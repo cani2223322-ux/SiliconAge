@@ -51,6 +51,9 @@
 2. Положите в папку `libs/` jar-файлы для компиляции (в репозиторий они не входят): `industrialcraft-2-2.2.828-experimental.jar`, `NotEnoughItems-1.7.10-1.0.5.120-universal.jar`, `CodeChickenCore-1.7.10-1.0.7.48-universal.jar`, `CodeChickenLib-1.7.10-1.1.3.141-universal.jar`, `Waila-1.5.10_1.7.10.jar`.
 3. Выполните `gradle build`. Готовый jar появится в `build/libs/`.
 
+### Лицензия
+© 2026 Aleksandr. Все права защищены. Код открыт для просмотра; копирование, изменение и распространение (в том числе в сборках) — только с разрешения автора.
+
 ---
 
 ## English
@@ -97,3 +100,6 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 1. JDK 8 and Gradle 2.14 (ForgeGradle 1.2).
 2. Put the compile-only jars into `libs/` (they are not part of this repository): `industrialcraft-2-2.2.828-experimental.jar`, `NotEnoughItems-1.7.10-1.0.5.120-universal.jar`, `CodeChickenCore-1.7.10-1.0.7.48-universal.jar`, `CodeChickenLib-1.7.10-1.1.3.141-universal.jar`, `Waila-1.5.10_1.7.10.jar`.
 3. Run `gradle build`. The jar is written to `build/libs/`.
+
+### License
+© 2026 Aleksandr. All rights reserved. The source is open to read; copying, modifying and redistributing it (modpacks included) only with the author's permission.
