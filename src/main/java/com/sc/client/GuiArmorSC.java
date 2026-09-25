@@ -396,7 +396,17 @@ public class GuiArmorSC extends GuiScreen {
             } else {
                 tip.add(Lang.tr("sc.armorfn." + f.name().toLowerCase(Locale.ROOT) + ".desc"));
             }
-            drawHoveringText(tip, mouseX, mouseY, fontRendererObj);
+            // long descriptions wrapped - one line ran off the screen's edge
+            int maxW = Math.max(120, Math.min(220, width / 2 - 20));
+            List<String> wrapped = new ArrayList<String>();
+            for (String line : tip) {
+                String color = line.startsWith("§") && line.length() > 1 ? line.substring(0, 2) : "";
+                for (Object part : fontRendererObj.listFormattedStringToWidth(line, maxW)) {
+                    String s = (String) part;
+                    wrapped.add(s.startsWith("§") ? s : color + s);    // a wrapped grey line stays grey
+                }
+            }
+            drawHoveringText(wrapped, mouseX, mouseY, fontRendererObj);
         }
     }
 
