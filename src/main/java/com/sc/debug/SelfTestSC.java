@@ -284,8 +284,18 @@ public final class SelfTestSC {
                         && t.outputFaces().length == 1 && t.outputFaces()[0] == n && t.offerableEnergy() == 512
                         && t.getMaxEnergyStored() == 1024,
                 "step-up: MV in on the sides only (HV there refused), one HV packet (512 EU/t) out of the front, buffer 8 MV packets");
-        t.setLowTier(com.sc.energy.Tier.EV);
-        check(t.getLowTier() == hv && t.getHighTier() == com.sc.energy.Tier.EV, "top transformer is HV-EV");
+        t.setLowTier(com.sc.energy.Tier.XV);
+        check(t.getLowTier() == com.sc.energy.Tier.QV && t.getHighTier() == com.sc.energy.Tier.XV, "top transformer is QV-XV");
+        com.sc.tileentity.TileEntityEnergyStorageSC xv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        xv.setStorageTier(com.sc.energy.Tier.XV);
+        com.sc.tileentity.TileEntityEnergyStorageSC qv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        qv.setStorageTier(com.sc.energy.Tier.QV);
+        check(xv.getMaxEnergyStored() == 2000000000 && xv.outputTier().getVoltage() == 32768
+                        && qv.getMaxEnergyStored() == 1000000000 && qv.outputTier().getVoltage() == 16384
+                        && com.sc.energy.CableType.EXO.tier == com.sc.energy.Tier.XV
+                        && com.sc.energy.Tier.QV.toIc2Tier() == 6 && com.sc.energy.Tier.IV.toIc2Tier() == 5
+                        && com.sc.block.BlockTransformerSC.VARIANTS == 6,
+                "tiers above EV: XV storage 2 000 000 000 EU / 32768 EU/t, QV half of it, cables, transformers, IC2 tiers");
     }
 
     /** Cable network arithmetic: even shares, line loss, the rating cap, drawing from several generators. */

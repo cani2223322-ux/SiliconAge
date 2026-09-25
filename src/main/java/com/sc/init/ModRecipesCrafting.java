@@ -94,6 +94,13 @@ public final class ModRecipesCrafting {
         OreRecipes.shapeless(cable(CableType.TUNGSTEN), ingot(Material.TUNGSTEN), new ItemStack(ModItems.rubberHeatResist));
         OreRecipes.shapeless(cable(CableType.SUPERCONDUCTOR),
                 ingot(Material.NIOBIUM), ingot(Material.TIN), new ItemStack(ModItems.liquidHeCell));
+        // above EV: IV (NbTi), QV (Quantum), XV (Exo) - each from two of the tier below
+        OreRecipes.shapeless(cable(CableType.NIOBIUM_TITANIUM, 2), cable(CableType.SUPERCONDUCTOR), cable(CableType.SUPERCONDUCTOR),
+                ingot(Material.NIOBIUM), ingot(Material.TITANIUM), new ItemStack(ModItems.liquidHeCell));
+        OreRecipes.shapeless(cable(CableType.QUANTUM, 2), cable(CableType.NIOBIUM_TITANIUM), cable(CableType.NIOBIUM_TITANIUM),
+                ingot(Material.PLATINUM), new ItemStack(ModItems.component("nb3SnPlate")), new ItemStack(ModItems.liquidHeCell));
+        OreRecipes.shapeless(cable(CableType.EXO, 2), cable(CableType.QUANTUM), cable(CableType.QUANTUM),
+                ingot(Material.HAFNIUM), ingot(Material.TANTALUM), silicon(SiliconMaterial.CONTROLLER));
 
         // §12.4: "кольцом" = cross pattern, top/bottom/left/right filled, centre+corners empty.
         OreRecipes.shaped(pipe(PipeType.COPPER), new Object[]{" X ", "X X", " X ", 'X', ingot(Material.COPPER)});

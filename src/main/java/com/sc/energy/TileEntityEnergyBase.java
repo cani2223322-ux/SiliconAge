@@ -134,7 +134,7 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
                 return t;
             }
         }
-        return Tier.EV;
+        return Tier.XV;
     }
 
     /** For subclasses (generators) that produce energy internally rather than receiving it. */

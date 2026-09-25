@@ -10,7 +10,11 @@ public enum CableType {
     COPPER_INSULATED("cableCopperInsulated", "wireCopperInsulatedLV", Tier.LV, 2, 1, true),
     SILVER("cableSilver", "wireSilverMV", Tier.MV, 2, 1, true),
     TUNGSTEN("cableTungsten", "wireTungstenHV", Tier.HV, 3, 2, true),
-    SUPERCONDUCTOR("cableSuperconductor", "wireSuperconductorEV", Tier.EV, 4, 0, true);
+    SUPERCONDUCTOR("cableSuperconductor", "wireSuperconductorEV", Tier.EV, 4, 0, true),
+    // The mod's own tiers above EV (appended: the cable's metadata is its ordinal).
+    NIOBIUM_TITANIUM("cableNiobiumTitanium", "wireNiobiumTitaniumIV", Tier.IV, 4, 0, true),
+    QUANTUM("cableQuantum", "wireQuantumQV", Tier.QV, 4, 0, true),
+    EXO("cableExo", "wireExoXV", Tier.XV, 4, 0, true);
 
     public final String textureName;
     /** OreDict name, §12.5. */

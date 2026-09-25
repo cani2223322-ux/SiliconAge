@@ -122,6 +122,19 @@ public final class ModRecipesMachineBlocks {
         OreRecipes.shaped(hvEv, " C ", "EXE", " S ",
                 'C', cable(CableType.TUNGSTEN), 'E', new ItemStack(ModItems.component("energyCellHV")),
                 'X', mvHv, 'S', cable(CableType.SUPERCONDUCTOR));
+        // above EV: each built round the one below, the new tier's cable underneath
+        ItemStack evIv = new ItemStack(ModBlocks.transformerSC, 1, 3);
+        ItemStack ivQv = new ItemStack(ModBlocks.transformerSC, 1, 4);
+        ItemStack qvXv = new ItemStack(ModBlocks.transformerSC, 1, 5);
+        OreRecipes.shaped(evIv, " C ", "EXE", " S ",
+                'C', cable(CableType.SUPERCONDUCTOR), 'E', new ItemStack(ModItems.component("nb3SnCoil")),
+                'X', hvEv, 'S', cable(CableType.NIOBIUM_TITANIUM));
+        OreRecipes.shaped(ivQv, " C ", "EXE", " S ",
+                'C', cable(CableType.NIOBIUM_TITANIUM), 'E', new ItemStack(ModItems.component("nb3SnCoil")),
+                'X', evIv, 'S', cable(CableType.QUANTUM));
+        OreRecipes.shaped(qvXv, " C ", "EXE", " S ",
+                'C', cable(CableType.QUANTUM), 'E', ModItems.siliconMaterial.stackOf(SiliconMaterial.CONTROLLER),
+                'X', ivQv, 'S', cable(CableType.EXO));
     }
 
     private static void registerEnergyStorage() {
@@ -141,12 +154,26 @@ public final class ModRecipesMachineBlocks {
         GameRegistry.addRecipe(new StorageUpgradeRecipeSC(ev, "KCK", "EXE", "KCK",
                 'K', new ItemStack(ModItems.component("tiCasing")), 'C', cable(CableType.SUPERCONDUCTOR),
                 'E', new ItemStack(ModItems.component("energyCellHV")), 'X', hv));
+        // IV, QV (Quantum), XV (Exo)
+        ItemStack iv = new ItemStack(ModBlocks.energyStorageSC, 1, 4);
+        ItemStack qv = new ItemStack(ModBlocks.energyStorageSC, 1, 5);
+        ItemStack xv = new ItemStack(ModBlocks.energyStorageSC, 1, 6);
+        GameRegistry.addRecipe(new StorageUpgradeRecipeSC(iv, "KCK", "EXE", "KCK",
+                'K', new ItemStack(ModItems.component("wTiPlate")), 'C', cable(CableType.NIOBIUM_TITANIUM),
+                'E', new ItemStack(ModItems.component("nb3SnCoil")), 'X', ev));
+        GameRegistry.addRecipe(new StorageUpgradeRecipeSC(qv, "KCK", "EXE", "KCK",
+                'K', ModItems.ingot.stackOf(Material.PLATINUM), 'C', cable(CableType.QUANTUM),
+                'E', new ItemStack(ModItems.component("heLoopModule")), 'X', iv));
+        GameRegistry.addRecipe(new StorageUpgradeRecipeSC(xv, "KCK", "EXE", "KCK",
+                'K', ModItems.ingot.stackOf(Material.HAFNIUM), 'C', cable(CableType.EXO),
+                'E', ModItems.siliconMaterial.stackOf(SiliconMaterial.CONTROLLER), 'X', qv));
 
         // Charge pads (IC2 style): the storage of that tier under a row of iron pressure plates, wired
         // with that tier's cable. The storage's charge stays in the pad.
-        CableType[] padCables = {CableType.COPPER_BARE, CableType.COPPER_INSULATED, CableType.TUNGSTEN, CableType.SUPERCONDUCTOR};
-        ItemStack[] storages = {lv, mv, hv, ev};
-        for (int t = 0; t < 4; t++) {
+        CableType[] padCables = {CableType.COPPER_BARE, CableType.COPPER_INSULATED, CableType.TUNGSTEN, CableType.SUPERCONDUCTOR,
+                CableType.NIOBIUM_TITANIUM, CableType.QUANTUM, CableType.EXO};
+        ItemStack[] storages = {lv, mv, hv, ev, iv, qv, xv};
+        for (int t = 0; t < storages.length; t++) {
             GameRegistry.addRecipe(new StorageUpgradeRecipeSC(new ItemStack(ModBlocks.chargePadSC, 1, t), "PPP", "CXC",
                     'P', new ItemStack(Blocks.heavy_weighted_pressure_plate), 'C', cable(padCables[t]), 'X', storages[t].copy()));
         }

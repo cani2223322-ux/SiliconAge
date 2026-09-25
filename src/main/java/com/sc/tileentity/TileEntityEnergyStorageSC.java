@@ -19,8 +19,8 @@ import net.minecraftforge.common.util.ForgeDirection;
  */
 public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements IInventory {
 
-    /** TODO(design doc has no storage blocks): capacities per tier, LV..EV. */
-    public static final int[] CAPACITY = {40000, 300000, 4000000, 40000000};
+    /** TODO(design doc has no storage blocks): capacities per tier, LV..XV (XV close to the int ceiling). */
+    public static final int[] CAPACITY = {40000, 300000, 4000000, 40000000, 300000000, 1000000000, 2000000000};
 
     private ForgeDirection facing = ForgeDirection.SOUTH;
     private ItemStack chargeSlot;

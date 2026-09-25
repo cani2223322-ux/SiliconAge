@@ -283,6 +283,13 @@ public final class ManualContent {
         lines.add("");
         lines.addAll(paragraph("sc.manual.machines.intro"));
         for (Tier tier : Tier.values()) {
+            boolean any = false;
+            for (MachineType type : MachineType.values()) {
+                any |= type.tier == tier;
+            }
+            if (!any) {
+                continue;                           // IV / QV / XV: energy blocks only, no machines
+            }
             lines.add("");
             lines.add(HEAD + Lang.tr("sc.manual.machines.tierhead", tier.name()));
             for (MachineType type : MachineType.values()) {

@@ -38,7 +38,7 @@ public class StorageUpgradeRecipeSC extends ShapedOreRecipe {
     @Override
     public ItemStack getCraftingResult(InventoryCrafting grid) {
         ItemStack out = super.getCraftingResult(grid);
-        int stored = 0;
+        long stored = 0;
         for (int i = 0; i < grid.getSizeInventory(); i++) {
             ItemStack s = grid.getStackInSlot(i);
             if (isStorage(s) && s.hasTagCompound()) {
@@ -48,7 +48,7 @@ public class StorageUpgradeRecipeSC extends ShapedOreRecipe {
         if (stored > 0 && out != null) {
             int cap = TileEntityEnergyStorageSC.capacityOf(BlockEnergyStorageSC.tierFor(out.getItemDamage()));
             NBTTagCompound nbt = out.hasTagCompound() ? out.getTagCompound() : new NBTTagCompound();
-            nbt.setInteger("EnergySC", Math.min(cap, stored));
+            nbt.setInteger("EnergySC", (int) Math.min(cap, stored));
             out.setTagCompound(nbt);
         }
         return out;
