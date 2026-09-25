@@ -23,7 +23,8 @@ import net.minecraft.util.AxisAlignedBB;
  * - Field: status, range, shape, shell colour / visibility, redstone control, the energy bar;
  * - Functions: no spawning, no ender teleports, mob damage, targets, warnings, wireless charging, healing;
  * - Access: the owner, the private zone, pushing strangers out, the access list (owner edits it);
- * - Map: the cluster seen from above - the field at the master's height, the nodes, the player.
+ * - Map: the cluster seen from above - the field at the master's height, the nodes, the player;
+ * - Upgrades: four energy storage upgrade slots (a bigger buffer) and the player's inventory.
  * Buttons go through the vanilla GUI-button packet (ContainerFieldGeneratorSC.enchantItem), the
  * access list through FieldNetSC; the state comes back with the block (description packet).
  * Drawn in code, vanilla style (the old 176x100 texture couldn't hold it all).
@@ -31,7 +32,7 @@ import net.minecraft.util.AxisAlignedBB;
 public class GuiFieldGeneratorSC extends GuiContainer {
 
     private static final int W = 248, H = 226;
-    private static final int TAB_BASE = 100, ADD_ID = 200, REMOVE_BASE = 300;
+    private static final int TAB_BASE = 100, ADD_ID = 200, REMOVE_BASE = 300, TAB_UPGRADES = 4;
     private static final int ENERGY_X = 224, ENERGY_Y = 34, ENERGY_W = 14, ENERGY_H = 76;
     private static final int MAP_X = 10, MAP_Y = 34, MAP = 150, CELL = 2;
 
@@ -58,13 +59,24 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         super.initGui();
         Keyboard.enableRepeatEvents(true);
         buttonList.clear();
-        String[] tabs = {"sc.fieldgui.tab.field", "sc.fieldgui.tab.functions", "sc.fieldgui.tab.access", "sc.fieldgui.tab.map"};
-        int tw = (W - 16) / tabs.length;
+        String[] tabs = {"sc.fieldgui.tab.field", "sc.fieldgui.tab.functions", "sc.fieldgui.tab.access", "sc.fieldgui.tab.map",
+                "sc.fieldgui.tab.upgrades"};
+        // tab widths follow their captions, the spare room shared out evenly
+        int[] tw = new int[tabs.length];
+        int text = 0;
         for (int i = 0; i < tabs.length; i++) {
-            GuiButton b = new GuiButton(TAB_BASE + i, guiLeft + 8 + i * tw, guiTop + 6, tw - 2, 18, Lang.tr(tabs[i]));
+            tw[i] = fontRendererObj.getStringWidth(Lang.tr(tabs[i]));
+            text += tw[i];
+        }
+        int spare = Math.max(0, W - 16 - text - 2 * tabs.length) / tabs.length;
+        for (int i = 0, tx = guiLeft + 8; i < tabs.length; i++) {
+            int w = i == tabs.length - 1 ? guiLeft + W - 8 - tx - 2 : tw[i] + spare;
+            GuiButton b = new GuiButton(TAB_BASE + i, tx, guiTop + 6, w, 18, Lang.tr(tabs[i]));
             b.enabled = i != tab;
             buttonList.add(b);
+            tx += w + 2;
         }
+        ((ContainerFieldGeneratorSC) inventorySlots).setSlotsShown(tab == TAB_UPGRADES);
         nameField = null;
         int x = guiLeft + 8, y = guiTop + 30;
         switch (tab) {
@@ -196,7 +208,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     @Override
     protected void actionPerformed(GuiButton button) {
-        if (button.id >= TAB_BASE && button.id < TAB_BASE + 4) {
+        if (button.id >= TAB_BASE && button.id <= TAB_BASE + TAB_UPGRADES) {
             tab = button.id - TAB_BASE;
             initGui();
         } else if (button.id == ADD_ID) {
@@ -274,6 +286,22 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         } else if (tab == 3) {
             inset(guiLeft + MAP_X - 1, guiTop + MAP_Y - 1, MAP + 2, MAP + 2);
             drawMap(guiLeft + MAP_X, guiTop + MAP_Y);
+        } else if (tab == TAB_UPGRADES) {
+            for (int i = 0; i < TileEntityFieldGeneratorSC.UPGRADE_SLOTS; i++) {
+                inset(guiLeft + ContainerFieldGeneratorSC.UPGRADE_X - 1 + i * 18, guiTop + ContainerFieldGeneratorSC.UPGRADE_Y - 1, 18, 18);
+            }
+            for (int row = 0; row < 4; row++) {
+                int y = guiTop + ContainerFieldGeneratorSC.INV_Y - 1 + row * 18 + (row == 3 ? 4 : 0);
+                for (int col = 0; col < 9; col++) {
+                    inset(guiLeft + ContainerFieldGeneratorSC.INV_X - 1 + col * 18, y, 18, 18);
+                }
+            }
+            // the buffer, as a horizontal bar
+            int bx = guiLeft + 44, by = guiTop + 100, bw = W - 88;
+            inset(bx - 1, by - 1, bw + 2, 10);
+            float fill = (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored());
+            drawRect(bx, by, bx + (int) (bw * Math.min(1F, fill)), by + 8, 0xFFD02020);
+            drawRect(bx, by, bx + (int) (bw * Math.min(1F, fill)), by + 2, 0xFFFF6060);
         }
         if (nameField != null) {
             nameField.drawTextBox();
@@ -307,6 +335,19 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 if (!mayEditAccess()) {
                     fontRendererObj.drawString(Lang.tr("sc.fieldgui.access.ownerOnly"), 8, H - 38, 0xA02020);
                 }
+                break;
+            }
+            case TAB_UPGRADES: {
+                String title = Lang.tr("sc.fieldgui.upgrades.title");
+                fontRendererObj.drawString(title, (W - fontRendererObj.getStringWidth(title)) / 2, 32, c);
+                int n = field.storageUpgrades();
+                String count = Lang.tr("sc.fieldgui.upgrades.count", n, com.sc.machine.UpgradeType.MAX_EFFECTIVE,
+                        n * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE);
+                fontRendererObj.drawString(count, (W - fontRendererObj.getStringWidth(count)) / 2, 72, c);
+                String buf = Lang.tr("sc.fieldgui.upgrades.buffer", field.getEnergyStored(), field.getMaxEnergyStored());
+                fontRendererObj.drawString(buf, (W - fontRendererObj.getStringWidth(buf)) / 2, 86, c);
+                fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.upgrades.hint"), 10, 114, W - 20, dim);
+                fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerFieldGeneratorSC.INV_X, ContainerFieldGeneratorSC.INV_Y - 11, c);
                 break;
             }
             default: {

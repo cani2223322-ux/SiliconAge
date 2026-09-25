@@ -575,8 +575,20 @@ public final class SelfTestSC {
         f.toggle(com.sc.tileentity.TileEntityFieldGeneratorSC.F_PRIVATE);
         boolean extras = f.extrasPerTick() == com.sc.tileentity.TileEntityFieldGeneratorSC.NO_SPAWN_EU + com.sc.tileentity.TileEntityFieldGeneratorSC.PRIVATE_EU;
         boolean access = f.addAccess("Steve") && !f.addAccess("steve") && f.getAccess().size() == 1 && f.removeAccess("STEVE");
-        check(dome && cyl && defaults && extras && access,
-                "field generator: dome / cylinder shapes, default switches, protections' upkeep, access list");
+        int base = f.getMaxEnergyStored();
+        com.sc.item.ItemUpgradeSC up = (com.sc.item.ItemUpgradeSC) com.sc.init.ModItems.upgrade;
+        ItemStack two = up.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE);
+        two.stackSize = 2;
+        f.setInventorySlotContents(0, two);
+        boolean plus = f.getMaxEnergyStored() == base + 2 * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE;
+        ItemStack many = up.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE);
+        many.stackSize = 40;
+        f.setInventorySlotContents(1, many);
+        boolean capped = f.getMaxEnergyStored() == base + com.sc.machine.UpgradeType.MAX_EFFECTIVE * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE;
+        boolean only = !f.isItemValidForSlot(2, up.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER))
+                && f.isItemValidForSlot(2, two) && f.getAccessibleSlotsFromSide(1).length == 0;
+        check(dome && cyl && defaults && extras && access && plus && capped && only,
+                "field generator: dome / cylinder shapes, default switches, protections' upkeep, access list, storage upgrades (+10k each, 16 max, nothing else)");
     }
 
     /** Drills: each tier has everything the one below has, defaults, fortune III / V, small batteries, pad tier rule. */

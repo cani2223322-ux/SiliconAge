@@ -11,6 +11,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.monster.IMob;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagList;
@@ -36,7 +37,7 @@ import net.minecraft.world.World;
  * another TODO-by-analogy number, since the doc doesn't define what "face" means for an
  * arbitrary node graph either.
  */
-public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase {
+public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements ISidedInventory {
 
     public static final int BUFFER_BLOCKS = 2;
     // §16: node cap by tier - Field Generator is fixed HV per its own recipe (§7: Tungsten Cable).
@@ -45,6 +46,10 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase {
     // TODO(design doc): no link range is specified - 16 blocks per axis keeps a cluster to a
     // base-sized area (and stops a 10k-block "cluster" whose bounding box is scanned every tick).
     public static final int MAX_LINK_DISTANCE = 16;
+
+    /** Upgrade slots on the master's screen - energy storage upgrades only, each +10 000 EU of buffer (as in a machine). */
+    public static final int UPGRADE_SLOTS = 4;
+    private final ItemStack[] upgrades = new ItemStack[UPGRADE_SLOTS];
 
     private FieldMode mode = FieldMode.UNION;
     private boolean master = true;
@@ -238,6 +243,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase {
         return active;
     }
 
+    @Override
     public boolean isUseableByPlayer(EntityPlayer player) {
         return worldObj != null && worldObj.getTileEntity(xCoord, yCoord, zCoord) == this
                 && player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= 64;
@@ -352,6 +358,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase {
                 member.nodePositions.clear();
                 member.active = false;
                 member.copySettings(masterTe);          // 6: an orphan later re-elected keeps the cluster's owner, not its own old one
+                member.handUpgradesTo(masterTe);        // a member has no screen - its upgrades move to the master
                 // A member's own buffer is dead weight (only the master pays upkeep) - hand it over.
                 // Only what fits: addEnergy caps at the buffer, so moving everything threw the rest away.
                 int room = masterTe.getMaxEnergyStored() - masterTe.getEnergyStored();
@@ -819,6 +826,170 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase {
         return e.motionX * e.motionX + e.motionY * e.motionY + e.motionZ * e.motionZ > 0.01;
     }
 
+    // ---- upgrade slots (energy storage upgrades): player-only, no pipes or hoppers ----
+
+    /** How many energy storage upgrades count (the machines' cap, UpgradeType.MAX_EFFECTIVE). */
+    public int storageUpgrades() {
+        int n = 0;
+        for (ItemStack s : upgrades) {
+            if (isStorageUpgrade(s)) {
+                n += s.stackSize;
+            }
+        }
+        return Math.min(n, com.sc.machine.UpgradeType.MAX_EFFECTIVE);
+    }
+
+    private static boolean isStorageUpgrade(ItemStack s) {
+        return s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC
+                && com.sc.item.ItemUpgradeSC.typeOf(s) == com.sc.machine.UpgradeType.ENERGY_STORAGE;
+    }
+
+    /** HV buffer + 10 000 EU per energy storage upgrade. */
+    @Override
+    public int getMaxEnergyStored() {
+        return super.getMaxEnergyStored() + storageUpgrades() * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE;
+    }
+
+    /** Taking upgrades out shrinks the buffer - what no longer fits is lost, as in a machine. */
+    private void clampEnergy() {
+        int over = getEnergyStored() - getMaxEnergyStored();
+        if (over > 0 && worldObj != null && !worldObj.isRemote) {
+            removeEnergy(over);
+        }
+    }
+
+    /** A node joining a cluster: its upgrades into the master's free room, the rest dropped where it stands. */
+    private void handUpgradesTo(TileEntityFieldGeneratorSC to) {
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            ItemStack s = upgrades[i];
+            if (s == null) {
+                continue;
+            }
+            for (int j = 0; j < UPGRADE_SLOTS && s.stackSize > 0; j++) {
+                ItemStack t = to.upgrades[j];
+                if (t == null) {
+                    to.upgrades[j] = s.copy();
+                    s.stackSize = 0;
+                } else if (t.isItemEqual(s) && ItemStack.areItemStackTagsEqual(t, s)) {
+                    int move = Math.min(s.stackSize, t.getMaxStackSize() - t.stackSize);
+                    t.stackSize += move;
+                    s.stackSize -= move;
+                }
+            }
+            if (s.stackSize > 0 && worldObj != null) {
+                worldObj.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, s));
+            }
+            upgrades[i] = null;
+        }
+        markDirty();
+        to.markDirty();
+    }
+
+    /** Breaking the block: its upgrades drop (BlockFieldGeneratorSC.breakBlock). */
+    public void dropUpgrades() {
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            if (upgrades[i] != null && worldObj != null) {
+                worldObj.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(worldObj, xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, upgrades[i]));
+            }
+            upgrades[i] = null;
+        }
+    }
+
+    @Override
+    public int getSizeInventory() {
+        return UPGRADE_SLOTS;
+    }
+
+    @Override
+    public ItemStack getStackInSlot(int slot) {
+        return slot >= 0 && slot < UPGRADE_SLOTS ? upgrades[slot] : null;
+    }
+
+    @Override
+    public ItemStack decrStackSize(int slot, int count) {
+        ItemStack s = getStackInSlot(slot);
+        if (s == null) {
+            return null;
+        }
+        ItemStack out;
+        if (s.stackSize <= count) {
+            out = s;
+            upgrades[slot] = null;
+        } else {
+            out = s.splitStack(count);
+        }
+        markDirty();
+        return out;
+    }
+
+    @Override
+    public ItemStack getStackInSlotOnClosing(int slot) {
+        return null;                            // the slots are the block's own, not a crafting grid
+    }
+
+    @Override
+    public void setInventorySlotContents(int slot, ItemStack stack) {
+        if (slot < 0 || slot >= UPGRADE_SLOTS) {
+            return;
+        }
+        if (stack != null && stack.stackSize > getInventoryStackLimit()) {
+            stack.stackSize = getInventoryStackLimit();
+        }
+        upgrades[slot] = stack;
+        markDirty();
+    }
+
+    @Override
+    public void markDirty() {
+        clampEnergy();
+        super.markDirty();
+    }
+
+    @Override
+    public String getInventoryName() {
+        return "container.siliconage.fieldGenerator";
+    }
+
+    @Override
+    public boolean hasCustomInventoryName() {
+        return false;
+    }
+
+    @Override
+    public int getInventoryStackLimit() {
+        return 64;
+    }
+
+    @Override
+    public void openInventory() {
+    }
+
+    @Override
+    public void closeInventory() {
+    }
+
+    @Override
+    public boolean isItemValidForSlot(int slot, ItemStack stack) {
+        return isStorageUpgrade(stack);
+    }
+
+    private static final int[] NO_SLOTS = new int[0];
+
+    @Override
+    public int[] getAccessibleSlotsFromSide(int side) {
+        return NO_SLOTS;
+    }
+
+    @Override
+    public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        return false;
+    }
+
+    @Override
+    public boolean canExtractItem(int slot, ItemStack stack, int side) {
+        return false;
+    }
+
     // ---- client sync: the shield is drawn from the master's nodes, mode and active flag ----
 
     private void changed() {
@@ -902,6 +1073,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase {
         color = Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")));
         owner = nbt.getString("Owner");
         redstoneOff = nbt.getBoolean("RedstoneOff");
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            upgrades[i] = null;
+        }
+        NBTTagList ups = nbt.getTagList("Upgrades", 10);
+        for (int i = 0; i < ups.tagCount(); i++) {
+            NBTTagCompound u = ups.getCompoundTagAt(i);
+            int slot = u.getByte("Slot");
+            if (slot >= 0 && slot < UPGRADE_SLOTS) {
+                upgrades[slot] = ItemStack.loadItemStackFromNBT(u);
+            }
+        }
         access.clear();
         NBTTagList names = nbt.getTagList("Access", 8);
         for (int i = 0; i < names.tagCount(); i++) {
@@ -941,5 +1123,15 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase {
             names.appendTag(new net.minecraft.nbt.NBTTagString(n));
         }
         nbt.setTag("Access", names);
+        NBTTagList ups = new NBTTagList();
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            if (upgrades[i] != null) {
+                NBTTagCompound u = new NBTTagCompound();
+                u.setByte("Slot", (byte) i);
+                upgrades[i].writeToNBT(u);
+                ups.appendTag(u);
+            }
+        }
+        nbt.setTag("Upgrades", ups);
     }
 }

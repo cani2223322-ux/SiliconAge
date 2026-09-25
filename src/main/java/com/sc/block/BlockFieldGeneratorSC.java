@@ -62,6 +62,10 @@ public class BlockFieldGeneratorSC extends Block {
     @Override
     public void breakBlock(World world, int x, int y, int z, Block block, int meta) {
         TileEntityFieldGeneratorSC.unlink(world, x, y, z);
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityFieldGeneratorSC) {
+            ((TileEntityFieldGeneratorSC) te).dropUpgrades();
+        }
         super.breakBlock(world, x, y, z, block, meta);
     }
 

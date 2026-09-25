@@ -11,10 +11,11 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 
 /**
- * Read-only status screen for a Field Generator master node (§7/§9/§16) - no inventory slots at
- * all (the cluster holds no items), just the energy bar kept live via the same field-sync
- * pattern as ContainerMachineSC/ContainerGeneratorSC. Only ever opened on a master (see
- * BlockFieldGeneratorSC) - a linked node has nothing of its own worth a screen for.
+ * Screen of a Field Generator master node (§7/§9/§16): the settings (buttons), the energy bar kept
+ * live via the same field-sync pattern as ContainerMachineSC/ContainerGeneratorSC, and the
+ * Upgrades tab - four energy storage upgrade slots and the player's inventory. The slots only
+ * show on that tab (GuiFieldGeneratorSC moves them off-screen on the others, setSlotsShown).
+ * Only ever opened on a master (see BlockFieldGeneratorSC).
  */
 public class ContainerFieldGeneratorSC extends Container {
 
@@ -57,47 +58,86 @@ public class ContainerFieldGeneratorSC extends Container {
 
     public ContainerFieldGeneratorSC(InventoryPlayer playerInv, TileEntityFieldGeneratorSC field) {
         this.field = field;
-        // Hidden, locked hotbar slots. Vanilla NetHandlerPlayServer.processPlayerBlockPlacement looks up
-        // the held item's slot in the container the click just opened and NPEs (server crash "Ticking
-        // memory connection") if there is none - e.g. right-clicking with a charged item whose NBT
-        // differs client/server. Off-screen and never drawn, clicked or shift-clicked.
+        int n = TileEntityFieldGeneratorSC.UPGRADE_SLOTS;
+        for (int i = 0; i < n; i++) {
+            addSlotToContainer(new SlotStorageUpgrade(field, i, UPGRADE_X + i * 18, UPGRADE_Y));
+        }
+        // The player's inventory (its hotbar also keeps vanilla's processPlayerBlockPlacement from
+        // NPE-ing on a screen with no slot for the held item - the reason this screen used to carry
+        // a hidden hotbar).
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, INV_X + col * 18, INV_Y + row * 18));
+            }
+        }
         for (int col = 0; col < 9; col++) {
-            addSlotToContainer(new SlotHidden(playerInv, col));
+            addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + 58));
+        }
+        shownX = new int[inventorySlots.size()];
+        for (int i = 0; i < shownX.length; i++) {
+            shownX[i] = ((Slot) inventorySlots.get(i)).xDisplayPosition;
         }
     }
 
-    @Override
-    public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
-        if (slotId >= 0 && slotId < inventorySlots.size()) {
-            return null;                      // the hidden hotbar is not for use
+    /** Where the Upgrades tab draws its slots (GuiFieldGeneratorSC draws the frames there). */
+    public static final int UPGRADE_X = 89, UPGRADE_Y = 48, INV_X = 44, INV_Y = 144;
+    private final int[] shownX;
+
+    /** Client: the slots on the Upgrades tab, off-screen (not hoverable or clickable) on the others. */
+    @SideOnly(Side.CLIENT)
+    public void setSlotsShown(boolean shown) {
+        for (int i = 0; i < shownX.length; i++) {
+            ((Slot) inventorySlots.get(i)).xDisplayPosition = shown ? shownX[i] : -10000;
         }
-        return super.slotClick(slotId, button, mode, player);
     }
 
+    /** Shift-click: upgrades into the upgrade slots, back out into the inventory, main grid <-> hotbar. */
     @Override
     public ItemStack transferStackInSlot(EntityPlayer player, int index) {
-        return null;
+        Slot slot = (Slot) inventorySlots.get(index);
+        if (slot == null || !slot.getHasStack()) {
+            return null;
+        }
+        ItemStack original = slot.getStack();
+        ItemStack result = original.copy();
+        int n = TileEntityFieldGeneratorSC.UPGRADE_SLOTS, hotbar = n + 27, end = inventorySlots.size();
+        if (index < n) {
+            if (!mergeItemStack(original, n, end, true)) {
+                return null;
+            }
+        } else if (field.isItemValidForSlot(0, original)) {
+            if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, n)
+                    && !mergeItemStack(original, index < hotbar ? hotbar : n, index < hotbar ? end : hotbar, false)) {
+                return null;
+            }
+        } else if (!mergeItemStack(original, index < hotbar ? hotbar : n, index < hotbar ? end : hotbar, false)) {
+            return null;
+        }
+        if (original.stackSize == 0) {
+            slot.putStack(null);
+        } else {
+            slot.onSlotChanged();
+        }
+        return result;
     }
 
-    private static class SlotHidden extends Slot {
-        SlotHidden(InventoryPlayer inv, int index) {
-            super(inv, index, -10000, -10000);
+    /** Takes energy storage upgrades only; only the owner / access list may take them out (the field's own rule). */
+    private static class SlotStorageUpgrade extends Slot {
+        private final TileEntityFieldGeneratorSC field;
+
+        SlotStorageUpgrade(TileEntityFieldGeneratorSC field, int index, int x, int y) {
+            super(field, index, x, y);
+            this.field = field;
         }
 
         @Override
         public boolean isItemValid(ItemStack stack) {
-            return false;
+            return field.isItemValidForSlot(getSlotIndex(), stack);
         }
 
         @Override
         public boolean canTakeStack(EntityPlayer player) {
-            return false;
-        }
-
-        @Override
-        @SideOnly(Side.CLIENT)
-        public boolean func_111238_b() {      // not hoverable, not rendered
-            return false;
+            return field.allowed(player);
         }
     }
 
