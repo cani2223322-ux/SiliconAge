@@ -13,7 +13,7 @@ import net.minecraft.item.ItemStack;
 /**
  * Screen of a Field Generator master node (§7/§9/§16): the settings (buttons), the energy bar kept
  * live via the same field-sync pattern as ContainerMachineSC/ContainerGeneratorSC, and the
- * Upgrades tab - four energy storage upgrade slots and the player's inventory. The slots only
+ * Upgrades tab - four slots for energy storage / transformer upgrades and the player's inventory. The slots only
  * show on that tab (GuiFieldGeneratorSC moves them off-screen on the others, setSlotsShown).
  * Only ever opened on a master (see BlockFieldGeneratorSC).
  */
@@ -60,7 +60,7 @@ public class ContainerFieldGeneratorSC extends Container {
         this.field = field;
         int n = TileEntityFieldGeneratorSC.UPGRADE_SLOTS;
         for (int i = 0; i < n; i++) {
-            addSlotToContainer(new SlotStorageUpgrade(field, i, UPGRADE_X + i * 18, UPGRADE_Y));
+            addSlotToContainer(new SlotFieldUpgrade(field, i, UPGRADE_X + i * 18, UPGRADE_Y));
         }
         // The player's inventory (its hotbar also keeps vanilla's processPlayerBlockPlacement from
         // NPE-ing on a screen with no slot for the held item - the reason this screen used to carry
@@ -121,11 +121,11 @@ public class ContainerFieldGeneratorSC extends Container {
         return result;
     }
 
-    /** Takes energy storage upgrades only; only the owner / access list may take them out (the field's own rule). */
-    private static class SlotStorageUpgrade extends Slot {
+    /** Takes energy storage and transformer upgrades only; only the owner / access list may take them out (the field's own rule). */
+    private static class SlotFieldUpgrade extends Slot {
         private final TileEntityFieldGeneratorSC field;
 
-        SlotStorageUpgrade(TileEntityFieldGeneratorSC field, int index, int x, int y) {
+        SlotFieldUpgrade(TileEntityFieldGeneratorSC field, int index, int x, int y) {
             super(field, index, x, y);
             this.field = field;
         }

@@ -7,9 +7,11 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 ### Русский
 - Генератор поля: новая вкладка «Улучшения» на экране главного узла — 4 слота под модули энергонакопителя, каждый модуль +10 000 EU к буферу поля (считаются до 16, как в машинах). Там же шкала буфера и ваш инвентарь; Shift-клик кладёт модули в слоты. Вынимать модули могут только владелец и игроки из списка доступа. При объединении кластеров модули узла переходят к мастеру, при разрушении генератора выпадают. Справочник и подсказка модуля обновлены.
+- Генератор поля принимает и модуль трансформатора: с ним главный узел (а через него и все узлы кластера) принимает EV без взрыва. На вкладке «Улучшения» показано, какое напряжение сейчас принимается.
 
 ### English
 - Field generator: a new Upgrades tab on the master's screen - 4 slots for energy storage upgrades, each +10,000 EU of field buffer (up to 16 count, as in machines). It also shows a buffer bar and your inventory; shift-click puts upgrades in. Only the owner and the access list can take them out. When clusters merge a node's upgrades go to the master; breaking a generator drops them. Handbook and the upgrade's tooltip updated.
+- The field generator also takes the transformer upgrade: with it the master (and through it every node of the cluster) takes EV without exploding. The Upgrades tab shows the voltage it takes right now.
 
 ## 0.1.1-alpha — 2026-09-25
 

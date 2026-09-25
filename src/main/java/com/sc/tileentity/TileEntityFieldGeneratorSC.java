@@ -47,7 +47,10 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     // base-sized area (and stops a 10k-block "cluster" whose bounding box is scanned every tick).
     public static final int MAX_LINK_DISTANCE = 16;
 
-    /** Upgrade slots on the master's screen - energy storage upgrades only, each +10 000 EU of buffer (as in a machine). */
+    /**
+     * Upgrade slots on the master's screen, as in a machine: energy storage upgrades (+10 000 EU of
+     * buffer each) and transformer upgrades (one tier higher voltage each - HV -> EV).
+     */
     public static final int UPGRADE_SLOTS = 4;
     private final ItemStack[] upgrades = new ItemStack[UPGRADE_SLOTS];
 
@@ -826,22 +829,45 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return e.motionX * e.motionX + e.motionY * e.motionY + e.motionZ * e.motionZ > 0.01;
     }
 
-    // ---- upgrade slots (energy storage upgrades): player-only, no pipes or hoppers ----
+    // ---- upgrade slots (energy storage, transformer): player-only, no pipes or hoppers ----
 
-    /** How many energy storage upgrades count (the machines' cap, UpgradeType.MAX_EFFECTIVE). */
-    public int storageUpgrades() {
+    /** How many upgrades of a kind count (the machines' cap, UpgradeType.MAX_EFFECTIVE). */
+    public int upgradeCount(com.sc.machine.UpgradeType type) {
         int n = 0;
         for (ItemStack s : upgrades) {
-            if (isStorageUpgrade(s)) {
+            if (s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == type) {
                 n += s.stackSize;
             }
         }
         return Math.min(n, com.sc.machine.UpgradeType.MAX_EFFECTIVE);
     }
 
-    private static boolean isStorageUpgrade(ItemStack s) {
-        return s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC
-                && com.sc.item.ItemUpgradeSC.typeOf(s) == com.sc.machine.UpgradeType.ENERGY_STORAGE;
+    public int storageUpgrades() {
+        return upgradeCount(com.sc.machine.UpgradeType.ENERGY_STORAGE);
+    }
+
+    private static boolean isFieldUpgrade(ItemStack s) {
+        if (s == null || !(s.getItem() instanceof com.sc.item.ItemUpgradeSC)) {
+            return false;
+        }
+        com.sc.machine.UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
+        return t == com.sc.machine.UpgradeType.ENERGY_STORAGE || t == com.sc.machine.UpgradeType.TRANSFORMER;
+    }
+
+    /**
+     * Each transformer upgrade takes one tier higher voltage without exploding (HV -> EV, like a
+     * machine's). A linked node takes whatever its master takes - it only passes energy on.
+     */
+    @Override
+    public Tier inputTier() {
+        if (!master) {
+            TileEntityFieldGeneratorSC m = loadedMaster();
+            if (m != null) {
+                return m.inputTier();
+            }
+        }
+        Tier[] tiers = Tier.values();
+        return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(com.sc.machine.UpgradeType.TRANSFORMER))];
     }
 
     /** HV buffer + 10 000 EU per energy storage upgrade. */
@@ -970,7 +996,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     @Override
     public boolean isItemValidForSlot(int slot, ItemStack stack) {
-        return isStorageUpgrade(stack);
+        return isFieldUpgrade(stack);
     }
 
     private static final int[] NO_SLOTS = new int[0];

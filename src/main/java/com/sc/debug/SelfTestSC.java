@@ -585,10 +585,13 @@ public final class SelfTestSC {
         many.stackSize = 40;
         f.setInventorySlotContents(1, many);
         boolean capped = f.getMaxEnergyStored() == base + com.sc.machine.UpgradeType.MAX_EFFECTIVE * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE;
-        boolean only = !f.isItemValidForSlot(2, up.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER))
-                && f.isItemValidForSlot(2, two) && f.getAccessibleSlotsFromSide(1).length == 0;
-        check(dome && cyl && defaults && extras && access && plus && capped && only,
-                "field generator: dome / cylinder shapes, default switches, protections' upkeep, access list, storage upgrades (+10k each, 16 max, nothing else)");
+        boolean hv = f.inputTier() == com.sc.energy.Tier.HV;
+        f.setInventorySlotContents(2, up.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
+        boolean ev = hv && f.inputTier() == com.sc.energy.Tier.EV;
+        boolean only = !f.isItemValidForSlot(3, up.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER))
+                && f.isItemValidForSlot(3, two) && f.getAccessibleSlotsFromSide(1).length == 0;
+        check(dome && cyl && defaults && extras && access && plus && capped && ev && only,
+                "field generator: dome / cylinder shapes, default switches, protections' upkeep, access list, storage upgrades (+10k each, 16 max), transformer HV -> EV, nothing else");
     }
 
     /** Drills: each tier has everything the one below has, defaults, fortune III / V, small batteries, pad tier rule. */

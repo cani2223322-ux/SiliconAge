@@ -24,7 +24,7 @@ import net.minecraft.util.AxisAlignedBB;
  * - Functions: no spawning, no ender teleports, mob damage, targets, warnings, wireless charging, healing;
  * - Access: the owner, the private zone, pushing strangers out, the access list (owner edits it);
  * - Map: the cluster seen from above - the field at the master's height, the nodes, the player;
- * - Upgrades: four energy storage upgrade slots (a bigger buffer) and the player's inventory.
+ * - Upgrades: four slots for energy storage (a bigger buffer) and transformer (EV input) upgrades, the player's inventory.
  * Buttons go through the vanilla GUI-button packet (ContainerFieldGeneratorSC.enchantItem), the
  * access list through FieldNetSC; the state comes back with the block (description packet).
  * Drawn in code, vanilla style (the old 176x100 texture couldn't hold it all).
@@ -297,7 +297,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 }
             }
             // the buffer, as a horizontal bar
-            int bx = guiLeft + 44, by = guiTop + 100, bw = W - 88;
+            int bx = guiLeft + 44, by = guiTop + 101, bw = W - 88;
             inset(bx - 1, by - 1, bw + 2, 10);
             float fill = (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored());
             drawRect(bx, by, bx + (int) (bw * Math.min(1F, fill)), by + 8, 0xFFD02020);
@@ -343,9 +343,11 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 int n = field.storageUpgrades();
                 String count = Lang.tr("sc.fieldgui.upgrades.count", n, com.sc.machine.UpgradeType.MAX_EFFECTIVE,
                         n * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE);
-                fontRendererObj.drawString(count, (W - fontRendererObj.getStringWidth(count)) / 2, 72, c);
+                fontRendererObj.drawString(count, (W - fontRendererObj.getStringWidth(count)) / 2, 70, c);
                 String buf = Lang.tr("sc.fieldgui.upgrades.buffer", field.getEnergyStored(), field.getMaxEnergyStored());
-                fontRendererObj.drawString(buf, (W - fontRendererObj.getStringWidth(buf)) / 2, 86, c);
+                fontRendererObj.drawString(buf, (W - fontRendererObj.getStringWidth(buf)) / 2, 80, c);
+                String input = Lang.tr("sc.fieldgui.upgrades.input", field.inputTier().name(), field.inputTier().getVoltage());
+                fontRendererObj.drawString(input, (W - fontRendererObj.getStringWidth(input)) / 2, 90, c);
                 fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.upgrades.hint"), 10, 114, W - 20, dim);
                 fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerFieldGeneratorSC.INV_X, ContainerFieldGeneratorSC.INV_Y - 11, c);
                 break;
