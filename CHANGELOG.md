@@ -13,7 +13,6 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - Иконки 111 предметов (детали, чипы, пластины, кабели, формы, компоненты, ячейки, улучшения, оружие и др.) перерисованы в 32x32: объём, фаски, фактура и блики; кремниевые пластины нарисованы заново. Броня, клинки, буры, пыль и слитки не менялись.
 - Дроблёная и очищенная дроблёная руда (21 иконка) нарисована заново в 32x32: горка гранёных камней с прожилками и вкраплениями металла; очищенная — чистые металлические куски с бликами.
 - Текстуры механизмов (74) в 32x32: лицевые панели всех машин, корпуса LV–EV, энергохранилища, трансформаторы, зарядные плиты и баки — с фасками и фактурой металла, стыкуются без швов.
-- Энергоклинки и электробуры Нано / Квант / Экзо перерисованы: у клинков — рукоять с обмоткой, камень в навершии, крылатая гарда, эмиттер с прорезями и широкое переливающееся плазменное лезвие с ореолом и искрами; у буров — корпус с D-рукоятью, батарея с индикатором заряда, вентиляционные прорези, рифлёный патрон и спиральное сверло с твёрдым наконечником.
 
 ### English
 - The "Silicon Age" creative tab lists items in a fixed order instead of by internal IDs: ores → materials → parts → tools and upgrades → machines → energy → logistics → field generator → each tier's suit, blade and drill → weapons. It no longer comes out jumbled in old worlds.
@@ -23,7 +22,6 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - Icons of 111 items (parts, chips, wafers, cables, moulds, components, cells, upgrades, weapons and more) redrawn at 32x32: volume, bevels, texture and highlights; silicon wafers drawn anew. Suits, blades, drills, dusts and ingots are unchanged.
 - Crushed and purified crushed ores (21 icons) drawn anew at 32x32: a heap of faceted rocks with metal veins and flecks; purified ones are clean, shiny metal chunks.
 - Mechanism textures (74) at 32x32: all machine fronts, LV–EV casings, energy storage, transformers, charge pads and tanks - bevels and metal texture, tiling seamlessly.
-- Nano / Quantum / Exo energy blades and electric drills redrawn: blades get a wrapped grip, a gem in the pommel, a winged guard, a vented emitter and a wide shimmering plasma blade with a halo and sparks; drills get a D-handle body, a battery with a charge indicator, vents, a knurled chuck and a spiral-fluted bit with a hard tip.
 
 ## 0.1.0-alpha — 2026-09-25
 
