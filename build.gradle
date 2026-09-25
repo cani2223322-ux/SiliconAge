@@ -1,0 +1,83 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { name = "forge"; url = "https://maven.minecraftforge.net" }
+        maven { name = "sonatype"; url = "https://oss.sonatype.org/content/repositories/snapshots/" }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:1.2-SNAPSHOT'
+    }
+}
+
+apply plugin: 'forge'
+
+version = "0.1.0"
+group = "com.sc"
+archivesBaseName = "SiliconAge"
+
+sourceCompatibility = 1.6
+targetCompatibility = 1.6
+
+// The sources are UTF-8 (the "§" colour codes in tooltips and screens). Without this javac on a
+// Russian Windows read them as cp1251 and every "§" came out as "В§" - a stray "В" in front.
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+minecraft {
+    version = "1.7.10-10.13.4.1614-1.7.10"
+    runDir = "run"
+}
+
+// ForgeGradle 1.2's downloadClient/downloadServer tasks hit a hardcoded, long-dead Mojang S3
+// endpoint (s3.amazonaws.com/Minecraft.Download/...) with no existence check before opening
+// the connection (it calls output.createNewFile() then overwrites via FileOutputStream even
+// when the file is already correct) - on a project with no prior Gradle task history this
+// WILL be invoked and, on timeout, leaves a truncated 0-byte jar behind. The shared
+// GRADLE_USER_HOME cache (used by every project on this machine, including the sibling
+// ThermalADD/improvedassembler projects) already has valid minecraft-1.7.10.jar /
+// minecraft_server-1.7.10.jar (verified against Mojang's published SHA1s), so these two
+// tasks are disabled outright rather than risking them re-truncating that shared cache.
+gradle.projectsEvaluated {
+    tasks.findByName('downloadClient')?.enabled = false
+    tasks.findByName('downloadServer')?.enabled = false
+}
+
+repositories {
+    mavenCentral()
+}
+
+// IC2 is a soft dependency (see design doc 01_recipes.md §9.4): our TileEntities implement
+// ic2.api.energy.tile.IEnergySink/IEnergySource conditionally via @Optional.Interface, and
+// only touch IC2 classes at runtime behind Loader.isModLoaded("IC2") checks (verified via
+// javap against the vendored jar - IC2 2.2.828's own @Mod modid is "IC2", not
+// "IndustrialCraft2"; see Reference.IC2_MODID).
+// Same vendoring approach as the sibling ThermalADD project (see its build.gradle comment):
+// plain `compile files(...)`, not `deobfCompile` (ForgeGradle 1.2's UserBasePlugin has no
+// such configuration) - javac only needs IC2's own (non-SRG) method signatures to compile
+// against, and Forge's dev classloader remaps vanilla-internal references at runtime same
+// as for any other mod jar dropped into run/mods.
+dependencies {
+    compile files(
+            'libs/industrialcraft-2-2.2.828-experimental.jar',
+            // NEI plugin (com.sc.nei) - compile only, never packed into our jar
+            'libs/NotEnoughItems-1.7.10-1.0.5.120-universal.jar',
+            'libs/CodeChickenCore-1.7.10-1.0.7.48-universal.jar',
+            'libs/CodeChickenLib-1.7.10-1.1.3.141-universal.jar',
+            'libs/Waila-1.5.10_1.7.10.jar'
+    )
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "mcversion", project.minecraft.version
+
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+        expand 'version': project.version, 'mcversion': project.minecraft.version
+    }
+
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mcmod.info'
+    }
+}

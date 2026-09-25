@@ -1,0 +1,16 @@
+[
+{
+    "modid": "SiliconAge",
+    "name": "Silicon Age: From Wafer to ExoTech",
+    "description": "From a silicon wafer to ExoTech: semiconductor fabrication, energy networks and machines, Nano / Quantum / Exo suits, energy blades, drills and field generators. (Formerly Silicon & Circuitry.)",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "url": "",
+    "updateUrl": "",
+    "authorList": ["Aleksandr"],
+    "credits": "Design document authored with Claude",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": []
+}
+]

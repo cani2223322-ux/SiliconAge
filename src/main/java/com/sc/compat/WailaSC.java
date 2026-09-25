@@ -1,0 +1,198 @@
+package com.sc.compat;
+
+import java.util.List;
+
+import com.sc.conduit.ConduitKind;
+import com.sc.energy.Tier;
+import com.sc.energy.TileEntityEnergyBase;
+import com.sc.manual.Lang;
+import com.sc.tileentity.TileEntityConduitBundleSC;
+import com.sc.tileentity.TileEntityEnergyStorageSC;
+import com.sc.tileentity.TileEntityMachineSC;
+import com.sc.tileentity.TileEntityTransformerSC;
+
+import mcp.mobius.waila.api.IWailaConfigHandler;
+import mcp.mobius.waila.api.IWailaDataAccessor;
+import mcp.mobius.waila.api.IWailaDataProvider;
+import mcp.mobius.waila.api.IWailaRegistrar;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.world.World;
+import net.minecraftforge.fluids.FluidRegistry;
+import net.minecraftforge.fluids.FluidStack;
+
+/**
+ * WAILA tooltip lines for the mod's blocks: stored energy and voltage tier of everything with an
+ * energy buffer (machines, generators, storages, transformers, the field generator), a machine's
+ * work and upgrades, and what a conduit bundle carries. The numbers come from the server (the
+ * client copy of a tile's energy is never updated outside its GUI). Only loaded when WAILA is
+ * present - it finds us through the IMC message SCMod.init sends.
+ */
+public class WailaSC implements IWailaDataProvider {
+
+    /** Called by WAILA (IMC "register"). */
+    public static void callbackRegister(IWailaRegistrar registrar) {
+        WailaSC provider = new WailaSC();
+        registrar.registerBodyProvider(provider, TileEntityEnergyBase.class);
+        registrar.registerNBTProvider(provider, TileEntityEnergyBase.class);
+        registrar.registerBodyProvider(provider, TileEntityConduitBundleSC.class);
+        registrar.registerNBTProvider(provider, TileEntityConduitBundleSC.class);
+        registrar.registerBodyProvider(provider, com.sc.tileentity.TileEntityTankSC.class);
+        registrar.registerNBTProvider(provider, com.sc.tileentity.TileEntityTankSC.class);
+    }
+
+    @Override
+    public ItemStack getWailaStack(IWailaDataAccessor accessor, IWailaConfigHandler config) {
+        return null;
+    }
+
+    @Override
+    public List<String> getWailaHead(ItemStack stack, List<String> tip, IWailaDataAccessor accessor, IWailaConfigHandler config) {
+        return tip;
+    }
+
+    @Override
+    public List<String> getWailaBody(ItemStack stack, List<String> tip, IWailaDataAccessor accessor, IWailaConfigHandler config) {
+        NBTTagCompound t = accessor.getNBTData();
+        if (t == null) {
+            return tip;
+        }
+        if (t.hasKey("scIgnition")) {
+            // an unlit fusion reactor: what counts is how far its ignition charge has got, not the buffer
+            tip.add(Lang.tr("sc.waila.ignition", String.valueOf(t.getLong("scIgnition")), String.valueOf(t.getLong("scIgnitionMax"))));
+        } else if (t.hasKey("scEnergy")) {
+            tip.add(Lang.tr("sc.waila.energy", t.getInteger("scEnergy"), t.getInteger("scMax")));
+        }
+        if (t.hasKey("scEnergy")) {
+            Tier in = tier(t.getInteger("scIn"));
+            Tier out = tier(t.getInteger("scOut"));
+            if (t.getBoolean("scTransformer")) {
+                tip.add(Lang.tr(t.getBoolean("scStepUp") ? "sc.waila.stepup" : "sc.waila.stepdown"));
+                tip.add(Lang.tr("sc.waila.tierinout", in.name(), in.getVoltage(), out.name(), out.getVoltage()));
+            } else if (t.getBoolean("scSource") && !t.getBoolean("scSink")) {
+                if (t.hasKey("scGen")) {
+                    tip.add(Lang.tr("sc.waila.gen", t.getInteger("scGen")));
+                }
+                tip.add(Lang.tr("sc.waila.tierout", out.name(), out.getVoltage()));
+            } else {
+                tip.add(Lang.tr("sc.waila.tier", in.name(), in.getVoltage()));
+            }
+        }
+        if (t.hasKey("scFlow")) {
+            int flow = t.getInteger("scFlow");
+            tip.add(Lang.tr("sc.waila.flow", (flow > 0 ? "+" : "") + flow));
+        }
+        if (t.hasKey("scStatus")) {
+            tip.add(com.sc.machine.MachineStatus.byOrdinal(t.getInteger("scStatus")).localized());
+            int ticks = t.getInteger("scTicks");
+            if (ticks > 0) {
+                tip.add(Lang.tr("sc.waila.progress", t.getInteger("scProgress") * 100 / ticks));
+            }
+            tip.add(Lang.tr("sc.waila.usage", t.getInteger("scUsage")));
+            if (t.getInteger("scUpgrades") > 0) {
+                tip.add(Lang.tr("sc.waila.upgrades", t.getInteger("scUpgrades")));
+            }
+        }
+        if (t.hasKey("scCable")) {
+            int c = t.getInteger("scCable");
+            if (c >= 0) {
+                com.sc.energy.CableType type = com.sc.energy.CableType.values()[c];
+                tip.add(Lang.tr("sc.waila.cable", type.tier.name(), type.maxThroughput()));
+            }
+            net.minecraftforge.fluids.Fluid fluid = t.hasKey("scFluid") ? FluidRegistry.getFluid(t.getString("scFluid")) : null;
+            if (fluid != null) {
+                FluidStack inPipe = new FluidStack(fluid, t.getInteger("scFluidAmount"));
+                tip.add(Lang.tr("sc.waila.fluid", inPipe.getLocalizedName(), inPipe.amount, t.getInteger("scFluidCap")));
+            }
+        }
+        if (t.hasKey("scTankCap")) {
+            net.minecraftforge.fluids.Fluid tf = t.hasKey("scTankFluid") ? FluidRegistry.getFluid(t.getString("scTankFluid")) : null;
+            if (tf == null) {
+                tip.add(Lang.tr("sc.tank.tooltip.empty", t.getInteger("scTankCap")));
+            } else {
+                FluidStack inTank = new FluidStack(tf, t.getInteger("scTankAmount"));
+                tip.add(Lang.tr(tf.isGaseous(inTank) ? "sc.tank.tooltip.gas" : "sc.tank.tooltip.fluid",
+                        inTank.getLocalizedName(), inTank.amount, t.getInteger("scTankCap")));
+            }
+            if (t.getBoolean("scTankOut")) {
+                tip.add(Lang.tr("sc.tank.output.on"));
+            }
+        }
+        return tip;
+    }
+
+    @Override
+    public List<String> getWailaTail(ItemStack stack, List<String> tip, IWailaDataAccessor accessor, IWailaConfigHandler config) {
+        return tip;
+    }
+
+    /** Server side: just the numbers the body needs, not the whole tile. */
+    @Override
+    public NBTTagCompound getNBTData(EntityPlayerMP player, TileEntity te, NBTTagCompound tag, World world, int x, int y, int z) {
+        if (te instanceof TileEntityEnergyBase) {
+            TileEntityEnergyBase e = (TileEntityEnergyBase) te;
+            tag.setInteger("scEnergy", e.getEnergyStored());
+            tag.setInteger("scMax", e.getMaxEnergyStored());
+            tag.setInteger("scIn", e.inputTier().ordinal());
+            tag.setInteger("scOut", e.outputTier().ordinal());
+            tag.setBoolean("scSource", e.isEnergySource());
+            tag.setBoolean("scSink", e.isEnergySink());
+        }
+        if (te instanceof com.sc.tileentity.TileEntityGeneratorSC) {
+            com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
+            tag.setInteger("scGen", g.getGeneratorType().euPerTick);     // what it makes - not its tier's voltage
+            if (g.getGeneratorType() == com.sc.energy.GeneratorType.FUSION_REACTOR && !g.isIgnited()) {
+                tag.setLong("scIgnition", g.getIgnitionEU());
+                tag.setLong("scIgnitionMax", com.sc.tileentity.TileEntityGeneratorSC.getIgnitionThreshold());
+            }
+        }
+        if (te instanceof TileEntityTransformerSC) {
+            tag.setBoolean("scTransformer", true);
+            tag.setBoolean("scStepUp", ((TileEntityTransformerSC) te).isStepUp());
+        }
+        if (te instanceof TileEntityEnergyStorageSC) {
+            tag.setInteger("scFlow", ((TileEntityEnergyStorageSC) te).getFlowPerTick());
+        }
+        if (te instanceof TileEntityMachineSC) {
+            TileEntityMachineSC m = (TileEntityMachineSC) te;
+            tag.setInteger("scStatus", m.getStatus().ordinal());
+            tag.setInteger("scProgress", m.getProgressTicks());
+            tag.setInteger("scTicks", m.getCurrentRecipeTicks());
+            tag.setInteger("scUsage", m.effectiveEuPerTick());
+            int upgrades = 0;
+            for (int i = TileEntityMachineSC.FIRST_UPGRADE_SLOT; i < m.getSizeInventory(); i++) {
+                ItemStack s = m.getStackInSlot(i);
+                upgrades += s == null ? 0 : s.stackSize;
+            }
+            tag.setInteger("scUpgrades", upgrades);
+        }
+        if (te instanceof TileEntityConduitBundleSC) {
+            TileEntityConduitBundleSC b = (TileEntityConduitBundleSC) te;
+            tag.setInteger("scCable", b.has(ConduitKind.CABLE) ? b.getCable().ordinal() : -1);
+            FluidStack fluid = b.getFluid();
+            if (fluid != null && fluid.amount > 0) {
+                tag.setString("scFluid", fluid.getFluid().getName());
+                tag.setInteger("scFluidAmount", fluid.amount);
+                tag.setInteger("scFluidCap", b.getFluidCapacity());
+            }
+        }
+        if (te instanceof com.sc.tileentity.TileEntityTankSC) {
+            com.sc.tileentity.TileEntityTankSC tank = (com.sc.tileentity.TileEntityTankSC) te;
+            tag.setInteger("scTankCap", tank.getTank().getCapacity());
+            tag.setBoolean("scTankOut", tank.isAutoOutput());
+            FluidStack f = tank.getTank().getFluid();
+            if (f != null && f.amount > 0) {
+                tag.setString("scTankFluid", f.getFluid().getName());
+                tag.setInteger("scTankAmount", f.amount);
+            }
+        }
+        return tag;
+    }
+
+    private static Tier tier(int ordinal) {
+        Tier[] v = Tier.values();
+        return v[ordinal >= 0 && ordinal < v.length ? ordinal : 0];
+    }
+}

@@ -1,0 +1,24 @@
+# build output and Gradle caches
+build/
+.gradle/
+out/
+
+# the dev run folder (worlds, configs, logs)
+run/
+
+# third-party jars used only to compile - not ours to redistribute (see README)
+libs/*.jar
+
+# local art backups
+art_backup/
+
+# IDE / OS files
+*.iml
+.idea/
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+Thumbs.db
+desktop.ini
