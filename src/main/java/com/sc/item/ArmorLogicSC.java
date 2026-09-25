@@ -198,12 +198,30 @@ public final class ArmorLogicSC {
             if (!p.capabilities.isCreativeMode) {
                 p.capabilities.allowFlying = false;
                 p.capabilities.isFlying = false;
+                setFlySpeed(p, VANILLA_FLY_SPEED);
                 p.sendPlayerAbilities();
+            }
+        }
+        if (can && !p.capabilities.isCreativeMode) {
+            // the Quantum chestplate flies at half the speed, the Exo one as in creative
+            float speed = suitOf(piece(p, 1)) == ArmorSuit.EXO ? VANILLA_FLY_SPEED : QUANTUM_FLY_SPEED;
+            if (Math.abs(p.capabilities.getFlySpeed() - speed) > 1e-4) {
+                setFlySpeed(p, speed);
+                p.sendPlayerAbilities();          // the client takes its fly speed from this packet
             }
         }
         if (can && p.capabilities.isFlying) {
             p.fallDistance = 0;           // vanilla adds up the descent while flying - landing turned it into fall damage
         }
+    }
+
+    /** Creative / Exo flight speed, and the Quantum chestplate's slower one. */
+    public static final float VANILLA_FLY_SPEED = 0.05F, QUANTUM_FLY_SPEED = 0.025F;
+
+    /** PlayerCapabilities.setFlySpeed is client-only - the field is set directly on the server. */
+    private static void setFlySpeed(EntityPlayer p, float speed) {
+        cpw.mods.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraft.entity.player.PlayerCapabilities.class,
+                p.capabilities, speed, "flySpeed", "field_75096_f");
     }
 
     /** Arrows and fireballs coming at the player are turned back (combat mode: twice the reach). */

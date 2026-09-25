@@ -22,7 +22,7 @@ public enum ArmorFeature {
     // chestplate
     CHARGER(1, ArmorSuit.NANO, 0, 1, true),         // charges the mod's weapons in the inventory
     SHIELD(1, ArmorSuit.QUANTUM, 0, 1, true),       // turns arrows and fireballs back (EU per projectile)
-    FLIGHT(1, ArmorSuit.EXO, 120, 3, true),         // EU per second while actually flying
+    FLIGHT(1, ArmorSuit.QUANTUM, 120, 3, true),     // EU per second while actually flying; Quantum at half the speed
     FIRE_PROOF(1, ArmorSuit.EXO, 40, 1, true),      // fire and lava don't hurt (EU per second while burning)
     // leggings
     STEP_ASSIST(2, ArmorSuit.NANO, 0, 0, true),
