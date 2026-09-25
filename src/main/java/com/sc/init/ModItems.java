@@ -63,7 +63,7 @@ public final class ModItems {
     /** NEI-only stand-ins for fluids (ItemFluidDropSC) - never obtainable in play. */
     public static com.sc.item.ItemFluidDropSC fluidDrop;
     /** Step 11: every remaining §1/§2/§5-§7 component that's just a plain item with no metadata/behaviour, keyed by its own name (== texture name == unlocalized suffix). */
-    public static final java.util.Map<String, ItemSimpleSC> COMPONENTS = new java.util.HashMap<String, ItemSimpleSC>();
+    public static final java.util.Map<String, ItemSimpleSC> COMPONENTS = new java.util.LinkedHashMap<String, ItemSimpleSC>();   // registration order (the creative tab lists them so)
 
     private ModItems() {
     }
