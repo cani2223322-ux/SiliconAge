@@ -447,6 +447,32 @@ public final class SelfTestSC {
                 "wrenches: basic has no battery, electric 10000 EU charges on LV, quantum only from HV, all count as wrenches");
         check(!com.sc.energy.ExplosionLogic.burnCableIfOvervolted(null, com.sc.energy.Tier.XV, com.sc.energy.Tier.QV),
                 "cable burn-out: a cable at or above the source's tier stays (the burn itself needs a world)");
+        // generators: the two blocks, upgrades, ignition thresholds
+        boolean roundTrip = true;
+        for (com.sc.energy.GeneratorType gt : com.sc.energy.GeneratorType.values()) {
+            roundTrip &= com.sc.init.ModBlocks.generatorTypeOf(com.sc.init.ModBlocks.generatorStack(gt, 1)) == gt;
+        }
+        com.sc.tileentity.TileEntityGeneratorSC gen = new com.sc.tileentity.TileEntityGeneratorSC();
+        gen.setGeneratorType(com.sc.energy.GeneratorType.COMBUSTION);
+        ItemStack od = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE);
+        gen.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od);
+        gen.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 1, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
+        boolean upg = gen.ratedOutput() == 48 && gen.outputTier() == com.sc.energy.Tier.MV
+                && gen.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 2, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ECONOMIZER))
+                && !gen.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 2, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER));
+        com.sc.tileentity.TileEntityGeneratorSC sol = new com.sc.tileentity.TileEntityGeneratorSC();
+        sol.setGeneratorType(com.sc.energy.GeneratorType.SOLAR_EXO);
+        sol.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od.copy());
+        boolean passive = sol.ratedOutput() == 16384 && sol.outputTier() == com.sc.energy.Tier.XV;   // overdrive: fuel generators only
+        TileEntityMachineSC mo = new TileEntityMachineSC();
+        mo.setMachineType(MachineType.CRUSHER);
+        boolean machineRefuses = !mo.isItemValidForSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT, od);
+        com.sc.tileentity.TileEntityGeneratorSC exo = new com.sc.tileentity.TileEntityGeneratorSC();
+        exo.setGeneratorType(com.sc.energy.GeneratorType.EXO_REACTOR);
+        boolean ign = exo.isEnergySink() && !exo.isEnergySource() && exo.demandedEnergy() == 100000000
+                && com.sc.energy.GeneratorType.COMBUSTION.euPerMb("fuel") > 0 && com.sc.energy.GeneratorType.COMBUSTION.euPerMb("water") == 0;
+        check(roundTrip && upg && passive && machineRefuses && ign,
+                "generators: 21 types over two blocks, overdrive x1.5 + transformer tier, passive ones ignore overdrive, machines refuse it, exo ignition 100M, combustion fuels");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));

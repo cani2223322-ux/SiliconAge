@@ -35,6 +35,7 @@ public final class ModRecipesCrafting {
         baseMaterials();
         passiveComponents();
         generators();
+        newGenerators();
         armorAndChips();
         weaponsAndField();
         upgrades();
@@ -188,8 +189,68 @@ public final class ModRecipesCrafting {
                 comp("liBlanketModule"), comp("liBlanketModule"), comp("liBlanketModule"), comp("liBlanketModule"));
     }
 
+    /**
+     * The generators added after §15 - every ingredient is one of the mod's own items. Each
+     * tier of a line is built round the one below (solar Nano / Quantum / Exo, the reactors),
+     * like the energy storages.
+     */
+    private static void newGenerators() {
+        ItemStack coil = comp("copperCoil"), controller = silicon(SiliconMaterial.CONTROLLER);
+        // LV: coal etc. in a combustion chamber, copper windings
+        OreRecipes.shaped(generator(GeneratorType.SOLID_FUEL), "CKC", "IXI", "CKC",
+                'C', ingot(Material.COPPER), 'K', coil, 'I', ingot(Material.TIN), 'X', comp("combustionChamber"));
+        // LV: a tin paddle wheel on a copper dynamo
+        OreRecipes.shaped(generator(GeneratorType.WATER_WHEEL), "T T", "TKT", "LCL",
+                'T', ingot(Material.TIN), 'K', coil, 'L', ingot(Material.LEAD), 'C', cable(CableType.COPPER_INSULATED));
+        // MV: steel mast, generator of two coils; the rotor of four titanium blades
+        OreRecipes.shaped(generator(GeneratorType.WIND_TURBINE), "SKS", "SXS", "SCS",
+                'S', ingot(Material.STEEL), 'K', coil, 'X', comp("steelCasing"), 'C', cable(CableType.SILVER));
+        OreRecipes.shaped(new ItemStack(ModItems.windRotor), " B ", "BSB", " B ",
+                'B', comp("turbineBladeTitanium"), 'S', ingot(Material.STEEL));
+        // MV: lead shielding round thermocouples; the capsule: lithium isotopes in zirconium and lead
+        OreRecipes.shaped(generator(GeneratorType.RTG), "LKL", "LXL", "LCL",
+                'L', ingot(Material.LEAD), 'K', coil, 'X', comp("steelCasing"), 'C', cable(CableType.SILVER));
+        OreRecipes.shaped(new ItemStack(ModItems.isotopeCapsule), "LZL", "YPY", "LZL",
+                'L', ingot(Material.LEAD), 'Z', ingot(Material.ZIRCONIUM), 'Y', ingot(Material.LITHIUM), 'P', comp("tiPlate"));
+        // HV: Peltier elements - silicon dies between titanium plates
+        OreRecipes.shaped(generator(GeneratorType.THERMOELECTRIC), "PDP", "DXD", "CDC",
+                'P', comp("tiPlate"), 'D', silicon(SiliconMaterial.DIE), 'X', controller, 'C', cable(CableType.TUNGSTEN));
+        // HV: a quartz chamber for the lava in titanium casings
+        OreRecipes.shaped(generator(GeneratorType.GEOTHERMAL), "TQT", "KTK", "CTC",
+                'T', comp("tiCasing"), 'Q', comp("quartzChamber"), 'K', coil, 'C', cable(CableType.TUNGSTEN));
+        // HV: platinum catalyst on a polymer membrane
+        OreRecipes.shaped(generator(GeneratorType.FUEL_CELL), "PMP", "MXM", "CTC",
+                'P', ingot(Material.PLATINUM), 'M', comp("polymerPlate"), 'X', controller, 'C', cable(CableType.TUNGSTEN),
+                'T', comp("tiPlate"));
+        // Solar Nano (IV) / Quantum (QV) / Exo (XV): four of the panel below round the new tier's parts
+        OreRecipes.shaped(generator(GeneratorType.SOLAR_NANO), "SHS", "CXC", "SHS",
+                'S', generator(GeneratorType.SOLAR_GAAS), 'H', comp("hfo2Die"), 'C', cable(CableType.NIOBIUM_TITANIUM), 'X', controller);
+        OreRecipes.shaped(generator(GeneratorType.SOLAR_QUANTUM), "SHS", "CXC", "SHS",
+                'S', generator(GeneratorType.SOLAR_NANO), 'H', comp("heLoopModule"), 'C', cable(CableType.QUANTUM), 'X', controller);
+        OreRecipes.shaped(generator(GeneratorType.SOLAR_EXO), "SHS", "CXC", "SHS",
+                'S', generator(GeneratorType.SOLAR_QUANTUM), 'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', controller);
+        // IV: two plasma generators and Nb3Sn coils
+        OreRecipes.shaped(generator(GeneratorType.PLASMA_REACTOR), "NGN", "CXC", "NGN",
+                'N', comp("nb3SnCoil"), 'G', generator(GeneratorType.PLASMA_GENERATOR), 'C', cable(CableType.NIOBIUM_TITANIUM), 'X', controller);
+        // QV: the fusion reactor made a tokamak; its coils (8 around it)
+        OreRecipes.shaped(generator(GeneratorType.TOKAMAK), "NCN", "XFX", "NCN",
+                'N', comp("nb3SnCoil"), 'C', cable(CableType.QUANTUM), 'X', controller, 'F', generator(GeneratorType.FUSION_REACTOR));
+        OreRecipes.shaped(new ItemStack(ModBlocks.tokamakCoil), "NTN", "CHC", "NTN",
+                'N', comp("nb3SnCoil"), 'T', comp("tiCasing"), 'C', cable(CableType.NIOBIUM_TITANIUM), 'H', new ItemStack(ModItems.liquidHeCell));
+        // XV: a tokamak with a second fusion core, hafnium and Exo cable
+        OreRecipes.shaped(generator(GeneratorType.EXO_REACTOR), "HCH", "XTX", "HFH",
+                'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', controller, 'T', generator(GeneratorType.TOKAMAK),
+                'F', comp("fusionCore"));
+        // generator upgrades
+        ItemStack transistor = silicon(SiliconMaterial.TRANSISTOR);
+        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE), "KKK", "WTW", "WCW",
+                'K', comp("capacitor"), 'W', cable(CableType.SILVER), 'T', transistor, 'C', comp("combustionChamber"));
+        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ECONOMIZER), "RRR", "WTW", "WSW",
+                'R', comp("resistor"), 'W', cable(CableType.SILVER), 'T', transistor, 'S', comp("sensor"));
+    }
+
     private static ItemStack generator(GeneratorType type) {
-        return new ItemStack(ModBlocks.generatorSC, 1, type.ordinal());
+        return ModBlocks.generatorStack(type, 1);
     }
 
     // ---- §6 (Nano base corpus + Chip tier I - Quantum/Exo/tier II/III are Upgrade Station recipes) ----

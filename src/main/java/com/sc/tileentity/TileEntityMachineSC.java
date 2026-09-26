@@ -726,7 +726,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         // hopper) could fill the input slots with junk that can never be processed, and the
         // player has to dig it back out by hand.
         if (slot >= FIRST_UPGRADE_SLOT) {
-            return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC;
+            return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
+                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly();
         }
         return slot < INPUT_SLOTS && RecipeRegistry.isValidInput(machineType, stack);
     }

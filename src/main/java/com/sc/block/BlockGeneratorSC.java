@@ -28,14 +28,26 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraftforge.common.util.ForgeDirection;
 
-/** All 7 generators (§15) on one block, one metadata per GeneratorType - well under the 16-value cap (unlike machines, §10/step 6). */
+/**
+ * The generators, one metadata per GeneratorType - more than a block's 16 metadata values, so
+ * (like machines) two blocks: typeOffset 0 covers ordinals 0-15, typeOffset 16 the rest. Both
+ * share one unlocalized name, so the item names are the same keys.
+ */
 public class BlockGeneratorSC extends Block {
 
+    private final int typeOffset;
+    private final int typeCount;
     private IIcon[] frontIcons;
     private IIcon[] casingIcons;
 
     public BlockGeneratorSC() {
+        this(0);
+    }
+
+    public BlockGeneratorSC(int typeOffset) {
         super(Material.iron);
+        this.typeOffset = typeOffset;
+        this.typeCount = Math.min(16, GeneratorType.values().length - typeOffset);
         setBlockName(Reference.ASSETS + ".generatorSC");
         setCreativeTab(ModCreativeTab.TAB);
         setHardness(3.5F);
@@ -55,9 +67,14 @@ public class BlockGeneratorSC extends Block {
         return te;
     }
 
-    private static GeneratorType typeFor(int meta) {
+    public int getTypeOffset() {
+        return typeOffset;
+    }
+
+    public GeneratorType typeFor(int meta) {
         GeneratorType[] values = GeneratorType.values();
-        return values[meta >= 0 && meta < values.length ? meta : 0];
+        int i = typeOffset + (meta >= 0 && meta < typeCount ? meta : 0);
+        return values[Math.min(i, values.length - 1)];
     }
 
     @Override
@@ -90,7 +107,7 @@ public class BlockGeneratorSC extends Block {
 
     private IIcon iconFor(int side, GeneratorType type, int front) {
         // Solar panels face the sky: their cell texture goes on top, not on the front.
-        int face = type.kind == GeneratorType.Kind.PASSIVE ? 1 : front;
+        int face = type.frontOnTop() ? 1 : front;
         if (side == face) {
             return frontIcons != null ? frontIcons[type.ordinal()] : null;
         }
@@ -153,8 +170,8 @@ public class BlockGeneratorSC extends Block {
 
     @Override
     public void getSubBlocks(Item item, CreativeTabs tab, List list) {
-        for (GeneratorType type : GeneratorType.values()) {
-            list.add(new ItemStack(item, 1, type.ordinal()));
+        for (int i = 0; i < typeCount; i++) {
+            list.add(new ItemStack(item, 1, i));
         }
     }
 

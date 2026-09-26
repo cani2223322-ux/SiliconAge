@@ -9,66 +9,114 @@ import com.sc.energy.GeneratorType;
 import com.sc.manual.Lang;
 import com.sc.tileentity.TileEntityGeneratorSC;
 
+import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.FluidTank;
 
 /**
- * Generic GUI for every generator (§15). Shows the energy buffer plus whatever that generator
- * type actually has: a fuel tank for the fluid-burning ones, and the ignition charge bar for
- * the Fusion Reactor (§18.2), which used to only exist as a percentage buried in a status
- * string. The background sheet is only the frame: slot pockets and wells are drawn here per
- * type (ContainerGeneratorSC parks the unused slots off-screen), so a turbine doesn't show an
- * item slot it can't take and a solar panel shows a sun that's lit while it has light.
+ * GUI for every generator, in the machines' steel style. It shows the energy buffer plus what
+ * that generator actually has: its item slots, up to three tanks (fuel, second fuel, the Fuel
+ * Cell's water), the sun of a solar panel, wind / water / heat readings, the ignition charge and
+ * plasma heat of a reactor, the Creative Generator's tier button - and, for every one, its
+ * status and what it makes right now. Upgrades sit in a side panel, like a machine's.
  */
 public class GuiGeneratorSC extends GuiContainer {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation(Reference.ASSETS, "textures/gui/guiGenerator.png");
 
-    private static final int SLOT_FUEL_X = 26, SLOT_BLANKET_X = 44, SLOT_Y = 33;
-    private static final int FUEL_X = 67, FUEL_Y = 17, FUEL_W = 8, FUEL_H = 44;
-    private static final int SUN_X = 60, SUN_Y = 22;
-    private static final int IGNITION_X = 84, IGNITION_Y = 33, IGNITION_W = 52, IGNITION_H = 8;
+    private static final int TANK_Y = 17, TANK_W = 8, TANK_H = 36;
+    private static final int[] TANK_X = {67, 79, 91};
+    private static final int SUN_X = 60, SUN_Y = 20;
+    private static final int INFO_X = 84, INFO_Y = 20;
+    private static final int IGNITION_X = 84, IGNITION_Y = 20, IGNITION_W = 52, IGNITION_H = 8;
+    private static final int HEAT_X = 84, HEAT_Y = 42, HEAT_W = 42, HEAT_H = 5;
     private static final int ENERGY_X = 152, ENERGY_Y = 17, ENERGY_W = 10, ENERGY_H = 44;
-    // Below the fuel gauge (which now ends at y 61): the longest status is 120 px wide.
-    private static final int STATUS_X = 8, STATUS_Y = 66;
+    private static final int STATUS_X = 8, STATUS_Y = 58, OUTPUT_Y = 68;
+    private static final int PANEL_W = 32, PANEL_H = 86;
 
     private final TileEntityGeneratorSC generator;
+    private final GeneratorType type;
 
     public GuiGeneratorSC(InventoryPlayer playerInv, TileEntityGeneratorSC generator) {
         super(new ContainerGeneratorSC(playerInv, generator));
         this.generator = generator;
-        xSize = 176;
+        this.type = generator.getGeneratorType();
+        xSize = TileEntityGeneratorSC.hasUpgradeSlots(type) ? ContainerGeneratorSC.PANEL_X + PANEL_W : 176;
         ySize = 166;
     }
 
-    private boolean hasFuelTank() {
-        return generator.getGeneratorType().kind == GeneratorType.Kind.FLUID_FUEL;
+    @Override
+    public void initGui() {
+        super.initGui();
+        buttonList.clear();
+        if (type == GeneratorType.CREATIVE) {
+            buttonList.add(new GuiButton(ContainerGeneratorSC.BTN_CREATIVE_TIER, guiLeft + 30, guiTop + 26, 100, 20, ""));
+        }
     }
 
-    private boolean isFusion() {
-        return generator.getGeneratorType() == GeneratorType.FUSION_REACTOR;
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        for (Object o : buttonList) {
+            GuiButton b = (GuiButton) o;
+            if (b.id == ContainerGeneratorSC.BTN_CREATIVE_TIER) {
+                b.displayString = Lang.tr("sc.gui.gen.creativetier", generator.getCreativeTier().name(), generator.getCreativeTier().getVoltage());
+                b.enabled = mc.thePlayer.capabilities.isCreativeMode;
+            }
+        }
+    }
+
+    @Override
+    protected void actionPerformed(GuiButton button) {
+        mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
+    }
+
+    /** Tanks this generator shows: 1 (fuel / coolant), 2 (two fuels), 3 (+ the Fuel Cell's water). */
+    private int tankCount() {
+        switch (type.kind) {
+            case FLUID_FUEL:
+            case EXO:
+                return 1;
+            case DUAL_FLUID:
+                return type == GeneratorType.FUEL_CELL ? 3 : 2;
+            default:
+                return 0;
+        }
+    }
+
+    private FluidTank tank(int i) {
+        return i == 0 ? generator.getFuelTank() : i == 1 ? generator.getFuelTank2() : generator.getOutTank();
+    }
+
+    private boolean isReactor() {
+        return type.needsIgnition();
     }
 
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         GuiGaugeSC.bind(mc, TEXTURE);
-        int x = (width - xSize) / 2;
-        int y = (height - ySize) / 2;
-        drawTexturedModalRect(x, y, 0, 0, xSize, ySize);
-
-        GeneratorType type = generator.getGeneratorType();
-        if (type == GeneratorType.COMBUSTION || isFusion()) {
-            pocket(x + SLOT_FUEL_X, y + SLOT_Y);
+        int x = guiLeft, y = guiTop;
+        drawTexturedModalRect(x, y, 0, 0, 176, ySize);
+        if (TileEntityGeneratorSC.hasUpgradeSlots(type)) {
+            drawUpgradePanel(x, y);
         }
-        if (isFusion()) {
-            pocket(x + SLOT_BLANKET_X, y + SLOT_Y);
+
+        for (int slot = 0; slot < TileEntityGeneratorSC.FIRST_UPGRADE_SLOT; slot++) {
+            if (TileEntityGeneratorSC.usesSlot(type, slot)) {
+                int sx = slot == 0 ? ContainerGeneratorSC.SLOT_FUEL_X : ContainerGeneratorSC.SLOT_BLANKET_X;
+                drawTexturedModalRect(x + sx - 1, y + ContainerGeneratorSC.SLOT_Y - 1, GuiGaugeSC.SPR_STEEL_SLOT_U, GuiGaugeSC.SPR_STEEL_SLOT_V, 18, 18);
+            }
+        }
+        if (isReactor()) {
             GuiGaugeSC.drawWell(x + IGNITION_X, y + IGNITION_Y, IGNITION_W, IGNITION_H);
-            float charge = generator.isIgnited() ? 1f
-                    : (float) generator.getIgnitionEU() / TileEntityGeneratorSC.getIgnitionThreshold();
+            float charge = generator.isIgnited() ? 1f : (float) generator.getIgnitionEU() / type.ignitionThreshold();
             GuiGaugeSC.drawSpriteHorizontal(this, x + IGNITION_X, y + IGNITION_Y,
                     GuiGaugeSC.SPR_IGNITION_U, GuiGaugeSC.SPR_IGNITION_V, IGNITION_W, IGNITION_H, charge);
+            GuiGaugeSC.drawWell(x + HEAT_X, y + HEAT_Y, HEAT_W, HEAT_H);
+            GuiGaugeSC.drawSpriteHorizontal(this, x + HEAT_X, y + HEAT_Y, GuiGaugeSC.SPR_HEAT_U, GuiGaugeSC.SPR_HEAT_V,
+                    HEAT_W, HEAT_H, (float) generator.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT);
         }
         if (type.kind == GeneratorType.Kind.PASSIVE) {
             boolean lit = generator.getStatus() != GeneratorStatus.NO_SUNLIGHT;
@@ -79,35 +127,74 @@ public class GuiGeneratorSC extends GuiContainer {
         GuiGaugeSC.drawSpriteVertical(this, x + ENERGY_X, y + ENERGY_Y, GuiGaugeSC.SPR_ENERGY_U, GuiGaugeSC.SPR_ENERGY_V,
                 ENERGY_W, ENERGY_H, (float) generator.getEnergyStored() / Math.max(1, generator.getMaxEnergyStored()));
 
-        if (hasFuelTank()) {                    // last: drawFluid() leaves the blocks atlas bound
-            FluidTank tank = generator.getFuelTank();
-            GuiGaugeSC.drawWell(x + FUEL_X, y + FUEL_Y, FUEL_W, FUEL_H);
-            GuiGaugeSC.drawFluid(mc, x + FUEL_X, y + FUEL_Y, FUEL_W, FUEL_H, tank.getFluid(), tank.getCapacity());
+        for (int i = 0; i < tankCount(); i++) {      // last: drawFluid() leaves the blocks atlas bound
+            FluidTank t = tank(i);
+            GuiGaugeSC.drawWell(x + TANK_X[i], y + TANK_Y, TANK_W, TANK_H);
+            GuiGaugeSC.drawFluid(mc, x + TANK_X[i], y + TANK_Y, TANK_W, TANK_H, t.getFluid(), t.getCapacity());
             GuiGaugeSC.bind(mc, TEXTURE);
-            GuiGaugeSC.drawBlended(this, x + FUEL_X, y + FUEL_Y, GuiGaugeSC.SPR_GLASS_U, GuiGaugeSC.SPR_GLASS_V, FUEL_W, FUEL_H);
+            GuiGaugeSC.drawBlended(this, x + TANK_X[i], y + TANK_Y, GuiGaugeSC.SPR_GLASS_U, GuiGaugeSC.SPR_GLASS_V, TANK_W, TANK_H);
         }
+        org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
-    /** 18x18 slot pocket whose 16x16 interior starts at (x, y), like a baked-in one would. */
-    private void pocket(int x, int y) {
-        drawTexturedModalRect(x - 1, y - 1, GuiGaugeSC.SPR_SLOT_U, GuiGaugeSC.SPR_SLOT_V, 18, 18);
+    /** The upgrade panel, same as a machine's (GuiMachineSC). */
+    private void drawUpgradePanel(int x, int y) {
+        int x0 = x + ContainerGeneratorSC.PANEL_X - 1, y0 = y, x1 = x + ContainerGeneratorSC.PANEL_X + PANEL_W, y1 = y0 + PANEL_H;
+        drawRect(x0, y0, x1, y1, GuiGaugeSC.OUTLINE);
+        drawRect(x0 + 1, y0 + 1, x1 - 1, y1 - 1, GuiGaugeSC.PANEL);
+        drawRect(x0 + 1, y0 + 1, x1 - 2, y0 + 2, GuiGaugeSC.BEVEL_LIGHT);
+        drawRect(x0 + 1, y0 + 1, x0 + 2, y1 - 2, GuiGaugeSC.BEVEL_LIGHT);
+        drawRect(x1 - 2, y0 + 2, x1 - 1, y1 - 1, GuiGaugeSC.BEVEL_DARK);
+        drawRect(x0 + 2, y1 - 2, x1 - 1, y1 - 1, GuiGaugeSC.BEVEL_DARK);
+        org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
+        GuiGaugeSC.bind(mc, TEXTURE);
+        for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
+            drawTexturedModalRect(x + ContainerGeneratorSC.UPGRADE_X - 1, y + ContainerGeneratorSC.UPGRADE_Y - 1 + i * 18,
+                    GuiGaugeSC.SPR_STEEL_SLOT_U, GuiGaugeSC.SPR_STEEL_SLOT_V, 18, 18);
+        }
     }
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        fontRendererObj.drawString(generator.getGeneratorType().localizedName(), 8, 5, GuiGaugeSC.TITLE_COLOR);
-        GuiGaugeSC.drawTierBadge(fontRendererObj, generator.getGeneratorType().tier, xSize - 6, 3);
+        fontRendererObj.drawString(type.localizedName(), 8, 5, GuiGaugeSC.TITLE_COLOR);
+        GuiGaugeSC.drawTierBadge(fontRendererObj, generator.outputTier(), 176 - 6, 3);
         GeneratorStatus status = generator.getStatus();
         fontRendererObj.drawString(status.localized(), STATUS_X, STATUS_Y, statusColor(status));
+        String out = Lang.tr("sc.gui.gen.now", generator.getLastOutput());
+        if (isReactor()) {
+            out += "   " + Lang.tr("sc.gui.gen.plasma", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT);
+        }
+        fontRendererObj.drawString(out, STATUS_X, OUTPUT_Y, 0x404040);
+        int c = 0x404040;
+        switch (type.kind) {
+            case PASSIVE: {
+                boolean sky = status != GeneratorStatus.NO_SUNLIGHT;
+                String when = !sky ? Lang.tr("sc.gui.gen.nosky")
+                        : Lang.tr(mc.theWorld.isDaytime() ? "sc.gui.gen.day" : "sc.gui.gen.night");
+                fontRendererObj.drawString(when, 100, 26, c);
+                if (sky && mc.theWorld.isRaining()) {
+                    fontRendererObj.drawString(Lang.tr("sc.gui.gen.rain"), 100, 36, 0x2A62A8);
+                }
+                break;
+            }
+            case WIND:
+                fontRendererObj.drawString(Lang.tr("sc.gui.gen.height", generator.getInfoA()), INFO_X - 16, INFO_Y + 2, c);
+                fontRendererObj.drawString(Lang.tr("sc.gui.gen.free", generator.getInfoB()), INFO_X - 16, INFO_Y + 12, c);
+                break;
+            case WATER:
+                fontRendererObj.drawString(Lang.tr("sc.gui.gen.flow", generator.getInfoA()), INFO_X - 16, INFO_Y + 6, c);
+                break;
+            case THERMO:
+                fontRendererObj.drawString(Lang.tr("sc.gui.gen.pairs", generator.getInfoA()), INFO_X - 16, INFO_Y + 2, c);
+                fontRendererObj.drawString(Lang.tr("sc.gui.gen.dt", generator.getInfoB()), INFO_X - 16, INFO_Y + 12, c);
+                break;
+            case RTG:
+                fontRendererObj.drawString(Lang.tr("sc.gui.gen.capsules", generator.getInfoA()), INFO_X - 16, INFO_Y + 6, c);
+                break;
+            default:
+        }
     }
 
-    /**
-     * Gauge tooltips are drawn after everything else, in screen space. GuiContainer hands
-     * drawGuiContainerForegroundLayer the RAW screen mouse position (while GL is translated to
-     * the panel), so hover tests there were off by (guiLeft, guiTop): the real gauges never
-     * showed a tooltip and the panel's top-left corner did. Drawing here also avoids the
-     * item-lighting drawHoveringText leaves behind for the cursor stack.
-     */
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         super.drawScreen(mouseX, mouseY, partialTicks);
@@ -121,9 +208,10 @@ public class GuiGeneratorSC extends GuiContainer {
         switch (status) {
             case GENERATING: return 0x2E7D32;
             case IGNITING: return 0x2A62A8;
-            case BUFFER_FULL: return 0x9A6200;
+            case BUFFER_FULL:
+            case WATER_FULL: return 0x9A6200;
             case IDLE: return 0x606060;
-            default: return 0xB02418;          // every "no ..." / depleted state
+            default: return 0xB02418;          // every "no ..." / depleted / overheated state
         }
     }
 
@@ -133,47 +221,91 @@ public class GuiGeneratorSC extends GuiContainer {
         if (GuiGaugeSC.isOver(ENERGY_X, ENERGY_Y, ENERGY_W, ENERGY_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(generator.getEnergyStored() + " / " + generator.getMaxEnergyStored() + " EU");
-            lines.add(Lang.tr("sc.gui.output", generator.getGeneratorType().euPerTick));
+            lines.add(Lang.tr("sc.gui.output", type == GeneratorType.CREATIVE ? generator.getCreativeTier().getVoltage() : generator.ratedOutput()));
+            lines.add(Lang.tr("sc.gui.gen.packet", generator.outputTier().name(), generator.outputTier().getVoltage()));
             return lines;
         }
 
-        if (hasFuelTank() && GuiGaugeSC.isOver(FUEL_X, FUEL_Y, FUEL_W, FUEL_H, mouseX, mouseY)) {
-            FluidTank tank = generator.getFuelTank();
-            lines.add(Lang.tr("sc.gui.fuel"));
-            lines.add(GuiGaugeSC.fluidLabel(tank.getFluid(), tank.getCapacity()));
-            lines.add(Lang.tr("sc.gui.fuel.rate", generator.getGeneratorType().fuelRatePerTick));
-            return lines;
-        }
-
-        if (isFusion() && !generator.isIgnited()
-                && GuiGaugeSC.isOver(IGNITION_X, IGNITION_Y, IGNITION_W, IGNITION_H, mouseX, mouseY)) {
-            lines.add(Lang.tr("sc.gui.ignition"));
-            lines.add(generator.getIgnitionEU() + " / " + TileEntityGeneratorSC.getIgnitionThreshold() + " EU");
-            return lines;
-        }
-
-        // What belongs in each slot while it's still empty - a blank pocket says nothing on its
-        // own, and vanilla only draws a tooltip for a slot that holds an item.
-        if (generator.getGeneratorType() == GeneratorType.COMBUSTION
-                && generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL) == null
-                && GuiGaugeSC.isOver(SLOT_FUEL_X, SLOT_Y, 16, 16, mouseX, mouseY)) {
-            lines.add(Lang.tr("sc.gui.slot.solidfuel"));
-            lines.add(Lang.tr("sc.gui.slot.solidfuel.hint"));
-            return lines;
-        }
-        if (isFusion()) {
-            if (generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL) == null
-                    && GuiGaugeSC.isOver(SLOT_FUEL_X, SLOT_Y, 16, 16, mouseX, mouseY)) {
-                lines.add(Lang.tr("sc.gui.slot.deuterium"));
+        for (int i = 0; i < tankCount(); i++) {
+            if (GuiGaugeSC.isOver(TANK_X[i], TANK_Y, TANK_W, TANK_H, mouseX, mouseY)) {
+                FluidTank t = tank(i);
+                lines.add(Lang.tr(i == 2 ? "sc.gui.gen.water" : type.kind == GeneratorType.Kind.EXO ? "sc.gui.gen.coolant" : "sc.gui.fuel"));
+                lines.add(GuiGaugeSC.fluidLabel(t.getFluid(), t.getCapacity()));
+                if (i == 0 && type.kind == GeneratorType.Kind.DUAL_FLUID || i == 0 && type.kind == GeneratorType.Kind.EXO) {
+                    lines.add(Lang.tr("sc.gui.gen.needs", fluidName(type.fuelFluidName), type.fuelRatePerTick));
+                } else if (i == 1) {
+                    lines.add(Lang.tr("sc.gui.gen.needs", fluidName(type.fuel2FluidName), type.fuel2RatePerTick));
+                } else if (i == 0 && type == GeneratorType.COMBUSTION) {
+                    lines.add(Lang.tr("sc.gui.gen.fuels"));
+                } else if (i == 0) {
+                    lines.add(Lang.tr("sc.gui.fuel.rate", type.fuelRatePerTick));
+                }
                 return lines;
             }
-            if (generator.getStackInSlot(TileEntityGeneratorSC.SLOT_BLANKET) == null
-                    && GuiGaugeSC.isOver(SLOT_BLANKET_X, SLOT_Y, 16, 16, mouseX, mouseY)) {
-                lines.add(Lang.tr("sc.gui.slot.blanket"));
-                lines.add(Lang.tr("sc.gui.slot.blanket.hint"));
+        }
+
+        if (isReactor()) {
+            if (!generator.isIgnited() && GuiGaugeSC.isOver(IGNITION_X, IGNITION_Y, IGNITION_W, IGNITION_H, mouseX, mouseY)) {
+                lines.add(Lang.tr("sc.gui.ignition"));
+                lines.add(generator.getIgnitionEU() + " / " + type.ignitionThreshold() + " EU");
+                return lines;
+            }
+            if (GuiGaugeSC.isOver(HEAT_X, HEAT_Y, HEAT_W, HEAT_H, mouseX, mouseY)) {
+                lines.add(Lang.tr("sc.gui.gen.heat"));
+                lines.add(Lang.tr("sc.gui.gen.plasma", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT)
+                        + "  (" + generator.getHeat() / 10 + "%)");
+                lines.add(Lang.tr("sc.gui.gen.ramp", generator.getRamp() / 10));
+                lines.add(Lang.tr("sc.gui.gen.heat.hint"));
+                return lines;
+            }
+        }
+
+        if (TileEntityGeneratorSC.hasUpgradeSlots(type)
+                && GuiGaugeSC.isOver(ContainerGeneratorSC.PANEL_X, 0, PANEL_W, PANEL_H, mouseX, mouseY)
+                && !overUpgradeSlot(mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.upgrades"));
+            lines.add(Lang.tr("sc.gui.gen.upgrades.hint"));
+            return lines;
+        }
+
+        // What belongs in each slot while it's still empty.
+        for (int slot = 0; slot < TileEntityGeneratorSC.FIRST_UPGRADE_SLOT; slot++) {
+            int sx = slot == 0 ? ContainerGeneratorSC.SLOT_FUEL_X : ContainerGeneratorSC.SLOT_BLANKET_X;
+            if (TileEntityGeneratorSC.usesSlot(type, slot) && generator.getStackInSlot(slot) == null
+                    && GuiGaugeSC.isOver(sx, ContainerGeneratorSC.SLOT_Y, 16, 16, mouseX, mouseY)) {
+                lines.add(Lang.tr(slotKey(slot)));
+                String hint = Lang.trOr(slotKey(slot) + ".hint", null);
+                if (hint != null) {
+                    lines.add(hint);
+                }
                 return lines;
             }
         }
         return null;
+    }
+
+    private String slotKey(int slot) {
+        switch (type) {
+            case COMBUSTION:
+            case SOLID_FUEL: return "sc.gui.slot.solidfuel";
+            case GEOTHERMAL: return "sc.gui.slot.lava";
+            case WIND_TURBINE: return "sc.gui.slot.rotor";
+            case RTG: return "sc.gui.slot.capsule";
+            default: return slot == 0 ? "sc.gui.slot.deuterium" : "sc.gui.slot.blanket";
+        }
+    }
+
+    private static boolean overUpgradeSlot(int mouseX, int mouseY) {
+        for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
+            if (GuiGaugeSC.isOver(ContainerGeneratorSC.UPGRADE_X - 1, ContainerGeneratorSC.UPGRADE_Y - 1 + i * 18, 18, 18, mouseX, mouseY)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String fluidName(String name) {
+        net.minecraftforge.fluids.Fluid f = name == null ? null : net.minecraftforge.fluids.FluidRegistry.getFluid(name);
+        return f == null ? String.valueOf(name) : f.getLocalizedName(new net.minecraftforge.fluids.FluidStack(f, 1));
     }
 }

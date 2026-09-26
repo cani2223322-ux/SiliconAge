@@ -50,7 +50,7 @@ public final class RecipeDumpSC {
                 }
             }
             for (GeneratorType type : GeneratorType.values()) {
-                out.println("B\tgenerator\t" + type.name() + "\t" + name(new ItemStack(ModBlocks.generatorSC, 1, type.ordinal()))
+                out.println("B\tgenerator\t" + type.name() + "\t" + name(ModBlocks.generatorStack(type, 1))
                         + "\t" + type.kind + "\t" + type.fuelFluidName);
             }
             for (Object o : CraftingManager.getInstance().getRecipeList()) {

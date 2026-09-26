@@ -142,10 +142,10 @@ public class WailaSC implements IWailaDataProvider {
         }
         if (te instanceof com.sc.tileentity.TileEntityGeneratorSC) {
             com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
-            tag.setInteger("scGen", g.getGeneratorType().euPerTick);     // what it makes - not its tier's voltage
-            if (g.getGeneratorType() == com.sc.energy.GeneratorType.FUSION_REACTOR && !g.isIgnited()) {
+            tag.setInteger("scGen", g.getLastOutput());                  // what it makes right now - not its tier's voltage
+            if (g.getGeneratorType().needsIgnition() && !g.isIgnited()) {
                 tag.setLong("scIgnition", g.getIgnitionEU());
-                tag.setLong("scIgnitionMax", com.sc.tileentity.TileEntityGeneratorSC.getIgnitionThreshold());
+                tag.setLong("scIgnitionMax", g.getGeneratorType().ignitionThreshold());
             }
         }
         if (te instanceof TileEntityTransformerSC) {

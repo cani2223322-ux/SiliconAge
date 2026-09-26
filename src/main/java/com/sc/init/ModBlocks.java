@@ -1,5 +1,6 @@
 package com.sc.init;
 
+import net.minecraft.block.Block;
 import com.sc.block.BlockCableSC;
 import com.sc.block.BlockFieldGeneratorSC;
 import com.sc.block.BlockGeneratorSC;
@@ -38,6 +39,23 @@ public final class ModBlocks {
     public static BlockMachineSC machineSC;
     public static BlockMachineSC machineSC2;
     public static BlockGeneratorSC generatorSC;
+    public static BlockGeneratorSC generatorSC2;
+    public static Block tokamakCoil;
+
+    /** The item of a generator type (the block and metadata it lives on). */
+    public static net.minecraft.item.ItemStack generatorStack(com.sc.energy.GeneratorType type, int count) {
+        BlockGeneratorSC block = type.ordinal() < 16 ? generatorSC : generatorSC2;
+        return new net.minecraft.item.ItemStack(block, count, type.ordinal() - block.getTypeOffset());
+    }
+
+    /** The generator type of a generator item, or null. */
+    public static com.sc.energy.GeneratorType generatorTypeOf(net.minecraft.item.ItemStack stack) {
+        if (stack == null) {
+            return null;
+        }
+        Block b = Block.getBlockFromItem(stack.getItem());
+        return b instanceof BlockGeneratorSC ? ((BlockGeneratorSC) b).typeFor(stack.getItemDamage()) : null;
+    }
     public static BlockFieldGeneratorSC fieldGeneratorSC;
     public static com.sc.block.BlockEnergyStorageSC energyStorageSC;
     public static com.sc.block.BlockTransformerSC transformerSC;
@@ -74,8 +92,13 @@ public final class ModBlocks {
         machineSC2 = new BlockMachineSC(16);
         GameRegistry.registerBlock(machineSC2, ItemBlockMachineSC.class, "machineSC2");
 
-        generatorSC = new BlockGeneratorSC();
+        generatorSC = new BlockGeneratorSC(0);
         GameRegistry.registerBlock(generatorSC, ItemBlockGeneratorSC.class, "generatorSC");
+        // more generators than 16 metadata values: the rest on a second block (like machines)
+        generatorSC2 = new BlockGeneratorSC(16);
+        GameRegistry.registerBlock(generatorSC2, ItemBlockGeneratorSC.class, "generatorSC2");
+        tokamakCoil = new com.sc.block.BlockTokamakCoilSC();
+        GameRegistry.registerBlock(tokamakCoil, "tokamakCoil");
 
         fieldGeneratorSC = new BlockFieldGeneratorSC();
         GameRegistry.registerBlock(fieldGeneratorSC, "fieldGeneratorSC");

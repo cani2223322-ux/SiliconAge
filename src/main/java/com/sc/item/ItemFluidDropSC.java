@@ -59,8 +59,15 @@ public class ItemFluidDropSC extends Item {
                 }
             }
             for (GeneratorType type : GeneratorType.values()) {
-                if (type.fuelFluidName != null) {
-                    set.add(type.fuelFluidName);
+                for (String f : new String[]{type.fuelFluidName, type.fuel2FluidName}) {
+                    if (f != null && net.minecraftforge.fluids.FluidRegistry.getFluid(f) != null) {
+                        set.add(f);
+                    }
+                }
+            }
+            for (String f : GeneratorType.COMBUSTION_FUELS) {
+                if (net.minecraftforge.fluids.FluidRegistry.getFluid(f) != null) {
+                    set.add(f);
                 }
             }
             List<String> list = new ArrayList<String>(set);

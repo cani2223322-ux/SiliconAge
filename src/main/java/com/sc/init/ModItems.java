@@ -45,6 +45,7 @@ public final class ModItems {
     public static ItemSimpleSC alFoil;
     public static ItemSimpleSC liquidHeCell;
     public static ItemSimpleSC deuteriumCell;
+    public static com.sc.item.ItemWearPartSC windRotor, isotopeCapsule;
     public static final java.util.List<com.sc.item.ItemWrenchSC> WRENCHES = new java.util.ArrayList<com.sc.item.ItemWrenchSC>();
     public static final java.util.Map<SCToolType, ItemToolSC> TOOLS = new java.util.EnumMap<SCToolType, ItemToolSC>(SCToolType.class);
     public static final java.util.Map<ArmorSuit, ItemArmorSC[]> ARMOR = new java.util.EnumMap<ArmorSuit, ItemArmorSC[]>(ArmorSuit.class);
@@ -166,6 +167,12 @@ public final class ModItems {
         // §7/§9: Field Generator cluster linking tool.
         fieldLinkModule = new ItemFieldLinkModule();
         GameRegistry.registerItem(fieldLinkModule, "fieldLinkModule");
+
+        // Generator wear parts (appended): 6 hours of turning, a day of decay.
+        windRotor = new com.sc.item.ItemWearPartSC("windRotor", 21600);
+        GameRegistry.registerItem(windRotor, "windRotor");
+        isotopeCapsule = new com.sc.item.ItemWearPartSC("isotopeCapsule", 86400);
+        GameRegistry.registerItem(isotopeCapsule, "isotopeCapsule");
 
         // Wrenches: basic, electric, quantum (appended).
         for (com.sc.item.ItemWrenchSC.Tier t : com.sc.item.ItemWrenchSC.Tier.values()) {

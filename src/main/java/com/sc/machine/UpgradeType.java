@@ -25,7 +25,24 @@ public enum UpgradeType {
      * Universal transformer: one is enough - the machine (or field generator) takes any voltage,
      * LV to XV, without exploding. Appended last: the item's metadata is the ordinal.
      */
-    UNIVERSAL_TRANSFORMER("upgradeUniversalTransformer");
+    UNIVERSAL_TRANSFORMER("upgradeUniversalTransformer"),
+    /** Generators only: output x1.5 and fuel x1.75 per upgrade (at most 4 count). */
+    OVERDRIVE("upgradeOverdrive"),
+    /** Generators only: fuel x0.7 and output x0.9 per upgrade (at most 4 count). */
+    ECONOMIZER("upgradeEconomizer");
+
+    /** Overdrive / Economizer stop adding up past this many. */
+    public static final int MAX_GENERATOR_EFFECTIVE = 4;
+
+    /** Only generators take it (machines and the field generator refuse it). */
+    public boolean generatorOnly() {
+        return this == OVERDRIVE || this == ECONOMIZER;
+    }
+
+    /** What a generator's upgrade slots take. */
+    public boolean forGenerators() {
+        return this == OVERDRIVE || this == ECONOMIZER || this == TRANSFORMER || this == ENERGY_STORAGE;
+    }
 
     /** Effects stop growing past this many upgrades of one kind (IC2 lets a slot hold 64). */
     public static final int MAX_EFFECTIVE = 16;

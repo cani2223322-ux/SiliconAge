@@ -330,15 +330,21 @@ public final class ManualContent {
         lines.addAll(paragraph("sc.manual.machines.trouble"));
         lines.add("");
         lines.add(HEAD + Lang.tr("sc.manual.machines.generators"));
+        lines.addAll(paragraph("sc.manual.gen.rules"));
         for (GeneratorType type : GeneratorType.values()) {
+            if (type == GeneratorType.CREATIVE) {
+                continue;
+            }
             String fuel;
-            if (type.kind == GeneratorType.Kind.PASSIVE) {
-                fuel = Lang.tr("sc.manual.machines.passive");
-            } else if (type.kind == GeneratorType.Kind.FUSION) {
-                fuel = Lang.tr("sc.manual.machines.fusioninfo", TileEntityGeneratorSC.getIgnitionThreshold(),
-                        TileEntityGeneratorSC.CELL_BURN_TICKS / 1200);
-            } else {
-                fuel = type.fuelRatePerTick + " mB/t " + fluidName(type.fuelFluidName);
+            switch (type.kind) {
+                case PASSIVE: fuel = Lang.tr("sc.manual.machines.passive"); break;
+                case FUSION: fuel = Lang.tr("sc.manual.machines.fusioninfo", String.valueOf(type.ignitionThreshold()),
+                        TileEntityGeneratorSC.CELL_BURN_TICKS / 1200); break;
+                case DUAL_FLUID: fuel = type.fuelRatePerTick + " mB/t " + fluidName(type.fuelFluidName) + " + "
+                        + type.fuel2RatePerTick + " mB/t " + fluidName(type.fuel2FluidName); break;
+                case FLUID_FUEL:
+                case EXO: fuel = type.fuelRatePerTick + " mB/t " + fluidName(type.fuelFluidName); break;
+                default: fuel = Lang.tr("sc.manual.gen.kind." + type.kind.name().toLowerCase(Locale.ROOT));
             }
             lines.add(" " + type.localizedName() + R + DIM + " - " + type.tier + ", " + type.euPerTick + " EU/t, " + fuel);
             lines.add("   " + Lang.tr("sc.manual.generator." + type.name().toLowerCase(Locale.ROOT)));

@@ -65,6 +65,13 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
     private List<GenEntry> allEntries(ItemStack solidFuel) {
         List<GenEntry> list = new ArrayList<GenEntry>();
         for (GeneratorType type : GeneratorType.values()) {
+            if (type == GeneratorType.CREATIVE) {
+                continue;
+            }
+            if (type == GeneratorType.SOLID_FUEL) {
+                list.add(new GenEntry(type, solidFuel != null ? solidFuel : new ItemStack(Items.coal)));
+                continue;
+            }
             if (type.kind == GeneratorType.Kind.FLUID_FUEL) {
                 ItemStack drop = ItemFluidDropSC.stackOf(FluidRegistry.getFluid(type.fuelFluidName));
                 list.add(new GenEntry(type, drop));
@@ -98,7 +105,7 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
 
     @Override
     public void loadUsageRecipes(ItemStack ingredient) {
-        boolean isGenerator = ingredient.getItem() == net.minecraft.item.Item.getItemFromBlock(ModBlocks.generatorSC);
+        boolean isGenerator = ModBlocks.generatorTypeOf(ingredient) != null;
         FluidStack fluid = MachineRecipeHandlerSC.fluidFor(ingredient);
         boolean furnaceFuel = fluid == null && TileEntityFurnace.isItemFuel(ingredient);
         for (GenEntry e : allEntries(furnaceFuel ? oneOf(ingredient) : null)) {
@@ -107,7 +114,7 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
             } else if (fluid != null && e.type.fuelFluidName != null && e.fuel != null && !e.isSolidFuel()
                     && fluid.getFluid().getName().equals(e.type.fuelFluidName)) {
                 arecipes.add(e);
-            } else if (e.type == GeneratorType.FUSION_REACTOR && (sameItem(ingredient, ModItems.deuteriumCell)
+            } else if (e.type.kind == GeneratorType.Kind.FUSION && (sameItem(ingredient, ModItems.deuteriumCell)
                     || sameItem(ingredient, ModItems.component("liBlanketModule")))) {
                 arecipes.add(e);
             } else if (furnaceFuel && e.isSolidFuel()) {
@@ -175,7 +182,7 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
             this.type = type;
             this.fuel = fuel;
             this.solidFuel = fuel != null && ItemFluidDropSC.fluidOf(fuel) == null ? fuel : null;
-            if (type == GeneratorType.FUSION_REACTOR) {
+            if (type.kind == GeneratorType.Kind.FUSION) {
                 fuelStacks.add(new PositionedStack(new ItemStack(ModItems.deuteriumCell), FUEL_X, SLOT_Y));
                 fuelStacks.add(new PositionedStack(new ItemStack(ModItems.component("liBlanketModule")), FUEL2_X, SLOT_Y));
             } else if (fuel != null) {
@@ -189,7 +196,7 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
         }
 
         ItemStack generatorStack() {
-            return new ItemStack(ModBlocks.generatorSC, 1, type.ordinal());
+            return ModBlocks.generatorStack(type, 1);
         }
 
         String[] details() {
@@ -199,9 +206,23 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                 case FUSION:
                     long cellEu = (long) TileEntityGeneratorSC.CELL_BURN_TICKS * type.euPerTick;
                     return new String[]{
-                            Lang.tr("sc.nei.gen.fusion1", String.valueOf(TileEntityGeneratorSC.getIgnitionThreshold()),
+                            Lang.tr("sc.nei.gen.fusion1", String.valueOf(type.ignitionThreshold()),
                                     TileEntityGeneratorSC.MODULE_LIFE_TICKS / 72000),
                             Lang.tr("sc.nei.gen.fusion2", TileEntityGeneratorSC.CELL_BURN_TICKS / 1200, String.valueOf(cellEu))};
+                case SOLID:
+                    if (solidFuel != null) {
+                        int t = Math.max(1, TileEntityFurnace.getItemBurnTime(solidFuel) / TileEntityGeneratorSC.SOLID_GEN_DIVISOR);
+                        return new String[]{Lang.tr("sc.nei.gen.solid", seconds(t), String.valueOf((long) t * type.euPerTick))};
+                    }
+                    return new String[]{Lang.tr("sc.manual.gen.kind.solid")};
+                case WIND:
+                case WATER:
+                case THERMO:
+                case RTG:
+                case EXO:
+                case CREATIVE:
+                case DUAL_FLUID:
+                    return new String[]{Lang.tr("sc.manual.gen.kind." + type.kind.name().toLowerCase(java.util.Locale.ROOT))};
                 default:
                     if (solidFuel != null) {
                         int ticks = Math.max(1, TileEntityFurnace.getItemBurnTime(solidFuel) / TileEntityGeneratorSC.SOLID_FUEL_DIVISOR);

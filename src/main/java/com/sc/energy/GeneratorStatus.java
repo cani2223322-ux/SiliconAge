@@ -13,7 +13,17 @@ public enum GeneratorStatus {
     IGNITING,
     BLANKET_DEPLETED,
     NO_BLANKET,
-    NO_DEUTERIUM;
+    NO_DEUTERIUM,
+    // appended (the ordinal is synced to the screen)
+    NO_ROTOR,
+    NO_WIND,
+    NO_WATER,
+    NO_HEAT,
+    NO_CAPSULE,
+    WATER_FULL,
+    NO_STRUCTURE,
+    OVERHEATED,
+    NO_COOLANT;
 
     public String localized() {
         return Lang.tr("sc.status.generator." + name().toLowerCase(java.util.Locale.ROOT));

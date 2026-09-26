@@ -27,9 +27,7 @@ public class ItemBlockGeneratorSC extends ItemBlock {
 
     @Override
     public String getUnlocalizedName(ItemStack stack) {
-        GeneratorType[] values = GeneratorType.values();
-        int meta = stack.getItemDamage();
-        GeneratorType type = values[meta >= 0 && meta < values.length ? meta : 0];
+        GeneratorType type = ((BlockGeneratorSC) field_150939_a).typeFor(stack.getItemDamage());
         return super.getUnlocalizedName() + "." + type.name().toLowerCase(java.util.Locale.ROOT);
     }
 
@@ -40,9 +38,7 @@ public class ItemBlockGeneratorSC extends ItemBlock {
         if (nbt == null) {
             return;
         }
-        GeneratorType[] values = GeneratorType.values();
-        int meta = stack.getItemDamage();
-        GeneratorType type = values[meta >= 0 && meta < values.length ? meta : 0];
+        GeneratorType type = ((BlockGeneratorSC) field_150939_a).typeFor(stack.getItemDamage());
         if (nbt.getInteger("EnergySC") > 0) {
             list.add(Lang.tr("sc.storage.tooltip.charge", String.valueOf(nbt.getInteger("EnergySC")),
                     String.valueOf(type.tier.getBuffer())));
@@ -58,7 +54,7 @@ public class ItemBlockGeneratorSC extends ItemBlock {
                     (int) ((long) nbt.getInteger("ModuleLife") * 100 / TileEntityGeneratorSC.MODULE_LIFE_TICKS)));
         } else if (nbt.getLong("IgnitionEU") > 0) {
             list.add(Lang.tr("sc.generator.tooltip.ignition", String.valueOf(nbt.getLong("IgnitionEU")),
-                    String.valueOf(TileEntityGeneratorSC.getIgnitionThreshold())));
+                    String.valueOf(type.ignitionThreshold())));
         }
     }
 }
