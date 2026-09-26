@@ -484,6 +484,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         if (time % 10 == 0) {
             autoOutput();
+            feedWash();
         }
         pushOut();
         if (scanDirty || scanY > 0) {
@@ -857,6 +858,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     /** The fluid vein's reach past the area, by tier (LV .. EV). */
     public static final int[] FLUID_VEIN_RANGE = {8, 16, 32, 64};
     private boolean fluidVeinOn = true, fluidVeinKeepFlowing;
+    /** The washing tank tops itself up from the pump's tanks' water. */
+    private boolean washFromTanks;
     private int fluidVeinRange = 64;
     /** Blocks the last vein step took, and all of them so far (the Tanks tab shows them). */
     private int fluidVeinLast, fluidVeinTotal;
@@ -999,6 +1002,31 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public int clearCost(int i) {
         FluidTank t = i == TANKS ? water : tanks[i];
         return (t.getFluidAmount() + CLEAR_MB_PER_EU - 1) / CLEAR_MB_PER_EU;
+    }
+
+    public boolean isWashFromTanks() {
+        return washFromTanks;
+    }
+
+    /** The washing tank takes water from the pump's tanks (up to AUTO_OUT every 10 ticks) while it has room. */
+    private void feedWash() {
+        if (!washFromTanks) {
+            return;
+        }
+        water.setCapacity(waterCapacity());
+        int room = water.getCapacity() - water.getFluidAmount(), budget = AUTO_OUT;
+        for (int i = 0; i < unlockedTanks() && room > 0 && budget > 0; i++) {
+            FluidStack in = tanks[i].getFluid();
+            if (in == null || in.amount <= 0 || in.getFluid() != FluidRegistry.WATER) {
+                continue;
+            }
+            int move = Math.min(Math.min(room, budget), in.amount);
+            water.fill(new FluidStack(FluidRegistry.WATER, move), true);
+            tanks[i].drain(move, true);
+            room -= move;
+            budget -= move;
+            markDirty();
+        }
     }
 
     /** Auto output: every compartment switched to it pushes its fluid into the handlers on its side(s). */
@@ -1578,7 +1606,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             A_FILTER_MODE = 14, A_OUT_SIDE = 15, A_SHOW = 16, A_VFLAG = 17, A_BRIGHT = 18, A_COLOR_FRAME = 19,
             A_COLOR_PLANE = 20, A_SCAN = 21, A_TANK_SIDE = 22, A_TANK_CLEAR = 23, A_TANK_TO_FILTER = 24,
             A_FF_MODE = 25, A_FF_REMOVE = 26, A_TANK_FULL = 27, A_FF_HAND = 28, A_FF_CLEAR = 29, A_FF_DELETE = 30,
-            A_TANK_PIN = 31, A_TANK_AUTO = 32, A_FVEIN = 33, A_FVEIN_RANGE = 34, A_FVEIN_FLOWING = 35;
+            A_TANK_PIN = 31, A_TANK_AUTO = 32, A_FVEIN = 33, A_FVEIN_RANGE = 34, A_FVEIN_FLOWING = 35, A_WASH_FEED = 36;
 
     public void action(EntityPlayer p, int action, int value) {
         boolean area = false;
@@ -1652,6 +1680,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 }
                 break;
             case A_FVEIN: fluidVeinOn = !fluidVeinOn; break;
+            case A_WASH_FEED: washFromTanks = !washFromTanks; break;
             case A_FVEIN_RANGE: {                   // 8 -> 16 -> 32 -> 64 (as far as the tier goes) -> 8
                 int max = FLUID_VEIN_RANGE[tierIndex()];
                 int now = fluidVeinReach();
@@ -2042,6 +2071,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setTag("TankPinned", pins);
         nbt.setByteArray("TankAuto", auto);
         nbt.setBoolean("FluidVeinOff", !fluidVeinOn);
+        nbt.setBoolean("WashFromTanks", washFromTanks);
         nbt.setBoolean("FluidVeinKeepFlowing", fluidVeinKeepFlowing);
         nbt.setInteger("FluidVeinRange", fluidVeinRange);
         nbt.setInteger("FluidVeinTotal", fluidVeinTotal);
@@ -2111,6 +2141,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             tankAuto[i] = i < auto.length && auto[i] != 0;
         }
         fluidVeinOn = !nbt.getBoolean("FluidVeinOff");
+        washFromTanks = nbt.getBoolean("WashFromTanks");
         fluidVeinKeepFlowing = nbt.getBoolean("FluidVeinKeepFlowing");
         fluidVeinRange = nbt.hasKey("FluidVeinRange") ? Math.max(8, Math.min(64, nbt.getInteger("FluidVeinRange"))) : 64;
         fluidVeinTotal = nbt.getInteger("FluidVeinTotal");

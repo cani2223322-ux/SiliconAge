@@ -1618,3 +1618,6 @@ sc.quarrygui.fvein.count=%d bl.
 sc.quarrygui.fvein.help=Fluid vein: when the pump finds a fluid it takes the whole lake or pool it belongs to, up to 256 blocks at a time, even past the area - as far as the Range (the tier's most: %2$d). Outside the area: %1$d EU a block. "Flowing" - take flowing blocks out there too, or sources only. Water doesn't refill meanwhile.
 sc.quarrygui.fvein.nomodule=Needs the Fluid Vein module in the Upgrades tab
 sc.quarrygui.fvein.stats=Last time: %d blocks, in all: %d
+sc.quarrygui.wash.feed=Refill
+sc.quarrygui.wash.feed.tip=Take water from the pump's tanks: %s
+sc.quarrygui.wash.feed.help=The washing tank tops itself up with water from the pump's tanks - up to %d mB every half second, until full.
