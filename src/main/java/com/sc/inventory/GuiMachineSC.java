@@ -39,7 +39,8 @@ public class GuiMachineSC extends GuiContainer {
     // Gauges start below the title row's divider (y 15), so a long machine name has the whole
     // top row to itself - at y 13 the tank and energy rims sat inside the title's line, and seven
     // English / eight Russian names ran straight into them.
-    private static final int TANK_X = 104, TANK_Y = 17, TANK_W = 8, TANK_H = 44, TANK_GAP = 12;
+    /** Compact tank gauges (GuiTankGaugeSC.drawCompact) over the sheet's old wells, energy gauge on their right. */
+    private static final int TANK_X = 102, TANK_Y = 16, TANK_W = 11, TANK_H = 54, TANK_GAP = 12;
     /** Text rooms end at ENERGY_X; the energy gauge (GuiEnergyGaugeSC) sits over the sheet's old well. */
     private static final int ENERGY_X = 152, GAUGE_X = 150, GAUGE_Y = 16, GAUGE_W = 22, GAUGE_H = 54;
     // The status line owns y 72 (it used to be drawn at y 60, straight across the output slots);
@@ -102,13 +103,9 @@ public class GuiMachineSC extends GuiContainer {
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
             int tx = x + TANK_X + i * TANK_GAP;
             FluidTank tank = machine.getTank(i);
-            if (!tankUsed[i] && tank.getFluidAmount() == 0) {
-                drawTexturedModalRect(tx, y + TANK_Y, GuiGaugeSC.SPR_UNUSED_U, GuiGaugeSC.SPR_UNUSED_V, TANK_W, TANK_H);
-                continue;
-            }
-            GuiGaugeSC.drawFluid(mc, tx, y + TANK_Y, TANK_W, TANK_H, tank.getFluid(), tank.getCapacity());
+            GuiTankGaugeSC.drawCompact(mc, tx, y + TANK_Y, TANK_W, TANK_H, tank.getFluid(), tank.getCapacity(),
+                    !tankUsed[i] && tank.getFluidAmount() == 0);
             GuiGaugeSC.bind(mc, TEXTURE);
-            GuiGaugeSC.drawBlended(this, tx, y + TANK_Y, GuiGaugeSC.SPR_GLASS_U, GuiGaugeSC.SPR_GLASS_V, TANK_W, TANK_H);
         }
     }
 
@@ -269,6 +266,7 @@ public class GuiMachineSC extends GuiContainer {
                     return lines;
                 }
                 lines.add(GuiGaugeSC.fluidLabel(tank.getFluid(), tank.getCapacity()));
+                lines.add(GuiTankGaugeSC.percentLine(tank.getFluid(), tank.getCapacity()));
                 return lines;
             }
         }

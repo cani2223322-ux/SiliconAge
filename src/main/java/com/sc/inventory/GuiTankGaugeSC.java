@@ -126,6 +126,86 @@ public final class GuiTankGaugeSC {
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
+    /**
+     * The same gauge squeezed into a machine's tank well (11 px wide): the bolted steel frame, the
+     * status lamp on top, fluid segments beside the level colour column and gold / dark ticks on the
+     * frame's right edge; the percentage moves to the tooltip. `unused`: a tank this machine never
+     * fills - hatched, lamp off. Leaves the blocks atlas bound when it drew a fluid.
+     */
+    public static void drawCompact(Minecraft mc, int x, int y, int w, int h, FluidStack st, int capacity, boolean unused) {
+        boolean has = st != null && st.amount > 0 && st.getFluid() != null;
+        float level = !has || capacity <= 0 ? 0F : Math.min(1F, (float) st.amount / capacity);
+        int col = status(st, capacity, null);
+        GuiEnergyGaugeSC.gradient(x, y, w, h, 0xFFAAB0BA, 0xFF747A84);
+        rect(x + 1, y + 1, w - 2, 1, 0xFFD0D6E0);
+        rect(x + 1, y + 1, 1, h - 2, 0xFFC4CAD4);
+        rect(x + 1, y + h - 2, w - 2, 1, 0xFF565A62);
+        rect(x + w - 2, y + 1, 1, h - 2, 0xFF5C6068);
+        rect(x, y, w, 1, 0xFF1E2024);
+        rect(x, y + h - 1, w, 1, 0xFF1E2024);
+        rect(x, y, 1, h, 0xFF1E2024);
+        rect(x + w - 1, y, 1, h, 0xFF1E2024);
+        // the lamp, with a little glow on the steel round it
+        int lx = x + (w - 4) / 2, ly = y + 2;
+        if (!unused) {
+            rect(lx - 1, ly - 1, 6, 6, (col & 0xFFFFFF) | 0x48000000);
+        }
+        rect(lx, ly, 4, 4, 0xFF121214);
+        rect(lx + 1, ly + 1, 2, 2, unused ? 0xFF3C3C3C : col);
+        if (!unused) {
+            rect(lx + 1, ly + 1, 1, 1, 0xFFFFFFFF & (col | 0xFF808080));
+        }
+        // the well: recessed, dark
+        int sx = x + 2, sy = y + 8, sw = w - 4, sh = h - 10;
+        rect(sx, sy, sw, sh, DARK);
+        rect(sx, sy, sw, 1, 0xFF3A3E46);
+        rect(sx, sy, 1, sh, 0xFF3A3E46);
+        rect(sx, sy + sh - 1, sw, 1, 0xFFDCE2EA);
+        rect(sx + sw - 1, sy, 1, sh, 0xFFC8CED8);
+        int left = sx + 1, fw = sw - 4, colX = sx + sw - 2;
+        int top = sy + 1, bottom = sy + sh - 1;
+        if (unused) {
+            for (int j = top; j < bottom; j++) {
+                for (int i = left; i < sx + sw - 1; i++) {
+                    if ((i + j) % 3 == 0) {
+                        rect(i, j, 1, 1, 0xFF30343C);
+                    }
+                }
+            }
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+            return;
+        }
+        int n = Math.max(3, (bottom - top + 1) / 4);
+        float seg = (bottom - top) / (float) n;
+        float filled = level * n;
+        for (int i = 0; i < n; i++) {
+            int b = Math.round(bottom - i * seg), t = Math.round(bottom - (i + 1) * seg) + 1;
+            boolean on = has && i < filled;
+            rect(left, t, fw, b - t, OFF);
+            if (on) {
+                float part = Math.min(1F, filled - i);
+                int hh = Math.max(1, Math.round((b - t) * part));
+                fluid(mc, st.getFluid(), st, left, b - hh, fw, hh);
+            }
+            int li = Math.min(LEVEL_COLS.length - 1, i * LEVEL_COLS.length / n);
+            rect(colX, t, 1, b - t, on ? LEVEL_COLS[li] : OFF);
+        }
+        // ticks on the frame's right edge: gold at 0 / 50 / 100 %
+        for (int i = 0; i <= 10; i++) {
+            int ty = Math.round(bottom - 1 - (bottom - 1 - top) * i / 10F);
+            rect(x + w - 2, ty, 1, 1, i % 5 == 0 ? 0xFFF0C450 : 0xFF3C4048);
+        }
+        GL11.glColor4f(1F, 1F, 1F, 1F);
+    }
+
+    /** "73%" in the lamp's colour, for the tooltips of the compact gauges. */
+    public static String percentLine(FluidStack st, int capacity) {
+        int pct = st == null || capacity <= 0 ? 0 : Math.min(100, Math.round(st.amount * 100F / capacity));
+        int col = status(st, capacity, null);
+        String code = col == GREEN ? "§a" : col == ORANGE ? "§6" : "§c";
+        return code + pct + "%";
+    }
+
     private static void rect(int x, int y, int w, int h, int c) {
         if (w > 0 && h > 0) {
             Gui.drawRect(x, y, x + w, y + h, c);

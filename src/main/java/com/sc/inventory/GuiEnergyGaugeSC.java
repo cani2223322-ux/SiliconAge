@@ -195,7 +195,7 @@ public final class GuiEnergyGaugeSC {
     }
 
     /** A vertical two-colour gradient (like GuiScreen.drawGradientRect, but static). */
-    private static void gradient(int x, int y, int w, int h, int top, int bottom) {
+    static void gradient(int x, int y, int w, int h, int top, int bottom) {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glDisable(GL11.GL_ALPHA_TEST);

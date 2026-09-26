@@ -26,8 +26,9 @@ public class GuiGeneratorSC extends GuiContainer {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation(Reference.ASSETS, "textures/gui/guiGenerator.png");
 
-    private static final int TANK_Y = 17, TANK_W = 8, TANK_H = 36;
-    private static final int[] TANK_X = {67, 79, 91};
+    /** Compact tank gauges (GuiTankGaugeSC.drawCompact). */
+    private static final int TANK_Y = 16, TANK_W = 11, TANK_H = 40;
+    private static final int[] TANK_X = {66, 78, 90};
     private static final int SUN_X = 60, SUN_Y = 20;
     private static final int INFO_X = 84, INFO_Y = 20;
     private static final int IGNITION_X = 84, IGNITION_Y = 20, IGNITION_W = 52, IGNITION_H = 8;
@@ -131,10 +132,8 @@ public class GuiGeneratorSC extends GuiContainer {
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawFluid() leaves the blocks atlas bound
             FluidTank t = tank(i);
-            GuiGaugeSC.drawWell(x + TANK_X[i], y + TANK_Y, TANK_W, TANK_H);
-            GuiGaugeSC.drawFluid(mc, x + TANK_X[i], y + TANK_Y, TANK_W, TANK_H, t.getFluid(), t.getCapacity());
+            GuiTankGaugeSC.drawCompact(mc, x + TANK_X[i], y + TANK_Y, TANK_W, TANK_H, t.getFluid(), t.getCapacity(), false);
             GuiGaugeSC.bind(mc, TEXTURE);
-            GuiGaugeSC.drawBlended(this, x + TANK_X[i], y + TANK_Y, GuiGaugeSC.SPR_GLASS_U, GuiGaugeSC.SPR_GLASS_V, TANK_W, TANK_H);
         }
         org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
     }
@@ -247,6 +246,7 @@ public class GuiGeneratorSC extends GuiContainer {
                 FluidTank t = tank(i);
                 lines.add(Lang.tr(i == 2 ? "sc.gui.gen.water" : type.kind == GeneratorType.Kind.EXO ? "sc.gui.gen.coolant" : "sc.gui.fuel"));
                 lines.add(GuiGaugeSC.fluidLabel(t.getFluid(), t.getCapacity()));
+                lines.add(GuiTankGaugeSC.percentLine(t.getFluid(), t.getCapacity()));
                 if (i == 0 && type.kind == GeneratorType.Kind.DUAL_FLUID || i == 0 && type.kind == GeneratorType.Kind.EXO) {
                     lines.add(Lang.tr("sc.gui.gen.needs", fluidName(type.fuelFluidName), type.fuelRatePerTick));
                 } else if (i == 1) {
