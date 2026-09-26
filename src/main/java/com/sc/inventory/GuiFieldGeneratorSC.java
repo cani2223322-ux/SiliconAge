@@ -469,7 +469,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             tip.add(Lang.tr("sc.gui.field.upkeep", field.upkeepPerTick()));
         }
         if (!tip.isEmpty()) {
-            drawHoveringText(tip, mouseX, mouseY, fontRendererObj);
+            drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tip, width), mouseX, mouseY, fontRendererObj);
         }
     }
 }

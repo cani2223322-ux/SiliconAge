@@ -36,6 +36,7 @@ public final class ModRecipesCrafting {
         passiveComponents();
         generators();
         newGenerators();
+        quarry();
         armorAndChips();
         weaponsAndField();
         upgrades();
@@ -247,6 +248,55 @@ public final class ModRecipesCrafting {
                 'K', comp("capacitor"), 'W', cable(CableType.SILVER), 'T', transistor, 'C', comp("combustionChamber"));
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ECONOMIZER), "RRR", "WTW", "WSW",
                 'R', comp("resistor"), 'W', cable(CableType.SILVER), 'T', transistor, 'S', comp("sensor"));
+    }
+
+    /** The quarry line, its drill heads, modules, the ore scanner and the area card - the mod's own items only. */
+    private static void quarry() {
+        ItemStack transistor = silicon(SiliconMaterial.TRANSISTOR), controller = silicon(SiliconMaterial.CONTROLLER);
+        ItemStack wire = cable(CableType.COPPER_INSULATED);
+        ItemStack[] heads = new ItemStack[ModItems.DRILL_HEADS.size()];
+        for (int i = 0; i < heads.length; i++) {
+            heads[i] = new ItemStack(ModItems.DRILL_HEADS.get(i));
+        }
+        OreRecipes.shaped(heads[0], "S S", "SXS", " S ", 'S', ingot(Material.STEEL), 'X', comp("steelCasing"));
+        OreRecipes.shaped(heads[1], "W W", "WXW", " W ", 'W', ingot(Material.TUNGSTEN), 'X', heads[0]);
+        OreRecipes.shaped(heads[2], "D D", "DXD", " D ",
+                'D', new ItemStack(ModItems.TOOLS.get(com.sc.util.SCToolType.DIAMOND_BLADE)), 'X', heads[1]);
+        OreRecipes.shaped(heads[3], "HEH", "CXC", "HEH",
+                'H', ingot(Material.HAFNIUM), 'E', comp("energyCellHV"), 'C', controller, 'X', heads[2]);
+        ItemStack lv = new ItemStack(ModBlocks.quarrySC, 1, 0), mv = new ItemStack(ModBlocks.quarrySC, 1, 1),
+                hv = new ItemStack(ModBlocks.quarrySC, 1, 2), ev = new ItemStack(ModBlocks.quarrySC, 1, 3);
+        OreRecipes.shaped(lv, "STS", "KXK", "CHC",
+                'S', ingot(Material.STEEL), 'T', transistor, 'K', comp("copperCoil"), 'X', comp("steelCasing"), 'C', wire, 'H', heads[0]);
+        OreRecipes.shaped(mv, "PCP", "KXK", "PCP",
+                'P', comp("tiPlate"), 'C', cable(CableType.SILVER), 'K', comp("copperCoil"), 'X', lv);
+        OreRecipes.shaped(hv, "PCP", "KXK", "PCP",
+                'P', comp("wTiPlate"), 'C', cable(CableType.TUNGSTEN), 'K', controller, 'X', mv);
+        OreRecipes.shaped(ev, "PCP", "KXK", "PCP",
+                'P', comp("tiCasing"), 'C', cable(CableType.SUPERCONDUCTOR), 'K', comp("nb3SnCoil"), 'X', hv);
+
+        com.sc.item.ItemQuarryModuleSC m = ModItems.quarryModule;
+        Object[][] modules = {
+                {com.sc.item.ItemQuarryModuleSC.Kind.SPEED, comp("copperCoil"), ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.FORTUNE, comp("lens"), ingot(Material.PLATINUM)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.SILK, comp("sensor"), comp("ptfeSheet")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.CRUSH, comp("copperCoil"),
+                        new ItemStack(ModBlocks.machineSC, 1, com.sc.machine.MachineType.CRUSHER.ordinal())},
+                {com.sc.item.ItemQuarryModuleSC.Kind.WASH, m.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.CRUSH),
+                        new ItemStack(ModBlocks.machineSC, 1, com.sc.machine.MachineType.ORE_WASHER.ordinal())},
+                {com.sc.item.ItemQuarryModuleSC.Kind.PUMP, comp("copperCoil"), pipe(PipeType.STEEL)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.MAGNET, comp("copperCoil"), ingot(Material.NEODYMIUM)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.RADIUS, comp("sensor"), comp("tiPlate")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.SILENT, comp("polymerPlate"), new ItemStack(ModItems.rubber)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.AUTOSTOP, comp("sensor"), controller},
+        };
+        for (Object[] r : modules) {
+            OreRecipes.shaped(m.stackOf((com.sc.item.ItemQuarryModuleSC.Kind) r[0]), " A ", "WMW", " T ",
+                    'A', r[1], 'W', wire, 'M', r[2], 'T', transistor);
+        }
+        OreRecipes.shaped(new ItemStack(ModItems.oreScanner), " L ", "SXS", " E ",
+                'L', comp("lens"), 'S', comp("sensor"), 'X', controller, 'E', comp("energyCellLV"));
+        OreRecipes.shapeless(new ItemStack(ModItems.areaCard), comp("polymerPlate"), silicon(SiliconMaterial.MEMORY_CHIP), wire);
     }
 
     private static ItemStack generator(GeneratorType type) {

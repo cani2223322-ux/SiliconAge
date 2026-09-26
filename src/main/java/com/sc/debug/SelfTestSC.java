@@ -473,6 +473,31 @@ public final class SelfTestSC {
                 && com.sc.energy.GeneratorType.COMBUSTION.euPerMb("fuel") > 0 && com.sc.energy.GeneratorType.COMBUSTION.euPerMb("water") == 0;
         check(roundTrip && upg && passive && machineRefuses && ign,
                 "generators: 21 types over two blocks, overdrive x1.5 + transformer tier, passive ones ignore overdrive, machines refuse it, exo ignition 100M, combustion fuels");
+        // quarry: tier sizes, radius modules, costs, area card, upgrade slots
+        com.sc.tileentity.TileEntityQuarrySC qr = new com.sc.tileentity.TileEntityQuarrySC();
+        qr.setQuarryTier(com.sc.energy.Tier.HV);
+        int[] qa = qr.area();
+        boolean qsize = qa != null && qa[2] - qa[0] + 1 == 32 && qr.maxSize() == 32;
+        ItemStack rad = ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.RADIUS);
+        rad.stackSize = 9;
+        qr.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE, rad);
+        boolean qrad = qr.maxSize() == 32 + 8 * 4;
+        int plain = qr.costFor(1.5F);
+        qr.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE + 1, ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.SPEED));
+        boolean qcost = plain == 53 && qr.costFor(1.5F) == (int) Math.ceil(52.5 * 1.6);
+        qr.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.SLOT_HEAD, new ItemStack(ModItems.DRILL_HEADS.get(2)));
+        boolean qspeed = Math.abs(qr.blocksPerSecond() - 4 * 2 * 1.4) < 1e-6;
+        ItemStack cardSt = new ItemStack(ModItems.areaCard);
+        cardSt.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        cardSt.getTagCompound().setIntArray("A", new int[]{10, 60, 10});
+        cardSt.getTagCompound().setIntArray("B", new int[]{-5, 20, 3});
+        int[] ca = com.sc.item.ItemAreaCardSC.area(cardSt);
+        boolean qcard = ca[0] == -5 && ca[3] == 10 && ca[1] == 20 && ca[4] == 60;
+        boolean qslots = qr.isItemValidForSlot(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE + 2, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER))
+                && !qr.isItemValidForSlot(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE + 2, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER))
+                && !qr.isItemValidForSlot(0, new ItemStack(ModItems.oreScanner));
+        check(qsize && qrad && qcost && qspeed && qcard && qslots,
+                "quarry: HV 32x32, radius +8 x4 max, cost 53 EU / x1.6 with speed, diamond head 4 x2 x1.4 blocks/s, area card box, slots");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));

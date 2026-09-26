@@ -21,6 +21,7 @@ public class GuiHandlerSC implements IGuiHandler {
     public static final int GENERATOR_GUI_ID = 1;
     public static final int FIELD_GENERATOR_GUI_ID = 2;
     public static final int ENERGY_STORAGE_GUI_ID = 3;
+    public static final int QUARRY_GUI_ID = 4;
     /** Conduit connector menu: this + the side (0..5). */
     public static final int CONDUIT_GUI_BASE = 10;
     /** Item filter set-up (the filter in the player's hand). */
@@ -37,6 +38,9 @@ public class GuiHandlerSC implements IGuiHandler {
             return filterSlot(player, x) ? new com.sc.inventory.ContainerFilterSC(player, x) : null;
         }
         TileEntity te = world.getTileEntity(x, y, z);
+        if (id == QUARRY_GUI_ID && te instanceof com.sc.tileentity.TileEntityQuarrySC) {
+            return new com.sc.inventory.ContainerQuarrySC(player.inventory, (com.sc.tileentity.TileEntityQuarrySC) te);
+        }
         if (id == MACHINE_GUI_ID && te instanceof TileEntityMachineSC) {
             return new ContainerMachineSC(player.inventory, (TileEntityMachineSC) te);
         }
@@ -62,6 +66,9 @@ public class GuiHandlerSC implements IGuiHandler {
             return filterSlot(player, x) ? new com.sc.inventory.GuiFilterSC(player, x) : null;
         }
         TileEntity te = world.getTileEntity(x, y, z);
+        if (id == QUARRY_GUI_ID && te instanceof com.sc.tileentity.TileEntityQuarrySC) {
+            return new com.sc.inventory.GuiQuarrySC(player.inventory, (com.sc.tileentity.TileEntityQuarrySC) te);
+        }
         if (id == MACHINE_GUI_ID && te instanceof TileEntityMachineSC) {
             return new GuiMachineSC(player.inventory, (TileEntityMachineSC) te);
         }

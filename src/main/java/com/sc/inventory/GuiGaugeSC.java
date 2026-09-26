@@ -170,6 +170,24 @@ public final class GuiGaugeSC {
         }
     }
 
+    /**
+     * Tooltip lines wrapped to fit the screen (at most half its width, 120-220 px), each piece
+     * keeping its line's colour - long hints used to run off the screen.
+     */
+    public static java.util.List<String> wrapTooltip(FontRenderer font, java.util.List<String> lines, int screenWidth) {
+        int maxW = Math.max(120, Math.min(220, screenWidth / 2 - 20));
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        for (String line : lines) {
+            String color = line.length() >= 2 && line.charAt(0) == '§' ? line.substring(0, 2) : "";
+            boolean first = true;
+            for (Object o : font.listFormattedStringToWidth(line, maxW)) {
+                out.add(first ? (String) o : color + o);
+                first = false;
+            }
+        }
+        return out;
+    }
+
     public static boolean isOver(int x, int y, int width, int height, int mouseX, int mouseY) {
         return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }

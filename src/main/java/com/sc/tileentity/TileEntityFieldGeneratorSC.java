@@ -155,6 +155,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return owner.isEmpty() || isOwner(p) || access.contains(p.getCommandSenderName().toLowerCase(java.util.Locale.ROOT));
     }
 
+    /** allowed() by name - for a quarry working in the field on its owner's behalf. */
+    public boolean allowedName(String name) {
+        String n = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+        return owner.isEmpty() || owner.equalsIgnoreCase(n) || access.contains(n);
+    }
+
     public boolean addAccess(String name) {
         String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
         if (n.isEmpty() || n.length() > 16 || access.contains(n) || access.size() >= MAX_ACCESS || n.equalsIgnoreCase(owner)) {

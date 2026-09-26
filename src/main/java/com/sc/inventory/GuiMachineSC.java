@@ -130,7 +130,7 @@ public class GuiMachineSC extends GuiContainer {
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tooltip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
         if (tooltip != null) {
-            drawHoveringText(tooltip, mouseX, mouseY, fontRendererObj);
+            drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tooltip, width), mouseX, mouseY, fontRendererObj);
         }
     }
 

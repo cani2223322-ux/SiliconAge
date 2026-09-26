@@ -160,11 +160,11 @@ public class GuiGeneratorSC extends GuiContainer {
         GuiGaugeSC.drawTierBadge(fontRendererObj, generator.outputTier(), 176 - 6, 3);
         GeneratorStatus status = generator.getStatus();
         fontRendererObj.drawString(status.localized(), STATUS_X, STATUS_Y, statusColor(status));
-        String out = Lang.tr("sc.gui.gen.now", generator.getLastOutput());
-        if (isReactor()) {
-            out += "   " + Lang.tr("sc.gui.gen.plasma", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT);
+        fontRendererObj.drawString(Lang.tr("sc.gui.gen.now", generator.getLastOutput()), STATUS_X, OUTPUT_Y, 0x404040);
+        if (isReactor()) {                // the plasma heat under its bar
+            fontRendererObj.drawString(Lang.tr("sc.gui.gen.plasma.short", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT),
+                    HEAT_X, HEAT_Y + HEAT_H + 2, 0x8A3A10);
         }
-        fontRendererObj.drawString(out, STATUS_X, OUTPUT_Y, 0x404040);
         int c = 0x404040;
         switch (type.kind) {
             case PASSIVE: {
@@ -200,7 +200,7 @@ public class GuiGeneratorSC extends GuiContainer {
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tooltip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
         if (tooltip != null) {
-            drawHoveringText(tooltip, mouseX, mouseY, fontRendererObj);
+            drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tooltip, width), mouseX, mouseY, fontRendererObj);
         }
     }
 

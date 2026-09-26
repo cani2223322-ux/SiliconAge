@@ -1,0 +1,236 @@
+package com.sc.inventory;
+
+import com.sc.tileentity.TileEntityQuarrySC;
+
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.InventoryPlayer;
+import net.minecraft.inventory.Container;
+import net.minecraft.inventory.InventoryBasic;
+import net.minecraft.inventory.Slot;
+import net.minecraft.item.ItemStack;
+import net.minecraftforge.fluids.FluidStack;
+
+/**
+ * The quarry's screen: 9 filter examples (ghost slots, like the tube filter's), the 27-slot
+ * buffer, 8 upgrade slots, the drill head, scanner and area card slots, the player's inventory.
+ * GuiQuarrySC shows only the groups of the open tab (setShown) - the others sit off-screen.
+ */
+public class ContainerQuarrySC extends Container {
+
+    public static final int G_FILTER = 0, G_BUFFER = 1, G_UPGRADES = 2, G_PLAYER = 3;
+    public static final int FILTER_X = 44, FILTER_Y = 50, BUFFER_X = 44, BUFFER_Y = 80;
+    public static final int UPGRADE_X = 12, UPGRADE_Y = 40, HEAD_X = 164, HEAD_Y = 40, SCANNER_Y = 64, CARD_Y = 88;
+    public static final int INV_X = 44, INV_Y = 157;
+    public static final int FIRST_BUFFER = TileEntityQuarrySC.FILTER_SLOTS, FIRST_UPGRADE = FIRST_BUFFER + TileEntityQuarrySC.BUFFER,
+            FIRST_PLAYER = FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES + 3;
+
+    private final TileEntityQuarrySC quarry;
+    private final InventoryBasic view = new InventoryBasic("filter", false, TileEntityQuarrySC.FILTER_SLOTS);
+    private final int[] shownX, group;
+
+    public ContainerQuarrySC(InventoryPlayer playerInv, TileEntityQuarrySC quarry) {
+        this.quarry = quarry;
+        for (int i = 0; i < TileEntityQuarrySC.FILTER_SLOTS; i++) {
+            view.setInventorySlotContents(i, quarry.getFilter()[i]);
+            addSlotToContainer(new SlotGhost(view, i, FILTER_X + i * 18, FILTER_Y));
+        }
+        for (int i = 0; i < TileEntityQuarrySC.BUFFER; i++) {
+            addSlotToContainer(new SlotBuffer(quarry, i, BUFFER_X + i % 9 * 18, BUFFER_Y + i / 9 * 18));
+        }
+        for (int i = 0; i < TileEntityQuarrySC.UPGRADES; i++) {
+            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_UPGRADE + i, UPGRADE_X + i % 4 * 18, UPGRADE_Y + i / 4 * 18));
+        }
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_HEAD, HEAD_X, HEAD_Y));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_SCANNER, HEAD_X, SCANNER_Y));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_CARD, HEAD_X, CARD_Y));
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, INV_X + col * 18, INV_Y + row * 18));
+            }
+        }
+        for (int col = 0; col < 9; col++) {
+            addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + 58));
+        }
+        shownX = new int[inventorySlots.size()];
+        group = new int[inventorySlots.size()];
+        for (int i = 0; i < shownX.length; i++) {
+            shownX[i] = ((Slot) inventorySlots.get(i)).xDisplayPosition;
+            group[i] = i < FIRST_BUFFER ? G_FILTER : i < FIRST_UPGRADE ? G_BUFFER : i < FIRST_PLAYER ? G_UPGRADES : G_PLAYER;
+        }
+    }
+
+    public TileEntityQuarrySC getQuarry() {
+        return quarry;
+    }
+
+    /** Client: only these slot groups on screen (the others off it, not hoverable or clickable). */
+    @SideOnly(Side.CLIENT)
+    public void setShown(boolean... groups) {
+        for (int i = 0; i < shownX.length; i++) {
+            ((Slot) inventorySlots.get(i)).xDisplayPosition = groups[group[i]] ? shownX[i] : -10000;
+        }
+    }
+
+    @Override
+    public boolean canInteractWith(EntityPlayer player) {
+        return quarry.isUseableByPlayer(player);
+    }
+
+    // ---- filter examples: a copy of the cursor's item, never the item itself ----
+
+    private void setExample(int i, ItemStack s, EntityPlayer player) {
+        ItemStack one = s == null ? null : s.copy();
+        if (one != null) {
+            one.stackSize = 1;
+        }
+        view.setInventorySlotContents(i, one);
+        if (!player.worldObj.isRemote && quarry.allowed(player)) {
+            quarry.setFilterStack(i, one);
+        }
+    }
+
+    @Override
+    public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (slotId >= 0 && slotId < FIRST_BUFFER) {
+            setExample(slotId, player.inventory.getItemStack(), player);
+            return null;
+        }
+        return super.slotClick(slotId, button, mode, player);
+    }
+
+    @Override
+    public ItemStack transferStackInSlot(EntityPlayer player, int index) {
+        if (index < FIRST_BUFFER) {
+            setExample(index, null, player);
+            return null;
+        }
+        Slot slot = (Slot) inventorySlots.get(index);
+        if (slot == null || !slot.getHasStack()) {
+            return null;
+        }
+        ItemStack original = slot.getStack();
+        ItemStack result = original.copy();
+        int end = inventorySlots.size(), hotbar = FIRST_PLAYER + 27;
+        if (index < FIRST_PLAYER) {
+            if (!mergeItemStack(original, FIRST_PLAYER, end, true)) {
+                return null;
+            }
+        } else if (!SlotMergeSC.mergeValid(inventorySlots, original, FIRST_UPGRADE, FIRST_PLAYER)
+                && !mergeItemStack(original, index < hotbar ? hotbar : FIRST_PLAYER, index < hotbar ? end : hotbar, false)) {
+            return null;
+        }
+        if (original.stackSize == 0) {
+            slot.putStack(null);
+        } else {
+            slot.onSlotChanged();
+        }
+        return result;
+    }
+
+    // ---- live numbers ----
+
+    private static final int COUNT = 12;
+    private final IntSyncSC sync = new IntSyncSC(COUNT);
+
+    private int value(int id) {
+        FluidStack p = quarry.getPumped().getFluid();
+        switch (id) {
+            case 0: return quarry.getEnergyStored();
+            case 1: return quarry.getStatus().ordinal();
+            case 2: return quarry.getLayerY();
+            case 3: return quarry.getCursor();
+            case 4: return (int) Math.min(Integer.MAX_VALUE, quarry.getMined());
+            case 5: return quarry.getXp();
+            case 6: return quarry.getLastCost();
+            case 7: return quarry.isRunning() ? 1 : 0;
+            case 8: return p == null ? 0 : p.getFluidID();
+            case 9: return quarry.getPumped().getFluidAmount();
+            case 10: return quarry.getWater().getFluidAmount();
+            default: return (int) Math.min(Integer.MAX_VALUE, quarry.blocksLeft());
+        }
+    }
+
+    @Override
+    public void detectAndSendChanges() {
+        super.detectAndSendChanges();
+        int[] v = new int[COUNT];
+        for (int i = 0; i < COUNT; i++) {
+            v[i] = value(i);
+        }
+        sync.send(this, crafters, v);
+    }
+
+    /** Blocks left, as the server counted them. */
+    public int blocksLeftClient;
+
+    @Override
+    public void updateProgressBar(int property, int half) {
+        int id = sync.receive(property, half);
+        if (id < 0) {
+            return;
+        }
+        if (id == 0) {
+            quarry.setEnergyStoredClient(sync.value(0));
+        } else if (id == 8 || id == 9) {
+            com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getPumped(), sync.value(8), sync.value(9));
+        } else if (id == 10) {
+            com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getWater(),
+                    net.minecraftforge.fluids.FluidRegistry.getFluidID("water"), sync.value(10));
+        } else if (id == 11) {
+            blocksLeftClient = sync.value(11);
+        } else {
+            quarry.setLiveClient(sync.value(1), sync.value(2), sync.value(3), sync.value(4), sync.value(5), sync.value(6), sync.value(7) != 0);
+        }
+    }
+
+    // ---- slots ----
+
+    private static class SlotGhost extends Slot {
+        SlotGhost(InventoryBasic inv, int index, int x, int y) {
+            super(inv, index, x, y);
+        }
+
+        @Override
+        public boolean isItemValid(ItemStack stack) {
+            return false;
+        }
+
+        @Override
+        public boolean canTakeStack(EntityPlayer player) {
+            return false;
+        }
+    }
+
+    /** The buffer: take from it, never put into it. */
+    private static class SlotBuffer extends Slot {
+        SlotBuffer(TileEntityQuarrySC q, int index, int x, int y) {
+            super(q, index, x, y);
+        }
+
+        @Override
+        public boolean isItemValid(ItemStack stack) {
+            return false;
+        }
+    }
+
+    private static class SlotValid extends Slot {
+        private final TileEntityQuarrySC quarry;
+
+        SlotValid(TileEntityQuarrySC q, int index, int x, int y) {
+            super(q, index, x, y);
+            this.quarry = q;
+        }
+
+        @Override
+        public boolean isItemValid(ItemStack stack) {
+            return quarry.isItemValidForSlot(getSlotIndex(), stack);
+        }
+
+        @Override
+        public boolean canTakeStack(EntityPlayer player) {
+            return quarry.allowed(player);
+        }
+    }
+}

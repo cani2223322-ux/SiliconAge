@@ -321,7 +321,7 @@ public class GuiConduitSC extends GuiContainer {
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tip = tooltip(mouseX, mouseY);
         if (tip != null) {
-            drawHoveringText(tip, mouseX, mouseY, fontRendererObj);
+            drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tip, width), mouseX, mouseY, fontRendererObj);
         }
     }
 

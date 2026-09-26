@@ -41,6 +41,7 @@ public final class ModBlocks {
     public static BlockGeneratorSC generatorSC;
     public static BlockGeneratorSC generatorSC2;
     public static Block tokamakCoil;
+    public static com.sc.block.BlockQuarrySC quarrySC;
 
     /** The item of a generator type (the block and metadata it lives on). */
     public static net.minecraft.item.ItemStack generatorStack(com.sc.energy.GeneratorType type, int count) {
@@ -97,6 +98,8 @@ public final class ModBlocks {
         // more generators than 16 metadata values: the rest on a second block (like machines)
         generatorSC2 = new BlockGeneratorSC(16);
         GameRegistry.registerBlock(generatorSC2, ItemBlockGeneratorSC.class, "generatorSC2");
+        quarrySC = new com.sc.block.BlockQuarrySC();
+        GameRegistry.registerBlock(quarrySC, com.sc.block.ItemBlockQuarrySC.class, "quarrySC");
         tokamakCoil = new com.sc.block.BlockTokamakCoilSC();
         GameRegistry.registerBlock(tokamakCoil, "tokamakCoil");
 
@@ -124,6 +127,7 @@ public final class ModBlocks {
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityTransformerSC.class, "SiliconAge.transformer");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityTankSC.class, "SiliconAge.tank");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityChargePadSC.class, "SiliconAge.chargePad");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityQuarrySC.class, "SiliconAge.quarry");
 
         registerOreDict();
     }

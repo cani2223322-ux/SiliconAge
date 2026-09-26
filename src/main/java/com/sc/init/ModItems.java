@@ -46,6 +46,10 @@ public final class ModItems {
     public static ItemSimpleSC liquidHeCell;
     public static ItemSimpleSC deuteriumCell;
     public static com.sc.item.ItemWearPartSC windRotor, isotopeCapsule;
+    public static com.sc.item.ItemQuarryModuleSC quarryModule;
+    public static final java.util.List<com.sc.item.ItemDrillHeadSC> DRILL_HEADS = new java.util.ArrayList<com.sc.item.ItemDrillHeadSC>();
+    public static ItemSimpleSC oreScanner;
+    public static com.sc.item.ItemAreaCardSC areaCard;
     public static final java.util.List<com.sc.item.ItemWrenchSC> WRENCHES = new java.util.ArrayList<com.sc.item.ItemWrenchSC>();
     public static final java.util.Map<SCToolType, ItemToolSC> TOOLS = new java.util.EnumMap<SCToolType, ItemToolSC>(SCToolType.class);
     public static final java.util.Map<ArmorSuit, ItemArmorSC[]> ARMOR = new java.util.EnumMap<ArmorSuit, ItemArmorSC[]>(ArmorSuit.class);
@@ -173,6 +177,20 @@ public final class ModItems {
         GameRegistry.registerItem(windRotor, "windRotor");
         isotopeCapsule = new com.sc.item.ItemWearPartSC("isotopeCapsule", 86400);
         GameRegistry.registerItem(isotopeCapsule, "isotopeCapsule");
+
+        // Quarry: modules, drill heads, the ore scanner and the area card (appended).
+        quarryModule = new com.sc.item.ItemQuarryModuleSC();
+        GameRegistry.registerItem(quarryModule, "quarryModule");
+        for (com.sc.item.ItemDrillHeadSC.Kind k : com.sc.item.ItemDrillHeadSC.Kind.values()) {
+            com.sc.item.ItemDrillHeadSC h = new com.sc.item.ItemDrillHeadSC(k);
+            GameRegistry.registerItem(h, k.name);
+            DRILL_HEADS.add(h);
+        }
+        oreScanner = new ItemSimpleSC("oreScanner", "oreScanner");
+        oreScanner.setMaxStackSize(1);
+        GameRegistry.registerItem(oreScanner, "oreScanner");
+        areaCard = new com.sc.item.ItemAreaCardSC();
+        GameRegistry.registerItem(areaCard, "areaCard");
 
         // Wrenches: basic, electric, quantum (appended).
         for (com.sc.item.ItemWrenchSC.Tier t : com.sc.item.ItemWrenchSC.Tier.values()) {

@@ -55,6 +55,7 @@ public class SCMod {
         NetworkRegistry.INSTANCE.registerGuiHandler(this, new GuiHandlerSC());
         com.sc.handler.ArmorNetSC.init();
         com.sc.handler.FieldNetSC.init();
+        com.sc.handler.QuarryNetSC.init();
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.

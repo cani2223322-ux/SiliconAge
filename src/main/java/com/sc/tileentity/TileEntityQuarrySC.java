@@ -1,0 +1,1394 @@
+package com.sc.tileentity;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.sc.energy.Tier;
+import com.sc.energy.TileEntityEnergyBase;
+import com.sc.item.ItemAreaCardSC;
+import com.sc.item.ItemDrillHeadSC;
+import com.sc.item.ItemQuarryModuleSC;
+import com.sc.machine.MachineRecipe;
+import com.sc.machine.MachineType;
+import com.sc.machine.RecipeRegistry;
+import com.sc.machine.UpgradeType;
+
+import net.minecraft.block.Block;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.item.EntityXPOrb;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.ISidedInventory;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.util.ForgeDirection;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidTank;
+import net.minecraftforge.fluids.FluidTankInfo;
+import net.minecraftforge.fluids.IFluidHandler;
+import net.minecraftforge.oredict.OreDictionary;
+
+/**
+ * The Silicon Quarry, LV / MV / HV / EV (metadata). It digs its area layer by layer from its own
+ * level down: centred on it (plus an offset) with the size set on its screen, or the box of an
+ * Area Card. A drill head sets its speed and what it can break; modules add fortune, silk touch,
+ * crushing and washing of ore, a pump, a magnet, more area, silence and auto-stop - each switched
+ * on the Functions tab. What it digs goes into a 27-slot buffer and from there into any inventory
+ * next to it. The screen's settings reach the client with the block (description packet); the
+ * live numbers through ContainerQuarrySC.
+ */
+public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler {
+
+    public static final int BUFFER = 27, FIRST_UPGRADE = BUFFER, UPGRADES = 8;
+    public static final int SLOT_HEAD = FIRST_UPGRADE + UPGRADES, SLOT_SCANNER = SLOT_HEAD + 1, SLOT_CARD = SLOT_SCANNER + 1;
+    public static final int SLOTS = SLOT_CARD + 1, FILTER_SLOTS = 9;
+    public static final int[] BASE_SIZE = {8, 16, 32, 64};
+    public static final double[] TIER_SPEED = {1, 1.5, 2, 3};
+
+    // ---- function switches (the Functions tab) ----
+    public static final int F_SPEED = 1, F_FORTUNE = 2, F_SILK = 4, F_CRUSH = 8, F_WASH = 16, F_PUMP = 32, F_PUMP_LAVA = 64,
+            F_MAG_ITEMS = 128, F_MAG_XP = 256, F_RADIUS = 512, F_SILENT = 1024, F_AUTOSTOP = 2048, F_FILTER = 4096,
+            F_SKIP_TILES = 8192, F_WARN_BUFFER = 16384, F_WARN_HEAD = 32768, F_WARN_ENERGY = 65536, F_WARN_DONE = 131072;
+    public static final int FLAG_COUNT = 18;
+    public static final int DEFAULT_FLAGS = ~F_SILK & ((1 << FLAG_COUNT) - 1);
+    // ---- look of the area (the Area tab) ----
+    public static final int V_DASH = 1, V_PLANE = 2, V_ORES = 4;
+    public static final int SHOW_ALWAYS = 0, SHOW_WRENCH = 1, SHOW_MENU = 2, SHOW_NEVER = 3;
+    public static final int[] PALETTE = {0xFFB020, 0x9CF03A, 0x40D8FF, 0xFF4040, 0xB070FF, 0xFFFFFF, 0xFF70C0, 0xFF8A20};
+    public static final int SHAPE_SQUARE = 0, SHAPE_CIRCLE = 1, SHAPE_SHAFT = 2;
+    public static final int REPLACE_HOLE = 0, REPLACE_STONE = 1, REPLACE_DIRT = 2, REPLACE_ASWAS = 3;
+    public static final int FILTER_ALL = 0, FILTER_ORE = 1, FILTER_ONLY = 2, FILTER_EXCEPT = 3;
+    public static final int POWER_FULL = 0, POWER_ECO = 1, POWER_MIN = 2;
+    public static final int REDSTONE_ALWAYS = 0, REDSTONE_ON = 1, REDSTONE_OFF = 2;
+
+    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD }
+
+    private final ItemStack[] slots = new ItemStack[SLOTS];
+    private final ItemStack[] filter = new ItemStack[FILTER_SLOTS];
+    private final List<ItemStack> overflow = new ArrayList<ItemStack>();
+    private final FluidTank pumped = new FluidTank(16000);
+    private final FluidTank water = new FluidTank(8000);
+
+    // settings
+    private int sizeX = 8, sizeZ = 8, offX, offZ, bottomY = 1, shape, replace, flags = DEFAULT_FLAGS, fortuneLevel = 5,
+            powerMode, redstone, outSide = -1, filterMode, show, vflags = V_DASH | V_PLANE | V_ORES, brightness = 3,
+            colorFrame = PALETTE[0], colorPlane = PALETTE[2];
+    private String owner = "";
+    /** The side the front faces (2-5), turned to the placer. */
+    private int facing = 3;
+    // state
+    private boolean running, done;
+    private int layerY = -1, cursor;
+    private long mined;
+    private int xp;
+    private double progress;
+    private Status status = Status.PAUSED;
+    private int lastCost;
+    private int warned;          // bits of Status already reported to the owner
+    // scanner (server)
+    private boolean scanDirty = true;
+    private int scanY, scanIndex;
+    private final List<int[]> ores = new ArrayList<int[]>();
+    private final Map<String, Integer> oreCounts = new LinkedHashMap<String, Integer>();
+
+    public TileEntityQuarrySC() {
+        super(Tier.LV);
+    }
+
+    public void setQuarryTier(Tier tier) {
+        setTier(tier);
+        int t = Math.min(3, tier.ordinal());
+        sizeX = sizeZ = BASE_SIZE[t];
+    }
+
+    private int tierIndex() {
+        return Math.min(3, getTier().ordinal());
+    }
+
+    // ------------------------------------------------------------------ modules and switches
+
+    public int moduleCount(ItemQuarryModuleSC.Kind kind) {
+        int n = 0;
+        for (int i = FIRST_UPGRADE; i < FIRST_UPGRADE + UPGRADES; i++) {
+            ItemStack s = slots[i];
+            if (s != null && s.getItem() instanceof ItemQuarryModuleSC && ItemQuarryModuleSC.kindOf(s) == kind) {
+                n += s.stackSize;
+            }
+        }
+        return Math.min(n, kind.max);
+    }
+
+    public int upgradeCount(UpgradeType type) {
+        int n = 0;
+        for (int i = FIRST_UPGRADE; i < FIRST_UPGRADE + UPGRADES; i++) {
+            ItemStack s = slots[i];
+            if (s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == type) {
+                n += s.stackSize;
+            }
+        }
+        return Math.min(n, UpgradeType.MAX_EFFECTIVE);
+    }
+
+    public boolean has(int flag) {
+        return (flags & flag) != 0;
+    }
+
+    /** A module's function works: the module is in, its switch is on, and the power mode allows it. */
+    public boolean active(ItemQuarryModuleSC.Kind kind, int flag) {
+        if (moduleCount(kind) <= 0 || !has(flag)) {
+            return false;
+        }
+        if (powerMode == POWER_MIN && kind != ItemQuarryModuleSC.Kind.RADIUS && kind != ItemQuarryModuleSC.Kind.SILENT
+                && kind != ItemQuarryModuleSC.Kind.AUTOSTOP) {
+            return false;
+        }
+        if (powerMode == POWER_ECO && getEnergyStored() < getMaxEnergyStored() / 4
+                && (kind == ItemQuarryModuleSC.Kind.SPEED || kind == ItemQuarryModuleSC.Kind.MAGNET)) {
+            return false;
+        }
+        return true;
+    }
+
+    public int fortune() {
+        if (!active(ItemQuarryModuleSC.Kind.FORTUNE, F_FORTUNE) || silk()) {
+            return 0;
+        }
+        return Math.max(0, Math.min(fortuneLevel, moduleCount(ItemQuarryModuleSC.Kind.FORTUNE)));
+    }
+
+    public boolean silk() {
+        return active(ItemQuarryModuleSC.Kind.SILK, F_SILK);
+    }
+
+    @Override
+    public Tier inputTier() {
+        Tier[] tiers = Tier.values();
+        if (upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
+            return tiers[tiers.length - 1];
+        }
+        return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
+    }
+
+    @Override
+    public int getMaxEnergyStored() {
+        return super.getMaxEnergyStored() + upgradeCount(UpgradeType.ENERGY_STORAGE) * UpgradeType.STORAGE_PER_UPGRADE;
+    }
+
+    public ItemDrillHeadSC.Kind headKind() {
+        ItemStack h = slots[SLOT_HEAD];
+        return h != null && h.getItem() instanceof ItemDrillHeadSC ? ((ItemDrillHeadSC) h.getItem()).kind : null;
+    }
+
+    /** Blocks a second: the head's speed x the tier's x 1.4 per speed module. */
+    public double blocksPerSecond() {
+        ItemDrillHeadSC.Kind head = headKind();
+        if (head == null) {
+            return 0;
+        }
+        int speed = active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED) ? moduleCount(ItemQuarryModuleSC.Kind.SPEED) : 0;
+        return head.blocksPerSecond * TIER_SPEED[tierIndex()] * Math.pow(1.4, speed);
+    }
+
+    /** EU one block costs: by its hardness, times what the modules add. */
+    public int costFor(float hardness) {
+        double eu = 30 + 15 * Math.max(0, hardness);
+        if (active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED)) {
+            eu *= Math.pow(1.6, moduleCount(ItemQuarryModuleSC.Kind.SPEED));
+        }
+        eu *= 1 + 0.5 * fortune();
+        if (silk()) {
+            eu *= 2;
+        }
+        if (active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
+            eu *= 1.5;
+        }
+        if (active(ItemQuarryModuleSC.Kind.WASH, F_WASH)) {
+            eu *= 1.5;
+        }
+        if (headKind() == ItemDrillHeadSC.Kind.EXO) {
+            eu *= 1.5;
+        }
+        return (int) Math.ceil(eu);
+    }
+
+    // ------------------------------------------------------------------ the area
+
+    public int maxSize() {
+        int radius = active(ItemQuarryModuleSC.Kind.RADIUS, F_RADIUS) ? moduleCount(ItemQuarryModuleSC.Kind.RADIUS) : 0;
+        return BASE_SIZE[tierIndex()] + 8 * radius;
+    }
+
+    /**
+     * {x0, z0, x1, z1, yTop, yBottom} (inclusive), or null if the card's box is too big or too far.
+     * Without a card: centred on the quarry plus the offset, from its own level down to bottomY.
+     */
+    public int[] area() {
+        int max = maxSize();
+        int[] card = ItemAreaCardSC.area(slots[SLOT_CARD]);
+        if (card != null) {
+            if (card[3] - card[0] + 1 > max || card[5] - card[2] + 1 > max
+                    || Math.abs((card[0] + card[3]) / 2 - xCoord) > 64 + max || Math.abs((card[2] + card[5]) / 2 - zCoord) > 64 + max) {
+                return null;
+            }
+            return new int[]{card[0], card[2], card[3], card[5], Math.min(card[4], 255), Math.max(1, card[1])};
+        }
+        int sx = shape == SHAPE_SHAFT ? 1 : Math.max(1, Math.min(sizeX, max));
+        int sz = shape == SHAPE_SHAFT ? 1 : Math.max(1, Math.min(shape == SHAPE_CIRCLE ? sizeX : sizeZ, max));
+        int x0 = xCoord + offX - (sx - 1) / 2, z0 = zCoord + offZ - (sz - 1) / 2;
+        return new int[]{x0, z0, x0 + sx - 1, z0 + sz - 1, yCoord, Math.max(1, Math.min(bottomY, yCoord))};
+    }
+
+    public boolean usesCard() {
+        return ItemAreaCardSC.area(slots[SLOT_CARD]) != null;
+    }
+
+    /** Cell `i` of a layer (row-major), or null if the shape leaves it out. */
+    private int[] cell(int[] a, int i) {
+        int w = a[2] - a[0] + 1;
+        int x = a[0] + i % w, z = a[1] + i / w;
+        if (shape == SHAPE_CIRCLE && !usesCard()) {
+            double cx = (a[0] + a[2]) / 2.0, cz = (a[1] + a[3]) / 2.0, r = w / 2.0;
+            if (Math.pow(x - cx, 2) + Math.pow(z - cz, 2) > r * r) {
+                return null;
+            }
+        }
+        return new int[]{x, z};
+    }
+
+    private int cellsPerLayer(int[] a) {
+        return (a[2] - a[0] + 1) * (a[3] - a[1] + 1);
+    }
+
+    /** Settings changed: start the area over. */
+    private void resetCursor() {
+        int[] a = area();
+        layerY = a == null ? -1 : a[4];
+        cursor = 0;
+        done = false;
+        progress = 0;
+        scanDirty = true;
+        warned = 0;
+    }
+
+    // ------------------------------------------------------------------ what gets dug
+
+    public static boolean isOre(Block block, int meta) {
+        Item item = Item.getItemFromBlock(block);
+        if (item == null) {
+            return false;
+        }
+        for (int id : OreDictionary.getOreIDs(new ItemStack(item, 1, meta))) {
+            if (OreDictionary.getOreName(id).startsWith("ore")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isOre(ItemStack s) {
+        if (s == null || s.getItem() == null) {
+            return false;
+        }
+        for (int id : OreDictionary.getOreIDs(s)) {
+            if (OreDictionary.getOreName(id).startsWith("ore")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Does the filter let this block be dug? (Everything else stays where it is.) */
+    private boolean passesFilter(Block block, int meta) {
+        if (replace == REPLACE_ASWAS) {
+            return isOre(block, meta);
+        }
+        if (!has(F_FILTER) || filterMode == FILTER_ALL) {
+            return true;
+        }
+        if (filterMode == FILTER_ORE) {
+            return isOre(block, meta);
+        }
+        Item item = Item.getItemFromBlock(block);
+        boolean listed = false;
+        for (ItemStack f : filter) {
+            if (f != null && item != null && f.getItem() == item && (!f.getHasSubtypes() || f.getItemDamage() == block.damageDropped(meta))) {
+                listed = true;
+                break;
+            }
+        }
+        return filterMode == FILTER_ONLY ? listed : !listed;
+    }
+
+    /** 0: dig it, 1: skip it (leave it), 2: a fluid for the pump. */
+    private int judge(int x, int y, int z) {
+        if (x == xCoord && y == yCoord && z == zCoord) {
+            return 1;
+        }
+        Block block = worldObj.getBlock(x, y, z);
+        if (block.isAir(worldObj, x, y, z)) {
+            return 1;
+        }
+        if (block.getMaterial().isLiquid()) {
+            return active(ItemQuarryModuleSC.Kind.PUMP, F_PUMP) ? 2 : 1;
+        }
+        float hardness = block.getBlockHardness(worldObj, x, y, z);
+        ItemDrillHeadSC.Kind head = headKind();
+        if (hardness < 0 || head == null || hardness > head.maxHardness) {
+            return 1;
+        }
+        if (block.hasTileEntity(worldObj.getBlockMetadata(x, y, z)) && has(F_SKIP_TILES)) {
+            return 1;
+        }
+        return passesFilter(block, worldObj.getBlockMetadata(x, y, z)) ? 0 : 1;
+    }
+
+    /** Another player's private field zone, or another mod's protection, forbids breaking there. */
+    private boolean forbidden(int x, int y, int z) {
+        TileEntityFieldGeneratorSC field = TileEntityFieldGeneratorSC.fieldWith(worldObj, TileEntityFieldGeneratorSC.F_PRIVATE, x + 0.5, y + 0.5, z + 0.5);
+        if (field != null && !field.allowedName(owner)) {
+            return true;
+        }
+        if (worldObj instanceof WorldServer) {
+            net.minecraftforge.common.util.FakePlayer fake = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((WorldServer) worldObj);
+            net.minecraftforge.event.world.BlockEvent.BreakEvent ev = new net.minecraftforge.event.world.BlockEvent.BreakEvent(
+                    x, y, z, worldObj, worldObj.getBlock(x, y, z), worldObj.getBlockMetadata(x, y, z), fake);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+            return ev.isCanceled();
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------ the tick
+
+    @Override
+    public boolean canUpdate() {
+        return true;
+    }
+
+    @Override
+    public void updateEntity() {
+        if (worldObj == null || worldObj.isRemote) {
+            return;
+        }
+        long time = worldObj.getTotalWorldTime();
+        pushOut();
+        if (scanDirty || scanY > 0) {
+            scanStep();
+        }
+        if (time % 20 == 0) {
+            magnet();
+        }
+        if (time % 40 == 0 && running) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the renderer's layer line
+        }
+        dig();
+    }
+
+    private void setStatus(Status s) {
+        if (s != status) {
+            status = s;
+            if (s != Status.RUNNING && s != Status.PAUSED) {
+                warn(s);               // once per start (warned is cleared by Start and by a new area)
+            }
+        }
+    }
+
+    private void dig() {
+        if (!running) {
+            setStatus(done ? Status.DONE : Status.PAUSED);
+            return;
+        }
+        boolean powered = worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
+        if (redstone == REDSTONE_ON && !powered || redstone == REDSTONE_OFF && powered) {
+            setStatus(Status.REDSTONE);
+            return;
+        }
+        int[] a = area();
+        if (a == null) {
+            setStatus(Status.NO_AREA);
+            return;
+        }
+        if (headKind() == null) {
+            setStatus(Status.NO_HEAD);
+            return;
+        }
+        if (!overflow.isEmpty() || firstEmpty() < 0) {
+            flushOverflow();
+            if (!overflow.isEmpty() || firstEmpty() < 0) {
+                setStatus(Status.BUFFER_FULL);
+                if (active(ItemQuarryModuleSC.Kind.AUTOSTOP, F_AUTOSTOP)) {
+                    running = false;
+                    markDirty();
+                }
+                return;
+            }
+        }
+        if (layerY < 0 || layerY > a[4]) {
+            layerY = a[4];
+            cursor = 0;
+        }
+        progress = Math.min(progress + blocksPerSecond() / 20.0, 16);
+        int checks = 0, dug = 0;
+        while (progress >= 1 && checks < 512 && dug < 16) {
+            if (layerY < a[5]) {
+                done = true;
+                running = false;
+                setStatus(Status.DONE);
+                markDirty();
+                return;
+            }
+            int[] c = cell(a, cursor);
+            checks++;
+            if (c == null) {
+                advance(a);
+                continue;
+            }
+            int x = c[0], z = c[1], y = layerY;
+            if (!worldObj.blockExists(x, y, z)) {
+                advance(a);
+                continue;
+            }
+            int verdict = judge(x, y, z);
+            if (verdict == 1) {
+                advance(a);
+                continue;
+            }
+            if (forbidden(x, y, z)) {
+                setStatus(Status.BLOCKED_BY_FIELD);
+                advance(a);
+                continue;
+            }
+            Block block = worldObj.getBlock(x, y, z);
+            int cost = verdict == 2 ? 20 : costFor(block.getBlockHardness(worldObj, x, y, z));
+            if (getEnergyStored() < cost) {
+                setStatus(Status.NO_POWER);
+                return;
+            }
+            if (verdict == 2) {
+                if (!pump(x, y, z, block)) {
+                    advance(a);
+                    continue;
+                }
+            } else {
+                mine(x, y, z, block);
+            }
+            removeEnergy(cost);
+            lastCost = cost;
+            progress -= 1;
+            dug++;
+            advance(a);
+            if (headKind() == null) {
+                setStatus(Status.NO_HEAD);
+                return;
+            }
+        }
+        setStatus(Status.RUNNING);
+    }
+
+    private void advance(int[] a) {
+        cursor++;
+        if (cursor >= cellsPerLayer(a)) {
+            cursor = 0;
+            layerY--;
+        }
+    }
+
+    private void replaceAfter(int x, int y, int z) {
+        Block with = replace == REPLACE_STONE || replace == REPLACE_ASWAS ? Blocks.stone : replace == REPLACE_DIRT ? Blocks.dirt : Blocks.air;
+        worldObj.setBlock(x, y, z, with, 0, 3);
+    }
+
+    private boolean pump(int x, int y, int z, Block block) {
+        Fluid fluid = FluidRegistry.lookupFluidForBlock(block);
+        int meta = worldObj.getBlockMetadata(x, y, z);
+        if (fluid == null) {
+            return false;
+        }
+        if (fluid == FluidRegistry.LAVA && !has(F_PUMP_LAVA)) {
+            return false;
+        }
+        if (meta == 0) {                           // a source block: into the tank
+            if (pumped.fill(new FluidStack(fluid, 1000), false) < 1000) {
+                return false;
+            }
+            pumped.fill(new FluidStack(fluid, 1000), true);
+        }
+        worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
+        return true;
+    }
+
+    private void mine(int x, int y, int z, Block block) {
+        int meta = worldObj.getBlockMetadata(x, y, z);
+        List<ItemStack> drops = new ArrayList<ItemStack>();
+        net.minecraftforge.common.util.FakePlayer fake = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((WorldServer) worldObj);
+        if (silk() && block.canSilkHarvest(worldObj, fake, x, y, z, meta) && Item.getItemFromBlock(block) != null) {
+            Item item = Item.getItemFromBlock(block);
+            drops.add(new ItemStack(item, 1, item.getHasSubtypes() ? meta : 0));
+        } else {
+            drops.addAll(block.getDrops(worldObj, x, y, z, meta, fortune()));
+        }
+        boolean ore = isOre(block, meta);
+        if (!has(F_SILENT) || moduleCount(ItemQuarryModuleSC.Kind.SILENT) == 0) {
+            worldObj.playAuxSFX(2001, x, y, z, Block.getIdFromBlock(block) + (meta << 12));
+        }
+        replaceAfter(x, y, z);
+        if (ore) {
+            removeOre(x, y, z);
+            String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(block)) + "@" + block.damageDropped(meta);
+            Integer n = oreCounts.get(key);
+            if (n != null) {
+                if (n <= 1) {
+                    oreCounts.remove(key);
+                } else {
+                    oreCounts.put(key, n - 1);
+                }
+            }
+        }
+        for (ItemStack d : drops) {
+            for (ItemStack out : process(d)) {
+                store(out);
+            }
+        }
+        mined++;
+        ItemStack head = slots[SLOT_HEAD];
+        if (head != null && head.getMaxDamage() > 0) {
+            head.setItemDamage(head.getItemDamage() + 1);
+            if (head.getItemDamage() >= head.getMaxDamage()) {
+                slots[SLOT_HEAD] = null;
+                worldObj.playSoundEffect(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, "random.break", 1F, 0.8F);
+                warn(Status.NO_HEAD);
+            }
+        }
+        markDirty();
+    }
+
+    /** Crushing, then washing of ore drops (the machines' own recipes). */
+    private List<ItemStack> process(ItemStack drop) {
+        List<ItemStack> out = new ArrayList<ItemStack>();
+        if (drop == null) {
+            return out;
+        }
+        if (!isOre(drop) || !active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
+            out.add(drop);
+            return out;
+        }
+        MachineRecipe crush = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{single(drop)}, null, null);
+        if (crush == null) {
+            out.add(drop);
+            return out;
+        }
+        for (int n = 0; n < drop.stackSize; n++) {
+            for (ItemStack c : crush.outputs) {
+                if (c == null) {
+                    continue;
+                }
+                MachineRecipe wash = active(ItemQuarryModuleSC.Kind.WASH, F_WASH)
+                        ? RecipeRegistry.findMatch(MachineType.ORE_WASHER, new ItemStack[]{c.copy()}, water.getFluid(), null) : null;
+                int need = wash == null || wash.fluidInputA == null ? 0 : wash.fluidInputA.amount;
+                if (wash != null && water.getFluidAmount() >= need) {
+                    if (need > 0) {
+                        water.drain(need, true);
+                    }
+                    for (ItemStack w : wash.outputs) {
+                        if (w != null) {
+                            out.add(w.copy());
+                        }
+                    }
+                    for (int i = 0; i < wash.byproducts.length; i++) {
+                        if (worldObj.rand.nextFloat() < wash.byproductChances[i]) {
+                            out.add(wash.byproducts[i].copy());
+                        }
+                    }
+                } else {
+                    out.add(c.copy());
+                }
+            }
+        }
+        return out;
+    }
+
+    private static ItemStack single(ItemStack s) {
+        ItemStack c = s.copy();
+        c.stackSize = 1;
+        return c;
+    }
+
+    // ------------------------------------------------------------------ the buffer
+
+    private int firstEmpty() {
+        for (int i = 0; i < BUFFER; i++) {
+            if (slots[i] == null) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Into the buffer (topping up first); what doesn't fit waits in the overflow. */
+    private void store(ItemStack stack) {
+        ItemStack s = stack.copy();
+        for (int i = 0; i < BUFFER && s.stackSize > 0; i++) {
+            ItemStack b = slots[i];
+            if (b != null && b.isItemEqual(s) && ItemStack.areItemStackTagsEqual(b, s) && b.stackSize < b.getMaxStackSize()) {
+                int move = Math.min(s.stackSize, b.getMaxStackSize() - b.stackSize);
+                b.stackSize += move;
+                s.stackSize -= move;
+            }
+        }
+        for (int i = 0; i < BUFFER && s.stackSize > 0; i++) {
+            if (slots[i] == null) {
+                slots[i] = s.copy();
+                s.stackSize = 0;
+            }
+        }
+        if (s.stackSize > 0) {
+            overflow.add(s);
+        }
+    }
+
+    private void flushOverflow() {
+        List<ItemStack> copy = new ArrayList<ItemStack>(overflow);
+        overflow.clear();
+        for (ItemStack s : copy) {
+            store(s);
+        }
+    }
+
+    /** One stack a tick into each neighbouring inventory (or only the chosen side). */
+    private void pushOut() {
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+            if (outSide >= 0 && d.ordinal() != outSide) {
+                continue;
+            }
+            TileEntity te = worldObj.getTileEntity(xCoord + d.offsetX, yCoord + d.offsetY, zCoord + d.offsetZ);
+            if (!(te instanceof IInventory) || te instanceof TileEntityQuarrySC) {
+                continue;
+            }
+            for (int i = 0; i < BUFFER; i++) {
+                if (slots[i] != null) {
+                    int left = com.sc.util.InvUtilSC.insert((IInventory) te, d.getOpposite(), slots[i]);
+                    if (left != slots[i].stackSize) {
+                        if (left <= 0) {
+                            slots[i] = null;
+                        } else {
+                            slots[i].stackSize = left;
+                        }
+                        markDirty();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    private void magnet() {
+        boolean items = active(ItemQuarryModuleSC.Kind.MAGNET, F_MAG_ITEMS), orbs = active(ItemQuarryModuleSC.Kind.MAGNET, F_MAG_XP);
+        int[] a = area();
+        if ((!items && !orbs) || a == null) {
+            return;
+        }
+        AxisAlignedBB box = AxisAlignedBB.getBoundingBox(a[0], a[5], a[1], a[2] + 1, a[4] + 4, a[3] + 1);
+        if (items) {
+            for (Object o : worldObj.getEntitiesWithinAABB(EntityItem.class, box)) {
+                EntityItem e = (EntityItem) o;
+                if (!e.isDead && e.getEntityItem() != null && firstEmpty() >= 0) {
+                    store(e.getEntityItem());
+                    e.setDead();
+                }
+            }
+        }
+        if (orbs) {
+            for (Object o : worldObj.getEntitiesWithinAABB(EntityXPOrb.class, box)) {
+                EntityXPOrb e = (EntityXPOrb) o;
+                if (!e.isDead) {
+                    xp += e.getXpValue();
+                    e.setDead();
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ the scanner
+
+    public boolean hasScanner() {
+        return slots[SLOT_SCANNER] != null && slots[SLOT_SCANNER].getItem() == com.sc.init.ModItems.oreScanner;
+    }
+
+    /** Looks through the area a slice at a time (4096 blocks a tick) for ore. */
+    private void scanStep() {
+        int[] a = area();
+        if (!hasScanner() || a == null) {
+            ores.clear();
+            oreCounts.clear();
+            scanDirty = false;
+            scanY = 0;
+            return;
+        }
+        if (scanDirty) {
+            ores.clear();
+            oreCounts.clear();
+            scanY = a[4];
+            scanIndex = 0;
+            scanDirty = false;
+        }
+        int budget = 4096, cells = cellsPerLayer(a);
+        while (budget-- > 0 && scanY >= a[5]) {
+            int[] c = cell(a, scanIndex);
+            if (c != null && worldObj.blockExists(c[0], scanY, c[1])) {
+                Block b = worldObj.getBlock(c[0], scanY, c[1]);
+                int meta = worldObj.getBlockMetadata(c[0], scanY, c[1]);
+                if (!b.isAir(worldObj, c[0], scanY, c[1]) && isOre(b, meta)) {
+                    if (ores.size() < 1024) {
+                        ores.add(new int[]{c[0], scanY, c[1], oreColor(b, meta)});
+                    }
+                    String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(b)) + "@" + b.damageDropped(meta);
+                    Integer n = oreCounts.get(key);
+                    oreCounts.put(key, n == null ? 1 : n + 1);
+                }
+            }
+            if (++scanIndex >= cells) {
+                scanIndex = 0;
+                scanY--;
+            }
+        }
+        if (scanY < a[5]) {
+            scanY = 0;
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
+    }
+
+    private void removeOre(int x, int y, int z) {
+        for (int i = 0; i < ores.size(); i++) {
+            int[] o = ores.get(i);
+            if (o[0] == x && o[1] == y && o[2] == z) {
+                ores.remove(i);
+                return;
+            }
+        }
+    }
+
+    /** A colour to outline an ore with: the vanilla ores by name, the rest by a hash of their name. */
+    public static int oreColor(Block b, int meta) {
+        if (b == Blocks.coal_ore) return 0x303030;
+        if (b == Blocks.iron_ore) return 0xD8A880;
+        if (b == Blocks.gold_ore) return 0xFFD840;
+        if (b == Blocks.diamond_ore) return 0x50F0E8;
+        if (b == Blocks.emerald_ore) return 0x40E060;
+        if (b == Blocks.redstone_ore || b == Blocks.lit_redstone_ore) return 0xFF2020;
+        if (b == Blocks.lapis_ore) return 0x3050E0;
+        if (b == Blocks.quartz_ore) return 0xF0F0F0;
+        int h = (String.valueOf(Block.blockRegistry.getNameForObject(b)) + meta).hashCode();
+        java.awt.Color c = java.awt.Color.getHSBColor((h & 0xFF) / 255F, 0.7F, 1F);
+        return c.getRGB() & 0xFFFFFF;
+    }
+
+    public List<int[]> getOres() {
+        return ores;
+    }
+
+    public Map<String, Integer> getOreCounts() {
+        return oreCounts;
+    }
+
+    // ------------------------------------------------------------------ owner and warnings
+
+    public int getFacing() {
+        return facing;
+    }
+
+    public void setFacing(int side) {
+        if (side >= 2 && side <= 5) {
+            facing = side;
+            markDirty();
+        }
+    }
+
+    /** Breaking it: what waited for room in the buffer drops too. */
+    public void dropOverflow() {
+        for (ItemStack s : overflow) {
+            worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, s));
+        }
+        overflow.clear();
+    }
+
+    public String getOwner() {
+        return owner;
+    }
+
+    public void setOwner(String name) {
+        owner = name == null ? "" : name;
+        markDirty();
+    }
+
+    public boolean allowed(EntityPlayer p) {
+        return owner.isEmpty() || owner.equalsIgnoreCase(p.getCommandSenderName())
+                || p instanceof EntityPlayerMP && net.minecraft.server.MinecraftServer.getServer().getConfigurationManager().func_152596_g(((EntityPlayerMP) p).getGameProfile());
+    }
+
+    private void warn(Status s) {
+        int flag = s == Status.BUFFER_FULL ? F_WARN_BUFFER : s == Status.NO_HEAD ? F_WARN_HEAD : s == Status.NO_POWER ? F_WARN_ENERGY
+                : s == Status.DONE ? F_WARN_DONE : 0;
+        int bit = 1 << s.ordinal();
+        if (flag == 0 || !has(flag) || (warned & bit) != 0 || owner.isEmpty()) {
+            return;
+        }
+        warned |= bit;
+        EntityPlayerMP p = net.minecraft.server.MinecraftServer.getServer().getConfigurationManager().func_152612_a(owner);
+        if (p != null) {
+            p.addChatComponentMessage(new ChatComponentTranslation("sc.quarry.warn." + s.name().toLowerCase(java.util.Locale.ROOT),
+                    xCoord, yCoord, zCoord));
+        }
+    }
+
+    // ------------------------------------------------------------------ screen actions (QuarryNetSC)
+
+    public static final int A_RUN = 0, A_RESET = 1, A_REDSTONE = 2, A_POWER = 3, A_XP = 4, A_SIZE_X = 5, A_SIZE_Z = 6,
+            A_OFF_X = 7, A_OFF_Z = 8, A_BOTTOM = 9, A_SHAPE = 10, A_REPLACE = 11, A_FLAG = 12, A_FORTUNE = 13,
+            A_FILTER_MODE = 14, A_OUT_SIDE = 15, A_SHOW = 16, A_VFLAG = 17, A_BRIGHT = 18, A_COLOR_FRAME = 19,
+            A_COLOR_PLANE = 20, A_SCAN = 21;
+
+    public void action(EntityPlayer p, int action, int value) {
+        boolean area = false;
+        switch (action) {
+            case A_RUN:
+                running = !running;
+                if (running && done) {
+                    resetCursor();
+                }
+                warned = 0;
+                break;
+            case A_RESET: resetCursor(); break;
+            case A_REDSTONE: redstone = (redstone + 1) % 3; break;
+            case A_POWER: powerMode = (powerMode + 1) % 3; break;
+            case A_XP:
+                if (xp > 0) {
+                    p.addExperience(xp);
+                    xp = 0;
+                }
+                break;
+            case A_SIZE_X: sizeX = clamp(sizeX + value, 1, maxSize()); area = true; break;
+            case A_SIZE_Z: sizeZ = clamp(sizeZ + value, 1, maxSize()); area = true; break;
+            case A_OFF_X: offX = clamp(offX + value, -64, 64); area = true; break;
+            case A_OFF_Z: offZ = clamp(offZ + value, -64, 64); area = true; break;
+            case A_BOTTOM: bottomY = clamp(bottomY + value, 1, Math.max(1, yCoord)); area = true; break;
+            case A_SHAPE: shape = (shape + 1) % 3; area = true; break;
+            case A_REPLACE: replace = (replace + 1) % 4; break;
+            case A_FLAG:
+                if (value >= 0 && value < FLAG_COUNT) {
+                    flags ^= 1 << value;
+                    if ((1 << value) == F_SILK && has(F_SILK)) {
+                        flags &= ~F_FORTUNE;         // silk touch and fortune don't mix
+                    } else if ((1 << value) == F_FORTUNE && has(F_FORTUNE)) {
+                        flags &= ~F_SILK;
+                    }
+                    if ((1 << value) == F_RADIUS) {
+                        area = true;
+                    }
+                }
+                break;
+            case A_FORTUNE: fortuneLevel = clamp(fortuneLevel + value, 1, 5); break;
+            case A_FILTER_MODE: filterMode = (filterMode + 1) % 4; break;
+            case A_OUT_SIDE: outSide = outSide >= 5 ? -1 : outSide + 1; break;
+            case A_SHOW: show = (show + 1) % 4; break;
+            case A_VFLAG: vflags ^= value & 7; break;
+            case A_BRIGHT: brightness = brightness % 4 + 1; break;
+            case A_COLOR_FRAME: colorFrame = value & 0xFFFFFF; break;
+            case A_COLOR_PLANE: colorPlane = value & 0xFFFFFF; break;
+            case A_SCAN: scanDirty = true; break;
+            default: return;
+        }
+        if (area) {
+            resetCursor();
+        }
+        markDirty();
+        worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+    }
+
+    private static int clamp(int v, int lo, int hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
+
+    // ------------------------------------------------------------------ getters for the screen / renderer
+
+    public int getSizeX() { return sizeX; }
+    public int getSizeZ() { return sizeZ; }
+    public int getOffX() { return offX; }
+    public int getOffZ() { return offZ; }
+    public int getBottomY() { return bottomY; }
+    public int getShape() { return shape; }
+    public int getReplace() { return replace; }
+    public int getFlags() { return flags; }
+    public int getFortuneLevel() { return fortuneLevel; }
+    public int getPowerMode() { return powerMode; }
+    public int getRedstone() { return redstone; }
+    public int getOutSide() { return outSide; }
+    public int getFilterMode() { return filterMode; }
+    public int getShow() { return show; }
+    public int getVflags() { return vflags; }
+    public int getBrightness() { return brightness; }
+    public int getColorFrame() { return colorFrame; }
+    public int getColorPlane() { return colorPlane; }
+    public boolean isRunning() { return running; }
+    public boolean isDone() { return done; }
+    public int getLayerY() { return layerY; }
+    public int getCursor() { return cursor; }
+    public long getMined() { return mined; }
+    public int getXp() { return xp; }
+    public Status getStatus() { return status; }
+    public int getLastCost() { return lastCost; }
+    public FluidTank getPumped() { return pumped; }
+    public FluidTank getWater() { return water; }
+    public ItemStack[] getFilter() { return filter; }
+
+    /** Client sync (ContainerQuarrySC). */
+    public void setLiveClient(int statusOrdinal, int layer, int cur, int minedLow, int xpValue, int cost, boolean run) {
+        status = Status.values()[Math.max(0, Math.min(Status.values().length - 1, statusOrdinal))];
+        layerY = layer;
+        cursor = cur;
+        mined = minedLow;
+        xp = xpValue;
+        lastCost = cost;
+        running = run;
+    }
+
+    public void setFilterStack(int i, ItemStack s) {
+        if (i >= 0 && i < FILTER_SLOTS) {
+            filter[i] = s == null ? null : single(s);
+            markDirty();
+        }
+    }
+
+    /** Blocks left to look at in the area (for the forecast). */
+    public long blocksLeft() {
+        int[] a = area();
+        if (a == null || layerY < a[5]) {
+            return 0;
+        }
+        long perLayer = cellsPerLayer(a);
+        return (long) (layerY - a[5]) * perLayer + (perLayer - cursor);
+    }
+
+    // ------------------------------------------------------------------ IInventory
+
+    @Override
+    public int getSizeInventory() {
+        return SLOTS;
+    }
+
+    @Override
+    public ItemStack getStackInSlot(int slot) {
+        return slot >= 0 && slot < SLOTS ? slots[slot] : null;
+    }
+
+    @Override
+    public ItemStack decrStackSize(int slot, int count) {
+        ItemStack s = getStackInSlot(slot);
+        if (s == null) {
+            return null;
+        }
+        ItemStack out = s.stackSize <= count ? s : s.splitStack(count);
+        if (out == s) {
+            slots[slot] = null;
+        }
+        onSlotChange(slot);
+        return out;
+    }
+
+    @Override
+    public ItemStack getStackInSlotOnClosing(int slot) {
+        return null;
+    }
+
+    @Override
+    public void setInventorySlotContents(int slot, ItemStack stack) {
+        if (slot >= 0 && slot < SLOTS) {
+            slots[slot] = stack;
+            onSlotChange(slot);
+        }
+    }
+
+    private void onSlotChange(int slot) {
+        markDirty();
+        if (slot == SLOT_CARD || slot >= FIRST_UPGRADE && slot < FIRST_UPGRADE + UPGRADES) {
+            if (worldObj != null && !worldObj.isRemote) {
+                if (slot == SLOT_CARD) {
+                    resetCursor();
+                }
+                worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            }
+        }
+        if (slot == SLOT_SCANNER) {
+            scanDirty = true;
+        }
+    }
+
+    @Override
+    public String getInventoryName() {
+        return "container.siliconage.quarry";
+    }
+
+    @Override
+    public boolean hasCustomInventoryName() {
+        return false;
+    }
+
+    @Override
+    public int getInventoryStackLimit() {
+        return 64;
+    }
+
+    @Override
+    public boolean isUseableByPlayer(EntityPlayer player) {
+        return worldObj != null && worldObj.getTileEntity(xCoord, yCoord, zCoord) == this
+                && player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= 64;
+    }
+
+    @Override
+    public void openInventory() {
+    }
+
+    @Override
+    public void closeInventory() {
+    }
+
+    @Override
+    public boolean isItemValidForSlot(int slot, ItemStack s) {
+        if (s == null) {
+            return false;
+        }
+        if (slot < BUFFER) {
+            return false;                   // the quarry fills its buffer itself
+        }
+        if (slot < FIRST_UPGRADE + UPGRADES) {
+            if (s.getItem() instanceof ItemQuarryModuleSC) {
+                return true;
+            }
+            if (s.getItem() instanceof com.sc.item.ItemUpgradeSC) {
+                UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
+                return t == UpgradeType.TRANSFORMER || t == UpgradeType.UNIVERSAL_TRANSFORMER || t == UpgradeType.ENERGY_STORAGE;
+            }
+            return false;
+        }
+        if (slot == SLOT_HEAD) {
+            return s.getItem() instanceof ItemDrillHeadSC;
+        }
+        if (slot == SLOT_SCANNER) {
+            return s.getItem() == com.sc.init.ModItems.oreScanner;
+        }
+        return s.getItem() instanceof ItemAreaCardSC;
+    }
+
+    private static final int[] BUFFER_SLOTS = new int[BUFFER];
+
+    static {
+        for (int i = 0; i < BUFFER; i++) {
+            BUFFER_SLOTS[i] = i;
+        }
+    }
+
+    /** Pipes and hoppers only take from the buffer. */
+    @Override
+    public int[] getAccessibleSlotsFromSide(int side) {
+        return BUFFER_SLOTS;
+    }
+
+    @Override
+    public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        return false;
+    }
+
+    @Override
+    public boolean canExtractItem(int slot, ItemStack stack, int side) {
+        return slot < BUFFER;
+    }
+
+    // ------------------------------------------------------------------ fluids: pumped out, water for washing in
+
+    @Override
+    public int fill(ForgeDirection from, FluidStack resource, boolean doFill) {
+        return resource != null && resource.getFluid() == FluidRegistry.WATER ? water.fill(resource, doFill) : 0;
+    }
+
+    @Override
+    public FluidStack drain(ForgeDirection from, FluidStack resource, boolean doDrain) {
+        return resource != null && resource.isFluidEqual(pumped.getFluid()) ? pumped.drain(resource.amount, doDrain) : null;
+    }
+
+    @Override
+    public FluidStack drain(ForgeDirection from, int maxDrain, boolean doDrain) {
+        return pumped.drain(maxDrain, doDrain);
+    }
+
+    @Override
+    public boolean canFill(ForgeDirection from, Fluid fluid) {
+        return fluid == FluidRegistry.WATER;
+    }
+
+    @Override
+    public boolean canDrain(ForgeDirection from, Fluid fluid) {
+        return true;
+    }
+
+    @Override
+    public FluidTankInfo[] getTankInfo(ForgeDirection from) {
+        return new FluidTankInfo[]{pumped.getInfo(), water.getInfo()};
+    }
+
+    // ------------------------------------------------------------------ the item keeps it all (wrench / breaking)
+
+    /** Settings, progress and energy for the dropped item (the buffer drops as items). */
+    public NBTTagCompound writeToItem() {
+        NBTTagCompound nbt = new NBTTagCompound();
+        writeSettings(nbt);
+        nbt.setInteger("EnergySC", getEnergyStored());
+        nbt.setBoolean("Running", running);
+        nbt.setInteger("LayerY", layerY);
+        nbt.setInteger("Cursor", cursor);
+        nbt.setLong("Mined", mined);
+        nbt.setInteger("Xp", xp);
+        return nbt;
+    }
+
+    public void readFromItem(NBTTagCompound nbt) {
+        readSettings(nbt);
+        addEnergy(nbt.getInteger("EnergySC"));
+        mined = nbt.getLong("Mined");
+        xp = nbt.getInteger("Xp");
+        resetCursor();
+        markDirty();
+    }
+
+    // ------------------------------------------------------------------ NBT
+
+    private void writeSettings(NBTTagCompound nbt) {
+        int[] s = {sizeX, sizeZ, offX, offZ, bottomY, shape, replace, flags, fortuneLevel, powerMode, redstone, outSide,
+                filterMode, show, vflags, brightness, colorFrame, colorPlane};
+        nbt.setIntArray("Settings", s);
+        nbt.setString("Owner", owner);
+        nbt.setInteger("Facing", facing);
+        NBTTagList f = new NBTTagList();
+        for (int i = 0; i < FILTER_SLOTS; i++) {
+            if (filter[i] != null) {
+                NBTTagCompound t = new NBTTagCompound();
+                t.setByte("Slot", (byte) i);
+                filter[i].writeToNBT(t);
+                f.appendTag(t);
+            }
+        }
+        nbt.setTag("Filter", f);
+    }
+
+    private void readSettings(NBTTagCompound nbt) {
+        int[] s = nbt.getIntArray("Settings");
+        if (s.length >= 18) {
+            sizeX = s[0]; sizeZ = s[1]; offX = s[2]; offZ = s[3]; bottomY = s[4]; shape = s[5]; replace = s[6]; flags = s[7];
+            fortuneLevel = s[8]; powerMode = s[9]; redstone = s[10]; outSide = s[11]; filterMode = s[12]; show = s[13];
+            vflags = s[14]; brightness = s[15]; colorFrame = s[16]; colorPlane = s[17];
+        }
+        owner = nbt.getString("Owner");
+        if (nbt.hasKey("Facing")) {
+            facing = Math.max(2, Math.min(5, nbt.getInteger("Facing")));
+        }
+        for (int i = 0; i < FILTER_SLOTS; i++) {
+            filter[i] = null;
+        }
+        NBTTagList f = nbt.getTagList("Filter", 10);
+        for (int i = 0; i < f.tagCount(); i++) {
+            NBTTagCompound t = f.getCompoundTagAt(i);
+            int slot = t.getByte("Slot");
+            if (slot >= 0 && slot < FILTER_SLOTS) {
+                filter[slot] = ItemStack.loadItemStackFromNBT(t);
+            }
+        }
+    }
+
+    @Override
+    public void readFromNBT(NBTTagCompound nbt) {
+        super.readFromNBT(nbt);
+        readSettings(nbt);
+        running = nbt.getBoolean("Running");
+        done = nbt.getBoolean("Done");
+        layerY = nbt.getInteger("LayerY");
+        cursor = nbt.getInteger("Cursor");
+        mined = nbt.getLong("Mined");
+        xp = nbt.getInteger("Xp");
+        progress = nbt.getDouble("Progress");
+        status = Status.values()[Math.max(0, Math.min(Status.values().length - 1, nbt.getInteger("Status")))];
+        pumped.readFromNBT(nbt.getCompoundTag("Pumped"));
+        water.readFromNBT(nbt.getCompoundTag("Water"));
+        for (int i = 0; i < SLOTS; i++) {
+            slots[i] = null;
+        }
+        NBTTagList list = nbt.getTagList("Slots", 10);
+        for (int i = 0; i < list.tagCount(); i++) {
+            NBTTagCompound t = list.getCompoundTagAt(i);
+            int slot = t.getByte("Slot") & 0xFF;
+            if (slot < SLOTS) {
+                slots[slot] = ItemStack.loadItemStackFromNBT(t);
+            }
+        }
+        overflow.clear();
+        NBTTagList ov = nbt.getTagList("Overflow", 10);
+        for (int i = 0; i < ov.tagCount(); i++) {
+            ItemStack s = ItemStack.loadItemStackFromNBT(ov.getCompoundTagAt(i));
+            if (s != null) {
+                overflow.add(s);
+            }
+        }
+        // the client's copy of the ore list and counts (description packet)
+        if (nbt.hasKey("OreList")) {
+            ores.clear();
+            int[] o = nbt.getIntArray("OreList");
+            for (int i = 0; i + 3 < o.length; i += 4) {
+                ores.add(new int[]{o[i], o[i + 1], o[i + 2], o[i + 3]});
+            }
+            oreCounts.clear();
+            NBTTagList c = nbt.getTagList("OreCounts", 10);
+            for (int i = 0; i < c.tagCount(); i++) {
+                oreCounts.put(c.getCompoundTagAt(i).getString("K"), c.getCompoundTagAt(i).getInteger("N"));
+            }
+        }
+        scanDirty = true;
+    }
+
+    @Override
+    public void writeToNBT(NBTTagCompound nbt) {
+        super.writeToNBT(nbt);
+        writeSettings(nbt);
+        nbt.setBoolean("Running", running);
+        nbt.setBoolean("Done", done);
+        nbt.setInteger("LayerY", layerY);
+        nbt.setInteger("Cursor", cursor);
+        nbt.setLong("Mined", mined);
+        nbt.setInteger("Xp", xp);
+        nbt.setDouble("Progress", progress);
+        nbt.setInteger("Status", status.ordinal());
+        nbt.setTag("Pumped", pumped.writeToNBT(new NBTTagCompound()));
+        nbt.setTag("Water", water.writeToNBT(new NBTTagCompound()));
+        NBTTagList list = new NBTTagList();
+        for (int i = 0; i < SLOTS; i++) {
+            if (slots[i] != null) {
+                NBTTagCompound t = new NBTTagCompound();
+                t.setByte("Slot", (byte) i);
+                slots[i].writeToNBT(t);
+                list.appendTag(t);
+            }
+        }
+        nbt.setTag("Slots", list);
+        NBTTagList ov = new NBTTagList();
+        for (ItemStack s : overflow) {
+            ov.appendTag(s.writeToNBT(new NBTTagCompound()));
+        }
+        nbt.setTag("Overflow", ov);
+    }
+
+    /** Settings, the digging layer and the scanned ore reach the client with the block. */
+    @Override
+    public net.minecraft.network.Packet getDescriptionPacket() {
+        NBTTagCompound nbt = new NBTTagCompound();
+        writeSettings(nbt);
+        nbt.setInteger("TierSC", getTier().ordinal());
+        nbt.setBoolean("Running", running);
+        nbt.setBoolean("Done", done);
+        nbt.setInteger("LayerY", layerY);
+        nbt.setInteger("Cursor", cursor);
+        NBTTagList list = new NBTTagList();
+        for (int i : new int[]{SLOT_CARD}) {
+            if (slots[i] != null) {
+                NBTTagCompound t = new NBTTagCompound();
+                t.setByte("Slot", (byte) i);
+                slots[i].writeToNBT(t);
+                list.appendTag(t);
+            }
+        }
+        for (int i = FIRST_UPGRADE; i < FIRST_UPGRADE + UPGRADES; i++) {
+            if (slots[i] != null) {
+                NBTTagCompound t = new NBTTagCompound();
+                t.setByte("Slot", (byte) i);
+                slots[i].writeToNBT(t);
+                list.appendTag(t);
+            }
+        }
+        nbt.setTag("Slots", list);
+        int n = Math.min(ores.size(), 512);
+        int[] o = new int[n * 4];
+        for (int i = 0; i < n; i++) {
+            System.arraycopy(ores.get(i), 0, o, i * 4, 4);
+        }
+        nbt.setIntArray("OreList", o);
+        NBTTagList c = new NBTTagList();
+        for (Map.Entry<String, Integer> e : oreCounts.entrySet()) {
+            NBTTagCompound t = new NBTTagCompound();
+            t.setString("K", e.getKey());
+            t.setInteger("N", e.getValue());
+            c.appendTag(t);
+        }
+        nbt.setTag("OreCounts", c);
+        return new net.minecraft.network.play.server.S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
+    }
+
+    @Override
+    public void onDataPacket(net.minecraft.network.NetworkManager manager, net.minecraft.network.play.server.S35PacketUpdateTileEntity pkt) {
+        NBTTagCompound nbt = pkt.func_148857_g();
+        readSettings(nbt);
+        setTier(Tier.values()[Math.max(0, Math.min(Tier.values().length - 1, nbt.getInteger("TierSC")))]);
+        running = nbt.getBoolean("Running");
+        done = nbt.getBoolean("Done");
+        layerY = nbt.getInteger("LayerY");
+        cursor = nbt.getInteger("Cursor");
+        for (int i = FIRST_UPGRADE; i <= SLOT_CARD; i++) {
+            if (i != SLOT_HEAD && i != SLOT_SCANNER) {
+                slots[i] = null;
+            }
+        }
+        NBTTagList list = nbt.getTagList("Slots", 10);
+        for (int i = 0; i < list.tagCount(); i++) {
+            NBTTagCompound t = list.getCompoundTagAt(i);
+            int slot = t.getByte("Slot") & 0xFF;
+            if (slot < SLOTS) {
+                slots[slot] = ItemStack.loadItemStackFromNBT(t);
+            }
+        }
+        ores.clear();
+        int[] o = nbt.getIntArray("OreList");
+        for (int i = 0; i + 3 < o.length; i += 4) {
+            ores.add(new int[]{o[i], o[i + 1], o[i + 2], o[i + 3]});
+        }
+        oreCounts.clear();
+        NBTTagList c = nbt.getTagList("OreCounts", 10);
+        for (int i = 0; i < c.tagCount(); i++) {
+            oreCounts.put(c.getCompoundTagAt(i).getString("K"), c.getCompoundTagAt(i).getInteger("N"));
+        }
+    }
+
+    // ------------------------------------------------------------------ rendering
+
+    @Override
+    @cpw.mods.fml.relauncher.SideOnly(cpw.mods.fml.relauncher.Side.CLIENT)
+    public AxisAlignedBB getRenderBoundingBox() {
+        return INFINITE_EXTENT_AABB;
+    }
+
+    @Override
+    @cpw.mods.fml.relauncher.SideOnly(cpw.mods.fml.relauncher.Side.CLIENT)
+    public double getMaxRenderDistanceSquared() {
+        return 128 * 128;
+    }
+
+    @Override
+    public boolean shouldRenderInPass(int pass) {
+        return pass == 1;
+    }
+}

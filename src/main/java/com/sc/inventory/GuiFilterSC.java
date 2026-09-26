@@ -124,7 +124,7 @@ public class GuiFilterSC extends GuiContainer {
             if (mouseX >= b.xPosition && mouseY >= b.yPosition && mouseX < b.xPosition + b.width && mouseY < b.yPosition + b.height) {
                 List<String> tip = new ArrayList<String>();
                 tip.add(Lang.tr("sc.filter.tip." + b.id));
-                drawHoveringText(tip, mouseX, mouseY, fontRendererObj);
+                drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tip, width), mouseX, mouseY, fontRendererObj);
             }
         }
     }

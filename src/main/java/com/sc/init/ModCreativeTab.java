@@ -57,6 +57,8 @@ public class ModCreativeTab extends CreativeTabs {
         // machines, energy, logistics, the field
         add(order, ModBlocks.machineSC, ModBlocks.machineSC2);
         add(order, ModBlocks.generatorSC, ModBlocks.generatorSC2, ModBlocks.tokamakCoil, ModBlocks.cableSC, ModBlocks.transformerSC, ModBlocks.energyStorageSC, ModBlocks.chargePadSC);
+        add(order, ModBlocks.quarrySC, ModItems.quarryModule, ModItems.oreScanner, ModItems.areaCard);
+        order.addAll(ModItems.DRILL_HEADS);
         add(order, ModBlocks.pipeSC, ModBlocks.tubeItemPneumatic, ModBlocks.conduitBundle, ModBlocks.tankSC);
         add(order, ModBlocks.fieldGeneratorSC);
         // gear, tier by tier: the suit, its blade, its drill
