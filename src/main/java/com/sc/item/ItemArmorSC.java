@@ -87,6 +87,13 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         return Reference.ASSETS + ":textures/models/armor/" + suit.textureName + "_layer_" + (slot == 2 ? 2 : 1) + ".png";
     }
 
+    /** The worn model: the armour, then its lit parts full-bright by the charge (ModelArmorGlowSC). */
+    @Override
+    @cpw.mods.fml.relauncher.SideOnly(cpw.mods.fml.relauncher.Side.CLIENT)
+    public net.minecraft.client.model.ModelBiped getArmorModel(EntityLivingBase wearer, ItemStack stack, int slot) {
+        return com.sc.client.ModelArmorGlowSC.forPiece(wearer, stack, slot);
+    }
+
     /** §16: up to 5 installed chips (one per ChipType), read/written by ItemArmorChipSC/CommonEventHandler. */
     public static NBTTagCompound chipsTag(ItemStack armorStack) {
         if (!armorStack.hasTagCompound()) {
