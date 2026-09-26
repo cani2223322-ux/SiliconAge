@@ -246,7 +246,8 @@ public class ItemWrenchSC extends Item {
     private static boolean dismantlable(World world, int x, int y, int z) {
         TileEntity te = world.getTileEntity(x, y, z);
         return te instanceof TileEntityMachineSC || te instanceof TileEntityGeneratorSC || te instanceof TileEntityEnergyStorageSC
-                || te instanceof TileEntityTransformerSC || te instanceof TileEntityTankSC || te instanceof TileEntityFieldGeneratorSC;
+                || te instanceof TileEntityTransformerSC || te instanceof TileEntityTankSC || te instanceof TileEntityFieldGeneratorSC
+                || te instanceof com.sc.tileentity.TileEntityQuarrySC;
     }
 
     /**
