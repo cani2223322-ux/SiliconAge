@@ -101,6 +101,9 @@ public class ContainerFieldGeneratorSC extends Container {
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
         int n = TileEntityFieldGeneratorSC.UPGRADE_SLOTS, hotbar = n + 27, end = inventorySlots.size();
+        if (index >= n && field.isItemValidForSlot(0, original) && !field.allowed(player)) {
+            return null;                            // strangers don't put upgrades in either
+        }
         if (index < n) {
             if (!mergeItemStack(original, n, end, true)) {
                 return null;
@@ -139,6 +142,14 @@ public class ContainerFieldGeneratorSC extends Container {
         public boolean canTakeStack(EntityPlayer player) {
             return field.allowed(player);
         }
+    }
+
+    @Override
+    public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (slotId >= 0 && slotId < TileEntityFieldGeneratorSC.UPGRADE_SLOTS && !field.allowed(player)) {
+            return null;
+        }
+        return super.slotClick(slotId, button, mode, player);
     }
 
     public TileEntityFieldGeneratorSC getField() {

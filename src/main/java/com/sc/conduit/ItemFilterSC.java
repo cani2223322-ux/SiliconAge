@@ -72,8 +72,8 @@ public final class ItemFilterSC {
         if (example != null) {
             example = example.copy();
             example.stackSize = 1;
-            if (!isAdvanced(filter)) {
-                example.setTagCompound(null);      // only the advanced filter can match NBT
+            if (!isAdvanced(filter) || isFilter(example)) {
+                example.setTagCompound(null);      // only the advanced filter matches NBT; never a filter's own list
             }
         }
         all[slot] = example;

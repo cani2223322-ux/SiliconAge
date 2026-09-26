@@ -994,6 +994,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (fuelTank2.getFluidAmount() > 0) {
             nbt.setTag("FuelTank2", fuelTank2.writeToNBT(new NBTTagCompound()));
         }
+        if (outTank.getFluidAmount() > 0) {
+            nbt.setTag("OutTank", outTank.writeToNBT(new NBTTagCompound()));
+        }
         if (generatorType.needsIgnition()) {
             if (ignitionEU > 0) {
                 nbt.setLong("IgnitionEU", ignitionEU);
@@ -1010,7 +1013,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Placed from an item that carries writeToItem()'s data. */
     public void readFromItem(NBTTagCompound nbt) {
-        addEnergy(Math.max(0, nbt.getInteger("EnergySC")));
+        restoreEnergy(nbt.getInteger("EnergySC"));
+        if (nbt.hasKey("OutTank")) {
+            outTank.readFromNBT(nbt.getCompoundTag("OutTank"));
+        }
         if (nbt.hasKey("FuelTank")) {
             fuelTank.readFromNBT(nbt.getCompoundTag("FuelTank"));
         }

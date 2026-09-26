@@ -31,6 +31,10 @@ public final class ModRecipesCrafting {
     }
 
     public static void init() {
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:tankupgrade", TankUpgradeRecipeSC.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:storageupgrade", StorageUpgradeRecipeSC.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         cablesAndPipes();
         baseMaterials();
         passiveComponents();

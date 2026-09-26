@@ -13,7 +13,17 @@ import net.minecraftforge.oredict.ShapedOreRecipe;
 public class TankUpgradeRecipeSC extends ShapedOreRecipe {
 
     public TankUpgradeRecipeSC(ItemStack result, Object... recipe) {
-        super(result, recipe);
+        super(result, convert(recipe));
+    }
+
+    /** Generic materials become ore names (like OreRecipes); the tank itself stays an exact stack. */
+    private static Object[] convert(Object[] in) {
+        Object[] out = new Object[in.length];
+        for (int i = 0; i < in.length; i++) {
+            out[i] = in[i] instanceof ItemStack && !(((ItemStack) in[i]).getItem() instanceof ItemBlockTankSC)
+                    ? OreRecipes.oreName((ItemStack) in[i]) : in[i];
+        }
+        return out;
     }
 
     @Override

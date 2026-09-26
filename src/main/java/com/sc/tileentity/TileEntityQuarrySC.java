@@ -490,21 +490,18 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             setStatus(Status.REDSTONE);
             return;
         }
-        if (isExo()) {
-            haul();
-            return;
-        }
-        int[] a = area();
-        if (a == null) {
-            setStatus(Status.NO_AREA);
-            return;
-        }
-        if (headKind() == null) {
-            setStatus(Status.NO_HEAD);
-            return;
-        }
-        if (repairing()) {
-            return;
+        if (!isExo()) {
+            if (area() == null) {
+                setStatus(Status.NO_AREA);
+                return;
+            }
+            if (headKind() == null) {
+                setStatus(Status.NO_HEAD);
+                return;
+            }
+            if (repairing()) {
+                return;
+            }
         }
         if (!overflow.isEmpty() || firstEmpty() < 0) {
             flushOverflow();
@@ -517,6 +514,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 return;
             }
         }
+        if (isExo()) {
+            haul();
+            return;
+        }
+        int[] a = area();
         if (layerY < 0 || layerY > a[4]) {
             layerY = a[4];
             cursor = 0;
@@ -564,7 +566,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                     continue;
                 }
             } else {
-                mine(x, y, z, block);
+                dug += mine(x, y, z, block);
             }
             removeEnergy(cost);
             lastCost = cost;
@@ -771,20 +773,22 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return true;
     }
 
-    private void mine(int x, int y, int z, Block block) {
+    /** @return the vein blocks dug along with it */
+    private int mine(int x, int y, int z, Block block) {
         boolean ore = isOre(block, worldObj.getBlockMetadata(x, y, z));
         int oreMeta = worldObj.getBlockMetadata(x, y, z);
         mineOne(x, y, z, block);
         if (ore && active(ItemQuarryModuleSC.Kind.VEIN, F_VEIN)) {
-            vein(x, y, z, block, oreMeta);
+            return vein(x, y, z, block, oreMeta);
         }
+        return 0;
     }
 
     /**
      * The rest of an ore vein: every touching block of the same ore (26 neighbours), up to VEIN_MAX
      * blocks within 32 of the first - inside the area or not - each paid for like any block.
      */
-    private void vein(int x0, int y0, int z0, Block ore, int meta) {
+    private int vein(int x0, int y0, int z0, Block ore, int meta) {
         java.util.ArrayDeque<int[]> open = new java.util.ArrayDeque<int[]>();
         java.util.Set<Long> seen = new java.util.HashSet<Long>();
         open.add(new int[]{x0, y0, z0});
@@ -803,7 +807,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                         }
                         int cost = costFor(ore.getBlockHardness(worldObj, x, y, z));
                         if (getEnergyStored() < cost || forbidden(x, y, z) || taken >= VEIN_MAX || headKind() == null) {
-                            return;
+                            return taken;
                         }
                         removeEnergy(cost);
                         mineOne(x, y, z, ore);
@@ -813,6 +817,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 }
             }
         }
+        return taken;
     }
 
     /** Lava and water next to a dug block turn to stone (the pump's own sources in the area are left to it). */
@@ -829,6 +834,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             boolean inArea = a != null && nx >= a[0] && nx <= a[2] && nz >= a[1] && nz <= a[3] && ny <= a[4] && ny >= a[5];
             if (pump && inArea && worldObj.getBlockMetadata(nx, ny, nz) == 0) {
+                continue;
+            }
+            if (forbidden(nx, ny, nz)) {
                 continue;
             }
             if (getEnergyStored() < GUARD_COST) {
@@ -1004,7 +1012,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             for (int i = 0; i < BUFFER; i++) {
                 if (slots[i] != null) {
-                    int left = com.sc.util.InvUtilSC.insert((IInventory) te, d.getOpposite(), slots[i]);
+                    int left = com.sc.util.InvUtilSC.insert((IInventory) te, d, slots[i]);
                     if (left != slots[i].stackSize) {
                         if (left <= 0) {
                             slots[i] = null;
@@ -1537,12 +1545,24 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setInteger("Cursor", cursor);
         nbt.setLong("Mined", mined);
         nbt.setInteger("Xp", xp);
+        if (pumped.getFluidAmount() > 0) {
+            nbt.setTag("Pumped", pumped.writeToNBT(new NBTTagCompound()));
+        }
+        if (water.getFluidAmount() > 0) {
+            nbt.setTag("Water", water.writeToNBT(new NBTTagCompound()));
+        }
         return nbt;
     }
 
     public void readFromItem(NBTTagCompound nbt) {
         readSettings(nbt);
-        addEnergy(nbt.getInteger("EnergySC"));
+        restoreEnergy(nbt.getInteger("EnergySC"));
+        if (nbt.hasKey("Pumped")) {
+            pumped.readFromNBT(nbt.getCompoundTag("Pumped"));
+        }
+        if (nbt.hasKey("Water")) {
+            water.readFromNBT(nbt.getCompoundTag("Water"));
+        }
         mined = nbt.getLong("Mined");
         xp = nbt.getInteger("Xp");
         resetCursor();
@@ -1647,6 +1667,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         clearScan();
+        NBTTagList hl = nbt.getTagList("HaulLog", 10);
+        for (int i = 0; i < hl.tagCount(); i++) {
+            oreCounts.put(hl.getCompoundTagAt(i).getString("K"), hl.getCompoundTagAt(i).getInteger("N"));
+        }
     }
 
     @Override
@@ -1679,6 +1703,16 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             ov.appendTag(s.writeToNBT(new NBTTagCompound()));
         }
         nbt.setTag("Overflow", ov);
+        if (isExo()) {
+            NBTTagList hl = new NBTTagList();
+            for (Map.Entry<String, Integer> e : oreCounts.entrySet()) {
+                NBTTagCompound t = new NBTTagCompound();
+                t.setString("K", e.getKey());
+                t.setInteger("N", e.getValue());
+                hl.appendTag(t);
+            }
+            nbt.setTag("HaulLog", hl);
+        }
     }
 
     /** Settings, the digging layer and the scanned ore reach the client with the block. */

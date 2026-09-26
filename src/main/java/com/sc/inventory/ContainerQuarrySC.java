@@ -91,6 +91,9 @@ public class ContainerQuarrySC extends Container {
     // ---- filter examples: a copy of the cursor's item, never the item itself ----
 
     private void setExample(int i, ItemStack s, EntityPlayer player) {
+        if (!quarry.allowed(player)) {
+            return;                                 // a stranger's click changes nothing, not even their view
+        }
         ItemStack one = s == null ? null : s.copy();
         if (one != null) {
             one.stackSize = 1;
@@ -107,6 +110,9 @@ public class ContainerQuarrySC extends Container {
             setExample(slotId, player.inventory.getItemStack(), player);
             return null;
         }
+        if (slotId >= 0 && slotId < FIRST_PLAYER && !quarry.allowed(player)) {
+            return null;                            // only the owner takes the output or changes the modules
+        }
         return super.slotClick(slotId, button, mode, player);
     }
 
@@ -118,6 +124,9 @@ public class ContainerQuarrySC extends Container {
         }
         Slot slot = (Slot) inventorySlots.get(index);
         if (slot == null || !slot.getHasStack()) {
+            return null;
+        }
+        if (!quarry.allowed(player)) {
             return null;
         }
         ItemStack original = slot.getStack();
@@ -225,6 +234,11 @@ public class ContainerQuarrySC extends Container {
         @Override
         public boolean isItemValid(ItemStack stack) {
             return false;
+        }
+
+        @Override
+        public boolean canTakeStack(EntityPlayer player) {
+            return ((TileEntityQuarrySC) inventory).allowed(player);
         }
     }
 

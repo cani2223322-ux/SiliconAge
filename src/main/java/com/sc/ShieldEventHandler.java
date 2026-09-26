@@ -133,7 +133,7 @@ public class ShieldEventHandler {
     }
 
     /** A private field: only its owner and access list may break or place blocks inside it or open its containers. */
-    private static boolean privateFor(net.minecraft.world.World w, net.minecraft.entity.player.EntityPlayer p, int x, int y, int z) {
+    public static boolean privateFor(net.minecraft.world.World w, net.minecraft.entity.player.EntityPlayer p, int x, int y, int z) {
         if (w.isRemote || p == null) {
             return false;
         }
@@ -165,7 +165,8 @@ public class ShieldEventHandler {
             return;
         }
         net.minecraft.tileentity.TileEntity te = event.world.getTileEntity(event.x, event.y, event.z);
-        if (te instanceof net.minecraft.inventory.IInventory && !(te instanceof TileEntityFieldGeneratorSC)
+        // any tile entity: containers, but also transformers, tanks, conduits (their settings and filters)
+        if (te != null && !(te instanceof TileEntityFieldGeneratorSC)
                 && privateFor(event.world, event.entityPlayer, event.x, event.y, event.z)) {
             event.setCanceled(true);
             return;

@@ -172,10 +172,12 @@ public final class ModRecipesInfrastructure {
      */
     private static void registerBoiler(MachineType boiler) {
         int ticks = boiler == MachineType.BOILER_MV ? 25 : 50;
-        RecipeRegistry.register(new MachineRecipe(boiler,
-                new ItemStack[]{new ItemStack(Items.coal)}, new FluidStack(FluidRegistry.WATER, 2500), null,
-                new ItemStack[0], new FluidStack(ModFluids.steam, 2000), null,
-                ticks, 0f));
+        for (int coal = 0; coal <= 1; coal++) {             // coal and charcoal
+            RecipeRegistry.register(new MachineRecipe(boiler,
+                    new ItemStack[]{new ItemStack(Items.coal, 1, coal)}, new FluidStack(FluidRegistry.WATER, 2500), null,
+                    new ItemStack[0], new FluidStack(ModFluids.steam, 2000), null,
+                    ticks, 0f));
+        }
         RecipeRegistry.register(new MachineRecipe(boiler,
                 new ItemStack[0], new FluidStack(FluidRegistry.WATER, 2500), new FluidStack(ModFluids.diesel, 100),
                 new ItemStack[0], new FluidStack(ModFluids.steam, 2000), null,

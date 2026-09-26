@@ -255,6 +255,7 @@ public class BlockMachineSC extends Block {
                     float x0 = x + 0.5F, y0 = y + 0.5F, z0 = z + 0.5F;
                     net.minecraft.entity.item.EntityItem entityItem = new net.minecraft.entity.item.EntityItem(world, x0, y0, z0, stack);
                     world.spawnEntityInWorld(entityItem);
+                    machine.setInventorySlotContents(i, null);      // no second copy for a GUI still open
                 }
             }
         }

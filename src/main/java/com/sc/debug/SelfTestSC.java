@@ -586,6 +586,13 @@ public final class SelfTestSC {
                 && (f18 & com.sc.tileentity.TileEntityQuarrySC.F_REPAIR) == 0 && (f18 & com.sc.tileentity.TileEntityQuarrySC.F_FORTUNE) == 0;
         check(mTier && mTrash && mEco && closed && opened && stab && migr,
                 "quarry modules 2: tier / quarry / rig rules, trash and gentle lists, economy x0.8 and twin x2, resonator opens lenses, stabilizer x7 at 300k, old saves get the new switches (repair off)");
+        // a filter as another filter's example keeps no list of its own (no filter-in-filter growth)
+        ItemStack fa = new ItemStack(ModItems.itemFilter, 1, 1), fb = new ItemStack(ModItems.itemFilter, 1, 1);
+        com.sc.conduit.ItemFilterSC.setEntry(fb, 0, new ItemStack(ModItems.oreScanner));
+        com.sc.conduit.ItemFilterSC.setEntry(fa, 0, fb);
+        ItemStack inA = com.sc.conduit.ItemFilterSC.entries(fa)[0];
+        check(inA != null && com.sc.conduit.ItemFilterSC.isFilter(inA) && !inA.hasTagCompound(),
+                "a filter put into a filter keeps no NBT");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));

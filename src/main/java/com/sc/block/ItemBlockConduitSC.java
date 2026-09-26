@@ -72,7 +72,8 @@ public abstract class ItemBlockConduitSC extends ItemBlock {
     /** Puts the conduit into the bundle at (x, y, z) if there is one without this kind. */
     private boolean addTo(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int side) {
         TileEntityConduitBundleSC te = BlockConduitSC.bundle(world, x, y, z);
-        if (te == null || te.has(kind()) || !player.canPlayerEdit(x, y, z, side, stack)) {
+        if (te == null || te.has(kind()) || !player.canPlayerEdit(x, y, z, side, stack)
+                || com.sc.ShieldEventHandler.privateFor(world, player, x, y, z)) {
             return false;
         }
         te.addPart(kind(), stack.getItemDamage());

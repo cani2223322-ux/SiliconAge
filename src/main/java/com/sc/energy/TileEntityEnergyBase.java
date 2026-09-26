@@ -138,6 +138,11 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     }
 
     /** For subclasses (generators) that produce energy internally rather than receiving it. */
+    /** Energy a placed item brings back: not clipped to the buffer, whose storage upgrades come later. */
+    protected void restoreEnergy(int amount) {
+        energyStored = Math.max(energyStored, Math.max(0, amount));
+    }
+
     protected void addEnergy(int amount) {
         energyStored = Math.min(getMaxEnergyStored(), energyStored + amount);
     }

@@ -26,6 +26,15 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 **Исправлено**
 - Карьер с модулем промывки промывал стопку из 2 дроблёных руд как одну.
+- Экзо-буровая установка с полным буфером продолжала добычу и копила «лишнее» без предела (сохранение мира разрасталось) — теперь останавливается, как карьер («Буфер добычи полон», автовыключение).
+- Карьер отдавал добычу соседнему инвентарю не через ту грань (печь сверху получала предметы во входной слот).
+- Защита от жидкостей больше не превращает жидкости в камень в чужой приватной зоне; модуль «Жила» учитывается в лимите блоков за тик (без просадок TPS).
+- Карьер и генераторы, снятые ключом, теряли жидкость в баках и энергию сверх базового буфера — теперь всё сохраняется. Журнал добычи экзо-установки больше не обнуляется при перезагрузке мира.
+- Чужой игрок мог забрать всю добычу из буфера карьера, вставлять модули и карту области (сбивая прогресс) и улучшения в генератор поля — теперь только владелец и список доступа.
+- Приватная зона поля защищает не только сундуки и машины, но и трансформаторы, баки, кабели и трубы (настройки, фильтры); к чужому кабелю в зоне нельзя добавить часть.
+- Сломанная машина могла дать дубликат предмета игроку с открытым меню.
+- Фильтр, вложенный в продвинутый фильтр, больше не хранит свой список (раньше данные предмета можно было раздуть до поломки сохранения).
+- Апгрейд баков (титан, вольфрам, крио) принимает слитки по словарю руд; бойлер работает и на древесном угле. Убраны предупреждения «Unknown recipe class» в логе.
 - Сканер руды карьера больше не работает как «рентген»: он запускается только кнопкой «Сканировать» на вкладке «Схема», тратит 8 EU за каждый проверенный блок и лишь считает, сколько какой руды в области — без подсветки в мире и без точек на схеме.
 - Текст в меню больше не вылезает за кнопки, вкладки и края окон: каждая надпись подгоняется под своё место (шрифт уменьшается до 75%, а если и так не влезает — обрезается с «…», полный текст при наведении). Вкладки карьера и генератора поля — со значками и короткими названиями (у карьера в два ряда), длинные пояснения убраны в значок «?». Это во всех окнах мода: машины, генераторы, накопители, генератор поля, карьер, кабели, фильтр, меню брони.
 - Длинные подсказки в меню механизмов уходили за край экрана — теперь переносятся по строкам во всех окнах мода; строка «Плазма» у реакторов вылезала за окно — перенесена под свою шкалу.
@@ -54,6 +63,15 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 **Fixed**
 - A quarry with the washing module washed a stack of 2 crushed ores as one.
+- The Exo Drilling Rig kept hauling with a full buffer and piled the rest up without limit (the world save grew) - it now stops like the quarry (Buffer full, auto-stop).
+- The quarry pushed its output into a neighbour's wrong face (a furnace on top got items in its input slot).
+- The fluid guard no longer turns fluids to stone in someone else's private zone; vein mining counts against the blocks-per-tick limit (no TPS drops).
+- A wrenched quarry or generator lost the fluid in its tanks and any energy above the base buffer - all kept now. The rig's haul log no longer resets on a world reload.
+- Another player could take a quarry's whole output, put modules and area cards in (resetting its progress) and upgrades into a field generator - owner and access list only now.
+- A private field zone protects transformers, tanks, cables and pipes (settings, filters) too, not only chests and machines; nobody else can add a part to a conduit in it.
+- A broken machine could duplicate an item for a player with its screen open.
+- A filter put into an advanced filter keeps no list of its own (its item data could be blown up until the save broke).
+- Titanium / tungsten / cryo tank upgrades take ore-dictionary ingots; the boiler burns charcoal too. No more "Unknown recipe class" warnings in the log.
 - The quarry's ore scanner is no X-ray any more: it only runs when the Map tab's Scan button is pressed, spends 8 EU per block it looks at and only counts how much of each ore the area holds - no outlines in the world, no dots on the map.
 - Text no longer runs out of buttons, tabs and screen edges: every caption fits its place (drawn smaller down to 75%, or cut with "..." and the full text on hover). The quarry's and field generator's tabs have icons and short names (the quarry's in two rows), long explanations moved into a "?" mark. On every screen of the mod: machines, generators, storages, field generator, quarry, cables, filter, armour screen.
 - Long tooltips in machine screens ran off the screen - they now wrap in every screen of the mod; the reactors' "Plasma" line ran out of the window - moved under its bar.

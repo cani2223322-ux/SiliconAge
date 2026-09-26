@@ -51,8 +51,6 @@ tile.siliconage.machineSC.etching_bath.name=Ванна травления
 tile.siliconage.machineSC.ion_implanter.name=Ионный имплантер
 tile.siliconage.machineSC.sputterer.name=Установка напыления
 tile.siliconage.machineSC.dicing_saw.name=Пила резки пластин
-tile.siliconage.machineSC.packager.name=Упаковщик
-tile.siliconage.machineSC.centrifuge.name=Центрифуга
 tile.siliconage.machineSC2.packager.name=Упаковщик
 tile.siliconage.machineSC2.centrifuge.name=Центрифуга
 

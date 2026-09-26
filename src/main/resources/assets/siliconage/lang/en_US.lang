@@ -51,8 +51,6 @@ tile.siliconage.machineSC.etching_bath.name=Etching Bath
 tile.siliconage.machineSC.ion_implanter.name=Ion Implanter
 tile.siliconage.machineSC.sputterer.name=Sputterer
 tile.siliconage.machineSC.dicing_saw.name=Dicing Saw
-tile.siliconage.machineSC.packager.name=Packager
-tile.siliconage.machineSC.centrifuge.name=Centrifuge
 tile.siliconage.machineSC2.packager.name=Packager
 tile.siliconage.machineSC2.centrifuge.name=Centrifuge
 
