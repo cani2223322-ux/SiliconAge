@@ -614,6 +614,22 @@ public final class SelfTestSC {
         boolean bOld = cf3.has(com.sc.tileentity.TileEntityFieldGeneratorSC.F_CHARGE_FX) && cf3.getChargeMode() == 0;
         check(bSlots && bRate && bKeep && bOld,
                 "field charging: booster in fields only, x2 each up to x16, mode / reserve (max 90%) saved, old fields get sparks on");
+        // the quarry's pump knows water and lava by their flowing blocks too, and other fluids by their own blocks
+        net.minecraft.block.Block modFluidBlock = null;
+        for (Object o : FluidRegistry.getRegisteredFluids().values()) {
+            net.minecraftforge.fluids.Fluid f = (net.minecraftforge.fluids.Fluid) o;
+            if (f.getBlock() instanceof net.minecraftforge.fluids.IFluidBlock && f.getBlock() != null) {
+                modFluidBlock = f.getBlock();
+                break;
+            }
+        }
+        check(com.sc.tileentity.TileEntityQuarrySC.fluidOf(net.minecraft.init.Blocks.flowing_water) == FluidRegistry.WATER
+                        && com.sc.tileentity.TileEntityQuarrySC.fluidOf(net.minecraft.init.Blocks.water) == FluidRegistry.WATER
+                        && com.sc.tileentity.TileEntityQuarrySC.fluidOf(net.minecraft.init.Blocks.flowing_lava) == FluidRegistry.LAVA
+                        && com.sc.tileentity.TileEntityQuarrySC.fluidOf(net.minecraft.init.Blocks.stone) == null
+                        && (modFluidBlock == null || com.sc.tileentity.TileEntityQuarrySC.fluidOf(modFluidBlock)
+                                == ((net.minecraftforge.fluids.IFluidBlock) modFluidBlock).getFluid()),
+                "quarry pump: flowing water / lava count, other fluids by their own block");
         // a filter as another filter's example keeps no list of its own (no filter-in-filter growth)
         ItemStack fa = new ItemStack(ModItems.itemFilter, 1, 1), fb = new ItemStack(ModItems.itemFilter, 1, 1);
         com.sc.conduit.ItemFilterSC.setEntry(fb, 0, new ItemStack(ModItems.oreScanner));

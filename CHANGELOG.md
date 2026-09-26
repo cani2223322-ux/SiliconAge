@@ -7,10 +7,12 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 ### Русский
 **Исправлено**
+- Насос карьера не собирал воду и лаву, если их источники стали «текучими» (а они становятся такими, как только рядом что-то выкопано), — такие жидкости оставались в мире. Теперь они собираются. Жидкости других модов (в том числе «конечные», например некоторые масла и газы) откачиваются по тому, сколько их в блоке.
 - Труба в режиме «Извлечение» вытягивала жидкость, даже когда её некуда отдать (бак полон или получатель не принимает эту жидкость). Жидкость застревала в трубах и попадала в соседние линии. Теперь труба забирает только то, что сеть сейчас может принять; остальное остаётся в источнике.
 
 ### English
 **Fixed**
+- The quarry's pump didn't collect water and lava once their sources turned into flowing blocks (which they do as soon as anything next to them is dug) - they stayed in the world. They're collected now. Other mods' fluids (finite ones too, such as some oils and gases) are pumped by what the block holds.
 - An extracting pipe pulled fluid even with nowhere to put it (the tank full, or no target taking that fluid) - it got stuck in the pipes and showed up in other lines. A pipe now takes only what the network can deliver right now; the rest stays in its source.
 
 ## 0.1.2-alpha — 2026-09-26

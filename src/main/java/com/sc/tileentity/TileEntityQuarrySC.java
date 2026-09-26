@@ -755,7 +755,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     private boolean pump(int x, int y, int z, Block block) {
-        Fluid fluid = FluidRegistry.lookupFluidForBlock(block);
+        Fluid fluid = fluidOf(block);
         int meta = worldObj.getBlockMetadata(x, y, z);
         if (fluid == null) {
             return false;
@@ -763,14 +763,46 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (fluid == FluidRegistry.LAVA && !has(F_PUMP_LAVA)) {
             return false;
         }
-        if (meta == 0) {                           // a source block: into the tank
+        if (block instanceof net.minecraftforge.fluids.IFluidBlock) {
+            // other mods' fluids (finite ones too): what the block itself says it holds
+            net.minecraftforge.fluids.IFluidBlock fb = (net.minecraftforge.fluids.IFluidBlock) block;
+            FluidStack there = fb.canDrain(worldObj, x, y, z) ? fb.drain(worldObj, x, y, z, false) : null;
+            if (there != null && there.amount > 0) {
+                if (pumped.fill(there, false) < there.amount) {
+                    return false;
+                }
+                FluidStack got = fb.drain(worldObj, x, y, z, true);
+                if (got != null) {
+                    pumped.fill(got, true);
+                }
+            }
+        } else if (meta == 0) {                    // a source block (still or flowing): into the tank
             if (pumped.fill(new FluidStack(fluid, 1000), false) < 1000) {
                 return false;
             }
             pumped.fill(new FluidStack(fluid, 1000), true);
         }
-        worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
+        if (worldObj.getBlock(x, y, z) == block) {
+            worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
+        }
         return true;
+    }
+
+    /**
+     * The fluid of a liquid block. Forge only knows water and lava by their still blocks, but a
+     * source turns into the flowing block as soon as anything next to it changes - both count.
+     */
+    public static Fluid fluidOf(Block block) {
+        if (block == Blocks.water || block == Blocks.flowing_water) {
+            return FluidRegistry.WATER;
+        }
+        if (block == Blocks.lava || block == Blocks.flowing_lava) {
+            return FluidRegistry.LAVA;
+        }
+        if (block instanceof net.minecraftforge.fluids.IFluidBlock) {
+            return ((net.minecraftforge.fluids.IFluidBlock) block).getFluid();
+        }
+        return FluidRegistry.lookupFluidForBlock(block);
     }
 
     /** @return the vein blocks dug along with it */
