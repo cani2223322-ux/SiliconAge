@@ -614,6 +614,28 @@ public final class SelfTestSC {
         boolean bOld = cf3.has(com.sc.tileentity.TileEntityFieldGeneratorSC.F_CHARGE_FX) && cf3.getChargeMode() == 0;
         check(bSlots && bRate && bKeep && bOld,
                 "field charging: booster in fields only, x2 each up to x16, mode / reserve (max 90%) saved, old fields get sparks on");
+        // the pump's compartments: open by tier, sized by tank modules, each given out only on its side; old saves' tank moves in
+        com.sc.tileentity.TileEntityQuarrySC tq = new com.sc.tileentity.TileEntityQuarrySC();
+        tq.setQuarryTier(com.sc.energy.Tier.HV);
+        boolean tOpen = tq.unlockedTanks() == 3 && tq.tankCapacity() == com.sc.tileentity.TileEntityQuarrySC.TANK_BASE;
+        ItemStack tm = ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.TANK);
+        tm.stackSize = 6;
+        tq.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE, tm);
+        boolean tCap = tq.tankCapacity() == com.sc.tileentity.TileEntityQuarrySC.TANK_BASE + 4 * com.sc.tileentity.TileEntityQuarrySC.TANK_PER_MODULE;
+        net.minecraft.nbt.NBTTagCompound tn = new net.minecraft.nbt.NBTTagCompound();
+        tq.writeToNBT(tn);
+        tn.removeTag("Tanks");
+        tn.setTag("Pumped", new FluidStack(FluidRegistry.LAVA, 5000).writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+        tn.setIntArray("TankSides", new int[]{net.minecraftforge.common.util.ForgeDirection.DOWN.ordinal(), -1, -1, -1});
+        com.sc.tileentity.TileEntityQuarrySC tq2 = new com.sc.tileentity.TileEntityQuarrySC();
+        tq2.readFromNBT(tn);
+        boolean tMig = tq2.getTank(0).getFluidAmount() == 5000 && tq2.getTank(0).getFluid().getFluid() == FluidRegistry.LAVA;
+        boolean tSide = tq2.drain(net.minecraftforge.common.util.ForgeDirection.UP, 1000, false) == null
+                && tq2.drain(net.minecraftforge.common.util.ForgeDirection.DOWN, 1000, false) != null
+                && !tq2.canDrain(net.minecraftforge.common.util.ForgeDirection.NORTH, null);
+        boolean tFilter = tq2.fluidWanted(FluidRegistry.WATER);
+        check(tOpen && tCap && tMig && tSide && tFilter,
+                "quarry pump tank: HV 3 of 4 compartments, tank modules +32000 each (up to 4), old 'Pumped' becomes compartment 1, output side kept");
         // the quarry's pump knows water and lava by their flowing blocks too, and other fluids by their own blocks
         net.minecraft.block.Block modFluidBlock = null;
         for (Object o : FluidRegistry.getRegisteredFluids().values()) {

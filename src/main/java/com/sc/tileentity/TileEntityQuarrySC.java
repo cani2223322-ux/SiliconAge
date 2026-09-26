@@ -87,12 +87,25 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public static final int POWER_FULL = 0, POWER_ECO = 1, POWER_MIN = 2;
     public static final int REDSTONE_ALWAYS = 0, REDSTONE_ON = 1, REDSTONE_OFF = 2;
 
-    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD, REPAIRING }
+    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD, REPAIRING, TANK_FULL }
+
+    // ---- the pump's tank: compartments, each its own fluid ----
+    public static final int TANKS = 4, TANK_BASE = 16000, TANK_PER_MODULE = 32000, FLUID_FILTER_MAX = 6;
+    /** A compartment's output side: SIDE_ANY, a ForgeDirection ordinal 0..5, or SIDE_NONE. */
+    public static final int SIDE_ANY = -1, SIDE_NONE = 6;
+    /** When the right compartment is full: leave the fluid in the world, pause, destroy it (trash module), make it a block. */
+    public static final int FULL_LEAVE = 0, FULL_PAUSE = 1, FULL_VOID = 2, FULL_BLOCK = 3;
+    /** Fluid filter: off, only the listed fluids, all but the listed; what's filtered out: left in the world or removed. */
+    public static final int FF_OFF = 0, FF_ONLY = 1, FF_EXCEPT = 2;
+    private static final int PUMP_OK = 0, PUMP_SKIP = 1, PUMP_WAIT = 2;
+    private final FluidTank[] tanks = {new FluidTank(TANK_BASE), new FluidTank(TANK_BASE), new FluidTank(TANK_BASE), new FluidTank(TANK_BASE)};
+    private final int[] tankSides = {SIDE_ANY, SIDE_ANY, SIDE_ANY, SIDE_ANY};
+    private final List<String> fluidFilter = new ArrayList<String>();
+    private int fluidFilterMode = FF_OFF, fluidFilterRemove, tankFull = FULL_LEAVE;
 
     private final ItemStack[] slots = new ItemStack[SLOTS];
     private final ItemStack[] filter = new ItemStack[FILTER_SLOTS];
     private final List<ItemStack> overflow = new ArrayList<ItemStack>();
-    private final FluidTank pumped = new FluidTank(16000);
     private final FluidTank water = new FluidTank(8000);
 
     // settings
@@ -458,6 +471,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return;
         }
         long time = worldObj.getTotalWorldTime();
+        if (applyTankCapacityLater || time % 20 == 0) {
+            applyTankCapacityLater = false;
+            applyTankCapacity();                   // modules in or out: the compartments' size follows
+        }
         pushOut();
         if (scanDirty || scanY > 0) {
             scanStep();
@@ -561,7 +578,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 return;
             }
             if (verdict == 2) {
-                if (!pump(x, y, z, block)) {
+                int r = pump(x, y, z, block);
+                if (r == PUMP_WAIT) {
+                    setStatus(Status.TANK_FULL);
+                    return;
+                }
+                if (r == PUMP_SKIP) {
                     advance(a);
                     continue;
                 }
@@ -754,38 +776,146 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         worldObj.setBlock(x, y, z, with, 0, 3);
     }
 
-    private boolean pump(int x, int y, int z, Block block) {
+    /** @return PUMP_OK (taken or removed), PUMP_SKIP (left, go on), PUMP_WAIT (a full tank pauses the quarry) */
+    private int pump(int x, int y, int z, Block block) {
         Fluid fluid = fluidOf(block);
         int meta = worldObj.getBlockMetadata(x, y, z);
         if (fluid == null) {
-            return false;
+            return PUMP_SKIP;
         }
         if (fluid == FluidRegistry.LAVA && !has(F_PUMP_LAVA)) {
-            return false;
+            return PUMP_SKIP;
         }
-        if (block instanceof net.minecraftforge.fluids.IFluidBlock) {
-            // other mods' fluids (finite ones too): what the block itself says it holds
-            net.minecraftforge.fluids.IFluidBlock fb = (net.minecraftforge.fluids.IFluidBlock) block;
-            FluidStack there = fb.canDrain(worldObj, x, y, z) ? fb.drain(worldObj, x, y, z, false) : null;
-            if (there != null && there.amount > 0) {
-                if (pumped.fill(there, false) < there.amount) {
-                    return false;
-                }
-                FluidStack got = fb.drain(worldObj, x, y, z, true);
-                if (got != null) {
-                    pumped.fill(got, true);
-                }
+        if (!fluidWanted(fluid)) {                  // the fluid filter: left in the world, or removed
+            if (fluidFilterRemove == 0) {
+                return PUMP_SKIP;
             }
-        } else if (meta == 0) {                    // a source block (still or flowing): into the tank
-            if (pumped.fill(new FluidStack(fluid, 1000), false) < 1000) {
-                return false;
+            worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
+            return PUMP_OK;
+        }
+        net.minecraftforge.fluids.IFluidBlock fb = block instanceof net.minecraftforge.fluids.IFluidBlock
+                ? (net.minecraftforge.fluids.IFluidBlock) block : null;
+        FluidStack there = fb != null ? (fb.canDrain(worldObj, x, y, z) ? fb.drain(worldObj, x, y, z, false) : null)
+                : meta == 0 ? new FluidStack(fluid, 1000) : null;
+        if (there == null || there.amount <= 0) {   // not a source: just cleared away
+            worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
+            return PUMP_OK;
+        }
+        int t = compartmentFor(there);
+        if (t < 0) {
+            switch (tankFull) {
+                case FULL_PAUSE:
+                    return PUMP_WAIT;
+                case FULL_VOID:
+                    if (!active(ItemQuarryModuleSC.Kind.TRASH, F_TRASH) || getEnergyStored() < TRASH_COST) {
+                        return PUMP_SKIP;
+                    }
+                    removeEnergy(TRASH_COST);
+                    break;
+                case FULL_BLOCK:
+                    if (fluid == FluidRegistry.LAVA) {
+                        store(new ItemStack(Blocks.obsidian));
+                    } else if (fluid == FluidRegistry.WATER) {
+                        store(new ItemStack(Blocks.ice));
+                    } else {
+                        return PUMP_SKIP;
+                    }
+                    break;
+                default:
+                    return PUMP_SKIP;
             }
-            pumped.fill(new FluidStack(fluid, 1000), true);
+        } else {
+            FluidStack got = fb != null ? fb.drain(worldObj, x, y, z, true) : there;
+            if (got != null) {
+                tanks[t].fill(got, true);
+            }
         }
         if (worldObj.getBlock(x, y, z) == block) {
             worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
         }
-        return true;
+        return PUMP_OK;
+    }
+
+    /** The open compartment that takes all of it: one already holding that fluid, or an empty one; -1 if none. */
+    private int compartmentFor(FluidStack fs) {
+        int open = unlockedTanks(), empty = -1;
+        applyTankCapacity();
+        for (int i = 0; i < open; i++) {
+            FluidStack in = tanks[i].getFluid();
+            if (in != null && in.amount > 0 && in.isFluidEqual(fs)) {
+                if (tanks[i].fill(fs, false) >= fs.amount) {
+                    return i;
+                }
+            } else if ((in == null || in.amount <= 0) && empty < 0) {
+                empty = i;
+            }
+        }
+        return empty;
+    }
+
+    /** Compartments open: LV 1, MV 2, HV 3, EV 4. */
+    public int unlockedTanks() {
+        return Math.min(TANKS, tierIndex() + 1);
+    }
+
+    /** Each compartment's size: 16 000 mB, +32 000 per tank module. */
+    public int tankCapacity() {
+        return TANK_BASE + TANK_PER_MODULE * moduleCount(ItemQuarryModuleSC.Kind.TANK);
+    }
+
+    private void applyTankCapacity() {
+        int cap = tankCapacity();
+        for (FluidTank t : tanks) {
+            t.setCapacity(cap);
+        }
+    }
+
+    public FluidTank getTank(int i) {
+        return tanks[i];
+    }
+
+    public int getTankSide(int i) {
+        return tankSides[i];
+    }
+
+    public List<String> getFluidFilter() {
+        return fluidFilter;
+    }
+
+    public int getFluidFilterMode() {
+        return fluidFilterMode;
+    }
+
+    public int getFluidFilterRemove() {
+        return fluidFilterRemove;
+    }
+
+    public int getTankFull() {
+        return tankFull;
+    }
+
+    /** Does the fluid filter let the pump take it? */
+    public boolean fluidWanted(Fluid f) {
+        if (fluidFilterMode == FF_OFF) {
+            return true;
+        }
+        boolean listed = fluidFilter.contains(f.getName());
+        return fluidFilterMode == FF_ONLY ? listed : !listed;
+    }
+
+    private void addToFluidFilter(Fluid f) {
+        if (f != null && !fluidFilter.contains(f.getName()) && fluidFilter.size() < FLUID_FILTER_MAX) {
+            fluidFilter.add(f.getName());
+        }
+    }
+
+    /** May a compartment give its fluid out on that side? */
+    private boolean sideAllows(int i, ForgeDirection from) {
+        int s = tankSides[i];
+        if (s == SIDE_NONE) {
+            return false;
+        }
+        return s == SIDE_ANY || from == ForgeDirection.UNKNOWN || s == from.ordinal();
     }
 
     /**
@@ -1263,7 +1393,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public static final int A_RUN = 0, A_RESET = 1, A_REDSTONE = 2, A_POWER = 3, A_XP = 4, A_SIZE_X = 5, A_SIZE_Z = 6,
             A_OFF_X = 7, A_OFF_Z = 8, A_BOTTOM = 9, A_SHAPE = 10, A_REPLACE = 11, A_FLAG = 12, A_FORTUNE = 13,
             A_FILTER_MODE = 14, A_OUT_SIDE = 15, A_SHOW = 16, A_VFLAG = 17, A_BRIGHT = 18, A_COLOR_FRAME = 19,
-            A_COLOR_PLANE = 20, A_SCAN = 21;
+            A_COLOR_PLANE = 20, A_SCAN = 21, A_TANK_SIDE = 22, A_TANK_CLEAR = 23, A_TANK_TO_FILTER = 24,
+            A_FF_MODE = 25, A_FF_REMOVE = 26, A_TANK_FULL = 27, A_FF_HAND = 28, A_FF_CLEAR = 29, A_FF_DELETE = 30;
 
     public void action(EntityPlayer p, int action, int value) {
         boolean area = false;
@@ -1313,6 +1444,41 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             case A_COLOR_FRAME: colorFrame = value & 0xFFFFFF; break;
             case A_COLOR_PLANE: colorPlane = value & 0xFFFFFF; break;
             case A_SCAN: scanDirty = true; break;
+            case A_TANK_SIDE:
+                if (value >= 0 && value < TANKS) {
+                    tankSides[value] = tankSides[value] >= SIDE_NONE ? SIDE_ANY : tankSides[value] + 1;
+                }
+                break;
+            case A_TANK_CLEAR:
+                if (value >= 0 && value < TANKS) {
+                    tanks[value].setFluid(null);
+                }
+                break;
+            case A_TANK_TO_FILTER:
+                if (value >= 0 && value < TANKS && tanks[value].getFluid() != null) {
+                    addToFluidFilter(tanks[value].getFluid().getFluid());
+                }
+                break;
+            case A_FF_MODE: fluidFilterMode = (fluidFilterMode + 1) % 3; break;
+            case A_FF_REMOVE: fluidFilterRemove = 1 - fluidFilterRemove; break;
+            case A_TANK_FULL: tankFull = (tankFull + 1) % 4; break;
+            case A_FF_HAND: {                       // the fluid in the item in hand (a bucket, a cell...)
+                ItemStack held = p.getCurrentEquippedItem();
+                FluidStack in = held == null ? null
+                        : held.getItem() instanceof net.minecraftforge.fluids.IFluidContainerItem
+                        ? ((net.minecraftforge.fluids.IFluidContainerItem) held.getItem()).getFluid(held)
+                        : net.minecraftforge.fluids.FluidContainerRegistry.getFluidForFilledItem(held);
+                if (in != null) {
+                    addToFluidFilter(in.getFluid());
+                }
+                break;
+            }
+            case A_FF_CLEAR: fluidFilter.clear(); break;
+            case A_FF_DELETE:
+                if (value >= 0 && value < fluidFilter.size()) {
+                    fluidFilter.remove(value);
+                }
+                break;
             default: return;
         }
         if (area) {
@@ -1354,7 +1520,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public int getXp() { return xp; }
     public Status getStatus() { return status; }
     public int getLastCost() { return lastCost; }
-    public FluidTank getPumped() { return pumped; }
+    /** All the pump's fluid, for the summary line. */
+    public int pumpedTotal() {
+        int n = 0;
+        for (FluidTank t : tanks) {
+            n += t.getFluidAmount();
+        }
+        return n;
+    }
     public FluidTank getWater() { return water; }
     public ItemStack[] getFilter() { return filter; }
 
@@ -1542,12 +1715,25 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     @Override
     public FluidStack drain(ForgeDirection from, FluidStack resource, boolean doDrain) {
-        return resource != null && resource.isFluidEqual(pumped.getFluid()) ? pumped.drain(resource.amount, doDrain) : null;
+        if (resource == null) {
+            return null;
+        }
+        for (int i = 0; i < TANKS; i++) {
+            if (sideAllows(i, from) && resource.isFluidEqual(tanks[i].getFluid())) {
+                return tanks[i].drain(resource.amount, doDrain);
+            }
+        }
+        return null;
     }
 
     @Override
     public FluidStack drain(ForgeDirection from, int maxDrain, boolean doDrain) {
-        return pumped.drain(maxDrain, doDrain);
+        for (int i = 0; i < TANKS; i++) {
+            if (sideAllows(i, from) && tanks[i].getFluidAmount() > 0) {
+                return tanks[i].drain(maxDrain, doDrain);
+            }
+        }
+        return null;
     }
 
     @Override
@@ -1557,12 +1743,25 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     @Override
     public boolean canDrain(ForgeDirection from, Fluid fluid) {
-        return true;
+        for (int i = 0; i < TANKS; i++) {
+            FluidStack in = tanks[i].getFluid();
+            if (sideAllows(i, from) && in != null && in.amount > 0 && (fluid == null || in.getFluid() == fluid)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public FluidTankInfo[] getTankInfo(ForgeDirection from) {
-        return new FluidTankInfo[]{pumped.getInfo(), water.getInfo()};
+        List<FluidTankInfo> info = new ArrayList<FluidTankInfo>();
+        for (int i = 0; i < TANKS; i++) {
+            if (sideAllows(i, from)) {
+                info.add(tanks[i].getInfo());
+            }
+        }
+        info.add(water.getInfo());
+        return info.toArray(new FluidTankInfo[info.size()]);
     }
 
     // ------------------------------------------------------------------ the item keeps it all (wrench / breaking)
@@ -1577,9 +1776,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setInteger("Cursor", cursor);
         nbt.setLong("Mined", mined);
         nbt.setInteger("Xp", xp);
-        if (pumped.getFluidAmount() > 0) {
-            nbt.setTag("Pumped", pumped.writeToNBT(new NBTTagCompound()));
-        }
+        writeTanks(nbt);
         if (water.getFluidAmount() > 0) {
             nbt.setTag("Water", water.writeToNBT(new NBTTagCompound()));
         }
@@ -1589,9 +1786,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public void readFromItem(NBTTagCompound nbt) {
         readSettings(nbt);
         restoreEnergy(nbt.getInteger("EnergySC"));
-        if (nbt.hasKey("Pumped")) {
-            pumped.readFromNBT(nbt.getCompoundTag("Pumped"));
-        }
+        readTanks(nbt);
         if (nbt.hasKey("Water")) {
             water.readFromNBT(nbt.getCompoundTag("Water"));
         }
@@ -1619,7 +1814,52 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         nbt.setTag("Filter", f);
+        nbt.setIntArray("TankSides", tankSides.clone());
+        nbt.setInteger("FluidFilterMode", fluidFilterMode);
+        nbt.setInteger("FluidFilterRemove", fluidFilterRemove);
+        nbt.setInteger("TankFull", tankFull);
+        NBTTagList ff = new NBTTagList();
+        for (String name : fluidFilter) {
+            ff.appendTag(new net.minecraft.nbt.NBTTagString(name));
+        }
+        nbt.setTag("FluidFilter", ff);
     }
+
+    /** The pump's compartments; a save from before them had one tank, "Pumped" - it becomes the first. */
+    private void writeTanks(NBTTagCompound nbt) {
+        NBTTagList list = new NBTTagList();
+        for (int i = 0; i < TANKS; i++) {
+            if (tanks[i].getFluidAmount() > 0) {
+                NBTTagCompound t = tanks[i].writeToNBT(new NBTTagCompound());
+                t.setByte("Tank", (byte) i);
+                list.appendTag(t);
+            }
+        }
+        nbt.setTag("Tanks", list);
+    }
+
+    private void readTanks(NBTTagCompound nbt) {
+        for (FluidTank t : tanks) {
+            t.setFluid(null);
+        }
+        if (nbt.hasKey("Tanks")) {
+            NBTTagList list = nbt.getTagList("Tanks", 10);
+            for (int i = 0; i < list.tagCount(); i++) {
+                NBTTagCompound t = list.getCompoundTagAt(i);
+                int k = t.getByte("Tank");
+                if (k >= 0 && k < TANKS) {
+                    tanks[k].setCapacity(Integer.MAX_VALUE);
+                    tanks[k].readFromNBT(t);
+                }
+            }
+        } else if (nbt.hasKey("Pumped")) {
+            tanks[0].readFromNBT(nbt.getCompoundTag("Pumped"));
+        }
+        applyTankCapacityLater = true;
+    }
+
+    /** The modules may not be read yet when the tanks are: sizes are set on the first tick. */
+    private boolean applyTankCapacityLater;
 
     private void readSettings(NBTTagCompound nbt) {
         int[] s = nbt.getIntArray("Settings");
@@ -1632,6 +1872,20 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         owner = nbt.getString("Owner");
+        if (nbt.hasKey("TankSides")) {
+            int[] ts = nbt.getIntArray("TankSides");
+            for (int i = 0; i < TANKS && i < ts.length; i++) {
+                tankSides[i] = Math.max(SIDE_ANY, Math.min(SIDE_NONE, ts[i]));
+            }
+        }
+        fluidFilterMode = Math.max(0, Math.min(2, nbt.getInteger("FluidFilterMode")));
+        fluidFilterRemove = nbt.getInteger("FluidFilterRemove") != 0 ? 1 : 0;
+        tankFull = Math.max(0, Math.min(3, nbt.getInteger("TankFull")));
+        fluidFilter.clear();
+        NBTTagList ff = nbt.getTagList("FluidFilter", 8);
+        for (int i = 0; i < ff.tagCount() && fluidFilter.size() < FLUID_FILTER_MAX; i++) {
+            fluidFilter.add(ff.getStringTagAt(i));
+        }
         if (nbt.hasKey("Facing")) {
             facing = Math.max(2, Math.min(5, nbt.getInteger("Facing")));
         }
@@ -1660,7 +1914,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         xp = nbt.getInteger("Xp");
         progress = nbt.getDouble("Progress");
         status = Status.values()[Math.max(0, Math.min(Status.values().length - 1, nbt.getInteger("Status")))];
-        pumped.readFromNBT(nbt.getCompoundTag("Pumped"));
+        readTanks(nbt);
         water.readFromNBT(nbt.getCompoundTag("Water"));
         for (int i = 0; i < SLOTS; i++) {
             slots[i] = null;
@@ -1717,7 +1971,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setInteger("Xp", xp);
         nbt.setDouble("Progress", progress);
         nbt.setInteger("Status", status.ordinal());
-        nbt.setTag("Pumped", pumped.writeToNBT(new NBTTagCompound()));
+        writeTanks(nbt);
         nbt.setTag("Water", water.writeToNBT(new NBTTagCompound()));
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < SLOTS; i++) {

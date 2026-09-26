@@ -150,11 +150,17 @@ public class ContainerQuarrySC extends Container {
 
     // ---- live numbers ----
 
-    private static final int COUNT = 13;
+    /** 0..12 as before (8 / 9: the first compartment), 13..18: the other compartments' fluid and amount. */
+    private static final int COUNT = 19;
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
     private int value(int id) {
-        FluidStack p = quarry.getPumped().getFluid();
+        if (id >= 13) {
+            net.minecraftforge.fluids.FluidTank t = quarry.getTank(1 + (id - 13) / 2);
+            FluidStack f = t.getFluid();
+            return (id - 13) % 2 == 0 ? (f == null ? 0 : f.getFluidID()) : t.getFluidAmount();
+        }
+        FluidStack p = quarry.getTank(0).getFluid();
         switch (id) {
             case 0: return quarry.getEnergyStored();
             case 1: return quarry.getStatus().ordinal();
@@ -165,7 +171,7 @@ public class ContainerQuarrySC extends Container {
             case 6: return quarry.getLastCost();
             case 7: return quarry.isRunning() ? 1 : 0;
             case 8: return p == null ? 0 : p.getFluidID();
-            case 9: return quarry.getPumped().getFluidAmount();
+            case 9: return quarry.getTank(0).getFluidAmount();
             case 10: return quarry.getWater().getFluidAmount();
             case 12: return quarry.scanPercent();
             default: return (int) Math.min(Integer.MAX_VALUE, quarry.blocksLeft());
@@ -194,7 +200,10 @@ public class ContainerQuarrySC extends Container {
         if (id == 0) {
             quarry.setEnergyStoredClient(sync.value(0));
         } else if (id == 8 || id == 9) {
-            com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getPumped(), sync.value(8), sync.value(9));
+            com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getTank(0), sync.value(8), sync.value(9));
+        } else if (id >= 13) {
+            int t = (id - 13) / 2;
+            com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getTank(1 + t), sync.value(13 + t * 2), sync.value(14 + t * 2));
         } else if (id == 10) {
             com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getWater(),
                     net.minecraftforge.fluids.FluidRegistry.getFluidID("water"), sync.value(10));

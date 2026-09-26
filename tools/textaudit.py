@@ -118,7 +118,8 @@ def audit(lang):
         check(lang, "quarry show", t("sc.quarrygui.show", t("sc.quarrygui.show.%d" % i)), 112 - 6)
         check(lang, "quarry filter", t("sc.quarrygui.filter", t("sc.quarrygui.filter.%d" % i)), 114 - 6)
     for i in range(7):
-        check(lang, "quarry output side", t("sc.quarrygui.out", t("sc.quarrygui.side.%d" % i)), 114 - 6)
+        check(lang, "quarry output side", t("sc.quarrygui.out", t("sc.quarrygui.side.%d" % i)), 72 - 6)
+        check(lang, "quarry tank side", t("sc.quarrygui.side.%d" % i), 56 - 6)
     for k in ("dash", "plane", "ores"):
         check(lang, "quarry area look", t("sc.quarrygui." + k, off), 112 - 6)
     check(lang, "quarry brightness", t("sc.quarrygui.bright", 100), 112 - 6)
@@ -144,6 +145,20 @@ def audit(lang):
     # ---- field generator
     for k in ("field", "functions", "access", "map", "upgrades"):
         check(lang, "field tab", t("sc.fieldgui.tab.%s.short" % k), (248 - 16 - 8) // 5 - 4 - 17)
+    for k in ("items", "fluids"):
+        check(lang, "quarry output page", t("sc.quarrygui.page." + k), 38 - 6)
+    for i in range(3):
+        check(lang, "quarry fluid filter", t("sc.quarrygui.ff", t("sc.quarrygui.ff.%d" % i)), 114 - 6)
+    for i in range(2):
+        check(lang, "quarry fluid filter rest", t("sc.quarrygui.ffact.%d" % i), 72 - 6)
+    for i in range(4):
+        check(lang, "quarry tank full", t("sc.quarrygui.tankfull", t("sc.quarrygui.tankfull.%d" % i)), 232 - 6)
+    check(lang, "quarry tank side", t("sc.quarrygui.tankside.none"), 56 - 6)
+    for k in ("hand", "clear"):
+        check(lang, "quarry fluid filter button", t("sc.quarrygui.ff." + k), 114 - 6)
+    check(lang, "quarry tank line", t("sc.quarrygui.tank.locked", 4, "EV"), 134)
+    check(lang, "quarry tank title", t("sc.quarrygui.tanks.title", 4, 4, 144000), 248 - 30 - 8)
+    check(lang, "quarry pump line", t("sc.quarrygui.pump2", 576000, 4, 4), 232)
     for flag in (64, 512):
         check(lang, "field charge switch", t("sc.fieldgui.flag.%d" % flag) + ": " + off, 114 - 6)
     for i in range(4):

@@ -309,6 +309,7 @@ public final class ModRecipesCrafting {
                 {com.sc.item.ItemQuarryModuleSC.Kind.RESONATOR, comp("lens"), comp("heLoopModule")},
                 {com.sc.item.ItemQuarryModuleSC.Kind.STABILIZER, controller, comp("nb3SnCoil")},
                 {com.sc.item.ItemQuarryModuleSC.Kind.DEEP_SCAN, comp("hfo2Die"), new ItemStack(ModItems.oreScanner)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.TANK, comp("steelCasing"), new ItemStack(ModBlocks.tankSC, 1, 0)},
         };
         for (Object[] r : modules) {
             OreRecipes.shaped(m.stackOf((com.sc.item.ItemQuarryModuleSC.Kind) r[0]), " A ", "WMW", " T ",
