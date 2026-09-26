@@ -102,6 +102,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     private static final int PUMP_OK = 0, PUMP_SKIP = 1, PUMP_WAIT = 2;
     private final FluidTank[] tanks = {new FluidTank(TANK_BASE), new FluidTank(TANK_BASE), new FluidTank(TANK_BASE), new FluidTank(TANK_BASE)};
     private final int[] tankSides = {SIDE_ANY, SIDE_ANY, SIDE_ANY, SIDE_ANY};
+    /** A compartment pinned to a fluid takes only that one, even empty; auto: the quarry pushes it out itself. */
+    private final String[] tankPinned = new String[TANKS];
+    private final boolean[] tankAuto = new boolean[TANKS];
+    /** Pouring a tank out costs 1 EU per 10 mB; auto output moves up to this much a compartment every 10 ticks. */
+    public static final int CLEAR_MB_PER_EU = 10, AUTO_OUT = 1000;
     private final List<String> fluidFilter = new ArrayList<String>();
     private int fluidFilterMode = FF_OFF, fluidFilterRemove, tankFull = FULL_LEAVE;
 
@@ -477,6 +482,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             applyTankCapacityLater = false;
             applyTankCapacity();                   // modules in or out: the compartments' size follows
         }
+        if (time % 10 == 0) {
+            autoOutput();
+        }
         pushOut();
         if (scanDirty || scanY > 0) {
             scanStep();
@@ -840,19 +848,70 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** The open compartment that takes all of it: one already holding that fluid, or an empty one; -1 if none. */
     private int compartmentFor(FluidStack fs) {
-        int open = unlockedTanks(), empty = -1;
+        int open = unlockedTanks(), empty = -1, emptyPinned = -1;
+        String name = fs.getFluid().getName();
         applyTankCapacity();
         for (int i = 0; i < open; i++) {
+            if (tankPinned[i] != null && !tankPinned[i].equals(name)) {
+                continue;                           // pinned to another fluid
+            }
             FluidStack in = tanks[i].getFluid();
             if (in != null && in.amount > 0 && in.isFluidEqual(fs)) {
                 if (tanks[i].fill(fs, false) >= fs.amount) {
                     return i;
                 }
-            } else if ((in == null || in.amount <= 0) && empty < 0) {
-                empty = i;
+            } else if (in == null || in.amount <= 0) {
+                if (tankPinned[i] != null && emptyPinned < 0) {
+                    emptyPinned = i;
+                } else if (tankPinned[i] == null && empty < 0) {
+                    empty = i;
+                }
             }
         }
-        return empty;
+        return emptyPinned >= 0 ? emptyPinned : empty;
+    }
+
+    public String getTankPinned(int i) {
+        return tankPinned[i];
+    }
+
+    public boolean getTankAuto(int i) {
+        return tankAuto[i];
+    }
+
+    /** EU to pour out a tank (0..3 the pump's, 4 the washing water). */
+    public int clearCost(int i) {
+        FluidTank t = i == TANKS ? water : tanks[i];
+        return (t.getFluidAmount() + CLEAR_MB_PER_EU - 1) / CLEAR_MB_PER_EU;
+    }
+
+    /** Auto output: every compartment switched to it pushes its fluid into the handlers on its side(s). */
+    private void autoOutput() {
+        for (int i = 0; i < unlockedTanks(); i++) {
+            if (!tankAuto[i] || tankSides[i] == SIDE_NONE || tanks[i].getFluidAmount() <= 0) {
+                continue;
+            }
+            for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
+                if (tankSides[i] != SIDE_ANY && tankSides[i] != dir.ordinal() || tanks[i].getFluidAmount() <= 0) {
+                    continue;
+                }
+                int nx = xCoord + dir.offsetX, ny = yCoord + dir.offsetY, nz = zCoord + dir.offsetZ;
+                if (!worldObj.blockExists(nx, ny, nz)) {
+                    continue;
+                }
+                TileEntity te = worldObj.getTileEntity(nx, ny, nz);
+                if (!(te instanceof IFluidHandler) || te instanceof TileEntityQuarrySC) {
+                    continue;
+                }
+                FluidStack offer = tanks[i].getFluid().copy();
+                offer.amount = Math.min(AUTO_OUT, offer.amount);
+                int took = ((IFluidHandler) te).fill(dir.getOpposite(), offer, true);
+                if (took > 0) {
+                    tanks[i].drain(took, true);
+                    markDirty();
+                }
+            }
+        }
     }
 
     /** Compartments open: LV 1, MV 2, HV 3, EV 4. */
@@ -1402,7 +1461,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             A_OFF_X = 7, A_OFF_Z = 8, A_BOTTOM = 9, A_SHAPE = 10, A_REPLACE = 11, A_FLAG = 12, A_FORTUNE = 13,
             A_FILTER_MODE = 14, A_OUT_SIDE = 15, A_SHOW = 16, A_VFLAG = 17, A_BRIGHT = 18, A_COLOR_FRAME = 19,
             A_COLOR_PLANE = 20, A_SCAN = 21, A_TANK_SIDE = 22, A_TANK_CLEAR = 23, A_TANK_TO_FILTER = 24,
-            A_FF_MODE = 25, A_FF_REMOVE = 26, A_TANK_FULL = 27, A_FF_HAND = 28, A_FF_CLEAR = 29, A_FF_DELETE = 30;
+            A_FF_MODE = 25, A_FF_REMOVE = 26, A_TANK_FULL = 27, A_FF_HAND = 28, A_FF_CLEAR = 29, A_FF_DELETE = 30,
+            A_TANK_PIN = 31, A_TANK_AUTO = 32;
 
     public void action(EntityPlayer p, int action, int value) {
         boolean area = false;
@@ -1457,9 +1517,27 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                     tankSides[value] = tankSides[value] >= SIDE_NONE ? SIDE_ANY : tankSides[value] + 1;
                 }
                 break;
-            case A_TANK_CLEAR:
+            case A_TANK_CLEAR:                      // 0..3 a compartment, 4 the washing water - paid in EU
+                if (value >= 0 && value <= TANKS) {
+                    int cost = clearCost(value);
+                    if (getEnergyStored() >= cost) {
+                        removeEnergy(cost);
+                        (value == TANKS ? water : tanks[value]).setFluid(null);
+                    }
+                }
+                break;
+            case A_TANK_PIN:
                 if (value >= 0 && value < TANKS) {
-                    tanks[value].setFluid(null);
+                    if (tankPinned[value] != null) {
+                        tankPinned[value] = null;
+                    } else if (tanks[value].getFluid() != null) {
+                        tankPinned[value] = tanks[value].getFluid().getFluid().getName();
+                    }
+                }
+                break;
+            case A_TANK_AUTO:
+                if (value >= 0 && value < TANKS) {
+                    tankAuto[value] = !tankAuto[value];
                 }
                 break;
             case A_TANK_TO_FILTER:
@@ -1831,6 +1909,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             ff.appendTag(new net.minecraft.nbt.NBTTagString(name));
         }
         nbt.setTag("FluidFilter", ff);
+        NBTTagList pins = new NBTTagList();
+        byte[] auto = new byte[TANKS];
+        for (int i = 0; i < TANKS; i++) {
+            pins.appendTag(new net.minecraft.nbt.NBTTagString(tankPinned[i] == null ? "" : tankPinned[i]));
+            auto[i] = (byte) (tankAuto[i] ? 1 : 0);
+        }
+        nbt.setTag("TankPinned", pins);
+        nbt.setByteArray("TankAuto", auto);
     }
 
     /** The pump's compartments; a save from before them had one tank, "Pumped" - it becomes the first. */
@@ -1889,6 +1975,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         fluidFilterMode = Math.max(0, Math.min(2, nbt.getInteger("FluidFilterMode")));
         fluidFilterRemove = nbt.getInteger("FluidFilterRemove") != 0 ? 1 : 0;
         tankFull = Math.max(0, Math.min(3, nbt.getInteger("TankFull")));
+        NBTTagList pins = nbt.getTagList("TankPinned", 8);
+        byte[] auto = nbt.getByteArray("TankAuto");
+        for (int i = 0; i < TANKS; i++) {
+            String pin = i < pins.tagCount() ? pins.getStringTagAt(i) : "";
+            tankPinned[i] = pin.isEmpty() ? null : pin;
+            tankAuto[i] = i < auto.length && auto[i] != 0;
+        }
         fluidFilter.clear();
         NBTTagList ff = nbt.getTagList("FluidFilter", 8);
         for (int i = 0; i < ff.tagCount() && fluidFilter.size() < FLUID_FILTER_MAX; i++) {

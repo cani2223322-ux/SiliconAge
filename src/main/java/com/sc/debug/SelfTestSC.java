@@ -637,6 +637,43 @@ public final class SelfTestSC {
         boolean tFilter = tq2.fluidWanted(FluidRegistry.WATER);
         check(tOpen && tCap && tMig && tSide && tFilter,
                 "quarry pump tank: HV 3 of 4 compartments, tank modules +32000 each (up to 4), old 'Pumped' becomes compartment 1, output side kept");
+        // the Tanks tab: a pinned tank takes only its fluid (first, even empty), clearing costs 1 EU per 10 mB, pins and auto are kept
+        boolean tPins = false;
+        try {
+            net.minecraft.nbt.NBTTagCompound pn = new net.minecraft.nbt.NBTTagCompound();
+            tq.writeToNBT(pn);
+            net.minecraft.nbt.NBTTagList tl = new net.minecraft.nbt.NBTTagList();
+            net.minecraft.nbt.NBTTagCompound w2 = new FluidStack(FluidRegistry.WATER, 5000).writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+            w2.setByte("Tank", (byte) 2);
+            tl.appendTag(w2);
+            pn.setTag("Tanks", tl);
+            net.minecraft.nbt.NBTTagList pins = new net.minecraft.nbt.NBTTagList();
+            for (String n : new String[]{"lava", "", "", ""}) {
+                pins.appendTag(new net.minecraft.nbt.NBTTagString(n));
+            }
+            pn.setTag("TankPinned", pins);
+            pn.setByteArray("TankAuto", new byte[]{0, 1, 0, 0});
+            com.sc.tileentity.TileEntityQuarrySC tp = new com.sc.tileentity.TileEntityQuarrySC();
+            tp.readFromNBT(pn);
+            java.lang.reflect.Method cfor = com.sc.tileentity.TileEntityQuarrySC.class.getDeclaredMethod("compartmentFor", FluidStack.class);
+            cfor.setAccessible(true);
+            int water = (Integer) cfor.invoke(tp, new FluidStack(FluidRegistry.WATER, 1000));
+            int lava = (Integer) cfor.invoke(tp, new FluidStack(FluidRegistry.LAVA, 1000));
+            net.minecraftforge.fluids.Fluid other = null;
+            for (Object o : FluidRegistry.getRegisteredFluids().values()) {
+                net.minecraftforge.fluids.Fluid f = (net.minecraftforge.fluids.Fluid) o;
+                if (f != FluidRegistry.WATER && f != FluidRegistry.LAVA) {
+                    other = f;
+                    break;
+                }
+            }
+            int oth = other == null ? 1 : (Integer) cfor.invoke(tp, new FluidStack(other, 1000));
+            tPins = water == 2 && lava == 0 && oth == 1 && tp.clearCost(2) == 500 && tp.clearCost(0) == 0
+                    && "lava".equals(tp.getTankPinned(0)) && tp.getTankAuto(1) && !tp.getTankAuto(0);
+        } catch (Exception ex) {
+            tPins = false;
+        }
+        check(tPins, "quarry tanks: a pinned tank takes only its fluid, others go to a free tank, clearing 1 EU / 10 mB, pins + auto saved");
         // the quarry's pump knows water and lava by their flowing blocks too, and other fluids by their own blocks
         net.minecraft.block.Block modFluidBlock = null;
         for (Object o : FluidRegistry.getRegisteredFluids().values()) {

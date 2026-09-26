@@ -38,7 +38,7 @@ public class GuiQuarrySC extends GuiContainer {
     private static final int TAB_BASE = 1000;
     private static final int ENERGY_X = 226, ENERGY_Y = 30, ENERGY_W = 12, ENERGY_H = 80;
     private static final int MAP_X = 8, MAP_Y = 30, MAP = 150;
-    private static final String[] TABS = {"quarry", "area", "map", "output", "functions", "upgrades"};
+    private static final String[] TABS = {"quarry", "area", "map", "output", "functions", "upgrades", "tanks"};
 
     /** The quarry whose screen is open (the renderer shows its area "while the menu is open"). */
     public static int[] openAt;
@@ -63,33 +63,36 @@ public class GuiQuarrySC extends GuiContainer {
             B_SHOW = 20, B_DASH = 21, B_PLANE = 22, B_ORES = 23, B_BRIGHT = 24, B_TARGET = 25, B_SWATCH = 30, B_SLIDER = 40,
             B_SCAN = 50, B_FILTER = 60, B_OUTSIDE = 61, B_PAGE = 62, B_OUTPAGE = 63, B_FF_MODE = 64,
             B_FF_REMOVE = 65, B_TANK_FULL = 66, B_FF_HAND = 67, B_FF_CLEAR = 68, B_TANK_SIDE = 70, B_TANK_CLEAR = 74,
-            B_TANK_FILTER = 78, B_FF_DEL = 82, B_FLAG = 100, B_FORTUNE_DOWN = 140, B_FORTUNE_UP = 141, B_STEP = 200;
+            B_TANK_FILTER = 78, B_FF_DEL = 82, B_TANK_PIN = 88, B_TANK_AUTO = 92, B_WASH_CLEAR = 96, B_FLAG = 100, B_FORTUNE_DOWN = 140, B_FORTUNE_UP = 141, B_STEP = 200;
 
     /** The Functions tab's two pages: what the modules add; then the rest (silence, auto-stop, filter, chests, chat). */
     private static final int[][] FN_PAGES = {{0, 1, 2, 3, 4, 19, 5, 6, 7, 8, 9, 18, 20, 21, 22, 23, 24, 25, 26, 27},
             {10, 11, 12, 13, 14, 15, 16, 17}};
     private static int fnPage;
-    /** The Output tab's second page: the pump's fluids. */
-    private static boolean fluidPage;
-    /** Fluids page layout (relative to the tab area): compartment rows and the filter row. */
-    private static final int TANK_Y = 72, TANK_ROW = 30, FF_Y = 196;
+    /** The Tanks tab: where the four gauges and the washing water's stand (x from the GUI's left, y in the tab area). */
+    private static final int[] GAUGE_X = {8, 55, 102, 149};
+    private static final int WASH_X = 203, GAUGE_Y = 38, TAB_TANKS = 6;
 
     @Override
     public void initGui() {
         super.initGui();
         openAt = new int[]{quarry.xCoord, quarry.yCoord, quarry.zCoord};
         buttonList.clear();
-        // two rows of three tabs: an icon and a short name, the full name as the tooltip
+        // two rows of four tabs: an icon and a short name, the full name as the tooltip
         boolean exo = quarry.isExo();
         ItemStack[] icons = {new ItemStack(com.sc.init.ModBlocks.quarrySC, 1, quarry.getBlockMetadata()),
                 exo ? new ItemStack(com.sc.init.ModItems.DRILL_HEADS.get(3)) : new ItemStack(com.sc.init.ModItems.areaCard),
                 exo ? new ItemStack(com.sc.init.ModItems.oreLens, 1, 1) : new ItemStack(com.sc.init.ModItems.oreScanner),
                 new ItemStack(net.minecraft.init.Blocks.chest), new ItemStack(net.minecraft.init.Blocks.lever),
-                com.sc.init.ModItems.quarryModule.stackOf(ItemQuarryModuleSC.Kind.SPEED)};
-        int tw = (W - 16 - 4) / 3;
-        for (int i = 0; i < TABS.length; i++) {
+                com.sc.init.ModItems.quarryModule.stackOf(ItemQuarryModuleSC.Kind.SPEED),
+                new ItemStack(net.minecraft.init.Items.water_bucket)};
+        if (exo && tab == TAB_TANKS) {
+            tab = 0;
+        }
+        int tw = (W - 16 - 6) / 4;
+        for (int i = 0; i < (exo ? TABS.length - 1 : TABS.length); i++) {
             String key = exo && i < 3 ? "sc.quarrygui.exo.tab" : "sc.quarrygui.tab";
-            GuiButton b = new TextFitSC.Tab(TAB_BASE + i, guiLeft + 8 + (i % 3) * (tw + 2), guiTop + 5 + (i / 3) * 20, tw, 19,
+            GuiButton b = new TextFitSC.Tab(TAB_BASE + i, guiLeft + 8 + (i % 4) * (tw + 2), guiTop + 5 + (i / 4) * 20, tw, 19,
                     icons[i], Lang.tr(key + "short." + TABS[i]), Lang.tr(key + "." + TABS[i]));
             b.enabled = i != tab;
             buttonList.add(b);
@@ -141,30 +144,29 @@ public class GuiQuarrySC extends GuiContainer {
                 }
                 break;
             case 3:
-                if (!fluidPage || quarry.isExo()) {
-                    buttonList.add(new TextFitSC.Button(B_FILTER, x, y + 28, 114, 16, ""));
-                    buttonList.add(new TextFitSC.Button(B_OUTSIDE, x + 118, y + 28, 72, 16, ""));
-                    if (!quarry.isExo()) {
-                        buttonList.add(new TextFitSC.Button(B_OUTPAGE, x + 194, y + 28, 38, 16, ""));
-                    }
-                    break;
-                }
-                buttonList.add(new TextFitSC.Button(B_FF_MODE, x, y + 28, 114, 16, ""));
-                buttonList.add(new TextFitSC.Button(B_FF_REMOVE, x + 118, y + 28, 72, 16, ""));
-                buttonList.add(new TextFitSC.Button(B_OUTPAGE, x + 194, y + 28, 38, 16, ""));
-                buttonList.add(new TextFitSC.Button(B_TANK_FULL, x, y + 48, 232, 16, ""));
-                for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
-                    int ry = y + TANK_Y + i * TANK_ROW;
-                    buttonList.add(new TextFitSC.Button(B_TANK_SIDE + i, x + 144, ry + 6, 56, 16, ""));
-                    buttonList.add(new TextFitSC.Button(B_TANK_FILTER + i, x + 202, ry + 6, 14, 16, "F"));
-                    buttonList.add(new TextFitSC.Button(B_TANK_CLEAR + i, x + 218, ry + 6, 14, 16, "x"));
-                }
-                for (int i = 0; i < TileEntityQuarrySC.FLUID_FILTER_MAX; i++) {
-                    buttonList.add(new TextFitSC.Button(B_FF_DEL + i, x + i * 39, y + FF_Y + 10, 37, 14, ""));
-                }
-                buttonList.add(new TextFitSC.Button(B_FF_HAND, x, y + FF_Y + 27, 114, 14, ""));
-                buttonList.add(new TextFitSC.Button(B_FF_CLEAR, x + 118, y + FF_Y + 27, 114, 14, ""));
+                buttonList.add(new TextFitSC.Button(B_FILTER, x, y + 28, 114, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_OUTSIDE, x + 118, y + 28, 114, 16, ""));
                 break;
+            case TAB_TANKS: {
+                for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
+                    int bx = guiLeft + GAUGE_X[i] - 2;
+                    buttonList.add(new TextFitSC.Button(B_TANK_SIDE + i, bx, y + 122, 44, 12, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_CLEAR + i, bx, y + 136, 44, 12, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_FILTER + i, bx, y + 150, 44, 12, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_PIN + i, bx, y + 164, 44, 12, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_AUTO + i, bx, y + 178, 44, 12, ""));
+                }
+                buttonList.add(new TextFitSC.Button(B_WASH_CLEAR, guiLeft + WASH_X - 2, y + 122, 40, 12, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_MODE, guiLeft + 8, y + 196, 114, 12, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_REMOVE, guiLeft + 126, y + 196, 72, 12, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_HAND, guiLeft + 202, y + 196, 38, 12, ""));
+                for (int i = 0; i < TileEntityQuarrySC.FLUID_FILTER_MAX; i++) {
+                    buttonList.add(new TextFitSC.Button(B_FF_DEL + i, guiLeft + 8 + i * 39, y + 210, 37, 11, ""));
+                }
+                buttonList.add(new TextFitSC.Button(B_TANK_FULL, guiLeft + 8, y + 224, 158, 12, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_CLEAR, guiLeft + 170, y + 224, 70, 12, ""));
+                break;
+            }
             case 4: {
                 buttonList.add(new TextFitSC.Button(B_POWER, x, y + 28, 114, 16, ""));
                 buttonList.add(new TextFitSC.Button(B_PAGE, x + 118, y + 28, 54, 16, ""));
@@ -183,7 +185,7 @@ public class GuiQuarrySC extends GuiContainer {
             default:
         }
         // groups: filter, buffer, modules, inventory, lenses, head / scanner / card
-        boolean items = tab == 3 && (!fluidPage || exo);
+        boolean items = tab == 3;
         container.setShown(items, items, tab == 5, items || tab == 5 || exo && tab == 2, exo && tab == 2, !exo && tab == 5);
         refresh();
     }
@@ -274,9 +276,6 @@ public class GuiQuarrySC extends GuiContainer {
             } else if (id == B_TARGET) {
                 b.displayString = Lang.tr(targetPlane ? "sc.quarrygui.target.plane" : "sc.quarrygui.target.frame");
                 b.enabled = true;
-            } else if (id == B_OUTPAGE) {
-                b.displayString = Lang.tr(fluidPage ? "sc.quarrygui.page.items" : "sc.quarrygui.page.fluids");
-                b.enabled = true;
             } else if (id == B_FF_MODE) {
                 b.displayString = Lang.tr("sc.quarrygui.ff", Lang.tr("sc.quarrygui.ff." + quarry.getFluidFilterMode()));
             } else if (id == B_FF_REMOVE) {
@@ -286,20 +285,37 @@ public class GuiQuarrySC extends GuiContainer {
                 b.displayString = Lang.tr("sc.quarrygui.tankfull", Lang.tr("sc.quarrygui.tankfull." + quarry.getTankFull()));
             } else if (id >= B_TANK_SIDE && id < B_TANK_SIDE + TileEntityQuarrySC.TANKS) {
                 int side = quarry.getTankSide(id - B_TANK_SIDE);
-                b.displayString = side == TileEntityQuarrySC.SIDE_NONE ? Lang.tr("sc.quarrygui.tankside.none")
-                        : Lang.tr("sc.quarrygui.side." + (side + 1));
+                b.displayString = Lang.tr("sc.quarrygui.tank.sidebtn", Lang.tr("sc.quarrygui.sideshort." + (side + 1)));
                 b.enabled = may && id - B_TANK_SIDE < quarry.unlockedTanks();
             } else if (id >= B_TANK_CLEAR && id < B_TANK_CLEAR + TileEntityQuarrySC.TANKS) {
-                b.enabled = may && quarry.getTank(id - B_TANK_CLEAR).getFluidAmount() > 0;
+                int i = id - B_TANK_CLEAR;
+                b.displayString = Lang.tr("sc.quarrygui.tank.clear");
+                b.enabled = may && i < quarry.unlockedTanks() && quarry.getTank(i).getFluidAmount() > 0
+                        && quarry.getEnergyStored() >= quarry.clearCost(i);
+            } else if (id == B_WASH_CLEAR) {
+                b.displayString = Lang.tr("sc.quarrygui.tank.clear");
+                b.enabled = may && quarry.getWater().getFluidAmount() > 0
+                        && quarry.getEnergyStored() >= quarry.clearCost(TileEntityQuarrySC.TANKS);
             } else if (id >= B_TANK_FILTER && id < B_TANK_FILTER + TileEntityQuarrySC.TANKS) {
-                b.enabled = may && quarry.getTank(id - B_TANK_FILTER).getFluidAmount() > 0;
+                int i = id - B_TANK_FILTER;
+                b.displayString = Lang.tr("sc.quarrygui.tank.tofilter");
+                b.enabled = may && i < quarry.unlockedTanks() && quarry.getTank(i).getFluidAmount() > 0;
+            } else if (id >= B_TANK_PIN && id < B_TANK_PIN + TileEntityQuarrySC.TANKS) {
+                int i = id - B_TANK_PIN;
+                boolean pinned = quarry.getTankPinned(i) != null;
+                b.displayString = Lang.tr(pinned ? "sc.quarrygui.tank.unpin" : "sc.quarrygui.tank.pin");
+                b.enabled = may && i < quarry.unlockedTanks() && (pinned || quarry.getTank(i).getFluidAmount() > 0);
+            } else if (id >= B_TANK_AUTO && id < B_TANK_AUTO + TileEntityQuarrySC.TANKS) {
+                int i = id - B_TANK_AUTO;
+                b.displayString = Lang.tr("sc.quarrygui.tank.auto", onOff(quarry.getTankAuto(i)));
+                b.enabled = may && i < quarry.unlockedTanks();
             } else if (id >= B_FF_DEL && id < B_FF_DEL + TileEntityQuarrySC.FLUID_FILTER_MAX) {
                 int i = id - B_FF_DEL;
                 java.util.List<String> ff = quarry.getFluidFilter();
                 b.visible = i < ff.size();
                 if (i < ff.size()) {
                     net.minecraftforge.fluids.Fluid f = net.minecraftforge.fluids.FluidRegistry.getFluid(ff.get(i));
-                    b.displayString = f == null ? ff.get(i) : f.getLocalizedName(new net.minecraftforge.fluids.FluidStack(f, 1000));
+                    b.displayString = (f == null ? ff.get(i) : f.getLocalizedName(new net.minecraftforge.fluids.FluidStack(f, 1000))) + " \u00d7";
                 }
             } else if (id == B_FF_HAND) {
                 b.displayString = Lang.tr("sc.quarrygui.ff.hand");
@@ -396,6 +412,14 @@ public class GuiQuarrySC extends GuiContainer {
             QuarryNetSC.send(quarry, TileEntityQuarrySC.A_TANK_TO_FILTER, id - B_TANK_FILTER);
             return;
         }
+        if (id >= B_TANK_PIN && id < B_TANK_PIN + TileEntityQuarrySC.TANKS) {
+            QuarryNetSC.send(quarry, TileEntityQuarrySC.A_TANK_PIN, id - B_TANK_PIN);
+            return;
+        }
+        if (id >= B_TANK_AUTO && id < B_TANK_AUTO + TileEntityQuarrySC.TANKS) {
+            QuarryNetSC.send(quarry, TileEntityQuarrySC.A_TANK_AUTO, id - B_TANK_AUTO);
+            return;
+        }
         if (id >= B_FF_DEL && id < B_FF_DEL + TileEntityQuarrySC.FLUID_FILTER_MAX) {
             QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FF_DELETE, id - B_FF_DEL);
             return;
@@ -427,10 +451,7 @@ public class GuiQuarrySC extends GuiContainer {
             case B_SCAN: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_SCAN, 0); break;
             case B_FILTER: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FILTER_MODE, 0); break;
             case B_OUTSIDE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_OUT_SIDE, 0); break;
-            case B_OUTPAGE:
-                fluidPage = !fluidPage;
-                initGui();
-                break;
+            case B_WASH_CLEAR: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_TANK_CLEAR, TileEntityQuarrySC.TANKS); break;
             case B_FF_MODE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FF_MODE, 0); break;
             case B_FF_REMOVE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FF_REMOVE, 0); break;
             case B_TANK_FULL: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_TANK_FULL, 0); break;
@@ -551,26 +572,14 @@ public class GuiQuarrySC extends GuiContainer {
         } else if (tab == 2) {
             inset(x + MAP_X - 1, y + MAP_Y - 1, MAP + 2, MAP + 2);
             drawMap(x + MAP_X, y + MAP_Y);
-        } else if (tab == 3 && fluidPage && !quarry.isExo()) {
+        } else if (tab == TAB_TANKS) {
             int cap = quarry.tankCapacity();
             for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
-                int bx = x + 8, by = y + TANK_Y + i * TANK_ROW + 12, bw = 132;
-                inset(bx - 1, by - 1, bw + 2, 12);
-                net.minecraftforge.fluids.FluidStack f = quarry.getTank(i).getFluid();
-                if (i >= quarry.unlockedTanks()) {
-                    drawRect(bx, by, bx + bw, by + 10, 0xC0101319);
-                    lock(bx + bw / 2 - 8, by - 3);
-                } else if (f != null && f.amount > 0) {
-                    int col = f.getFluid().getColor(f);
-                    if ((col & 0xFFFFFF) == 0xFFFFFF) {    // white means "no colour" - water and lava are drawn from their texture
-                        col = f.getFluid() == net.minecraftforge.fluids.FluidRegistry.LAVA ? 0xFF6010
-                                : f.getFluid() == net.minecraftforge.fluids.FluidRegistry.WATER ? 0x3060E0 : 0x9098A8;
-                    }
-                    int w = (int) (bw * Math.min(1D, (double) f.amount / Math.max(1, cap)));
-                    drawRect(bx, by, bx + w, by + 10, 0xFF000000 | col);
-                    drawRect(bx, by, bx + w, by + 2, 0x60FFFFFF);
-                }
+                GuiTankGaugeSC.draw(mc, x + GAUGE_X[i], y + GAUGE_Y, quarry.getTank(i).getFluid(), cap, quarry.getTankPinned(i),
+                        i >= quarry.unlockedTanks());
             }
+            GuiTankGaugeSC.draw(mc, x + WASH_X, y + GAUGE_Y, quarry.getWater().getFluid(), quarry.waterCapacity(), null, false);
+            drawRect(x + 6, y + 192, x + W - 6, y + 193, 0xFF969696);
         } else if (tab == 3) {
             pockets(x + ContainerQuarrySC.FILTER_X, y + ContainerQuarrySC.FILTER_Y, 9, 1);
             pockets(x + ContainerQuarrySC.BUFFER_X, y + ContainerQuarrySC.BUFFER_Y, 9, 3);
@@ -585,30 +594,37 @@ public class GuiQuarrySC extends GuiContainer {
                 pockets(x + ContainerQuarrySC.CARD_X, y + ContainerQuarrySC.TOOLS_Y, 1, 1);
             }
         }
-        if (tab == 3 && (!fluidPage || quarry.isExo()) || tab == 5 || tab == 2 && quarry.isExo()) {
+        if (tab == 3 || tab == 5 || tab == 2 && quarry.isExo()) {
             pockets(x + ContainerQuarrySC.INV_X, y + ContainerQuarrySC.INV_Y, 9, 3);
             pockets(x + ContainerQuarrySC.INV_X, y + ContainerQuarrySC.INV_Y + 58, 9, 1);
         }
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
-    /** The Output tab's fluid page: the compartments, the fluid filter. */
-    private void fluidsPage(int c, int dim) {
-        fit(Lang.tr("sc.quarrygui.tanks.title", quarry.unlockedTanks(), TileEntityQuarrySC.TANKS, quarry.tankCapacity()), 8, TANK_Y - 6, W - 30, c);
-        TextFitSC.help(fontRendererObj, W - 16, TANK_Y - 7, Lang.tr("sc.quarrygui.tanks.help", TileEntityQuarrySC.TANK_PER_MODULE),
-                guiLeft, guiTop + TOP);
+    /** The Tanks tab's texts: the title, each gauge's label, the washing water. */
+    private void tanksTab(int c, int dim) {
+        fit(Lang.tr("sc.quarrygui.tanks.title", quarry.unlockedTanks(), TileEntityQuarrySC.TANKS, quarry.tankCapacity()), 8, 27, W - 30, c);
+        TextFitSC.help(fontRendererObj, W - 16, 26, Lang.tr("sc.quarrygui.tanks.help", TileEntityQuarrySC.TANK_PER_MODULE,
+                TileEntityQuarrySC.CLEAR_MB_PER_EU), guiLeft, guiTop + TOP);
         for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
-            int ry = TANK_Y + i * TANK_ROW + 3;
             net.minecraftforge.fluids.FluidStack f = quarry.getTank(i).getFluid();
-            String text = i >= quarry.unlockedTanks() ? Lang.tr("sc.quarrygui.tank.locked", i + 1, TIER_NAMES[Math.min(3, i)])
-                    : f == null || f.amount <= 0 ? Lang.tr("sc.quarrygui.tank.empty", i + 1)
-                    : Lang.tr("sc.quarrygui.tank", i + 1, f.getLocalizedName(), f.amount);
-            fit(text, 8, ry, 134, i >= quarry.unlockedTanks() ? dim : c);
+            String pin = quarry.getTankPinned(i);
+            String text;
+            if (i >= quarry.unlockedTanks()) {
+                text = Lang.tr("sc.quarrygui.tank.label.locked", i + 1, TIER_NAMES[Math.min(3, i)]);
+            } else if (f != null && f.amount > 0) {
+                text = Lang.tr(pin != null ? "sc.quarrygui.tank.label.pinned" : "sc.quarrygui.tank.label", i + 1, f.getLocalizedName());
+            } else if (pin != null && net.minecraftforge.fluids.FluidRegistry.getFluid(pin) != null) {
+                net.minecraftforge.fluids.Fluid pf = net.minecraftforge.fluids.FluidRegistry.getFluid(pin);
+                text = Lang.tr("sc.quarrygui.tank.label.pinned", i + 1, pf.getLocalizedName(new net.minecraftforge.fluids.FluidStack(pf, 1000)));
+            } else {
+                text = Lang.tr("sc.quarrygui.tank.label.empty", i + 1);
+            }
+            fit(text, GAUGE_X[i] - 2, 111, 45, i >= quarry.unlockedTanks() ? dim : c);
         }
-        fit(Lang.tr("sc.quarrygui.ff.list", quarry.getFluidFilter().size(), TileEntityQuarrySC.FLUID_FILTER_MAX), 8, FF_Y, W - 16, c);
-        if (quarry.getFluidFilter().isEmpty()) {
-            fit(Lang.tr("sc.quarrygui.ff.empty"), 8, FF_Y + 13, W - 16, dim);
-        }
+        fit(Lang.tr("sc.quarrygui.wash"), WASH_X - 2, 111, 42, 0x2A62A8);
+        fit(String.valueOf(quarry.getWater().getFluidAmount()) + " /", WASH_X - 2, 137, 42, dim);
+        fit(Lang.tr("sc.quarrygui.wash.cap", quarry.waterCapacity()), WASH_X - 2, 145, 42, dim);
     }
 
     private static final String[] TIER_NAMES = {"LV", "MV", "HV", "EV"};
@@ -765,11 +781,10 @@ public class GuiQuarrySC extends GuiContainer {
                 }
                 break;
             }
+            case TAB_TANKS:
+                tanksTab(c, dim);
+                break;
             case 3:
-                if (fluidPage && !quarry.isExo()) {
-                    fluidsPage(c, dim);
-                    break;
-                }
                 fit(Lang.tr("sc.quarrygui.filterlabel"), ContainerQuarrySC.FILTER_X, ContainerQuarrySC.FILTER_Y - 10, 150, c);
                 TextFitSC.help(fontRendererObj, ContainerQuarrySC.FILTER_X + 153, ContainerQuarrySC.FILTER_Y - 11,
                         Lang.tr("sc.quarrygui.filter.help"), guiLeft, guiTop + TOP);
@@ -901,6 +916,35 @@ public class GuiQuarrySC extends GuiContainer {
         }
     }
 
+    /** A gauge's tooltip: the fluid and amount, its side, the pin, auto output (i = TANKS: the washing water). */
+    private List<String> tankTip(int i) {
+        List<String> lines = new ArrayList<String>();
+        boolean wash = i == TileEntityQuarrySC.TANKS;
+        net.minecraftforge.fluids.FluidStack f = wash ? quarry.getWater().getFluid() : quarry.getTank(i).getFluid();
+        int cap = wash ? quarry.waterCapacity() : quarry.tankCapacity();
+        String name = f != null && f.amount > 0 ? f.getLocalizedName() : Lang.tr("sc.quarrygui.tank.none");
+        lines.add(wash ? Lang.tr("sc.quarrygui.wash") : Lang.tr("sc.quarrygui.tank.n", i + 1));
+        if (!wash && i >= quarry.unlockedTanks()) {
+            lines.add("§c" + Lang.tr("sc.quarrygui.locked", TIER_NAMES[Math.min(3, i)]));
+            return lines;
+        }
+        lines.add(Lang.tr("sc.quarrygui.tank.amount", name, f == null ? 0 : f.amount, cap));
+        if (!wash) {
+            int side = quarry.getTankSide(i);
+            lines.add("§7" + Lang.tr("sc.quarrygui.tank.side", Lang.tr("sc.quarrygui.sideshort." + (side + 1))));
+            String pin = quarry.getTankPinned(i);
+            if (pin != null) {
+                net.minecraftforge.fluids.Fluid pf = net.minecraftforge.fluids.FluidRegistry.getFluid(pin);
+                lines.add("§9" + Lang.tr("sc.quarrygui.tank.pinned", pf == null ? pin
+                        : pf.getLocalizedName(new net.minecraftforge.fluids.FluidStack(pf, 1000))));
+            }
+            if (quarry.getTankAuto(i)) {
+                lines.add("§a" + Lang.tr("sc.quarrygui.tank.autoon"));
+            }
+        }
+        return lines;
+    }
+
     private List<String> tooltipAt(int mx, int my) {
         List<String> lines = new ArrayList<String>();
         if (tab == 0 && GuiGaugeSC.isOver(ENERGY_X, ENERGY_Y, ENERGY_W, ENERGY_H, mx, my)) {
@@ -913,6 +957,27 @@ public class GuiQuarrySC extends GuiContainer {
             for (int i = quarry.unlockedUpgrades(); i < TileEntityQuarrySC.UPGRADES; i++) {
                 if (GuiGaugeSC.isOver(ContainerQuarrySC.UPGRADE_X - 1 + i % 9 * 18, ContainerQuarrySC.UPGRADE_Y - 1 + i / 9 * 18, 18, 18, mx, my)) {
                     lines.add(Lang.tr("sc.quarrygui.locked", TileEntityQuarrySC.tierUnlocking(i).name()));
+                    return lines;
+                }
+            }
+        }
+        if (tab == TAB_TANKS) {
+            for (int i = 0; i <= TileEntityQuarrySC.TANKS; i++) {
+                int gx = i < TileEntityQuarrySC.TANKS ? GAUGE_X[i] : WASH_X;
+                if (GuiGaugeSC.isOver(gx, GAUGE_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mx, my)) {
+                    return tankTip(i);
+                }
+            }
+            for (Object o : buttonList) {
+                GuiButton b = (GuiButton) o;
+                boolean clear = b.id >= B_TANK_CLEAR && b.id < B_TANK_CLEAR + TileEntityQuarrySC.TANKS || b.id == B_WASH_CLEAR;
+                if (clear && GuiGaugeSC.isOver(b.xPosition - guiLeft, b.yPosition - guiTop - TOP, b.width, b.height, mx, my)) {
+                    int i = b.id == B_WASH_CLEAR ? TileEntityQuarrySC.TANKS : b.id - B_TANK_CLEAR;
+                    int amount = i == TileEntityQuarrySC.TANKS ? quarry.getWater().getFluidAmount() : quarry.getTank(i).getFluidAmount();
+                    lines.add(Lang.tr("sc.quarrygui.tank.clear.tip", amount));
+                    int cost = quarry.clearCost(i);
+                    lines.add((quarry.getEnergyStored() >= cost ? "§e" : "§c")
+                            + Lang.tr("sc.quarrygui.tank.clear.cost", cost, quarry.getEnergyStored()));
                     return lines;
                 }
             }

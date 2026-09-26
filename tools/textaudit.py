@@ -97,7 +97,7 @@ def audit(lang):
     on, off = t("sc.fieldgui.on"), t("sc.fieldgui.off")
     # ---- quarry: tabs (icon + short name in 55 px), buttons (caption room = width - 6), labels
     for k in ("quarry", "area", "map", "output", "functions", "upgrades"):
-        check(lang, "quarry tab", t("sc.quarrygui.tabshort." + k), 76 - 4 - 17)
+        check(lang, "quarry tab", t("sc.quarrygui.tabshort." + k), (248 - 16 - 6) // 4 - 4 - 17)
     for i in range(28):
         room = (80 if i == 1 else 114) - 6
         name = t("sc.quarrygui.flag.%d" % i) if i != 1 else t("sc.quarrygui.flag.fortune", "III")
@@ -145,19 +145,23 @@ def audit(lang):
     # ---- field generator
     for k in ("field", "functions", "access", "map", "upgrades"):
         check(lang, "field tab", t("sc.fieldgui.tab.%s.short" % k), (248 - 16 - 8) // 5 - 4 - 17)
-    for k in ("items", "fluids"):
-        check(lang, "quarry output page", t("sc.quarrygui.page." + k), 38 - 6)
     for i in range(3):
         check(lang, "quarry fluid filter", t("sc.quarrygui.ff", t("sc.quarrygui.ff.%d" % i)), 114 - 6)
     for i in range(2):
         check(lang, "quarry fluid filter rest", t("sc.quarrygui.ffact.%d" % i), 72 - 6)
     for i in range(4):
-        check(lang, "quarry tank full", t("sc.quarrygui.tankfull", t("sc.quarrygui.tankfull.%d" % i)), 232 - 6)
-    check(lang, "quarry tank side", t("sc.quarrygui.tankside.none"), 56 - 6)
-    for k in ("hand", "clear"):
-        check(lang, "quarry fluid filter button", t("sc.quarrygui.ff." + k), 114 - 6)
-    check(lang, "quarry tank line", t("sc.quarrygui.tank.locked", 4, "EV"), 134)
+        check(lang, "quarry tank full", t("sc.quarrygui.tankfull", t("sc.quarrygui.tankfull.%d" % i)), 158 - 6)
+    for i in range(8):
+        check(lang, "quarry tank side", t("sc.quarrygui.tank.sidebtn", t("sc.quarrygui.sideshort.%d" % i)), 44 - 6)
+    for k in ("clear", "tofilter", "pin", "unpin"):
+        check(lang, "quarry tank button", t("sc.quarrygui.tank." + k), 44 - 6)
+    check(lang, "quarry tank button", t("sc.quarrygui.tank.auto", off), 44 - 6)
+    check(lang, "quarry tank button", t("sc.quarrygui.ff.hand"), 38 - 6)
+    check(lang, "quarry tank button", t("sc.quarrygui.ff.clear"), 70 - 6)
+    check(lang, "quarry tank label", t("sc.quarrygui.tank.label.locked", 4, "EV"), 45)
+    check(lang, "quarry tank label", t("sc.quarrygui.tank.label.empty", 4), 45)
     check(lang, "quarry tank title", t("sc.quarrygui.tanks.title", 4, 4, 144000), 248 - 30 - 8)
+    check(lang, "quarry tab", t("sc.quarrygui.tabshort.tanks"), (248 - 16 - 6) // 4 - 4 - 17)
     check(lang, "quarry pump line", t("sc.quarrygui.pump2", 576000, 4, 4), 232)
     for flag in (64, 512):
         check(lang, "field charge switch", t("sc.fieldgui.flag.%d" % flag) + ": " + off, 114 - 6)
