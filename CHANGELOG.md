@@ -7,12 +7,14 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 ### Русский
 - **Бак насоса карьера с отсеками.** Каждая жидкость занимает свой отсек: LV — 1, MV — 2, HV — 3, EV — 4 отсека по 16 000 мБ; новый **модуль «Расширенный бак»** добавляет +32 000 мБ каждому (до 4). На вкладке «Добыча» — страница «Жидкости»: шкалы отсеков, **своя сторона выдачи** для каждого (или «никуда»), кнопки «вылить» и «в фильтр». **Фильтр жидкостей** (только список / кроме списка, до 6 жидкостей; из отсека или из предмета в руке), ненужное остаётся в мире или убирается. Настройка **«Бак полон»**: оставлять жидкость в мире, ставить карьер на паузу, уничтожать (с утилизатором) или превращать лаву в обсидиан, а воду в лёд.
+- Бак воды для промывки в карьере увеличен: 32 000 мБ вместо 8 000, и каждый модуль «Расширенный бак» добавляет ему ещё +32 000 мБ.
 **Исправлено**
 - Насос карьера не собирал воду и лаву, если их источники стали «текучими» (а они становятся такими, как только рядом что-то выкопано), — такие жидкости оставались в мире. Теперь они собираются. Жидкости других модов (в том числе «конечные», например некоторые масла и газы) откачиваются по тому, сколько их в блоке.
 - Труба в режиме «Извлечение» вытягивала жидкость, даже когда её некуда отдать (бак полон или получатель не принимает эту жидкость). Жидкость застревала в трубах и попадала в соседние линии. Теперь труба забирает только то, что сеть сейчас может принять; остальное остаётся в источнике.
 
 ### English
 - **The quarry pump's tank has compartments.** Each fluid takes its own: LV 1, MV 2, HV 3, EV 4 compartments of 16,000 mB; a new **Tank Extension module** adds +32,000 mB to each (up to 4). The Output tab has a Fluids page: compartment gauges, **an output side for each** (or nowhere), pour-out and add-to-filter buttons. A **fluid filter** (only the list / all but the list, up to 6 fluids; from a compartment or the item in hand) - the rest stays in the world or is removed. A **Tank full** setting: leave the fluid in the world, pause the quarry, destroy it (trash module) or turn lava into obsidian and water into ice.
+- The quarry's washing water tank is bigger: 32,000 mB instead of 8,000, and each Tank Extension module adds another +32,000 mB to it.
 **Fixed**
 - The quarry's pump didn't collect water and lava once their sources turned into flowing blocks (which they do as soon as anything next to them is dug) - they stayed in the world. They're collected now. Other mods' fluids (finite ones too, such as some oils and gases) are pumped by what the block holds.
 - An extracting pipe pulled fluid even with nowhere to put it (the tank full, or no target taking that fluid) - it got stuck in the pipes and showed up in other lines. A pipe now takes only what the network can deliver right now; the rest stays in its source.

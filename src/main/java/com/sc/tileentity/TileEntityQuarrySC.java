@@ -91,6 +91,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     // ---- the pump's tank: compartments, each its own fluid ----
     public static final int TANKS = 4, TANK_BASE = 16000, TANK_PER_MODULE = 32000, FLUID_FILTER_MAX = 6;
+    /** The washing water tank: 32 000 mB, +32 000 per tank module too. */
+    public static final int WATER_BASE = 32000;
     /** A compartment's output side: SIDE_ANY, a ForgeDirection ordinal 0..5, or SIDE_NONE. */
     public static final int SIDE_ANY = -1, SIDE_NONE = 6;
     /** When the right compartment is full: leave the fluid in the world, pause, destroy it (trash module), make it a block. */
@@ -106,7 +108,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     private final ItemStack[] slots = new ItemStack[SLOTS];
     private final ItemStack[] filter = new ItemStack[FILTER_SLOTS];
     private final List<ItemStack> overflow = new ArrayList<ItemStack>();
-    private final FluidTank water = new FluidTank(8000);
+    private final FluidTank water = new FluidTank(WATER_BASE);
 
     // settings
     private int sizeX = 8, sizeZ = 8, offX, offZ, bottomY = 1, shape, replace, flags = DEFAULT_FLAGS, fortuneLevel = 5,
@@ -863,11 +865,17 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return TANK_BASE + TANK_PER_MODULE * moduleCount(ItemQuarryModuleSC.Kind.TANK);
     }
 
+    /** The washing water tank's size: 32 000 mB, +32 000 per tank module. */
+    public int waterCapacity() {
+        return WATER_BASE + TANK_PER_MODULE * moduleCount(ItemQuarryModuleSC.Kind.TANK);
+    }
+
     private void applyTankCapacity() {
         int cap = tankCapacity();
         for (FluidTank t : tanks) {
             t.setCapacity(cap);
         }
+        water.setCapacity(waterCapacity());
     }
 
     public FluidTank getTank(int i) {

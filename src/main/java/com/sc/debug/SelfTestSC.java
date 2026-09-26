@@ -621,7 +621,8 @@ public final class SelfTestSC {
         ItemStack tm = ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.TANK);
         tm.stackSize = 6;
         tq.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE, tm);
-        boolean tCap = tq.tankCapacity() == com.sc.tileentity.TileEntityQuarrySC.TANK_BASE + 4 * com.sc.tileentity.TileEntityQuarrySC.TANK_PER_MODULE;
+        boolean tCap = tq.tankCapacity() == com.sc.tileentity.TileEntityQuarrySC.TANK_BASE + 4 * com.sc.tileentity.TileEntityQuarrySC.TANK_PER_MODULE
+                && tq.waterCapacity() == com.sc.tileentity.TileEntityQuarrySC.WATER_BASE + 4 * com.sc.tileentity.TileEntityQuarrySC.TANK_PER_MODULE;
         net.minecraft.nbt.NBTTagCompound tn = new net.minecraft.nbt.NBTTagCompound();
         tq.writeToNBT(tn);
         tn.removeTag("Tanks");

@@ -703,7 +703,7 @@ public class GuiQuarrySC extends GuiContainer {
                     used += quarry.getTank(i).getFluidAmount() > 0 ? 1 : 0;
                 }
                 fit(Lang.tr("sc.quarrygui.pump2", quarry.pumpedTotal(), used, quarry.unlockedTanks()), 8, 170, W - 16, c);
-                fit(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.getWater().getCapacity()), 8, 182, W - 16, c);
+                fit(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 8, 182, W - 16, c);
                 fit(Lang.tr("sc.quarrygui.head", headName()), 8, 194, W - 16, c);
                 if (!quarry.allowed(mc.thePlayer)) {
                     fit(Lang.tr("sc.quarrygui.owneronly"), 8, 222, W - 16, 0xA02020);
@@ -822,7 +822,7 @@ public class GuiQuarrySC extends GuiContainer {
         fit(Lang.tr("sc.quarrygui.exo.use", String.valueOf((long) (cost * rate / 20))), 8, 54, room, c);
         fit(Lang.tr("sc.quarrygui.exo.mined", String.valueOf(quarry.getMined())), 8, 66, room, c);
         fit(Lang.tr("sc.fieldgui.owner", quarry.getOwner().isEmpty() ? "-" : quarry.getOwner()), 8, 102, room, dim);
-        fit(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.getWater().getCapacity()), 8, 182, W - 16, c);
+        fit(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 8, 182, W - 16, c);
         if (!quarry.allowed(mc.thePlayer)) {
             fit(Lang.tr("sc.quarrygui.owneronly"), 8, 222, W - 16, 0xA02020);
         }
