@@ -279,6 +279,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         mode = FieldMode.values()[Math.min(FieldMode.values().length - 1, Math.max(0, nbt.getInteger("Mode")))];
         range = FieldShapeSC.clampRange(nbt.getInteger("Range"));
         flags = nbt.getInteger("Flags");
+        if (!nbt.hasKey("ChargeMode")) {
+            flags |= F_CHARGE_FX;                  // copied before the charging settings: sparks stay on
+        }
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
         filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
         color = Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")));
