@@ -63,6 +63,9 @@ public abstract class ItemBlockConduitSC extends ItemBlock {
             te.addPart(kind(), stack.getItemDamage());
         }
         placed(stack, world, x, y, z);
+        if (kind() == ConduitKind.CABLE) {
+            com.sc.energy.CableWarningSC.cablePlaced(world, x, y, z, player);
+        }
         return true;
     }
 
@@ -74,6 +77,9 @@ public abstract class ItemBlockConduitSC extends ItemBlock {
         }
         te.addPart(kind(), stack.getItemDamage());
         placed(stack, world, x, y, z);
+        if (kind() == ConduitKind.CABLE) {
+            com.sc.energy.CableWarningSC.cablePlaced(world, x, y, z, player);
+        }
         return true;
     }
 

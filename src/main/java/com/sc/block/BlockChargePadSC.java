@@ -45,6 +45,7 @@ public class BlockChargePadSC extends BlockEnergyStorageSC {
             ((TileEntityEnergyStorageSC) te).setFacing(sides[quarter]);
             world.markBlockForUpdate(x, y, z);
         }
+        com.sc.energy.CableWarningSC.sourcePlaced(world, x, y, z, placer);
     }
 
     @Override

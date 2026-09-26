@@ -75,6 +75,9 @@ public class BlockEnergyStorageSC extends Block {
             storage.setStoredFromItem(stack.getTagCompound().getInteger("EnergySC"));
         }
         world.markBlockForUpdate(x, y, z);
+        if (!(this instanceof BlockChargePadSC)) {            // the pad warns after turning its face
+            com.sc.energy.CableWarningSC.sourcePlaced(world, x, y, z, placer);
+        }
     }
 
     /** The horizontal face (or top/bottom when looking steeply) that points back at the placer. */

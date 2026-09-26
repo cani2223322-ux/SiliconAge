@@ -116,6 +116,18 @@ public class BlockMachineSC extends Block {
         return getIcon(side, meta);
     }
 
+    /** With a universal transformer upgrade inside, no blast breaks the machine. */
+    @Override
+    public float getExplosionResistance(net.minecraft.entity.Entity exploder, World world, int x, int y, int z,
+                                        double explosionX, double explosionY, double explosionZ) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityMachineSC
+                && ((TileEntityMachineSC) te).upgradeCount(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
+            return 6000000.0F;
+        }
+        return super.getExplosionResistance(exploder, world, x, y, z, explosionX, explosionY, explosionZ);
+    }
+
     @Override
     public int damageDropped(int meta) {
         return meta;

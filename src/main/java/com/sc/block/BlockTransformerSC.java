@@ -72,6 +72,7 @@ public class BlockTransformerSC extends Block {
         if (te instanceof TileEntityTransformerSC) {
             ((TileEntityTransformerSC) te).setFacing(facingToward(placer));
             world.markBlockForUpdate(x, y, z);
+            com.sc.energy.CableWarningSC.sourcePlaced(world, x, y, z, placer);
         }
     }
 

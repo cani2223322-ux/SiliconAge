@@ -445,6 +445,8 @@ public final class SelfTestSC {
                         && com.sc.block.BlockConduitSC.isWrench(wq) && lvs.isItemValidForSlot(0, we) && !lvs.isItemValidForSlot(0, wq)
                         && com.sc.item.ItemWrenchSC.Tier.QUANTUM.modes() == 3,
                 "wrenches: basic has no battery, electric 10000 EU charges on LV, quantum only from HV, all count as wrenches");
+        check(!com.sc.energy.ExplosionLogic.burnCableIfOvervolted(null, com.sc.energy.Tier.XV, com.sc.energy.Tier.QV),
+                "cable burn-out: a cable at or above the source's tier stays (the burn itself needs a world)");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));

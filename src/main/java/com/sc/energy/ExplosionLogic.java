@@ -36,6 +36,35 @@ public final class ExplosionLogic {
         return true;
     }
 
+    /**
+     * An overloaded cable (a source above its tier, or IC2 burning it): only the cable burns out -
+     * smoke and a hiss, no blast, so nothing around it breaks (IC2's cables do the same). The
+     * bundle's pipe and tube stay. @return true if it burned (the caller stops delivering)
+     */
+    public static boolean burnCableIfOvervolted(com.sc.tileentity.TileEntityConduitBundleSC bundle, Tier cableTier, Tier packetTier) {
+        if (cableTier.excessTiersOf(packetTier) <= 0) {
+            return false;
+        }
+        burnCable(bundle);
+        return true;
+    }
+
+    public static void burnCable(com.sc.tileentity.TileEntityConduitBundleSC bundle) {
+        World world = bundle.getWorldObj();
+        if (world == null || world.isRemote) {
+            return;
+        }
+        int x = bundle.xCoord, y = bundle.yCoord, z = bundle.zCoord;
+        bundle.removePart(com.sc.conduit.ConduitKind.CABLE);
+        if (bundle.isEmpty()) {
+            world.setBlockToAir(x, y, z);
+        }
+        world.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, "random.fizz", 1.0F, 0.6F);
+        if (world instanceof net.minecraft.world.WorldServer) {
+            ((net.minecraft.world.WorldServer) world).func_147487_a("largesmoke", x + 0.5, y + 0.5, z + 0.5, 12, 0.25, 0.25, 0.25, 0.01);
+        }
+    }
+
     public static void explodeFromOverheat(TileEntity te) {
         explode(te, HEAT_EXPLOSION_POWER);
     }

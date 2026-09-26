@@ -1054,7 +1054,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         }
         int ic2Tier = ic2.api.energy.EnergyNet.instance.getTierFromPower(stats.getVoltage());
         if (ic2Tier > 0) {
-            ExplosionLogic.checkOvervoltageAndExplode(this, cable.tier, com.sc.energy.Tier.fromIc2Tier(ic2Tier));
+            ExplosionLogic.burnCableIfOvervolted(this, cable.tier, com.sc.energy.Tier.fromIc2Tier(ic2Tier));
         }
     }
 
@@ -1087,13 +1087,13 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
     @Override
     @Optional.Method(modid = Reference.IC2_MODID)
     public void removeInsulation() {
-        ExplosionLogic.explodeFromOverheat(this);
+        ExplosionLogic.burnCable(this);
     }
 
     @Override
     @Optional.Method(modid = Reference.IC2_MODID)
     public void removeConductor() {
-        ExplosionLogic.explodeFromOverheat(this);
+        ExplosionLogic.burnCable(this);
     }
 
     /**

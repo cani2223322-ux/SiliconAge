@@ -59,6 +59,18 @@ public class BlockFieldGeneratorSC extends Block {
         }
     }
 
+    /** With a universal transformer upgrade inside, no blast breaks the generator. */
+    @Override
+    public float getExplosionResistance(net.minecraft.entity.Entity exploder, World world, int x, int y, int z,
+                                        double explosionX, double explosionY, double explosionZ) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityFieldGeneratorSC
+                && ((TileEntityFieldGeneratorSC) te).upgradeCount(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
+            return 6000000.0F;
+        }
+        return super.getExplosionResistance(exploder, world, x, y, z, explosionX, explosionY, explosionZ);
+    }
+
     @Override
     public void breakBlock(World world, int x, int y, int z, Block block, int meta) {
         TileEntityFieldGeneratorSC.unlink(world, x, y, z);

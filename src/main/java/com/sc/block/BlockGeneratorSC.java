@@ -112,6 +112,7 @@ public class BlockGeneratorSC extends Block {
             generator.readFromItem(stack.getTagCompound());
         }
         world.markBlockForUpdate(x, y, z);
+        com.sc.energy.CableWarningSC.sourcePlaced(world, x, y, z, placer);
     }
 
     // ---- keep the buffer, fuel and ignition in the dropped item: drop while the tile entity still exists ----

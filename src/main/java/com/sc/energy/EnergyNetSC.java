@@ -430,7 +430,7 @@ public final class EnergyNetSC {
                     consumers.add(ep);
                 }
             }
-            // §9.3: a supplier above the cable's tier burns the cable it feeds into.
+            // §9.3: a supplier above the cable's tier burns out the cable it feeds into (no blast).
             for (Endpoint ep : concat(suppliers, buffers)) {
                 if (ep.tile.offerableEnergy() > 0 && type.tier.excessTiersOf(ep.tile.outputTier()) > 0) {
                     ForgeDirection out = ep.outFace();
@@ -438,7 +438,7 @@ public final class EnergyNetSC {
                         continue;
                     }
                     TileEntityConduitBundleSC cable = cables.get(ep.cablesAt.get(ep.faces.indexOf(out)));
-                    ExplosionLogic.checkOvervoltageAndExplode(cable, type.tier, ep.tile.outputTier());
+                    ExplosionLogic.burnCableIfOvervolted(cable, type.tier, ep.tile.outputTier());
                     return false;
                 }
             }
