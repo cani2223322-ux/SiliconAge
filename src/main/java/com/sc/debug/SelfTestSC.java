@@ -540,6 +540,52 @@ public final class SelfTestSC {
                 && moved.getStackInSlot(35) == null;
         check(slotsLv && slotsEv && rigSlots && rigLens && migrate,
                 "quarry slots LV 6 / EV 18; Exo rig: no area, no pump / head, lenses x5, 200k EU a haul, 20M buffer; old saves' head moves to its new slot");
+        // the second batch of quarry modules: tiers and scopes, trash, gentle, economy, resonator, stabilizer, old saves' switches
+        com.sc.item.ItemQuarryModuleSC qm = ModItems.quarryModule;
+        boolean mTier = !qlv.isItemValidForSlot(fu, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.CENTRIFUGE))
+                && qev.isItemValidForSlot(fu, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.CENTRIFUGE))
+                && !qlv.isItemValidForSlot(fu, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.RESONATOR))
+                && !rig.isItemValidForSlot(fu, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.VEIN))
+                && rig.isItemValidForSlot(fu, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.DEEP_SCAN))
+                && qlv.isItemValidForSlot(fu, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.TRASH));
+        boolean mTrash = com.sc.tileentity.TileEntityQuarrySC.trash(new ItemStack(net.minecraft.init.Blocks.cobblestone))
+                && !com.sc.tileentity.TileEntityQuarrySC.trash(new ItemStack(net.minecraft.init.Blocks.diamond_ore))
+                && com.sc.tileentity.TileEntityQuarrySC.built(net.minecraft.init.Blocks.planks)
+                && !com.sc.tileentity.TileEntityQuarrySC.built(net.minecraft.init.Blocks.stone);
+        com.sc.tileentity.TileEntityQuarrySC qe = new com.sc.tileentity.TileEntityQuarrySC();
+        qe.setQuarryTier(com.sc.energy.Tier.EV);
+        qe.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.SLOT_HEAD, new ItemStack(ModItems.DRILL_HEADS.get(0)));
+        double bps0 = qe.blocksPerSecond();
+        int cost0 = qe.costFor(1.5F);
+        qe.setInventorySlotContents(fu, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.ECONOMY));
+        boolean mEco = Math.abs(qe.blocksPerSecond() - bps0 * 0.8) < 1e-6 && qe.costFor(1.5F) < cost0
+                && (qe.getFlags() & com.sc.tileentity.TileEntityQuarrySC.F_REPAIR) == 0;
+        qe.setInventorySlotContents(fu + 1, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.DOUBLE));
+        mEco &= Math.abs(qe.blocksPerSecond() - bps0 * 1.6) < 1e-6;
+        com.sc.tileentity.TileEntityQuarrySC rig2 = new com.sc.tileentity.TileEntityQuarrySC();
+        rig2.setQuarryTier(com.sc.energy.Tier.XV);
+        int L = com.sc.tileentity.TileEntityQuarrySC.FIRST_LENS;
+        boolean closed = !rig2.isItemValidForSlot(L + 4, lens) && rig2.unlockedLenses() == 4;
+        ItemStack res = qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.RESONATOR);
+        res.stackSize = 2;
+        rig2.setInventorySlotContents(fu, res);
+        boolean opened = rig2.unlockedLenses() == 6 && rig2.isItemValidForSlot(L + 5, lens) && !rig2.isItemValidForSlot(L + 6, lens);
+        rig2.setInventorySlotContents(fu + 1, qm.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.STABILIZER));
+        rig2.setInventorySlotContents(L + 5, lens);
+        boolean stab = rig2.lensBoost() == 6 && rig2.haulCost() == 300000 && sp != null && rig2.weightOf(sp) == plainW * 7;
+        net.minecraft.nbt.NBTTagCompound old18 = new net.minecraft.nbt.NBTTagCompound();
+        qe.writeToNBT(old18);
+        int[] st = old18.getIntArray("Settings");
+        int[] st18 = java.util.Arrays.copyOf(st, 18);
+        st18[7] = com.sc.tileentity.TileEntityQuarrySC.F_SPEED;
+        old18.setIntArray("Settings", st18);
+        com.sc.tileentity.TileEntityQuarrySC qm18 = new com.sc.tileentity.TileEntityQuarrySC();
+        qm18.readFromNBT(old18);
+        int f18 = qm18.getFlags();
+        boolean migr = (f18 & com.sc.tileentity.TileEntityQuarrySC.F_TRASH) != 0 && (f18 & com.sc.tileentity.TileEntityQuarrySC.F_DEEP_SCAN) != 0
+                && (f18 & com.sc.tileentity.TileEntityQuarrySC.F_REPAIR) == 0 && (f18 & com.sc.tileentity.TileEntityQuarrySC.F_FORTUNE) == 0;
+        check(mTier && mTrash && mEco && closed && opened && stab && migr,
+                "quarry modules 2: tier / quarry / rig rules, trash and gentle lists, economy x0.8 and twin x2, resonator opens lenses, stabilizer x7 at 300k, old saves get the new switches (repair off)");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));

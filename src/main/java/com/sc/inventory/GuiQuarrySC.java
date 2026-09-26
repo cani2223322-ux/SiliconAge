@@ -61,7 +61,12 @@ public class GuiQuarrySC extends GuiContainer {
 
     private static final int B_RUN = 1, B_RESET = 2, B_XP = 3, B_REDSTONE = 4, B_POWER = 5, B_SHAPE = 10, B_REPLACE = 11,
             B_SHOW = 20, B_DASH = 21, B_PLANE = 22, B_ORES = 23, B_BRIGHT = 24, B_TARGET = 25, B_SWATCH = 30, B_SLIDER = 40,
-            B_SCAN = 50, B_FILTER = 60, B_OUTSIDE = 61, B_FLAG = 100, B_FORTUNE_DOWN = 130, B_FORTUNE_UP = 131, B_STEP = 200;
+            B_SCAN = 50, B_FILTER = 60, B_OUTSIDE = 61, B_PAGE = 62, B_FLAG = 100, B_FORTUNE_DOWN = 140, B_FORTUNE_UP = 141, B_STEP = 200;
+
+    /** The Functions tab's two pages: what the modules add; then the rest (silence, auto-stop, filter, chests, chat). */
+    private static final int[][] FN_PAGES = {{0, 1, 2, 3, 4, 19, 5, 6, 7, 8, 9, 18, 20, 21, 22, 23, 24, 25, 26, 27},
+            {10, 11, 12, 13, 14, 15, 16, 17}};
+    private static int fnPage;
 
     @Override
     public void initGui() {
@@ -133,16 +138,21 @@ public class GuiQuarrySC extends GuiContainer {
                 buttonList.add(new TextFitSC.Button(B_FILTER, x, y + 28, 114, 16, ""));
                 buttonList.add(new TextFitSC.Button(B_OUTSIDE, x + 118, y + 28, 114, 16, ""));
                 break;
-            case 4:
-                buttonList.add(new TextFitSC.Button(B_POWER, x, y + 28, 150, 16, ""));
-                for (int i = 0; i < TileEntityQuarrySC.FLAG_COUNT; i++) {
-                    int col = i / 9, row = i % 9;
+            case 4: {
+                buttonList.add(new TextFitSC.Button(B_POWER, x, y + 28, 114, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_PAGE, x + 118, y + 28, 54, 16, ""));
+                int[] page = FN_PAGES[fnPage];
+                for (int n = 0; n < page.length; n++) {
+                    int i = page[n], col = n % 2, row = n / 2;
                     int bw = i == 1 ? 80 : 114;
                     buttonList.add(new TextFitSC.Button(B_FLAG + i, x + col * 118, y + 50 + row * 18, bw, 16, ""));
+                    if (i == 1) {
+                        buttonList.add(new TextFitSC.Button(B_FORTUNE_DOWN, x + col * 118 + 82, y + 50 + row * 18, 15, 16, "-"));
+                        buttonList.add(new TextFitSC.Button(B_FORTUNE_UP, x + col * 118 + 99, y + 50 + row * 18, 15, 16, "+"));
+                    }
                 }
-                buttonList.add(new TextFitSC.Button(B_FORTUNE_DOWN, x + 82, y + 68, 15, 16, "-"));
-                buttonList.add(new TextFitSC.Button(B_FORTUNE_UP, x + 99, y + 68, 15, 16, "+"));
                 break;
+            }
             default:
         }
         // groups: filter, buffer, modules, inventory, lenses, head / scanner / card
@@ -178,6 +188,16 @@ public class GuiQuarrySC extends GuiContainer {
             case 9: return ItemQuarryModuleSC.Kind.RADIUS;
             case 10: return ItemQuarryModuleSC.Kind.SILENT;
             case 11: return ItemQuarryModuleSC.Kind.AUTOSTOP;
+            case 18: return ItemQuarryModuleSC.Kind.TRASH;
+            case 19: return ItemQuarryModuleSC.Kind.CENTRIFUGE;
+            case 20: return ItemQuarryModuleSC.Kind.VEIN;
+            case 21: return ItemQuarryModuleSC.Kind.DOUBLE;
+            case 22: return ItemQuarryModuleSC.Kind.FLUID_GUARD;
+            case 23: return ItemQuarryModuleSC.Kind.GENTLE;
+            case 24: return ItemQuarryModuleSC.Kind.REPAIR;
+            case 25: return ItemQuarryModuleSC.Kind.ECONOMY;
+            case 26: return ItemQuarryModuleSC.Kind.STABILIZER;
+            case 27: return ItemQuarryModuleSC.Kind.DEEP_SCAN;
             default: return null;
         }
     }
@@ -199,6 +219,9 @@ public class GuiQuarrySC extends GuiContainer {
                 b.enabled = may && quarry.getXp() > 0;
             } else if (id == B_REDSTONE) {
                 b.displayString = Lang.tr("sc.fieldgui.redstone", Lang.tr("sc.fieldgui.redstone." + quarry.getRedstone()));
+            } else if (id == B_PAGE) {
+                b.displayString = Lang.tr("sc.quarrygui.page", fnPage + 1, FN_PAGES.length);
+                b.enabled = true;
             } else if (id == B_POWER) {
                 b.displayString = Lang.tr("sc.quarrygui.power", Lang.tr("sc.quarrygui.power." + quarry.getPowerMode()));
             } else if (id >= B_STEP) {
@@ -233,10 +256,13 @@ public class GuiQuarrySC extends GuiContainer {
                 ItemQuarryModuleSC.Kind k = moduleOf(i);
                 boolean on = (quarry.getFlags() & (1 << i)) != 0;
                 String name = Lang.tr("sc.quarrygui.flag." + i);
+                if (i == 24 && on) {
+                    name = Lang.tr("sc.quarrygui.flag.24.active");
+                }
                 if (i == 1 && k != null && quarry.moduleCount(k) > 0) {
                     name = Lang.tr("sc.quarrygui.flag.fortune", roman(Math.min(quarry.getFortuneLevel(), quarry.moduleCount(k))));
                 }
-                if (quarry.isExo() && notForRig(i)) {
+                if (quarry.isExo() ? notForRig(i) : rigOnly(i)) {
                     b.displayString = "§8" + name;
                     b.enabled = false;
                 } else if (k != null && quarry.moduleCount(k) == 0) {
@@ -255,7 +281,13 @@ public class GuiQuarrySC extends GuiContainer {
 
     /** Switches the rig has no use for: silk touch, the pump, the magnet, the area, chests. */
     private static boolean notForRig(int flag) {
-        return flag == 2 || flag == 5 || flag == 6 || flag == 7 || flag == 8 || flag == 9 || flag == 13;
+        return flag == 2 || flag == 5 || flag == 6 || flag == 7 || flag == 8 || flag == 9 || flag == 13
+                || flag >= 20 && flag <= 24;
+    }
+
+    /** Switches only the drilling rig has. */
+    private static boolean rigOnly(int flag) {
+        return flag == 26 || flag == 27;
     }
 
     private static String roman(int n) {
@@ -320,6 +352,10 @@ public class GuiQuarrySC extends GuiContainer {
             case B_OUTSIDE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_OUT_SIDE, 0); break;
             case B_FORTUNE_DOWN: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FORTUNE, -1); break;
             case B_FORTUNE_UP: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FORTUNE, 1); break;
+            case B_PAGE:
+                fnPage = (fnPage + 1) % FN_PAGES.length;
+                initGui();
+                break;
             default:
         }
     }
@@ -422,7 +458,10 @@ public class GuiQuarrySC extends GuiContainer {
             drawRect(px - 1, py - 1, px + 17, py + 17, GuiGaugeSC.OUTLINE);
             drawRect(px, py, px + 16, py + 16, 0xFF000000 | c);
         } else if (tab == 2 && quarry.isExo()) {
-            pockets(x + ContainerQuarrySC.LENS_X, y + ContainerQuarrySC.LENS_Y, TileEntityQuarrySC.LENSES, 1);
+            pockets(x + ContainerQuarrySC.LENS_X, y + ContainerQuarrySC.LENS_Y, 4, 2);
+            for (int i = quarry.unlockedLenses(); i < TileEntityQuarrySC.LENSES; i++) {
+                lock(x + ContainerQuarrySC.LENS_X + i % 4 * 18, y + ContainerQuarrySC.LENS_Y + i / 4 * 18);
+            }
         } else if (tab == 2) {
             inset(x + MAP_X - 1, y + MAP_Y - 1, MAP + 2, MAP + 2);
             drawMap(x + MAP_X, y + MAP_Y);
@@ -607,12 +646,13 @@ public class GuiQuarrySC extends GuiContainer {
                 int on = 0, total = 0;
                 for (int i = 0; i < TileEntityQuarrySC.FLAG_COUNT; i++) {
                     ItemQuarryModuleSC.Kind k = moduleOf(i);
-                    if (k == null || quarry.moduleCount(k) > 0) {
+                    boolean mine = quarry.isExo() ? !notForRig(i) : !rigOnly(i);
+                    if (mine && (k == null || quarry.moduleCount(k) > 0)) {
                         total++;
                         on += (quarry.getFlags() & (1 << i)) != 0 ? 1 : 0;
                     }
                 }
-                fit(Lang.tr("sc.quarrygui.fncount", on, total), 164, 32, W - 170, c);
+                fit(Lang.tr("sc.quarrygui.fncount", on, total), 184, 32, W - 190, c);
                 break;
             }
             case 5:
@@ -660,7 +700,7 @@ public class GuiQuarrySC extends GuiContainer {
         TextFitSC.help(fontRendererObj, ContainerQuarrySC.LENS_X + 64, ContainerQuarrySC.LENS_Y - 11,
                 Lang.tr("sc.quarrygui.exo.lenses.help"), guiLeft, guiTop + TOP);
         int total = Math.max(1, quarry.totalWeight());
-        List<com.sc.machine.ExoOreTableSC.Entry> list = new ArrayList<com.sc.machine.ExoOreTableSC.Entry>(com.sc.machine.ExoOreTableSC.entries());
+        List<com.sc.machine.ExoOreTableSC.Entry> list = new ArrayList<com.sc.machine.ExoOreTableSC.Entry>(quarry.exoEntries());
         java.util.Collections.sort(list, new java.util.Comparator<com.sc.machine.ExoOreTableSC.Entry>() {
             @Override
             public int compare(com.sc.machine.ExoOreTableSC.Entry a, com.sc.machine.ExoOreTableSC.Entry b) {
@@ -681,7 +721,7 @@ public class GuiQuarrySC extends GuiContainer {
             GL11.glDisable(GL11.GL_LIGHTING);
             String pct = String.format(java.util.Locale.ROOT, "%.1f%%", w * 100.0 / total);
             int lens = e.lens >= 0 ? quarry.lensCount(e.lens) : 0;
-            fit(pct + (lens > 0 ? "  x" + (1 + com.sc.machine.ExoOreTableSC.LENS_BOOST * lens) : "") + "  " + e.ore.getDisplayName(),
+            fit(pct + (lens > 0 ? "  x" + (1 + quarry.lensBoost() * lens) : "") + "  " + e.ore.getDisplayName(),
                     x + 18, ry + 4, W - x - 24, lens > 0 ? 0x2E7D32 : c);
             RenderHelper.enableGUIStandardItemLighting();
             shown++;
@@ -748,10 +788,14 @@ public class GuiQuarrySC extends GuiContainer {
                 GuiButton b = (GuiButton) o;
                 if (b.id >= B_FLAG && b.id < B_FLAG + TileEntityQuarrySC.FLAG_COUNT && GuiGaugeSC.isOver(b.xPosition - guiLeft,
                         b.yPosition - guiTop - TOP, b.width, b.height, mx, my)) {
-                    lines.add(Lang.tr("sc.quarrygui.flag." + (b.id - B_FLAG) + ".hint"));
+                    lines.add(b.id - B_FLAG == 24
+                            ? Lang.tr("sc.quarrygui.flag.24.hint", TileEntityQuarrySC.REPAIR_PER_TICK, TileEntityQuarrySC.REPAIR_COST)
+                            : Lang.tr("sc.quarrygui.flag." + (b.id - B_FLAG) + ".hint"));
                     ItemQuarryModuleSC.Kind k = moduleOf(b.id - B_FLAG);
                     if (quarry.isExo() && notForRig(b.id - B_FLAG)) {
                         lines.add("§c" + Lang.tr("sc.quarrygui.exo.notused"));
+                    } else if (!quarry.isExo() && rigOnly(b.id - B_FLAG)) {
+                        lines.add("§c" + Lang.tr("sc.quarrygui.rigonly"));
                     } else if (k != null && quarry.moduleCount(k) == 0) {
                         lines.add("§c" + Lang.tr("sc.quarrygui.needmodule.tip", Lang.tr("item.siliconage.quarryModule."
                                 + k.name().toLowerCase(java.util.Locale.ROOT) + ".name")));

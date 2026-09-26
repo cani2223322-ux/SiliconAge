@@ -33,7 +33,48 @@ public final class ExoOreTableSC {
         }
     }
 
-    private static List<Entry> entries;
+    private static List<Entry> entries, foreign;
+
+    /**
+     * Other mods' ores (the ore dictionary's "ore..." names, one block each), weight 8 - what the
+     * deep scan module adds. Empty without such mods. Worked out once, when first asked (in game,
+     * after every mod has registered its ores).
+     */
+    public static List<Entry> foreign() {
+        if (foreign == null) {
+            List<Entry> l = new ArrayList<Entry>();
+            java.util.Set<String> seen = new java.util.HashSet<String>();
+            for (Entry e : entries()) {
+                seen.add(key(e.ore));
+            }
+            for (String name : net.minecraftforge.oredict.OreDictionary.getOreNames()) {
+                if (!name.startsWith("ore")) {
+                    continue;
+                }
+                for (ItemStack s : net.minecraftforge.oredict.OreDictionary.getOres(name)) {
+                    if (s == null || s.getItem() == null) {
+                        continue;
+                    }
+                    String id = String.valueOf(net.minecraft.item.Item.itemRegistry.getNameForObject(s.getItem()));
+                    if (id.startsWith("minecraft:") || id.startsWith(com.sc.Reference.MODID + ":")) {
+                        continue;
+                    }
+                    int meta = s.getItemDamage() == net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE ? 0 : s.getItemDamage();
+                    ItemStack one = new ItemStack(s.getItem(), 1, meta);
+                    if (seen.add(key(one))) {
+                        l.add(new Entry(one, 8, -1));
+                    }
+                    break;                              // one block per ore name
+                }
+            }
+            foreign = l;
+        }
+        return foreign;
+    }
+
+    private static String key(ItemStack s) {
+        return net.minecraft.item.Item.itemRegistry.getNameForObject(s.getItem()) + "@" + s.getItemDamage();
+    }
 
     private ExoOreTableSC() {
     }

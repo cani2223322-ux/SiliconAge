@@ -98,16 +98,18 @@ def audit(lang):
     # ---- quarry: tabs (icon + short name in 55 px), buttons (caption room = width - 6), labels
     for k in ("quarry", "area", "map", "output", "functions", "upgrades"):
         check(lang, "quarry tab", t("sc.quarrygui.tabshort." + k), 76 - 4 - 17)
-    for i in range(18):
+    for i in range(28):
         room = (80 if i == 1 else 114) - 6
         name = t("sc.quarrygui.flag.%d" % i) if i != 1 else t("sc.quarrygui.flag.fortune", "III")
         check(lang, "quarry function", name + ": " + off, room)
-        if i < 12:
+        if i < 12 or i >= 18:
             check(lang, "quarry function (no module)", t("sc.quarrygui.flag.%d" % i), room)
+    check(lang, "quarry function", t("sc.quarrygui.flag.24.active"), 108)
+    check(lang, "quarry page", t("sc.quarrygui.page", 1, 2), 48)
     for k, n in (("sc.quarrygui.power", 3),):
         for i in range(n):
             check(lang, "quarry power (Quarry tab)", t(k, t(k + ".%d" % i)), 114 - 6)
-            check(lang, "quarry power (Functions tab)", t(k, t(k + ".%d" % i)), 150 - 6)
+            check(lang, "quarry power (Functions tab)", t(k, t(k + ".%d" % i)), 114 - 6)
     for i in range(3):
         check(lang, "quarry redstone", t("sc.fieldgui.redstone", t("sc.fieldgui.redstone.%d" % i)), 114 - 6)
         check(lang, "quarry shape", t("sc.quarrygui.shape", t("sc.quarrygui.shape.%d" % i)), 112 - 6)
@@ -138,7 +140,7 @@ def audit(lang):
     check(lang, "quarry slot labels", t("sc.quarrygui.slot.scanner"), 60)
     check(lang, "quarry modules title", t("sc.quarrygui.modules"), 62)
     check(lang, "quarry filter label", t("sc.quarrygui.filterlabel"), 150)
-    check(lang, "quarry functions count", t("sc.quarrygui.fncount", 18, 18), 248 - 170)
+    check(lang, "quarry functions count", t("sc.quarrygui.fncount", 20, 20), 248 - 190)
     # ---- field generator
     for k in ("field", "functions", "access", "map", "upgrades"):
         check(lang, "field tab", t("sc.fieldgui.tab.%s.short" % k), (248 - 16 - 8) // 5 - 4 - 17)

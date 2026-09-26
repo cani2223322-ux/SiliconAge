@@ -289,6 +289,18 @@ public final class ModRecipesCrafting {
                 {com.sc.item.ItemQuarryModuleSC.Kind.RADIUS, comp("sensor"), comp("tiPlate")},
                 {com.sc.item.ItemQuarryModuleSC.Kind.SILENT, comp("polymerPlate"), new ItemStack(ModItems.rubber)},
                 {com.sc.item.ItemQuarryModuleSC.Kind.AUTOSTOP, comp("sensor"), controller},
+                {com.sc.item.ItemQuarryModuleSC.Kind.TRASH, comp("sensor"), comp("combustionChamber")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.CENTRIFUGE, m.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.WASH),
+                        ModRecipesMachineBlocks.block(com.sc.machine.MachineType.CENTRIFUGE)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.VEIN, comp("sensor"), new ItemStack(ModItems.oreScanner)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.DOUBLE, comp("nb3SnCoil"), heads[1]},
+                {com.sc.item.ItemQuarryModuleSC.Kind.FLUID_GUARD, comp("ptfeSheet"), comp("steelCasing")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.GENTLE, comp("sensor"), comp("lens")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.REPAIR, controller, ingot(Material.TUNGSTEN)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.ECONOMY, comp("capacitor"), comp("energyCellMV")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.RESONATOR, comp("lens"), comp("heLoopModule")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.STABILIZER, controller, comp("nb3SnCoil")},
+                {com.sc.item.ItemQuarryModuleSC.Kind.DEEP_SCAN, comp("hfo2Die"), new ItemStack(ModItems.oreScanner)},
         };
         for (Object[] r : modules) {
             OreRecipes.shaped(m.stackOf((com.sc.item.ItemQuarryModuleSC.Kind) r[0]), " A ", "WMW", " T ",

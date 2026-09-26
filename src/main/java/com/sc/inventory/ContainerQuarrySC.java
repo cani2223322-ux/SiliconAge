@@ -52,7 +52,7 @@ public class ContainerQuarrySC extends Container {
         addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_SCANNER, SCANNER_X, TOOLS_Y + TOP));
         addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_CARD, CARD_X, TOOLS_Y + TOP));
         for (int i = 0; i < TileEntityQuarrySC.LENSES; i++) {
-            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_LENS + i, LENS_X + i * 18, LENS_Y + TOP));
+            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_LENS + i, LENS_X + i % 4 * 18, LENS_Y + TOP + i / 4 * 18));
         }
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {

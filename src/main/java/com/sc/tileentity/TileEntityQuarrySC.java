@@ -53,7 +53,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     public static final int BUFFER = 27, FIRST_UPGRADE = BUFFER, UPGRADES = 18;
     public static final int SLOT_HEAD = FIRST_UPGRADE + UPGRADES, SLOT_SCANNER = SLOT_HEAD + 1, SLOT_CARD = SLOT_SCANNER + 1;
-    public static final int FIRST_LENS = SLOT_CARD + 1, LENSES = 4;
+    /** 4 lens slots open, 4 more with resonator modules (appended after the old four - saves keep theirs). */
+    public static final int FIRST_LENS = SLOT_CARD + 1, LENSES = 8, BASE_LENSES = 4;
     public static final int SLOTS = FIRST_LENS + LENSES, FILTER_SLOTS = 9;
     /** Module slots open by tier: LV 6, MV 10, HV 14, EV 18 (the Exo rig: all 18). */
     public static final int[] UNLOCKED = {6, 10, 14, 18};
@@ -66,9 +67,16 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     // ---- function switches (the Functions tab) ----
     public static final int F_SPEED = 1, F_FORTUNE = 2, F_SILK = 4, F_CRUSH = 8, F_WASH = 16, F_PUMP = 32, F_PUMP_LAVA = 64,
             F_MAG_ITEMS = 128, F_MAG_XP = 256, F_RADIUS = 512, F_SILENT = 1024, F_AUTOSTOP = 2048, F_FILTER = 4096,
-            F_SKIP_TILES = 8192, F_WARN_BUFFER = 16384, F_WARN_HEAD = 32768, F_WARN_ENERGY = 65536, F_WARN_DONE = 131072;
-    public static final int FLAG_COUNT = 18;
-    public static final int DEFAULT_FLAGS = ~F_SILK & ((1 << FLAG_COUNT) - 1);
+            F_SKIP_TILES = 8192, F_WARN_BUFFER = 16384, F_WARN_HEAD = 32768, F_WARN_ENERGY = 65536, F_WARN_DONE = 131072,
+            F_TRASH = 1 << 18, F_CENTRIFUGE = 1 << 19, F_VEIN = 1 << 20, F_DOUBLE = 1 << 21, F_FLUID_GUARD = 1 << 22,
+            F_GENTLE = 1 << 23, F_REPAIR = 1 << 24, F_ECONOMY = 1 << 25, F_STABILIZER = 1 << 26, F_DEEP_SCAN = 1 << 27;
+    public static final int FLAG_COUNT = 28;
+    /** Everything on but silk touch and the repair (a request: it switches itself off when the head is whole). */
+    public static final int DEFAULT_FLAGS = ~F_SILK & ~F_REPAIR & ((1 << FLAG_COUNT) - 1);
+    /** The switches added after the first 18: on by default in quarries saved before them (the repair excepted). */
+    private static final int NEW_FLAGS_DEFAULT = ((1 << FLAG_COUNT) - 1) & ~((1 << 18) - 1) & ~F_REPAIR;
+    /** Head repair: points mended a tick, EU a point. Trash: EU an item. Fluid guard: EU a block turned to stone. */
+    public static final int REPAIR_PER_TICK = 20, REPAIR_COST = 25, TRASH_COST = 1, GUARD_COST = 10, VEIN_MAX = 64;
     // ---- look of the area (the Area tab) ----
     public static final int V_DASH = 1, V_PLANE = 2, V_ORES = 4;
     public static final int SHOW_ALWAYS = 0, SHOW_WRENCH = 1, SHOW_MENU = 2, SHOW_NEVER = 3;
@@ -79,7 +87,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public static final int POWER_FULL = 0, POWER_ECO = 1, POWER_MIN = 2;
     public static final int REDSTONE_ALWAYS = 0, REDSTONE_ON = 1, REDSTONE_OFF = 2;
 
-    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD }
+    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD, REPAIRING }
 
     private final ItemStack[] slots = new ItemStack[SLOTS];
     private final ItemStack[] filter = new ItemStack[FILTER_SLOTS];
@@ -180,6 +188,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return false;
         }
         if (powerMode == POWER_MIN && kind != ItemQuarryModuleSC.Kind.RADIUS && kind != ItemQuarryModuleSC.Kind.SILENT
+                && kind != ItemQuarryModuleSC.Kind.FLUID_GUARD && kind != ItemQuarryModuleSC.Kind.GENTLE
+                && kind != ItemQuarryModuleSC.Kind.REPAIR && kind != ItemQuarryModuleSC.Kind.ECONOMY
+                && kind != ItemQuarryModuleSC.Kind.RESONATOR
                 && kind != ItemQuarryModuleSC.Kind.AUTOSTOP) {
             return false;
         }
@@ -230,7 +241,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return 0;
         }
         int speed = active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED) ? moduleCount(ItemQuarryModuleSC.Kind.SPEED) : 0;
-        return head.blocksPerSecond * TIER_SPEED[tierIndex()] * Math.pow(1.4, speed);
+        double bps = head.blocksPerSecond * TIER_SPEED[tierIndex()] * Math.pow(1.4, speed);
+        if (active(ItemQuarryModuleSC.Kind.DOUBLE, F_DOUBLE)) {
+            bps *= 2;
+        }
+        if (active(ItemQuarryModuleSC.Kind.ECONOMY, F_ECONOMY)) {
+            bps *= 0.8;
+        }
+        return bps;
     }
 
     /** EU one block costs: by its hardness, times what the modules add. */
@@ -251,6 +269,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         if (headKind() == ItemDrillHeadSC.Kind.EXO) {
             eu *= 1.5;
+        }
+        if (active(ItemQuarryModuleSC.Kind.ECONOMY, F_ECONOMY)) {
+            eu *= 0.75;
         }
         return (int) Math.ceil(eu);
     }
@@ -386,7 +407,26 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (block.hasTileEntity(worldObj.getBlockMetadata(x, y, z)) && has(F_SKIP_TILES)) {
             return 1;
         }
+        if (active(ItemQuarryModuleSC.Kind.GENTLE, F_GENTLE) && built(block)) {
+            return 1;
+        }
         return passesFilter(block, worldObj.getBlockMetadata(x, y, z)) ? 0 : 1;
+    }
+
+    /** What players build (and the Gentle module leaves): wood, glass, wool, bricks, doors, rails, torches... */
+    public static boolean built(Block b) {
+        net.minecraft.block.material.Material m = b.getMaterial();
+        if (m == net.minecraft.block.material.Material.wood || m == net.minecraft.block.material.Material.glass
+                || m == net.minecraft.block.material.Material.cloth || m == net.minecraft.block.material.Material.carpet
+                || m == net.minecraft.block.material.Material.circuits || m == net.minecraft.block.material.Material.redstoneLight) {
+            return true;
+        }
+        return b == Blocks.stonebrick || b == Blocks.brick_block || b == Blocks.nether_brick || b == Blocks.quartz_block
+                || b == Blocks.stone_brick_stairs || b == Blocks.brick_stairs || b == Blocks.stone_stairs || b == Blocks.quartz_stairs
+                || b == Blocks.nether_brick_stairs || b == Blocks.stone_slab || b == Blocks.double_stone_slab
+                || b == Blocks.cobblestone_wall || b == Blocks.iron_bars || b == Blocks.iron_door || b == Blocks.rail
+                || b == Blocks.golden_rail || b == Blocks.detector_rail || b == Blocks.activator_rail || b == Blocks.bookshelf
+                || b == Blocks.glowstone;
     }
 
     /** Another player's private field zone, or another mod's protection, forbids breaking there. */
@@ -461,6 +501,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         if (headKind() == null) {
             setStatus(Status.NO_HEAD);
+            return;
+        }
+        if (repairing()) {
             return;
         }
         if (!overflow.isEmpty() || firstEmpty() < 0) {
@@ -541,7 +584,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     /** Hauls a second (the speed modules' x1.4 each). */
     public double haulsPerSecond() {
         int speed = active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED) ? moduleCount(ItemQuarryModuleSC.Kind.SPEED) : 0;
-        return EXO_RATE * Math.pow(1.4, speed);
+        double rate = EXO_RATE * Math.pow(1.4, speed);
+        return active(ItemQuarryModuleSC.Kind.ECONOMY, F_ECONOMY) ? rate * 0.8 : rate;
     }
 
     public int haulCost() {
@@ -550,6 +594,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             eu *= Math.pow(1.6, moduleCount(ItemQuarryModuleSC.Kind.SPEED));
         }
         eu *= 1 + 0.5 * fortune();
+        if (active(ItemQuarryModuleSC.Kind.STABILIZER, F_STABILIZER)) {
+            eu *= 1.5;
+        }
+        if (active(ItemQuarryModuleSC.Kind.ECONOMY, F_ECONOMY)) {
+            eu *= 0.75;
+        }
         if (active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
             eu *= 1.25;
         }
@@ -562,7 +612,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     /** Lenses of that mod ore in the lens slots. */
     public int lensCount(int ore) {
         int n = 0;
-        for (int i = FIRST_LENS; i < FIRST_LENS + LENSES; i++) {
+        for (int i = FIRST_LENS; i < FIRST_LENS + unlockedLenses(); i++) {
             ItemStack s = slots[i];
             if (s != null && s.getItem() instanceof com.sc.item.ItemOreLensSC && com.sc.item.ItemOreLensSC.oreOf(s) == ore) {
                 n += s.stackSize;
@@ -585,12 +635,32 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 return 0;
             }
         }
-        return e.weight * (1 + com.sc.machine.ExoOreTableSC.LENS_BOOST * (e.lens >= 0 ? lensCount(e.lens) : 0));
+        return e.weight * (1 + lensBoost() * (e.lens >= 0 ? lensCount(e.lens) : 0));
+    }
+
+    /** What one lens adds: x5 (4), with the stabilizer x7 (6). */
+    public int lensBoost() {
+        return active(ItemQuarryModuleSC.Kind.STABILIZER, F_STABILIZER) ? 6 : com.sc.machine.ExoOreTableSC.LENS_BOOST;
+    }
+
+    /** Lens slots open: 4, +1 per resonator module. */
+    public int unlockedLenses() {
+        return Math.min(LENSES, BASE_LENSES + (isExo() ? moduleCount(ItemQuarryModuleSC.Kind.RESONATOR) : 0));
+    }
+
+    /** The ores the rig can bring up: the table, plus other mods' ores with a deep scan module. */
+    public List<com.sc.machine.ExoOreTableSC.Entry> exoEntries() {
+        if (!active(ItemQuarryModuleSC.Kind.DEEP_SCAN, F_DEEP_SCAN)) {
+            return com.sc.machine.ExoOreTableSC.entries();
+        }
+        List<com.sc.machine.ExoOreTableSC.Entry> all = new ArrayList<com.sc.machine.ExoOreTableSC.Entry>(com.sc.machine.ExoOreTableSC.entries());
+        all.addAll(com.sc.machine.ExoOreTableSC.foreign());
+        return all;
     }
 
     public int totalWeight() {
         int t = 0;
-        for (com.sc.machine.ExoOreTableSC.Entry e : com.sc.machine.ExoOreTableSC.entries()) {
+        for (com.sc.machine.ExoOreTableSC.Entry e : exoEntries()) {
             t += weightOf(e);
         }
         return t;
@@ -612,7 +682,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             int pick = worldObj.rand.nextInt(total);
             com.sc.machine.ExoOreTableSC.Entry got = null;
-            for (com.sc.machine.ExoOreTableSC.Entry e : com.sc.machine.ExoOreTableSC.entries()) {
+            for (com.sc.machine.ExoOreTableSC.Entry e : exoEntries()) {
                 pick -= weightOf(e);
                 if (pick < 0) {
                     got = e;
@@ -638,6 +708,35 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             markDirty();
         }
         setStatus(Status.RUNNING);
+    }
+
+    /**
+     * Head repair: while its switch is on (with the module in), the quarry mends the head instead of
+     * digging - REPAIR_PER_TICK points a tick at REPAIR_COST EU each - and switches it off itself
+     * when the head is whole. @return true while it's repairing (no digging this tick)
+     */
+    private boolean repairing() {
+        if (!has(F_REPAIR)) {
+            return false;
+        }
+        ItemStack head = slots[SLOT_HEAD];
+        if (moduleCount(ItemQuarryModuleSC.Kind.REPAIR) <= 0 || head == null || head.getItemDamage() <= 0) {
+            flags &= ~F_REPAIR;
+            markDirty();
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            return false;
+        }
+        int points = Math.min(REPAIR_PER_TICK, head.getItemDamage());
+        points = Math.min(points, getEnergyStored() / REPAIR_COST);
+        if (points <= 0) {
+            setStatus(Status.NO_POWER);
+            return true;
+        }
+        removeEnergy(points * REPAIR_COST);
+        head.setItemDamage(head.getItemDamage() - points);
+        setStatus(Status.REPAIRING);
+        markDirty();
+        return true;
     }
 
     private void advance(int[] a) {
@@ -673,6 +772,74 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     private void mine(int x, int y, int z, Block block) {
+        boolean ore = isOre(block, worldObj.getBlockMetadata(x, y, z));
+        int oreMeta = worldObj.getBlockMetadata(x, y, z);
+        mineOne(x, y, z, block);
+        if (ore && active(ItemQuarryModuleSC.Kind.VEIN, F_VEIN)) {
+            vein(x, y, z, block, oreMeta);
+        }
+    }
+
+    /**
+     * The rest of an ore vein: every touching block of the same ore (26 neighbours), up to VEIN_MAX
+     * blocks within 32 of the first - inside the area or not - each paid for like any block.
+     */
+    private void vein(int x0, int y0, int z0, Block ore, int meta) {
+        java.util.ArrayDeque<int[]> open = new java.util.ArrayDeque<int[]>();
+        java.util.Set<Long> seen = new java.util.HashSet<Long>();
+        open.add(new int[]{x0, y0, z0});
+        int taken = 0;
+        while (!open.isEmpty() && taken < VEIN_MAX) {
+            int[] c = open.poll();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        int x = c[0] + dx, y = c[1] + dy, z = c[2] + dz;
+                        if (y < 1 || y > 255 || Math.abs(x - x0) > 32 || Math.abs(z - z0) > 32 || !seen.add(((long) x << 36) ^ ((long) y << 24) ^ z)) {
+                            continue;
+                        }
+                        if (!worldObj.blockExists(x, y, z) || worldObj.getBlock(x, y, z) != ore || worldObj.getBlockMetadata(x, y, z) != meta) {
+                            continue;
+                        }
+                        int cost = costFor(ore.getBlockHardness(worldObj, x, y, z));
+                        if (getEnergyStored() < cost || forbidden(x, y, z) || taken >= VEIN_MAX || headKind() == null) {
+                            return;
+                        }
+                        removeEnergy(cost);
+                        mineOne(x, y, z, ore);
+                        taken++;
+                        open.add(new int[]{x, y, z});
+                    }
+                }
+            }
+        }
+    }
+
+    /** Lava and water next to a dug block turn to stone (the pump's own sources in the area are left to it). */
+    private void guardFluids(int x, int y, int z) {
+        if (!active(ItemQuarryModuleSC.Kind.FLUID_GUARD, F_FLUID_GUARD)) {
+            return;
+        }
+        int[] a = area();
+        boolean pump = active(ItemQuarryModuleSC.Kind.PUMP, F_PUMP);
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+            int nx = x + d.offsetX, ny = y + d.offsetY, nz = z + d.offsetZ;
+            if (!worldObj.blockExists(nx, ny, nz) || !worldObj.getBlock(nx, ny, nz).getMaterial().isLiquid()) {
+                continue;
+            }
+            boolean inArea = a != null && nx >= a[0] && nx <= a[2] && nz >= a[1] && nz <= a[3] && ny <= a[4] && ny >= a[5];
+            if (pump && inArea && worldObj.getBlockMetadata(nx, ny, nz) == 0) {
+                continue;
+            }
+            if (getEnergyStored() < GUARD_COST) {
+                return;
+            }
+            removeEnergy(GUARD_COST);
+            worldObj.setBlock(nx, ny, nz, Blocks.stone, 0, 3);
+        }
+    }
+
+    private void mineOne(int x, int y, int z, Block block) {
         int meta = worldObj.getBlockMetadata(x, y, z);
         List<ItemStack> drops = new ArrayList<ItemStack>();
         net.minecraftforge.common.util.FakePlayer fake = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((WorldServer) worldObj);
@@ -687,6 +854,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             worldObj.playAuxSFX(2001, x, y, z, Block.getIdFromBlock(block) + (meta << 12));
         }
         replaceAfter(x, y, z);
+        guardFluids(x, y, z);
         if (ore) {
             removeOre(x, y, z);
             String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(block)) + "@" + block.damageDropped(meta);
@@ -707,7 +875,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         mined++;
         ItemStack head = slots[SLOT_HEAD];
         if (head != null && head.getMaxDamage() > 0) {
-            head.setItemDamage(head.getItemDamage() + 1);
+            head.setItemDamage(head.getItemDamage() + (active(ItemQuarryModuleSC.Kind.DOUBLE, F_DOUBLE) ? 2 : 1));
             if (head.getItemDamage() >= head.getMaxDamage()) {
                 slots[SLOT_HEAD] = null;
                 worldObj.playSoundEffect(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, "random.break", 1F, 0.8F);
@@ -717,45 +885,49 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         markDirty();
     }
 
-    /** Crushing, then washing of ore drops (the machines' own recipes). */
+    /** Crushing, washing, then the centrifuge - the machines' own recipes, one item at a time. */
     private List<ItemStack> process(ItemStack drop) {
-        List<ItemStack> out = new ArrayList<ItemStack>();
+        List<ItemStack> stage = new ArrayList<ItemStack>();
         if (drop == null) {
-            return out;
+            return stage;
         }
-        if (!isOre(drop) || !active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
-            out.add(drop);
-            return out;
+        stage.add(drop);
+        if (isOre(drop) && active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
+            stage = through(stage, MachineType.CRUSHER, false);
+            if (active(ItemQuarryModuleSC.Kind.WASH, F_WASH)) {
+                stage = through(stage, MachineType.ORE_WASHER, true);
+            }
+            if (active(ItemQuarryModuleSC.Kind.CENTRIFUGE, F_CENTRIFUGE)) {
+                stage = through(stage, MachineType.CENTRIFUGE, false);
+            }
         }
-        MachineRecipe crush = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{single(drop)}, null, null);
-        if (crush == null) {
-            out.add(drop);
-            return out;
-        }
-        for (int n = 0; n < drop.stackSize; n++) {
-            for (ItemStack c : crush.outputs) {
-                if (c == null) {
+        return stage;
+    }
+
+    /** Every item of `in` that has a recipe in `type` goes through it (byproducts by their chance); the rest stays as it is. */
+    private List<ItemStack> through(List<ItemStack> in, MachineType type, boolean water) {
+        List<ItemStack> out = new ArrayList<ItemStack>();
+        for (ItemStack s : in) {
+            for (int n = 0; n < s.stackSize; n++) {
+                ItemStack one = single(s);
+                MachineRecipe r = RecipeRegistry.findMatch(type, new ItemStack[]{one}, water ? this.water.getFluid() : null, null);
+                int need = r == null || r.fluidInputA == null ? 0 : r.fluidInputA.amount;
+                if (r == null || this.water.getFluidAmount() < need) {
+                    out.add(one);
                     continue;
                 }
-                MachineRecipe wash = active(ItemQuarryModuleSC.Kind.WASH, F_WASH)
-                        ? RecipeRegistry.findMatch(MachineType.ORE_WASHER, new ItemStack[]{c.copy()}, water.getFluid(), null) : null;
-                int need = wash == null || wash.fluidInputA == null ? 0 : wash.fluidInputA.amount;
-                if (wash != null && water.getFluidAmount() >= need) {
-                    if (need > 0) {
-                        water.drain(need, true);
+                if (need > 0) {
+                    this.water.drain(need, true);
+                }
+                for (ItemStack o : r.outputs) {
+                    if (o != null) {
+                        out.add(o.copy());
                     }
-                    for (ItemStack w : wash.outputs) {
-                        if (w != null) {
-                            out.add(w.copy());
-                        }
+                }
+                for (int b = 0; b < r.byproducts.length; b++) {
+                    if (worldObj.rand.nextFloat() < r.byproductChances[b]) {
+                        out.add(r.byproducts[b].copy());
                     }
-                    for (int i = 0; i < wash.byproducts.length; i++) {
-                        if (worldObj.rand.nextFloat() < wash.byproductChances[i]) {
-                            out.add(wash.byproducts[i].copy());
-                        }
-                    }
-                } else {
-                    out.add(c.copy());
                 }
             }
         }
@@ -781,6 +953,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Into the buffer (topping up first); what doesn't fit waits in the overflow. */
     private void store(ItemStack stack) {
+        if (active(ItemQuarryModuleSC.Kind.TRASH, F_TRASH) && trash(stack) && getEnergyStored() >= TRASH_COST * stack.stackSize) {
+            removeEnergy(TRASH_COST * stack.stackSize);
+            return;
+        }
         ItemStack s = stack.copy();
         for (int i = 0; i < BUFFER && s.stackSize > 0; i++) {
             ItemStack b = slots[i];
@@ -799,6 +975,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (s.stackSize > 0) {
             overflow.add(s);
         }
+    }
+
+    /** What the trash module destroys: cobblestone, stone, dirt, gravel, sand, netherrack. */
+    public static boolean trash(ItemStack s) {
+        Block b = Block.getBlockFromItem(s.getItem());
+        return b == Blocks.cobblestone || b == Blocks.stone || b == Blocks.dirt || b == Blocks.gravel || b == Blocks.sand
+                || b == Blocks.netherrack || b == Blocks.grass;
     }
 
     private void flushOverflow() {
@@ -1260,8 +1443,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             if (s.getItem() instanceof ItemQuarryModuleSC) {
                 ItemQuarryModuleSC.Kind k = ItemQuarryModuleSC.kindOf(s);
-                return !isExo() || !(k == ItemQuarryModuleSC.Kind.SILK || k == ItemQuarryModuleSC.Kind.PUMP
-                        || k == ItemQuarryModuleSC.Kind.MAGNET || k == ItemQuarryModuleSC.Kind.RADIUS);
+                if (isExo()) {
+                    return k.scope != ItemQuarryModuleSC.QUARRY;
+                }
+                return k.scope != ItemQuarryModuleSC.EXO && tierIndex() >= k.minTier;
             }
             if (s.getItem() instanceof com.sc.item.ItemUpgradeSC) {
                 UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
@@ -1270,7 +1455,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return false;
         }
         if (slot >= FIRST_LENS) {
-            return isExo() && s.getItem() instanceof com.sc.item.ItemOreLensSC;
+            return isExo() && slot - FIRST_LENS < unlockedLenses() && s.getItem() instanceof com.sc.item.ItemOreLensSC;
         }
         if (isExo()) {
             return false;                           // no head, scanner or card in the rig
@@ -1368,7 +1553,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     private void writeSettings(NBTTagCompound nbt) {
         int[] s = {sizeX, sizeZ, offX, offZ, bottomY, shape, replace, flags, fortuneLevel, powerMode, redstone, outSide,
-                filterMode, show, vflags, brightness, colorFrame, colorPlane};
+                filterMode, show, vflags, brightness, colorFrame, colorPlane, 2};
         nbt.setIntArray("Settings", s);
         nbt.setString("Owner", owner);
         nbt.setInteger("Facing", facing);
@@ -1390,6 +1575,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             sizeX = s[0]; sizeZ = s[1]; offX = s[2]; offZ = s[3]; bottomY = s[4]; shape = s[5]; replace = s[6]; flags = s[7];
             fortuneLevel = s[8]; powerMode = s[9]; redstone = s[10]; outSide = s[11]; filterMode = s[12]; show = s[13];
             vflags = s[14]; brightness = s[15]; colorFrame = s[16]; colorPlane = s[17];
+            if (s.length < 19) {
+                flags |= NEW_FLAGS_DEFAULT;        // saved before the second batch of modules
+            }
         }
         owner = nbt.getString("Owner");
         if (nbt.hasKey("Facing")) {
