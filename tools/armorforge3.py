@@ -660,6 +660,8 @@ if __name__ == "__main__":
     Z = 4
     sheet = Image.new("RGBA", (4 * 32 * Z + 2 * 32 * Z + 90, 3 * (64 * Z + 10) + 10), (60, 60, 70, 255))
     for r, (st, p) in enumerate(SUITS.items()):
+        if st == "Exo" and tex != "-":
+            continue                                        # Exo has its own design: tools/armorforge_exo.py
         for c, piece in enumerate(("Helmet", "Chestplate", "Leggings", "Boots")):
             im = icon(st, piece, p)
             if tex != "-":
