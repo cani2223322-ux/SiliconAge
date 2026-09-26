@@ -498,6 +498,48 @@ public final class SelfTestSC {
                 && !qr.isItemValidForSlot(0, new ItemStack(ModItems.oreScanner));
         check(qsize && qrad && qcost && qspeed && qcard && qslots,
                 "quarry: HV 32x32, radius +8 x4 max, cost 53 EU / x1.6 with speed, diamond head 4 x2 x1.4 blocks/s, area card box, slots");
+        // quarry module slots by tier, the Exo Drilling Rig, the old slot layout
+        com.sc.tileentity.TileEntityQuarrySC qlv = new com.sc.tileentity.TileEntityQuarrySC();
+        qlv.setQuarryTier(com.sc.energy.Tier.LV);
+        ItemStack spd = ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.SPEED);
+        int fu = com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE;
+        boolean slotsLv = qlv.isItemValidForSlot(fu + 5, spd) && !qlv.isItemValidForSlot(fu + 6, spd);
+        com.sc.tileentity.TileEntityQuarrySC qev = new com.sc.tileentity.TileEntityQuarrySC();
+        qev.setQuarryTier(com.sc.energy.Tier.EV);
+        boolean slotsEv = qev.isItemValidForSlot(fu + 17, spd) && qev.unlockedUpgrades() == 18;
+        com.sc.tileentity.TileEntityQuarrySC rig = new com.sc.tileentity.TileEntityQuarrySC();
+        rig.setQuarryTier(com.sc.energy.Tier.XV);
+        ItemStack lens = new ItemStack(ModItems.oreLens, 1, com.sc.util.OreEntry.SPERRYLITE.meta());
+        boolean rigSlots = rig.isExo() && rig.unlockedUpgrades() == 18 && rig.area() == null
+                && !rig.isItemValidForSlot(fu, ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.PUMP))
+                && !rig.isItemValidForSlot(com.sc.tileentity.TileEntityQuarrySC.SLOT_HEAD, new ItemStack(ModItems.DRILL_HEADS.get(0)))
+                && rig.isItemValidForSlot(com.sc.tileentity.TileEntityQuarrySC.FIRST_LENS, lens)
+                && !qev.isItemValidForSlot(com.sc.tileentity.TileEntityQuarrySC.FIRST_LENS, lens);
+        com.sc.machine.ExoOreTableSC.Entry sp = null;
+        for (com.sc.machine.ExoOreTableSC.Entry e : com.sc.machine.ExoOreTableSC.entries()) {
+            if (e.lens == com.sc.util.OreEntry.SPERRYLITE.meta()) {
+                sp = e;
+            }
+        }
+        int plainW = rig.weightOf(sp);
+        rig.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.FIRST_LENS, lens);
+        boolean rigLens = sp != null && rig.weightOf(sp) == plainW * 5 && rig.haulCost() == 200000
+                && rig.getMaxEnergyStored() == com.sc.tileentity.TileEntityQuarrySC.EXO_BUFFER;
+        net.minecraft.nbt.NBTTagCompound oldSave = new net.minecraft.nbt.NBTTagCompound();
+        qev.writeToNBT(oldSave);
+        oldSave.removeTag("Layout");
+        net.minecraft.nbt.NBTTagList ol = new net.minecraft.nbt.NBTTagList();
+        net.minecraft.nbt.NBTTagCompound hd = new net.minecraft.nbt.NBTTagCompound();
+        hd.setByte("Slot", (byte) 35);
+        new ItemStack(ModItems.DRILL_HEADS.get(1)).writeToNBT(hd);
+        ol.appendTag(hd);
+        oldSave.setTag("Slots", ol);
+        com.sc.tileentity.TileEntityQuarrySC moved = new com.sc.tileentity.TileEntityQuarrySC();
+        moved.readFromNBT(oldSave);
+        boolean migrate = moved.getStackInSlot(com.sc.tileentity.TileEntityQuarrySC.SLOT_HEAD) != null
+                && moved.getStackInSlot(35) == null;
+        check(slotsLv && slotsEv && rigSlots && rigLens && migrate,
+                "quarry slots LV 6 / EV 18; Exo rig: no area, no pump / head, lenses x5, 200k EU a haul, 20M buffer; old saves' head moves to its new slot");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));

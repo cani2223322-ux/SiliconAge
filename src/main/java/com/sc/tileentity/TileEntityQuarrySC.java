@@ -51,9 +51,15 @@ import net.minecraftforge.oredict.OreDictionary;
  */
 public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler {
 
-    public static final int BUFFER = 27, FIRST_UPGRADE = BUFFER, UPGRADES = 8;
+    public static final int BUFFER = 27, FIRST_UPGRADE = BUFFER, UPGRADES = 18;
     public static final int SLOT_HEAD = FIRST_UPGRADE + UPGRADES, SLOT_SCANNER = SLOT_HEAD + 1, SLOT_CARD = SLOT_SCANNER + 1;
-    public static final int SLOTS = SLOT_CARD + 1, FILTER_SLOTS = 9;
+    public static final int FIRST_LENS = SLOT_CARD + 1, LENSES = 4;
+    public static final int SLOTS = FIRST_LENS + LENSES, FILTER_SLOTS = 9;
+    /** Module slots open by tier: LV 6, MV 10, HV 14, EV 18 (the Exo rig: all 18). */
+    public static final int[] UNLOCKED = {6, 10, 14, 18};
+    /** Exo Drilling Rig: EU a haul costs, and hauls a second (x1.4 per speed module, cost x1.6). */
+    public static final int EXO_COST = 200000;
+    public static final double EXO_RATE = 1.0;
     public static final int[] BASE_SIZE = {8, 16, 32, 64};
     public static final double[] TIER_SPEED = {1, 1.5, 2, 3};
 
@@ -115,6 +121,25 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     private int tierIndex() {
         return Math.min(3, getTier().ordinal());
+    }
+
+    /** The Exo Drilling Rig: the same block family, tier XV - it brings ore up from the deep, digging nothing. */
+    public boolean isExo() {
+        return getTier() == Tier.XV;
+    }
+
+    public int unlockedUpgrades() {
+        return isExo() ? UPGRADES : UNLOCKED[tierIndex()];
+    }
+
+    /** The tier a module slot opens at (for its lock's tooltip). */
+    public static Tier tierUnlocking(int index) {
+        for (int t = 0; t < UNLOCKED.length; t++) {
+            if (index < UNLOCKED[t]) {
+                return Tier.values()[t];
+            }
+        }
+        return Tier.EV;
     }
 
     // ------------------------------------------------------------------ modules and switches
@@ -181,9 +206,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
     }
 
+    /** The rig's buffer is 20M EU: a haul with every module in costs up to ~7M, more than tier XV's own buffer. */
+    public static final int EXO_BUFFER = 20000000;
+
     @Override
     public int getMaxEnergyStored() {
-        return super.getMaxEnergyStored() + upgradeCount(UpgradeType.ENERGY_STORAGE) * UpgradeType.STORAGE_PER_UPGRADE;
+        return (isExo() ? EXO_BUFFER : super.getMaxEnergyStored()) + upgradeCount(UpgradeType.ENERGY_STORAGE) * UpgradeType.STORAGE_PER_UPGRADE;
     }
 
     public ItemDrillHeadSC.Kind headKind() {
@@ -235,6 +263,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
      * Without a card: centred on the quarry plus the offset, from its own level down to bottomY.
      */
     public int[] area() {
+        if (isExo()) {
+            return null;
+        }
         int max = maxSize();
         int[] card = ItemAreaCardSC.area(slots[SLOT_CARD]);
         if (card != null) {
@@ -415,6 +446,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             setStatus(Status.REDSTONE);
             return;
         }
+        if (isExo()) {
+            haul();
+            return;
+        }
         int[] a = area();
         if (a == null) {
             setStatus(Status.NO_AREA);
@@ -493,6 +528,110 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 setStatus(Status.NO_HEAD);
                 return;
             }
+        }
+        setStatus(Status.RUNNING);
+    }
+
+    // ------------------------------------------------------------------ the Exo Drilling Rig
+
+    /** Hauls a second (the speed modules' x1.4 each). */
+    public double haulsPerSecond() {
+        int speed = active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED) ? moduleCount(ItemQuarryModuleSC.Kind.SPEED) : 0;
+        return EXO_RATE * Math.pow(1.4, speed);
+    }
+
+    public int haulCost() {
+        double eu = EXO_COST;
+        if (active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED)) {
+            eu *= Math.pow(1.6, moduleCount(ItemQuarryModuleSC.Kind.SPEED));
+        }
+        eu *= 1 + 0.5 * fortune();
+        if (active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
+            eu *= 1.25;
+        }
+        if (active(ItemQuarryModuleSC.Kind.WASH, F_WASH)) {
+            eu *= 1.25;
+        }
+        return (int) Math.min(Integer.MAX_VALUE, Math.ceil(eu));
+    }
+
+    /** Lenses of that mod ore in the lens slots. */
+    public int lensCount(int ore) {
+        int n = 0;
+        for (int i = FIRST_LENS; i < FIRST_LENS + LENSES; i++) {
+            ItemStack s = slots[i];
+            if (s != null && s.getItem() instanceof com.sc.item.ItemOreLensSC && com.sc.item.ItemOreLensSC.oreOf(s) == ore) {
+                n += s.stackSize;
+            }
+        }
+        return n;
+    }
+
+    /** An ore's weight here: its base, x(1 + 4 per lens), 0 if the filter leaves it out. */
+    public int weightOf(com.sc.machine.ExoOreTableSC.Entry e) {
+        if (has(F_FILTER) && (filterMode == FILTER_ONLY || filterMode == FILTER_EXCEPT)) {
+            boolean listed = false;
+            for (ItemStack f : filter) {
+                if (f != null && f.getItem() == e.ore.getItem() && f.getItemDamage() == e.ore.getItemDamage()) {
+                    listed = true;
+                    break;
+                }
+            }
+            if (filterMode == FILTER_ONLY ? !listed : listed) {
+                return 0;
+            }
+        }
+        return e.weight * (1 + com.sc.machine.ExoOreTableSC.LENS_BOOST * (e.lens >= 0 ? lensCount(e.lens) : 0));
+    }
+
+    public int totalWeight() {
+        int t = 0;
+        for (com.sc.machine.ExoOreTableSC.Entry e : com.sc.machine.ExoOreTableSC.entries()) {
+            t += weightOf(e);
+        }
+        return t;
+    }
+
+    /** One tick of the rig: hauls ore up while it has the energy - fortune adds copies, crushing / washing as the quarry's. */
+    private void haul() {
+        int total = totalWeight();
+        if (total <= 0) {
+            setStatus(Status.NO_AREA);
+            return;
+        }
+        progress = Math.min(progress + haulsPerSecond() / 20.0, 8);
+        int cost = haulCost();
+        while (progress >= 1) {
+            if (getEnergyStored() < cost) {
+                setStatus(Status.NO_POWER);
+                return;
+            }
+            int pick = worldObj.rand.nextInt(total);
+            com.sc.machine.ExoOreTableSC.Entry got = null;
+            for (com.sc.machine.ExoOreTableSC.Entry e : com.sc.machine.ExoOreTableSC.entries()) {
+                pick -= weightOf(e);
+                if (pick < 0) {
+                    got = e;
+                    break;
+                }
+            }
+            if (got == null) {
+                return;
+            }
+            removeEnergy(cost);
+            lastCost = cost;
+            progress -= 1;
+            ItemStack ore = got.ore.copy();
+            int f = fortune();
+            ore.stackSize = 1 + (f > 0 ? worldObj.rand.nextInt(f + 1) : 0);
+            for (ItemStack out : process(ore)) {
+                store(out);
+            }
+            mined++;
+            String key = Item.itemRegistry.getNameForObject(ore.getItem()) + "@" + ore.getItemDamage();
+            Integer n = oreCounts.get(key);
+            oreCounts.put(key, n == null ? 1 : n + 1);
+            markDirty();
         }
         setStatus(Status.RUNNING);
     }
@@ -728,6 +867,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Looks through the area a slice at a time (4096 blocks a tick) for ore. */
     private void scanStep() {
+        if (isExo()) {
+            scanDirty = false;
+            scanY = 0;
+            return;
+        }
         int[] a = area();
         if (!hasScanner() || a == null) {
             ores.clear();
@@ -1072,14 +1216,25 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return false;                   // the quarry fills its buffer itself
         }
         if (slot < FIRST_UPGRADE + UPGRADES) {
+            if (slot - FIRST_UPGRADE >= unlockedUpgrades()) {
+                return false;                       // locked at this tier
+            }
             if (s.getItem() instanceof ItemQuarryModuleSC) {
-                return true;
+                ItemQuarryModuleSC.Kind k = ItemQuarryModuleSC.kindOf(s);
+                return !isExo() || !(k == ItemQuarryModuleSC.Kind.SILK || k == ItemQuarryModuleSC.Kind.PUMP
+                        || k == ItemQuarryModuleSC.Kind.MAGNET || k == ItemQuarryModuleSC.Kind.RADIUS);
             }
             if (s.getItem() instanceof com.sc.item.ItemUpgradeSC) {
                 UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
                 return t == UpgradeType.TRANSFORMER || t == UpgradeType.UNIVERSAL_TRANSFORMER || t == UpgradeType.ENERGY_STORAGE;
             }
             return false;
+        }
+        if (slot >= FIRST_LENS) {
+            return isExo() && s.getItem() instanceof com.sc.item.ItemOreLensSC;
+        }
+        if (isExo()) {
+            return false;                           // no head, scanner or card in the rig
         }
         if (slot == SLOT_HEAD) {
             return s.getItem() instanceof ItemDrillHeadSC;
@@ -1232,9 +1387,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             slots[i] = null;
         }
         NBTTagList list = nbt.getTagList("Slots", 10);
+        boolean oldLayout = !nbt.hasKey("Layout");
         for (int i = 0; i < list.tagCount(); i++) {
             NBTTagCompound t = list.getCompoundTagAt(i);
             int slot = t.getByte("Slot") & 0xFF;
+            if (oldLayout && slot >= 35 && slot <= 37) {
+                slot += SLOT_HEAD - 35;               // head / scanner / card after 8 module slots, now after 18
+            }
             if (slot < SLOTS) {
                 slots[slot] = ItemStack.loadItemStackFromNBT(t);
             }
@@ -1287,6 +1446,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         nbt.setTag("Slots", list);
+        nbt.setInteger("Layout", 2);
         NBTTagList ov = new NBTTagList();
         for (ItemStack s : overflow) {
             ov.appendTag(s.writeToNBT(new NBTTagCompound()));

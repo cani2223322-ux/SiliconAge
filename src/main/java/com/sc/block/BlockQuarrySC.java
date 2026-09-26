@@ -33,9 +33,10 @@ import net.minecraft.world.World;
  */
 public class BlockQuarrySC extends Block {
 
-    public static final int TIERS = 4;
+    /** LV, MV, HV, EV quarries and (meta 4) the Exo Drilling Rig, tier XV. */
+    public static final int TIERS = 5;
     private IIcon[] fronts, casings;
-    private IIcon top;
+    private IIcon top, exoTop;
 
     public BlockQuarrySC() {
         super(Material.iron);
@@ -57,7 +58,10 @@ public class BlockQuarrySC extends Block {
     }
 
     public static Tier tierFor(int meta) {
-        return Tier.values()[meta >= 0 && meta < TIERS ? meta : 0];
+        if (meta == 4) {
+            return Tier.XV;
+        }
+        return Tier.values()[meta >= 0 && meta < 4 ? meta : 0];
     }
 
     @Override
@@ -77,16 +81,17 @@ public class BlockQuarrySC extends Block {
         fronts = new IIcon[TIERS];
         casings = new IIcon[TIERS];
         for (int i = 0; i < TIERS; i++) {
-            fronts[i] = register.registerIcon(Reference.ASSETS + ":quarryFront" + tierFor(i).name());
+            fronts[i] = register.registerIcon(Reference.ASSETS + (i == 4 ? ":exoDrillFront" : ":quarryFront" + tierFor(i).name()));
             casings[i] = register.registerIcon(Reference.ASSETS + ":machineCasing" + tierFor(i).name());
         }
         top = register.registerIcon(Reference.ASSETS + ":quarryTop");
+        exoTop = register.registerIcon(Reference.ASSETS + ":exoDrillTop");
     }
 
     @Override
     public IIcon getIcon(int side, int meta) {
         int t = Math.max(0, Math.min(TIERS - 1, meta));
-        return side == 1 ? top : side == 3 ? fronts[t] : casings[t];
+        return side == 1 ? (t == 4 ? exoTop : top) : side == 3 ? fronts[t] : casings[t];
     }
 
     @Override
@@ -95,7 +100,7 @@ public class BlockQuarrySC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         int front = te instanceof TileEntityQuarrySC ? ((TileEntityQuarrySC) te).getFacing() : 3;
         int t = Math.max(0, Math.min(TIERS - 1, meta));
-        return side == 1 ? top : side == front ? fronts[t] : casings[t];
+        return side == 1 ? (t == 4 ? exoTop : top) : side == front ? fronts[t] : casings[t];
     }
 
     @Override

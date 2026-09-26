@@ -34,6 +34,10 @@ public class QuarryRendererSC extends TileEntitySpecialRenderer {
         if (!visible(q)) {
             return;
         }
+        if (q.isExo()) {
+            beam(q, x, y, z, partial);
+            return;
+        }
         int[] a = q.area();
         if (a == null) {
             return;
@@ -102,6 +106,70 @@ public class QuarryRendererSC extends TileEntitySpecialRenderer {
             label(x0, yt + 2.1, z0, Lang.tr("sc.quarry.label", (int) (x1 - x0), (int) (z1 - z0), (int) (yt - yb)), frame);
         }
         GL11.glPopMatrix();
+    }
+
+    /**
+     * The Exo Drilling Rig: a laser beam from the rig down to bedrock - a bright core (plane
+     * colour) in a softer glow, rings (frame colour) running down it while it works, a flare at
+     * the bottom. It pulses while it hauls, and is dimmer when it's stopped.
+     */
+    private void beam(TileEntityQuarrySC q, double x, double y, double z, float partial) {
+        double time = (q.getWorldObj().getTotalWorldTime() + partial) / 20.0;
+        float bright = q.getBrightness() * 0.25F * (q.isRunning() ? 1F : 0.35F);
+        float pulse = 0.8F + 0.2F * (float) Math.sin(time * 6);
+        double top = 0, bottom = -(q.yCoord - 1);
+        GL11.glPushMatrix();
+        GL11.glTranslated(x + 0.5, y, z + 0.5);
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_LINE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GL11.glDepthMask(false);
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, 240F, 240F);
+        boolean glow = (q.getVflags() & TileEntityQuarrySC.V_PLANE) != 0;
+        int core = q.getColorPlane(), ring = q.getColorFrame();
+        // core and glow: two crossed quads each, turning slowly
+        GL11.glPushMatrix();
+        GL11.glRotated(time * 40 % 360, 0, 1, 0);
+        crossQuads(0.12, top, bottom, 0xFFFFFF, 0.9F * bright * pulse);
+        crossQuads(0.22, top, bottom, core, 0.6F * bright * pulse);
+        if (glow) {
+            crossQuads(0.5, top, bottom, core, 0.18F * bright);
+        }
+        GL11.glPopMatrix();
+        // rings running down
+        if ((q.getVflags() & TileEntityQuarrySC.V_DASH) != 0 && q.isRunning()) {
+            GL11.glLineWidth(2F);
+            double shift = (time * 6) % 3.0;
+            for (double ry = top - shift; ry > bottom; ry -= 3.0) {
+                ring(0, 0, 0.45, ry, ring, 0.8F * bright, -1);
+            }
+        }
+        // the emitter ring under the rig and the flare at the bottom
+        GL11.glLineWidth(3F);
+        ring(0, 0, 0.55, top - 0.02, ring, bright, -1);
+        for (int k = 0; k < 3; k++) {
+            double r = 0.3 + ((time * 1.5 + k / 3.0) % 1.0) * 1.8;
+            ring(0, 0, r, bottom + 0.05, core, (float) (bright * (1 - (r - 0.3) / 1.8)), -1);
+        }
+        GL11.glPopAttrib();
+        GL11.glPopMatrix();
+    }
+
+    private static void crossQuads(double w, double top, double bottom, int rgb, float alpha) {
+        color(rgb, alpha);
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex3d(-w, top, 0);
+        GL11.glVertex3d(w, top, 0);
+        GL11.glVertex3d(w, bottom, 0);
+        GL11.glVertex3d(-w, bottom, 0);
+        GL11.glVertex3d(0, top, -w);
+        GL11.glVertex3d(0, top, w);
+        GL11.glVertex3d(0, bottom, w);
+        GL11.glVertex3d(0, bottom, -w);
+        GL11.glEnd();
     }
 
     /** Always / only with a wrench in hand / only while its screen is open / never. */

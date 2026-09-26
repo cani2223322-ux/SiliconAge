@@ -29,9 +29,15 @@ public class ItemBlockQuarrySC extends ItemBlock {
 
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
+        if (stack.getItemDamage() == 4) {
+            list.add(Lang.tr("sc.quarry.tooltip.exo", String.valueOf(TileEntityQuarrySC.EXO_COST)));
+            list.add("§7" + Lang.tr("sc.quarry.tooltip.exo2"));
+            return;
+        }
         int t = Math.max(0, Math.min(3, stack.getItemDamage()));
         list.add(Lang.tr("sc.quarry.tooltip.size", TileEntityQuarrySC.BASE_SIZE[t], TileEntityQuarrySC.BASE_SIZE[t],
                 String.valueOf(TileEntityQuarrySC.TIER_SPEED[t])));
+        list.add(Lang.tr("sc.quarry.tooltip.slots", TileEntityQuarrySC.UNLOCKED[t]));
         if (stack.hasTagCompound() && stack.getTagCompound().getLong("Mined") > 0) {
             list.add(Lang.tr("sc.quarry.tooltip.mined", String.valueOf(stack.getTagCompound().getLong("Mined"))));
         }

@@ -294,6 +294,16 @@ public final class ModRecipesCrafting {
             OreRecipes.shaped(m.stackOf((com.sc.item.ItemQuarryModuleSC.Kind) r[0]), " A ", "WMW", " T ",
                     'A', r[1], 'W', wire, 'M', r[2], 'T', transistor);
         }
+        // the Exo Drilling Rig: an EV quarry round a fusion core, Exo cable and an Exo drill head
+        OreRecipes.shaped(new ItemStack(ModBlocks.quarrySC, 1, 4), "HFH", "XQX", "CEC",
+                'H', ingot(Material.HAFNIUM), 'F', comp("fusionCore"), 'X', controller, 'Q', ev,
+                'C', cable(CableType.EXO), 'E', heads[3]);
+        // its ore lenses: a lens, a controller and four of that ore
+        for (com.sc.util.OreEntry o : com.sc.util.OreEntry.values()) {
+            ItemStack ore = new ItemStack(ModBlocks.oreSC, 1, o.meta());
+            OreRecipes.shaped(new ItemStack(ModItems.oreLens, 1, o.meta()), " O ", "OLO", " X ",
+                    'O', ore, 'L', comp("lens"), 'X', controller);
+        }
         OreRecipes.shaped(new ItemStack(ModItems.oreScanner), " L ", "SXS", " E ",
                 'L', comp("lens"), 'S', comp("sensor"), 'X', controller, 'E', comp("energyCellLV"));
         OreRecipes.shapeless(new ItemStack(ModItems.areaCard), comp("polymerPlate"), silicon(SiliconMaterial.MEMORY_CHIP), wire);

@@ -50,6 +50,7 @@ public final class ModItems {
     public static final java.util.List<com.sc.item.ItemDrillHeadSC> DRILL_HEADS = new java.util.ArrayList<com.sc.item.ItemDrillHeadSC>();
     public static ItemSimpleSC oreScanner;
     public static com.sc.item.ItemAreaCardSC areaCard;
+    public static com.sc.item.ItemOreLensSC oreLens;
     public static final java.util.List<com.sc.item.ItemWrenchSC> WRENCHES = new java.util.ArrayList<com.sc.item.ItemWrenchSC>();
     public static final java.util.Map<SCToolType, ItemToolSC> TOOLS = new java.util.EnumMap<SCToolType, ItemToolSC>(SCToolType.class);
     public static final java.util.Map<ArmorSuit, ItemArmorSC[]> ARMOR = new java.util.EnumMap<ArmorSuit, ItemArmorSC[]>(ArmorSuit.class);
@@ -191,6 +192,8 @@ public final class ModItems {
         GameRegistry.registerItem(oreScanner, "oreScanner");
         areaCard = new com.sc.item.ItemAreaCardSC();
         GameRegistry.registerItem(areaCard, "areaCard");
+        oreLens = new com.sc.item.ItemOreLensSC();
+        GameRegistry.registerItem(oreLens, "oreLens");
 
         // Wrenches: basic, electric, quantum (appended).
         for (com.sc.item.ItemWrenchSC.Tier t : com.sc.item.ItemWrenchSC.Tier.values()) {

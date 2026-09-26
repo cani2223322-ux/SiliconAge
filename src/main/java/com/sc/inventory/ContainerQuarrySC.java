@@ -19,14 +19,18 @@ import net.minecraftforge.fluids.FluidStack;
  */
 public class ContainerQuarrySC extends Container {
 
-    public static final int G_FILTER = 0, G_BUFFER = 1, G_UPGRADES = 2, G_PLAYER = 3;
+    public static final int G_FILTER = 0, G_BUFFER = 1, G_UPGRADES = 2, G_PLAYER = 3, G_LENS = 4, G_TOOLS = 5;
     public static final int FILTER_X = 44, FILTER_Y = 50, BUFFER_X = 44, BUFFER_Y = 80;
-    public static final int UPGRADE_X = 12, UPGRADE_Y = 40, HEAD_X = 164, HEAD_Y = 40, SCANNER_Y = 64, CARD_Y = 88;
+    /** 18 module slots as a 9 x 2 grid; the head, scanner and card in a row under it, each after its label. */
+    public static final int UPGRADE_X = 44, UPGRADE_Y = 40, TOOLS_Y = 90, TOOL_COL = 78, TOOL_SLOT = 52;
+    public static final int HEAD_X = 8 + TOOL_SLOT, SCANNER_X = 8 + TOOL_COL + TOOL_SLOT, CARD_X = 8 + 2 * TOOL_COL + TOOL_SLOT;
+    public static final int LENS_X = 8, LENS_Y = 40;
     public static final int INV_X = 44, INV_Y = 157;
     /** The screen's content starts this much lower than its coordinates say (two rows of tabs above it). */
     public static final int TOP = 22;
     public static final int FIRST_BUFFER = TileEntityQuarrySC.FILTER_SLOTS, FIRST_UPGRADE = FIRST_BUFFER + TileEntityQuarrySC.BUFFER,
-            FIRST_PLAYER = FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES + 3;
+            FIRST_TOOLS = FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES, FIRST_LENS = FIRST_TOOLS + 3,
+            FIRST_PLAYER = FIRST_LENS + TileEntityQuarrySC.LENSES;
 
     private final TileEntityQuarrySC quarry;
     private final InventoryBasic view = new InventoryBasic("filter", false, TileEntityQuarrySC.FILTER_SLOTS);
@@ -42,11 +46,14 @@ public class ContainerQuarrySC extends Container {
             addSlotToContainer(new SlotBuffer(quarry, i, BUFFER_X + i % 9 * 18, BUFFER_Y + TOP + i / 9 * 18));
         }
         for (int i = 0; i < TileEntityQuarrySC.UPGRADES; i++) {
-            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_UPGRADE + i, UPGRADE_X + i % 4 * 18, UPGRADE_Y + TOP + i / 4 * 18));
+            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_UPGRADE + i, UPGRADE_X + i % 9 * 18, UPGRADE_Y + TOP + i / 9 * 18));
         }
-        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_HEAD, HEAD_X, HEAD_Y + TOP));
-        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_SCANNER, HEAD_X, SCANNER_Y + TOP));
-        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_CARD, HEAD_X, CARD_Y + TOP));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_HEAD, HEAD_X, TOOLS_Y + TOP));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_SCANNER, SCANNER_X, TOOLS_Y + TOP));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_CARD, CARD_X, TOOLS_Y + TOP));
+        for (int i = 0; i < TileEntityQuarrySC.LENSES; i++) {
+            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_LENS + i, LENS_X + i * 18, LENS_Y + TOP));
+        }
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, INV_X + col * 18, INV_Y + TOP + row * 18));
@@ -59,7 +66,8 @@ public class ContainerQuarrySC extends Container {
         group = new int[inventorySlots.size()];
         for (int i = 0; i < shownX.length; i++) {
             shownX[i] = ((Slot) inventorySlots.get(i)).xDisplayPosition;
-            group[i] = i < FIRST_BUFFER ? G_FILTER : i < FIRST_UPGRADE ? G_BUFFER : i < FIRST_PLAYER ? G_UPGRADES : G_PLAYER;
+            group[i] = i < FIRST_BUFFER ? G_FILTER : i < FIRST_UPGRADE ? G_BUFFER : i < FIRST_TOOLS ? G_UPGRADES
+                    : i < FIRST_LENS ? G_TOOLS : i < FIRST_PLAYER ? G_LENS : G_PLAYER;
         }
     }
 
