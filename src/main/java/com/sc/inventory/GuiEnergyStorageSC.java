@@ -43,7 +43,7 @@ public class GuiEnergyStorageSC extends GuiContainer {
         int x = guiLeft, y = guiTop;
         drawTexturedModalRect(x, y, 0, 0, xSize, ySize);
         drawTexturedModalRect(x + ContainerEnergyStorageSC.SLOT_X - 1, y + ContainerEnergyStorageSC.SLOT_Y - 1,
-                GuiGaugeSC.SPR_SLOT_U, GuiGaugeSC.SPR_SLOT_V, 18, 18);
+                GuiGaugeSC.SPR_STEEL_SLOT_U, GuiGaugeSC.SPR_STEEL_SLOT_V, 18, 18);
         GuiGaugeSC.drawSpriteVertical(this, x + ENERGY_X, y + ENERGY_Y, GuiGaugeSC.SPR_ENERGY_U, GuiGaugeSC.SPR_ENERGY_V,
                 ENERGY_W, ENERGY_H, fraction());
         // wide charge bar: well, fill, lighter top edge
@@ -60,8 +60,8 @@ public class GuiEnergyStorageSC extends GuiContainer {
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         String title = Lang.tr("tile.siliconage." + (storage instanceof com.sc.tileentity.TileEntityChargePadSC ? "chargePad." : "energyStorage.")
                 + storage.getTier().name().toLowerCase(java.util.Locale.ROOT) + ".name");
-        fontRendererObj.drawString(title, 8, 6, 0x404040);
-        GuiGaugeSC.drawTierBadge(fontRendererObj, storage.getTier(), xSize - 8, 4);
+        fontRendererObj.drawString(title, 8, 5, GuiGaugeSC.TITLE_COLOR);
+        GuiGaugeSC.drawTierBadge(fontRendererObj, storage.getTier(), xSize - 6, 3);
         fontRendererObj.drawString(Lang.tr("sc.storage.gui.stored", String.valueOf(storage.getEnergyStored())), 8, 20, 0x404040);
         fontRendererObj.drawString(Lang.tr("sc.storage.gui.capacity", String.valueOf(storage.getMaxEnergyStored()),
                 Math.round(fraction() * 100)), 8, 30, 0x606060);

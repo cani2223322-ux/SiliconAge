@@ -40,6 +40,11 @@ public final class GuiGaugeSC {
     public static final int SPR_SUN_U = 176, SPR_SUN_OFF_U = 208, SPR_SUN_V = 64; // 32x32
     public static final int SPR_ARROW_R_U = 176, SPR_ARROW_R_FULL_U = 200, SPR_ARROW_R_V = 100; // 24x17, right-pointing (NEI)
     public static final int SPR_PROCESS_U = 176, SPR_PROCESS_V = 120;  // 16x16 frames: 4 per row, one row per ProcessKind
+    public static final int SPR_STEEL_SLOT_U = 0, SPR_STEEL_SLOT_V = 168; // 18x18 slot pocket in the steel style (machine / generator sheets)
+
+    /** The steel style of the machine, generator and storage screens (the sheets' own colours). */
+    public static final int TITLE_COLOR = 0xF2F5F8, OUTLINE = 0xFF101319, PANEL = 0xFFB8C0CB,
+            BEVEL_LIGHT = 0xFFECF1F7, BEVEL_DARK = 0xFF343C48;
 
     private static final int EMPTY_WELL = 0xFF3C3C3C;
     private static final int WELL_RIM = 0xFF1E1E1E;
@@ -149,13 +154,19 @@ public final class GuiGaugeSC {
         GL11.glColor4f(1f, 1f, 1f, 1f);
     }
 
-    /** LV grey, MV orange, HV gold, EV violet - the usual IC2/GregTech reading of the tiers. */
+    /**
+     * LV grey, MV orange, HV gold, EV violet - the usual IC2/GregTech reading of the tiers; the
+     * mod's own above: IV teal, QV (Quantum) blue, XV (Exo) near-black violet.
+     */
     public static int tierColor(Tier tier) {
         switch (tier) {
             case LV: return 0x6E6E6E;
             case MV: return 0xC0661A;
             case HV: return 0xB8900E;
-            default: return 0x7A3CB8;
+            case EV: return 0x7A3CB8;
+            case IV: return 0x178C84;
+            case QV: return 0x2F7FD0;
+            default: return 0x2A1C3E;
         }
     }
 

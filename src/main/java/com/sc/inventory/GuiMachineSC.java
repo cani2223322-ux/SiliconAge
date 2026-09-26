@@ -112,8 +112,8 @@ public class GuiMachineSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        fontRendererObj.drawString(machine.getMachineType().localizedName(), 8, 6, 0x404040);
-        GuiGaugeSC.drawTierBadge(fontRendererObj, machine.getMachineType().tier, 176 - 8, 4);
+        fontRendererObj.drawString(machine.getMachineType().localizedName(), 8, 5, GuiGaugeSC.TITLE_COLOR);
+        GuiGaugeSC.drawTierBadge(fontRendererObj, machine.getMachineType().tier, 176 - 6, 3);
         MachineStatus status = machine.getStatus();
         fontRendererObj.drawString(status.localized(), STATUS_X, STATUS_Y, statusColor(status));
     }
@@ -135,21 +135,22 @@ public class GuiMachineSC extends GuiContainer {
     }
 
     /**
-     * The side panel with the four upgrade slot pockets, in exactly the main sheet's frame: 2 px
-     * white top / left, 2 px dark grey right / bottom, the two light corners where they meet, no
-     * outline (the old one had a black outline and hung 4 px into the sheet, 4 px lower).
+     * The side panel with the four upgrade slot pockets, in the main sheet's steel style: the
+     * dark outline (its left edge shared with the sheet's right one), light top / left bevel,
+     * dark right / bottom bevel, and the sheet's steel slot pockets.
      */
     private void drawUpgradePanel(int x, int y) {
-        int x0 = x + PANEL_X, y0 = y + PANEL_Y, x1 = x0 + PANEL_W, y1 = y0 + PANEL_H;
-        drawRect(x0, y0, x1, y1, 0xFFC6C6C6);
-        drawRect(x0, y0, x1 - 2, y0 + 2, 0xFFFFFFFF);          // top
-        drawRect(x0, y0, x0 + 2, y1 - 2, 0xFFFFFFFF);          // left
-        drawRect(x1 - 2, y0 + 2, x1, y1, 0xFF373737);          // right
-        drawRect(x0 + 2, y1 - 2, x1, y1, 0xFF373737);          // bottom
+        int x0 = x + PANEL_X - 1, y0 = y + PANEL_Y, x1 = x + PANEL_X + PANEL_W, y1 = y0 + PANEL_H;
+        drawRect(x0, y0, x1, y1, GuiGaugeSC.OUTLINE);
+        drawRect(x0 + 1, y0 + 1, x1 - 1, y1 - 1, GuiGaugeSC.PANEL);
+        drawRect(x0 + 1, y0 + 1, x1 - 2, y0 + 2, GuiGaugeSC.BEVEL_LIGHT);   // top
+        drawRect(x0 + 1, y0 + 1, x0 + 2, y1 - 2, GuiGaugeSC.BEVEL_LIGHT);   // left
+        drawRect(x1 - 2, y0 + 2, x1 - 1, y1 - 1, GuiGaugeSC.BEVEL_DARK);    // right
+        drawRect(x0 + 2, y1 - 2, x1 - 1, y1 - 1, GuiGaugeSC.BEVEL_DARK);    // bottom
         org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
         GuiGaugeSC.bind(mc, TEXTURE);
         for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
-            drawTexturedModalRect(x + UPGRADE_X - 1, y + UPGRADE_Y - 1 + i * 18, GuiGaugeSC.SPR_SLOT_U, GuiGaugeSC.SPR_SLOT_V, 18, 18);
+            drawTexturedModalRect(x + UPGRADE_X - 1, y + UPGRADE_Y - 1 + i * 18, GuiGaugeSC.SPR_STEEL_SLOT_U, GuiGaugeSC.SPR_STEEL_SLOT_V, 18, 18);
         }
     }
 

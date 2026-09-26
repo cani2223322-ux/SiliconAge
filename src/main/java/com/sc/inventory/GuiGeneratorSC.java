@@ -95,8 +95,8 @@ public class GuiGeneratorSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        fontRendererObj.drawString(generator.getGeneratorType().localizedName(), 8, 6, 0x404040);
-        GuiGaugeSC.drawTierBadge(fontRendererObj, generator.getGeneratorType().tier, xSize - 8, 4);
+        fontRendererObj.drawString(generator.getGeneratorType().localizedName(), 8, 5, GuiGaugeSC.TITLE_COLOR);
+        GuiGaugeSC.drawTierBadge(fontRendererObj, generator.getGeneratorType().tier, xSize - 6, 3);
         GeneratorStatus status = generator.getStatus();
         fontRendererObj.drawString(status.localized(), STATUS_X, STATUS_Y, statusColor(status));
     }
