@@ -29,10 +29,11 @@ import net.minecraft.world.World;
  * consecutive MachineType ordinals per instance; ModBlocks registers two instances
  * (machineSC = ordinals 0-15, machineSC2 = ordinals 16-28) to cover all of them.
  *
- * Side 3 (south, raw Minecraft side index) always shows the machine's front texture; every
- * other side shows its tier's casing texture (§13.3's "front=output" side-config, matched
- * visually - see TileEntityMachineSC's javadoc for the placement-facing simplification this
- * implies).
+ * The front texture shows on the machine's facing (TileEntityMachineSC.getFacing): it turns to the
+ * player on placement, a wrench turns it (click: a quarter turn; sneak + click: to the clicked
+ * side), and so do other mods' wrenches through rotateBlock. Every other side shows the tier's
+ * casing. Only a look - all sides take ingredients and give products alike. In the inventory
+ * (no tile) the front is side 3, as before.
  */
 public class BlockMachineSC extends Block {
 
@@ -102,6 +103,20 @@ public class BlockMachineSC extends Block {
     }
 
     @Override
+    public IIcon getIcon(net.minecraft.world.IBlockAccess world, int x, int y, int z, int side) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        int meta = world.getBlockMetadata(x, y, z);
+        if (te instanceof TileEntityMachineSC) {
+            int front = ((TileEntityMachineSC) te).getFacing().ordinal();
+            if (side == front) {
+                return getIcon(3, meta);
+            }
+            return getIcon(side == 3 ? 2 : side, meta);     // the casing everywhere else, south included
+        }
+        return getIcon(side, meta);
+    }
+
+    @Override
     public int damageDropped(int meta) {
         return meta;
     }
@@ -123,6 +138,15 @@ public class BlockMachineSC extends Block {
     @Override
     public void onBlockPlacedBy(World world, int x, int y, int z, net.minecraft.entity.EntityLivingBase placer, ItemStack stack) {
         TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityMachineSC) {
+            // the front turns to the placer, like a generator's or a furnace's
+            int quarter = net.minecraft.util.MathHelper.floor_double(placer.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;
+            net.minecraftforge.common.util.ForgeDirection[] toPlacer = {net.minecraftforge.common.util.ForgeDirection.NORTH,
+                    net.minecraftforge.common.util.ForgeDirection.EAST, net.minecraftforge.common.util.ForgeDirection.SOUTH,
+                    net.minecraftforge.common.util.ForgeDirection.WEST};
+            ((TileEntityMachineSC) te).setFacing(toPlacer[quarter]);
+            world.markBlockForUpdate(x, y, z);
+        }
         if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
                 && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_TANKS_KEY)) {
             ((TileEntityMachineSC) te).loadTanksFromItem(stack.getTagCompound().getCompoundTag(TileEntityMachineSC.ITEM_TANKS_KEY));
@@ -166,6 +190,16 @@ public class BlockMachineSC extends Block {
 
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
+        if (com.sc.block.BlockConduitSC.isWrench(player.getCurrentEquippedItem())) {
+            TileEntity te = world.getTileEntity(x, y, z);
+            if (!world.isRemote && te instanceof TileEntityMachineSC) {
+                TileEntityMachineSC machine = (TileEntityMachineSC) te;
+                net.minecraftforge.common.util.ForgeDirection clicked = net.minecraftforge.common.util.ForgeDirection.getOrientation(side);
+                machine.setFacing(player.isSneaking() && clicked.offsetY == 0 ? clicked
+                        : machine.getFacing().getRotation(net.minecraftforge.common.util.ForgeDirection.UP));
+            }
+            return true;
+        }
         if (player.isSneaking() && player.getCurrentEquippedItem() == null) {
             TileEntity te = world.getTileEntity(x, y, z);
             if (!world.isRemote && te instanceof TileEntityMachineSC) {
@@ -178,6 +212,24 @@ public class BlockMachineSC extends Block {
             player.openGui(SCMod.instance, GuiHandlerSC.MACHINE_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    /** Other mods' wrenches (BuildCraft, Thermal, Ender IO...): a quarter turn round the vertical axis. */
+    @Override
+    public boolean rotateBlock(World world, int x, int y, int z, net.minecraftforge.common.util.ForgeDirection axis) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityMachineSC)) {
+            return false;
+        }
+        TileEntityMachineSC machine = (TileEntityMachineSC) te;
+        machine.setFacing(machine.getFacing().getRotation(net.minecraftforge.common.util.ForgeDirection.UP));
+        return true;
+    }
+
+    @Override
+    public net.minecraftforge.common.util.ForgeDirection[] getValidRotations(World world, int x, int y, int z) {
+        return new net.minecraftforge.common.util.ForgeDirection[]{net.minecraftforge.common.util.ForgeDirection.UP,
+                net.minecraftforge.common.util.ForgeDirection.DOWN};
     }
 
     @Override

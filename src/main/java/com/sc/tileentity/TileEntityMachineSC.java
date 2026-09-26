@@ -858,9 +858,52 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
 
     // ---- NBT ----
 
+    // ---- facing: the side the front texture shows on (only a look - every side works the same) ----
+
+    /** South for machines placed before machines turned (their front was always drawn there). */
+    private net.minecraftforge.common.util.ForgeDirection facing = net.minecraftforge.common.util.ForgeDirection.SOUTH;
+
+    public net.minecraftforge.common.util.ForgeDirection getFacing() {
+        return facing;
+    }
+
+    /** Horizontal sides only; anything else keeps the current facing. */
+    public void setFacing(net.minecraftforge.common.util.ForgeDirection side) {
+        if (side != null && side != net.minecraftforge.common.util.ForgeDirection.UNKNOWN && side.offsetY == 0) {
+            facing = side;
+            markDirty();
+            if (worldObj != null && !worldObj.isRemote) {
+                worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            }
+        }
+    }
+
+    /** The client only needs the facing to draw the block - not the slots and tanks. */
+    @Override
+    public net.minecraft.network.Packet getDescriptionPacket() {
+        NBTTagCompound nbt = new NBTTagCompound();
+        nbt.setInteger("Facing", facing.ordinal());
+        return new net.minecraft.network.play.server.S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
+    }
+
+    @Override
+    public void onDataPacket(net.minecraft.network.NetworkManager manager, net.minecraft.network.play.server.S35PacketUpdateTileEntity pkt) {
+        NBTTagCompound nbt = pkt.func_148857_g();
+        if (nbt != null && nbt.hasKey("Facing")) {
+            facing = net.minecraftforge.common.util.ForgeDirection.getOrientation(nbt.getInteger("Facing"));
+            if (worldObj != null) {
+                worldObj.markBlockRangeForRenderUpdate(xCoord, yCoord, zCoord, xCoord, yCoord, zCoord);
+            }
+        }
+    }
+
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
+        net.minecraftforge.common.util.ForgeDirection f = nbt.hasKey("Facing")
+                ? net.minecraftforge.common.util.ForgeDirection.getOrientation(nbt.getInteger("Facing"))
+                : net.minecraftforge.common.util.ForgeDirection.SOUTH;
+        facing = f.offsetY == 0 && f != net.minecraftforge.common.util.ForgeDirection.UNKNOWN ? f : net.minecraftforge.common.util.ForgeDirection.SOUTH;
         MachineType[] types = MachineType.values();
         int typeOrdinal = nbt.getInteger("MachineType");
         machineType = types[typeOrdinal >= 0 && typeOrdinal < types.length ? typeOrdinal : 0];
@@ -890,6 +933,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
         nbt.setInteger("MachineType", machineType.ordinal());
+        nbt.setInteger("Facing", facing.ordinal());
         nbt.setInteger("Progress", progressTicks);
         nbt.setInteger("Heat", heat);
         nbt.setBoolean("CoolingDown", coolingDown);

@@ -420,6 +420,23 @@ public final class SelfTestSC {
                         && baseEu == MachineType.CRUSHER.euPerTick,
                 "upgrades: 2 overclockers x0.49 time / x2.56 energy, transformer +1 tier, storage +10000 EU ("
                         + baseTicks + "->" + c.effectiveTicks(r) + " t, " + baseEu + "->" + c.effectiveEuPerTick() + " EU/t)");
+        TileEntityMachineSC fm = new TileEntityMachineSC();
+        fm.setMachineType(MachineType.CRUSHER);
+        boolean southFirst = fm.getFacing() == net.minecraftforge.common.util.ForgeDirection.SOUTH;
+        fm.setFacing(net.minecraftforge.common.util.ForgeDirection.EAST);
+        fm.setFacing(net.minecraftforge.common.util.ForgeDirection.UP);         // ignored: horizontal only
+        net.minecraft.nbt.NBTTagCompound fn = new net.minecraft.nbt.NBTTagCompound();
+        fm.writeToNBT(fn);
+        TileEntityMachineSC fm2 = new TileEntityMachineSC();
+        fm2.readFromNBT(fn);
+        net.minecraft.nbt.NBTTagCompound old = new net.minecraft.nbt.NBTTagCompound();
+        fm.writeToNBT(old);
+        old.removeTag("Facing");
+        TileEntityMachineSC fm3 = new TileEntityMachineSC();
+        fm3.readFromNBT(old);
+        check(southFirst && fm2.getFacing() == net.minecraftforge.common.util.ForgeDirection.EAST
+                        && fm3.getFacing() == net.minecraftforge.common.util.ForgeDirection.SOUTH,
+                "machine facing: horizontal only, saved, old machines stay facing south");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));

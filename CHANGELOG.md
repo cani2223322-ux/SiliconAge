@@ -12,12 +12,18 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - Новый **Универсальный модуль трансформатора**: с одним таким модулем машина или генератор поля принимает любое напряжение от LV до XV без взрыва. Крафт очень дорогой: в станции модернизации (EV), 5 минут — 2 трансформатора QV-XV, 16 модулей трансформатора и 16 экзо-кабелей.
 - Новый вид меню машин, генераторов и энергонакопителей: стальная панель с тёмной полосой заголовка (название белым, плашка уровня в ней), чёткая рамка со срезанными углами, более глубокие слоты и шкалы, желобок над инвентарём, заклёпки; панель улучшений в том же стиле. Плашки уровней IV / QV / XV получили свои цвета.
 
+**Исправлено**
+- Машины всегда ставились лицевой панелью на юг, как бы ни стоял игрок. Теперь они поворачиваются лицом к игроку, как генераторы; ключом (любым: BuildCraft, Thermal, Ender IO и т.п.) — ПКМ поворачивает на четверть оборота, Shift + ПКМ разворачивает лицом к нажатой стороне. Уже поставленные машины остаются лицом на юг.
+
 ### English
 - Field generator: a new Upgrades tab on the master's screen - 4 slots for energy storage upgrades, each +10,000 EU of field buffer (up to 16 count, as in machines). It also shows a buffer bar and your inventory; shift-click puts upgrades in. Only the owner and the access list can take them out. When clusters merge a node's upgrades go to the master; breaking a generator drops them. Handbook and the upgrade's tooltip updated.
 - The field generator also takes the transformer upgrade: with it the master (and through it every node of the cluster) takes EV without exploding. The Upgrades tab shows the voltage it takes right now.
 - Three new energy tiers above EV: **IV** (8,192 EU/t), **QV - Quantum** (16,384 EU/t) and **XV - Exo** (32,768 EU/t). Each has an energy storage (IV 300M EU, QV 1B EU, XV 2B EU), a charge pad, its own cable (niobium-titanium, quantum, exo) and a transformer (EV-IV, IV-QV, QV-XV). Storages and pads are built from the storage one tier below and keep its charge. The transformer upgrade now goes all the way to XV. With IC2: IV is its tier 5, QV and XV its tier 6.
 - New **Universal Transformer Upgrade**: with just one a machine or field generator takes any voltage from LV to XV without exploding. Very expensive: EV Upgrade Station, 5 minutes - 2 QV-XV transformers, 16 transformer upgrades and 16 Exo cables.
 - New look for machine, generator and energy storage screens: a steel panel with a dark title bar (white name, tier plate in it), a crisp outline with cut corners, deeper slots and gauges, a groove above the inventory, rivets; the upgrade panel matches. The IV / QV / XV tier plates have their own colours.
+
+**Fixed**
+- Machines were always placed with their front to the south, whichever way the player stood. They now face the player like generators; any wrench (BuildCraft, Thermal, Ender IO...) turns them - right-click a quarter turn, sneak + right-click to the clicked side. Machines already placed keep facing south.
 
 ## 0.1.1-alpha — 2026-09-25
 
