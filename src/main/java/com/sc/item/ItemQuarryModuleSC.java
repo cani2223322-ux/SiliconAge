@@ -60,7 +60,9 @@ public class ItemQuarryModuleSC extends Item {
         /** Exo rig: other mods' ores (ore dictionary "ore...") come up too - useless without such mods. */
         DEEP_SCAN("quarryDeepScan", 1, 0, EXO),
         /** +32 000 mB to every compartment of the pump's tank (up to 4). */
-        TANK("quarryTank", 4, 0, QUARRY);
+        TANK("quarryTank", 4, 0, QUARRY),
+        /** The pump follows a fluid it finds through the whole lake or pool, past the area (range by tier). */
+        FLUID_VEIN("quarryFluidVein", 1, 0, QUARRY);
 
         public final String textureName;
         public final int max;

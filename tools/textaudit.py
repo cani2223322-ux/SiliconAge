@@ -158,6 +158,11 @@ def audit(lang):
     check(lang, "quarry tank button", t("sc.quarrygui.tank.auto", off), 44 - 6)
     check(lang, "quarry tank button", t("sc.quarrygui.ff.hand"), 38 - 6)
     check(lang, "quarry tank button", t("sc.quarrygui.ff.clear"), 70 - 6)
+    check(lang, "quarry fluid vein", t("sc.quarrygui.fvein", off), 62 - 6)
+    check(lang, "quarry fluid vein", t("sc.quarrygui.fvein.range", 64), 62 - 6)
+    for k in ("take", "keep"):
+        check(lang, "quarry fluid vein", t("sc.quarrygui.fvein." + k), 62 - 6)
+    check(lang, "quarry fluid vein", t("sc.quarrygui.fvein.count", 256), 42)
     check(lang, "quarry tank label", t("sc.quarrygui.tank.label.locked", 4, "EV"), 45)
     check(lang, "quarry tank label", t("sc.quarrygui.tank.label.empty", 4), 45)
     check(lang, "quarry tank title", t("sc.quarrygui.tanks.title", 4, 4, 144000), 248 - 30 - 8)

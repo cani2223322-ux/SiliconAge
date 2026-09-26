@@ -151,10 +151,16 @@ public class ContainerQuarrySC extends Container {
     // ---- live numbers ----
 
     /** 0..12 as before (8 / 9: the first compartment), 13..18: the other compartments' fluid and amount. */
-    private static final int COUNT = 19;
+    private static final int COUNT = 21;             // 19, 20: the fluid vein's counters
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
     private int value(int id) {
+        if (id == 19) {
+            return quarry.getFluidVeinLast();
+        }
+        if (id == 20) {
+            return quarry.getFluidVeinTotal();
+        }
         if (id >= 13) {
             net.minecraftforge.fluids.FluidTank t = quarry.getTank(1 + (id - 13) / 2);
             FluidStack f = t.getFluid();
@@ -201,6 +207,8 @@ public class ContainerQuarrySC extends Container {
             quarry.setEnergyStoredClient(sync.value(0));
         } else if (id == 8 || id == 9) {
             com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getTank(0), sync.value(8), sync.value(9));
+        } else if (id == 19 || id == 20) {
+            quarry.setFluidVeinClient(sync.value(19), sync.value(20));
         } else if (id >= 13) {
             int t = (id - 13) / 2;
             com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getTank(1 + t), sync.value(13 + t * 2), sync.value(14 + t * 2));

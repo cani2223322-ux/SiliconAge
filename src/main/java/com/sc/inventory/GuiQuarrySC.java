@@ -63,7 +63,8 @@ public class GuiQuarrySC extends GuiContainer {
             B_SHOW = 20, B_DASH = 21, B_PLANE = 22, B_ORES = 23, B_BRIGHT = 24, B_TARGET = 25, B_SWATCH = 30, B_SLIDER = 40,
             B_SCAN = 50, B_FILTER = 60, B_OUTSIDE = 61, B_PAGE = 62, B_OUTPAGE = 63, B_FF_MODE = 64,
             B_FF_REMOVE = 65, B_TANK_FULL = 66, B_FF_HAND = 67, B_FF_CLEAR = 68, B_TANK_SIDE = 70, B_TANK_CLEAR = 74,
-            B_TANK_FILTER = 78, B_FF_DEL = 82, B_TANK_PIN = 88, B_TANK_AUTO = 92, B_WASH_CLEAR = 96, B_FLAG = 100, B_FORTUNE_DOWN = 140, B_FORTUNE_UP = 141, B_STEP = 200;
+            B_TANK_FILTER = 78, B_FF_DEL = 82, B_TANK_PIN = 88, B_TANK_AUTO = 92, B_WASH_CLEAR = 96, B_FVEIN = 97, B_FVEIN_RANGE = 98, B_FVEIN_FLOWING = 99,
+            B_FLAG = 100, B_FORTUNE_DOWN = 140, B_FORTUNE_UP = 141, B_STEP = 200;
 
     /** The Functions tab's two pages: what the modules add; then the rest (silence, auto-stop, filter, chests, chat). */
     private static final int[][] FN_PAGES = {{0, 1, 2, 3, 4, 19, 5, 6, 7, 8, 9, 18, 20, 21, 22, 23, 24, 25, 26, 27},
@@ -150,21 +151,24 @@ public class GuiQuarrySC extends GuiContainer {
             case TAB_TANKS: {
                 for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
                     int bx = guiLeft + GAUGE_X[i] - 2;
-                    buttonList.add(new TextFitSC.Button(B_TANK_SIDE + i, bx, y + 122, 44, 12, ""));
-                    buttonList.add(new TextFitSC.Button(B_TANK_CLEAR + i, bx, y + 136, 44, 12, ""));
-                    buttonList.add(new TextFitSC.Button(B_TANK_FILTER + i, bx, y + 150, 44, 12, ""));
-                    buttonList.add(new TextFitSC.Button(B_TANK_PIN + i, bx, y + 164, 44, 12, ""));
-                    buttonList.add(new TextFitSC.Button(B_TANK_AUTO + i, bx, y + 178, 44, 12, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_SIDE + i, bx, y + 122, 44, 11, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_CLEAR + i, bx, y + 134, 44, 11, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_FILTER + i, bx, y + 146, 44, 11, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_PIN + i, bx, y + 158, 44, 11, ""));
+                    buttonList.add(new TextFitSC.Button(B_TANK_AUTO + i, bx, y + 170, 44, 11, ""));
                 }
-                buttonList.add(new TextFitSC.Button(B_WASH_CLEAR, guiLeft + WASH_X - 2, y + 122, 40, 12, ""));
-                buttonList.add(new TextFitSC.Button(B_FF_MODE, guiLeft + 8, y + 196, 114, 12, ""));
-                buttonList.add(new TextFitSC.Button(B_FF_REMOVE, guiLeft + 126, y + 196, 72, 12, ""));
-                buttonList.add(new TextFitSC.Button(B_FF_HAND, guiLeft + 202, y + 196, 38, 12, ""));
+                buttonList.add(new TextFitSC.Button(B_WASH_CLEAR, guiLeft + WASH_X - 2, y + 122, 40, 11, ""));
+                buttonList.add(new TextFitSC.Button(B_FVEIN, guiLeft + 8, y + 185, 62, 11, ""));
+                buttonList.add(new TextFitSC.Button(B_FVEIN_RANGE, guiLeft + 72, y + 185, 62, 11, ""));
+                buttonList.add(new TextFitSC.Button(B_FVEIN_FLOWING, guiLeft + 136, y + 185, 62, 11, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_MODE, guiLeft + 8, y + 199, 114, 11, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_REMOVE, guiLeft + 126, y + 199, 72, 11, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_HAND, guiLeft + 202, y + 199, 38, 11, ""));
                 for (int i = 0; i < TileEntityQuarrySC.FLUID_FILTER_MAX; i++) {
-                    buttonList.add(new TextFitSC.Button(B_FF_DEL + i, guiLeft + 8 + i * 39, y + 210, 37, 11, ""));
+                    buttonList.add(new TextFitSC.Button(B_FF_DEL + i, guiLeft + 8 + i * 39, y + 212, 37, 11, ""));
                 }
-                buttonList.add(new TextFitSC.Button(B_TANK_FULL, guiLeft + 8, y + 224, 158, 12, ""));
-                buttonList.add(new TextFitSC.Button(B_FF_CLEAR, guiLeft + 170, y + 224, 70, 12, ""));
+                buttonList.add(new TextFitSC.Button(B_TANK_FULL, guiLeft + 8, y + 225, 158, 12, ""));
+                buttonList.add(new TextFitSC.Button(B_FF_CLEAR, guiLeft + 170, y + 225, 70, 12, ""));
                 break;
             }
             case 4: {
@@ -292,6 +296,16 @@ public class GuiQuarrySC extends GuiContainer {
                 b.displayString = Lang.tr("sc.quarrygui.tank.clear");
                 b.enabled = may && i < quarry.unlockedTanks() && quarry.getTank(i).getFluidAmount() > 0
                         && quarry.getEnergyStored() >= quarry.clearCost(i);
+            } else if (id == B_FVEIN) {
+                boolean has = quarry.moduleCount(ItemQuarryModuleSC.Kind.FLUID_VEIN) > 0;
+                b.displayString = Lang.tr("sc.quarrygui.fvein", onOff(has && quarry.isFluidVeinOn()));
+                b.enabled = may && has;
+            } else if (id == B_FVEIN_RANGE) {
+                b.displayString = Lang.tr("sc.quarrygui.fvein.range", quarry.fluidVeinReach());
+                b.enabled = may && quarry.fluidVeinActive();
+            } else if (id == B_FVEIN_FLOWING) {
+                b.displayString = Lang.tr(quarry.isFluidVeinKeepFlowing() ? "sc.quarrygui.fvein.keep" : "sc.quarrygui.fvein.take");
+                b.enabled = may && quarry.fluidVeinActive();
             } else if (id == B_WASH_CLEAR) {
                 b.displayString = Lang.tr("sc.quarrygui.tank.clear");
                 b.enabled = may && quarry.getWater().getFluidAmount() > 0
@@ -452,6 +466,9 @@ public class GuiQuarrySC extends GuiContainer {
             case B_FILTER: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FILTER_MODE, 0); break;
             case B_OUTSIDE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_OUT_SIDE, 0); break;
             case B_WASH_CLEAR: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_TANK_CLEAR, TileEntityQuarrySC.TANKS); break;
+            case B_FVEIN: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FVEIN, 0); break;
+            case B_FVEIN_RANGE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FVEIN_RANGE, 0); break;
+            case B_FVEIN_FLOWING: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FVEIN_FLOWING, 0); break;
             case B_FF_MODE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FF_MODE, 0); break;
             case B_FF_REMOVE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_FF_REMOVE, 0); break;
             case B_TANK_FULL: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_TANK_FULL, 0); break;
@@ -579,7 +596,8 @@ public class GuiQuarrySC extends GuiContainer {
                         i >= quarry.unlockedTanks());
             }
             GuiTankGaugeSC.draw(mc, x + WASH_X, y + GAUGE_Y, quarry.getWater().getFluid(), quarry.waterCapacity(), null, false);
-            drawRect(x + 6, y + 192, x + W - 6, y + 193, 0xFF969696);
+            drawRect(x + 6, y + 182, x + W - 6, y + 183, 0xFF969696);
+            drawRect(x + 6, y + 197, x + W - 6, y + 198, 0xFF969696);
         } else if (tab == 3) {
             pockets(x + ContainerQuarrySC.FILTER_X, y + ContainerQuarrySC.FILTER_Y, 9, 1);
             pockets(x + ContainerQuarrySC.BUFFER_X, y + ContainerQuarrySC.BUFFER_Y, 9, 3);
@@ -623,6 +641,9 @@ public class GuiQuarrySC extends GuiContainer {
             fit(text, GAUGE_X[i] - 2, 111, 45, i >= quarry.unlockedTanks() ? dim : c);
         }
         fit(Lang.tr("sc.quarrygui.wash"), WASH_X - 2, 111, 42, 0x2A62A8);
+        if (quarry.moduleCount(ItemQuarryModuleSC.Kind.FLUID_VEIN) > 0) {
+            fit(Lang.tr("sc.quarrygui.fvein.count", quarry.getFluidVeinLast()), 200, 187, 42, dim);
+        }
         fit(String.valueOf(quarry.getWater().getFluidAmount()) + " /", WASH_X - 2, 137, 42, dim);
         fit(Lang.tr("sc.quarrygui.wash.cap", quarry.waterCapacity()), WASH_X - 2, 145, 42, dim);
     }
@@ -962,6 +983,20 @@ public class GuiQuarrySC extends GuiContainer {
             }
         }
         if (tab == TAB_TANKS) {
+            for (Object o : buttonList) {
+                GuiButton b = (GuiButton) o;
+                if (b.id >= B_FVEIN && b.id <= B_FVEIN_FLOWING
+                        && GuiGaugeSC.isOver(b.xPosition - guiLeft, b.yPosition - guiTop - TOP, b.width, b.height, mx, my)) {
+                    lines.add(Lang.tr("sc.quarrygui.fvein.help", TileEntityQuarrySC.FLUID_VEIN_COST,
+                            TileEntityQuarrySC.FLUID_VEIN_RANGE[Math.min(3, quarry.getTier().ordinal())]));
+                    if (quarry.moduleCount(ItemQuarryModuleSC.Kind.FLUID_VEIN) == 0) {
+                        lines.add("§c" + Lang.tr("sc.quarrygui.fvein.nomodule"));
+                    } else {
+                        lines.add("§7" + Lang.tr("sc.quarrygui.fvein.stats", quarry.getFluidVeinLast(), quarry.getFluidVeinTotal()));
+                    }
+                    return lines;
+                }
+            }
             for (int i = 0; i <= TileEntityQuarrySC.TANKS; i++) {
                 int gx = i < TileEntityQuarrySC.TANKS ? GAUGE_X[i] : WASH_X;
                 if (GuiGaugeSC.isOver(gx, GAUGE_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mx, my)) {

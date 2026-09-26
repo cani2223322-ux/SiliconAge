@@ -803,8 +803,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
             return PUMP_OK;
         }
+        if (fluidVeinActive()) {
+            return pumpBody(x, y, z, fluid, true);  // the fluid vein: the whole lake, past the area too
+        }
         if (fluid == FluidRegistry.WATER) {
-            return pumpWaterBody(x, y, z);        // water heals itself: take the whole body at once
+            return pumpBody(x, y, z, fluid, false); // water heals itself: take the whole body at once
         }
         net.minecraftforge.fluids.IFluidBlock fb = block instanceof net.minecraftforge.fluids.IFluidBlock
                 ? (net.minecraftforge.fluids.IFluidBlock) block : null;
@@ -849,56 +852,98 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return PUMP_OK;
     }
 
-    /** Water taken a pump step at most, and EU per block past the first. */
-    public static final int WATER_BODY_MAX = 256, WATER_BODY_COST = 2;
+    /** Water taken a pump step at most, and EU per block past the first; the fluid vein: EU a block outside the area. */
+    public static final int WATER_BODY_MAX = 256, WATER_BODY_COST = 2, FLUID_VEIN_COST = 5;
+    /** The fluid vein's reach past the area, by tier (LV .. EV). */
+    public static final int[] FLUID_VEIN_RANGE = {8, 16, 32, 64};
+    private boolean fluidVeinOn = true, fluidVeinKeepFlowing;
+    private int fluidVeinRange = 64;
+    /** Blocks the last vein step took, and all of them so far (the Tanks tab shows them). */
+    private int fluidVeinLast, fluidVeinTotal;
+
+    public boolean fluidVeinActive() {
+        return fluidVeinOn && moduleCount(ItemQuarryModuleSC.Kind.FLUID_VEIN) > 0;
+    }
+
+    /** How far past the area the vein may go: the setting, at most the tier's. */
+    public int fluidVeinReach() {
+        return Math.min(fluidVeinRange, FLUID_VEIN_RANGE[tierIndex()]);
+    }
+
+    public boolean isFluidVeinOn() { return fluidVeinOn; }
+    public boolean isFluidVeinKeepFlowing() { return fluidVeinKeepFlowing; }
+    public int getFluidVeinLast() { return fluidVeinLast; }
+    public int getFluidVeinTotal() { return fluidVeinTotal; }
+
+    /** Client: the vein's counters from the screen's sync. */
+    public void setFluidVeinClient(int last, int total) {
+        fluidVeinLast = last;
+        fluidVeinTotal = total;
+    }
 
     /**
-     * Vanilla water refills a gap between two sources, so taking it a block at a time never ends.
-     * The whole connected body inside the area (sources and flowing blocks) goes at once, without
-     * block updates - nothing is told to flow back in. Every source is 1000 mB into the tank;
-     * when the tank is full, the Tank full setting decides (leave it / pause / destroy / ice).
+     * A connected body of one fluid, taken a step at a time (WATER_BODY_MAX blocks): vanilla water
+     * refills a gap between two sources, so taking it a block at a time never ends - the body goes
+     * without block updates, and nothing is told to flow back. Without the vein only the area's
+     * part (water only); with it, the whole lake up to fluidVeinReach() past the area, 5 EU a block
+     * out there. Every source goes into the tank (1000 mB, or what another mod's block holds); a
+     * full tank: the Tank full setting (leave it / pause / destroy / make ice or obsidian).
      */
-    private int pumpWaterBody(int x0, int y0, int z0) {
+    private int pumpBody(int x0, int y0, int z0, Fluid fluid, boolean vein) {
         int[] a = area();
+        int r = vein ? fluidVeinReach() : 0;
         java.util.ArrayDeque<int[]> open = new java.util.ArrayDeque<int[]>();
         java.util.Set<Long> seen = new java.util.HashSet<Long>();
         open.add(new int[]{x0, y0, z0});
         seen.add(((long) x0 << 36) ^ ((long) y0 << 24) ^ z0);
-        int taken = 0;
-        while (!open.isEmpty() && taken < WATER_BODY_MAX) {
+        int taken = 0, visits = 0;
+        while (!open.isEmpty() && taken < WATER_BODY_MAX && visits < WATER_BODY_MAX * 8) {
             int[] c = open.poll();
+            visits++;
             int x = c[0], y = c[1], z = c[2];
             Block b = worldObj.getBlock(x, y, z);
-            if (b != Blocks.water && b != Blocks.flowing_water || forbidden(x, y, z)) {
+            if (fluidOf(b) != fluid || forbidden(x, y, z)) {
                 continue;
             }
-            if (taken > 0 && getEnergyStored() < WATER_BODY_COST) {
+            boolean inside = a != null && x >= a[0] && x <= a[2] && z >= a[1] && z <= a[3] && y <= a[4] && y >= a[5];
+            int cost = taken == 0 ? 0 : inside ? WATER_BODY_COST : FLUID_VEIN_COST;
+            if (getEnergyStored() < cost) {
                 break;
             }
-            if (worldObj.getBlockMetadata(x, y, z) == 0) {              // a source
-                FluidStack fs = new FluidStack(FluidRegistry.WATER, 1000);
-                int t = compartmentFor(fs);
+            net.minecraftforge.fluids.IFluidBlock fb = b instanceof net.minecraftforge.fluids.IFluidBlock
+                    ? (net.minecraftforge.fluids.IFluidBlock) b : null;
+            FluidStack there = fb != null ? (fb.canDrain(worldObj, x, y, z) ? fb.drain(worldObj, x, y, z, false) : null)
+                    : worldObj.getBlockMetadata(x, y, z) == 0 ? new FluidStack(fluid, 1000) : null;
+            boolean source = there != null && there.amount > 0;
+            if (source) {
+                int t = compartmentFor(there);
                 if (t >= 0) {
-                    tanks[t].fill(fs, true);
+                    FluidStack got = fb != null ? fb.drain(worldObj, x, y, z, true) : there;
+                    if (got != null) {
+                        tanks[t].fill(got, true);
+                    }
                 } else if (tankFull == FULL_PAUSE) {
                     return taken > 0 ? PUMP_OK : PUMP_WAIT;
                 } else if (tankFull == FULL_VOID && active(ItemQuarryModuleSC.Kind.TRASH, F_TRASH)
-                        && getEnergyStored() >= TRASH_COST) {
+                        && getEnergyStored() >= cost + TRASH_COST) {
                     removeEnergy(TRASH_COST);
-                } else if (tankFull == FULL_BLOCK) {
-                    store(new ItemStack(Blocks.ice));
+                } else if (tankFull == FULL_BLOCK && (fluid == FluidRegistry.WATER || fluid == FluidRegistry.LAVA)) {
+                    store(new ItemStack(fluid == FluidRegistry.WATER ? Blocks.ice : Blocks.obsidian));
                 } else {
                     break;                                              // left in the world
                 }
             }
-            if (taken > 0) {
-                removeEnergy(WATER_BODY_COST);
+            if (source || !(vein && !inside && fluidVeinKeepFlowing)) {
+                removeEnergy(cost);
+                if (worldObj.getBlock(x, y, z) == b) {
+                    worldObj.setBlock(x, y, z, Blocks.air, 0, 2);       // no neighbour updates: no refilling
+                }
+                taken++;
             }
-            worldObj.setBlock(x, y, z, Blocks.air, 0, 2);               // no neighbour updates: no refilling
-            taken++;
             for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
                 int nx = x + d.offsetX, ny = y + d.offsetY, nz = z + d.offsetZ;
-                if (a != null && (nx < a[0] || nx > a[2] || nz < a[1] || nz > a[3] || ny > a[4] || ny < a[5])) {
+                if (a != null && (nx < a[0] - r || nx > a[2] + r || nz < a[1] - r || nz > a[3] + r
+                        || ny > a[4] + r || ny < Math.max(1, a[5] - r))) {
                     continue;
                 }
                 if (!worldObj.blockExists(nx, ny, nz) || !seen.add(((long) nx << 36) ^ ((long) ny << 24) ^ nz)) {
@@ -908,6 +953,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         if (taken > 0) {
+            if (vein) {
+                fluidVeinLast = taken;
+                fluidVeinTotal += taken;
+            }
             markDirty();
         }
         return taken > 0 ? PUMP_OK : PUMP_SKIP;
@@ -1529,7 +1578,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             A_FILTER_MODE = 14, A_OUT_SIDE = 15, A_SHOW = 16, A_VFLAG = 17, A_BRIGHT = 18, A_COLOR_FRAME = 19,
             A_COLOR_PLANE = 20, A_SCAN = 21, A_TANK_SIDE = 22, A_TANK_CLEAR = 23, A_TANK_TO_FILTER = 24,
             A_FF_MODE = 25, A_FF_REMOVE = 26, A_TANK_FULL = 27, A_FF_HAND = 28, A_FF_CLEAR = 29, A_FF_DELETE = 30,
-            A_TANK_PIN = 31, A_TANK_AUTO = 32;
+            A_TANK_PIN = 31, A_TANK_AUTO = 32, A_FVEIN = 33, A_FVEIN_RANGE = 34, A_FVEIN_FLOWING = 35;
 
     public void action(EntityPlayer p, int action, int value) {
         boolean area = false;
@@ -1602,6 +1651,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                     }
                 }
                 break;
+            case A_FVEIN: fluidVeinOn = !fluidVeinOn; break;
+            case A_FVEIN_RANGE: {                   // 8 -> 16 -> 32 -> 64 (as far as the tier goes) -> 8
+                int max = FLUID_VEIN_RANGE[tierIndex()];
+                int now = fluidVeinReach();
+                fluidVeinRange = now >= max ? 8 : now * 2;
+                break;
+            }
+            case A_FVEIN_FLOWING: fluidVeinKeepFlowing = !fluidVeinKeepFlowing; break;
             case A_TANK_AUTO:
                 if (value >= 0 && value < TANKS) {
                     tankAuto[value] = !tankAuto[value];
@@ -1984,6 +2041,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         nbt.setTag("TankPinned", pins);
         nbt.setByteArray("TankAuto", auto);
+        nbt.setBoolean("FluidVeinOff", !fluidVeinOn);
+        nbt.setBoolean("FluidVeinKeepFlowing", fluidVeinKeepFlowing);
+        nbt.setInteger("FluidVeinRange", fluidVeinRange);
+        nbt.setInteger("FluidVeinTotal", fluidVeinTotal);
     }
 
     /** The pump's compartments; a save from before them had one tank, "Pumped" - it becomes the first. */
@@ -2049,6 +2110,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             tankPinned[i] = pin.isEmpty() ? null : pin;
             tankAuto[i] = i < auto.length && auto[i] != 0;
         }
+        fluidVeinOn = !nbt.getBoolean("FluidVeinOff");
+        fluidVeinKeepFlowing = nbt.getBoolean("FluidVeinKeepFlowing");
+        fluidVeinRange = nbt.hasKey("FluidVeinRange") ? Math.max(8, Math.min(64, nbt.getInteger("FluidVeinRange"))) : 64;
+        fluidVeinTotal = nbt.getInteger("FluidVeinTotal");
         fluidFilter.clear();
         NBTTagList ff = nbt.getTagList("FluidFilter", 8);
         for (int i = 0; i < ff.tagCount() && fluidFilter.size() < FLUID_FILTER_MAX; i++) {

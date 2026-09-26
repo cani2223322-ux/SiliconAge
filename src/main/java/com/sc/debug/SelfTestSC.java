@@ -674,6 +674,18 @@ public final class SelfTestSC {
             tPins = false;
         }
         check(tPins, "quarry tanks: a pinned tank takes only its fluid, others go to a free tank, clearing 1 EU / 10 mB, pins + auto saved");
+        // the fluid vein module: quarry only, off without it, its reach by tier (and the setting) - saved
+        com.sc.tileentity.TileEntityQuarrySC fv = new com.sc.tileentity.TileEntityQuarrySC();
+        fv.setQuarryTier(com.sc.energy.Tier.MV);
+        boolean fvOff = !fv.fluidVeinActive();
+        fv.setInventorySlotContents(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE,
+                ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.FLUID_VEIN));
+        com.sc.tileentity.TileEntityQuarrySC fvRig = new com.sc.tileentity.TileEntityQuarrySC();
+        fvRig.setQuarryTier(com.sc.energy.Tier.XV);
+        check(fvOff && fv.fluidVeinActive() && fv.fluidVeinReach() == 16
+                        && !fvRig.isItemValidForSlot(com.sc.tileentity.TileEntityQuarrySC.FIRST_UPGRADE,
+                        ModItems.quarryModule.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.FLUID_VEIN)),
+                "fluid vein module: on with the module, MV reach 16, not for the drilling rig");
         // the quarry's pump knows water and lava by their flowing blocks too, and other fluids by their own blocks
         net.minecraft.block.Block modFluidBlock = null;
         for (Object o : FluidRegistry.getRegisteredFluids().values()) {
