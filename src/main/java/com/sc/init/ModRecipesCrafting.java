@@ -282,6 +282,17 @@ public final class ModRecipesCrafting {
     private static void upgrades() {
         ItemStack transistor = silicon(SiliconMaterial.TRANSISTOR);
         ItemStack wire = cable(CableType.COPPER_INSULATED);
+        // Wrenches: steel; + LV cell, coil and controller; + HV cell, tungsten cable and controllers.
+        ItemStack wrench = new ItemStack(ModItems.WRENCHES.get(0));
+        ItemStack wrenchElectric = new ItemStack(ModItems.WRENCHES.get(1));
+        ItemStack wrenchQuantum = new ItemStack(ModItems.WRENCHES.get(2));
+        OreRecipes.shaped(wrench, "S S", " S ", " S ", 'S', ingot(Material.STEEL));
+        OreRecipes.shaped(wrenchElectric, " K ", "CWC", " E ",
+                'K', comp("copperCoil"), 'C', cable(CableType.COPPER_INSULATED), 'W', wrench, 'E', comp("energyCellLV"));
+        OreRecipes.shaped(wrenchQuantum, "PKP", "CWC", "PEP",
+                'P', comp("wTiPlate"), 'K', silicon(SiliconMaterial.CONTROLLER), 'C', cable(CableType.TUNGSTEN),
+                'W', wrenchElectric, 'E', comp("energyCellHV"));
+
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER), "CCC", "WTW",
                 'C', comp("capacitor"), 'W', wire, 'T', transistor);
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER), "GGG", "WXW", "GTG",

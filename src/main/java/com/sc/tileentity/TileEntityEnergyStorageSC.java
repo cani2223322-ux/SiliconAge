@@ -146,6 +146,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         if (s.getItem() instanceof ItemWeaponSC) {
             return ItemWeaponSC.charge(s, ((ItemWeaponSC) s.getItem()).getType(), max);
         }
+        if (com.sc.item.ItemWrenchSC.isElectric(s)) {
+            return com.sc.item.ItemWrenchSC.charge(s, max);
+        }
         if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
             return Ic2Charge.charge(s, max, getTier().toIc2Tier());
         }
@@ -166,6 +169,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         }
         if (s.getItem() instanceof ItemWeaponSC) {
             return ((ItemWeaponSC) s.getItem()).getType().tier.ordinal() <= block.ordinal();
+        }
+        if (com.sc.item.ItemWrenchSC.isElectric(s)) {
+            return com.sc.item.ItemWrenchSC.tierOf(s).chargeTier.ordinal() <= block.ordinal();
         }
         return true;
     }
@@ -255,7 +261,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
     /** Weapons and armor pieces go in the charge slot (isItemValidForSlot adds the tier rule). */
     public static boolean isChargeable(ItemStack stack) {
         return stack != null && (stack.getItem() instanceof ItemWeaponSC || stack.getItem() instanceof com.sc.item.ItemArmorSC
-                || stack.getItem() instanceof com.sc.item.ItemBladeSC || stack.getItem() instanceof com.sc.item.ItemDrillSC);
+                || stack.getItem() instanceof com.sc.item.ItemBladeSC || stack.getItem() instanceof com.sc.item.ItemDrillSC
+                || com.sc.item.ItemWrenchSC.isElectric(stack));
     }
 
     // ---- NBT ----

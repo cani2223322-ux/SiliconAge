@@ -1,0 +1,451 @@
+package com.sc.item;
+
+import java.util.List;
+
+import com.sc.Reference;
+import com.sc.init.ModCreativeTab;
+import com.sc.machine.UpgradeType;
+import com.sc.manual.Lang;
+import com.sc.tileentity.TileEntityEnergyStorageSC;
+import com.sc.tileentity.TileEntityFieldGeneratorSC;
+import com.sc.tileentity.TileEntityGeneratorSC;
+import com.sc.tileentity.TileEntityMachineSC;
+import com.sc.tileentity.TileEntityTankSC;
+import com.sc.tileentity.TileEntityTransformerSC;
+
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
+import net.minecraft.block.Block;
+import net.minecraft.client.renderer.texture.IIconRegister;
+import net.minecraft.creativetab.CreativeTabs;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.util.IIcon;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
+import net.minecraft.world.World;
+import net.minecraftforge.common.util.ForgeDirection;
+
+/**
+ * The mod's wrench, three tiers (IC2 / Thermal style):
+ * - Wrench (steel): turns blocks - the mod's machines, generators, storages and transformers,
+ *   and anything else that supports rotateBlock; sets cable / pipe sides like any wrench.
+ * - Electric Wrench (LV, battery): + Dismantle mode - the block goes straight into the inventory
+ *   with its charge, fuel and tanks (what breaking it keeps), nothing lost.
+ * - Quantum Wrench (HV, battery): + dismantles from up to 8 blocks away, + Copy mode - settings
+ *   from one block to another like IC2's memory card (a field generator's settings, a
+ *   transformer's direction, a machine's upgrade set, filled from the player's inventory).
+ * Sneak + right-click in the air switches the mode. The name has "wrench" in it, so every
+ * wrench check of the mod's blocks (BlockConduitSC.isWrench) takes it too.
+ */
+public class ItemWrenchSC extends Item {
+
+    public enum Tier {
+        BASIC("wrench", 0, 0, com.sc.energy.Tier.LV),
+        ELECTRIC("wrenchElectric", 10000, 250, com.sc.energy.Tier.LV),
+        QUANTUM("wrenchQuantum", 100000, 250, com.sc.energy.Tier.HV);
+
+        public final String name;
+        public final int maxCharge;
+        /** EU a dismantle costs (double from afar); copying / pasting costs a fifth of it. */
+        public final int dismantleCost;
+        public final com.sc.energy.Tier chargeTier;
+
+        Tier(String name, int maxCharge, int dismantleCost, com.sc.energy.Tier chargeTier) {
+            this.name = name;
+            this.maxCharge = maxCharge;
+            this.dismantleCost = dismantleCost;
+            this.chargeTier = chargeTier;
+        }
+
+        public int modes() {
+            return ordinal() + 1;           // basic: rotate; electric: + dismantle; quantum: + copy
+        }
+    }
+
+    public static final int MODE_ROTATE = 0, MODE_DISMANTLE = 1, MODE_COPY = 2;
+    public static final int REMOTE_RANGE = 8;
+    private static final String CHARGE = "ChargeSC", MODE = "WrenchMode", COPY = "WrenchCopy";
+
+    public final Tier tier;
+    private IIcon icon;
+
+    public ItemWrenchSC(Tier tier) {
+        this.tier = tier;
+        setMaxStackSize(1);
+        setMaxDamage(0);
+        setCreativeTab(ModCreativeTab.TAB);
+        setUnlocalizedName(Reference.ASSETS + "." + tier.name);
+    }
+
+    // ------------------------------------------------------------------ charge
+
+    public static boolean isElectric(ItemStack s) {
+        return s != null && s.getItem() instanceof ItemWrenchSC && ((ItemWrenchSC) s.getItem()).tier.maxCharge > 0;
+    }
+
+    public static Tier tierOf(ItemStack s) {
+        return ((ItemWrenchSC) s.getItem()).tier;
+    }
+
+    public static int chargeOf(ItemStack s) {
+        return s != null && s.hasTagCompound() ? s.getTagCompound().getInteger(CHARGE) : 0;
+    }
+
+    private static NBTTagCompound tag(ItemStack s) {
+        if (!s.hasTagCompound()) {
+            s.setTagCompound(new NBTTagCompound());
+        }
+        return s.getTagCompound();
+    }
+
+    /** Charges up to `max` EU. @return EU taken */
+    public static int charge(ItemStack s, int max) {
+        if (!isElectric(s) || max <= 0) {
+            return 0;
+        }
+        int taken = Math.max(0, Math.min(tierOf(s).maxCharge - chargeOf(s), max));
+        if (taken > 0) {
+            tag(s).setInteger(CHARGE, chargeOf(s) + taken);
+        }
+        return taken;
+    }
+
+    private static boolean spend(EntityPlayer p, ItemStack s, int eu) {
+        if (p.capabilities.isCreativeMode || eu <= 0) {
+            return true;
+        }
+        if (chargeOf(s) < eu) {
+            p.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.nocharge", eu));
+            return false;
+        }
+        tag(s).setInteger(CHARGE, chargeOf(s) - eu);
+        return true;
+    }
+
+    @Override
+    public boolean showDurabilityBar(ItemStack stack) {
+        return tier.maxCharge > 0;
+    }
+
+    @Override
+    public double getDurabilityForDisplay(ItemStack stack) {
+        return tier.maxCharge > 0 ? 1.0 - (double) chargeOf(stack) / tier.maxCharge : 0;
+    }
+
+    // ------------------------------------------------------------------ modes
+
+    public static int modeOf(ItemStack s) {
+        int m = s.hasTagCompound() ? s.getTagCompound().getInteger(MODE) : 0;
+        return m >= 0 && m < tierOf(s).modes() ? m : 0;
+    }
+
+    /** Sneak + right-click in the air: next mode. Quantum in Dismantle mode: right-click in the air dismantles from afar. */
+    @Override
+    public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
+        if (player.isSneaking()) {
+            if (!world.isRemote && tier.modes() > 1) {
+                int next = (modeOf(stack) + 1) % tier.modes();
+                tag(stack).setInteger(MODE, next);
+                player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.mode",
+                        new ChatComponentTranslation("sc.wrench.mode." + next)));
+            }
+            return stack;
+        }
+        if (!world.isRemote && tier == Tier.QUANTUM && modeOf(stack) == MODE_DISMANTLE) {
+            MovingObjectPosition hit = lookedAt(world, player, REMOTE_RANGE);
+            if (hit != null && hit.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
+                    && dismantlable(world, hit.blockX, hit.blockY, hit.blockZ)) {
+                dismantle(stack, player, world, hit.blockX, hit.blockY, hit.blockZ, 2 * tier.dismantleCost);
+            }
+        }
+        return stack;
+    }
+
+    /** The block the player looks at within `range` (the look vector worked out here: getLook is client-only in places). */
+    private static MovingObjectPosition lookedAt(World world, EntityPlayer p, double range) {
+        float yaw = p.rotationYaw * 0.017453292F, pitch = p.rotationPitch * 0.017453292F;
+        double lx = -Math.sin(yaw) * Math.cos(pitch), ly = -Math.sin(pitch), lz = Math.cos(yaw) * Math.cos(pitch);
+        Vec3 from = Vec3.createVectorHelper(p.posX, p.posY + p.getEyeHeight(), p.posZ);
+        Vec3 to = from.addVector(lx * range, ly * range, lz * range);
+        return world.rayTraceBlocks(from, to);
+    }
+
+    /** Sneaking with the wrench still reaches the block (machines: sneak + wrench turns them to the clicked side). */
+    @Override
+    public boolean doesSneakBypassUse(World world, int x, int y, int z, EntityPlayer player) {
+        return true;
+    }
+
+    /**
+     * Server side, before the block is clicked: Dismantle and Copy modes, and turning the mod's
+     * blocks whose click opens a screen (generators, storages). Client: always false, or the
+     * click would never reach the server.
+     */
+    @Override
+    public boolean onItemUseFirst(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int side,
+                                  float hitX, float hitY, float hitZ) {
+        if (world.isRemote) {
+            return false;
+        }
+        int mode = modeOf(stack);
+        if (mode == MODE_DISMANTLE) {
+            if (!dismantlable(world, x, y, z)) {
+                return false;
+            }
+            dismantle(stack, player, world, x, y, z, tier.dismantleCost);
+            return true;
+        }
+        if (mode == MODE_COPY) {
+            return player.isSneaking() ? copy(stack, player, world, x, y, z) : paste(stack, player, world, x, y, z);
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        ForgeDirection clicked = ForgeDirection.getOrientation(side);
+        if (te instanceof TileEntityGeneratorSC) {
+            TileEntityGeneratorSC g = (TileEntityGeneratorSC) te;
+            g.setFacing(player.isSneaking() && clicked.offsetY == 0 ? clicked : g.getFacing().getRotation(ForgeDirection.UP));
+            g.markDirty();
+            world.markBlockForUpdate(x, y, z);
+            return true;
+        }
+        if (te instanceof TileEntityEnergyStorageSC) {
+            TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
+            boolean pad = te instanceof com.sc.tileentity.TileEntityChargePadSC;
+            ForgeDirection next = player.isSneaking() ? clicked
+                    : s.getFacing().offsetY != 0 ? ForgeDirection.NORTH : s.getFacing().getRotation(ForgeDirection.UP);
+            if (pad && next == ForgeDirection.UP) {
+                next = ForgeDirection.NORTH;             // the pad is on top
+            }
+            s.setFacing(next);
+            s.markDirty();
+            world.markBlockForUpdate(x, y, z);
+            return true;
+        }
+        return false;                                    // machines, transformers, conduits handle the wrench themselves
+    }
+
+    /** Rotate mode, a block that didn't take the click itself: its own rotation, if it has one (vanilla and other mods). */
+    @Override
+    public boolean onItemUse(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int side,
+                             float hitX, float hitY, float hitZ) {
+        if (world.isRemote || modeOf(stack) != MODE_ROTATE) {
+            return false;
+        }
+        Block block = world.getBlock(x, y, z);
+        return block.rotateBlock(world, x, y, z, ForgeDirection.getOrientation(side));
+    }
+
+    // ------------------------------------------------------------------ dismantle
+
+    /** The mod's blocks that keep what matters in their item when broken (or have nothing inside). */
+    private static boolean dismantlable(World world, int x, int y, int z) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof TileEntityMachineSC || te instanceof TileEntityGeneratorSC || te instanceof TileEntityEnergyStorageSC
+                || te instanceof TileEntityTransformerSC || te instanceof TileEntityTankSC || te instanceof TileEntityFieldGeneratorSC;
+    }
+
+    /**
+     * Takes the block into the inventory: its drops (they carry charge, fuel and tank contents)
+     * go to the player, the rest (a machine's slots, a field generator's upgrades) drops where it
+     * stood, exactly as breaking it would. Protection (a field's private zone, other mods'
+     * claims) is asked first, as for any block break.
+     */
+    private void dismantle(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int cost) {
+        Block block = world.getBlock(x, y, z);
+        int meta = world.getBlockMetadata(x, y, z);
+        if (player instanceof EntityPlayerMP && net.minecraftforge.common.ForgeHooks.onBlockBreakEvent(world,
+                ((EntityPlayerMP) player).theItemInWorldManager.getGameType(), (EntityPlayerMP) player, x, y, z).isCanceled()) {
+            return;
+        }
+        if (!spend(player, stack, cost)) {
+            return;
+        }
+        java.util.ArrayList<ItemStack> drops = block.getDrops(world, x, y, z, meta, 0);
+        world.setBlockToAir(x, y, z);                     // breakBlock: slots / upgrades out, field unlinked
+        for (ItemStack d : drops) {
+            if (d != null && !player.inventory.addItemStackToInventory(d)) {
+                player.dropPlayerItemWithRandomChoice(d, false);
+            }
+        }
+        player.inventoryContainer.detectAndSendChanges();
+        world.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, block.stepSound.getBreakSound(), 1.0F, 1.2F);
+    }
+
+    // ------------------------------------------------------------------ copy / paste (Quantum)
+
+    private boolean copy(ItemStack stack, EntityPlayer player, World world, int x, int y, int z) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        NBTTagCompound data = new NBTTagCompound();
+        if (te instanceof TileEntityFieldGeneratorSC && ((TileEntityFieldGeneratorSC) te).isMaster()) {
+            data.setString("Kind", "field");
+            ((TileEntityFieldGeneratorSC) te).exportSettings(data);
+        } else if (te instanceof TileEntityTransformerSC) {
+            data.setString("Kind", "transformer");
+            data.setBoolean("StepUp", ((TileEntityTransformerSC) te).isStepUp());
+        } else if (te instanceof TileEntityMachineSC) {
+            data.setString("Kind", "machine");
+            TileEntityMachineSC m = (TileEntityMachineSC) te;
+            for (UpgradeType type : UpgradeType.values()) {
+                data.setInteger(type.name(), m.upgradeCount(type));
+            }
+        } else {
+            return false;
+        }
+        if (!spend(player, stack, tier.dismantleCost / 5)) {
+            return true;
+        }
+        tag(stack).setTag(COPY, data);
+        player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.copied",
+                new ChatComponentTranslation("sc.wrench.kind." + data.getString("Kind"))));
+        return true;
+    }
+
+    private boolean paste(ItemStack stack, EntityPlayer player, World world, int x, int y, int z) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityFieldGeneratorSC || te instanceof TileEntityTransformerSC || te instanceof TileEntityMachineSC)) {
+            return false;
+        }
+        NBTTagCompound data = stack.hasTagCompound() ? stack.getTagCompound().getCompoundTag(COPY) : null;
+        if (data == null || !data.hasKey("Kind")) {
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.nothing"));
+            return true;
+        }
+        String kind = data.getString("Kind");
+        boolean fits = "field".equals(kind) && te instanceof TileEntityFieldGeneratorSC && ((TileEntityFieldGeneratorSC) te).isMaster()
+                || "transformer".equals(kind) && te instanceof TileEntityTransformerSC
+                || "machine".equals(kind) && te instanceof TileEntityMachineSC;
+        if (!fits) {
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.mismatch",
+                    new ChatComponentTranslation("sc.wrench.kind." + kind)));
+            return true;
+        }
+        if (te instanceof TileEntityFieldGeneratorSC && !((TileEntityFieldGeneratorSC) te).allowed(player)) {
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.field.noaccess", ((TileEntityFieldGeneratorSC) te).getOwner()));
+            return true;
+        }
+        if (!spend(player, stack, tier.dismantleCost / 5)) {
+            return true;
+        }
+        if (te instanceof TileEntityFieldGeneratorSC) {
+            ((TileEntityFieldGeneratorSC) te).importSettings(data);
+        } else if (te instanceof TileEntityTransformerSC) {
+            ((TileEntityTransformerSC) te).setStepUp(data.getBoolean("StepUp"));
+            te.markDirty();
+        } else {
+            int missing = fillUpgrades((TileEntityMachineSC) te, player, data);
+            if (missing > 0) {
+                player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.missing", missing));
+            }
+        }
+        world.markBlockForUpdate(x, y, z);
+        player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.pasted",
+                new ChatComponentTranslation("sc.wrench.kind." + kind)));
+        return true;
+    }
+
+    /**
+     * Brings the machine's upgrades up to the copied set, out of the player's inventory (never
+     * takes any out of the machine). @return how many upgrades the player didn't have / didn't fit
+     */
+    private static int fillUpgrades(TileEntityMachineSC m, EntityPlayer p, NBTTagCompound data) {
+        int missing = 0;
+        for (UpgradeType type : UpgradeType.values()) {
+            int want = data.getInteger(type.name()) - m.upgradeCount(type);
+            while (want > 0) {
+                int slot = upgradeSlotFor(m, type);
+                int from = inventorySlotWith(p, type);
+                if (slot < 0 || from < 0) {
+                    missing += want;
+                    break;
+                }
+                ItemStack there = m.getStackInSlot(slot);
+                if (there == null) {
+                    ItemStack one = p.inventory.decrStackSize(from, 1);
+                    m.setInventorySlotContents(slot, one);
+                } else {
+                    p.inventory.decrStackSize(from, 1);
+                    there.stackSize++;
+                    m.markDirty();
+                }
+                want--;
+            }
+        }
+        p.inventoryContainer.detectAndSendChanges();
+        return missing;
+    }
+
+    private static int upgradeSlotFor(TileEntityMachineSC m, UpgradeType type) {
+        int empty = -1;
+        for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
+            int slot = TileEntityMachineSC.FIRST_UPGRADE_SLOT + i;
+            ItemStack s = m.getStackInSlot(slot);
+            if (s == null) {
+                empty = empty < 0 ? slot : empty;
+            } else if (s.getItem() instanceof ItemUpgradeSC && ItemUpgradeSC.typeOf(s) == type && s.stackSize < s.getMaxStackSize()) {
+                return slot;
+            }
+        }
+        return empty;
+    }
+
+    private static int inventorySlotWith(EntityPlayer p, UpgradeType type) {
+        for (int i = 0; i < p.inventory.mainInventory.length; i++) {
+            ItemStack s = p.inventory.mainInventory[i];
+            if (s != null && s.getItem() instanceof ItemUpgradeSC && ItemUpgradeSC.typeOf(s) == type) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // ------------------------------------------------------------------ look and text
+
+    @Override
+    public void registerIcons(IIconRegister register) {
+        icon = register.registerIcon(Reference.ASSETS + ":" + tier.name);
+    }
+
+    @Override
+    public IIcon getIconFromDamage(int damage) {
+        return icon;
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
+    public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
+        if (tier.maxCharge > 0) {
+            list.add(Lang.tr("sc.wrench.charge", chargeOf(stack), tier.maxCharge, tier.chargeTier.name()));
+            list.add(Lang.tr("sc.wrench.modeline", Lang.tr("sc.wrench.mode." + modeOf(stack))));
+        }
+        list.add("§7" + Lang.tr("sc.wrench.tip.rotate"));
+        if (tier.modes() > 1) {
+            list.add("§7" + Lang.tr("sc.wrench.tip.switch"));
+            list.add("§7" + Lang.tr("sc.wrench.tip.dismantle", tier.dismantleCost));
+        }
+        if (tier == Tier.QUANTUM) {
+            list.add("§7" + Lang.tr("sc.wrench.tip.remote", REMOTE_RANGE));
+            list.add("§7" + Lang.tr("sc.wrench.tip.copy"));
+            NBTTagCompound data = stack.hasTagCompound() ? stack.getTagCompound().getCompoundTag(COPY) : null;
+            if (data != null && data.hasKey("Kind")) {
+                list.add("§b" + Lang.tr("sc.wrench.holding", Lang.tr("sc.wrench.kind." + data.getString("Kind"))));
+            }
+        }
+    }
+
+    /** Creative tab: an electric wrench empty and charged, like the drills. */
+    @Override
+    @SideOnly(Side.CLIENT)
+    public void getSubItems(Item item, CreativeTabs tab, List list) {
+        list.add(new ItemStack(item));
+        if (tier.maxCharge > 0) {
+            ItemStack full = new ItemStack(item);
+            tag(full).setInteger(CHARGE, tier.maxCharge);
+            list.add(full);
+        }
+    }
+}

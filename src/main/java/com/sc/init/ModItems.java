@@ -45,6 +45,7 @@ public final class ModItems {
     public static ItemSimpleSC alFoil;
     public static ItemSimpleSC liquidHeCell;
     public static ItemSimpleSC deuteriumCell;
+    public static final java.util.List<com.sc.item.ItemWrenchSC> WRENCHES = new java.util.ArrayList<com.sc.item.ItemWrenchSC>();
     public static final java.util.Map<SCToolType, ItemToolSC> TOOLS = new java.util.EnumMap<SCToolType, ItemToolSC>(SCToolType.class);
     public static final java.util.Map<ArmorSuit, ItemArmorSC[]> ARMOR = new java.util.EnumMap<ArmorSuit, ItemArmorSC[]>(ArmorSuit.class);
     public static ItemArmorChipSC armorChip;
@@ -165,6 +166,13 @@ public final class ModItems {
         // §7/§9: Field Generator cluster linking tool.
         fieldLinkModule = new ItemFieldLinkModule();
         GameRegistry.registerItem(fieldLinkModule, "fieldLinkModule");
+
+        // Wrenches: basic, electric, quantum (appended).
+        for (com.sc.item.ItemWrenchSC.Tier t : com.sc.item.ItemWrenchSC.Tier.values()) {
+            com.sc.item.ItemWrenchSC w = new com.sc.item.ItemWrenchSC(t);
+            GameRegistry.registerItem(w, t.name);
+            WRENCHES.add(w);
+        }
 
         upgrade = new com.sc.item.ItemUpgradeSC();
         GameRegistry.registerItem(upgrade, "machineUpgrade");

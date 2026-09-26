@@ -313,6 +313,9 @@ public final class ManualContent {
         lines.addAll(paragraph("sc.manual.machines.sides"));
         lines.addAll(paragraph("sc.manual.machines.vent"));
         lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.machines.wrenchhead"));
+        lines.addAll(paragraph("sc.manual.machines.wrench"));
+        lines.add("");
         lines.add(HEAD + Lang.tr("sc.manual.machines.upgradeshead"));
         lines.addAll(paragraph("sc.manual.machines.upgrades"));
         for (com.sc.machine.UpgradeType type : com.sc.machine.UpgradeType.values()) {

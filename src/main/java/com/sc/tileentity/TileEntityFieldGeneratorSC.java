@@ -206,6 +206,27 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         access.addAll(from.access);
     }
 
+    /** The Quantum Wrench's copy: shape, range and switches - not the owner, not the access list. */
+    public void exportSettings(NBTTagCompound nbt) {
+        nbt.setInteger("Mode", mode.ordinal());
+        nbt.setInteger("Range", range);
+        nbt.setInteger("Flags", flags);
+        nbt.setInteger("Redstone", redstone);
+        nbt.setInteger("Filter", filter);
+        nbt.setInteger("Color", color);
+    }
+
+    /** The Quantum Wrench's paste (the caller checked allowed()). */
+    public void importSettings(NBTTagCompound nbt) {
+        mode = FieldMode.values()[Math.min(FieldMode.values().length - 1, Math.max(0, nbt.getInteger("Mode")))];
+        range = FieldShapeSC.clampRange(nbt.getInteger("Range"));
+        flags = nbt.getInteger("Flags");
+        redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
+        filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
+        color = Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")));
+        changed();
+    }
+
     /** The first active field in the world with that switch on that covers the point, or null. */
     public static TileEntityFieldGeneratorSC fieldWith(World world, int flag, double x, double y, double z) {
         for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
@@ -639,6 +660,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             took = com.sc.item.DrillLogicSC.digging(p, s) ? 0 : com.sc.item.ItemDrillSC.charge(s, max);
         } else if (s.getItem() instanceof com.sc.item.ItemWeaponSC) {
             took = com.sc.item.ItemWeaponSC.charge(s, ((com.sc.item.ItemWeaponSC) s.getItem()).getType(), max);
+        } else if (com.sc.item.ItemWrenchSC.isElectric(s)) {
+            took = com.sc.item.ItemWrenchSC.charge(s, max);
         } else {
             return 0;
         }

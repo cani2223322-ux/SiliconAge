@@ -51,6 +51,7 @@ public class ModCreativeTab extends CreativeTabs {
         order.addAll(ModItems.COMPONENTS.values());
         // tools and upgrades
         order.addAll(ModItems.TOOLS.values());
+        order.addAll(ModItems.WRENCHES);
         add(order, ModItems.upgrade, ModItems.tubeSpeedUpgrade, ModItems.itemFilter, ModItems.armorChip,
                 ModItems.fieldLinkModule, ModItems.manual);
         // machines, energy, logistics, the field

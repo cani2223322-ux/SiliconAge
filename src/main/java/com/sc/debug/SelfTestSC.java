@@ -437,6 +437,14 @@ public final class SelfTestSC {
         check(southFirst && fm2.getFacing() == net.minecraftforge.common.util.ForgeDirection.EAST
                         && fm3.getFacing() == net.minecraftforge.common.util.ForgeDirection.SOUTH,
                 "machine facing: horizontal only, saved, old machines stay facing south");
+        ItemStack we = new ItemStack(ModItems.WRENCHES.get(1)), wq = new ItemStack(ModItems.WRENCHES.get(2));
+        com.sc.tileentity.TileEntityEnergyStorageSC lvs = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        lvs.setStorageTier(com.sc.energy.Tier.LV);
+        check(!com.sc.item.ItemWrenchSC.isElectric(new ItemStack(ModItems.WRENCHES.get(0)))
+                        && com.sc.item.ItemWrenchSC.charge(we, 50000) == 10000 && com.sc.item.ItemWrenchSC.chargeOf(we) == 10000
+                        && com.sc.block.BlockConduitSC.isWrench(wq) && lvs.isItemValidForSlot(0, we) && !lvs.isItemValidForSlot(0, wq)
+                        && com.sc.item.ItemWrenchSC.Tier.QUANTUM.modes() == 3,
+                "wrenches: basic has no battery, electric 10000 EU charges on LV, quantum only from HV, all count as wrenches");
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));
