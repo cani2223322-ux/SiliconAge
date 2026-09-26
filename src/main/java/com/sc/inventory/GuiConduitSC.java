@@ -93,8 +93,8 @@ public class GuiConduitSC extends GuiContainer {
         if (selected == null) {
             return;
         }
-        buttonList.add(new GuiButton(ContainerConduitSC.buttonId(selected, ContainerConduitSC.MODE_PREV), guiLeft + 46, guiTop + 6, 12, 16, "<"));
-        buttonList.add(new GuiButton(ContainerConduitSC.buttonId(selected, ContainerConduitSC.MODE_NEXT), guiLeft + 164, guiTop + 6, 12, 16, ">"));
+        buttonList.add(new TextFitSC.Button(ContainerConduitSC.buttonId(selected, ContainerConduitSC.MODE_PREV), guiLeft + 46, guiTop + 6, 12, 16, "<"));
+        buttonList.add(new TextFitSC.Button(ContainerConduitSC.buttonId(selected, ContainerConduitSC.MODE_NEXT), guiLeft + 164, guiTop + 6, 12, 16, ">"));
         ConduitMode mode = bundle.mode(selected, side);
         builtMode = mode;
         builtConnector = connector();
@@ -125,8 +125,8 @@ public class GuiConduitSC extends GuiContainer {
                 x += 22;
             }
             prioX = x - guiLeft;
-            buttonList.add(new GuiButton(ContainerConduitSC.buttonId(selected, ContainerConduitSC.PRIO_DOWN), x, guiTop + row + 4, 12, 12, "-"));
-            buttonList.add(new GuiButton(ContainerConduitSC.buttonId(selected, ContainerConduitSC.PRIO_UP), x + 44, guiTop + row + 4, 12, 12, "+"));
+            buttonList.add(new TextFitSC.Button(ContainerConduitSC.buttonId(selected, ContainerConduitSC.PRIO_DOWN), x, guiTop + row + 4, 12, 12, "-"));
+            buttonList.add(new TextFitSC.Button(ContainerConduitSC.buttonId(selected, ContainerConduitSC.PRIO_UP), x + 44, guiTop + row + 4, 12, 12, "+"));
         }
     }
 
@@ -282,20 +282,20 @@ public class GuiConduitSC extends GuiContainer {
         if (selected == null) {
             return;
         }
-        fontRendererObj.drawString(Lang.tr("sc.conduit.gui.mode"), 8, 10, 0x404040);
+        TextFitSC.draw(fontRendererObj, Lang.tr("sc.conduit.gui.mode"), 8, 10, 36, 0x404040, guiLeft, guiTop);
         String mode = Lang.tr("sc.conduit.mode." + bundle.mode(selected, side).menuKey(selected, connector()));
-        fontRendererObj.drawStringWithShadow(mode, 111 - fontRendererObj.getStringWidth(mode) / 2, 10, 0xFFFFFF);
+        TextFitSC.drawCentered(fontRendererObj, mode, 60, 10, 102, 0xFFFFFF, true, guiLeft, guiTop);
         if (extractRow >= 0) {
-            fontRendererObj.drawString(Lang.tr("sc.conduit.gui.extracting"), 8, extractRow + 6, 0x404040);
+            TextFitSC.draw(fontRendererObj, Lang.tr("sc.conduit.gui.extracting"), 8, extractRow + 6, W - 16, 0x404040, guiLeft, guiTop);
         }
         if (insertRow >= 0) {
-            fontRendererObj.drawString(Lang.tr("sc.conduit.gui.inserting"), 8, insertRow + 6, 0x404040);
+            TextFitSC.draw(fontRendererObj, Lang.tr("sc.conduit.gui.inserting"), 8, insertRow + 6, prioX - 12, 0x404040, guiLeft, guiTop);
             String p = String.valueOf(bundle.priority(selected, side));
             fontRendererObj.drawString(p, prioX + 28 - fontRendererObj.getStringWidth(p) / 2, insertRow + 6, 0xFFFFFF);
         }
         String sideName = Lang.tr("sc.side." + side.name().toLowerCase(Locale.ROOT));
         String where = Lang.tr("sc.conduit.gui.where", sideName, targetName());
-        fontRendererObj.drawString(fontRendererObj.trimStringToWidth(where, W - 16), 8, TEXT_BOTTOM, 0x606060);
+        TextFitSC.draw(fontRendererObj, where, 8, TEXT_BOTTOM, W - 16, 0x606060, guiLeft, guiTop);
     }
 
     /** Name of the block on this side (what the connector plugs into). */
@@ -318,8 +318,12 @@ public class GuiConduitSC extends GuiContainer {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tip = tooltip(mouseX, mouseY);
+        if (tip == null) {
+            tip = TextFitSC.hoverAt(mouseX, mouseY);
+        }
         if (tip != null) {
             drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tip, width), mouseX, mouseY, fontRendererObj);
         }

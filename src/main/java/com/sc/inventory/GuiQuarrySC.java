@@ -34,7 +34,7 @@ import net.minecraft.item.ItemStack;
  */
 public class GuiQuarrySC extends GuiContainer {
 
-    private static final int W = 248, H = 240;
+    private static final int W = 248, H = 262, TOP = ContainerQuarrySC.TOP;
     private static final int TAB_BASE = 1000;
     private static final int ENERGY_X = 226, ENERGY_Y = 30, ENERGY_W = 12, ENERGY_H = 80;
     private static final int MAP_X = 8, MAP_Y = 30, MAP = 150;
@@ -68,28 +68,26 @@ public class GuiQuarrySC extends GuiContainer {
         super.initGui();
         openAt = new int[]{quarry.xCoord, quarry.yCoord, quarry.zCoord};
         buttonList.clear();
-        int[] widths = new int[TABS.length];
-        int text = 0;
+        // two rows of three tabs: an icon and a short name, the full name as the tooltip
+        ItemStack[] icons = {new ItemStack(com.sc.init.ModBlocks.quarrySC, 1, quarry.getBlockMetadata() & 3),
+                new ItemStack(com.sc.init.ModItems.areaCard), new ItemStack(com.sc.init.ModItems.oreScanner),
+                new ItemStack(net.minecraft.init.Blocks.chest), new ItemStack(net.minecraft.init.Blocks.lever),
+                com.sc.init.ModItems.quarryModule.stackOf(ItemQuarryModuleSC.Kind.SPEED)};
+        int tw = (W - 16 - 4) / 3;
         for (int i = 0; i < TABS.length; i++) {
-            widths[i] = fontRendererObj.getStringWidth(Lang.tr("sc.quarrygui.tab." + TABS[i]));
-            text += widths[i];
-        }
-        int spare = Math.max(0, W - 16 - text - 2 * TABS.length) / TABS.length;
-        for (int i = 0, x = guiLeft + 8; i < TABS.length; i++) {
-            int w = i == TABS.length - 1 ? guiLeft + W - 8 - x : widths[i] + spare;
-            GuiButton b = new GuiButton(TAB_BASE + i, x, guiTop + 6, w, 18, Lang.tr("sc.quarrygui.tab." + TABS[i]));
+            GuiButton b = new TextFitSC.Tab(TAB_BASE + i, guiLeft + 8 + (i % 3) * (tw + 2), guiTop + 5 + (i / 3) * 20, tw, 19,
+                    icons[i], Lang.tr("sc.quarrygui.tabshort." + TABS[i]), Lang.tr("sc.quarrygui.tab." + TABS[i]));
             b.enabled = i != tab;
             buttonList.add(b);
-            x += w + 2;
         }
-        int x = guiLeft + 8, y = guiTop;
+        int x = guiLeft + 8, y = guiTop + TOP;
         switch (tab) {
             case 0:
-                buttonList.add(new GuiButton(B_RUN, x, y + 118, 72, 20, ""));
-                buttonList.add(new GuiButton(B_RESET, x + 76, y + 118, 72, 20, Lang.tr("sc.quarrygui.reset")));
-                buttonList.add(new GuiButton(B_XP, x + 152, y + 118, 80, 20, ""));
-                buttonList.add(new GuiButton(B_REDSTONE, x, y + 142, 114, 20, ""));
-                buttonList.add(new GuiButton(B_POWER, x + 118, y + 142, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(B_RUN, x, y + 118, 72, 20, ""));
+                buttonList.add(new TextFitSC.Button(B_RESET, x + 76, y + 118, 72, 20, Lang.tr("sc.quarrygui.reset")));
+                buttonList.add(new TextFitSC.Button(B_XP, x + 152, y + 118, 80, 20, ""));
+                buttonList.add(new TextFitSC.Button(B_REDSTONE, x, y + 142, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(B_POWER, x + 118, y + 142, 114, 20, ""));
                 break;
             case 1: {
                 String[] rows = {"sizex", "sizez", "offx", "offz", "bottom"};
@@ -98,18 +96,18 @@ public class GuiQuarrySC extends GuiContainer {
                     for (int s = 0; s < 4; s++) {
                         int id = B_STEP + r * 10 + s;
                         String label = (steps[s] > 0 ? "+" : "") + steps[s];
-                        buttonList.add(new GuiButton(id, x + s * 28, y + 40 + r * 30, 27, 16, label));
+                        buttonList.add(new TextFitSC.Button(id, x + s * 28, y + 40 + r * 30, 27, 16, label));
                     }
                 }
-                buttonList.add(new GuiButton(B_SHAPE, x, y + 190, 112, 16, ""));
-                buttonList.add(new GuiButton(B_REPLACE, x, y + 210, 112, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_SHAPE, x, y + 190, 112, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_REPLACE, x, y + 210, 112, 16, ""));
                 int rx = guiLeft + 128;
-                buttonList.add(new GuiButton(B_SHOW, rx, y + 30, 112, 16, ""));
-                buttonList.add(new GuiButton(B_DASH, rx, y + 50, 112, 16, ""));
-                buttonList.add(new GuiButton(B_PLANE, rx, y + 70, 112, 16, ""));
-                buttonList.add(new GuiButton(B_ORES, rx, y + 90, 112, 16, ""));
-                buttonList.add(new GuiButton(B_BRIGHT, rx, y + 110, 112, 16, ""));
-                buttonList.add(new GuiButton(B_TARGET, rx, y + 130, 92, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_SHOW, rx, y + 30, 112, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_DASH, rx, y + 50, 112, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_PLANE, rx, y + 70, 112, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_ORES, rx, y + 90, 112, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_BRIGHT, rx, y + 110, 112, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_TARGET, rx, y + 130, 92, 16, ""));
                 for (int i = 0; i < TileEntityQuarrySC.PALETTE.length; i++) {
                     buttonList.add(new Swatch(B_SWATCH + i, rx + i * 14, y + 150, TileEntityQuarrySC.PALETTE[i]));
                 }
@@ -122,21 +120,21 @@ public class GuiQuarrySC extends GuiContainer {
                 break;
             }
             case 2:
-                buttonList.add(new GuiButton(B_SCAN, guiLeft + 166, y + 208, 74, 20, Lang.tr("sc.quarrygui.scan")));
+                buttonList.add(new TextFitSC.Button(B_SCAN, guiLeft + 166, y + 208, 74, 20, Lang.tr("sc.quarrygui.scan")));
                 break;
             case 3:
-                buttonList.add(new GuiButton(B_FILTER, x, y + 28, 114, 16, ""));
-                buttonList.add(new GuiButton(B_OUTSIDE, x + 118, y + 28, 114, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_FILTER, x, y + 28, 114, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_OUTSIDE, x + 118, y + 28, 114, 16, ""));
                 break;
             case 4:
-                buttonList.add(new GuiButton(B_POWER, x, y + 28, 150, 16, ""));
+                buttonList.add(new TextFitSC.Button(B_POWER, x, y + 28, 150, 16, ""));
                 for (int i = 0; i < TileEntityQuarrySC.FLAG_COUNT; i++) {
                     int col = i / 9, row = i % 9;
                     int bw = i == 1 ? 80 : 114;
-                    buttonList.add(new GuiButton(B_FLAG + i, x + col * 118, y + 50 + row * 18, bw, 16, ""));
+                    buttonList.add(new TextFitSC.Button(B_FLAG + i, x + col * 118, y + 50 + row * 18, bw, 16, ""));
                 }
-                buttonList.add(new GuiButton(B_FORTUNE_DOWN, x + 82, y + 68, 15, 16, "-"));
-                buttonList.add(new GuiButton(B_FORTUNE_UP, x + 99, y + 68, 15, 16, "+"));
+                buttonList.add(new TextFitSC.Button(B_FORTUNE_DOWN, x + 82, y + 68, 15, 16, "-"));
+                buttonList.add(new TextFitSC.Button(B_FORTUNE_UP, x + 99, y + 68, 15, 16, "+"));
                 break;
             default:
         }
@@ -229,7 +227,7 @@ public class GuiQuarrySC extends GuiContainer {
                     name = Lang.tr("sc.quarrygui.flag.fortune", roman(Math.min(quarry.getFortuneLevel(), quarry.moduleCount(k))));
                 }
                 if (k != null && quarry.moduleCount(k) == 0) {
-                    b.displayString = "§8" + name + ": " + Lang.tr("sc.quarrygui.needmodule");
+                    b.displayString = "§8" + name;        // greyed; "needs a module" is in its tooltip
                     b.enabled = false;
                 } else {
                     b.displayString = (on ? "§a" : "§7") + name + ": " + onOff(on);
@@ -392,8 +390,8 @@ public class GuiQuarrySC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        int x = guiLeft, y = guiTop;
-        panel(x, y, W, H);
+        int x = guiLeft, y = guiTop + TOP;
+        panel(x, guiTop, W, H);
         if (tab == 0) {
             inset(x + ENERGY_X - 1, y + ENERGY_Y - 1, ENERGY_W + 2, ENERGY_H + 2);
             float f = (float) quarry.getEnergyStored() / Math.max(1, quarry.getMaxEnergyStored());
@@ -460,11 +458,23 @@ public class GuiQuarrySC extends GuiContainer {
 
     private void legend(int x, int y, int color, String text) {
         drawRect(x, y + 1, x + 6, y + 7, color);
-        fontRendererObj.drawString(text, x + 9, y, 0x404040);
+        fit(text, x + 9, y, W - x - 15, 0x404040);
+    }
+
+    /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
+    private void fit(String text, int x, int y, int maxW, int color) {
+        TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop + TOP);
     }
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
+        GL11.glPushMatrix();
+        GL11.glTranslatef(0, TOP, 0);
+        foreground();
+        GL11.glPopMatrix();
+    }
+
+    private void foreground() {
         int c = 0x303844, dim = 0x5A6472;
         int[] a = quarry.area();
         switch (tab) {
@@ -472,26 +482,27 @@ public class GuiQuarrySC extends GuiContainer {
                 TileEntityQuarrySC.Status s = quarry.getStatus();
                 int sc = s == TileEntityQuarrySC.Status.RUNNING ? 0x2E7D32 : s == TileEntityQuarrySC.Status.DONE ? 0x2A62A8
                         : s == TileEntityQuarrySC.Status.PAUSED ? 0x606060 : 0xA02020;
-                fontRendererObj.drawString(Lang.tr("sc.quarry.status." + s.name().toLowerCase(java.util.Locale.ROOT)), 8, 30, sc);
+                int room = ENERGY_X - 12;
+                fit(Lang.tr("sc.quarry.status." + s.name().toLowerCase(java.util.Locale.ROOT)), 8, 30, room, sc);
                 if (a != null) {
                     long total = (long) (a[4] - a[5] + 1) * (a[2] - a[0] + 1) * (a[3] - a[1] + 1);
                     long left = Math.min(total, container.blocksLeftClient);
-                    fontRendererObj.drawString(Lang.tr("sc.quarrygui.layer", quarry.getLayerY(), a[5],
-                            total == 0 ? 100 : (int) ((total - left) * 100 / total)), 8, 42, c);
+                    fit(Lang.tr("sc.quarrygui.layer", quarry.getLayerY(), a[5],
+                            total == 0 ? 100 : (int) ((total - left) * 100 / total)), 8, 42, room, c);
                     double bps = quarry.blocksPerSecond();
-                    fontRendererObj.drawString(Lang.tr("sc.quarrygui.cost", quarry.getLastCost(), String.format(java.util.Locale.ROOT, "%.1f", bps)), 8, 54, c);
+                    fit(Lang.tr("sc.quarrygui.cost", quarry.getLastCost(), String.format(java.util.Locale.ROOT, "%.1f", bps)), 8, 54, room, c);
                     long sec = bps <= 0 ? 0 : (long) (left / bps);
-                    fontRendererObj.drawString(Lang.tr("sc.quarrygui.left", String.valueOf(left), sec / 3600, sec / 60 % 60), 8, 66, c);
-                    fontRendererObj.drawString(Lang.tr("sc.quarrygui.size", a[2] - a[0] + 1, a[3] - a[1] + 1, a[4] - a[5] + 1), 8, 78, c);
+                    fit(Lang.tr("sc.quarrygui.left", String.valueOf(left), sec / 3600, sec / 60 % 60), 8, 66, room, c);
+                    fit(Lang.tr("sc.quarrygui.size", a[2] - a[0] + 1, a[3] - a[1] + 1, a[4] - a[5] + 1), 8, 78, room, c);
                 }
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.mined", String.valueOf(quarry.getMined())), 8, 90, c);
-                fontRendererObj.drawString(Lang.tr("sc.fieldgui.owner", quarry.getOwner().isEmpty() ? "-" : quarry.getOwner()), 8, 102, dim);
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.pump", quarry.getPumped().getFluidAmount(), quarry.getPumped().getCapacity(),
-                        quarry.getPumped().getFluid() == null ? "-" : quarry.getPumped().getFluid().getLocalizedName()), 8, 170, c);
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.getWater().getCapacity()), 8, 182, c);
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.head", headName()), 8, 194, c);
+                fit(Lang.tr("sc.quarrygui.mined", String.valueOf(quarry.getMined())), 8, 90, room, c);
+                fit(Lang.tr("sc.fieldgui.owner", quarry.getOwner().isEmpty() ? "-" : quarry.getOwner()), 8, 102, room, dim);
+                fit(Lang.tr("sc.quarrygui.pump", quarry.getPumped().getFluidAmount(), quarry.getPumped().getCapacity(),
+                        quarry.getPumped().getFluid() == null ? "-" : quarry.getPumped().getFluid().getLocalizedName()), 8, 170, W - 16, c);
+                fit(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.getWater().getCapacity()), 8, 182, W - 16, c);
+                fit(Lang.tr("sc.quarrygui.head", headName()), 8, 194, W - 16, c);
                 if (!quarry.allowed(mc.thePlayer)) {
-                    fontRendererObj.drawString(Lang.tr("sc.quarrygui.owneronly"), 8, 222, 0xA02020);
+                    fit(Lang.tr("sc.quarrygui.owneronly"), 8, 222, W - 16, 0xA02020);
                 }
                 break;
             }
@@ -501,16 +512,16 @@ public class GuiQuarrySC extends GuiContainer {
                         Lang.tr("sc.quarrygui.offx", quarry.getOffX()), Lang.tr("sc.quarrygui.offz", quarry.getOffZ()),
                         Lang.tr("sc.quarrygui.bottom", quarry.getBottomY())};
                 for (int r = 0; r < rows.length; r++) {
-                    fontRendererObj.drawString(rows[r], 8, 30 + r * 30, c);
+                    fit(rows[r], 8, 30 + r * 30, 114, c);
                 }
                 if (quarry.usesCard()) {
-                    fontRendererObj.drawString(Lang.tr("sc.quarrygui.bycard"), 8, 228, 0x2A62A8);
+                    fit(Lang.tr("sc.quarrygui.bycard"), 8, 230, W - 16, 0x2A62A8);
                 }
                 break;
             }
             case 2: {
                 int lx = MAP_X + MAP + 8;
-                fontRendererObj.drawString(Lang.tr("sc.fieldgui.map.title"), lx, 30, c);
+                fit(Lang.tr("sc.fieldgui.map.title"), lx, 30, W - lx - 6, c);
                 legend(lx, 44, 0xFFFFE040, Lang.tr("sc.quarrygui.map.quarry"));
                 legend(lx, 56, 0xFF000000 | quarry.getColorPlane(), Lang.tr("sc.quarrygui.map.drill"));
                 legend(lx, 68, 0xFF1E232B, Lang.tr("sc.quarrygui.map.done"));
@@ -518,7 +529,7 @@ public class GuiQuarrySC extends GuiContainer {
                 if (!quarry.hasScanner()) {
                     fontRendererObj.drawSplitString(Lang.tr("sc.quarrygui.noscanner"), lx, 96, W - lx - 6, dim);
                 } else {
-                    fontRendererObj.drawString(Lang.tr("sc.quarrygui.orefound"), lx, 96, c);
+                    fit(Lang.tr("sc.quarrygui.orefound"), lx, 96, W - lx - 6, c);
                     int row = 0;
                     RenderHelper.enableGUIStandardItemLighting();
                     for (Map.Entry<String, Integer> e : quarry.getOreCounts().entrySet()) {
@@ -539,9 +550,11 @@ public class GuiQuarrySC extends GuiContainer {
                 break;
             }
             case 3:
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.filterlabel"), ContainerQuarrySC.FILTER_X, ContainerQuarrySC.FILTER_Y - 10, c);
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.buffer"), ContainerQuarrySC.BUFFER_X, ContainerQuarrySC.BUFFER_Y - 10, c);
-                fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerQuarrySC.INV_X, ContainerQuarrySC.INV_Y - 10, c);
+                fit(Lang.tr("sc.quarrygui.filterlabel"), ContainerQuarrySC.FILTER_X, ContainerQuarrySC.FILTER_Y - 10, 150, c);
+                TextFitSC.help(fontRendererObj, ContainerQuarrySC.FILTER_X + 153, ContainerQuarrySC.FILTER_Y - 11,
+                        Lang.tr("sc.quarrygui.filter.help"), guiLeft, guiTop + TOP);
+                fit(Lang.tr("sc.quarrygui.buffer"), ContainerQuarrySC.BUFFER_X, ContainerQuarrySC.BUFFER_Y - 10, 162, c);
+                fit(Lang.tr("container.inventory"), ContainerQuarrySC.INV_X, ContainerQuarrySC.INV_Y - 10, 162, c);
                 break;
             case 4: {
                 int on = 0, total = 0;
@@ -552,16 +565,17 @@ public class GuiQuarrySC extends GuiContainer {
                         on += (quarry.getFlags() & (1 << i)) != 0 ? 1 : 0;
                     }
                 }
-                fontRendererObj.drawString(Lang.tr("sc.tooltip.functions", on, total), 164, 32, c);
+                fit(Lang.tr("sc.quarrygui.fncount", on, total), 164, 32, W - 170, c);
                 break;
             }
             case 5:
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.modules"), ContainerQuarrySC.UPGRADE_X, ContainerQuarrySC.UPGRADE_Y - 10, c);
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.slot.head"), ContainerQuarrySC.HEAD_X - 60, ContainerQuarrySC.HEAD_Y + 4, c);
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.slot.scanner"), ContainerQuarrySC.HEAD_X - 60, ContainerQuarrySC.SCANNER_Y + 4, c);
-                fontRendererObj.drawString(Lang.tr("sc.quarrygui.slot.card"), ContainerQuarrySC.HEAD_X - 60, ContainerQuarrySC.CARD_Y + 4, c);
-                fontRendererObj.drawSplitString(Lang.tr("sc.quarrygui.modules.hint"), 8, 112, W - 16, dim);
-                fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerQuarrySC.INV_X, ContainerQuarrySC.INV_Y - 10, c);
+                fit(Lang.tr("sc.quarrygui.modules"), ContainerQuarrySC.UPGRADE_X, ContainerQuarrySC.UPGRADE_Y - 10, 62, c);
+                TextFitSC.help(fontRendererObj, ContainerQuarrySC.UPGRADE_X + 64, ContainerQuarrySC.UPGRADE_Y - 11,
+                        Lang.tr("sc.quarrygui.modules.hint"), guiLeft, guiTop + TOP);
+                fit(Lang.tr("sc.quarrygui.slot.head"), ContainerQuarrySC.HEAD_X - 64, ContainerQuarrySC.HEAD_Y + 4, 60, c);
+                fit(Lang.tr("sc.quarrygui.slot.scanner"), ContainerQuarrySC.HEAD_X - 64, ContainerQuarrySC.SCANNER_Y + 4, 60, c);
+                fit(Lang.tr("sc.quarrygui.slot.card"), ContainerQuarrySC.HEAD_X - 64, ContainerQuarrySC.CARD_Y + 4, 60, c);
+                fit(Lang.tr("container.inventory"), ContainerQuarrySC.INV_X, ContainerQuarrySC.INV_Y - 10, 162, c);
                 break;
             default:
         }
@@ -590,11 +604,15 @@ public class GuiQuarrySC extends GuiContainer {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         if (tab == 1 && ++sliderTick % 10 == 0 && !org.lwjgl.input.Mouse.isButtonDown(0)) {
             sendSliders();
         }
-        List<String> tip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
+        List<String> tip = tooltipAt(mouseX - guiLeft, mouseY - guiTop - TOP);
+        if (tip == null) {
+            tip = TextFitSC.hoverAt(mouseX, mouseY);
+        }
         if (tip != null) {
             drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tip, width), mouseX, mouseY, fontRendererObj);
         }
@@ -612,8 +630,13 @@ public class GuiQuarrySC extends GuiContainer {
             for (Object o : buttonList) {
                 GuiButton b = (GuiButton) o;
                 if (b.id >= B_FLAG && b.id < B_FLAG + TileEntityQuarrySC.FLAG_COUNT && GuiGaugeSC.isOver(b.xPosition - guiLeft,
-                        b.yPosition - guiTop, b.width, b.height, mx, my)) {
+                        b.yPosition - guiTop - TOP, b.width, b.height, mx, my)) {
                     lines.add(Lang.tr("sc.quarrygui.flag." + (b.id - B_FLAG) + ".hint"));
+                    ItemQuarryModuleSC.Kind k = moduleOf(b.id - B_FLAG);
+                    if (k != null && quarry.moduleCount(k) == 0) {
+                        lines.add("§c" + Lang.tr("sc.quarrygui.needmodule.tip", Lang.tr("item.siliconage.quarryModule."
+                                + k.name().toLowerCase(java.util.Locale.ROOT) + ".name")));
+                    }
                     return lines;
                 }
             }

@@ -112,10 +112,10 @@ public class GuiMachineSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        fontRendererObj.drawString(machine.getMachineType().localizedName(), 8, 5, GuiGaugeSC.TITLE_COLOR);
+        fit(machine.getMachineType().localizedName(), 8, 5, titleRoom(machine.getMachineType().tier), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, machine.getMachineType().tier, 176 - 6, 3);
         MachineStatus status = machine.getStatus();
-        fontRendererObj.drawString(status.localized(), STATUS_X, STATUS_Y, statusColor(status));
+        fit(status.localized(), STATUS_X, STATUS_Y, (machine.getMachineType().heatCapable ? HEAT_X - 4 : 170) - STATUS_X, statusColor(status));
     }
 
     /**
@@ -127,8 +127,12 @@ public class GuiMachineSC extends GuiContainer {
      */
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tooltip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
+        if (tooltip == null) {
+            tooltip = TextFitSC.hoverAt(mouseX, mouseY);
+        }
         if (tooltip != null) {
             drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tooltip, width), mouseX, mouseY, fontRendererObj);
         }
@@ -211,6 +215,16 @@ public class GuiMachineSC extends GuiContainer {
             default:
                 return 8;      // Packager, Upgrade Stations
         }
+    }
+
+    /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
+    private void fit(String text, int x, int y, int maxW, int color) {
+        TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop);
+    }
+
+    /** Room for the title: up to the tier plate at the right of the title bar. */
+    private int titleRoom(com.sc.energy.Tier tier) {
+        return 176 - 6 - (fontRendererObj.getStringWidth(tier.name()) + 4) - 4 - 8;
     }
 
     private static int statusColor(MachineStatus status) {

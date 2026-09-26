@@ -23,6 +23,8 @@ public class ContainerQuarrySC extends Container {
     public static final int FILTER_X = 44, FILTER_Y = 50, BUFFER_X = 44, BUFFER_Y = 80;
     public static final int UPGRADE_X = 12, UPGRADE_Y = 40, HEAD_X = 164, HEAD_Y = 40, SCANNER_Y = 64, CARD_Y = 88;
     public static final int INV_X = 44, INV_Y = 157;
+    /** The screen's content starts this much lower than its coordinates say (two rows of tabs above it). */
+    public static final int TOP = 22;
     public static final int FIRST_BUFFER = TileEntityQuarrySC.FILTER_SLOTS, FIRST_UPGRADE = FIRST_BUFFER + TileEntityQuarrySC.BUFFER,
             FIRST_PLAYER = FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES + 3;
 
@@ -34,24 +36,24 @@ public class ContainerQuarrySC extends Container {
         this.quarry = quarry;
         for (int i = 0; i < TileEntityQuarrySC.FILTER_SLOTS; i++) {
             view.setInventorySlotContents(i, quarry.getFilter()[i]);
-            addSlotToContainer(new SlotGhost(view, i, FILTER_X + i * 18, FILTER_Y));
+            addSlotToContainer(new SlotGhost(view, i, FILTER_X + i * 18, FILTER_Y + TOP));
         }
         for (int i = 0; i < TileEntityQuarrySC.BUFFER; i++) {
-            addSlotToContainer(new SlotBuffer(quarry, i, BUFFER_X + i % 9 * 18, BUFFER_Y + i / 9 * 18));
+            addSlotToContainer(new SlotBuffer(quarry, i, BUFFER_X + i % 9 * 18, BUFFER_Y + TOP + i / 9 * 18));
         }
         for (int i = 0; i < TileEntityQuarrySC.UPGRADES; i++) {
-            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_UPGRADE + i, UPGRADE_X + i % 4 * 18, UPGRADE_Y + i / 4 * 18));
+            addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.FIRST_UPGRADE + i, UPGRADE_X + i % 4 * 18, UPGRADE_Y + TOP + i / 4 * 18));
         }
-        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_HEAD, HEAD_X, HEAD_Y));
-        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_SCANNER, HEAD_X, SCANNER_Y));
-        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_CARD, HEAD_X, CARD_Y));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_HEAD, HEAD_X, HEAD_Y + TOP));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_SCANNER, HEAD_X, SCANNER_Y + TOP));
+        addSlotToContainer(new SlotValid(quarry, TileEntityQuarrySC.SLOT_CARD, HEAD_X, CARD_Y + TOP));
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, INV_X + col * 18, INV_Y + row * 18));
+                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, INV_X + col * 18, INV_Y + TOP + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + 58));
+            addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + TOP + 58));
         }
         shownX = new int[inventorySlots.size()];
         group = new int[inventorySlots.size()];

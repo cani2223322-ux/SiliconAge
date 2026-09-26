@@ -40,11 +40,11 @@ public class GuiFilterSC extends GuiContainer {
         super.initGui();
         buttonList.clear();
         int x = guiLeft + 102, y = guiTop + 18;
-        buttonList.add(new GuiButton(ContainerFilterSC.BTN_BLACKLIST, x, y, 66, 14, ""));
-        buttonList.add(new GuiButton(ContainerFilterSC.BTN_IGNORE_META, x, y + 15, 66, 14, ""));
+        buttonList.add(new TextFitSC.Button(ContainerFilterSC.BTN_BLACKLIST, x, y, 66, 14, ""));
+        buttonList.add(new TextFitSC.Button(ContainerFilterSC.BTN_IGNORE_META, x, y + 15, 66, 14, ""));
         if (advanced()) {
-            buttonList.add(new GuiButton(ContainerFilterSC.BTN_MATCH_NBT, x, y + 30, 66, 14, ""));
-            buttonList.add(new GuiButton(ContainerFilterSC.BTN_ORE_DICT, x, y + 45, 66, 14, ""));
+            buttonList.add(new TextFitSC.Button(ContainerFilterSC.BTN_MATCH_NBT, x, y + 30, 66, 14, ""));
+            buttonList.add(new TextFitSC.Button(ContainerFilterSC.BTN_ORE_DICT, x, y + 45, 66, 14, ""));
         }
         refreshLabels();
     }
@@ -112,12 +112,13 @@ public class GuiFilterSC extends GuiContainer {
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         ItemStack f = container.filter();
-        fontRendererObj.drawString(f == null ? "" : f.getDisplayName(), 8, 6, 0x404040);
-        fontRendererObj.drawString(Lang.tr("sc.filter.examples"), 8, 60, 0x606060);
+        TextFitSC.draw(fontRendererObj, f == null ? "" : f.getDisplayName(), 8, 6, xSize - 16, 0x404040, guiLeft, guiTop);
+        TextFitSC.draw(fontRendererObj, Lang.tr("sc.filter.examples"), 8, 60, xSize - 16, 0x606060, guiLeft, guiTop);
     }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;

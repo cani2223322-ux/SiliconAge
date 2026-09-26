@@ -61,20 +61,17 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         buttonList.clear();
         String[] tabs = {"sc.fieldgui.tab.field", "sc.fieldgui.tab.functions", "sc.fieldgui.tab.access", "sc.fieldgui.tab.map",
                 "sc.fieldgui.tab.upgrades"};
-        // tab widths follow their captions, the spare room shared out evenly
-        int[] tw = new int[tabs.length];
-        int text = 0;
+        // tabs: an icon and a short name (smaller, or left out when there's no room), the full name as the tooltip
+        net.minecraft.item.ItemStack[] icons = {new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.fieldGeneratorSC),
+                new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.lever), new net.minecraft.item.ItemStack(net.minecraft.init.Items.name_tag),
+                new net.minecraft.item.ItemStack(net.minecraft.init.Items.map),
+                com.sc.init.ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE)};
+        int tw = (W - 16 - 2 * (tabs.length - 1)) / tabs.length;
         for (int i = 0; i < tabs.length; i++) {
-            tw[i] = fontRendererObj.getStringWidth(Lang.tr(tabs[i]));
-            text += tw[i];
-        }
-        int spare = Math.max(0, W - 16 - text - 2 * tabs.length) / tabs.length;
-        for (int i = 0, tx = guiLeft + 8; i < tabs.length; i++) {
-            int w = i == tabs.length - 1 ? guiLeft + W - 8 - tx - 2 : tw[i] + spare;
-            GuiButton b = new GuiButton(TAB_BASE + i, tx, guiTop + 6, w, 18, Lang.tr(tabs[i]));
+            GuiButton b = new TextFitSC.Tab(TAB_BASE + i, guiLeft + 8 + i * (tw + 2), guiTop + 5, tw, 20, icons[i],
+                    Lang.tr(tabs[i] + ".short"), Lang.tr(tabs[i]));
             b.enabled = i != tab;
             buttonList.add(b);
-            tx += w + 2;
         }
         ((ContainerFieldGeneratorSC) inventorySlots).setSlotsShown(tab == TAB_UPGRADES);
         nameField = null;
@@ -82,15 +79,15 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         switch (tab) {
             case 0: {
                 int ry = guiTop + 118;
-                buttonList.add(new GuiButton(ContainerFieldGeneratorSC.BTN_RANGE_MINUS_16, x, ry, 30, 20, "-16"));
-                buttonList.add(new GuiButton(ContainerFieldGeneratorSC.BTN_RANGE_MINUS_1, x + 32, ry, 30, 20, "-1"));
-                buttonList.add(new GuiButton(ContainerFieldGeneratorSC.BTN_RANGE_PLUS_1, x + 64, ry, 30, 20, "+1"));
-                buttonList.add(new GuiButton(ContainerFieldGeneratorSC.BTN_RANGE_PLUS_16, x + 96, ry, 30, 20, "+16"));
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_MINUS_16, x, ry, 30, 20, "-16"));
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_MINUS_1, x + 32, ry, 30, 20, "-1"));
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_PLUS_1, x + 64, ry, 30, 20, "+1"));
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_PLUS_16, x + 96, ry, 30, 20, "+16"));
                 int by = guiTop + 142;
-                buttonList.add(new GuiButton(ContainerFieldGeneratorSC.BTN_MODE, x, by, 114, 20, ""));
-                buttonList.add(new GuiButton(ContainerFieldGeneratorSC.BTN_COLOR, x + 118, by, 114, 20, ""));
-                buttonList.add(new GuiButton(flagId(TileEntityFieldGeneratorSC.F_SHOW), x, by + 22, 114, 20, ""));
-                buttonList.add(new GuiButton(ContainerFieldGeneratorSC.BTN_REDSTONE, x + 118, by + 22, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_MODE, x, by, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_COLOR, x + 118, by, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_SHOW), x, by + 22, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_REDSTONE, x + 118, by + 22, 114, 20, ""));
                 break;
             }
             case 1: {
@@ -98,24 +95,24 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                         -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_CHARGE, TileEntityFieldGeneratorSC.F_HEAL};
                 for (int i = 0; i < rows.length; i++) {
                     int id = rows[i] < 0 ? ContainerFieldGeneratorSC.BTN_FILTER : flagId(rows[i]);
-                    buttonList.add(new GuiButton(id, x, y + i * 22, W - 16, 20, ""));
+                    buttonList.add(new TextFitSC.Button(id, x, y + i * 22, W - 16, 20, ""));
                 }
                 break;
             }
             case 2: {
-                buttonList.add(new GuiButton(flagId(TileEntityFieldGeneratorSC.F_PRIVATE), x, y + 14, 114, 20, ""));
-                buttonList.add(new GuiButton(flagId(TileEntityFieldGeneratorSC.F_PUSH_PLAYERS), x + 118, y + 14, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_PRIVATE), x, y + 14, 114, 20, ""));
+                buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_PUSH_PLAYERS), x + 118, y + 14, 114, 20, ""));
                 List<String> names = field.getAccess();
                 for (int i = 0; i < names.size() && i < TileEntityFieldGeneratorSC.MAX_ACCESS; i++) {
                     int col = i % 3, row = i / 3;
-                    GuiButton b = new GuiButton(REMOVE_BASE + i, x + col * 78, y + 56 + row * 16, 76, 15, "");
+                    GuiButton b = new TextFitSC.Button(REMOVE_BASE + i, x + col * 78, y + 56 + row * 16, 76, 15, "");
                     b.enabled = mayEditAccess();
                     buttonList.add(b);
                 }
                 nameField = new GuiTextField(fontRendererObj, x + 1, guiTop + H - 24, 160, 16);
                 nameField.setMaxStringLength(16);
                 nameField.setEnabled(mayEditAccess());
-                GuiButton add = new GuiButton(ADD_ID, x + 166, guiTop + H - 26, 66, 20, Lang.tr("sc.fieldgui.access.add"));
+                GuiButton add = new TextFitSC.Button(ADD_ID, x + 166, guiTop + H - 26, 66, 20, Lang.tr("sc.fieldgui.access.add"));
                 add.enabled = mayEditAccess();
                 buttonList.add(add);
                 break;
@@ -315,46 +312,47 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             case 0: {
                 String status = field.isRedstoneOff() ? Lang.tr("sc.fieldgui.status.redstone")
                         : Lang.tr(field.isActive() ? "sc.gui.field.active" : "sc.gui.field.inactive");
-                fontRendererObj.drawString(status, 8, 32, field.isActive() ? 0x2E7D32 : field.isRedstoneOff() ? 0x8A5A00 : 0xA02020);
-                fontRendererObj.drawString(Lang.tr("sc.gui.field.mode", modeName(field.getMode())), 8, 46, c);
-                fontRendererObj.drawString(Lang.tr("sc.gui.field.nodes", field.getNodeCount()), 8, 58, c);
-                fontRendererObj.drawString(Lang.tr("sc.gui.field.range", field.getRange()), 8, 70, c);
-                fontRendererObj.drawString(Lang.tr("sc.gui.field.upkeep", field.upkeepPerTick()), 8, 82, c);
-                fontRendererObj.drawString(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 8, 96, dim);
+                int room = ENERGY_X - 12;
+                fit(status, 8, 32, room, field.isActive() ? 0x2E7D32 : field.isRedstoneOff() ? 0x8A5A00 : 0xA02020);
+                fit(Lang.tr("sc.gui.field.mode", modeName(field.getMode())), 8, 46, room, c);
+                fit(Lang.tr("sc.gui.field.nodes", field.getNodeCount()), 8, 58, room, c);
+                fit(Lang.tr("sc.gui.field.range", field.getRange()), 8, 70, room, c);
+                fit(Lang.tr("sc.gui.field.upkeep", field.upkeepPerTick()), 8, 82, room, c);
+                fit(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 8, 96, room, dim);
                 break;
             }
             case 1:
                 break;
             case 2: {
-                fontRendererObj.drawString(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 8, 32, c);
-                fontRendererObj.drawString(Lang.tr("sc.fieldgui.access.list", field.getAccess().size(), TileEntityFieldGeneratorSC.MAX_ACCESS),
-                        8, 72, c);
+                fit(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 8, 32, W - 16, c);
+                fit(Lang.tr("sc.fieldgui.access.list", field.getAccess().size(), TileEntityFieldGeneratorSC.MAX_ACCESS), 8, 72, W - 16, c);
                 if (field.getAccess().isEmpty()) {
-                    fontRendererObj.drawString(Lang.tr("sc.fieldgui.access.empty"), 12, 90, 0xE0E0E0);
+                    fit(Lang.tr("sc.fieldgui.access.empty"), 12, 90, W - 24, 0xE0E0E0);
                 }
                 if (!mayEditAccess()) {
-                    fontRendererObj.drawString(Lang.tr("sc.fieldgui.access.ownerOnly"), 8, H - 38, 0xA02020);
+                    fit(Lang.tr("sc.fieldgui.access.ownerOnly"), 8, H - 38, W - 16, 0xA02020);
                 }
                 break;
             }
             case TAB_UPGRADES: {
                 String title = Lang.tr("sc.fieldgui.upgrades.title");
-                fontRendererObj.drawString(title, (W - fontRendererObj.getStringWidth(title)) / 2, 32, c);
+                fitCentered(title, 32, c);
+                int tw = Math.min(W - 30, fontRendererObj.getStringWidth(title));
+                TextFitSC.help(fontRendererObj, (W + tw) / 2 + 3, 31, Lang.tr("sc.fieldgui.upgrades.hint"), guiLeft, guiTop);
                 int n = field.storageUpgrades();
                 String count = Lang.tr("sc.fieldgui.upgrades.count", n, com.sc.machine.UpgradeType.MAX_EFFECTIVE,
                         n * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE);
-                fontRendererObj.drawString(count, (W - fontRendererObj.getStringWidth(count)) / 2, 70, c);
+                fitCentered(count, 70, c);
                 String buf = Lang.tr("sc.fieldgui.upgrades.buffer", field.getEnergyStored(), field.getMaxEnergyStored());
-                fontRendererObj.drawString(buf, (W - fontRendererObj.getStringWidth(buf)) / 2, 80, c);
+                fitCentered(buf, 80, c);
                 String input = Lang.tr("sc.fieldgui.upgrades.input", field.inputTier().name(), field.inputTier().getVoltage());
-                fontRendererObj.drawString(input, (W - fontRendererObj.getStringWidth(input)) / 2, 90, c);
-                fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.upgrades.hint"), 10, 114, W - 20, dim);
-                fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerFieldGeneratorSC.INV_X, ContainerFieldGeneratorSC.INV_Y - 11, c);
+                fitCentered(input, 90, c);
+                fit(Lang.tr("container.inventory"), ContainerFieldGeneratorSC.INV_X, ContainerFieldGeneratorSC.INV_Y - 11, 162, c);
                 break;
             }
             default: {
                 int lx = MAP_X + MAP + 8;
-                fontRendererObj.drawString(Lang.tr("sc.fieldgui.map.title"), lx, 32, c);
+                fit(Lang.tr("sc.fieldgui.map.title"), lx, 32, W - lx - 6, c);
                 legend(lx, 48, 0xFFFFE040, Lang.tr("sc.fieldgui.map.master"));
                 legend(lx, 60, 0xFFFFFFFF, Lang.tr("sc.fieldgui.map.node"));
                 legend(lx, 72, 0xFFFF4040, Lang.tr("sc.fieldgui.map.you"));
@@ -373,7 +371,16 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     private void legend(int x, int y, int color, String text) {
         drawRect(x, y + 1, x + 6, y + 7, color);
-        fontRendererObj.drawString(text, x + 9, y, 0x404040);
+        fit(text, x + 9, y, W - x - 15, 0x404040);
+    }
+
+    /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
+    private void fit(String text, int x, int y, int maxW, int color) {
+        TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop);
+    }
+
+    private void fitCentered(String text, int y, int color) {
+        TextFitSC.drawCentered(fontRendererObj, text, 8, y, W - 16, color, false, guiLeft, guiTop);
     }
 
     /** The field at the master's height, seen from above (north up), with the nodes and the player. */
@@ -439,6 +446,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tip = new ArrayList<String>();
         for (Object o : buttonList) {
@@ -467,6 +475,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             tip.add(Lang.tr("sc.gui.energy"));
             tip.add(field.getEnergyStored() + " / " + field.getMaxEnergyStored() + " EU");
             tip.add(Lang.tr("sc.gui.field.upkeep", field.upkeepPerTick()));
+        }
+        if (tip.isEmpty() && TextFitSC.hoverAt(mouseX, mouseY) != null) {
+            tip.addAll(TextFitSC.hoverAt(mouseX, mouseY));
         }
         if (!tip.isEmpty()) {
             drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tip, width), mouseX, mouseY, fontRendererObj);

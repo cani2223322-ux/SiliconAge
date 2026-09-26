@@ -60,17 +60,28 @@ public class GuiEnergyStorageSC extends GuiContainer {
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         String title = Lang.tr("tile.siliconage." + (storage instanceof com.sc.tileentity.TileEntityChargePadSC ? "chargePad." : "energyStorage.")
                 + storage.getTier().name().toLowerCase(java.util.Locale.ROOT) + ".name");
-        fontRendererObj.drawString(title, 8, 5, GuiGaugeSC.TITLE_COLOR);
+        fit(title, 8, 5, titleRoom(storage.getTier()), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, storage.getTier(), xSize - 6, 3);
-        fontRendererObj.drawString(Lang.tr("sc.storage.gui.stored", String.valueOf(storage.getEnergyStored())), 8, 20, 0x404040);
-        fontRendererObj.drawString(Lang.tr("sc.storage.gui.capacity", String.valueOf(storage.getMaxEnergyStored()),
-                Math.round(fraction() * 100)), 8, 30, 0x606060);
+        fit(Lang.tr("sc.storage.gui.stored", String.valueOf(storage.getEnergyStored())), 8, 20, ENERGY_X - 12, 0x404040);
+        fit(Lang.tr("sc.storage.gui.capacity", String.valueOf(storage.getMaxEnergyStored()),
+                Math.round(fraction() * 100)), 8, 30, ENERGY_X - 12, 0x606060);
         // Flow and output sit left of the charge slot (x 130): 8..~110 px at the longest strings
         // ("Поток: +10240 EU/t", "Output: 2048 EU/t"); which face is the output is in the tooltip.
         int flow = storage.getFlowPerTick();
-        fontRendererObj.drawString(Lang.tr("sc.storage.gui.flow", (flow > 0 ? "+" : "") + flow), TEXT_X, FLOW_Y,
+        int room = ContainerEnergyStorageSC.SLOT_X - 4 - TEXT_X;
+        fit(Lang.tr("sc.storage.gui.flow", (flow > 0 ? "+" : "") + flow), TEXT_X, FLOW_Y, room,
                 flow > 0 ? 0x2E7D32 : flow < 0 ? 0xB02418 : 0x606060);
-        fontRendererObj.drawString(Lang.tr("sc.storage.gui.output", storage.getTier().getVoltage()), TEXT_X, OUTPUT_Y, 0x606060);
+        fit(Lang.tr("sc.storage.gui.output", storage.getTier().getVoltage()), TEXT_X, OUTPUT_Y, room, 0x606060);
+    }
+
+    /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
+    private void fit(String text, int x, int y, int maxW, int color) {
+        TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop);
+    }
+
+    /** Room for the title: up to the tier plate at the right of the title bar. */
+    private int titleRoom(com.sc.energy.Tier tier) {
+        return 176 - 6 - (fontRendererObj.getStringWidth(tier.name()) + 4) - 4 - 8;
     }
 
     private List<String> tooltipAt(int mx, int my) {
@@ -95,8 +106,12 @@ public class GuiEnergyStorageSC extends GuiContainer {
     /** Tooltips in screen space - see GuiMachineSC.drawScreen. */
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tooltip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
+        if (tooltip == null) {
+            tooltip = TextFitSC.hoverAt(mouseX, mouseY);
+        }
         if (tooltip != null) {
             drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tooltip, width), mouseX, mouseY, fontRendererObj);
         }

@@ -52,7 +52,7 @@ public class GuiGeneratorSC extends GuiContainer {
         super.initGui();
         buttonList.clear();
         if (type == GeneratorType.CREATIVE) {
-            buttonList.add(new GuiButton(ContainerGeneratorSC.BTN_CREATIVE_TIER, guiLeft + 30, guiTop + 26, 100, 20, ""));
+            buttonList.add(new TextFitSC.Button(ContainerGeneratorSC.BTN_CREATIVE_TIER, guiLeft + 30, guiTop + 26, 100, 20, ""));
         }
     }
 
@@ -156,14 +156,14 @@ public class GuiGeneratorSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        fontRendererObj.drawString(type.localizedName(), 8, 5, GuiGaugeSC.TITLE_COLOR);
+        fit(type.localizedName(), 8, 5, titleRoom(generator.outputTier()), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, generator.outputTier(), 176 - 6, 3);
         GeneratorStatus status = generator.getStatus();
-        fontRendererObj.drawString(status.localized(), STATUS_X, STATUS_Y, statusColor(status));
-        fontRendererObj.drawString(Lang.tr("sc.gui.gen.now", generator.getLastOutput()), STATUS_X, OUTPUT_Y, 0x404040);
+        fit(status.localized(), STATUS_X, STATUS_Y, ENERGY_X - 4 - STATUS_X, statusColor(status));
+        fit(Lang.tr("sc.gui.gen.now", generator.getLastOutput()), STATUS_X, OUTPUT_Y, ENERGY_X - 4 - STATUS_X, 0x404040);
         if (isReactor()) {                // the plasma heat under its bar
-            fontRendererObj.drawString(Lang.tr("sc.gui.gen.plasma.short", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT),
-                    HEAT_X, HEAT_Y + HEAT_H + 2, 0x8A3A10);
+            fit(Lang.tr("sc.gui.gen.plasma.short", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT),
+                    HEAT_X, HEAT_Y + HEAT_H + 2, ENERGY_X - 4 - HEAT_X, 0x8A3A10);
         }
         int c = 0x404040;
         switch (type.kind) {
@@ -171,25 +171,25 @@ public class GuiGeneratorSC extends GuiContainer {
                 boolean sky = status != GeneratorStatus.NO_SUNLIGHT;
                 String when = !sky ? Lang.tr("sc.gui.gen.nosky")
                         : Lang.tr(mc.theWorld.isDaytime() ? "sc.gui.gen.day" : "sc.gui.gen.night");
-                fontRendererObj.drawString(when, 100, 26, c);
+                fit(when, 96, 26, ENERGY_X - 100, c);
                 if (sky && mc.theWorld.isRaining()) {
-                    fontRendererObj.drawString(Lang.tr("sc.gui.gen.rain"), 100, 36, 0x2A62A8);
+                    fit(Lang.tr("sc.gui.gen.rain"), 96, 36, ENERGY_X - 100, 0x2A62A8);
                 }
                 break;
             }
             case WIND:
-                fontRendererObj.drawString(Lang.tr("sc.gui.gen.height", generator.getInfoA()), INFO_X - 16, INFO_Y + 2, c);
-                fontRendererObj.drawString(Lang.tr("sc.gui.gen.free", generator.getInfoB()), INFO_X - 16, INFO_Y + 12, c);
+                fit(Lang.tr("sc.gui.gen.height", generator.getInfoA()), INFO_X - 16, INFO_Y + 2, ENERGY_X - 4 - (INFO_X - 16), c);
+                fit(Lang.tr("sc.gui.gen.free", generator.getInfoB()), INFO_X - 16, INFO_Y + 12, ENERGY_X - 4 - (INFO_X - 16), c);
                 break;
             case WATER:
-                fontRendererObj.drawString(Lang.tr("sc.gui.gen.flow", generator.getInfoA()), INFO_X - 16, INFO_Y + 6, c);
+                fit(Lang.tr("sc.gui.gen.flow", generator.getInfoA()), INFO_X - 16, INFO_Y + 6, ENERGY_X - 4 - (INFO_X - 16), c);
                 break;
             case THERMO:
-                fontRendererObj.drawString(Lang.tr("sc.gui.gen.pairs", generator.getInfoA()), INFO_X - 16, INFO_Y + 2, c);
-                fontRendererObj.drawString(Lang.tr("sc.gui.gen.dt", generator.getInfoB()), INFO_X - 16, INFO_Y + 12, c);
+                fit(Lang.tr("sc.gui.gen.pairs", generator.getInfoA()), INFO_X - 16, INFO_Y + 2, ENERGY_X - 4 - (INFO_X - 16), c);
+                fit(Lang.tr("sc.gui.gen.dt", generator.getInfoB()), INFO_X - 16, INFO_Y + 12, ENERGY_X - 4 - (INFO_X - 16), c);
                 break;
             case RTG:
-                fontRendererObj.drawString(Lang.tr("sc.gui.gen.capsules", generator.getInfoA()), INFO_X - 16, INFO_Y + 6, c);
+                fit(Lang.tr("sc.gui.gen.capsules", generator.getInfoA()), INFO_X - 16, INFO_Y + 6, ENERGY_X - 4 - (INFO_X - 16), c);
                 break;
             default:
         }
@@ -197,11 +197,25 @@ public class GuiGeneratorSC extends GuiContainer {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tooltip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
+        if (tooltip == null) {
+            tooltip = TextFitSC.hoverAt(mouseX, mouseY);
+        }
         if (tooltip != null) {
             drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tooltip, width), mouseX, mouseY, fontRendererObj);
         }
+    }
+
+    /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
+    private void fit(String text, int x, int y, int maxW, int color) {
+        TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop);
+    }
+
+    /** Room for the title: up to the tier plate at the right of the title bar. */
+    private int titleRoom(com.sc.energy.Tier tier) {
+        return 176 - 6 - (fontRendererObj.getStringWidth(tier.name()) + 4) - 4 - 8;
     }
 
     private static int statusColor(GeneratorStatus status) {

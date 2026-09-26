@@ -106,7 +106,7 @@ public class GuiArmorSC extends GuiScreen {
         for (int type : tabs) {
             String label = type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
                     : type == DRILL_TAB ? Lang.tr("sc.drillgui.tab") : Lang.tr("sc.armorhud.piece." + type);
-            GuiButton tab = new GuiButton(TAB_BASE + type, tx, top + 14, tabW, 18, label);
+            GuiButton tab = new com.sc.inventory.TextFitSC.Button(TAB_BASE + type, tx, top + 14, tabW, 18, label);
             tab.enabled = type != selectedPiece;                // the pressed-in one is the open tab
             buttonList.add(tab);
             tx += tabW + 2;
@@ -154,18 +154,18 @@ public class GuiArmorSC extends GuiScreen {
         }
         chipsShown = selectedPiece == 1 && ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1));
         if (chipsShown) {
-            buttonList.add(new GuiButton(CHIPS_ID, width / 2 - 90, y + 4, 180, 18, Lang.tr("sc.armorgui.chips.remove")));
+            buttonList.add(new com.sc.inventory.TextFitSC.Button(CHIPS_ID, width / 2 - 90, y + 4, 180, 18, Lang.tr("sc.armorgui.chips.remove")));
             y += 22;
         }
         if (ArmorLogicSC.piece(mc.thePlayer, 1) != null && selectedPiece != BLADE_TAB && selectedPiece != MODE_TAB && selectedPiece != DRILL_TAB) {
-            buttonList.add(new GuiButton(MODE_ID, width / 2 - 90, Math.max(y + 6, top + 190), 180, 18, ""));
+            buttonList.add(new com.sc.inventory.TextFitSC.Button(MODE_ID, width / 2 - 90, Math.max(y + 6, top + 190), 180, 18, ""));
         }
         refresh();
     }
 
     private void addRow(Enum<?> f, int left, int y) {
-        buttonList.add(new GuiButton(switchId(f), left, y, NAME_W, 18, ""));
-        buttonList.add(new GuiButton(BIND_BASE + switchId(f), left + NAME_W + 4, y, BIND_W, 18, ""));
+        buttonList.add(new com.sc.inventory.TextFitSC.Button(switchId(f), left, y, NAME_W, 18, ""));
+        buttonList.add(new com.sc.inventory.TextFitSC.Button(BIND_BASE + switchId(f), left + NAME_W + 4, y, BIND_W, 18, ""));
     }
 
     private boolean isOn(Enum<?> f) {
@@ -318,6 +318,7 @@ public class GuiArmorSC extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        com.sc.inventory.TextFitSC.beginFrame();
         drawDefaultBackground();
         drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.title"), width / 2, top, 0xFFFFFF);
         if (selectedPiece < 0) {
@@ -374,6 +375,16 @@ public class GuiArmorSC extends GuiScreen {
             }
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
+        boolean overFeature = false;
+        for (Object o : buttonList) {
+            GuiButton b = (GuiButton) o;
+            overFeature |= !(b.id >= TAB_BASE && b.id < BIND_BASE) && mouseX >= b.xPosition && mouseY >= b.yPosition
+                    && mouseX < b.xPosition + b.width && mouseY < b.yPosition + b.height;
+        }
+        List<String> cut = com.sc.inventory.TextFitSC.hoverAt(mouseX, mouseY);
+        if (!overFeature && cut != null) {             // a caption too long for its button or tab
+            drawHoveringText(cut, mouseX, mouseY, fontRendererObj);
+        }
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
             if (b.id >= TAB_BASE && b.id < BIND_BASE || mouseX < b.xPosition || mouseY < b.yPosition
