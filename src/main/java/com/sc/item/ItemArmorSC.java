@@ -178,6 +178,21 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     }
 
     /** The suit's power mode (kept on the chestplate): 0 economy, 1 normal, 2 combat. */
+    /** The light colour picked in the armour menu (0 = the suit's own; ModelArmorGlowSC.COLORS). */
+    public static int glowColor(ItemStack piece) {
+        return piece != null && piece.hasTagCompound() ? piece.getTagCompound().getInteger("GlowColorSC") : 0;
+    }
+
+    public static void setGlowColor(ItemStack piece, int color) {
+        if (!piece.hasTagCompound()) {
+            piece.setTagCompound(new NBTTagCompound());
+        }
+        piece.getTagCompound().setInteger("GlowColorSC", Math.max(0, Math.min(GLOW_COLORS - 1, color)));
+    }
+
+    /** How many light colours there are (the suit's own + 9). */
+    public static final int GLOW_COLORS = 10;
+
     public static int powerMode(ItemStack chest) {
         return chest != null && chest.hasTagCompound() && chest.getTagCompound().hasKey("PowerMode")
                 ? Math.max(0, Math.min(2, chest.getTagCompound().getInteger("PowerMode"))) : 1;

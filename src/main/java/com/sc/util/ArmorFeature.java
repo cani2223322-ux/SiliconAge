@@ -35,7 +35,8 @@ public enum ArmorFeature {
     // chestplate, added later (ordinals are saved - appended)
     ANNIHILATION(1, ArmorSuit.EXO, 0, 40, true),    // on its key only: every hostile mob within 7 blocks dies; 95% of the suit's energy
     REGENERATION(1, ArmorSuit.NANO, 200, 2, false), // combat mode only: heals every second; the whole suit costs 3x combat meanwhile
-    EXPLOSION_PROOF(1, ArmorSuit.EXO, 0, 2, true);  // full Exo set only: explosions neither hurt nor throw (EU per explosion)
+    EXPLOSION_PROOF(1, ArmorSuit.EXO, 0, 2, true),  // full Exo set only: explosions neither hurt nor throw (EU per explosion)
+    SET_AURA(1, ArmorSuit.NANO, 0, 0, true);        // full set of one suit: sparks of its light colour around the wearer (looks only)
 
     public final int piece;
     public final ArmorSuit minSuit;

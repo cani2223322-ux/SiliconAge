@@ -714,9 +714,9 @@ public final class SelfTestSC {
                 exo += f.availableIn(com.sc.util.ArmorSuit.EXO, type) ? 1 : 0;
             }
         }
-        check(nano == 6 && quantum == 13 && exo == 20 && com.sc.util.ArmorFeature.ANNIHILATION.isAction()
+        check(nano == 7 && quantum == 14 && exo == 21 && com.sc.util.ArmorFeature.ANNIHILATION.isAction()
                         && !com.sc.util.ArmorFeature.ANNIHILATION.availableIn(com.sc.util.ArmorSuit.QUANTUM, 1),
-                "suit functions: Nano 6, Quantum 13 (flight from Quantum), Exo all 20 incl. the annihilation pulse, regeneration, explosion proofing (" + nano + "/" + quantum + "/" + exo + ")");
+                "suit functions: Nano 7, Quantum 14 (flight from Quantum), Exo all 21 incl. the annihilation pulse, regeneration, explosion proofing, set aura (" + nano + "/" + quantum + "/" + exo + ")");
 
         ItemStack helmet = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[0]);
         ItemStack nanoHelmet = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[0]);

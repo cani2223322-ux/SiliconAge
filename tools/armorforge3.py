@@ -459,6 +459,9 @@ def layers(st, p):
     box(l1, 0, 32, 8, 24, 8, p, leg(st, True))
     box(l2, 32, 32, 16, 24, 8, p, body(st, True))
     box(l2, 0, 32, 8, 24, 8, p, leg(st, False))
+    if st == "Nano":
+        import parts3d
+        parts3d.paint("Nano", l1, l2, p)                     # the 3D add-on parts' nets
     return l1.im, l2.im
 
 

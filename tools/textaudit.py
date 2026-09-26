@@ -187,6 +187,8 @@ def audit(lang):
             check(lang, "storage title", v, 176 - 6 - 20 - 12)
     # ---- armour screen (K): function buttons 170 px, key buttons 90 px
     for k, v in L.items():
+        if k.startswith("sc.armorgui.glow."):
+            check(lang, "armour light colour", t("sc.armorgui.glow", v), 180 - 6)
         if re.match(r"sc\.(armorfn|bladefn|drillfn)\.[a-z_]+$", k):
             check(lang, "armour screen function", v + ": " + off, 170 - 6)
     # ---- tube filter buttons

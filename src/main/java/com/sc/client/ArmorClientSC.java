@@ -78,6 +78,11 @@ public class ArmorClientSC {
         } else {
             ArmorKeyBindsSC.markAllDown();
         }
+        if (!mc.isGamePaused() && mc.theWorld != null && mc.gameSettings.particleSetting < 2) {
+            for (Object o : mc.theWorld.playerEntities) {
+                aura((net.minecraft.entity.player.EntityPlayer) o);
+            }
+        }
         if (scannedWorld != mc.theWorld) {                      // another world / dimension / server
             ores.clear();
             scanTimer = 0;
@@ -91,6 +96,30 @@ public class ArmorClientSC {
         } else {
             ores.clear();
             scanTimer = 0;
+        }
+    }
+
+    /** A full set with its aura on: a few sparks of the suit's light colour drifting round the wearer. */
+    private static void aura(net.minecraft.entity.player.EntityPlayer p) {
+        if (p.isInvisible() || p.ticksExisted % 3 != 0) {
+            return;
+        }
+        com.sc.util.ArmorSuit set = ArmorLogicSC.fullSet(p);
+        ItemStack chest = ArmorLogicSC.piece(p, 1);
+        if (set == null || chest == null || !ItemArmorSC.isEnabled(chest, ArmorFeature.SET_AURA) || ItemArmorSC.chargeOf(chest) <= 0) {
+            return;
+        }
+        int c = ModelArmorGlowSC.COLORS[Math.max(0, Math.min(ModelArmorGlowSC.COLORS.length - 1, ItemArmorSC.glowColor(chest)))];
+        java.util.Random rnd = p.worldObj.rand;
+        if (c == 0) {
+            c = set == com.sc.util.ArmorSuit.NANO ? 0x5CFF6A : set == com.sc.util.ArmorSuit.QUANTUM ? 0x3FD6FF
+                    : new int[]{0xB35CFF, 0xFF5AB8, 0x5A7CFF}[rnd.nextInt(3)];
+        }
+        float r = Math.max(0.01F, (c >> 16 & 255) / 255F), g = (c >> 8 & 255) / 255F, b = (c & 255) / 255F;
+        for (int i = 0; i < 2; i++) {
+            double ang = rnd.nextDouble() * Math.PI * 2, rad = 0.45 + rnd.nextDouble() * 0.25;
+            double y = p.boundingBox.minY + rnd.nextDouble() * p.height;
+            p.worldObj.spawnParticle("reddust", p.posX + Math.cos(ang) * rad, y, p.posZ + Math.sin(ang) * rad, r, g, b);
         }
     }
 

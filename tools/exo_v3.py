@@ -211,6 +211,8 @@ def layers(v):
     e.box(l1, 0, 32, 8, 24, 8, leg(v, True))
     e.box(l2, 32, 32, 16, 24, 8, body(v, True))
     e.box(l2, 0, 32, 8, 24, 8, leg(v, False))
+    import parts3d
+    parts3d.paint("Exo", l1, l2, P)                         # the 3D add-on parts' nets
     for im in (l1, l2):
         e.finish(im)
     return l1.im, l2.im

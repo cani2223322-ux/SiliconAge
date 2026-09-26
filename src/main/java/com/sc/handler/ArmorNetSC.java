@@ -29,6 +29,8 @@ public final class ArmorNetSC {
     public static final byte REMOVE_CHIPS = 8;
     /** The drill in hand: switch one of its functions, or fire its laser. */
     public static final byte DRILL_TOGGLE = 9, DRILL_LASER = 10;
+    /** The light colour of every worn piece of the mod (feature = the colour index). */
+    public static final byte GLOW_COLOR = 11;
 
     private ArmorNetSC() {
     }
@@ -131,6 +133,16 @@ public final class ArmorNetSC {
                 case DRILL_LASER:
                     com.sc.item.DrillLogicSC.laser(p);
                     break;
+                case GLOW_COLOR: {
+                    for (int i = 0; i < 4; i++) {
+                        ItemStack s = ArmorLogicSC.piece(p, i);
+                        if (s != null) {
+                            ItemArmorSC.setGlowColor(s, msg.feature);
+                        }
+                    }
+                    p.inventoryContainer.detectAndSendChanges();
+                    break;
+                }
                 default:
                     break;
             }

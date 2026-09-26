@@ -40,7 +40,7 @@ public class GuiArmorSC extends GuiScreen {
     private static final int NAME_W = 170, BIND_W = 90, ROW = 20;
     /** The blade's tab (after the four armour pieces). */
     private static final int BLADE_TAB = 4, MODE_TAB = 5, DRILL_TAB = 6;
-    private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, BIND_BASE = 2000;
+    private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002, BIND_BASE = 2000;
 
     private int selectedPiece = -1;
     /** The "remove chips" button is on screen (rebuilt when the chips come or go). */
@@ -157,6 +157,10 @@ public class GuiArmorSC extends GuiScreen {
             buttonList.add(new com.sc.inventory.TextFitSC.Button(CHIPS_ID, width / 2 - 90, y + 4, 180, 18, Lang.tr("sc.armorgui.chips.remove")));
             y += 22;
         }
+        if (selectedPiece == 1) {                          // the chestplate's tab: the light colour of the whole suit
+            buttonList.add(new com.sc.inventory.TextFitSC.Button(COLOR_ID, width / 2 - 90, y + 4, 180, 18, ""));
+            y += 22;
+        }
         if (ArmorLogicSC.piece(mc.thePlayer, 1) != null && selectedPiece != BLADE_TAB && selectedPiece != MODE_TAB && selectedPiece != DRILL_TAB) {
             buttonList.add(new com.sc.inventory.TextFitSC.Button(MODE_ID, width / 2 - 90, Math.max(y + 6, top + 190), 180, 18, ""));
         }
@@ -195,6 +199,8 @@ public class GuiArmorSC extends GuiScreen {
             GuiButton b = (GuiButton) o;
             if (b.id == MODE_ID) {
                 b.displayString = Lang.tr("sc.armorgui.mode", Lang.tr("sc.armorgui.mode." + ArmorLogicSC.powerMode(mc.thePlayer)));
+            } else if (b.id == COLOR_ID) {
+                b.displayString = Lang.tr("sc.armorgui.glow", Lang.tr("sc.armorgui.glow." + ItemArmorSC.glowColor(ArmorLogicSC.piece(mc.thePlayer, 1))));
             } else if (b.id >= TAB_BASE && b.id < BIND_BASE) {
                 continue;
             } else if (b.id >= BIND_BASE) {
@@ -222,6 +228,18 @@ public class GuiArmorSC extends GuiScreen {
         if (b.id >= TAB_BASE && b.id < MODE_ID) {
             selectedPiece = b.id - TAB_BASE;
             initGui();
+            return;
+        }
+        if (b.id == COLOR_ID) {                         // the next colour, on every worn piece (shown at once)
+            int next = (ItemArmorSC.glowColor(ArmorLogicSC.piece(mc.thePlayer, 1)) + 1) % ItemArmorSC.GLOW_COLORS;
+            for (int i = 0; i < 4; i++) {
+                ItemStack s = ArmorLogicSC.piece(mc.thePlayer, i);
+                if (s != null) {
+                    ItemArmorSC.setGlowColor(s, next);
+                }
+            }
+            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.GLOW_COLOR, next));
+            refresh();
             return;
         }
         if (b.id == CHIPS_ID) {

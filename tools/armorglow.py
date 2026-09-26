@@ -21,6 +21,15 @@ def colour_mask(img, colours):
     return [[px[x, y][3] > 0 and tuple(px[x, y][:3]) in keep for y in range(img.size[1])] for x in range(img.size[0])]
 
 
+FRAMES = 8
+
+
+def wave(y, f):
+    """A band of light running down the armour: brightness 0.72..1 by frame."""
+    import math
+    return 0.72 + 0.28 * (0.5 + 0.5 * math.cos(2 * math.pi * ((y % 32) / 16.0 - f / float(FRAMES))))
+
+
 def exo_masks():
     """Exo's glow is iridescent (computed per pixel): find it from the unfinished layers' markers."""
     real = e.finish
@@ -32,11 +41,12 @@ def exo_masks():
     out = []
     for raw in (raw1, raw2):
         px = raw.load()
-        out.append([[px[x, y] in (e.G1, e.G2) for y in range(raw.size[1])] for x in range(raw.size[0])])
+        out.append([[(2 if px[x, y] == e.G2 else 1) if px[x, y] in (e.G1, e.G2) else 0
+                     for y in range(raw.size[1])] for x in range(raw.size[0])])
     return out
 
 
-def write(tex, suit, n, mask):
+def write(tex, suit, n, mask, exo=False):
     base = Image.open(os.path.join(tex, "models", "armor", "%s_layer_%d.png" % (suit, n))).convert("RGBA")
     bp = base.load()
     glow = Image.new("RGBA", base.size, (0, 0, 0, 0))
@@ -51,6 +61,32 @@ def write(tex, suit, n, mask):
                 rp[x, y] = (255, int(40 + 150 * max(0.0, lum - 0.5)), int(30 + 140 * max(0.0, lum - 0.5)), 255)
     glow.save(os.path.join(tex, "models", "armor", "%s_glow_%d.png" % (suit, n)))
     red.save(os.path.join(tex, "models", "armor", "%s_glowred_%d.png" % (suit, n)))
+    # white (for a chosen light colour: tinted in the renderer) and the animation frames
+    white = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    wp = white.load()
+    frames = [Image.new("RGBA", base.size, (0, 0, 0, 0)) for _ in range(FRAMES)]
+    fps = [f.load() for f in frames]
+    for x in range(base.size[0]):
+        for y in range(base.size[1]):
+            if not mask[x][y]:
+                continue
+            r, g, b, a = bp[x, y]
+            lum = (0.3 * r + 0.59 * g + 0.11 * b)
+            v = int(min(255, lum * 1.3 + 70))
+            wp[x, y] = (v, v, v, 255)
+            for f in range(FRAMES):
+                if exo:
+                    col = e.irid(x * 0.035 + y * 0.05 + f / float(FRAMES))
+                    if mask[x][y] == 2:
+                        col = e.mix(col, (255, 255, 255, 255), 0.55)
+                    cr, cg, cb = col[:3]
+                else:
+                    cr, cg, cb = r, g, b
+                k = wave(y, f)
+                fps[f][x, y] = (int(cr * k), int(cg * k), int(cb * k), 255)
+    white.save(os.path.join(tex, "models", "armor", "%s_gloww_%d.png" % (suit, n)))
+    for f in range(FRAMES):
+        frames[f].save(os.path.join(tex, "models", "armor", "%s_glow_%d_%d.png" % (suit, n, f)))
 
 
 if __name__ == "__main__":
@@ -62,6 +98,6 @@ if __name__ == "__main__":
         img = Image.open(os.path.join(tex, "models", "armor", "quantum_layer_%d.png" % n)).convert("RGBA")
         write(tex, "quantum", n, colour_mask(img, [qv.CY, qv.CYHI]))
     m1, m2 = exo_masks()
-    write(tex, "exo", 1, m1)
-    write(tex, "exo", 2, m2)
+    write(tex, "exo", 1, m1, True)
+    write(tex, "exo", 2, m2, True)
     print("ok")
