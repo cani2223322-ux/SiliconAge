@@ -803,6 +803,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
             return PUMP_OK;
         }
+        if (fluid == FluidRegistry.WATER) {
+            return pumpWaterBody(x, y, z);        // water heals itself: take the whole body at once
+        }
         net.minecraftforge.fluids.IFluidBlock fb = block instanceof net.minecraftforge.fluids.IFluidBlock
                 ? (net.minecraftforge.fluids.IFluidBlock) block : null;
         FluidStack there = fb != null ? (fb.canDrain(worldObj, x, y, z) ? fb.drain(worldObj, x, y, z, false) : null)
@@ -844,6 +847,70 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             worldObj.setBlock(x, y, z, Blocks.air, 0, 3);
         }
         return PUMP_OK;
+    }
+
+    /** Water taken a pump step at most, and EU per block past the first. */
+    public static final int WATER_BODY_MAX = 256, WATER_BODY_COST = 2;
+
+    /**
+     * Vanilla water refills a gap between two sources, so taking it a block at a time never ends.
+     * The whole connected body inside the area (sources and flowing blocks) goes at once, without
+     * block updates - nothing is told to flow back in. Every source is 1000 mB into the tank;
+     * when the tank is full, the Tank full setting decides (leave it / pause / destroy / ice).
+     */
+    private int pumpWaterBody(int x0, int y0, int z0) {
+        int[] a = area();
+        java.util.ArrayDeque<int[]> open = new java.util.ArrayDeque<int[]>();
+        java.util.Set<Long> seen = new java.util.HashSet<Long>();
+        open.add(new int[]{x0, y0, z0});
+        seen.add(((long) x0 << 36) ^ ((long) y0 << 24) ^ z0);
+        int taken = 0;
+        while (!open.isEmpty() && taken < WATER_BODY_MAX) {
+            int[] c = open.poll();
+            int x = c[0], y = c[1], z = c[2];
+            Block b = worldObj.getBlock(x, y, z);
+            if (b != Blocks.water && b != Blocks.flowing_water || forbidden(x, y, z)) {
+                continue;
+            }
+            if (taken > 0 && getEnergyStored() < WATER_BODY_COST) {
+                break;
+            }
+            if (worldObj.getBlockMetadata(x, y, z) == 0) {              // a source
+                FluidStack fs = new FluidStack(FluidRegistry.WATER, 1000);
+                int t = compartmentFor(fs);
+                if (t >= 0) {
+                    tanks[t].fill(fs, true);
+                } else if (tankFull == FULL_PAUSE) {
+                    return taken > 0 ? PUMP_OK : PUMP_WAIT;
+                } else if (tankFull == FULL_VOID && active(ItemQuarryModuleSC.Kind.TRASH, F_TRASH)
+                        && getEnergyStored() >= TRASH_COST) {
+                    removeEnergy(TRASH_COST);
+                } else if (tankFull == FULL_BLOCK) {
+                    store(new ItemStack(Blocks.ice));
+                } else {
+                    break;                                              // left in the world
+                }
+            }
+            if (taken > 0) {
+                removeEnergy(WATER_BODY_COST);
+            }
+            worldObj.setBlock(x, y, z, Blocks.air, 0, 2);               // no neighbour updates: no refilling
+            taken++;
+            for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+                int nx = x + d.offsetX, ny = y + d.offsetY, nz = z + d.offsetZ;
+                if (a != null && (nx < a[0] || nx > a[2] || nz < a[1] || nz > a[3] || ny > a[4] || ny < a[5])) {
+                    continue;
+                }
+                if (!worldObj.blockExists(nx, ny, nz) || !seen.add(((long) nx << 36) ^ ((long) ny << 24) ^ nz)) {
+                    continue;
+                }
+                open.add(new int[]{nx, ny, nz});
+            }
+        }
+        if (taken > 0) {
+            markDirty();
+        }
+        return taken > 0 ? PUMP_OK : PUMP_SKIP;
     }
 
     /** The open compartment that takes all of it: one already holding that fluid, or an empty one; -1 if none. */
