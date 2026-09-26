@@ -24,7 +24,9 @@ import net.minecraft.util.AxisAlignedBB;
  * - Functions: no spawning, no ender teleports, mob damage, targets, warnings, wireless charging, healing;
  * - Access: the owner, the private zone, pushing strangers out, the access list (owner edits it);
  * - Map: the cluster seen from above - the field at the master's height, the nodes, the player;
- * - Upgrades: four slots for energy storage (a bigger buffer) and transformer (EV input) upgrades, the player's inventory.
+ * - Upgrades: four slots for energy storage (a bigger buffer) and transformer (EV input) upgrades, the player's inventory;
+ * - Zone: radius, height, offset, centre and shape (at once, or held as a preview and applied), the
+ *   outline, dashes, shell, animation, brightness, node beams, hum, and the three colours (RGB).
  * Buttons go through the vanilla GUI-button packet (ContainerFieldGeneratorSC.enchantItem), the
  * access list through FieldNetSC; the state comes back with the block (description packet).
  * Drawn in code, vanilla style (the old 176x100 texture couldn't hold it all).
@@ -32,7 +34,18 @@ import net.minecraft.util.AxisAlignedBB;
 public class GuiFieldGeneratorSC extends GuiContainer {
 
     private static final int W = 248, H = 226;
-    private static final int TAB_BASE = 100, ADD_ID = 200, REMOVE_BASE = 300, TAB_UPGRADES = 4, PAGE_ID = 40;
+    /**
+     * Six tabs take two rows (4 + 2): the panel grows TABS_UP px upwards and guiTop stays the
+     * content's origin (initGui moves it down), so every tab keeps its old coordinates.
+     */
+    private static final int TABS_UP = 22;
+    private static final int TAB_BASE = 100, ADD_ID = 200, REMOVE_BASE = 300, TAB_UPGRADES = 4, TAB_ZONE = 5, PAGE_ID = 40;
+    /** The Zone tab's own buttons (client side: they edit the draft, then FieldNetSC). */
+    private static final int Z_BASE = 50, Z_RANGE = 50, Z_HEIGHT = 54, Z_OFFX = 58, Z_OFFZ = 62, Z_OFFY = 66, Z_SHAPE = 70,
+            Z_ANCHOR = 71, Z_PREVIEW = 72, Z_APPLY = 73, Z_CANCEL = 74, Z_TARGET = 75, Z_PRESET = 80, Z_SLIDER = 90;
+    private static final int[] STEP_BIG = {-16, -1, 1, 16}, STEP_OFF = {-8, -1, 1, 8};
+    /** Draft indices: range, height, offset x / y / z, anchor, shape, set point x / y / z. */
+    private static final int D_RANGE = 0, D_HEIGHT = 1, D_OX = 2, D_OY = 3, D_OZ = 4, D_ANCHOR = 5, D_MODE = 6, D_PX = 7;
     /** The energy gauge (GuiEnergyGaugeSC); the Field tab's text rooms end 4 px before it. */
     private static final int ENERGY_X = 222, ENERGY_Y = 33, ENERGY_W = 22, ENERGY_H = 79;
     private static final int MAP_X = 10, MAP_Y = 34, MAP = 150, CELL = 2;
@@ -40,6 +53,16 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     private static int tab;                 // remembered while the game runs
     /** The Functions tab's second page: wireless charging. */
     private static boolean chargePage;
+    /** The Zone tab: its draft (whose master), preview mode, the colour being edited. */
+    private static int[] draft;
+    private static String draftOf = "";
+    private static boolean previewMode;
+    private static int colorTarget;
+    /** Ticks the screen keeps its own values after sending them, until the block's update arrives. */
+    private int holdZone, holdRgb;
+    private int editRgb = -1;
+    private String volumeKey = "";
+    private long volume;
 
     private final TileEntityFieldGeneratorSC field;
     private GuiTextField nameField;
@@ -52,7 +75,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         super(new ContainerFieldGeneratorSC(playerInv, field));
         this.field = field;
         xSize = W;
-        ySize = H;
+        ySize = H + TABS_UP;
     }
 
     // ------------------------------------------------------------------ layout
@@ -60,18 +83,20 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     @Override
     public void initGui() {
         super.initGui();
+        guiTop += TABS_UP;
         Keyboard.enableRepeatEvents(true);
         buttonList.clear();
         String[] tabs = {"sc.fieldgui.tab.field", "sc.fieldgui.tab.functions", "sc.fieldgui.tab.access", "sc.fieldgui.tab.map",
-                "sc.fieldgui.tab.upgrades"};
+                "sc.fieldgui.tab.upgrades", "sc.fieldgui.tab.zone"};
         // tabs: an icon and a short name (smaller, or left out when there's no room), the full name as the tooltip
         net.minecraft.item.ItemStack[] icons = {new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.fieldGeneratorSC),
                 new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.lever), new net.minecraft.item.ItemStack(net.minecraft.init.Items.name_tag),
                 new net.minecraft.item.ItemStack(net.minecraft.init.Items.map),
-                com.sc.init.ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE)};
-        int tw = (W - 16 - 2 * (tabs.length - 1)) / tabs.length;
+                com.sc.init.ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE),
+                new net.minecraft.item.ItemStack(net.minecraft.init.Items.compass)};
+        int tw = (W - 16 - 2 * 3) / 4;
         for (int i = 0; i < tabs.length; i++) {
-            GuiButton b = new TextFitSC.Tab(TAB_BASE + i, guiLeft + 8 + i * (tw + 2), guiTop + 5, tw, 20, icons[i],
+            GuiButton b = new TextFitSC.Tab(TAB_BASE + i, guiLeft + 8 + i % 4 * (tw + 2), guiTop + 5 - TABS_UP + i / 4 * TABS_UP, tw, 20, icons[i],
                     Lang.tr(tabs[i] + ".short"), Lang.tr(tabs[i]));
             b.enabled = i != tab;
             buttonList.add(b);
@@ -81,16 +106,39 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         int x = guiLeft + 8, y = guiTop + 30;
         switch (tab) {
             case 0: {
-                int ry = guiTop + 118;
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_MINUS_16, x, ry, 30, 20, "-16"));
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_MINUS_1, x + 32, ry, 30, 20, "-1"));
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_PLUS_1, x + 64, ry, 30, 20, "+1"));
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RANGE_PLUS_16, x + 96, ry, 30, 20, "+16"));
-                int by = guiTop + 142;
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_MODE, x, by, 114, 20, ""));
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_COLOR, x + 118, by, 114, 20, ""));
-                buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_SHOW), x, by + 22, 114, 20, ""));
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_REDSTONE, x + 118, by + 22, 114, 20, ""));
+                // radius, shape, colour and shell moved to the Zone tab
+                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_REDSTONE, x, guiTop + 142, W - 16, 20, ""));
+                break;
+            }
+            case TAB_ZONE: {
+                ensureDraft();
+                int[] bases = {Z_RANGE, Z_HEIGHT, Z_OFFX, Z_OFFZ, Z_OFFY};
+                for (int k = 0; k < bases.length; k++) {
+                    int[] steps = k < 2 ? STEP_BIG : STEP_OFF;
+                    for (int j = 0; j < 4; j++) {
+                        buttonList.add(new TextFitSC.Button(bases[k] + j, x + j * 28, guiTop + 40 + k * 24, 27, 12,
+                                (steps[j] > 0 ? "+" : "") + steps[j]));
+                    }
+                }
+                buttonList.add(new TextFitSC.Button(Z_SHAPE, x, guiTop + 152, 114, 13, ""));
+                buttonList.add(new TextFitSC.Button(Z_ANCHOR, x, guiTop + 167, 114, 13, ""));
+                buttonList.add(new TextFitSC.Button(Z_PREVIEW, x, guiTop + 182, 114, 13, ""));
+                buttonList.add(new TextFitSC.Button(Z_APPLY, x, guiTop + 197, 56, 13, Lang.tr("sc.fieldzone.apply")));
+                buttonList.add(new TextFitSC.Button(Z_CANCEL, x + 58, guiTop + 197, 56, 13, Lang.tr("sc.fieldzone.cancel")));
+                int rx = guiLeft + 126, rw = 114;
+                int[] right = {ContainerFieldGeneratorSC.BTN_OUTLINE, flagId(TileEntityFieldGeneratorSC.F_DASH),
+                        flagId(TileEntityFieldGeneratorSC.F_SHOW), ContainerFieldGeneratorSC.BTN_ANIM, ContainerFieldGeneratorSC.BTN_BRIGHT,
+                        flagId(TileEntityFieldGeneratorSC.F_BEAMS), flagId(TileEntityFieldGeneratorSC.F_HUM)};
+                for (int i = 0; i < right.length; i++) {
+                    buttonList.add(new TextFitSC.Button(right[i], rx, guiTop + 30 + i * 14, rw, 13, ""));
+                }
+                buttonList.add(new TextFitSC.Button(Z_TARGET, rx, guiTop + 130, rw - 18, 13, ""));
+                for (int i = 0; i < TileEntityFieldGeneratorSC.PRESETS.length; i++) {
+                    buttonList.add(new TextFitSC.Button(Z_PRESET + i, rx + i * 14 + 1, guiTop + 146, 13, 12, ""));
+                }
+                for (int ch = 0; ch < 3; ch++) {
+                    buttonList.add(new Slider(Z_SLIDER + ch, rx, guiTop + 162 + ch * 14, rw, 12, ch));
+                }
                 break;
             }
             case 1: {
@@ -156,6 +204,23 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
             int id = b.id;
+            if (id >= Z_BASE && id < TAB_BASE) {
+                refreshZone(b);
+                continue;
+            }
+            if (id == ContainerFieldGeneratorSC.BTN_OUTLINE) {
+                b.displayString = Lang.tr("sc.fieldzone.outline", Lang.tr("sc.fieldzone.outline." + field.getOutline()));
+                b.enabled = mayEdit();
+                continue;
+            } else if (id == ContainerFieldGeneratorSC.BTN_ANIM) {
+                b.displayString = Lang.tr("sc.fieldzone.anim", Lang.tr("sc.fieldzone.anim." + field.getAnim()));
+                b.enabled = mayEdit();
+                continue;
+            } else if (id == ContainerFieldGeneratorSC.BTN_BRIGHT) {
+                b.displayString = Lang.tr("sc.fieldzone.bright", field.getBrightness());
+                b.enabled = mayEdit();
+                continue;
+            }
             if (id >= TAB_BASE) {
                 if (id >= REMOVE_BASE && id - REMOVE_BASE < field.getAccess().size()) {
                     b.displayString = "§c×§r " + field.getAccess().get(id - REMOVE_BASE);
@@ -177,8 +242,6 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 b.displayString = (on ? "§a" : "§7") + Lang.tr("sc.fieldgui.flag." + flag) + ": " + onOff(on);
             } else if (id == ContainerFieldGeneratorSC.BTN_MODE) {
                 b.displayString = Lang.tr("sc.fieldgui.shape", modeName(field.getMode()));
-            } else if (id == ContainerFieldGeneratorSC.BTN_COLOR) {
-                b.displayString = Lang.tr("sc.fieldgui.color", Lang.tr("sc.fieldgui.color." + field.getColor()));
             } else if (id == ContainerFieldGeneratorSC.BTN_REDSTONE) {
                 b.displayString = Lang.tr("sc.fieldgui.redstone", Lang.tr("sc.fieldgui.redstone." + field.getRedstone()));
             } else if (id == ContainerFieldGeneratorSC.BTN_FILTER) {
@@ -189,6 +252,245 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 continue;
             }
             b.enabled = mayEdit();
+        }
+    }
+
+    /** The Zone tab's own buttons from the draft. */
+    private void refreshZone(GuiButton b) {
+        int id = b.id;
+        boolean edit = mayEdit();
+        if (id < Z_SHAPE) {
+            int row = (id - Z_BASE) / 4, j = (id - Z_BASE) % 4;
+            int step = (row < 2 ? STEP_BIG : STEP_OFF)[j];
+            int v = draft[row == 0 ? D_RANGE : row == 1 ? D_HEIGHT : row == 2 ? D_OX : row == 3 ? D_OZ : D_OY];
+            if (row == 0) {
+                b.enabled = edit && (step < 0 ? v > FieldShapeSC.MIN_RANGE : v < FieldShapeSC.MAX_RANGE);
+            } else if (row == 1) {
+                b.enabled = edit && (step < 0 ? v > 0 : v < FieldShapeSC.MAX_RANGE);
+            } else {
+                b.enabled = edit && (step < 0 ? v > -TileEntityFieldGeneratorSC.MAX_OFFSET : v < TileEntityFieldGeneratorSC.MAX_OFFSET);
+            }
+            return;
+        }
+        boolean pending = previewMode && differs();
+        switch (id) {
+            case Z_SHAPE:
+                b.displayString = Lang.tr("sc.fieldgui.shape", modeName(FieldMode.values()[draft[D_MODE]]));
+                break;
+            case Z_ANCHOR:
+                b.displayString = Lang.tr("sc.fieldzone.anchor", Lang.tr("sc.fieldzone.anchor." + draft[D_ANCHOR]));
+                break;
+            case Z_PREVIEW:
+                b.displayString = (previewMode ? "\u00a7a" : "\u00a77") + Lang.tr("sc.fieldzone.preview", onOff(previewMode));
+                break;
+            case Z_APPLY:
+            case Z_CANCEL:
+                b.enabled = edit && pending;
+                return;
+            case Z_TARGET:
+                b.displayString = Lang.tr("sc.fieldzone.target", Lang.tr("sc.fieldzone.target." + colorTarget));
+                break;
+            default:
+                break;
+        }
+        b.enabled = edit;
+    }
+
+    // ------------------------------------------------------------------ the Zone tab's draft
+
+    private int[] fromField() {
+        int[] ap = field.getAnchorPoint();
+        return new int[]{field.getRange(), field.getHeight(), field.getOffset(0), field.getOffset(1), field.getOffset(2),
+                field.getAnchor(), field.getMode().ordinal(), ap != null ? ap[0] : field.xCoord, ap != null ? ap[1] : field.yCoord,
+                ap != null ? ap[2] : field.zCoord};
+    }
+
+    private String key() {
+        return field.xCoord + "," + field.yCoord + "," + field.zCoord;
+    }
+
+    private void ensureDraft() {
+        if (draft == null || !draftOf.equals(key())) {
+            draft = fromField();
+            draftOf = key();
+            previewClear();
+        }
+        if (editRgb < 0) {
+            editRgb = field.getRgb(colorTarget);
+        }
+    }
+
+    /** The draft differs from the field's shape in anything that moves it. */
+    private boolean differs() {
+        int[] f = fromField();
+        for (int i = 0; i < D_PX; i++) {
+            if (f[i] != draft[i]) {
+                return true;
+            }
+        }
+        return draft[D_ANCHOR] == TileEntityFieldGeneratorSC.ANCHOR_POINT
+                && (f[D_PX] != draft[D_PX] || f[D_PX + 1] != draft[D_PX + 1] || f[D_PX + 2] != draft[D_PX + 2]);
+    }
+
+    private void sendZone() {
+        FieldNetSC.CHANNEL.sendToServer(new FieldNetSC.Message(field, FieldNetSC.ZONE, draft.clone()));
+        holdZone = 20;
+    }
+
+    private void sendRgb() {
+        FieldNetSC.CHANNEL.sendToServer(new FieldNetSC.Message(field, FieldNetSC.RGB, colorTarget, editRgb));
+        holdRgb = 20;
+    }
+
+    /** The preview in the world: the draft while it differs from the field, in preview mode. */
+    private void updatePreview() {
+        if (!previewMode || !differs()) {
+            previewClear();
+            return;
+        }
+        int[] point = {draft[D_PX], draft[D_PX + 1], draft[D_PX + 2]};
+        previewShow(field, FieldMode.values()[draft[D_MODE]],
+                TileEntityFieldGeneratorSC.zoneNodesFor(field.getNodePositions(), draft[D_ANCHOR], point, draft[D_OX], draft[D_OY], draft[D_OZ]),
+                draft[D_RANGE], draft[D_HEIGHT]);
+    }
+
+    private static void previewClear() {
+        com.sc.client.FieldRendererSC.preview = null;
+    }
+
+    private static void previewShow(TileEntityFieldGeneratorSC f, FieldMode mode, List<int[]> nodes, int range, int height) {
+        com.sc.client.FieldRendererSC.Preview p = new com.sc.client.FieldRendererSC.Preview();
+        p.x = f.xCoord;
+        p.y = f.yCoord;
+        p.z = f.zCoord;
+        p.mode = mode;
+        p.nodes = nodes;
+        p.range = range;
+        p.height = height;
+        com.sc.client.FieldRendererSC.preview = p;
+    }
+
+    /** A Zone tab button: edit the draft, send it at once (or leave it as a preview). */
+    private void zoneAction(int id) {
+        if (id < Z_SHAPE) {
+            int row = (id - Z_BASE) / 4, j = (id - Z_BASE) % 4;
+            int step = (row < 2 ? STEP_BIG : STEP_OFF)[j];
+            if (row == 0) {
+                draft[D_RANGE] = FieldShapeSC.clampRange(draft[D_RANGE] + step);
+            } else if (row == 1) {
+                int h = draft[D_HEIGHT] == 0 ? draft[D_RANGE] : draft[D_HEIGHT];
+                h += step;
+                draft[D_HEIGHT] = h <= 0 ? 0 : FieldShapeSC.clampRange(h);
+                if (draft[D_HEIGHT] == 0 && step < -1) {
+                    draft[D_HEIGHT] = 1;                    // -16 stops at 1; -1 from 1 goes back to "as the radius"
+                }
+            } else {
+                int idx = row == 2 ? D_OX : row == 3 ? D_OZ : D_OY;
+                int m = TileEntityFieldGeneratorSC.MAX_OFFSET;
+                draft[idx] = Math.max(-m, Math.min(m, draft[idx] + step));
+            }
+        } else if (id == Z_SHAPE) {
+            draft[D_MODE] = (draft[D_MODE] + 1) % FieldMode.values().length;
+        } else if (id == Z_ANCHOR) {
+            draft[D_ANCHOR] = (draft[D_ANCHOR] + 1) % TileEntityFieldGeneratorSC.ANCHORS;
+            if (draft[D_ANCHOR] == TileEntityFieldGeneratorSC.ANCHOR_POINT) {       // the point: where the player stands
+                draft[D_PX] = net.minecraft.util.MathHelper.floor_double(mc.thePlayer.posX);
+                draft[D_PX + 1] = net.minecraft.util.MathHelper.floor_double(mc.thePlayer.boundingBox.minY);
+                draft[D_PX + 2] = net.minecraft.util.MathHelper.floor_double(mc.thePlayer.posZ);
+            }
+        } else if (id == Z_PREVIEW) {
+            previewMode = !previewMode;
+            draft = fromField();
+            updatePreview();
+            return;
+        } else if (id == Z_APPLY) {
+            sendZone();
+            previewClear();
+            return;
+        } else if (id == Z_CANCEL) {
+            draft = fromField();
+            previewClear();
+            return;
+        } else if (id == Z_TARGET) {
+            colorTarget = (colorTarget + 1) % TileEntityFieldGeneratorSC.RGB_TARGETS;
+            editRgb = field.getRgb(colorTarget);
+            return;
+        } else if (id >= Z_PRESET && id < Z_PRESET + TileEntityFieldGeneratorSC.PRESETS.length) {
+            editRgb = TileEntityFieldGeneratorSC.PRESETS[id - Z_PRESET];
+            sendRgb();
+            return;
+        } else {
+            return;                                         // sliders send on release
+        }
+        if (previewMode) {
+            updatePreview();
+        } else {
+            sendZone();
+        }
+    }
+
+    /** An R / G / B slider for the colour being edited; sends when let go. */
+    private class Slider extends GuiButton {
+        private final int channel;
+        private boolean dragging;
+
+        Slider(int id, int x, int y, int w, int h, int channel) {
+            super(id, x, y, w, h, "");
+            this.channel = channel;
+        }
+
+        private int value() {
+            return (editRgb >> (16 - channel * 8)) & 255;
+        }
+
+        private void setFrom(int mx) {
+            int v = Math.max(0, Math.min(255, Math.round((mx - xPosition - 3) * 255F / (width - 6))));
+            int shift = 16 - channel * 8;
+            editRgb = (editRgb & ~(255 << shift)) | v << shift;
+        }
+
+        @Override
+        public void drawButton(net.minecraft.client.Minecraft mc, int mx, int my) {
+            if (!visible) {
+                return;
+            }
+            if (dragging) {
+                setFrom(mx);
+            }
+            int v = value(), x = xPosition, y = yPosition;
+            drawRect(x, y, x + width, y + height, 0xFF000000);
+            drawRect(x + 1, y + 1, x + width - 1, y + height - 1, 0xFF28282C);
+            int tint = channel == 0 ? 0x70FF4040 : channel == 1 ? 0x7040FF60 : 0x704080FF;
+            drawRect(x + 1, y + 1, x + 1 + (width - 2) * v / 255, y + height - 1, tint);
+            int kx = x + (width - 6) * v / 255;
+            drawRect(kx, y - 1, kx + 6, y + height + 1, 0xFF000000);
+            drawRect(kx + 1, y, kx + 5, y + height, enabled ? 0xFFA8A8A8 : 0xFF606060);
+            drawRect(kx + 1, y, kx + 5, y + 1, 0xFFE0E0E0);
+            String s = "RGB".charAt(channel) + ": " + v;
+            mc.fontRenderer.drawStringWithShadow(s, x + (width - mc.fontRenderer.getStringWidth(s)) / 2, y + (height - 8) / 2 + 1,
+                    enabled ? 0xFFFFFF : 0xA0A0A0);
+        }
+
+        @Override
+        public boolean mousePressed(net.minecraft.client.Minecraft mc, int mx, int my) {
+            if (enabled && visible && mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height) {
+                dragging = true;
+                setFrom(mx);
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public void mouseReleased(int mx, int my) {
+            if (dragging) {
+                dragging = false;
+                sendRgb();
+            }
+        }
+
+        boolean isDragging() {
+            return dragging;
         }
     }
 
@@ -213,6 +515,23 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         if (nameField != null) {
             nameField.updateCursorCounter();
         }
+        if (tab == TAB_ZONE) {
+            if (holdZone > 0) {
+                holdZone--;
+            } else if (!previewMode) {
+                draft = fromField();
+            }
+            boolean dragging = false;
+            for (Object o : buttonList) {
+                dragging |= o instanceof Slider && ((Slider) o).isDragging();
+            }
+            if (holdRgb > 0) {
+                holdRgb--;
+            } else if (!dragging) {
+                editRgb = field.getRgb(colorTarget);
+            }
+            updatePreview();
+        }
         refresh();
     }
 
@@ -229,7 +548,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         if (button.id == PAGE_ID) {
             chargePage = !chargePage;
             initGui();
-        } else if (button.id >= TAB_BASE && button.id <= TAB_BASE + TAB_UPGRADES) {
+        } else if (button.id >= Z_BASE && button.id < TAB_BASE) {
+            zoneAction(button.id);
+        } else if (button.id >= TAB_BASE && button.id <= TAB_BASE + TAB_ZONE) {
             tab = button.id - TAB_BASE;
             initGui();
         } else if (button.id == ADD_ID) {
@@ -295,7 +616,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        panel(guiLeft, guiTop, W, H);
+        panel(guiLeft, guiTop - TABS_UP, W, H + TABS_UP);
         if (tab == 0) {
             GuiEnergyGaugeSC.draw(guiLeft + ENERGY_X, guiTop + ENERGY_Y, ENERGY_W, ENERGY_H,
                     (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored()));
@@ -358,6 +679,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 }
                 break;
             }
+            case TAB_ZONE:
+                drawZone(c);
+                break;
             case TAB_UPGRADES: {
                 String title = Lang.tr("sc.fieldgui.upgrades.title");
                 fitCentered(title, 32, c);
@@ -380,7 +704,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 legend(lx, 48, 0xFFFFE040, Lang.tr("sc.fieldgui.map.master"));
                 legend(lx, 60, 0xFFFFFFFF, Lang.tr("sc.fieldgui.map.node"));
                 legend(lx, 72, 0xFFFF4040, Lang.tr("sc.fieldgui.map.you"));
-                float[] col = TileEntityFieldGeneratorSC.COLORS[field.getColor()];
+                float[] col = field.rgbF(TileEntityFieldGeneratorSC.RGB_SHELL);
                 legend(lx, 84, 0xFF000000 | ((int) (col[0] * 200) << 16) | ((int) (col[1] * 200) << 8) | (int) (col[2] * 200),
                         Lang.tr("sc.fieldgui.map.field"));
                 fontRendererObj.drawString("N ↑", MAP_X + MAP / 2 - 6, MAP_Y + 2, 0xFFFFFF);
@@ -389,8 +713,67 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     fontRendererObj.drawString(wBlocks + " x " + dBlocks, lx, 104, dim);
                 }
                 fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.map.hint"), lx, 120, W - lx - 6, dim);
+                GL11.glColor4f(1F, 1F, 1F, 1F);
             }
         }
+    }
+
+    /** The Zone tab's labels, the colour swatches and what the draft holds and costs. */
+    private void drawZone(int c) {
+        FieldMode mode = FieldMode.values()[draft[D_MODE]];
+        String height = draft[D_HEIGHT] > 0 ? Lang.tr("sc.fieldzone.height", draft[D_HEIGHT])
+                : Lang.tr(mode == FieldMode.PRISM ? "sc.fieldzone.height.world" : "sc.fieldzone.height.auto");
+        String[] labels = {Lang.tr("sc.fieldzone.radius", draft[D_RANGE], FieldShapeSC.MAX_RANGE), height,
+                Lang.tr("sc.fieldzone.offx", signed(draft[D_OX])), Lang.tr("sc.fieldzone.offz", signed(draft[D_OZ])),
+                Lang.tr("sc.fieldzone.offy", signed(draft[D_OY]))};
+        for (int k = 0; k < labels.length; k++) {
+            fit(labels[k], 8, 30 + k * 24, 114, c);
+        }
+        // the colour being edited, and a frame round the ready colour it matches
+        int rx = 126;
+        drawRect(rx + 97, 130, rx + 114, 143, 0xFF000000);
+        drawRect(rx + 98, 131, rx + 113, 142, 0xFF000000 | editRgb);
+        for (int i = 0; i < TileEntityFieldGeneratorSC.PRESETS.length; i++) {
+            int px = rx + i * 14 + 1;
+            int col = TileEntityFieldGeneratorSC.PRESETS[i];
+            if (col == editRgb) {
+                drawRect(px - 1, 145, px + 14, 159, 0xFFFFFFFF);
+            }
+            drawRect(px + 2, 148, px + 11, 156, 0xFF000000 | col);
+        }
+        // the readout: blocks held and the upkeep, for the draft
+        int[] point = {draft[D_PX], draft[D_PX + 1], draft[D_PX + 2]};
+        List<int[]> nodes = TileEntityFieldGeneratorSC.zoneNodesFor(field.getNodePositions(), draft[D_ANCHOR], point,
+                draft[D_OX], draft[D_OY], draft[D_OZ]);
+        String vk = java.util.Arrays.toString(draft) + "/" + field.getNodePositions().size();
+        if (!vk.equals(volumeKey)) {
+            volumeKey = vk;
+            volume = FieldShapeSC.volume(mode, nodes, draft[D_RANGE], draft[D_HEIGHT]);
+        }
+        int upkeep = TileEntityFieldGeneratorSC.upkeepFor(field.getNodeCount(), draft[D_RANGE], draft[D_HEIGHT], mode)
+                + field.extrasPerTick();
+        String info = Lang.tr("sc.fieldzone.info", thousands(volume), upkeep);
+        boolean pending = previewMode && differs();
+        if (pending) {
+            info += " " + Lang.tr("sc.fieldzone.pending");
+        }
+        fit(info, 8, 213, W - 16, pending ? 0xB06000 : 0x2A62A8);
+    }
+
+    private static String signed(int v) {
+        return v > 0 ? "+" + v : String.valueOf(v);
+    }
+
+    private static String thousands(long v) {
+        String s = String.valueOf(v);
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            if (i > 0 && (s.length() - i) % 3 == 0) {
+                out.append(' ');
+            }
+            out.append(s.charAt(i));
+        }
+        return out.toString();
     }
 
     /** The Functions tab's second page: wireless charging settings and last second's numbers. */
@@ -435,24 +818,26 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         for (int[] nd : nodes) {
             hash = hash * 31 + ((long) nd[0] * 73856093L ^ (long) nd[1] * 19349663L ^ (long) nd[2] * 83492791L);
         }
-        String key = field.getMode() + "/" + field.getRange() + "/" + nodes.size() + "/" + hash;
+        List<int[]> zone = field.zoneNodes();
+        String key = field.getMode() + "/" + field.getRange() + "/" + field.getHeight() + "/" + nodes.size() + "/" + hash
+                + "/" + (zone.isEmpty() ? "" : zone.get(0)[0] + "," + zone.get(0)[1] + "," + zone.get(0)[2] + "," + zone.size());
         int n = MAP / CELL;
         if (!key.equals(mapKey)) {
             mapKey = key;
-            AxisAlignedBB b = FieldShapeSC.bounds(field.getMode(), nodes, field.getRange());
+            AxisAlignedBB b = FieldShapeSC.bounds(field.getMode(), zone, field.getRange(), field.getHeight());
             double size = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) + 4;
             double cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
             mapBounds = AxisAlignedBB.getBoundingBox(cx - size / 2, 0, cz - size / 2, cx + size / 2, 0, cz + size / 2);
-            double y = field.yCoord + 0.5;
+            double y = (zone.isEmpty() ? field.yCoord : zone.get(0)[1]) + 0.5;
             mapCells = new boolean[n][n];
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
                     double wx = mapBounds.minX + (i + 0.5) * size / n, wz = mapBounds.minZ + (j + 0.5) * size / n;
-                    mapCells[i][j] = FieldShapeSC.contains(field.getMode(), nodes, field.getRange(), wx, y, wz);
+                    mapCells[i][j] = FieldShapeSC.contains(field.getMode(), zone, field.getRange(), field.getHeight(), wx, y, wz);
                 }
             }
         }
-        float[] c = TileEntityFieldGeneratorSC.COLORS[field.getColor()];
+        float[] c = field.rgbF(TileEntityFieldGeneratorSC.RGB_SHELL);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         Tessellator t = Tessellator.instance;
@@ -503,7 +888,26 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 key = "sc.fieldgui.charge.mode.desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_RESERVE_MINUS || b.id == ContainerFieldGeneratorSC.BTN_RESERVE_PLUS) {
                 key = "sc.fieldgui.charge.reserve.desc";
-            } else if (b.id >= ContainerFieldGeneratorSC.BTN_FLAG_BASE && b.id < TAB_BASE) {
+            } else if (b.id == ContainerFieldGeneratorSC.BTN_OUTLINE) {
+                key = "sc.fieldzone.outline.desc";
+            } else if (b.id == ContainerFieldGeneratorSC.BTN_ANIM) {
+                key = "sc.fieldzone.anim.desc";
+            } else if (b.id == ContainerFieldGeneratorSC.BTN_BRIGHT) {
+                key = "sc.fieldzone.bright.desc";
+            } else if (b.id >= Z_HEIGHT && b.id < Z_HEIGHT + 4) {
+                key = "sc.fieldzone.height.desc";
+            } else if (b.id >= Z_OFFX && b.id < Z_SHAPE) {
+                key = "sc.fieldzone.offset.desc";
+            } else if (b.id == Z_SHAPE) {
+                key = "sc.fieldgui.shape.desc";
+            } else if (b.id == Z_ANCHOR) {
+                key = "sc.fieldzone.anchor.desc";
+            } else if (b.id == Z_PREVIEW || b.id == Z_APPLY || b.id == Z_CANCEL) {
+                key = "sc.fieldzone.preview.desc";
+            } else if (b.id == Z_TARGET || b.id >= Z_PRESET && b.id < TAB_BASE) {
+                key = "sc.fieldzone.target.desc";
+            } else if (b.id >= ContainerFieldGeneratorSC.BTN_FLAG_BASE
+                    && b.id < ContainerFieldGeneratorSC.BTN_FLAG_BASE + ContainerFieldGeneratorSC.FLAG_COUNT) {
                 key = "sc.fieldgui.flag." + (1 << (b.id - ContainerFieldGeneratorSC.BTN_FLAG_BASE)) + ".desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_MODE) {
                 key = "sc.fieldgui.shape.desc";

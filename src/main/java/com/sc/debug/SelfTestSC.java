@@ -207,6 +207,27 @@ public final class SelfTestSC {
         check(!com.sc.tileentity.FieldShapeSC.contains(P, nodes, 2, 20.5, 64.5, 5.5), "prism r2: 10 blocks outside the wall is outside");
         check(com.sc.tileentity.FieldShapeSC.clampRange(1000) == 256 && com.sc.tileentity.FieldShapeSC.clampRange(0) == 1, "range clamps to 1..256");
         check(com.sc.tileentity.FieldShapeSC.hull(nodes).size() == 4, "prism: hull of a square has 4 corners");
+        // the Zone tab: height, anchors, offset
+        java.util.List<int[]> one = new java.util.ArrayList<int[]>();
+        one.add(new int[]{0, 64, 0});
+        check(com.sc.tileentity.FieldShapeSC.contains(U, one, 8, 3, 0.5, 66.5, 0.5)
+                        && !com.sc.tileentity.FieldShapeSC.contains(U, one, 8, 3, 0.5, 68, 0.5)
+                        && com.sc.tileentity.FieldShapeSC.contains(U, one, 8, 3, 7.5, 64.5, 0.5),
+                "zone: height 3 squashes the sphere (7 across in, 2 up in, 3.5 up out)");
+        check(com.sc.tileentity.FieldShapeSC.contains(P, nodes, 2, 4, 5.5, 67, 5.5)
+                && !com.sc.tileentity.FieldShapeSC.contains(P, nodes, 2, 4, 5.5, 200, 5.5), "zone: a prism with a height stops above it");
+        java.util.List<int[]> mid = com.sc.tileentity.TileEntityFieldGeneratorSC.zoneNodesFor(nodes,
+                com.sc.tileentity.TileEntityFieldGeneratorSC.ANCHOR_CENTRE, null, 0, 3, 0);
+        check(mid.size() == 1 && mid.get(0)[0] == 5 && mid.get(0)[1] == 67 && mid.get(0)[2] == 5,
+                "zone: the cluster centre of the square, 3 up, is (5, 67, 5)");
+        java.util.List<int[]> moved = com.sc.tileentity.TileEntityFieldGeneratorSC.zoneNodesFor(nodes,
+                com.sc.tileentity.TileEntityFieldGeneratorSC.ANCHOR_NODES, null, 4, 0, -2);
+        check(moved.size() == 4 && moved.get(1)[0] == 14 && moved.get(1)[2] == -2 && nodes.get(1)[0] == 10,
+                "zone: the offset moves the anchors, not the nodes");
+        long v = com.sc.tileentity.FieldShapeSC.volume(B, one, 2, 0);
+        check(v >= 60 && v <= 68, "zone: a box of radius 2 (4 x 4 x 4) holds ~64 blocks (" + v + ")");
+        check(com.sc.tileentity.TileEntityFieldGeneratorSC.upkeepFor(1, 8, 8, U) == com.sc.tileentity.TileEntityFieldGeneratorSC.upkeepFor(1, 8, U),
+                "zone: the upkeep with height = radius is the old one");
     }
 
     /** NEI fluid stand-ins: every recipe/generator fluid has a drop, and drop <-> fluid round-trips. */

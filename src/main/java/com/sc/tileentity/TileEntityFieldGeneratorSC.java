@@ -71,7 +71,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     /** Switches, bits of "Flags". */
     public static final int F_NO_SPAWN = 1, F_NO_ENDER = 2, F_PRIVATE = 4, F_PUSH_PLAYERS = 8, F_DAMAGE = 16,
-            F_WARN = 32, F_CHARGE = 64, F_HEAL = 128, F_SHOW = 256, F_CHARGE_FX = 512;
+            F_WARN = 32, F_CHARGE = 64, F_HEAL = 128, F_SHOW = 256, F_CHARGE_FX = 512,
+            F_BEAMS = 1024, F_HUM = 2048, F_DASH = 4096;
     /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell and charging sparks shown. */
     public static final int DEFAULT_FLAGS = F_DAMAGE | F_WARN | F_SHOW | F_CHARGE_FX;
     /** What charges first: armour, the held item, everything evenly, or the armour alone. */
@@ -87,11 +88,35 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public static final int REDSTONE_ALWAYS = 0, REDSTONE_ON = 1, REDSTONE_OFF = 2;
     public static final int FILTER_HOSTILE = 0, FILTER_NEUTRAL = 1, FILTER_ALL = 2;
     public static final int MAX_ACCESS = 16;
-    /** Shell colours: cyan, green, red, violet, gold. */
+    /** The old five shell colours (cyan, green, red, violet, gold) - only to read fields saved before RGB colours. */
     public static final float[][] COLORS = {{0.35F, 0.9F, 1F}, {0.35F, 1F, 0.45F}, {1F, 0.3F, 0.3F}, {0.75F, 0.45F, 1F}, {1F, 0.8F, 0.3F}};
 
+    // ---- the Zone tab ----
+
+    /** Where the shape is built round: every node, the cluster's middle, or a point set by a player. */
+    public static final int ANCHOR_NODES = 0, ANCHOR_CENTRE = 1, ANCHOR_POINT = 2, ANCHORS = 3;
+    /** The zone's offset from its anchors, per axis, in blocks. */
+    public static final int MAX_OFFSET = 32;
+    /** When the outline is drawn: with the shell, always, with a wrench in hand, never. */
+    public static final int OUTLINE_WITH_SHELL = 0, OUTLINE_ALWAYS = 1, OUTLINE_WRENCH = 2, OUTLINE_NEVER = 3, OUTLINES = 4;
+    public static final int ANIM_PULSE = 0, ANIM_WAVES = 1, ANIM_STATIC = 2, ANIMS = 3;
+    public static final int BRIGHT_STEP = 25;
+    /** The three colours the screen sets: the shell, the outline (and node beams), sparks and flashes. */
+    public static final int RGB_SHELL = 0, RGB_OUTLINE = 1, RGB_FLASH = 2, RGB_TARGETS = 3;
+    public static final int DEFAULT_RGB = 0x59E6FF;
+    /** The screen's eight ready colours: cyan, green, red, violet, gold, white, pink, orange. */
+    public static final int[] PRESETS = {0x59E6FF, 0x59FF73, 0xFF4D4D, 0xBF73FF, 0xFFCC4D, 0xFFFFFF, 0xFF78BE, 0xFF8C1E};
+
     private int flags = DEFAULT_FLAGS;
-    private int redstone = REDSTONE_ALWAYS, filter = FILTER_HOSTILE, color;
+    private int redstone = REDSTONE_ALWAYS, filter = FILTER_HOSTILE;
+    /** 0: the same as the range. */
+    private int height;
+    private int offX, offY, offZ, anchor = ANCHOR_NODES;
+    private int[] anchorPoint;
+    private int outline = OUTLINE_WITH_SHELL, anim = ANIM_PULSE, brightness = 100;
+    private final int[] rgb = {DEFAULT_RGB, DEFAULT_RGB, DEFAULT_RGB};
+    /** zoneNodes(), rebuilt after any change (changed(), a load). */
+    private List<int[]> zoneCache;
     private int chargeMode = CHARGE_ARMOR_FIRST, chargeReserve;
     /** Last second's charging: EU given out and players served (the screen shows them). */
     private int chargedLastSecond, playersLastSecond;
@@ -129,8 +154,136 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         changed();
     }
 
-    public int getColor() {
-        return color;
+    public int getRgb(int target) {
+        return rgb[Math.max(0, Math.min(RGB_TARGETS - 1, target))];
+    }
+
+    public float[] rgbF(int target) {
+        int c = getRgb(target);
+        return new float[]{((c >> 16) & 255) / 255F, ((c >> 8) & 255) / 255F, (c & 255) / 255F};
+    }
+
+    public void setRgb(int target, int value) {
+        if (target >= 0 && target < RGB_TARGETS && rgb[target] != (value & 0xFFFFFF)) {
+            rgb[target] = value & 0xFFFFFF;
+            changed();
+        }
+    }
+
+    public int getHeight() {
+        return height;
+    }
+
+    /** 0: x, 1: y, 2: z. */
+    public int getOffset(int axis) {
+        return axis == 0 ? offX : axis == 1 ? offY : offZ;
+    }
+
+    public int getAnchor() {
+        return anchor;
+    }
+
+    public int[] getAnchorPoint() {
+        return anchorPoint;
+    }
+
+    public int getOutline() {
+        return outline;
+    }
+
+    public void cycleOutline() {
+        outline = (outline + 1) % OUTLINES;
+        changed();
+    }
+
+    public int getAnim() {
+        return anim;
+    }
+
+    public void cycleAnim() {
+        anim = (anim + 1) % ANIMS;
+        changed();
+    }
+
+    /** Shell and outline brightness, 25..100 %. */
+    public int getBrightness() {
+        return brightness;
+    }
+
+    public void cycleBrightness() {
+        brightness = brightness >= 100 ? BRIGHT_STEP : brightness + BRIGHT_STEP;
+        changed();
+    }
+
+    /**
+     * The Zone tab's whole shape at once (FieldNetSC.ZONE), clamped. A set point must lie within
+     * MAX_LINK_DISTANCE of the master on every axis; @return false (and the anchor left as it was) if not.
+     */
+    public boolean setZone(int newRange, int newHeight, int ox, int oy, int oz, int newAnchor, int modeOrdinal, int px, int py, int pz) {
+        boolean ok = true;
+        range = FieldShapeSC.clampRange(newRange);
+        height = newHeight <= 0 ? 0 : FieldShapeSC.clampRange(newHeight);
+        offX = clampOffset(ox);
+        offY = clampOffset(oy);
+        offZ = clampOffset(oz);
+        FieldMode[] modes = FieldMode.values();
+        mode = modes[Math.max(0, Math.min(modes.length - 1, modeOrdinal))];
+        int a = Math.max(0, Math.min(ANCHORS - 1, newAnchor));
+        if (a == ANCHOR_POINT) {
+            if (Math.abs(px - xCoord) <= MAX_LINK_DISTANCE && Math.abs(py - yCoord) <= MAX_LINK_DISTANCE
+                    && Math.abs(pz - zCoord) <= MAX_LINK_DISTANCE) {
+                anchorPoint = new int[]{px, py, pz};
+                anchor = a;
+            } else {
+                ok = false;
+            }
+        } else {
+            anchor = a;
+        }
+        changed();
+        return ok;
+    }
+
+    private static int clampOffset(int v) {
+        return Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, v));
+    }
+
+    /** The points the shape is built round: the anchors, shifted by the offset. */
+    public List<int[]> zoneNodes() {
+        if (zoneCache == null) {
+            zoneCache = zoneNodesFor(nodePositions, anchor, anchorPoint, offX, offY, offZ);
+        }
+        return zoneCache;
+    }
+
+    /** zoneNodes() for any settings (the screen's preview uses it too). */
+    public static List<int[]> zoneNodesFor(List<int[]> nodes, int anchor, int[] point, int ox, int oy, int oz) {
+        List<int[]> base = new ArrayList<int[]>();
+        if (anchor == ANCHOR_CENTRE && !nodes.isEmpty()) {
+            double x = 0, y = 0, z = 0;
+            for (int[] n : nodes) {
+                x += n[0];
+                y += n[1];
+                z += n[2];
+            }
+            base.add(new int[]{(int) Math.round(x / nodes.size()), (int) Math.round(y / nodes.size()), (int) Math.round(z / nodes.size())});
+        } else if (anchor == ANCHOR_POINT && point != null) {
+            base.add(point.clone());
+        } else {
+            for (int[] n : nodes) {
+                base.add(n.clone());
+            }
+        }
+        for (int[] p : base) {
+            p[0] += ox;
+            p[1] += oy;
+            p[2] += oz;
+        }
+        return base;
+    }
+
+    public AxisAlignedBB zoneBounds() {
+        return FieldShapeSC.bounds(mode, zoneNodes(), range, height);
     }
 
     public int getChargeMode() {
@@ -172,8 +325,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         playersLastSecond = players;
     }
 
+    /** The shell colour to the next ready colour (all three colours follow it). */
     public void cycleColor() {
-        color = (color + 1) % COLORS.length;
+        int next = 0;
+        for (int i = 0; i < PRESETS.length; i++) {
+            if (PRESETS[i] == rgb[RGB_SHELL]) {
+                next = (i + 1) % PRESETS.length;
+            }
+        }
+        for (int i = 0; i < RGB_TARGETS; i++) {
+            rgb[i] = PRESETS[next];
+        }
         changed();
     }
 
@@ -254,12 +416,69 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         flags = from.flags;
         redstone = from.redstone;
         filter = from.filter;
-        color = from.color;
+        copyZone(from);
         chargeMode = from.chargeMode;
         chargeReserve = from.chargeReserve;
         owner = from.owner;
         access.clear();
         access.addAll(from.access);
+    }
+
+    private void copyZone(TileEntityFieldGeneratorSC from) {
+        height = from.height;
+        offX = from.offX;
+        offY = from.offY;
+        offZ = from.offZ;
+        anchor = from.anchor;
+        anchorPoint = from.anchorPoint == null ? null : from.anchorPoint.clone();
+        outline = from.outline;
+        anim = from.anim;
+        brightness = from.brightness;
+        System.arraycopy(from.rgb, 0, rgb, 0, RGB_TARGETS);
+        zoneCache = null;
+    }
+
+    private void writeZone(NBTTagCompound nbt) {
+        nbt.setInteger("Height", height);
+        nbt.setInteger("OffX", offX);
+        nbt.setInteger("OffY", offY);
+        nbt.setInteger("OffZ", offZ);
+        nbt.setInteger("Anchor", anchor);
+        if (anchorPoint != null) {
+            nbt.setIntArray("AnchorPoint", anchorPoint);
+        }
+        nbt.setInteger("Outline", outline);
+        nbt.setInteger("Anim", anim);
+        nbt.setInteger("Bright", brightness);
+        nbt.setIntArray("RGB", rgb.clone());
+    }
+
+    /** Zone and looks; a field saved before them keeps its old look (its shell colour for all three). */
+    private void readZone(NBTTagCompound nbt) {
+        height = nbt.getInteger("Height") <= 0 ? 0 : FieldShapeSC.clampRange(nbt.getInteger("Height"));
+        offX = clampOffset(nbt.getInteger("OffX"));
+        offY = clampOffset(nbt.getInteger("OffY"));
+        offZ = clampOffset(nbt.getInteger("OffZ"));
+        anchor = Math.max(0, Math.min(ANCHORS - 1, nbt.getInteger("Anchor")));
+        int[] ap = nbt.getIntArray("AnchorPoint");
+        anchorPoint = ap.length == 3 ? ap : null;
+        outline = Math.max(0, Math.min(OUTLINES - 1, nbt.getInteger("Outline")));
+        anim = Math.max(0, Math.min(ANIMS - 1, nbt.getInteger("Anim")));
+        int b = nbt.hasKey("Bright") ? nbt.getInteger("Bright") : 100;
+        brightness = Math.max(BRIGHT_STEP, Math.min(100, b / BRIGHT_STEP * BRIGHT_STEP));
+        int[] c = nbt.getIntArray("RGB");
+        if (c.length == RGB_TARGETS) {
+            for (int i = 0; i < RGB_TARGETS; i++) {
+                rgb[i] = c[i] & 0xFFFFFF;
+            }
+        } else if (nbt.hasKey("Color")) {
+            float[] old = COLORS[Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")))];
+            int v = (int) (old[0] * 255) << 16 | (int) (old[1] * 255) << 8 | (int) (old[2] * 255);
+            for (int i = 0; i < RGB_TARGETS; i++) {
+                rgb[i] = v;
+            }
+        }
+        zoneCache = null;
     }
 
     /** The Quantum Wrench's copy: shape, range and switches - not the owner, not the access list. */
@@ -269,9 +488,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nbt.setInteger("Flags", flags);
         nbt.setInteger("Redstone", redstone);
         nbt.setInteger("Filter", filter);
-        nbt.setInteger("Color", color);
         nbt.setInteger("ChargeMode", chargeMode);
         nbt.setInteger("ChargeReserve", chargeReserve);
+        writeZone(nbt);
     }
 
     /** The Quantum Wrench's paste (the caller checked allowed()). */
@@ -284,9 +503,14 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
         filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
-        color = Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")));
         chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
         chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
+        readZone(nbt);
+        if (anchor == ANCHOR_POINT && (anchorPoint == null || Math.abs(anchorPoint[0] - xCoord) > MAX_LINK_DISTANCE
+                || Math.abs(anchorPoint[1] - yCoord) > MAX_LINK_DISTANCE || Math.abs(anchorPoint[2] - zCoord) > MAX_LINK_DISTANCE)) {
+            anchor = ANCHOR_NODES;                 // another field's point doesn't carry over
+            anchorPoint = null;
+        }
         changed();
     }
 
@@ -351,7 +575,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * (BASE x 6 x nodes + RANGE_EU_PER_BLOCK x range) x multiplier. Also shown in the GUI.
      */
     public int upkeepPerTick() {
-        return upkeepFor(getNodeCount(), range, mode) + extrasPerTick();
+        return upkeepFor(getNodeCount(), range, height, mode) + extrasPerTick();
     }
 
     /** What the switched-on protections add to the upkeep (charging and healing are paid as used). */
@@ -361,7 +585,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public static int upkeepFor(int nodes, int range, FieldMode mode) {
-        return (int) Math.round((BASE_EU_PER_FACE * 6 * nodes + RANGE_EU_PER_BLOCK * range) * mode.costMultiplier);
+        return upkeepFor(nodes, range, 0, mode);
+    }
+
+    /** With a height of its own the reach costs by (2 x range + height) / 3 - the same as before when height = range. */
+    public static int upkeepFor(int nodes, int range, int height, FieldMode mode) {
+        double reach = (2.0 * range + FieldShapeSC.heightOf(range, height)) / 3.0;
+        return (int) Math.round((BASE_EU_PER_FACE * 6 * nodes + RANGE_EU_PER_BLOCK * reach) * mode.costMultiplier);
     }
 
     // ---- client copies for the GUI, written by ContainerFieldGeneratorSC (nothing else syncs
@@ -380,6 +610,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     @Override
     public void validate() {
         super.validate();
+        zoneCache = null;
         if (master && nodePositions.isEmpty()) {
             nodePositions.add(new int[]{xCoord, yCoord, zCoord});
         }
@@ -619,7 +850,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     @Override
     public void updateEntity() {
-        if (worldObj == null || worldObj.isRemote || !master) {
+        if (worldObj != null && worldObj.isRemote) {
+            if (master && active && has(F_HUM)) {
+                hum();
+            }
+            return;
+        }
+        if (worldObj == null || !master) {
             return; // only the master ticks upkeep/protection for the whole cluster
         }
         if (worldObj.getTotalWorldTime() % 100 == 0) {
@@ -674,6 +911,20 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
     }
 
+    /** Client: a low hum from each node a player stands near (World.playSound is a no-op on the server). */
+    private void hum() {
+        long t = worldObj.getTotalWorldTime() + (xCoord * 7 + zCoord * 13 & 63);
+        if (t % 70 != 0) {
+            return;
+        }
+        for (int[] n : nodePositions) {
+            if (worldObj.getClosestPlayer(n[0] + 0.5, n[1] + 0.5, n[2] + 0.5, 20) != null) {
+                worldObj.playSound(n[0] + 0.5, n[1] + 0.5, n[2] + 0.5, "portal.portal", 0.07F,
+                        0.45F + worldObj.rand.nextFloat() * 0.05F, false);
+            }
+        }
+    }
+
     /** A chat line to the owner, if the warnings are on and the owner is online. */
     private void warn(String key) {
         if (!has(F_WARN) || owner.isEmpty()) {
@@ -689,7 +940,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     /** Once a second: the owner and the access list inside the field are charged and healed (if switched on). */
     private void serveAllies() {
-        AxisAlignedBB box = FieldShapeSC.bounds(mode, nodePositions, range);
+        AxisAlignedBB box = zoneBounds();
         for (Object o : worldObj.getEntitiesWithinAABB(EntityPlayer.class, box)) {
             EntityPlayer p = (EntityPlayer) o;
             if (!allowed(p) || p.isDead || !fieldContains(p.posX, p.posY + 1, p.posZ)) {
@@ -770,7 +1021,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 from = n;
             }
         }
-        float[] c = COLORS[color];
+        float[] c = rgbF(RGB_FLASH);
         net.minecraft.world.WorldServer ws = (net.minecraft.world.WorldServer) worldObj;
         double sx = from[0] + 0.5, sy = from[1] + 1.1, sz = from[2] + 0.5;
         double tx = p.posX, ty = p.boundingBox.minY + p.height * 0.55, tz = p.posZ;
@@ -859,7 +1110,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (!has(F_SHOW) || !(worldObj instanceof net.minecraft.world.WorldServer)) {
             return;
         }
-        float[] c = COLORS[color];
+        float[] c = rgbF(RGB_FLASH);
         net.minecraft.world.WorldServer ws = (net.minecraft.world.WorldServer) worldObj;
         for (int i = 0; i < 16; i++) {
             double a = i * Math.PI / 8;
@@ -931,7 +1182,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public boolean fieldContains(double x, double y, double z) {
-        return FieldShapeSC.contains(mode, nodePositions, range, x, y, z);
+        return FieldShapeSC.contains(mode, zoneNodes(), range, height, x, y, z);
     }
 
     /** Spends EU for a protective action; false (and nothing spent) if the buffer can't cover it. */
@@ -944,7 +1195,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     private void protectRegion() {
-        AxisAlignedBB box = FieldShapeSC.bounds(mode, nodePositions, range);
+        AxisAlignedBB box = zoneBounds();
         // Hostile mobs inside the shape are shoved out and hurt - every IMob, not just EntityMob
         // (ghasts, slimes and magma cubes are IMob without being EntityMob and used to be ignored).
         List<Entity> living = worldObj.getEntitiesWithinAABB(EntityLiving.class, box);
@@ -1006,7 +1257,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
         double[] best = null;
         double bestD = Double.MAX_VALUE;
-        for (int[] n : nodePositions) {
+        for (int[] n : zoneNodes()) {
             double d = entity.getDistanceSq(n[0] + 0.5, n[1] + 0.5, n[2] + 0.5);
             if (d < bestD) {
                 bestD = d;
@@ -1231,6 +1482,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     // ---- client sync: the shield is drawn from the master's nodes, mode and active flag ----
 
     private void changed() {
+        zoneCache = null;
         markDirty();
         if (worldObj != null && !worldObj.isRemote) {
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
@@ -1274,13 +1526,18 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     @Override
     @cpw.mods.fml.relauncher.SideOnly(cpw.mods.fml.relauncher.Side.CLIENT)
     public AxisAlignedBB getRenderBoundingBox() {
-        return master && !nodePositions.isEmpty() ? FieldShapeSC.bounds(mode, nodePositions, range) : super.getRenderBoundingBox();
+        if (!master || nodePositions.isEmpty()) {
+            return super.getRenderBoundingBox();
+        }
+        AxisAlignedBB z = zoneBounds(), n = FieldShapeSC.bounds(FieldMode.BOX, nodePositions, 1);   // the beams run between the nodes
+        return AxisAlignedBB.getBoundingBox(Math.min(z.minX, n.minX), Math.min(z.minY, n.minY), Math.min(z.minZ, n.minZ),
+                Math.max(z.maxX, n.maxX), Math.max(z.maxY, n.maxY), Math.max(z.maxZ, n.maxZ));
     }
 
     @Override
     @cpw.mods.fml.relauncher.SideOnly(cpw.mods.fml.relauncher.Side.CLIENT)
     public double getMaxRenderDistanceSquared() {
-        double d = 128 + range;         // the shell is visible from as far as it reaches
+        double d = 128 + range + MAX_OFFSET;         // the shell is visible from as far as it reaches
         return d * d;
     }
 
@@ -1313,7 +1570,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
         filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
-        color = Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")));
+        readZone(nbt);
         owner = nbt.getString("Owner");
         redstoneOff = nbt.getBoolean("RedstoneOff");
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
@@ -1360,7 +1617,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nbt.setInteger("ChargeReserve", chargeReserve);
         nbt.setInteger("Redstone", redstone);
         nbt.setInteger("Filter", filter);
-        nbt.setInteger("Color", color);
+        writeZone(nbt);
         nbt.setString("Owner", owner);
         nbt.setBoolean("RedstoneOff", redstoneOff);
         NBTTagList names = new NBTTagList();

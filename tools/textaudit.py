@@ -143,8 +143,8 @@ def audit(lang):
     check(lang, "quarry filter label", t("sc.quarrygui.filterlabel"), 150)
     check(lang, "quarry functions count", t("sc.quarrygui.fncount", 20, 20), 248 - 190)
     # ---- field generator
-    for k in ("field", "functions", "access", "map", "upgrades"):
-        check(lang, "field tab", t("sc.fieldgui.tab.%s.short" % k), (248 - 16 - 8) // 5 - 4 - 17)
+    for k in ("field", "functions", "access", "map", "upgrades", "zone"):
+        check(lang, "field tab", t("sc.fieldgui.tab.%s.short" % k), (248 - 16 - 6) // 4 - 4 - 17)
     for i in range(3):
         check(lang, "quarry fluid filter", t("sc.quarrygui.ff", t("sc.quarrygui.ff.%d" % i)), 114 - 6)
     for i in range(2):
@@ -186,6 +186,25 @@ def audit(lang):
     for flag in (1, 2, 4, 8, 16, 32, 64, 128, 256):
         check(lang, "field switch", t("sc.fieldgui.flag.%d" % flag) + ": " + off, (114 if flag in (4, 8, 256) else 232) - 6)
     check(lang, "field upkeep", t("sc.gui.field.upkeep", 99999), 222 - 12)
+    # ---- field generator: the Zone tab
+    check(lang, "zone radius", t("sc.fieldzone.radius", 256, 256), 114)
+    for k, args in (("height", (256,)), ("height.auto", ()), ("height.world", ()), ("offx", ("-32",)), ("offy", ("-32",)), ("offz", ("-32",))):
+        check(lang, "zone label", t("sc.fieldzone." + k, *args), 114)
+    for m in ("union", "box", "prism", "dome", "cylinder"):
+        check(lang, "zone shape", t("sc.fieldgui.shape", t("sc.field.mode." + m)), 114 - 6)
+    for i in range(3):
+        check(lang, "zone anchor", t("sc.fieldzone.anchor", t("sc.fieldzone.anchor.%d" % i)), 114 - 6)
+        check(lang, "zone colour target", t("sc.fieldzone.target", t("sc.fieldzone.target.%d" % i)), 96 - 6)
+        check(lang, "zone animation", t("sc.fieldzone.anim", t("sc.fieldzone.anim.%d" % i)), 114 - 6)
+    check(lang, "zone preview", t("sc.fieldzone.preview", off), 114 - 6)
+    check(lang, "zone apply", t("sc.fieldzone.apply"), 56 - 6)
+    check(lang, "zone cancel", t("sc.fieldzone.cancel"), 56 - 6)
+    for i in range(4):
+        check(lang, "zone outline", t("sc.fieldzone.outline", t("sc.fieldzone.outline.%d" % i)), 114 - 6)
+    check(lang, "zone brightness", t("sc.fieldzone.bright", 100), 114 - 6)
+    for flag in (256, 1024, 2048, 4096):
+        check(lang, "zone switch", t("sc.fieldgui.flag.%d" % flag) + ": " + off, 114 - 6)
+    check(lang, "zone readout", t("sc.fieldzone.info", "16 777 216", 99999) + " " + t("sc.fieldzone.pending"), 232)
     check(lang, "field upgrades count", t("sc.fieldgui.upgrades.count", 16, 16, 160000), 232)
     check(lang, "field input", t("sc.fieldgui.upgrades.input", "XV", 32768), 232)
     # ---- generators, machines, storages

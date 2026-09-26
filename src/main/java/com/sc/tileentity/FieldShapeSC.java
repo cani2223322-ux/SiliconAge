@@ -21,8 +21,14 @@ import net.minecraft.util.AxisAlignedBB;
  *  - DOME: the upper half of each node's sphere, from the node's floor up (cheaper - nothing below).
  *  - CYLINDER: an upright cylinder round each node, radius R, R up and R down.
  *
+ * An explicit HEIGHT H (the Zone tab; 0 = the same as the range) changes the vertical reach:
+ * bubbles and domes become ellipsoids (R across, H up / down), a box grows H up and down, a
+ * cylinder is H up and down, and a prism runs H up and down instead of the full world height.
+ *
  * Coordinates are block-centre based (node x + 0.5). Pure geometry, shared by the tile entity
- * (mobs, projectiles, explosions) and the client renderer.
+ * (mobs, projectiles, explosions) and the client renderer. The "nodes" handed in are the field's
+ * anchors (TileEntityFieldGeneratorSC.zoneNodes: the nodes, the cluster centre or a set point,
+ * shifted by the zone's offset).
  */
 public final class FieldShapeSC {
 
@@ -39,58 +45,79 @@ public final class FieldShapeSC {
         return Math.max(MIN_RANGE, Math.min(MAX_RANGE, range));
     }
 
+    /** The vertical reach: an explicit height, or the range when it is 0. */
+    public static int heightOf(int range, int height) {
+        return height > 0 ? height : range;
+    }
+
     /** Axis-aligned bounds enclosing the whole shape (for entity queries and render culling). */
     public static AxisAlignedBB bounds(FieldMode mode, List<int[]> nodes, int range) {
+        return bounds(mode, nodes, range, 0);
+    }
+
+    public static boolean contains(FieldMode mode, List<int[]> nodes, int range, double x, double y, double z) {
+        return contains(mode, nodes, range, 0, x, y, z);
+    }
+
+    /** As bounds(mode, nodes, range) with a vertical reach of its own (0 = the range). */
+    public static AxisAlignedBB bounds(FieldMode mode, List<int[]> nodes, int range, int height) {
         double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, minZ = Double.MAX_VALUE;
         double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
         for (int[] n : nodes) {
             minX = Math.min(minX, n[0]); minY = Math.min(minY, n[1]); minZ = Math.min(minZ, n[2]);
             maxX = Math.max(maxX, n[0]); maxY = Math.max(maxY, n[1]); maxZ = Math.max(maxZ, n[2]);
         }
-        double r = range;
+        double r = range, h = heightOf(range, height);
         if (mode == FieldMode.DOME) {                              // half spheres: nothing below the lowest node
             return AxisAlignedBB.getBoundingBox(minX + 0.5 - r, minY, minZ + 0.5 - r,
-                    maxX + 0.5 + r, maxY + 0.5 + r, maxZ + 0.5 + r);
+                    maxX + 0.5 + r, maxY + h, maxZ + 0.5 + r);
         }
-        if (mode == FieldMode.PRISM) {
+        if (mode == FieldMode.PRISM && height <= 0) {
             return AxisAlignedBB.getBoundingBox(minX + 0.5 - r, WORLD_BOTTOM, minZ + 0.5 - r,
                     maxX + 0.5 + r, WORLD_TOP, maxZ + 0.5 + r);
         }
-        return AxisAlignedBB.getBoundingBox(minX + 0.5 - r, minY + 0.5 - r, minZ + 0.5 - r,
-                maxX + 0.5 + r, maxY + 0.5 + r, maxZ + 0.5 + r);
+        return AxisAlignedBB.getBoundingBox(minX + 0.5 - r, minY + 0.5 - h, minZ + 0.5 - r,
+                maxX + 0.5 + r, maxY + 0.5 + h, maxZ + 0.5 + r);
     }
 
-    public static boolean contains(FieldMode mode, List<int[]> nodes, int range, double x, double y, double z) {
+    /** As contains(mode, nodes, range, ...) with a vertical reach of its own (0 = the range). */
+    public static boolean contains(FieldMode mode, List<int[]> nodes, int range, int height, double x, double y, double z) {
         if (nodes.isEmpty()) {
             return false;
         }
         switch (mode) {
-            case UNION:
+            case UNION: {                                         // ellipsoids: R across, H up and down (spheres when H = R)
+                double r2 = (double) range * range, h = heightOf(range, height), k = r2 / (h * h);
                 for (int[] n : nodes) {
                     double dx = x - (n[0] + 0.5), dy = y - (n[1] + 0.5), dz = z - (n[2] + 0.5);
-                    if (dx * dx + dy * dy + dz * dz <= (double) range * range) {
+                    if (dx * dx + dy * dy * k + dz * dz <= r2) {
                         return true;
                     }
                 }
                 return false;
-            case DOME:                                            // the upper half of each bubble, from the node's floor up
+            }
+            case DOME: {                                          // the upper half of each bubble, from the node's floor up
+                double r2 = (double) range * range, h = heightOf(range, height), k = r2 / (h * h);
                 for (int[] n : nodes) {
                     double dx = x - (n[0] + 0.5), dy = y - n[1], dz = z - (n[2] + 0.5);
-                    if (dy >= 0 && dx * dx + dy * dy + dz * dz <= (double) range * range) {
+                    if (dy >= 0 && dx * dx + dy * dy * k + dz * dz <= r2) {
                         return true;
                     }
                 }
                 return false;
-            case CYLINDER:                                        // upright cylinders, radius and half-height = range
+            }
+            case CYLINDER: {                                      // upright cylinders, radius R, H up and down
+                double h = heightOf(range, height);
                 for (int[] n : nodes) {
                     double dx = x - (n[0] + 0.5), dy = y - (n[1] + 0.5), dz = z - (n[2] + 0.5);
-                    if (Math.abs(dy) <= range && dx * dx + dz * dz <= (double) range * range) {
+                    if (Math.abs(dy) <= h && dx * dx + dz * dz <= (double) range * range) {
                         return true;
                     }
                 }
                 return false;
+            }
             case PRISM: {
-                AxisAlignedBB b = bounds(mode, nodes, range);
+                AxisAlignedBB b = bounds(mode, nodes, range, height);
                 if (y < b.minY || y > b.maxY) {
                     return false;
                 }
@@ -102,10 +129,31 @@ public final class FieldShapeSC {
                 return insidePolygon(hull, x, z) || distanceToOutline(hull, x, z) <= range;
             }
             default: {
-                AxisAlignedBB b = bounds(mode, nodes, range);
+                AxisAlignedBB b = bounds(mode, nodes, range, height);
                 return x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY && z >= b.minZ && z <= b.maxZ;
             }
         }
+    }
+
+    /**
+     * Roughly how many blocks the shape holds (overlaps counted once): a fixed-seed sample of its
+     * bounds - for the Zone tab's readout, client side.
+     */
+    public static long volume(FieldMode mode, List<int[]> nodes, int range, int height) {
+        if (nodes.isEmpty()) {
+            return 0;
+        }
+        AxisAlignedBB b = bounds(mode, nodes, range, height);
+        double sx = b.maxX - b.minX, sy = b.maxY - b.minY, sz = b.maxZ - b.minZ;
+        java.util.Random rnd = new java.util.Random(12345L);
+        int samples = 6000, hits = 0;
+        for (int i = 0; i < samples; i++) {
+            if (contains(mode, nodes, range, height, b.minX + rnd.nextDouble() * sx, b.minY + rnd.nextDouble() * sy,
+                    b.minZ + rnd.nextDouble() * sz)) {
+                hits++;
+            }
+        }
+        return Math.round(sx * sy * sz * hits / samples);
     }
 
     /** Convex hull of the nodes' block centres in the XZ plane (Andrew's monotone chain), counter-clockwise. */
