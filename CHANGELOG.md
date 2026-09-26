@@ -16,6 +16,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 **Исправлено**
 - Машины всегда ставились лицевой панелью на юг, как бы ни стоял игрок. Теперь они поворачиваются лицом к игроку, как генераторы; ключом (любым: BuildCraft, Thermal, Ender IO и т.п.) — ПКМ поворачивает на четверть оборота, Shift + ПКМ разворачивает лицом к нажатой стороне. Уже поставленные машины остаются лицом на юг.
 - Кабель, к которому подключён источник выше его уровня (например, XV-накопитель на квантовом кабеле), больше не взрывается и не разносит соседние машины — он сгорает с дымом и шипением, как в IC2. При установке такого кабеля или источника рядом с ним в чат приходит предупреждение. Машины и генератор поля с универсальным модулем трансформатора теперь не разрушаются никаким взрывом.
+- Машина, взорвавшаяся от слишком высокого напряжения, больше не ломает блоки вокруг: пропадает только она сама (взрыв по-прежнему ранит и отбрасывает).
 
 ### English
 - Field generator: a new Upgrades tab on the master's screen - 4 slots for energy storage upgrades, each +10,000 EU of field buffer (up to 16 count, as in machines). It also shows a buffer bar and your inventory; shift-click puts upgrades in. Only the owner and the access list can take them out. When clusters merge a node's upgrades go to the master; breaking a generator drops them. Handbook and the upgrade's tooltip updated.
@@ -28,6 +29,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 **Fixed**
 - Machines were always placed with their front to the south, whichever way the player stood. They now face the player like generators; any wrench (BuildCraft, Thermal, Ender IO...) turns them - right-click a quarter turn, sneak + right-click to the clicked side. Machines already placed keep facing south.
 - A cable fed by a source above its tier (say an XV storage on a quantum cable) no longer blows up and takes the machines next to it along - it burns out with smoke and a hiss, as in IC2. Placing such a cable, or a source next to one, warns you in chat. Machines and field generators holding a universal transformer upgrade are no longer broken by any blast.
+- A machine blown up by too high a voltage no longer breaks the blocks around it: only the machine itself goes (the blast still hurts and knocks back).
 
 ## 0.1.1-alpha — 2026-09-25
 

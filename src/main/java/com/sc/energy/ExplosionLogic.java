@@ -32,7 +32,7 @@ public final class ExplosionLogic {
         if (excessTiers <= 0) {
             return false;
         }
-        explode(receiver, EXPLOSION_BASE_POWER + excessTiers);
+        explode(receiver, EXPLOSION_BASE_POWER + excessTiers, false);   // the receiver goes, the blocks around it stay
         return true;
     }
 
@@ -66,10 +66,11 @@ public final class ExplosionLogic {
     }
 
     public static void explodeFromOverheat(TileEntity te) {
-        explode(te, HEAT_EXPLOSION_POWER);
+        explode(te, HEAT_EXPLOSION_POWER, true);
     }
 
-    private static void explode(TileEntity te, float power) {
+    /** @param breakBlocks false: the blast still hurts and knocks back, but breaks no block around (overvoltage) */
+    private static void explode(TileEntity te, float power, boolean breakBlocks) {
         World world = te.getWorldObj();
         if (world == null || world.isRemote) {
             return;
@@ -88,6 +89,6 @@ public final class ExplosionLogic {
         } else {
             world.setBlockToAir(te.xCoord, te.yCoord, te.zCoord);
         }
-        world.createExplosion(null, x, y, z, power, true);
+        world.createExplosion(null, x, y, z, power, breakBlocks);
     }
 }
