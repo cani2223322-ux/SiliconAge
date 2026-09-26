@@ -20,7 +20,12 @@ public enum UpgradeType {
     /** Heat-capable machines heat up 1 / (n+1) as fast. */
     HEAT_SINK("upgradeHeatSink"),
     /** Defect chance x0.5 per upgrade, energy per tick x1.25. */
-    QUALITY("upgradeQuality");
+    QUALITY("upgradeQuality"),
+    /**
+     * Universal transformer: one is enough - the machine (or field generator) takes any voltage,
+     * LV to XV, without exploding. Appended last: the item's metadata is the ordinal.
+     */
+    UNIVERSAL_TRANSFORMER("upgradeUniversalTransformer");
 
     /** Effects stop growing past this many upgrades of one kind (IC2 lets a slot hold 64). */
     public static final int MAX_EFFECTIVE = 16;

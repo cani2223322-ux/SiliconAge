@@ -130,6 +130,16 @@ public final class ModRecipesComponents {
                 new ItemStack[]{comp("tiCasing", 40), comp("nb3SnCoil", 8), cable(CableType.SUPERCONDUCTOR, 8)}, null, null,
                 new ItemStack[]{comp("fusionCore")}, null, null,
                 1200, 0f));
+        // Universal transformer upgrade: deliberately the hardest upgrade to make - two QV-XV
+        // transformers (the whole transformer chain twice), 16 transformer upgrades and 16 Exo
+        // cables, five minutes in the EV Upgrade Station.
+        ItemStack transformers = new ItemStack(com.sc.init.ModBlocks.transformerSC, 2, 5);
+        ItemStack upgrades = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER);
+        upgrades.stackSize = 16;
+        RecipeRegistry.register(new MachineRecipe(MachineType.UPGRADE_STATION_EV,
+                new ItemStack[]{transformers, upgrades, cable(CableType.EXO, 16)}, null, null,
+                new ItemStack[]{ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER)}, null, null,
+                6000, 0f));
     }
 
     /** §18.3: Nb Ingot + Sn Ingot -> Blast Furnace -> Nb3Sn Ingot, then Rolling Machine shapes it. */

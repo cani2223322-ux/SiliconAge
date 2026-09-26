@@ -142,10 +142,16 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         return (int) Math.min(Integer.MAX_VALUE / 4, Math.ceil(eu));
     }
 
-    /** Each transformer upgrade takes one tier higher voltage without exploding (IC2 style). */
+    /**
+     * Each transformer upgrade takes one tier higher voltage without exploding (IC2 style); a
+     * universal transformer upgrade takes any voltage at all.
+     */
     @Override
     public com.sc.energy.Tier inputTier() {
         com.sc.energy.Tier[] tiers = com.sc.energy.Tier.values();
+        if (upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
+            return tiers[tiers.length - 1];
+        }
         return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
     }
 

@@ -420,6 +420,11 @@ public final class SelfTestSC {
                         && baseEu == MachineType.CRUSHER.euPerTick,
                 "upgrades: 2 overclockers x0.49 time / x2.56 energy, transformer +1 tier, storage +10000 EU ("
                         + baseTicks + "->" + c.effectiveTicks(r) + " t, " + baseEu + "->" + c.effectiveEuPerTick() + " EU/t)");
+        TileEntityMachineSC u = new TileEntityMachineSC();
+        u.setMachineType(MachineType.CRUSHER);
+        u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));
+        check(u.inputTier() == com.sc.energy.Tier.XV && u.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 100, true) == 100,
+                "universal transformer upgrade: an LV machine takes any voltage, XV included");
         boolean hidden = true;
         for (int slot : c.getAccessibleSlotsFromSide(1)) {
             hidden &= slot < TileEntityMachineSC.FIRST_UPGRADE_SLOT;
@@ -598,10 +603,13 @@ public final class SelfTestSC {
         boolean hv = f.inputTier() == com.sc.energy.Tier.HV;
         f.setInventorySlotContents(2, up.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
         boolean ev = hv && f.inputTier() == com.sc.energy.Tier.EV;
+        f.setInventorySlotContents(3, up.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));
+        ev &= f.inputTier() == com.sc.energy.Tier.XV;
+        f.setInventorySlotContents(3, null);
         boolean only = !f.isItemValidForSlot(3, up.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER))
                 && f.isItemValidForSlot(3, two) && f.getAccessibleSlotsFromSide(1).length == 0;
         check(dome && cyl && defaults && extras && access && plus && capped && ev && only,
-                "field generator: dome / cylinder shapes, default switches, protections' upkeep, access list, storage upgrades (+10k each, 16 max), transformer HV -> EV, nothing else");
+                "field generator: dome / cylinder shapes, default switches, protections' upkeep, access list, storage upgrades (+10k each, 16 max), transformer HV -> EV, universal -> any, nothing else");
     }
 
     /** Drills: each tier has everything the one below has, defaults, fortune III / V, small batteries, pad tier rule. */

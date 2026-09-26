@@ -851,7 +851,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return false;
         }
         com.sc.machine.UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
-        return t == com.sc.machine.UpgradeType.ENERGY_STORAGE || t == com.sc.machine.UpgradeType.TRANSFORMER;
+        return t == com.sc.machine.UpgradeType.ENERGY_STORAGE || t == com.sc.machine.UpgradeType.TRANSFORMER
+                || t == com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER;
     }
 
     /**
@@ -867,6 +868,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
         }
         Tier[] tiers = Tier.values();
+        if (upgradeCount(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
+            return tiers[tiers.length - 1];             // any voltage
+        }
         return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(com.sc.machine.UpgradeType.TRANSFORMER))];
     }
 
