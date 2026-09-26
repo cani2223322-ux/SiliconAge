@@ -588,6 +588,13 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             if (drained == null || drained.amount <= 0) {
                 continue;
             }
+            // only what the network can deliver somewhere: a full or unwilling target leaves the fluid in its source
+            int wanted = deliverable(drained, room);
+            if (wanted <= 0) {
+                continue;
+            }
+            drained = drained.copy();
+            drained.amount = Math.min(drained.amount, wanted);
             int fits = tank().fill(drained, false);
             if (fits <= 0) {
                 continue;
@@ -600,6 +607,39 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
                 fluidChanged();
             }
         }
+    }
+
+    /**
+     * How much of that fluid the pipe network's insert connectors would take now (simulated), up to
+     * max - less what's already waiting in this pipe. Not back into this bundle's own extracting sides.
+     */
+    private int deliverable(FluidStack fluid, int max) {
+        int total = 0;
+        for (Route r : fluidRoutes()) {
+            if (total >= max) {
+                break;
+            }
+            if (r.owner == this && mode(ConduitKind.PIPE, r.dir).extracts(ConduitKind.PIPE)) {
+                continue;
+            }
+            if (!worldObj.blockExists(r.x, r.y, r.z)) {
+                continue;
+            }
+            TileEntity te = worldObj.getTileEntity(r.x, r.y, r.z);
+            if (!(te instanceof IFluidHandler) || te instanceof TileEntityConduitBundleSC) {
+                continue;
+            }
+            IFluidHandler target = (IFluidHandler) te;
+            ForgeDirection face = r.dir.getOpposite();
+            if (!target.canFill(face, fluid.getFluid())) {
+                continue;
+            }
+            FluidStack offer = fluid.copy();
+            offer.amount = max - total;
+            total += Math.max(0, target.fill(face, offer, false));
+        }
+        FluidStack waiting = tank().getFluid();
+        return Math.max(0, Math.min(max, total) - (waiting == null ? 0 : waiting.amount));
     }
 
     /**
