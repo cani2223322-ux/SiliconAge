@@ -10,6 +10,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - Новый **модуль «Насосная жила»**: найдя жидкость, насос откачивает всё озеро или водоём целиком, даже за границей области (LV — 8, MV — 16, HV — 32, EV — 64 блока), до 256 блоков за раз, 5 EU за блок снаружи области. Во вкладке «Баки»: включение, дальность, «Текучие: убрать / оставить», счётчик откачанного.
 - У бака промывки во вкладке «Баки» кнопка **«Из баков»** (вкл/выкл): бак промывки сам доливается водой из баков насоса.
 - Бак воды для промывки в карьере увеличен: 32 000 мБ вместо 8 000, и каждый модуль «Расширенный бак» добавляет ему ещё +32 000 мБ.
+- **Новый индикатор буфера энергии** во всех механизмах (машины, генераторы, энергонакопители, карьер, генератор поля): стальная рамка с латунной табличкой и лампой, голо-экран с сегментами и светящейся кромкой, деления и проценты заполнения. Цвет по заряду: от 70% — зелёный, от 30% — оранжевый, меньше — красный.
 **Исправлено**
 - Насос карьера не мог откачать воду до конца: из-за «бесконечного источника» вода восстанавливалась между соседними источниками. Теперь насос забирает всё связанное водяное тело в области сразу (до 256 блоков за раз, 2 EU за блок) и не даёт ему восстановиться; каждый источник — 1000 мБ в бак.
 - Насос карьера не собирал воду и лаву, если их источники стали «текучими» (а они становятся такими, как только рядом что-то выкопано), — такие жидкости оставались в мире. Теперь они собираются. Жидкости других модов (в том числе «конечные», например некоторые масла и газы) откачиваются по тому, сколько их в блоке.
@@ -20,6 +21,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - A new **Fluid Vein module**: when the pump finds a fluid it takes the whole lake or pool, even past the area (LV 8, MV 16, HV 32, EV 64 blocks), up to 256 blocks at a time, 5 EU a block outside the area. On the Tanks tab: on / off, range, "Flowing: take / leave", a counter.
 - The washing tank on the Tanks tab has a **Refill** button (on / off): it tops itself up with water from the pump's tanks.
 - The quarry's washing water tank is bigger: 32,000 mB instead of 8,000, and each Tank Extension module adds another +32,000 mB to it.
+- **A new energy buffer gauge** in every machine (machines, generators, energy storages, the quarry, the field generator): a steel frame with a brass nameplate and a lamp, a holo screen with segments and a glowing edge, ticks and the fill percentage. Coloured by charge: green from 70%, orange from 30%, red below.
 **Fixed**
 - The quarry's pump couldn't empty water: the infinite-source rule kept refilling the gaps between sources. The pump now takes the whole connected body of water in the area at once (up to 256 blocks a go, 2 EU a block) and nothing flows back; each source is 1000 mB into the tank.
 - The quarry's pump didn't collect water and lava once their sources turned into flowing blocks (which they do as soon as anything next to them is dug) - they stayed in the world. They're collected now. Other mods' fluids (finite ones too, such as some oils and gases) are pumped by what the block holds.

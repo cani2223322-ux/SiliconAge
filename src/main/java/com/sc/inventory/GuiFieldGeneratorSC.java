@@ -33,7 +33,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     private static final int W = 248, H = 226;
     private static final int TAB_BASE = 100, ADD_ID = 200, REMOVE_BASE = 300, TAB_UPGRADES = 4, PAGE_ID = 40;
-    private static final int ENERGY_X = 224, ENERGY_Y = 34, ENERGY_W = 14, ENERGY_H = 76;
+    /** The energy gauge (GuiEnergyGaugeSC); the Field tab's text rooms end 4 px before it. */
+    private static final int ENERGY_X = 222, ENERGY_Y = 33, ENERGY_W = 22, ENERGY_H = 79;
     private static final int MAP_X = 10, MAP_Y = 34, MAP = 150, CELL = 2;
 
     private static int tab;                 // remembered while the game runs
@@ -296,11 +297,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         panel(guiLeft, guiTop, W, H);
         if (tab == 0) {
-            inset(guiLeft + ENERGY_X - 1, guiTop + ENERGY_Y - 1, ENERGY_W + 2, ENERGY_H + 2);
-            float fill = (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored());
-            int h = (int) (ENERGY_H * Math.min(1F, fill));
-            drawRect(guiLeft + ENERGY_X, guiTop + ENERGY_Y + ENERGY_H - h, guiLeft + ENERGY_X + ENERGY_W, guiTop + ENERGY_Y + ENERGY_H, 0xFFD02020);
-            drawRect(guiLeft + ENERGY_X, guiTop + ENERGY_Y + ENERGY_H - h, guiLeft + ENERGY_X + 3, guiTop + ENERGY_Y + ENERGY_H, 0xFFFF6060);
+            GuiEnergyGaugeSC.draw(guiLeft + ENERGY_X, guiTop + ENERGY_Y, ENERGY_W, ENERGY_H,
+                    (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored()));
         } else if (tab == 2) {
             inset(guiLeft + 7, guiTop + 84, W - 14, 6 * 16 + 4);
         } else if (tab == 3) {

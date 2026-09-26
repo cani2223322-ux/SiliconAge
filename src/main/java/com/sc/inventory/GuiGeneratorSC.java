@@ -32,7 +32,8 @@ public class GuiGeneratorSC extends GuiContainer {
     private static final int INFO_X = 84, INFO_Y = 20;
     private static final int IGNITION_X = 84, IGNITION_Y = 20, IGNITION_W = 52, IGNITION_H = 8;
     private static final int HEAT_X = 84, HEAT_Y = 42, HEAT_W = 42, HEAT_H = 5;
-    private static final int ENERGY_X = 152, ENERGY_Y = 17, ENERGY_W = 10, ENERGY_H = 44;
+    /** Text rooms end at ENERGY_X; the energy gauge (GuiEnergyGaugeSC) sits over the sheet's old well. */
+    private static final int ENERGY_X = 152, GAUGE_X = 150, GAUGE_Y = 16, GAUGE_W = 22, GAUGE_H = 54;
     private static final int STATUS_X = 8, STATUS_Y = 58, OUTPUT_Y = 68;
     private static final int PANEL_W = 32, PANEL_H = 86;
 
@@ -124,8 +125,9 @@ public class GuiGeneratorSC extends GuiContainer {
                     GuiGaugeSC.SPR_SUN_V, 32, 32);
         }
 
-        GuiGaugeSC.drawSpriteVertical(this, x + ENERGY_X, y + ENERGY_Y, GuiGaugeSC.SPR_ENERGY_U, GuiGaugeSC.SPR_ENERGY_V,
-                ENERGY_W, ENERGY_H, (float) generator.getEnergyStored() / Math.max(1, generator.getMaxEnergyStored()));
+        GuiEnergyGaugeSC.draw(x + GAUGE_X, y + GAUGE_Y, GAUGE_W, GAUGE_H,
+                (float) generator.getEnergyStored() / Math.max(1, generator.getMaxEnergyStored()));
+        GuiGaugeSC.bind(mc, TEXTURE);
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawFluid() leaves the blocks atlas bound
             FluidTank t = tank(i);
@@ -232,7 +234,7 @@ public class GuiGeneratorSC extends GuiContainer {
     private List<String> tooltipAt(int mouseX, int mouseY) {
         List<String> lines = new ArrayList<String>();
 
-        if (GuiGaugeSC.isOver(ENERGY_X, ENERGY_Y, ENERGY_W, ENERGY_H, mouseX, mouseY)) {
+        if (GuiGaugeSC.isOver(GAUGE_X, GAUGE_Y, GAUGE_W, GAUGE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(generator.getEnergyStored() + " / " + generator.getMaxEnergyStored() + " EU");
             lines.add(Lang.tr("sc.gui.output", type == GeneratorType.CREATIVE ? generator.getCreativeTier().getVoltage() : generator.ratedOutput()));

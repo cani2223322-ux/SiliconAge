@@ -40,7 +40,8 @@ public class GuiMachineSC extends GuiContainer {
     // top row to itself - at y 13 the tank and energy rims sat inside the title's line, and seven
     // English / eight Russian names ran straight into them.
     private static final int TANK_X = 104, TANK_Y = 17, TANK_W = 8, TANK_H = 44, TANK_GAP = 12;
-    private static final int ENERGY_X = 152, ENERGY_Y = 17, ENERGY_W = 10, ENERGY_H = 44;
+    /** Text rooms end at ENERGY_X; the energy gauge (GuiEnergyGaugeSC) sits over the sheet's old well. */
+    private static final int ENERGY_X = 152, GAUGE_X = 150, GAUGE_Y = 16, GAUGE_W = 22, GAUGE_H = 54;
     // The status line owns y 72 (it used to be drawn at y 60, straight across the output slots);
     // heat sits on the same row, right of the longest status text (108 px).
     private static final int STATUS_X = 8, STATUS_Y = 72;
@@ -93,8 +94,9 @@ public class GuiMachineSC extends GuiContainer {
                     HEAT_W, HEAT_H, (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity());
         }
 
-        GuiGaugeSC.drawSpriteVertical(this, x + ENERGY_X, y + ENERGY_Y, GuiGaugeSC.SPR_ENERGY_U, GuiGaugeSC.SPR_ENERGY_V,
-                ENERGY_W, ENERGY_H, (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
+        GuiEnergyGaugeSC.draw(x + GAUGE_X, y + GAUGE_Y, GAUGE_W, GAUGE_H,
+                (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
+        GuiGaugeSC.bind(mc, TEXTURE);
 
         // Tanks last: drawFluid() switches to the blocks atlas, so the sheet is rebound per tank.
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -250,7 +252,7 @@ public class GuiMachineSC extends GuiContainer {
     private List<String> tooltipAt(int mouseX, int mouseY) {
         List<String> lines = new ArrayList<String>();
 
-        if (GuiGaugeSC.isOver(ENERGY_X, ENERGY_Y, ENERGY_W, ENERGY_H, mouseX, mouseY)) {
+        if (GuiGaugeSC.isOver(GAUGE_X, GAUGE_Y, GAUGE_W, GAUGE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(machine.getEnergyStored() + " / " + machine.getMaxEnergyStored() + " EU");
             lines.add(Lang.tr("sc.gui.usage", machine.effectiveEuPerTick()));

@@ -21,7 +21,8 @@ public class GuiEnergyStorageSC extends GuiContainer {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation(Reference.ASSETS, "textures/gui/guiGenerator.png");
     private static final int BAR_X = 8, BAR_Y = 42, BAR_W = 136, BAR_H = 8;
-    private static final int ENERGY_X = 152, ENERGY_Y = 17, ENERGY_W = 10, ENERGY_H = 44;
+    /** Text rooms end at ENERGY_X; the energy gauge (GuiEnergyGaugeSC) sits over the sheet's old well. */
+    private static final int ENERGY_X = 152, GAUGE_X = 150, GAUGE_Y = 16, GAUGE_W = 22, GAUGE_H = 54;
     private static final int TEXT_X = 8, FLOW_Y = 55, OUTPUT_Y = 67;
 
     private final TileEntityEnergyStorageSC storage;
@@ -44,8 +45,8 @@ public class GuiEnergyStorageSC extends GuiContainer {
         drawTexturedModalRect(x, y, 0, 0, xSize, ySize);
         drawTexturedModalRect(x + ContainerEnergyStorageSC.SLOT_X - 1, y + ContainerEnergyStorageSC.SLOT_Y - 1,
                 GuiGaugeSC.SPR_STEEL_SLOT_U, GuiGaugeSC.SPR_STEEL_SLOT_V, 18, 18);
-        GuiGaugeSC.drawSpriteVertical(this, x + ENERGY_X, y + ENERGY_Y, GuiGaugeSC.SPR_ENERGY_U, GuiGaugeSC.SPR_ENERGY_V,
-                ENERGY_W, ENERGY_H, fraction());
+        GuiEnergyGaugeSC.draw(x + GAUGE_X, y + GAUGE_Y, GAUGE_W, GAUGE_H, fraction());
+        GuiGaugeSC.bind(mc, TEXTURE);
         // wide charge bar: well, fill, lighter top edge
         GuiGaugeSC.drawWell(x + BAR_X, y + BAR_Y, BAR_W, BAR_H);
         int filled = (int) (BAR_W * Math.min(1F, fraction()));
@@ -90,7 +91,7 @@ public class GuiEnergyStorageSC extends GuiContainer {
             lines.add(Lang.tr("sc.storage.tooltip.io", storage.getTier().getVoltage()));
             return lines;
         }
-        if (GuiGaugeSC.isOver(ENERGY_X, ENERGY_Y, ENERGY_W, ENERGY_H, mx, my) || GuiGaugeSC.isOver(BAR_X, BAR_Y, BAR_W, BAR_H, mx, my)) {
+        if (GuiGaugeSC.isOver(GAUGE_X, GAUGE_Y, GAUGE_W, GAUGE_H, mx, my) || GuiGaugeSC.isOver(BAR_X, BAR_Y, BAR_W, BAR_H, mx, my)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(storage.getEnergyStored() + " / " + storage.getMaxEnergyStored() + " EU");
             return lines;

@@ -36,7 +36,8 @@ public class GuiQuarrySC extends GuiContainer {
 
     private static final int W = 248, H = 262, TOP = ContainerQuarrySC.TOP;
     private static final int TAB_BASE = 1000;
-    private static final int ENERGY_X = 226, ENERGY_Y = 30, ENERGY_W = 12, ENERGY_H = 80;
+    /** The energy gauge (GuiEnergyGaugeSC); the Quarry tab's text rooms end 4 px before it. */
+    private static final int ENERGY_X = 222, ENERGY_Y = 29, ENERGY_W = 22, ENERGY_H = 83;
     private static final int MAP_X = 8, MAP_Y = 30, MAP = 150;
     private static final String[] TABS = {"quarry", "area", "map", "output", "functions", "upgrades", "tanks"};
 
@@ -575,11 +576,8 @@ public class GuiQuarrySC extends GuiContainer {
         int x = guiLeft, y = guiTop + TOP;
         panel(x, guiTop, W, H);
         if (tab == 0) {
-            inset(x + ENERGY_X - 1, y + ENERGY_Y - 1, ENERGY_W + 2, ENERGY_H + 2);
-            float f = (float) quarry.getEnergyStored() / Math.max(1, quarry.getMaxEnergyStored());
-            int h = (int) (ENERGY_H * Math.min(1F, f));
-            drawRect(x + ENERGY_X, y + ENERGY_Y + ENERGY_H - h, x + ENERGY_X + ENERGY_W, y + ENERGY_Y + ENERGY_H, 0xFFD02020);
-            drawRect(x + ENERGY_X, y + ENERGY_Y + ENERGY_H - h, x + ENERGY_X + 3, y + ENERGY_Y + ENERGY_H, 0xFFFF6060);
+            GuiEnergyGaugeSC.draw(x + ENERGY_X, y + ENERGY_Y, ENERGY_W, ENERGY_H,
+                    (float) quarry.getEnergyStored() / Math.max(1, quarry.getMaxEnergyStored()));
         } else if (tab == 1) {
             int c = targetPlane ? quarry.getColorPlane() : quarry.getColorFrame();
             int px = x + 128 + 96, py = y + 130;

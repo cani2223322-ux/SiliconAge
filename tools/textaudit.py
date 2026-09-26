@@ -131,7 +131,7 @@ def audit(lang):
     check(lang, "quarry scan", t("sc.quarrygui.scan"), 74 - 6)
     for k, a in (("sizex", (128, 128)), ("sizez", (128, 128)), ("offx", (-64,)), ("offz", (-64,)), ("bottom", (255,))):
         check(lang, "quarry area label", t("sc.quarrygui." + k, *a), 114)
-    room = 226 - 12
+    room = 222 - 12
     for s in ("paused", "running", "no_power", "no_head", "buffer_full", "done", "no_area", "redstone", "blocked_by_field"):
         check(lang, "quarry status", t("sc.quarry.status." + s), room)
     check(lang, "quarry layer", t("sc.quarrygui.layer", 255, 1, 100), room)
@@ -185,7 +185,7 @@ def audit(lang):
         check(lang, "field colour", t("sc.fieldgui.color", t("sc.fieldgui.color.%d" % i)), 114 - 6)
     for flag in (1, 2, 4, 8, 16, 32, 64, 128, 256):
         check(lang, "field switch", t("sc.fieldgui.flag.%d" % flag) + ": " + off, (114 if flag in (4, 8, 256) else 232) - 6)
-    check(lang, "field upkeep", t("sc.gui.field.upkeep", 99999), 212)
+    check(lang, "field upkeep", t("sc.gui.field.upkeep", 99999), 222 - 12)
     check(lang, "field upgrades count", t("sc.fieldgui.upgrades.count", 16, 16, 160000), 232)
     check(lang, "field input", t("sc.fieldgui.upgrades.input", "XV", 32768), 232)
     # ---- generators, machines, storages
