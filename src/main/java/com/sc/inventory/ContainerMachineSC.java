@@ -201,7 +201,8 @@ public class ContainerMachineSC extends Container {
         @Override
         public boolean isItemValid(ItemStack stack) {
             return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
-                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly();
+                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
+                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly();
         }
     }
 

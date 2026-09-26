@@ -32,11 +32,13 @@ import net.minecraft.util.AxisAlignedBB;
 public class GuiFieldGeneratorSC extends GuiContainer {
 
     private static final int W = 248, H = 226;
-    private static final int TAB_BASE = 100, ADD_ID = 200, REMOVE_BASE = 300, TAB_UPGRADES = 4;
+    private static final int TAB_BASE = 100, ADD_ID = 200, REMOVE_BASE = 300, TAB_UPGRADES = 4, PAGE_ID = 40;
     private static final int ENERGY_X = 224, ENERGY_Y = 34, ENERGY_W = 14, ENERGY_H = 76;
     private static final int MAP_X = 10, MAP_Y = 34, MAP = 150, CELL = 2;
 
     private static int tab;                 // remembered while the game runs
+    /** The Functions tab's second page: wireless charging. */
+    private static boolean chargePage;
 
     private final TileEntityFieldGeneratorSC field;
     private GuiTextField nameField;
@@ -91,8 +93,17 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 break;
             }
             case 1: {
+                buttonList.add(new TextFitSC.Button(PAGE_ID, guiLeft + W - 8 - 110, guiTop + H - 26, 110, 20, ""));
+                if (chargePage) {
+                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_CHARGE), x, y + 14, 114, 20, ""));
+                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_CHARGE_FX), x + 118, y + 14, 114, 20, ""));
+                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_CHARGE_MODE, x, y + 38, W - 16, 20, ""));
+                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RESERVE_MINUS, x, y + 62, 34, 20, "-10%"));
+                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RESERVE_PLUS, x + 36, y + 62, 34, 20, "+10%"));
+                    break;
+                }
                 int[] rows = {TileEntityFieldGeneratorSC.F_NO_SPAWN, TileEntityFieldGeneratorSC.F_NO_ENDER, TileEntityFieldGeneratorSC.F_DAMAGE,
-                        -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_CHARGE, TileEntityFieldGeneratorSC.F_HEAL};
+                        -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL};
                 for (int i = 0; i < rows.length; i++) {
                     int id = rows[i] < 0 ? ContainerFieldGeneratorSC.BTN_FILTER : flagId(rows[i]);
                     buttonList.add(new TextFitSC.Button(id, x, y + i * 22, W - 16, 20, ""));
@@ -150,7 +161,16 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 }
                 continue;
             }
-            if (id >= ContainerFieldGeneratorSC.BTN_FLAG_BASE) {
+            if (id == PAGE_ID) {
+                b.displayString = Lang.tr(chargePage ? "sc.fieldgui.page.functions" : "sc.fieldgui.page.charge");
+                continue;
+            } else if (id == ContainerFieldGeneratorSC.BTN_CHARGE_MODE) {
+                b.displayString = Lang.tr("sc.fieldgui.charge.mode", Lang.tr("sc.fieldgui.charge.mode." + field.getChargeMode()));
+            } else if (id == ContainerFieldGeneratorSC.BTN_RESERVE_MINUS || id == ContainerFieldGeneratorSC.BTN_RESERVE_PLUS) {
+                b.enabled = mayEdit() && (id == ContainerFieldGeneratorSC.BTN_RESERVE_MINUS ? field.getChargeReserve() > 0
+                        : field.getChargeReserve() < TileEntityFieldGeneratorSC.RESERVE_MAX);
+                continue;
+            } else if (id >= ContainerFieldGeneratorSC.BTN_FLAG_BASE) {
                 int flag = 1 << (id - ContainerFieldGeneratorSC.BTN_FLAG_BASE);
                 boolean on = field.has(flag);
                 b.displayString = (on ? "§a" : "§7") + Lang.tr("sc.fieldgui.flag." + flag) + ": " + onOff(on);
@@ -205,7 +225,10 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     @Override
     protected void actionPerformed(GuiButton button) {
-        if (button.id >= TAB_BASE && button.id <= TAB_BASE + TAB_UPGRADES) {
+        if (button.id == PAGE_ID) {
+            chargePage = !chargePage;
+            initGui();
+        } else if (button.id >= TAB_BASE && button.id <= TAB_BASE + TAB_UPGRADES) {
             tab = button.id - TAB_BASE;
             initGui();
         } else if (button.id == ADD_ID) {
@@ -322,6 +345,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 break;
             }
             case 1:
+                if (chargePage) {
+                    drawChargePage(c, dim);
+                }
                 break;
             case 2: {
                 fit(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 8, 32, W - 16, c);
@@ -367,6 +393,24 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.map.hint"), lx, 120, W - lx - 6, dim);
             }
         }
+    }
+
+    /** The Functions tab's second page: wireless charging settings and last second's numbers. */
+    private void drawChargePage(int c, int dim) {
+        String title = Lang.tr("sc.fieldgui.charge.title");
+        fitCentered(title, 32, c);
+        int tw = Math.min(W - 30, fontRendererObj.getStringWidth(title));
+        TextFitSC.help(fontRendererObj, (W + tw) / 2 + 3, 31, Lang.tr("sc.fieldgui.charge.help"), guiLeft, guiTop);
+        int reserveEu = (int) ((long) field.getMaxEnergyStored() * field.getChargeReserve() / 100);
+        fit(Lang.tr("sc.fieldgui.charge.reserve", field.getChargeReserve(), reserveEu), 82, 98, W - 90, c);
+        int boosters = Math.min(com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS,
+                field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER));
+        fit(Lang.tr("sc.fieldgui.charge.rate", field.chargeRate()), 8, 124, W - 16, c);
+        fit(Lang.tr("sc.fieldgui.charge.boosters", boosters, com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS), 8, 136, W - 16, c);
+        boolean on = field.has(TileEntityFieldGeneratorSC.F_CHARGE) && field.isActive();
+        fit(on ? Lang.tr("sc.fieldgui.charge.now", field.getChargedLastSecond(), field.getPlayersLastSecond())
+                : Lang.tr("sc.fieldgui.charge.off"), 8, 150, W - 16, on ? 0x2E7D32 : 0xA02020);
+        fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.charge.items"), 8, 168, W - 16, dim);
     }
 
     private void legend(int x, int y, int color, String text) {
@@ -455,7 +499,13 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 continue;
             }
             String key = null;
-            if (b.id >= ContainerFieldGeneratorSC.BTN_FLAG_BASE && b.id < TAB_BASE) {
+            if (b.id == PAGE_ID) {
+                key = null;
+            } else if (b.id == ContainerFieldGeneratorSC.BTN_CHARGE_MODE) {
+                key = "sc.fieldgui.charge.mode.desc";
+            } else if (b.id == ContainerFieldGeneratorSC.BTN_RESERVE_MINUS || b.id == ContainerFieldGeneratorSC.BTN_RESERVE_PLUS) {
+                key = "sc.fieldgui.charge.reserve.desc";
+            } else if (b.id >= ContainerFieldGeneratorSC.BTN_FLAG_BASE && b.id < TAB_BASE) {
                 key = "sc.fieldgui.flag." + (1 << (b.id - ContainerFieldGeneratorSC.BTN_FLAG_BASE)) + ".desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_MODE) {
                 key = "sc.fieldgui.shape.desc";

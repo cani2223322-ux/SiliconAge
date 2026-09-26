@@ -252,6 +252,10 @@ public final class ModRecipesCrafting {
                 'K', comp("capacitor"), 'W', cable(CableType.SILVER), 'T', transistor, 'C', comp("combustionChamber"));
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ECONOMIZER), "RRR", "WTW", "WSW",
                 'R', comp("resistor"), 'W', cable(CableType.SILVER), 'T', transistor, 'S', comp("sensor"));
+        // the field generator's charge booster: a field link module over a charger's worth of coils and cells
+        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.CHARGE_BOOSTER), " L ", "WTW", "KEK",
+                'L', new ItemStack(ModItems.fieldLinkModule), 'W', cable(CableType.TUNGSTEN), 'T', transistor,
+                'K', comp("copperCoil"), 'E', comp("energyCellHV"));
     }
 
     /** The quarry line, its drill heads, modules, the ore scanner and the area card - the mod's own items only. */

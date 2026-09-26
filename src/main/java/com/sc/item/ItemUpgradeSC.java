@@ -42,7 +42,7 @@ public class ItemUpgradeSC extends Item {
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add(Lang.tr("sc.upgrade.tooltip." + typeOf(stack).name().toLowerCase(java.util.Locale.ROOT)));
-        list.add(Lang.tr("sc.upgrade.tooltip.slot"));
+        list.add(Lang.tr(typeOf(stack).fieldOnly() ? "sc.upgrade.tooltip.slot.field" : "sc.upgrade.tooltip.slot"));
     }
 
     @Override

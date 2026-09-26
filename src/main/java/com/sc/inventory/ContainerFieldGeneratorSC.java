@@ -20,13 +20,14 @@ import net.minecraft.item.ItemStack;
 public class ContainerFieldGeneratorSC extends Container {
 
     private final TileEntityFieldGeneratorSC field;
-    private final IntSyncSC sync = new IntSyncSC(5);  // energy, mode, node count, active, range
+    private final IntSyncSC sync = new IntSyncSC(7);  // energy, mode, node count, active, range, EU charged / s, players charged
 
     // Button ids for enchantItem (the vanilla GUI-button packet, no custom networking needed).
     public static final int BTN_RANGE_MINUS_16 = 0, BTN_RANGE_MINUS_1 = 1, BTN_RANGE_PLUS_1 = 2,
-            BTN_RANGE_PLUS_16 = 3, BTN_MODE = 4, BTN_COLOR = 5, BTN_REDSTONE = 6, BTN_FILTER = 7;
+            BTN_RANGE_PLUS_16 = 3, BTN_MODE = 4, BTN_COLOR = 5, BTN_REDSTONE = 6, BTN_FILTER = 7,
+            BTN_CHARGE_MODE = 8, BTN_RESERVE_MINUS = 9, BTN_RESERVE_PLUS = 30;
     /** Switches: BTN_FLAG_BASE + the bit's index (TileEntityFieldGeneratorSC.F_*). */
-    public static final int BTN_FLAG_BASE = 10, FLAG_COUNT = 9;
+    public static final int BTN_FLAG_BASE = 10, FLAG_COUNT = 10;
 
     /** Server side of the screen's buttons, master only, owner / access list only. */
     @Override
@@ -47,6 +48,9 @@ public class ContainerFieldGeneratorSC extends Container {
             case BTN_COLOR: field.cycleColor(); return true;
             case BTN_REDSTONE: field.cycleRedstone(); return true;
             case BTN_FILTER: field.cycleFilter(); return true;
+            case BTN_CHARGE_MODE: field.cycleChargeMode(); return true;
+            case BTN_RESERVE_MINUS: field.adjustChargeReserve(-TileEntityFieldGeneratorSC.RESERVE_STEP); return true;
+            case BTN_RESERVE_PLUS: field.adjustChargeReserve(TileEntityFieldGeneratorSC.RESERVE_STEP); return true;
             default:
                 if (id >= BTN_FLAG_BASE && id < BTN_FLAG_BASE + FLAG_COUNT) {
                     field.toggle(1 << (id - BTN_FLAG_BASE));
@@ -165,7 +169,7 @@ public class ContainerFieldGeneratorSC extends Container {
     public void detectAndSendChanges() {
         super.detectAndSendChanges();
         sync.send(this, crafters, new int[]{field.getEnergyStored(), field.getMode().ordinal(),
-                field.getNodeCount(), field.isActive() ? 1 : 0, field.getRange()});
+                field.getNodeCount(), field.isActive() ? 1 : 0, field.getRange(), field.getChargedLastSecond(), field.getPlayersLastSecond()});
     }
 
     /**
@@ -187,6 +191,7 @@ public class ContainerFieldGeneratorSC extends Container {
             }
             if (stateReady) {
                 field.setClientState(sync.value(1), sync.value(2), sync.value(3) != 0, sync.value(4));
+                field.setChargeStatsClient(sync.value(5), sync.value(6));
             }
         }
     }

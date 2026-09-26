@@ -586,6 +586,34 @@ public final class SelfTestSC {
                 && (f18 & com.sc.tileentity.TileEntityQuarrySC.F_REPAIR) == 0 && (f18 & com.sc.tileentity.TileEntityQuarrySC.F_FORTUNE) == 0;
         check(mTier && mTrash && mEco && closed && opened && stab && migr,
                 "quarry modules 2: tier / quarry / rig rules, trash and gentle lists, economy x0.8 and twin x2, resonator opens lenses, stabilizer x7 at 300k, old saves get the new switches (repair off)");
+        // field generator wireless charging: the booster goes into fields only and doubles the rate; mode and reserve are kept
+        ItemStack booster = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.CHARGE_BOOSTER);
+        com.sc.tileentity.TileEntityFieldGeneratorSC cf = new com.sc.tileentity.TileEntityFieldGeneratorSC();
+        TileEntityMachineSC cm = new TileEntityMachineSC();
+        cm.setMachineType(MachineType.CRUSHER);
+        boolean bSlots = cf.isItemValidForSlot(0, booster) && !cm.isItemValidForSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT, booster);
+        int rate0 = cf.chargeRate();
+        ItemStack b3 = booster.copy();
+        b3.stackSize = 6;
+        cf.setInventorySlotContents(0, b3);
+        boolean bRate = rate0 == com.sc.tileentity.TileEntityFieldGeneratorSC.CHARGE_PER_SECOND && cf.chargeRate() == rate0 * 16;
+        cf.cycleChargeMode();
+        cf.adjustChargeReserve(30);
+        cf.adjustChargeReserve(500);
+        net.minecraft.nbt.NBTTagCompound cfn = new net.minecraft.nbt.NBTTagCompound();
+        cf.writeToNBT(cfn);
+        com.sc.tileentity.TileEntityFieldGeneratorSC cf2 = new com.sc.tileentity.TileEntityFieldGeneratorSC();
+        cf2.readFromNBT(cfn);
+        boolean bKeep = cf2.getChargeMode() == com.sc.tileentity.TileEntityFieldGeneratorSC.CHARGE_HELD_FIRST
+                && cf2.getChargeReserve() == com.sc.tileentity.TileEntityFieldGeneratorSC.RESERVE_MAX
+                && cf2.has(com.sc.tileentity.TileEntityFieldGeneratorSC.F_CHARGE_FX);
+        cfn.removeTag("ChargeMode");
+        cfn.setInteger("Flags", com.sc.tileentity.TileEntityFieldGeneratorSC.F_CHARGE);
+        com.sc.tileentity.TileEntityFieldGeneratorSC cf3 = new com.sc.tileentity.TileEntityFieldGeneratorSC();
+        cf3.readFromNBT(cfn);
+        boolean bOld = cf3.has(com.sc.tileentity.TileEntityFieldGeneratorSC.F_CHARGE_FX) && cf3.getChargeMode() == 0;
+        check(bSlots && bRate && bKeep && bOld,
+                "field charging: booster in fields only, x2 each up to x16, mode / reserve (max 90%) saved, old fields get sparks on");
         // a filter as another filter's example keeps no list of its own (no filter-in-filter growth)
         ItemStack fa = new ItemStack(ModItems.itemFilter, 1, 1), fb = new ItemStack(ModItems.itemFilter, 1, 1);
         com.sc.conduit.ItemFilterSC.setEntry(fb, 0, new ItemStack(ModItems.oreScanner));

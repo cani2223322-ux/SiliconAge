@@ -727,7 +727,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         // player has to dig it back out by hand.
         if (slot >= FIRST_UPGRADE_SLOT) {
             return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
-                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly();
+                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
+                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly();
         }
         return slot < INPUT_SLOTS && RecipeRegistry.isValidInput(machineType, stack);
     }

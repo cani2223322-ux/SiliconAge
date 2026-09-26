@@ -71,9 +71,15 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     /** Switches, bits of "Flags". */
     public static final int F_NO_SPAWN = 1, F_NO_ENDER = 2, F_PRIVATE = 4, F_PUSH_PLAYERS = 8, F_DAMAGE = 16,
-            F_WARN = 32, F_CHARGE = 64, F_HEAL = 128, F_SHOW = 256;
-    /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell shown. */
-    public static final int DEFAULT_FLAGS = F_DAMAGE | F_WARN | F_SHOW;
+            F_WARN = 32, F_CHARGE = 64, F_HEAL = 128, F_SHOW = 256, F_CHARGE_FX = 512;
+    /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell and charging sparks shown. */
+    public static final int DEFAULT_FLAGS = F_DAMAGE | F_WARN | F_SHOW | F_CHARGE_FX;
+    /** What charges first: armour, the held item, everything evenly, or the armour alone. */
+    public static final int CHARGE_ARMOR_FIRST = 0, CHARGE_HELD_FIRST = 1, CHARGE_EVEN = 2, CHARGE_ARMOR_ONLY = 3, CHARGE_MODES = 4;
+    /** The charging reserve: 0..90% of the buffer, in steps of 10. */
+    public static final int RESERVE_STEP = 10, RESERVE_MAX = 90;
+    /** RF per EU when charging other mods' RF items (Thermal Expansion's rate). */
+    public static final int RF_PER_EU = 4;
     /** EU per tick each switched-on protection adds to the upkeep (TODO: not in the design doc). */
     public static final int NO_SPAWN_EU = 8, NO_ENDER_EU = 4, PRIVATE_EU = 16, PUSH_PLAYERS_EU = 8;
     /** Wireless charging: EU a second per player, from the master's buffer 1:1. Healing: EU per point healed. */
@@ -86,6 +92,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     private int flags = DEFAULT_FLAGS;
     private int redstone = REDSTONE_ALWAYS, filter = FILTER_HOSTILE, color;
+    private int chargeMode = CHARGE_ARMOR_FIRST, chargeReserve;
+    /** Last second's charging: EU given out and players served (the screen shows them). */
+    private int chargedLastSecond, playersLastSecond;
     private String owner = "";
     private final List<String> access = new ArrayList<String>();
     /** Switched off by its redstone setting right now (shown on the screen). */
@@ -122,6 +131,45 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     public int getColor() {
         return color;
+    }
+
+    public int getChargeMode() {
+        return chargeMode;
+    }
+
+    public void cycleChargeMode() {
+        chargeMode = (chargeMode + 1) % CHARGE_MODES;
+        changed();
+    }
+
+    /** Percent of the buffer charging never goes below. */
+    public int getChargeReserve() {
+        return chargeReserve;
+    }
+
+    public void adjustChargeReserve(int delta) {
+        chargeReserve = Math.max(0, Math.min(RESERVE_MAX, chargeReserve + delta));
+        changed();
+    }
+
+    /** EU a second one player can get: the base, x2 per charge booster (up to 4). */
+    public int chargeRate() {
+        return CHARGE_PER_SECOND << Math.min(com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS,
+                upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER));
+    }
+
+    public int getChargedLastSecond() {
+        return chargedLastSecond;
+    }
+
+    public int getPlayersLastSecond() {
+        return playersLastSecond;
+    }
+
+    /** Client: last second's charging numbers from the screen's sync. */
+    public void setChargeStatsClient(int eu, int players) {
+        chargedLastSecond = eu;
+        playersLastSecond = players;
     }
 
     public void cycleColor() {
@@ -207,6 +255,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         redstone = from.redstone;
         filter = from.filter;
         color = from.color;
+        chargeMode = from.chargeMode;
+        chargeReserve = from.chargeReserve;
         owner = from.owner;
         access.clear();
         access.addAll(from.access);
@@ -220,6 +270,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nbt.setInteger("Redstone", redstone);
         nbt.setInteger("Filter", filter);
         nbt.setInteger("Color", color);
+        nbt.setInteger("ChargeMode", chargeMode);
+        nbt.setInteger("ChargeReserve", chargeReserve);
     }
 
     /** The Quantum Wrench's paste (the caller checked allowed()). */
@@ -230,6 +282,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
         filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
         color = Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")));
+        chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
+        chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
         changed();
     }
 
@@ -585,13 +639,19 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             if (range <= 32 || worldObj.getTotalWorldTime() % 4 == 0) {
                 protectRegion();
             }
-            if (worldObj.getTotalWorldTime() % 20 == 0 && (has(F_CHARGE) || has(F_HEAL))) {
-                serveAllies();
+            if (worldObj.getTotalWorldTime() % 20 == 0) {
+                chargedLastSecond = 0;
+                playersLastSecond = 0;
+                if (has(F_CHARGE) || has(F_HEAL)) {
+                    serveAllies();
+                }
             }
             ACTIVE.add(this);
         } else {
             active = false;
             ACTIVE.remove(this);
+            chargedLastSecond = 0;
+            playersLastSecond = 0;
         }
         if (active != wasActive) {
             changed();          // turn the visible shield on/off for nearby clients
@@ -632,16 +692,16 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             if (!allowed(p) || p.isDead || !fieldContains(p.posX, p.posY + 1, p.posZ)) {
                 continue;
             }
-            int spare = getEnergyStored() - upkeepPerTick() * 40;
+            // charging keeps two seconds of upkeep and the set reserve in the buffer
+            int spare = Math.min(getEnergyStored() - upkeepPerTick() * 40,
+                    getEnergyStored() - (int) ((long) getMaxEnergyStored() * chargeReserve / 100));
             if (has(F_CHARGE) && spare > 0) {
-                int budget = Math.min(CHARGE_PER_SECOND, spare);
-                for (int i = 0; i < p.inventory.armorInventory.length && budget > 0; i++) {
-                    budget -= chargeInto(p, p.inventory.armorInventory[i], budget);
-                }
-                for (int i = 0; i < p.inventory.mainInventory.length && budget > 0; i++) {
-                    ItemStack s = p.inventory.mainInventory[i];
-                    if (!(p.isUsingItem() && s == p.getCurrentEquippedItem())) {       // a blocking blade keeps its block
-                        budget -= chargeInto(p, s, budget);
+                int used = chargePlayer(p, Math.min(chargeRate(), spare));
+                if (used > 0) {
+                    chargedLastSecond += used;
+                    playersLastSecond++;
+                    if (has(F_CHARGE_FX)) {
+                        sparks(p);
                     }
                 }
             }
@@ -652,7 +712,77 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
     }
 
-    /** Charges one of the mod's electric items from the buffer. @return EU used */
+    /** One player's items, in the order the charge mode says, up to `budget` EU. @return EU used */
+    private int chargePlayer(EntityPlayer p, int budget) {
+        ItemStack held = p.isUsingItem() ? null : p.getCurrentEquippedItem();   // a blocking blade keeps its block
+        List<ItemStack> order = new ArrayList<ItemStack>();
+        if (chargeMode == CHARGE_HELD_FIRST && held != null) {
+            order.add(held);
+        }
+        for (ItemStack s : p.inventory.armorInventory) {
+            if (s != null) {
+                order.add(s);
+            }
+        }
+        if (chargeMode != CHARGE_ARMOR_ONLY) {
+            if (chargeMode == CHARGE_ARMOR_FIRST && held != null) {
+                order.add(held);
+            }
+            for (ItemStack s : p.inventory.mainInventory) {
+                if (s != null && s != held && s != p.getCurrentEquippedItem()) {
+                    order.add(s);
+                }
+            }
+            if (chargeMode == CHARGE_EVEN && held != null) {
+                order.add(held);
+            }
+        }
+        int used = 0;
+        if (chargeMode == CHARGE_EVEN && !order.isEmpty()) {
+            int share = Math.max(1, budget / order.size());
+            for (ItemStack s : order) {
+                used += chargeInto(p, s, Math.min(share, budget - used));
+            }
+        }
+        for (ItemStack s : order) {                           // what's left, in order
+            if (used >= budget) {
+                break;
+            }
+            used += chargeInto(p, s, budget - used);
+        }
+        return used;
+    }
+
+    /** Sparks in the field's colour from the nearest node to the player being charged. */
+    private void sparks(EntityPlayer p) {
+        if (!(worldObj instanceof net.minecraft.world.WorldServer) || nodePositions.isEmpty()) {
+            return;
+        }
+        int[] from = null;
+        double best = Double.MAX_VALUE;
+        for (int[] n : nodePositions) {
+            double d = p.getDistanceSq(n[0] + 0.5, n[1] + 0.5, n[2] + 0.5);
+            if (d < best) {
+                best = d;
+                from = n;
+            }
+        }
+        float[] c = COLORS[color];
+        net.minecraft.world.WorldServer ws = (net.minecraft.world.WorldServer) worldObj;
+        double sx = from[0] + 0.5, sy = from[1] + 1.1, sz = from[2] + 0.5;
+        double tx = p.posX, ty = p.boundingBox.minY + p.height * 0.55, tz = p.posZ;
+        int points = Math.max(4, Math.min(24, (int) Math.sqrt(best)));
+        for (int i = 0; i <= points; i++) {
+            double k = (double) i / points;
+            double wob = Math.sin(k * Math.PI) * 0.35 * (worldObj.rand.nextDouble() - 0.5);
+            // reddust with no count: the "velocity" is its colour
+            ws.func_147487_a("reddust", sx + (tx - sx) * k + wob, sy + (ty - sy) * k + wob, sz + (tz - sz) * k + wob,
+                    0, Math.max(0.01F, c[0]), c[1], c[2], 1.0);
+        }
+        ws.func_147487_a("magicCrit", tx, ty, tz, 6, 0.3, 0.5, 0.3, 0.05);
+    }
+
+    /** Charges one electric item from the buffer: the mod's own, IC2's (EU) or other mods' RF items. @return EU used */
     private int chargeInto(EntityPlayer p, ItemStack s, int max) {
         if (s == null || max <= 0) {
             return 0;
@@ -668,11 +798,57 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             took = com.sc.item.ItemWeaponSC.charge(s, ((com.sc.item.ItemWeaponSC) s.getItem()).getType(), max);
         } else if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             took = com.sc.item.ItemWrenchSC.charge(s, max);
+        } else if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) && Ic2Charge.is(s)) {
+            took = Ic2Charge.charge(s, max);
         } else {
-            return 0;
+            took = RfCharge.charge(s, max);
         }
+        took = Math.max(0, Math.min(max, took));
         removeEnergy(took);
         return took;
+    }
+
+    /** Kept apart so IC2's API is only loaded when IC2 is (any tier: the field is the one limiting the rate). */
+    private static final class Ic2Charge {
+        static boolean is(ItemStack s) {
+            return s.getItem() instanceof ic2.api.item.IElectricItem && ic2.api.item.ElectricItem.manager != null;
+        }
+
+        static int charge(ItemStack s, int max) {
+            return (int) ic2.api.item.ElectricItem.manager.charge(s, max, Integer.MAX_VALUE, true, false);
+        }
+    }
+
+    /**
+     * Redstone Flux items (Thermal Expansion, EnderIO, Draconic Evolution...) through CoFH's
+     * IEnergyContainerItem, found by reflection - nothing to link against, nothing breaks without it.
+     */
+    private static final class RfCharge {
+        private static boolean looked;
+        private static Class<?> type;
+        private static java.lang.reflect.Method receive;
+
+        static int charge(ItemStack s, int maxEu) {
+            if (!looked) {
+                looked = true;
+                try {
+                    type = Class.forName("cofh.api.energy.IEnergyContainerItem");
+                    receive = type.getMethod("receiveEnergy", ItemStack.class, int.class, boolean.class);
+                } catch (Throwable t) {
+                    type = null;
+                }
+            }
+            if (type == null || !type.isInstance(s.getItem())) {
+                return 0;
+            }
+            try {
+                int maxRf = (int) Math.min(Integer.MAX_VALUE, (long) maxEu * RF_PER_EU);
+                int rf = (Integer) receive.invoke(s.getItem(), s, maxRf, false);
+                return (rf + RF_PER_EU - 1) / RF_PER_EU;
+            } catch (Throwable t) {
+                return 0;
+            }
+        }
     }
 
     /** A burst of the shell's colour where it stopped something (a projectile, an explosion). */
@@ -881,7 +1057,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
         com.sc.machine.UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
         return t == com.sc.machine.UpgradeType.ENERGY_STORAGE || t == com.sc.machine.UpgradeType.TRANSFORMER
-                || t == com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER;
+                || t == com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER || t == com.sc.machine.UpgradeType.CHARGE_BOOSTER;
     }
 
     /**
@@ -1127,6 +1303,11 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         masterPos = nbt.hasKey("MasterX")
                 ? new int[]{nbt.getInteger("MasterX"), nbt.getInteger("MasterY"), nbt.getInteger("MasterZ")} : null;
         flags = nbt.hasKey("Flags") ? nbt.getInteger("Flags") : DEFAULT_FLAGS;
+        if (nbt.hasKey("Flags") && !nbt.hasKey("ChargeMode")) {
+            flags |= F_CHARGE_FX;                  // saved before the charging settings: sparks on
+        }
+        chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
+        chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
         filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
         color = Math.max(0, Math.min(COLORS.length - 1, nbt.getInteger("Color")));
@@ -1172,6 +1353,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             nbt.setInteger("MasterZ", masterPos[2]);
         }
         nbt.setInteger("Flags", flags);
+        nbt.setInteger("ChargeMode", chargeMode);
+        nbt.setInteger("ChargeReserve", chargeReserve);
         nbt.setInteger("Redstone", redstone);
         nbt.setInteger("Filter", filter);
         nbt.setInteger("Color", color);

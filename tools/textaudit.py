@@ -144,6 +144,15 @@ def audit(lang):
     # ---- field generator
     for k in ("field", "functions", "access", "map", "upgrades"):
         check(lang, "field tab", t("sc.fieldgui.tab.%s.short" % k), (248 - 16 - 8) // 5 - 4 - 17)
+    for flag in (64, 512):
+        check(lang, "field charge switch", t("sc.fieldgui.flag.%d" % flag) + ": " + off, 114 - 6)
+    for i in range(4):
+        check(lang, "field charge mode", t("sc.fieldgui.charge.mode", t("sc.fieldgui.charge.mode.%d" % i)), 232 - 6)
+    check(lang, "field charge reserve", t("sc.fieldgui.charge.reserve", 90, 999999), 248 - 90)
+    for k, args in (("rate", (163840,)), ("boosters", (4, 4)), ("now", (655360, 16)), ("off", ()), ("title", ())):
+        check(lang, "field charge text", t("sc.fieldgui.charge." + k, *args), 232)
+    for k in ("charge", "functions"):
+        check(lang, "field page button", t("sc.fieldgui.page." + k), 110 - 6)
     for i in range(3):
         check(lang, "field redstone", t("sc.fieldgui.redstone", t("sc.fieldgui.redstone.%d" % i)), 114 - 6)
         check(lang, "field filter", t("sc.fieldgui.filter", t("sc.fieldgui.filter.%d" % i)), 232 - 6)

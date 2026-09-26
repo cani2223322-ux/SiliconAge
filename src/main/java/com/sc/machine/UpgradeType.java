@@ -29,7 +29,16 @@ public enum UpgradeType {
     /** Generators only: output x1.5 and fuel x1.75 per upgrade (at most 4 count). */
     OVERDRIVE("upgradeOverdrive"),
     /** Generators only: fuel x0.7 and output x0.9 per upgrade (at most 4 count). */
-    ECONOMIZER("upgradeEconomizer");
+    ECONOMIZER("upgradeEconomizer"),
+    /** Field generator only: wireless charging x2 per upgrade (at most 4 count). */
+    CHARGE_BOOSTER("upgradeChargeBooster");
+
+    public static final int MAX_CHARGE_BOOSTERS = 4;
+
+    /** Only the field generator takes it (machines and generators refuse it). */
+    public boolean fieldOnly() {
+        return this == CHARGE_BOOSTER;
+    }
 
     /** Overdrive / Economizer stop adding up past this many. */
     public static final int MAX_GENERATOR_EFFECTIVE = 4;
