@@ -104,8 +104,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     private int lastCost;
     private int warned;          // bits of Status already reported to the owner
     // scanner (server)
-    private boolean scanDirty = true;
+    private boolean scanDirty;
     private int scanY, scanIndex;
+    /** The scan's progress: blocks looked at and in all (for the screen's percentage). */
+    private long scanned, scanTotal;
+    /** EU the scanner spends per block it looks at - it is no free X-ray. */
+    public static final int SCAN_COST = 8;
     private final List<int[]> ores = new ArrayList<int[]>();
     private final Map<String, Integer> oreCounts = new LinkedHashMap<String, Integer>();
 
@@ -309,7 +313,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         cursor = 0;
         done = false;
         progress = 0;
-        scanDirty = true;
+        clearScan();
         warned = 0;
     }
 
@@ -886,9 +890,16 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             scanY = a[4];
             scanIndex = 0;
             scanDirty = false;
+            scanned = 0;
+            scanTotal = (long) (a[4] - a[5] + 1) * cellsPerLayer(a);
         }
-        int budget = 4096, cells = cellsPerLayer(a);
+        int budget = 1024, cells = cellsPerLayer(a);
         while (budget-- > 0 && scanY >= a[5]) {
+            if (getEnergyStored() < SCAN_COST) {
+                return;                            // waits for energy
+            }
+            removeEnergy(SCAN_COST);
+            scanned++;
             int[] c = cell(a, scanIndex);
             if (c != null && worldObj.blockExists(c[0], scanY, c[1])) {
                 Block b = worldObj.getBlock(c[0], scanY, c[1]);
@@ -909,8 +920,36 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         if (scanY < a[5]) {
             scanY = 0;
+            scanned = scanTotal;
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        } else if (worldObj.getTotalWorldTime() % 100 == 0) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the counts so far
         }
+    }
+
+    /** Scan progress 0-100, -1 before a scan (it only runs when the Map tab's Scan button is pressed). */
+    public int scanPercent() {
+        return scanTotal <= 0 ? -1 : (int) Math.min(100, scanned * 100 / scanTotal);
+    }
+
+    /** Old counts go (a new area, the scanner taken out, a reload); nothing is scanned until asked. */
+    private void clearScan() {
+        ores.clear();
+        oreCounts.clear();
+        scanDirty = false;
+        scanY = 0;
+        scanned = 0;
+        scanTotal = 0;
+    }
+
+    private int scanPercentClient = -1;
+
+    public int getScanPercentClient() {
+        return scanPercentClient;
+    }
+
+    public void setScanPercentClient(int p) {
+        scanPercentClient = p;
     }
 
     private void removeOre(int x, int y, int z) {
@@ -1174,7 +1213,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         if (slot == SLOT_SCANNER) {
-            scanDirty = true;
+            clearScan();
         }
     }
 
@@ -1419,7 +1458,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 oreCounts.put(c.getCompoundTagAt(i).getString("K"), c.getCompoundTagAt(i).getInteger("N"));
             }
         }
-        scanDirty = true;
+        clearScan();
     }
 
     @Override
@@ -1482,12 +1521,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         nbt.setTag("Slots", list);
-        int n = Math.min(ores.size(), 512);
-        int[] o = new int[n * 4];
-        for (int i = 0; i < n; i++) {
-            System.arraycopy(ores.get(i), 0, o, i * 4, 4);
-        }
-        nbt.setIntArray("OreList", o);
+        // only how much ore there is - never where (the scanner is no X-ray)
         NBTTagList c = new NBTTagList();
         for (Map.Entry<String, Integer> e : oreCounts.entrySet()) {
             NBTTagCompound t = new NBTTagCompound();

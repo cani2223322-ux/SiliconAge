@@ -90,14 +90,6 @@ public class QuarryRendererSC extends TileEntitySpecialRenderer {
             diamond(c[0], yt + 1.2 + 0.15 * Math.sin(time * 2 + c[0]), c[1], time * 60, frame, bright);
         }
 
-        // the ore found, outlined through the ground
-        if ((q.getVflags() & TileEntityQuarrySC.V_ORES) != 0 && !q.getOres().isEmpty()) {
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-            GL11.glLineWidth(1.5F);
-            for (int[] o : q.getOres()) {
-                cube(o[0] + 0.08, o[1] + 0.08, o[2] + 0.08, o[0] + 0.92, o[1] + 0.92, o[2] + 0.92, o[3], Math.min(1F, bright + 0.2F));
-            }
-        }
         GL11.glPopAttrib();
 
         // the size over the first corner, when close

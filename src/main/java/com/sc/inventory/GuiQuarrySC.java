@@ -110,9 +110,7 @@ public class GuiQuarrySC extends GuiContainer {
                 buttonList.add(new TextFitSC.Button(B_SHOW, rx, y + 30, 112, 16, ""));
                 buttonList.add(new TextFitSC.Button(B_DASH, rx, y + 50, 112, 16, ""));
                 buttonList.add(new TextFitSC.Button(B_PLANE, rx, y + 70, 112, 16, ""));
-                if (!exo) {
-                    buttonList.add(new TextFitSC.Button(B_ORES, rx, y + 90, 112, 16, ""));
-                }
+
                 buttonList.add(new TextFitSC.Button(B_BRIGHT, rx, y + 110, 112, 16, ""));
                 buttonList.add(new TextFitSC.Button(B_TARGET, rx, y + 130, 92, 16, ""));
                 for (int i = 0; i < TileEntityQuarrySC.PALETTE.length; i++) {
@@ -479,10 +477,6 @@ public class GuiQuarrySC extends GuiContainer {
         drawRect(ox, oz + (int) (d * cell) - 1, ox + (int) (w * cell), oz + (int) (d * cell), frame);
         drawRect(ox, oz, ox + 1, oz + (int) (d * cell), frame);
         drawRect(ox + (int) (w * cell) - 1, oz, ox + (int) (w * cell), oz + (int) (d * cell), frame);
-        for (int[] o : quarry.getOres()) {
-            int px = ox + (int) ((o[0] - a[0] + 0.5F) * cell), pz = oz + (int) ((o[2] - a[1] + 0.5F) * cell);
-            drawRect(px - 1, pz - 1, px + 1, pz + 1, 0xFF000000 | o[3]);
-        }
         int bx = ox + (int) ((doneCells % w + 0.5F) * cell), bz = oz + (int) ((doneRows + 0.5F) * cell);
         drawRect(bx - 2, bz - 2, bx + 2, bz + 2, 0xFF000000 | quarry.getColorPlane());
         int qx = ox + (int) ((quarry.xCoord - a[0] + 0.5F) * cell), qz = oz + (int) ((quarry.zCoord - a[1] + 0.5F) * cell);
@@ -578,7 +572,11 @@ public class GuiQuarrySC extends GuiContainer {
                 if (!quarry.hasScanner()) {
                     fontRendererObj.drawSplitString(Lang.tr("sc.quarrygui.noscanner"), lx, 96, W - lx - 6, dim);
                 } else {
-                    fit(Lang.tr("sc.quarrygui.orefound"), lx, 96, W - lx - 6, c);
+                    int pct = quarry.getScanPercentClient();
+                    fit(pct < 0 ? Lang.tr("sc.quarrygui.notscanned") : pct < 100 ? Lang.tr("sc.quarrygui.scanning", pct)
+                            : Lang.tr("sc.quarrygui.orefound"), lx, 96, W - lx - 6, pct == 100 ? c : 0x2A62A8);
+                    TextFitSC.help(fontRendererObj, W - 16, 96, Lang.tr("sc.quarrygui.scan.help", TileEntityQuarrySC.SCAN_COST),
+                            guiLeft, guiTop + TOP);
                     int row = 0;
                     RenderHelper.enableGUIStandardItemLighting();
                     for (Map.Entry<String, Integer> e : quarry.getOreCounts().entrySet()) {

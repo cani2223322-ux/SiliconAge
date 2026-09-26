@@ -141,7 +141,7 @@ public class ContainerQuarrySC extends Container {
 
     // ---- live numbers ----
 
-    private static final int COUNT = 12;
+    private static final int COUNT = 13;
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
     private int value(int id) {
@@ -158,6 +158,7 @@ public class ContainerQuarrySC extends Container {
             case 8: return p == null ? 0 : p.getFluidID();
             case 9: return quarry.getPumped().getFluidAmount();
             case 10: return quarry.getWater().getFluidAmount();
+            case 12: return quarry.scanPercent();
             default: return (int) Math.min(Integer.MAX_VALUE, quarry.blocksLeft());
         }
     }
@@ -190,6 +191,8 @@ public class ContainerQuarrySC extends Container {
                     net.minecraftforge.fluids.FluidRegistry.getFluidID("water"), sync.value(10));
         } else if (id == 11) {
             blocksLeftClient = sync.value(11);
+        } else if (id == 12) {
+            quarry.setScanPercentClient(sync.value(12));
         } else {
             quarry.setLiveClient(sync.value(1), sync.value(2), sync.value(3), sync.value(4), sync.value(5), sync.value(6), sync.value(7) != 0);
         }
