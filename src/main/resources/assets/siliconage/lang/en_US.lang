@@ -2081,6 +2081,14 @@ sc.gui.th.tip=What counts
 sc.gui.th.tip.1=§7Hot: lava 1300 K, fire 1000 K
 sc.gui.th.tip.2=§7Cold: water 300 K, ice and snow 270 K, packed ice 250 K
 sc.gui.th.tip.3=§7A pair = a hot side + a cold one; output = pairs × ΔT ÷ 8, up to 384 EU/t. All 6 sides count
+sc.gui.geo.title=GEOTHERMAL
+sc.gui.geo.boilers=bucket
+sc.gui.geo.steam=lava
+sc.gui.geo.permb=EU per mB
+sc.gui.geo.nosteam=No lava: put lava buckets in the slot or pipe it in (%s mB/t)
+sc.gui.geo.short=lava running out: supply %s of %s mB/t, lasts %d s
+sc.gui.geo.ok=Running · %d s in the tank · a lava bucket = %s s
+sc.gui.geo.hint=§7Lava by the bucket into the slot (the empty buckets stay there) or piped into the tank. While the tank has lava, it runs at full power
 sc.gui.holo.washing=WASHING
 sc.gui.washer.per=A wash
 sc.gui.washer.left=Enough

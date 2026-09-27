@@ -53,6 +53,8 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean gas;
     /** The Plasma Generator: the turbines' screen with an air separator, an MHD channel and a card where argon comes from. */
     private final boolean plasma;
+    /** The Geothermal Generator: the turbines' screen fed by lava buckets into a heat exchanger. */
+    private final boolean geo;
     /** The Fusion Reactor: its stages, the torus from above, the ignition charge / the plasma, the cell and blanket timers. */
     private final boolean fus;
     /** The Solid Fuel Generator: the firebox, its slot and flame, a table of what each fuel gives. */
@@ -97,7 +99,9 @@ public class GuiGeneratorSC extends GuiContainer {
         this.comb = type == GeneratorType.COMBUSTION;
         this.solar = type == GeneratorType.SOLAR_SI || type == GeneratorType.SOLAR_GAAS;
         this.gaas = type == GeneratorType.SOLAR_GAAS;
-        this.turb = type == GeneratorType.STEAM_TURBINE || type == GeneratorType.GAS_TURBINE || type == GeneratorType.PLASMA_GENERATOR;
+        this.turb = type == GeneratorType.STEAM_TURBINE || type == GeneratorType.GAS_TURBINE || type == GeneratorType.PLASMA_GENERATOR
+                || type == GeneratorType.GEOTHERMAL;
+        this.geo = type == GeneratorType.GEOTHERMAL;
         this.plasma = type == GeneratorType.PLASMA_GENERATOR;
         this.fus = type == GeneratorType.FUSION_REACTOR;
         this.solid = type == GeneratorType.SOLID_FUEL;
@@ -387,7 +391,9 @@ public class GuiGeneratorSC extends GuiContainer {
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING, feeding = turbSupply() > 0;
         GuiSceneSC.frame(x + 14, y + TB_Y, 158, TB_H);
         int bx = x + 19, by = y + 40;
-        if (plasma) {                                                          // an air separator column
+        if (geo) {                                                             // the lava bucket slot
+            GuiHoloSC.slot(x + ContainerGeneratorSC.GEO_SLOT_X, y + ContainerGeneratorSC.GEO_SLOT_Y, false);
+        } else if (plasma) {                                                          // an air separator column
             drawRect(bx + 1, by - 2, bx + 7, by, 0xFF6A707A);
             drawRect(bx - 2, by, bx + 10, by + 20, 0xFF8A909A);
             drawRect(bx - 1, by + 1, bx + 9, by + 19, 0xFF1A2A3A);
@@ -414,18 +420,24 @@ public class GuiGeneratorSC extends GuiContainer {
         if (feeding) {
             for (int i = 0; i < 3; i++) {
                 int d = (int) ((t * 1.5F + i * 4) % 12);
-                drawRect(x + 36 + d, y + 51, x + 38 + d, y + 52, plasma ? 0xFFC890FF : 0xFFE0E8F0);
+                drawRect(x + 36 + d, y + 51, x + 38 + d, y + 52, geo ? 0xFFFF7A20 : plasma ? 0xFFC890FF : 0xFFE0E8F0);
             }
         }
-        if (plasma) {
+        if (geo) {
+            GuiSceneSC.heatExchanger(x + 48, y + 36, 95, 34, t, running);
+        } else if (plasma) {
             GuiSceneSC.plasmaChannel(x + 48, y + 36, 64, 34, t, running);
         } else if (gas) {
             GuiSceneSC.gasTurbine(x + 48, y + 36, 64, 34, t, running);
         } else {
             GuiSceneSC.turbineSide(x + 48, y + 36, 64, 34, t, running);
         }
-        GuiSceneSC.frame(x + 113, y + 36, 30, 34);
-        if (plasma) {
+        if (!geo) {
+            GuiSceneSC.frame(x + 113, y + 36, 30, 34);
+        }
+        if (geo) {
+            // the exchanger's own turbine drum stands in for the rotor
+        } else if (plasma) {
             GuiSceneSC.plasmaRing(x + 128, y + 53, 9, t, running);
         } else {
             GuiSceneSC.rotorFront(x + 128, y + 53, 12, t, running);
@@ -442,11 +454,11 @@ public class GuiGeneratorSC extends GuiContainer {
         if (plasma) {                                                          // the card: where argon comes from
             GuiSceneSC.frame(x + 66, y + TB_DIAL_Y - 9, 106, 19);
         } else {
-            GuiSceneSC.dial(x + 78, y + TB_DIAL_Y, 9, running ? 1F : 0F);
+            GuiSceneSC.dial(x + 78, y + TB_DIAL_Y, 9, geo ? 1F : running ? 1F : 0F);
             GuiSceneSC.dial(x + 130, y + TB_DIAL_Y, 9, Math.min(1F, (float) generator.getLastOutput() / rated));
         }
-        int fuelCol = plasma ? 0xFFC890FF : gas ? 0xFF9AD8FF : 0xFFE0E8F0;
-        boolean short_ = turbSupply() < need - 0.05F;
+        int fuelCol = geo ? 0xFFFF7A20 : plasma ? 0xFFC890FF : gas ? 0xFF9AD8FF : 0xFFE0E8F0;
+        boolean short_ = turbShort(turbSupply(), need);
         drawRect(x + TB_BAR_X, y + TB_SUPPLY_Y, x + TB_BAR_X + TB_BAR_W, y + TB_SUPPLY_Y + 4, 0xFF04080C);
         int sw = (int) ((TB_BAR_W - 2) * Math.min(1F, turbSupply() / Math.max(0.1F, need)));
         drawRect(x + TB_BAR_X + 1, y + TB_SUPPLY_Y + 1, x + TB_BAR_X + 1 + sw, y + TB_SUPPLY_Y + 3, short_ ? 0xFFE63C3C : fuelCol);
@@ -462,7 +474,15 @@ public class GuiGeneratorSC extends GuiContainer {
 
     /** The Steam Turbine's key, or the Gas Turbine's own wording of it. */
     private String tk(String key) {
-        return (plasma ? "sc.gui.pgen." : gas ? "sc.gui.gturb." : "sc.gui.turb.") + key;
+        return (geo ? "sc.gui.geo." : plasma ? "sc.gui.pgen." : gas ? "sc.gui.gturb." : "sc.gui.turb.") + key;
+    }
+
+    /**
+     * The supply falls short of the need. Lava comes a bucket at a time - 1000 mB in one second, then
+     * none - so the Geothermal Generator only counts as short once less than a bucket is left.
+     */
+    private boolean turbShort(float supply, float need) {
+        return supply < need - 0.05F && !(geo && generator.getFuelTank().getFluidAmount() >= 1000);
     }
 
     private void drawTurbText() {
@@ -470,15 +490,18 @@ public class GuiGeneratorSC extends GuiContainer {
         TextFitSC.drawCentered(fontRendererObj, tankLabel(0), COMB_TANK_X, 30, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
         float supply = turbSupply(), need = (float) turbNeed();
-        boolean short_ = supply < need - 0.05F;
+        boolean short_ = turbShort(supply, need);
         String sup = supply == (int) supply ? String.valueOf((int) supply) : String.format(java.util.Locale.ROOT, "%.1f", supply);
         smallFit(sup, 35, 43, 14, short_ ? GuiHoloSC.BAD : GuiHoloSC.VALUE);
         smallFit(Lang.tr(tk("boilers")), 17, 62, 20, GuiHoloSC.LABEL);
         fontRendererObj.drawString(String.valueOf(generator.getLastOutput()), 146, 43, running ? GuiHoloSC.OK : GuiHoloSC.BAD);
         smallFit("EU/t", 146, 53, 24, GuiHoloSC.LABEL);
         String needS = String.format(java.util.Locale.ROOT, need == (int) need ? "%.0f" : "%.1f", need);
-        String[] labels = {Lang.tr(tk("steam")), Lang.tr("sc.gui.turb.speed"), Lang.tr("sc.gui.turb.out")};
-        String[] vals = {sup + "/" + needS, running ? "100%" : "0%", String.valueOf(generator.getLastOutput())};
+        String[] labels = {Lang.tr(tk("steam")), Lang.tr(geo ? "sc.gui.geo.permb" : "sc.gui.turb.speed"), Lang.tr("sc.gui.turb.out")};
+        String perMbS = need <= 0 ? "0" : String.valueOf(Math.round(generator.ratedOutput() / need));
+        String[] vals = {(geo ? Math.min(supply, need) == (int) Math.min(supply, need) ? String.valueOf((int) Math.min(supply, need))
+                : String.format(java.util.Locale.ROOT, "%.1f", Math.min(supply, need)) : sup) + "/" + needS,
+                geo ? perMbS : running ? "100%" : "0%", String.valueOf(generator.getLastOutput())};
         for (int i = 0; i < (plasma ? 1 : 3); i++) {
             int cx = 26 + i * 52;
             smallFit(labels[i], cx + 12, TB_DIAL_Y - 6, 38, GuiHoloSC.LABEL);
@@ -499,14 +522,19 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         String line;
         int col;
+        Object src = boilers;
+        if (geo) {                                                             // a bucket lasts this long
+            double b = need <= 0 ? 0 : 1000.0 / need / 20.0;
+            src = b == Math.floor(b) ? String.valueOf((long) b) : String.format(java.util.Locale.ROOT, "%.1f", b).replace('.', ',');
+        }
         if (tank.getFluidAmount() <= 0 && supply <= 0) {
-            line = Lang.tr(tk("nosteam"), needS, boilers);
+            line = Lang.tr(tk("nosteam"), needS, src);
             col = GuiHoloSC.BAD;
         } else if (short_) {
             line = Lang.tr(tk("short"), sup, needS, secs);
             col = GuiHoloSC.BAD;
         } else {
-            line = Lang.tr(tk("ok"), secs, boilers);
+            line = Lang.tr(tk("ok"), secs, src);
             col = GuiHoloSC.LABEL;
         }
         smallFit(line, 14, TB_RESERVE_Y + 6, 158, col);

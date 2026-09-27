@@ -536,6 +536,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         ItemStack s = slots[SLOT_FUEL];
         if (s != null && s.getItem() == Items.lava_bucket && fuelTank.getCapacity() - fuelTank.getFluidAmount() >= 1000) {
             if (fuelTank.fill(new FluidStack(FluidRegistry.LAVA, 1000), true) == 1000) {
+                inflowWindow += 1000;           // counts toward the screen's supply bar like piped-in lava
                 slots[SLOT_FUEL] = new ItemStack(Items.bucket);
                 markDirty();
             }

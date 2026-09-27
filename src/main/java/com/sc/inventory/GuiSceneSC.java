@@ -1323,6 +1323,39 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * A geothermal heat exchanger side-on: the lava coil glowing along the bottom of a water drum,
+     * the water boiling in bubbles, steam going out into a small turbine drum on the right.
+     */
+    public static void heatExchanger(int x, int y, int w, int h, float t, boolean running) {
+        frame(x, y, w, h);
+        int bx0 = x + 4, bx1 = x + w - 24;
+        rect(bx0, y + 6, bx1 - bx0, h - 12, 0xFF8A909A);
+        rect(bx0 + 1, y + 7, bx1 - bx0 - 2, h - 14, 0xFF14243A);
+        int wl = y + 12;
+        rect(bx0 + 1, wl, bx1 - bx0 - 2, y + h - 7 - wl, 0xFF2A5AA0);
+        for (int i = bx0 + 3; i < bx1 - 3; i += 6) {                           // the lava coil
+            rect(i, y + h - 12, 4, 3, running ? mix(0xFFFF7A20, 0xFFFFD060, 0.3F) : 0xFF6A2A10);
+            rect(i + 4, y + h - 11, 2, 1, 0xFF8A3A10);
+        }
+        if (running) {
+            int span = y + h - 13 - wl;
+            for (int i = 0; i < 6; i++) {                                      // bubbles
+                int k = (int) ((t * 0.8F + i * 3.3F) % span);
+                rect(bx0 + 4 + i * (bx1 - bx0 - 8) / 6, y + h - 13 - k, 2, 2, 0xFFC0E0FF);
+            }
+            for (int i = 0; i < 3; i++) {                                      // steam out
+                int d = (int) ((t * 1.2F + i * 4) % 12);
+                rect(bx1 + d, y + 8 + i * 2, 2, 1, 0xFFE0E8F0);
+            }
+        }
+        rect(bx1 + 4, y + 6, 16, h - 12, 0xFF3A4A8A);                           // the turbine drum
+        rect(bx1 + 5, y + 7, 14, h - 14, 0xFF1A2A5A);
+        if (running) {
+            rect(bx1 + 11, y + 8 + (int) t % Math.max(1, h - 16), 2, 1, 0xFF6EE6FF);
+        }
+    }
+
     /** Three wind turbine blades round a hub, turning at `spin` (0 still .. 1 full). */
     public static void windBlades(int cx, int cy, int r, float t, float spin) {
         double a0 = t * 0.25 * spin;
