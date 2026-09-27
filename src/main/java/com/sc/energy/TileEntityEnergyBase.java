@@ -188,6 +188,9 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         return t != null && inputTier().excessTiersOf(t) > 0;
     }
 
+    /** The IC2 sink tier of "any voltage" - see getSinkTier. */
+    public static final int ANY_VOLTAGE_IC2_TIER = 13;
+
     /** True when nothing overvolts this tile at all (a universal transformer upgrade). */
     public boolean acceptsAnyVoltage() {
         return false;
@@ -398,9 +401,11 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     @Override
     @Optional.Method(modid = Reference.IC2_MODID)
     public int getSinkTier() {
-        // IC2's "no limit": its tiers stop at 6 (32768 EU), so a universal transformer mapped to
-        // tier 6 still blew up on anything stronger (Industrial Upgrade's panels and storages)
-        return acceptsAnyVoltage() ? Integer.MAX_VALUE : inputTier().toIc2Tier();
+        // A universal transformer: tier 13 (536 870 912 EU a packet) - far above anything that
+        // exists, so nothing overvolts it. Not Integer.MAX_VALUE: Industrial Upgrade's net turns a
+        // tier into power as 8 << 2 * tier, which overflows to 0 there, and IC2's grid (running
+        // beside it) divides by that power - NaN through the whole grid, no energy moved at all.
+        return acceptsAnyVoltage() ? ANY_VOLTAGE_IC2_TIER : inputTier().toIc2Tier();
     }
 
     @Override
