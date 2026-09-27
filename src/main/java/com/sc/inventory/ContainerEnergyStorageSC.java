@@ -11,8 +11,8 @@ import net.minecraft.item.ItemStack;
 /** Energy storage screen: one weapon / armor charging slot, the player inventory, energy + flow sync. */
 public class ContainerEnergyStorageSC extends Container {
 
-    /** Right of the flow / output lines, just clear of the energy well at x 152 (GuiEnergyStorageSC). */
-    public static final int SLOT_X = 130, SLOT_Y = 53;
+    /** On the large screen's holo panel, left of the readings (GuiEnergyStorageSC / GuiBigSC). */
+    public static final int SLOT_X = 16, SLOT_Y = 30;
 
     private final TileEntityEnergyStorageSC storage;
     private final IntSyncSC sync = new IntSyncSC(2);   // energy, flow per tick
@@ -27,11 +27,11 @@ public class ContainerEnergyStorageSC extends Container {
         });
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, GuiBigSC.INV_X + col * 18, GuiBigSC.INV_Y + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlotToContainer(new Slot(playerInv, col, 8 + col * 18, 142));
+            addSlotToContainer(new Slot(playerInv, col, GuiBigSC.INV_X + col * 18, GuiBigSC.HOTBAR_Y));
         }
     }
 

@@ -44,7 +44,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         rects.add(new TemplateRecipeHandler.RecipeTransferRect(
                 // NEI measures these from (guiLeft + 5, guiTop + 11) on a screen with no overlay
                 // (RecipeInfo.getGuiOffset) - unshifted, the rect sat over the output slots.
-                new Rectangle(GuiMachineSC.PROGRESS_X - 5, GuiMachineSC.PROGRESS_Y - 1 - 11, GuiMachineSC.PROGRESS_W,
+                new Rectangle(GuiMachineSC.PROGRESS_X - 5, GuiMachineSC.PROGRESS_Y - 1 - 11, 52,
                         GuiMachineSC.PROGRESS_H + 2), MachineRecipeHandlerSC.ID_OPEN_MACHINE));
         TemplateRecipeHandler.RecipeTransferRectHandler.registerRectsToGuis(guis, rects);
     }

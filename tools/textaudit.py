@@ -207,6 +207,22 @@ def audit(lang):
     check(lang, "zone readout", t("sc.fieldzone.info", "16 777 216", 99999) + " " + t("sc.fieldzone.pending"), 232)
     check(lang, "field upgrades count", t("sc.fieldgui.upgrades.count", 16, 16, 160000), 232)
     check(lang, "field input", t("sc.fieldgui.upgrades.input", "XV", 32768), 232)
+    # ---- the large screens (GuiBigSC): upgrade row, tank labels, generator and storage readings
+    check(lang, "big upgrades effect", t("sc.gui.big.upgrades.effect", "10.54", "12.34"), 248 - 8 - 124)
+    check(lang, "big upgrades count", t("sc.gui.big.upgrades.count", 4, 4), 248 - 8 - 124)
+    check(lang, "big upgrades label", t("sc.gui.big.upgrades"), 49 - 1 - 8 - 2)
+    for k in ("in", "out"):
+        check(lang, "big tank label", t("sc.gui.holo.tank." + k, 2), 31 - 7)
+    for k in ("water", "coolant", "fuel"):
+        check(lang, "big gen tank label", t("sc.gui.holo.gen.tank." + k), 31 - 7)
+    for k in ("passive", "fluid_fuel", "fusion", "solid", "wind", "water", "thermo", "dual_fluid", "rtg", "exo", "creative"):
+        check(lang, "big gen caption", t("sc.gui.holo.gen." + k), 206 - 107)
+    check(lang, "big gen row", t("sc.gui.holo.gen.rated", 32768), 206 - 107)
+    check(lang, "big gen row", t("sc.gui.holo.gen.out", "XV", 32768), 206 - 107)
+    check(lang, "big gen row", t("sc.gui.holo.gen.buffer", 100), 206 - 107)
+    check(lang, "big gen now", t("sc.gui.gen.now", 32768), 88)
+    check(lang, "big storage", t("sc.storage.gui.stored", "2000000000"), 206 - 42)
+    check(lang, "big storage", t("sc.storage.gui.capacity", "2000000000", 100), 206 - 42)
     # ---- the machines' holo screen: its number rows (no tanks: 71 px)
     check(lang, "machine holo row", t("sc.gui.holo.progress", "100%"), 71)
     check(lang, "machine holo row", t("sc.gui.holo.energy", 1900), 71)

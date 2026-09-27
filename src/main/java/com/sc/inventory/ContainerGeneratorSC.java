@@ -21,9 +21,8 @@ import net.minecraftforge.fluids.FluidTank;
  */
 public class ContainerGeneratorSC extends Container {
 
-    public static final int SLOT_FUEL_X = 26, SLOT_BLANKET_X = 44, SLOT_Y = 33;
-    /** The upgrade side panel, right of the 176-wide sheet (like the machines'). */
-    public static final int PANEL_X = 176, UPGRADE_X = PANEL_X + 8, UPGRADE_Y = 8;
+    /** On the large screen's holo panel (GuiGeneratorSC / GuiBigSC). */
+    public static final int SLOT_FUEL_X = 16, SLOT_BLANKET_X = 38, SLOT_Y = 30;
     /** enchantItem button: the Creative Generator's tier. */
     public static final int BTN_CREATIVE_TIER = 0;
 
@@ -35,7 +34,7 @@ public class ContainerGeneratorSC extends Container {
         addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_FUEL, SLOT_FUEL_X, SLOT_Y));
         addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_BLANKET, SLOT_BLANKET_X, SLOT_Y));
         for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
-            addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i, UPGRADE_X, UPGRADE_Y + i * 18));
+            addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y));
         }
         for (int slot = 0; slot < TileEntityGeneratorSC.FIRST_UPGRADE_SLOT; slot++) {
             if (!TileEntityGeneratorSC.usesSlot(type, slot)) {
@@ -50,11 +49,11 @@ public class ContainerGeneratorSC extends Container {
 
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, GuiBigSC.INV_X + col * 18, GuiBigSC.INV_Y + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlotToContainer(new Slot(playerInv, col, 8 + col * 18, 142));
+            addSlotToContainer(new Slot(playerInv, col, GuiBigSC.INV_X + col * 18, GuiBigSC.HOTBAR_Y));
         }
     }
 

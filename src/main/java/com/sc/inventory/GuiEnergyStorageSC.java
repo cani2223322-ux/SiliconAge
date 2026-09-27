@@ -3,35 +3,30 @@ package com.sc.inventory;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.sc.Reference;
 import com.sc.manual.Lang;
 import com.sc.tileentity.TileEntityEnergyStorageSC;
 
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.InventoryPlayer;
-import net.minecraft.util.ResourceLocation;
 
 /**
- * Energy storage screen: stored / capacity with a wide charge bar, the net flow per tick
- * (averaged over a second: + charging, - discharging), the output voltage, and a slot that
- * charges a weapon. Reuses the generator sheet (frame, energy well, player inventory).
+ * Energy storage (and charge pad) screen, the large holo-screen layout (GuiBigSC, 248 x 232):
+ * the charging slot, stored / capacity, the net flow per tick (averaged over a second: +
+ * charging, - discharging) and the output voltage on the screen, a wide segmented charge bar
+ * along its bottom in the charge colour, the tall energy gauge right of it, the player's
+ * inventory below.
  */
 public class GuiEnergyStorageSC extends GuiContainer {
 
-    private static final ResourceLocation TEXTURE = new ResourceLocation(Reference.ASSETS, "textures/gui/guiGenerator.png");
-    private static final int BAR_X = 8, BAR_Y = 42, BAR_W = 136, BAR_H = 8;
-    /** Text rooms end at ENERGY_X; the energy gauge (GuiEnergyGaugeSC) sits over the sheet's old well. */
-    private static final int ENERGY_X = 152, GAUGE_X = 150, GAUGE_Y = 16, GAUGE_W = 22, GAUGE_H = 54;
-    private static final int TEXT_X = 8, FLOW_Y = 55, OUTPUT_Y = 67;
+    private static final int TEXT_X = 42, BAR_X = 14, BAR_Y = 98, BAR_W = 186, BAR_H = 9;
 
     private final TileEntityEnergyStorageSC storage;
 
     public GuiEnergyStorageSC(InventoryPlayer playerInv, TileEntityEnergyStorageSC storage) {
         super(new ContainerEnergyStorageSC(playerInv, storage));
         this.storage = storage;
-        xSize = 176;
-        ySize = 166;
+        xSize = GuiBigSC.W;
+        ySize = GuiBigSC.H;
     }
 
     private float fraction() {
@@ -40,20 +35,13 @@ public class GuiEnergyStorageSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        GuiGaugeSC.bind(mc, TEXTURE);
         int x = guiLeft, y = guiTop;
-        drawTexturedModalRect(x, y, 0, 0, xSize, ySize);
-        drawTexturedModalRect(x + ContainerEnergyStorageSC.SLOT_X - 1, y + ContainerEnergyStorageSC.SLOT_Y - 1,
-                GuiGaugeSC.SPR_STEEL_SLOT_U, GuiGaugeSC.SPR_STEEL_SLOT_V, 18, 18);
-        GuiEnergyGaugeSC.draw(x + GAUGE_X, y + GAUGE_Y, GAUGE_W, GAUGE_H, fraction());
-        GuiGaugeSC.bind(mc, TEXTURE);
-        // wide charge bar: well, fill, lighter top edge
-        GuiGaugeSC.drawWell(x + BAR_X, y + BAR_Y, BAR_W, BAR_H);
-        int filled = (int) (BAR_W * Math.min(1F, fraction()));
-        if (filled > 0) {
-            Gui.drawRect(x + BAR_X, y + BAR_Y, x + BAR_X + filled, y + BAR_Y + BAR_H, 0xFFD86A10);
-            Gui.drawRect(x + BAR_X, y + BAR_Y, x + BAR_X + filled, y + BAR_Y + 2, 0xFFFFB040);
-        }
+        GuiBigSC.window(x, y, false, 0);
+        GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
+        GuiHoloSC.slot(x + ContainerEnergyStorageSC.SLOT_X, y + ContainerEnergyStorageSC.SLOT_Y, storage.getStackInSlot(0) != null);
+        GuiHoloSC.bar(x + BAR_X, y + BAR_Y, BAR_W, BAR_H, fraction(), 24, GuiEnergyGaugeSC.colour(fraction()));
+        GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H, fraction());
+        GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
@@ -61,18 +49,20 @@ public class GuiEnergyStorageSC extends GuiContainer {
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         String title = Lang.tr("tile.siliconage." + (storage instanceof com.sc.tileentity.TileEntityChargePadSC ? "chargePad." : "energyStorage.")
                 + storage.getTier().name().toLowerCase(java.util.Locale.ROOT) + ".name");
-        fit(title, 8, 5, titleRoom(storage.getTier()), GuiGaugeSC.TITLE_COLOR);
-        GuiGaugeSC.drawTierBadge(fontRendererObj, storage.getTier(), xSize - 6, 3);
-        fit(Lang.tr("sc.storage.gui.stored", String.valueOf(storage.getEnergyStored())), 8, 20, ENERGY_X - 12, 0x404040);
-        fit(Lang.tr("sc.storage.gui.capacity", String.valueOf(storage.getMaxEnergyStored()),
-                Math.round(fraction() * 100)), 8, 30, ENERGY_X - 12, 0x606060);
-        // Flow and output sit left of the charge slot (x 130): 8..~110 px at the longest strings
-        // ("Поток: +10240 EU/t", "Output: 2048 EU/t"); which face is the output is in the tooltip.
+        fit(title, 8, 5, GuiBigSC.titleRoom(fontRendererObj, storage.getTier()), GuiGaugeSC.TITLE_COLOR);
+        GuiGaugeSC.drawTierBadge(fontRendererObj, storage.getTier(), GuiBigSC.W - 6, 3);
+        GuiBigSC.labels(fontRendererObj, null, Lang.tr("container.inventory"));
+        int room = GuiBigSC.SCREEN_RIGHT - TEXT_X;
+        fit(Lang.tr("sc.gui.holo.storage"), TEXT_X, 25, room, GuiHoloSC.CYAN & 0xFFFFFF);
+        fit(Lang.tr("sc.storage.gui.stored", String.valueOf(storage.getEnergyStored())), TEXT_X, 40, room, GuiHoloSC.VALUE);
+        fit(Lang.tr("sc.storage.gui.capacity", String.valueOf(storage.getMaxEnergyStored()), Math.round(fraction() * 100)),
+                TEXT_X, 51, room, GuiHoloSC.LABEL);
         int flow = storage.getFlowPerTick();
-        int room = ContainerEnergyStorageSC.SLOT_X - 4 - TEXT_X;
-        fit(Lang.tr("sc.storage.gui.flow", (flow > 0 ? "+" : "") + flow), TEXT_X, FLOW_Y, room,
-                flow > 0 ? 0x2E7D32 : flow < 0 ? 0xB02418 : 0x606060);
-        fit(Lang.tr("sc.storage.gui.output", storage.getTier().getVoltage()), TEXT_X, OUTPUT_Y, room, 0x606060);
+        fit(Lang.tr("sc.storage.gui.flow", (flow > 0 ? "+" : "") + flow), TEXT_X, 66, room,
+                flow > 0 ? GuiHoloSC.OK : flow < 0 ? GuiHoloSC.BAD : GuiHoloSC.IDLE);
+        fit(Lang.tr("sc.storage.gui.output", storage.getTier().getVoltage()), TEXT_X, 77, room, GuiHoloSC.LABEL);
+        String pct = Math.round(fraction() * 100) + "%";
+        fontRendererObj.drawString(pct, BAR_X + BAR_W - fontRendererObj.getStringWidth(pct), BAR_Y - 10, GuiEnergyGaugeSC.colour(fraction()) & 0xFFFFFF);
     }
 
     /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
@@ -80,18 +70,14 @@ public class GuiEnergyStorageSC extends GuiContainer {
         TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop);
     }
 
-    /** Room for the title: up to the tier plate at the right of the title bar. */
-    private int titleRoom(com.sc.energy.Tier tier) {
-        return 176 - 6 - (fontRendererObj.getStringWidth(tier.name()) + 4) - 4 - 8;
-    }
-
     private List<String> tooltipAt(int mx, int my) {
         List<String> lines = new ArrayList<String>();
-        if (GuiGaugeSC.isOver(TEXT_X, OUTPUT_Y - 1, ContainerEnergyStorageSC.SLOT_X - 4 - TEXT_X, 10, mx, my)) {
+        if (GuiGaugeSC.isOver(TEXT_X, 76, GuiBigSC.SCREEN_RIGHT - TEXT_X, 10, mx, my)) {
             lines.add(Lang.tr("sc.storage.tooltip.io", storage.getTier().getVoltage()));
             return lines;
         }
-        if (GuiGaugeSC.isOver(GAUGE_X, GAUGE_Y, GAUGE_W, GAUGE_H, mx, my) || GuiGaugeSC.isOver(BAR_X, BAR_Y, BAR_W, BAR_H, mx, my)) {
+        if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H, mx, my)
+                || GuiGaugeSC.isOver(BAR_X - 1, BAR_Y - 1, BAR_W + 2, BAR_H + 2, mx, my)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(storage.getEnergyStored() + " / " + storage.getMaxEnergyStored() + " EU");
             return lines;

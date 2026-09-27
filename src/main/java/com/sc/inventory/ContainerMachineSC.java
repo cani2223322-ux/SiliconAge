@@ -10,7 +10,10 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
 
-/** Generic container for every machine (§13) - 3 input / 3 output slots and the 4 upgrade slots on the side panel, see TileEntityMachineSC. */
+/**
+ * Generic container for every machine (§13) - 3 input / 3 output slots, the 4 upgrade slots and
+ * the player's inventory, at GuiMachineSC's large layout (GuiBigSC), see TileEntityMachineSC.
+ */
 public class ContainerMachineSC extends Container {
 
     private final TileEntityMachineSC machine;
@@ -18,25 +21,40 @@ public class ContainerMachineSC extends Container {
     public ContainerMachineSC(InventoryPlayer playerInv, TileEntityMachineSC machine) {
         this.machine = machine;
 
+        boolean tanks = usesTanks(machine.getMachineType());
         for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {
-            addSlotToContainer(new SlotRecipeInput(machine, i, GuiMachineSC.SLOT_X + i * 18, GuiMachineSC.IN_Y));
+            addSlotToContainer(new SlotRecipeInput(machine, i, slotX(tanks, i), GuiMachineSC.IN_Y));
         }
         for (int i = 0; i < TileEntityMachineSC.OUTPUT_SLOTS; i++) {
-            addSlotToContainer(new SlotOutputOnly(machine, TileEntityMachineSC.INPUT_SLOTS + i, GuiMachineSC.SLOT_X + i * 18, GuiMachineSC.OUT_Y));
+            addSlotToContainer(new SlotOutputOnly(machine, TileEntityMachineSC.INPUT_SLOTS + i, slotX(tanks, i), GuiMachineSC.OUT_Y));
         }
         for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
             addSlotToContainer(new SlotUpgrade(machine, TileEntityMachineSC.FIRST_UPGRADE_SLOT + i,
-                    GuiMachineSC.UPGRADE_X, GuiMachineSC.UPGRADE_Y + i * 18));
+                    GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y));
         }
-
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
+                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, GuiBigSC.INV_X + col * 18, GuiBigSC.INV_Y + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlotToContainer(new Slot(playerInv, col, 8 + col * 18, 142));
+            addSlotToContainer(new Slot(playerInv, col, GuiBigSC.INV_X + col * 18, GuiBigSC.HOTBAR_Y));
         }
+    }
+
+    /** A machine type with any tank gets the tighter slot layout beside its tank gauges. */
+    public static boolean usesTanks(com.sc.machine.MachineType type) {
+        for (int i = 0; i < TANK_COUNT; i++) {
+            if (com.sc.machine.RecipeRegistry.usesTank(type, i)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Where slot i of a row sits: 18 apart beside tanks, 22 apart otherwise. */
+    public static int slotX(boolean tanks, int i) {
+        return tanks ? 14 + i * 18 : 16 + i * 22;
     }
 
     public TileEntityMachineSC getMachine() {
