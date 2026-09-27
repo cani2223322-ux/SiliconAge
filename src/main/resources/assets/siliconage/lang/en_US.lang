@@ -1746,6 +1746,7 @@ sc.gui.step.heat=heat %d/%d
 sc.gui.step.dies=fields %d/%d · defects %d%%
 sc.gui.step.title=Exposure
 sc.gui.step.hint=The stage steps: one field, one die
+sc.machine.tooltip.upgrade=§7Upgrade: §f%s
 sc.gui.holo.washing=WASHING
 sc.gui.washer.per=A wash
 sc.gui.washer.left=Enough

@@ -149,6 +149,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
      * universal transformer upgrade takes any voltage at all.
      */
     @Override
+    public boolean acceptsAnyVoltage() {
+        return upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0;
+    }
+
+    @Override
     public com.sc.energy.Tier inputTier() {
         com.sc.energy.Tier[] tiers = com.sc.energy.Tier.values();
         if (upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
@@ -261,6 +266,64 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             }
         }
         return tag;
+    }
+
+    /** NBT key the machine's item carries its upgrades under - they come back with it on placement. */
+    public static final String ITEM_UPGRADES_KEY = "UpgradesSC";
+    /** Set once the upgrades went into the dropped item, so breakBlock doesn't drop them loose too. */
+    private boolean upgradesInItem;
+
+    /**
+     * The upgrade slots as an item NBT compound (null when empty): a machine placed on a live line
+     * used to come back bare and blow up in its first tick, before a transformer could go in.
+     */
+    public NBTTagCompound upgradesForItem() {
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            ItemStack s = slots[FIRST_UPGRADE_SLOT + i];
+            if (s != null) {
+                NBTTagCompound t = s.writeToNBT(new NBTTagCompound());
+                t.setByte("Slot", (byte) i);
+                list.appendTag(t);
+            }
+        }
+        upgradesInItem = list.tagCount() > 0;
+        if (!upgradesInItem) {
+            return null;
+        }
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setTag("Items", list);
+        return tag;
+    }
+
+    /** Whether breakBlock should leave the upgrade slots alone (they're in the dropped item). */
+    public boolean upgradesInItem() {
+        return upgradesInItem;
+    }
+
+    /** Puts back what upgradesForItem() saved (on placement, before the first energy tick). */
+    public void loadUpgradesFromItem(NBTTagCompound tag) {
+        ItemStack[] ups = upgradesOf(tag);
+        for (int i = 0; i < ups.length; i++) {
+            if (ups[i] != null) {
+                slots[FIRST_UPGRADE_SLOT + i] = ups[i];
+            }
+        }
+        markDirty();
+    }
+
+    /** The saved upgrades by slot (null where empty) - also used by the item's tooltip. */
+    public static ItemStack[] upgradesOf(NBTTagCompound tag) {
+        ItemStack[] ups = new ItemStack[UPGRADE_SLOTS];
+        net.minecraft.nbt.NBTTagList list = tag == null ? null : tag.getTagList("Items", 10);
+        for (int k = 0; list != null && k < list.tagCount(); k++) {
+            NBTTagCompound t = list.getCompoundTagAt(k);
+            int i = t.getByte("Slot");
+            if (i >= 0 && i < UPGRADE_SLOTS) {
+                ups[i] = ItemStack.loadItemStackFromNBT(t);
+            }
+        }
+        return ups;
     }
 
     /** Restores what tanksForItem() saved (on placement of the machine item). */

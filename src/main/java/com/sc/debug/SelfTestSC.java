@@ -755,6 +755,13 @@ public final class SelfTestSC {
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));
         check(u.inputTier() == com.sc.energy.Tier.XV && u.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 100, true) == 100,
                 "universal transformer upgrade: an LV machine takes any voltage, XV included");
+        net.minecraft.nbt.NBTTagCompound ut = u.upgradesForItem();
+        TileEntityMachineSC u2 = new TileEntityMachineSC();
+        u2.setMachineType(MachineType.CRUSHER);
+        u2.loadUpgradesFromItem(ut);
+        check(u.acceptsAnyVoltage() && !new TileEntityMachineSC().acceptsAnyVoltage() && u.upgradesInItem() && u2.acceptsAnyVoltage()
+                        && TileEntityMachineSC.upgradesOf(ut)[0] != null && new TileEntityMachineSC().upgradesForItem() == null,
+                "universal transformer: no voltage limit for IC2 nets; a machine's upgrades go with its item and come back on placement");
         boolean hidden = true;
         for (int slot : c.getAccessibleSlotsFromSide(1)) {
             hidden &= slot < TileEntityMachineSC.FIRST_UPGRADE_SLOT;

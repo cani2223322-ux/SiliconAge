@@ -1319,6 +1319,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * machine's). A linked node takes whatever its master takes - it only passes energy on.
      */
     @Override
+    public boolean acceptsAnyVoltage() {
+        if (!master) {
+            TileEntityFieldGeneratorSC m = loadedMaster();
+            if (m != null) {
+                return m.acceptsAnyVoltage();
+            }
+        }
+        return upgradeCount(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER) > 0;
+    }
+
+    @Override
     public Tier inputTier() {
         if (!master) {
             TileEntityFieldGeneratorSC m = loadedMaster();

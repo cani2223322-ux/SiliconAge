@@ -159,6 +159,12 @@ public class BlockMachineSC extends Block {
             ((TileEntityMachineSC) te).setFacing(toPlacer[quarter]);
             world.markBlockForUpdate(x, y, z);
         }
+        // the upgrades first: a transformer must be in before the machine's first energy tick
+        if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
+                && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_UPGRADES_KEY)) {
+            ((TileEntityMachineSC) te).loadUpgradesFromItem(stack.getTagCompound().getCompoundTag(TileEntityMachineSC.ITEM_UPGRADES_KEY));
+            world.markBlockForUpdate(x, y, z);
+        }
         if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
                 && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_TANKS_KEY)) {
             ((TileEntityMachineSC) te).loadTanksFromItem(stack.getTagCompound().getCompoundTag(TileEntityMachineSC.ITEM_TANKS_KEY));
@@ -186,9 +192,15 @@ public class BlockMachineSC extends Block {
         ItemStack stack = new ItemStack(this, 1, damageDropped(meta));
         TileEntity te = world.getTileEntity(x, y, z);
         net.minecraft.nbt.NBTTagCompound tanks = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).tanksForItem() : null;
-        if (tanks != null) {
+        net.minecraft.nbt.NBTTagCompound ups = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).upgradesForItem() : null;
+        if (tanks != null || ups != null) {
             net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
-            nbt.setTag(TileEntityMachineSC.ITEM_TANKS_KEY, tanks);
+            if (tanks != null) {
+                nbt.setTag(TileEntityMachineSC.ITEM_TANKS_KEY, tanks);
+            }
+            if (ups != null) {
+                nbt.setTag(TileEntityMachineSC.ITEM_UPGRADES_KEY, ups);
+            }
             stack.setTagCompound(nbt);
         }
         drops.add(stack);
@@ -250,6 +262,10 @@ public class BlockMachineSC extends Block {
         if (te instanceof TileEntityMachineSC) {
             TileEntityMachineSC machine = (TileEntityMachineSC) te;
             for (int i = 0; i < machine.getSizeInventory(); i++) {
+                if (machine.upgradesInItem() && i >= TileEntityMachineSC.FIRST_UPGRADE_SLOT
+                        && i < TileEntityMachineSC.FIRST_UPGRADE_SLOT + TileEntityMachineSC.UPGRADE_SLOTS) {
+                    continue;                                        // they left inside the machine's item
+                }
                 ItemStack stack = machine.getStackInSlot(i);
                 if (stack != null) {
                     float x0 = x + 0.5F, y0 = y + 0.5F, z0 = z + 0.5F;

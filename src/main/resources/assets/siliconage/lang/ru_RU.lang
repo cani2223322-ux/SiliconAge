@@ -1746,6 +1746,7 @@ sc.gui.step.heat=нагрев %d/%d
 sc.gui.step.dies=кадров %d/%d · брак %d%%
 sc.gui.step.title=Экспонирование
 sc.gui.step.hint=Столик шагает: один кадр — один кристалл
+sc.machine.tooltip.upgrade=§7Модуль: §f%s
 sc.gui.holo.washing=ПРОМЫВКА
 sc.gui.washer.per=За раз
 sc.gui.washer.left=Хватит

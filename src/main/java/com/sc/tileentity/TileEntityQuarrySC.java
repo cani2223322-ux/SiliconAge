@@ -233,6 +233,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     @Override
+    public boolean acceptsAnyVoltage() {
+        return upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0;
+    }
+
+    @Override
     public Tier inputTier() {
         Tier[] tiers = Tier.values();
         if (upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {

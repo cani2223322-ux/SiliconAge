@@ -101,6 +101,11 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         return true;
     }
 
+    /** True when nothing overvolts this tile at all (a universal transformer upgrade). */
+    public boolean acceptsAnyVoltage() {
+        return false;
+    }
+
     @Override
     public int receiveEnergy(ForgeDirection from, int voltage, int amount, boolean simulate) {
         if (from != ForgeDirection.UNKNOWN && !acceptsFrom(from)) {
@@ -302,7 +307,9 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     @Override
     @Optional.Method(modid = Reference.IC2_MODID)
     public int getSinkTier() {
-        return inputTier().toIc2Tier();
+        // IC2's "no limit": its tiers stop at 6 (32768 EU), so a universal transformer mapped to
+        // tier 6 still blew up on anything stronger (Industrial Upgrade's panels and storages)
+        return acceptsAnyVoltage() ? Integer.MAX_VALUE : inputTier().toIc2Tier();
     }
 
     @Override
