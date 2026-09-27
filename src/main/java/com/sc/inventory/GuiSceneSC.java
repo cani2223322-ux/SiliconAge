@@ -949,6 +949,46 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * A one-cylinder engine: the piston going up and down in its finned cylinder, the spark and the
+     * burst at the top of the stroke, the con-rod turning the flywheel, smoke out of the exhaust.
+     */
+    public static void engine(int x, int y, int w, int h, float t, boolean running) {
+        frame(x, y, w, h);
+        int cx = x + w / 3 + 2, cy0 = y + 10, cy1 = y + h / 2 + 8;
+        rect(cx - 9, cy0, 18, cy1 - cy0, 0xFF8A909A);                          // the cylinder
+        rect(cx - 7, cy0 + 2, 14, cy1 - cy0 - 2, 0xFF1A2430);
+        for (int i = 0; i < 4; i++) {                                          // its fins
+            rect(cx - 11, cy0 + 3 + i * 5, 2, 3, 0xFF6A707A);
+            rect(cx + 9, cy0 + 3 + i * 5, 2, 3, 0xFF6A707A);
+        }
+        double a = running ? t * 0.5 : 0;
+        int py = cy0 + 5 + (int) (6 * (1 - Math.cos(a)));
+        if (running && Math.cos(a) > 0.8) {
+            rect(cx - 6, cy0 + 2, 12, py - cy0 - 2, 0xFFFFB040);              // the burst
+            rect(cx - 1, cy0 + 1, 2, 2, 0xFFFFFFFF);                           // the spark
+        }
+        rect(cx - 7, py, 14, 5, 0xFFB0B8C4);                                   // the piston
+        rect(cx - 7, py, 14, 1, 0xFFD8E0E8);
+        int fx = cx, fy = y + h - 11, fr = 8;
+        disc(fx, fy, fr, 0xFF6A707A);                                          // the flywheel
+        disc(fx, fy, fr - 2, 0xFF12181E);
+        disc(fx, fy, 2, 0xFF8A909A);
+        int px = fx + (int) ((fr - 3) * Math.sin(a)), pyy = fy - (int) ((fr - 3) * Math.cos(a));
+        for (int k = 0; k < 10; k++) {                                         // the con-rod
+            rect(cx + (px - cx) * k / 9, py + 5 + (pyy - py - 5) * k / 9, 2, 1, 0xFFB0B8C4);
+        }
+        int ex = cx + 11;
+        rect(ex, cy0 + 4, 12, 3, 0xFF6A707A);                                  // the exhaust
+        rect(ex + 10, cy0 - 4, 3, 10, 0xFF6A707A);
+        if (running) {
+            for (int i = 0; i < 4; i++) {
+                float d = (t * 0.7F + i * 4) % 14;
+                rect(ex + 10 + (int) (d / 3), cy0 - 5 - (int) (d / 2), 2, 2, mix(0xFF8A8A92, 0xFF0A1218, d / 14F));
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

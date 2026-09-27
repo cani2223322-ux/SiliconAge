@@ -36,11 +36,19 @@ public class GuiGeneratorSC extends GuiContainer {
 
     private final TileEntityGeneratorSC generator;
     private final GeneratorType type;
+    /** The Combustion Generator's own screen: a tachometer, the engine, the fuels table, the reserve bar, the tank on the right. */
+    private final boolean comb;
+    private static final int COMB_TANK_X = 175, COMB_ENGINE_X = 44, COMB_ENGINE_W = 56, COMB_TABLE_X = 103, COMB_TABLE_W = 69,
+            COMB_TOP = 24, COMB_TABLE_H = 66, COMB_RESERVE_Y = 93;
+    /** The fuels it burns: the fluid names (the first one found counts) and their lang keys, best first. */
+    private static final String[][] COMB_FUELS = {{"fuel"}, {"biodiesel"}, {"diesel"}, {"ethanol", "bioethanol"}, {"biofuel"},
+            {"crudeoil", "oil"}, {"ic2biogas"}};
 
     public GuiGeneratorSC(InventoryPlayer playerInv, TileEntityGeneratorSC generator) {
         super(new ContainerGeneratorSC(playerInv, generator));
         this.generator = generator;
         this.type = generator.getGeneratorType();
+        this.comb = type == GeneratorType.COMBUSTION;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -59,7 +67,7 @@ public class GuiGeneratorSC extends GuiContainer {
         for (int i = 0; i < tankCount(); i++) {
             GuiBigSC.ClearButton b = new GuiBigSC.ClearButton(ContainerGeneratorSC.BTN_CLEAR + i);
             b.visible = true;
-            b.xPosition = guiLeft + RIGHT_X + i * TANK_GAP + GuiTankGaugeSC.WIDTH - 7;
+            b.xPosition = guiLeft + tankX(i) + GuiTankGaugeSC.WIDTH - 7;
             b.yPosition = guiTop + 31;
             buttonList.add(b);
         }
@@ -101,6 +109,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
     }
 
+    /** Where tank i stands: the Combustion Generator's on the right edge, the others from RIGHT_X. */
+    private int tankX(int i) {
+        return comb ? COMB_TANK_X : RIGHT_X + i * TANK_GAP;
+    }
+
     private FluidTank tank(int i) {
         return i == 0 ? generator.getFuelTank() : i == 1 ? generator.getFuelTank2() : generator.getOutTank();
     }
@@ -130,7 +143,11 @@ public class GuiGeneratorSC extends GuiContainer {
             GuiHoloSC.bar(x + LEFT_X, y + HEAT_Y, LEFT_W, HEAT_H, (float) generator.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT,
                     14, 0xFFFF5A3C);
         }
-        drawRect(x + RIGHT_X - 4, y + GuiBigSC.SCREEN_Y + 6, x + RIGHT_X - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
+        if (comb) {
+            drawCombBackground(x, y, partialTicks);
+        } else {
+            drawRect(x + RIGHT_X - 4, y + GuiBigSC.SCREEN_Y + 6, x + RIGHT_X - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
+        }
         if (type.kind == GeneratorType.Kind.PASSIVE) {
             GuiGaugeSC.bind(mc, TEXTURE);
             GL11.glColor4f(1F, 1F, 1F, 1F);
@@ -143,7 +160,7 @@ public class GuiGeneratorSC extends GuiContainer {
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawing a fluid leaves the blocks atlas bound
             FluidTank t = tank(i);
-            GuiTankGaugeSC.draw(mc, x + RIGHT_X + i * TANK_GAP, y + TANK_Y, t.getFluid(), t.getCapacity(), null, false);
+            GuiTankGaugeSC.draw(mc, x + tankX(i), y + (comb ? 40 : TANK_Y), t.getFluid(), t.getCapacity(), null, false);
         }
         GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         GuiGaugeSC.bind(mc, TEXTURE);
@@ -160,6 +177,11 @@ public class GuiGeneratorSC extends GuiContainer {
         fit(type.localizedName(), 8, 5, GuiBigSC.titleRoom(fontRendererObj, generator.outputTier()), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, generator.outputTier(), GuiBigSC.W - 6, 3);
         GuiBigSC.labels(fontRendererObj, upgrades() ? Lang.tr("sc.gui.big.upgrades") : null, Lang.tr("container.inventory"));
+        if (comb) {
+            drawCombText();
+            drawUpgradeCount();
+            return;
+        }
 
         // left: status, the output now, the generator's own readings
         GeneratorStatus status = generator.getStatus();
@@ -219,6 +241,10 @@ public class GuiGeneratorSC extends GuiContainer {
                     RIGHT_X, ROWS_Y + 22, room, GuiHoloSC.LABEL);
         }
 
+        drawUpgradeCount();
+    }
+
+    private void drawUpgradeCount() {
         if (upgrades()) {
             int used = 0;
             for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
@@ -227,6 +253,92 @@ public class GuiGeneratorSC extends GuiContainer {
             int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
             fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
         }
+    }
+
+    // ---- the Combustion Generator ----
+
+    /** The fuel in the tank: its row in COMB_FUELS, or -1. */
+    private int combFuel() {
+        net.minecraftforge.fluids.FluidStack f = generator.getFuelTank().getFluid();
+        String n = f == null || f.getFluid() == null ? null : f.getFluid().getName();
+        for (int i = 0; n != null && i < COMB_FUELS.length; i++) {
+            for (String s : COMB_FUELS[i]) {
+                if (s.equals(n)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /** mB a tick the fuel in the tank burns at, 0 for none. */
+    private double combRate() {
+        net.minecraftforge.fluids.FluidStack f = generator.getFuelTank().getFluid();
+        double per = f == null || f.getFluid() == null ? 0 : type.euPerMb(f.getFluid().getName());
+        return per <= 0 ? 0 : type.euPerTick / per * generator.fuelMultiplier();
+    }
+
+    private void drawCombBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
+        int rated = Math.max(1, generator.ratedOutput());
+        GuiSceneSC.dial(x + 26, y + 79, 11, Math.min(1F, (float) generator.getLastOutput() / rated));
+        GuiSceneSC.engine(x + COMB_ENGINE_X, y + COMB_TOP, COMB_ENGINE_W, 64, t, running);
+        GuiSceneSC.frame(x + COMB_TABLE_X, y + COMB_TOP, COMB_TABLE_W, COMB_TABLE_H);
+        int cur = combFuel(), w = COMB_TABLE_W - 8;
+        for (int i = 0; i < COMB_FUELS.length; i++) {
+            int yy = y + COMB_TOP + 10 + i * 8 + 5;
+            double per = type.euPerMb(COMB_FUELS[i][0]);
+            drawRect(x + COMB_TABLE_X + 3, yy, x + COMB_TABLE_X + 3 + w, yy + 2, 0xFF04080C);
+            drawRect(x + COMB_TABLE_X + 3, yy, x + COMB_TABLE_X + 3 + (int) (w * per / 24.0), yy + 2, i == cur ? 0xFFD8A040 : 0xFF3A5A7A);
+        }
+        FluidTank tank = generator.getFuelTank();
+        float left = tank.getCapacity() > 0 ? (float) tank.getFluidAmount() / tank.getCapacity() : 0F;
+        int bx = x + 64, bw = 108;
+        drawRect(bx, y + COMB_RESERVE_Y, bx + bw, y + COMB_RESERVE_Y + 4, 0xFF04080C);
+        for (int i = 0; i < 20; i++) {
+            int a = bx + 1 + i * (bw - 2) / 20, b = bx + 1 + (i + 1) * (bw - 2) / 20 - 1;
+            drawRect(a, y + COMB_RESERVE_Y + 1, b, y + COMB_RESERVE_Y + 3, (i + 0.5F) / 20 < left ? 0xFFD8A040 : 0xFF2A3038);
+        }
+    }
+
+    private void drawCombText() {
+        GeneratorStatus status = generator.getStatus();
+        smallFit(status.localized(), LEFT_X, 52, 28, statusColor(status));
+        smallFit(Lang.tr("sc.gui.comb.now", generator.getLastOutput(), generator.ratedOutput()), LEFT_X, 92, 28, GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.comb.table"), COMB_TABLE_X + 3, COMB_TOP + 2, COMB_TABLE_W - 6, GuiHoloSC.LABEL);
+        int cur = combFuel();
+        for (int i = 0; i < COMB_FUELS.length; i++) {
+            int yy = COMB_TOP + 10 + i * 8;
+            String v = String.valueOf((int) type.euPerMb(COMB_FUELS[i][0]));
+            int vw = fontRendererObj.getStringWidth(v) / 2;
+            smallFit(Lang.tr("sc.gui.comb.fuel." + i), COMB_TABLE_X + 3, yy, COMB_TABLE_W - 12 - vw, i == cur ? GuiHoloSC.VALUE : 0x6A829A);
+            smallFit(v, COMB_TABLE_X + COMB_TABLE_W - 4 - vw, yy, vw + 1, i == cur ? GuiHoloSC.VALUE : 0x6A829A);
+        }
+        TextFitSC.drawCentered(fontRendererObj, tankLabel(0), COMB_TANK_X, 30, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        smallFit(Lang.tr("sc.gui.comb.reserve"), COMB_ENGINE_X - 4, COMB_RESERVE_Y, 22, GuiHoloSC.LABEL);
+        FluidTank tank = generator.getFuelTank();
+        double rate = combRate();
+        String line;
+        if (rate <= 0 || tank.getFluidAmount() <= 0) {
+            line = Lang.tr("sc.gui.comb.empty");
+        } else {
+            int secs = (int) (tank.getFluidAmount() / rate / 20);
+            String time = secs >= 60 ? Lang.tr("sc.gui.comb.min", secs / 60, secs % 60) : Lang.tr("sc.gui.comb.sec", secs);
+            line = Lang.tr("sc.gui.comb.left", time, tank.getFluid().getLocalizedName(), (int) type.euPerMb(tank.getFluid().getFluid().getName()),
+                    String.format(java.util.Locale.ROOT, "%.1f", rate));
+        }
+        smallFit(line, COMB_ENGINE_X - 4, COMB_RESERVE_Y + 7, COMB_TANK_X - COMB_ENGINE_X, GuiHoloSC.VALUE);
+    }
+
+    /** Small text (5/8, or smaller to fit maxW), foreground coordinates. */
+    private void smallFit(String text, int x, int y, int maxW, int color) {
+        float k = Math.min(0.625F, maxW / (float) Math.max(1, fontRendererObj.getStringWidth(text)));
+        GL11.glPushMatrix();
+        GL11.glTranslatef(x, y, 0F);
+        GL11.glScalef(k, k, 1F);
+        fontRendererObj.drawString(text, 0, 0, color);
+        GL11.glPopMatrix();
     }
 
     private boolean hasItemSlots() {
@@ -301,7 +413,7 @@ public class GuiGeneratorSC extends GuiContainer {
         }
 
         for (int i = 0; i < tankCount(); i++) {
-            if (GuiGaugeSC.isOver(RIGHT_X + i * TANK_GAP, TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
+            if (GuiGaugeSC.isOver(tankX(i), comb ? 40 : TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
                 FluidTank t = tank(i);
                 lines.add(Lang.tr(i == 2 ? "sc.gui.gen.water" : type.kind == GeneratorType.Kind.EXO ? "sc.gui.gen.coolant" : "sc.gui.fuel"));
                 lines.add(GuiGaugeSC.fluidLabel(t.getFluid(), t.getCapacity()));
@@ -319,6 +431,11 @@ public class GuiGeneratorSC extends GuiContainer {
             }
         }
 
+        if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.comb.table.title"));
+            lines.add(Lang.tr("sc.gui.comb.table.hint"));
+            return lines;
+        }
         if (isReactor()) {
             if (!generator.isIgnited() && GuiGaugeSC.isOver(LEFT_X - 1, IGNITION_Y - 1, LEFT_W + 2, IGNITION_H + 2, mouseX, mouseY)) {
                 lines.add(Lang.tr("sc.gui.ignition"));
