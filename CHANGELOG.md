@@ -13,6 +13,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 **Исправлено**
 - Меню солнечной панели всегда писало «День», даже ночью (выработка при этом уже была ночной, вдвое меньше), и не всегда видело дождь. Теперь день/ночь и дождь приходят с сервера.
+
 ### English
 - **A new machine screen - a holo screen.** Everything that works is on one dark screen: slots in cyan frames, a segmented progress bar (with NEI a click opens the recipes) and the status under it; on the right what the machine does (CRUSHING, HEATING, FLUIDS...) with its animated icon and the numbers: progress, energy use, input voltage. Tanks show only if the machine uses them or they hold something - no more hatched "unused" tanks. Heat is a bar along the screen's bottom. The handbook is updated.
 - The "Overheated - paused" status is now just "Overheated".
@@ -21,6 +22,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 **Fixed**
 - The solar panel screen always said "Day", even at night (while its output was already the night's half), and didn't always see rain. Day / night and rain now come from the server.
+
 ## 0.1.3-alpha — 2026-09-27
 
 ### Русский
