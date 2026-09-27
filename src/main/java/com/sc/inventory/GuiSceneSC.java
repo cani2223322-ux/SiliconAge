@@ -1043,6 +1043,46 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * A steam turbine from the side: steam in by the left pipe, the casing with its blade rows
+     * (longer down the flow), the blades flickering as they turn, the shaft out to the right.
+     */
+    public static void turbineSide(int x, int y, int w, int h, float t, boolean running) {
+        frame(x, y, w, h);
+        int cy = y + h / 2;
+        rect(x + 2, cy - 3, 9, 6, 0xFF6A707A);                                 // steam in
+        if (running) {
+            for (int i = 0; i < 3; i++) {
+                rect(x + 2 + (int) ((t * 1.5F + i * 3) % 9), cy - 1, 2, 2, 0xFFE0E8F0);
+            }
+        }
+        int c0 = x + 11, c1 = x + w - 16;
+        rect(c0, cy - 14, c1 - c0, 28, 0xFF8A909A);                            // the casing
+        rect(c0 + 1, cy - 13, c1 - c0 - 2, 26, 0xFF1A2430);
+        for (int k = 0; k < 5; k++) {                                          // blade rows
+            int bx = c0 + 4 + k * (c1 - c0 - 8) / 4, bh = 6 + k * 2;
+            for (int j = -bh; j <= bh; j += 2) {
+                boolean on = running && (j + (int) (t * 2) + k) % 4 == 0;
+                rect(bx, cy + j, 2, 1, on ? 0xFFD8E0E8 : 0xFF8A94A8);
+            }
+        }
+        rect(c0, cy - 1, x + w - 3 - c0, 2, 0xFFB0B8C4);                        // the shaft
+    }
+
+    /** A turbine rotor end-on: curved blades turning while it runs, the hub in the middle. */
+    public static void rotorFront(int cx, int cy, int r, float t, boolean running) {
+        disc(cx, cy, r + 2, 0xFF8A909A);
+        disc(cx, cy, r + 1, 0xFF12181E);
+        double a0 = running ? t * 0.6 : 0;
+        for (int k = 0; k < 10; k++) {
+            double a = a0 + k * Math.PI / 5;
+            for (int d = 3; d < r; d++) {
+                rect(cx + (int) (d * Math.cos(a + d * 0.04)), cy + (int) (d * Math.sin(a + d * 0.04)), 1, 1, 0xFFB0B8C4);
+            }
+        }
+        disc(cx, cy, 3, 0xFF6A707A);
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

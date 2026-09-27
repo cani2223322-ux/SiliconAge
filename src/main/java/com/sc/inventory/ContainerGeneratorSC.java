@@ -96,7 +96,7 @@ public class ContainerGeneratorSC extends Container {
 
     private static final int ID_ENERGY = 0, ID_F1 = 1, ID_F1_AMT = 2, ID_F2 = 3, ID_F2_AMT = 4, ID_OUT = 5, ID_OUT_AMT = 6,
             ID_IGNITION = 7, ID_IGNITED = 8, ID_STATUS = 9, ID_OUTPUT = 10, ID_HEAT = 11, ID_RAMP = 12, ID_INFO_A = 13,
-            ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, COUNT = 17;
+            ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, COUNT = 18;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
@@ -123,6 +123,7 @@ public class ContainerGeneratorSC extends Container {
             case ID_INFO_A: return generator.getInfoA();
             case ID_INFO_B: return generator.getInfoB();
             case ID_POWER: return generator.powerFlags();
+            case ID_INFLOW: return generator.getInflowTenths();
             default: return generator.getCreativeTier().ordinal();
         }
     }
@@ -165,6 +166,9 @@ public class ContainerGeneratorSC extends Container {
                 break;
             case ID_STATUS:
                 generator.setStatusClient(GeneratorStatus.byOrdinal(sync.value(ID_STATUS)));
+                break;
+            case ID_INFLOW:
+                generator.setInflowClient(sync.value(ID_INFLOW));
                 break;
             case ID_POWER:
                 generator.setPowerFlagsClient(sync.value(ID_POWER));

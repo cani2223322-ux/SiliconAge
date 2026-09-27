@@ -40,6 +40,9 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean comb;
     /** The Silicon Solar Panel's own screen: the sky, the multiplier chain, the day strip. */
     private final boolean solar;
+    /** The Steam Turbine's own screen: boilers -> the turbine (side and end-on) -> the power, three dials, supply and reserve. */
+    private final boolean turb;
+    private static final int TB_Y = 34, TB_H = 38, TB_DIAL_Y = 83, TB_SUPPLY_Y = 96, TB_RESERVE_Y = 103, TB_BAR_X = 44, TB_BAR_W = 128;
     private static final int SOL_SKY_X = 14, SOL_SKY_Y = 34, SOL_SKY_W = 60, SOL_SKY_H = 44, SOL_STRIP_Y = 84, SOL_STRIP_W = 190;
     private static final int[] SOL_CHIP_X = {80, 118, 154}, SOL_CHIP_W = {28, 26, 26};
     private static final int COMB_TANK_X = 175, COMB_ENGINE_X = 44, COMB_ENGINE_W = 56, COMB_TABLE_X = 103, COMB_TABLE_W = 69,
@@ -54,6 +57,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.type = generator.getGeneratorType();
         this.comb = type == GeneratorType.COMBUSTION;
         this.solar = type == GeneratorType.SOLAR_SI;
+        this.turb = type == GeneratorType.STEAM_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -116,7 +120,7 @@ public class GuiGeneratorSC extends GuiContainer {
 
     /** Where tank i stands: the Combustion Generator's on the right edge, the others from RIGHT_X. */
     private int tankX(int i) {
-        return comb ? COMB_TANK_X : RIGHT_X + i * TANK_GAP;
+        return comb || turb ? COMB_TANK_X : RIGHT_X + i * TANK_GAP;
     }
 
     private FluidTank tank(int i) {
@@ -150,6 +154,8 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (comb) {
             drawCombBackground(x, y, partialTicks);
+        } else if (turb) {
+            drawTurbBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -169,7 +175,7 @@ public class GuiGeneratorSC extends GuiContainer {
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawing a fluid leaves the blocks atlas bound
             FluidTank t = tank(i);
-            GuiTankGaugeSC.draw(mc, x + tankX(i), y + (comb ? 40 : TANK_Y), t.getFluid(), t.getCapacity(), null, false);
+            GuiTankGaugeSC.draw(mc, x + tankX(i), y + (comb || turb ? 40 : TANK_Y), t.getFluid(), t.getCapacity(), null, false);
         }
         GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         GuiGaugeSC.bind(mc, TEXTURE);
@@ -188,6 +194,11 @@ public class GuiGeneratorSC extends GuiContainer {
         GuiBigSC.labels(fontRendererObj, upgrades() ? Lang.tr("sc.gui.big.upgrades") : null, Lang.tr("container.inventory"));
         if (comb) {
             drawCombText();
+            drawUpgradeCount();
+            return;
+        }
+        if (turb) {
+            drawTurbText();
             drawUpgradeCount();
             return;
         }
@@ -267,6 +278,102 @@ public class GuiGeneratorSC extends GuiContainer {
             int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
             fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
         }
+    }
+
+    // ---- the Steam Turbine ----
+
+    /** mB a tick it burns when running. */
+    private double turbNeed() {
+        return type.fuelRatePerTick * generator.fuelMultiplier();
+    }
+
+    private float turbSupply() {
+        return generator.getInflowTenths() / 10F;
+    }
+
+    private void drawTurbBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        boolean running = generator.getStatus() == GeneratorStatus.GENERATING, feeding = turbSupply() > 0;
+        GuiSceneSC.frame(x + 14, y + TB_Y, 158, TB_H);
+        int bx = x + 19, by = y + 40;                                          // a boiler
+        drawRect(bx, by, bx + 16, by + 20, 0xFF8A909A);
+        drawRect(bx + 1, by + 1, bx + 15, by + 11, 0xFF3A6AB0);
+        drawRect(bx + 1, by + 12, bx + 15, by + 19, 0xFF3A2418);
+        for (int k = 0; k < 3; k++) {
+            drawRect(bx + 3 + k * 4, by + 14, bx + 5 + k * 4, by + 18, feeding ? 0xFFFFB040 : 0xFF5A2A20);
+        }
+        drawRect(x + 36, y + 50, x + 48, y + 53, 0xFF6A707A);                  // the steam pipe
+        if (feeding) {
+            for (int i = 0; i < 3; i++) {
+                int d = (int) ((t * 1.5F + i * 4) % 12);
+                drawRect(x + 36 + d, y + 51, x + 38 + d, y + 52, 0xFFE0E8F0);
+            }
+        }
+        GuiSceneSC.turbineSide(x + 48, y + 36, 64, 34, t, running);
+        GuiSceneSC.frame(x + 113, y + 36, 30, 34);
+        GuiSceneSC.rotorFront(x + 128, y + 53, 12, t, running);
+        if (running) {
+            for (int i = 0; i < 3; i++) {                                      // power going out
+                int d = (int) ((t * 2 + i * 8) % 24);
+                drawRect(x + 145 + d, y + 61, x + 148 + d, y + 62, 0xFF6EE6FF);
+            }
+        }
+        int rated = Math.max(1, generator.ratedOutput());
+        float need = (float) turbNeed();
+        GuiSceneSC.dial(x + 26, y + TB_DIAL_Y, 9, Math.min(1F, turbSupply() / Math.max(0.1F, need)));
+        GuiSceneSC.dial(x + 78, y + TB_DIAL_Y, 9, running ? 1F : 0F);
+        GuiSceneSC.dial(x + 130, y + TB_DIAL_Y, 9, Math.min(1F, (float) generator.getLastOutput() / rated));
+        boolean short_ = turbSupply() < need - 0.05F;
+        drawRect(x + TB_BAR_X, y + TB_SUPPLY_Y, x + TB_BAR_X + TB_BAR_W, y + TB_SUPPLY_Y + 4, 0xFF04080C);
+        int sw = (int) ((TB_BAR_W - 2) * Math.min(1F, turbSupply() / Math.max(0.1F, need)));
+        drawRect(x + TB_BAR_X + 1, y + TB_SUPPLY_Y + 1, x + TB_BAR_X + 1 + sw, y + TB_SUPPLY_Y + 3, short_ ? 0xFFE63C3C : 0xFFE0E8F0);
+        drawRect(x + TB_BAR_X + TB_BAR_W - 1, y + TB_SUPPLY_Y - 1, x + TB_BAR_X + TB_BAR_W, y + TB_SUPPLY_Y + 5, 0xFF5AE66E);
+        FluidTank tank = generator.getFuelTank();
+        float left = tank.getCapacity() > 0 ? (float) tank.getFluidAmount() / tank.getCapacity() : 0F;
+        drawRect(x + TB_BAR_X, y + TB_RESERVE_Y, x + TB_BAR_X + TB_BAR_W, y + TB_RESERVE_Y + 4, 0xFF04080C);
+        for (int i = 0; i < 24; i++) {
+            int a = x + TB_BAR_X + 1 + i * (TB_BAR_W - 2) / 24, b = x + TB_BAR_X + 1 + (i + 1) * (TB_BAR_W - 2) / 24 - 1;
+            drawRect(a, y + TB_RESERVE_Y + 1, b, y + TB_RESERVE_Y + 3, (i + 0.5F) / 24 < left ? 0xFFE0E8F0 : 0xFF2A3038);
+        }
+    }
+
+    private void drawTurbText() {
+        fit(Lang.tr("sc.gui.turb.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        TextFitSC.drawCentered(fontRendererObj, tankLabel(0), COMB_TANK_X, 30, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
+        float supply = turbSupply(), need = (float) turbNeed();
+        boolean short_ = supply < need - 0.05F;
+        String sup = supply == (int) supply ? String.valueOf((int) supply) : String.format(java.util.Locale.ROOT, "%.1f", supply);
+        smallFit(sup, 35, 43, 14, short_ ? GuiHoloSC.BAD : GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.turb.boilers"), 17, 62, 20, GuiHoloSC.LABEL);
+        fontRendererObj.drawString(String.valueOf(generator.getLastOutput()), 146, 43, running ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit("EU/t", 146, 53, 24, GuiHoloSC.LABEL);
+        String needS = String.format(java.util.Locale.ROOT, need == (int) need ? "%.0f" : "%.1f", need);
+        String[] labels = {Lang.tr("sc.gui.turb.steam"), Lang.tr("sc.gui.turb.speed"), Lang.tr("sc.gui.turb.out")};
+        String[] vals = {sup + "/" + needS, running ? "100%" : "0%", String.valueOf(generator.getLastOutput())};
+        for (int i = 0; i < 3; i++) {
+            int cx = 26 + i * 52;
+            smallFit(labels[i], cx + 12, TB_DIAL_Y - 6, 38, GuiHoloSC.LABEL);
+            smallFit(vals[i], cx + 12, TB_DIAL_Y, 38, i == 0 && short_ ? GuiHoloSC.BAD : GuiHoloSC.VALUE);
+        }
+        smallFit(Lang.tr("sc.gui.turb.supply"), 14, TB_SUPPLY_Y, 28, GuiHoloSC.LABEL);
+        smallFit(Lang.tr("sc.gui.turb.reserve"), 14, TB_RESERVE_Y, 28, GuiHoloSC.LABEL);
+        FluidTank tank = generator.getFuelTank();
+        int secs = need <= 0 ? 0 : (int) (tank.getFluidAmount() / need / 20);
+        int boilers = (int) Math.ceil(need / 40.0 - 1e-6);
+        String line;
+        int col;
+        if (tank.getFluidAmount() <= 0 && supply <= 0) {
+            line = Lang.tr("sc.gui.turb.nosteam", needS, boilers);
+            col = GuiHoloSC.BAD;
+        } else if (short_) {
+            line = Lang.tr("sc.gui.turb.short", sup, needS, secs);
+            col = GuiHoloSC.BAD;
+        } else {
+            line = Lang.tr("sc.gui.turb.ok", secs, boilers);
+            col = GuiHoloSC.LABEL;
+        }
+        smallFit(line, 14, TB_RESERVE_Y + 6, 158, col);
     }
 
     // ---- the Silicon Solar Panel ----
@@ -496,7 +603,7 @@ public class GuiGeneratorSC extends GuiContainer {
         }
 
         for (int i = 0; i < tankCount(); i++) {
-            if (GuiGaugeSC.isOver(tankX(i), comb ? 40 : TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
+            if (GuiGaugeSC.isOver(tankX(i), comb || turb ? 40 : TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
                 FluidTank t = tank(i);
                 lines.add(Lang.tr(i == 2 ? "sc.gui.gen.water" : type.kind == GeneratorType.Kind.EXO ? "sc.gui.gen.coolant" : "sc.gui.fuel"));
                 lines.add(GuiGaugeSC.fluidLabel(t.getFluid(), t.getCapacity()));
@@ -514,6 +621,11 @@ public class GuiGeneratorSC extends GuiContainer {
             }
         }
 
+        if (turb && GuiGaugeSC.isOver(14, TB_Y, 158, TB_H, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.turb.title"));
+            lines.add(Lang.tr("sc.gui.turb.hint"));
+            return lines;
+        }
         if (solar && GuiGaugeSC.isOver(SOL_SKY_X, SOL_STRIP_Y - 2, SOL_STRIP_W, 14, mouseX, mouseY)) {
             long time = dayTime();
             lines.add(Lang.tr("sc.gui.sol.strip"));

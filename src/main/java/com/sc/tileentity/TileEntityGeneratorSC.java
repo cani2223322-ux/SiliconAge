@@ -235,6 +235,17 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         this.status = value;
     }
 
+    /** mB flowed into the fuel tank this second so far, and the last second's rate in tenths of a mB a tick. */
+    private int inflowWindow, inflowTenths;
+
+    public int getInflowTenths() {
+        return inflowTenths;
+    }
+
+    public void setInflowClient(int tenths) {
+        inflowTenths = tenths;
+    }
+
     public void setLiveClient(int output, int heatValue, int rampValue, int a, int b, int tierOrdinal) {
         lastOutput = output;
         heat = heatValue;
@@ -347,6 +358,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return;
         }
         syncTankCapacity();
+        if (worldObj.getTotalWorldTime() % 20 == 0) {                  // the inflow over the last second
+            inflowTenths = inflowWindow / 2;
+            inflowWindow = 0;
+        }
         if (!switchedOn()) {
             status = powerOn ? GeneratorStatus.REDSTONE : GeneratorStatus.DISABLED;
             lastOutput = 0;
@@ -991,7 +1006,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return 0;
         }
         if (fitsTank1(resource.getFluid())) {
-            return fuelTank.fill(resource, doFill);
+            int n = fuelTank.fill(resource, doFill);
+            if (doFill) {
+                inflowWindow += n;
+            }
+            return n;
         }
         if (fitsTank2(resource.getFluid())) {
             return fuelTank2.fill(resource, doFill);
