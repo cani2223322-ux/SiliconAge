@@ -62,7 +62,8 @@ public class ContainerMachineSC extends Container {
                 && type != com.sc.machine.MachineType.WIRE_SAW && type != com.sc.machine.MachineType.OXIDATION_FURNACE
                 && type != com.sc.machine.MachineType.PHOTORESIST_COATER
                 && type != com.sc.machine.MachineType.STEPPER && type != com.sc.machine.MachineType.STEPPER_EV
-                && type != com.sc.machine.MachineType.ION_IMPLANTER && type != com.sc.machine.MachineType.SPUTTERER;
+                && type != com.sc.machine.MachineType.ION_IMPLANTER && type != com.sc.machine.MachineType.SPUTTERER
+                && type != com.sc.machine.MachineType.DICING_SAW;
     }
 
     /** Where slot i of a row sits: 18 apart beside tanks, 22 apart otherwise. */

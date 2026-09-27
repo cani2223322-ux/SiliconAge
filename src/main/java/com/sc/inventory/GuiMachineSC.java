@@ -63,6 +63,8 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean blast;
     /** The Wire Saw's own screen: the saw, the wafers lighting up with the progress, the wire's wear, its water. */
     private final boolean saw;
+    /** The Dicing Saw: the Wire Saw's screen, the wafer cut into dies from above, a diamond blade's wear. */
+    private final boolean dice;
     /** The Oxidation Furnace's own screen: its two modes as badges, the tube furnace, the wafers taking colour, its oxygen. */
     private final boolean oxid;
     /** The Photoresist Coater's own screen: the spin coater from above, its four stages, the film's cover, its resist. */
@@ -113,7 +115,8 @@ public class GuiMachineSC extends GuiContainer {
         puller = machine.getMachineType() == com.sc.machine.MachineType.CZOCHRALSKI_PULLER
                 || machine.getMachineType() == com.sc.machine.MachineType.CZOCHRALSKI_PULLER_EV;
         blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE || puller;
-        saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW;
+        dice = machine.getMachineType() == com.sc.machine.MachineType.DICING_SAW;
+        saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW || dice;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
         step = machine.getMachineType() == com.sc.machine.MachineType.STEPPER
@@ -382,14 +385,18 @@ public class GuiMachineSC extends GuiContainer {
         } else if (saw) {                                               // the saw, the wafers, the wire's wear
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
-            GuiSceneSC.wireSaw(x + SAW_X, y + SAW_Y, SAW_W, SAW_H, t, running, progress);
+            if (dice) {
+                GuiSceneSC.dicingSaw(x + SAW_X, y + SAW_Y, SAW_W, SAW_H, t, running, progress);
+            } else {
+                GuiSceneSC.wireSaw(x + SAW_X, y + SAW_Y, SAW_W, SAW_H, t, running, progress);
+            }
             int n = Math.min(8, wafersPerRun()), lit = running ? (int) (progress * n) : 0;
             for (int i = 0; i < n; i++) {
                 int wx = x + SAW_X + i * 10, wy = y + WAFER_Y;
                 drawRect(wx, wy, wx + 8, wy + 8, i < lit ? 0xFF7A8AA8 : 0xFF3A4450);
-                drawRect(wx + 1, wy + 1, wx + 7, wy + 7, i < lit ? 0xFF9AB0D0 : 0xFF12181E);
+                drawRect(wx + 1, wy + 1, wx + 7, wy + 7, i < lit ? (dice ? 0xFFD8844A : 0xFF9AB0D0) : 0xFF12181E);
                 if (i < lit) {
-                    drawRect(wx + 2, wy + 2, wx + 4, wy + 4, 0xFFE0ECFF);
+                    drawRect(wx + 2, wy + 2, wx + 4, wy + 4, dice ? 0xFFFFD8A0 : 0xFFE0ECFF);
                 }
             }
             net.minecraft.item.ItemStack wire = wire();
@@ -730,7 +737,7 @@ public class GuiMachineSC extends GuiContainer {
 
     /** The Wire Saw: caption, its tank's label, wafers done / a run and defects, the wire's uses left. */
     private void drawSawText(int rx) {
-        fit(Lang.tr("sc.gui.holo.sawing"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
+        fit(Lang.tr(dice ? "sc.gui.holo.dicing" : "sc.gui.holo.sawing"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
         FluidTank tank = machine.getTank(0);
         String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
         TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
@@ -739,12 +746,12 @@ public class GuiMachineSC extends GuiContainer {
         com.sc.machine.MachineRecipe r = shownRecipe();
         String defect = Lang.tr("sc.gui.saw.defect", r == null ? 0 : Math.round(r.defectChance * 100));
         int dw = fontRendererObj.getStringWidth(defect) * 5 / 8;
-        fit(Lang.tr("sc.gui.saw.wafers", done, n), SAW_X, WAFER_Y + 11, WATER_X - SAW_X - dw - 8, GuiHoloSC.VALUE);
+        fit(Lang.tr(sk("wafers"), done, n), SAW_X, WAFER_Y + 11, WATER_X - SAW_X - dw - 8, GuiHoloSC.VALUE);
         small(defect, WATER_X - 4 - dw, WAFER_Y + 13, 0x6AA8C8);
-        small(Lang.tr("sc.gui.saw.wire"), SAW_X, WEAR_Y, 0x6AA8C8);
+        small(Lang.tr(sk("wire")), SAW_X, WEAR_Y, 0x6AA8C8);
         net.minecraft.item.ItemStack wire = wire();
-        small(wire == null ? Lang.tr("sc.gui.saw.nowire")
-                : Lang.tr("sc.gui.saw.left", wire.getMaxDamage() - wire.getItemDamage(), wire.getMaxDamage()),
+        small(wire == null ? Lang.tr(sk("nowire"))
+                : Lang.tr(sk("left"), wire.getMaxDamage() - wire.getItemDamage(), wire.getMaxDamage()),
                 SAW_X, WEAR_Y + 7, wire == null ? 0xE65A5A : 0x6AA8C8);
     }
 
@@ -807,6 +814,11 @@ public class GuiMachineSC extends GuiContainer {
     private boolean oxidising() {
         com.sc.machine.MachineRecipe r = shownRecipe();
         return r == null || r.fluidInputA != null;
+    }
+
+    /** The Wire Saw's key, or the Dicing Saw's own wording of it. */
+    private String sk(String key) {
+        return (dice ? "sc.gui.dice." : "sc.gui.saw.") + key;
     }
 
     /** The Wire Saw's diamond wire (a tool in an input slot), or null. */
@@ -1220,7 +1232,7 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (saw && GuiGaugeSC.isOver(SAW_X, SAW_Y, SAW_W, SAW_H + 20, mouseX, mouseY)) {
             com.sc.machine.MachineRecipe r = shownRecipe();
-            lines.add(Lang.tr("sc.gui.saw.title"));
+            lines.add(Lang.tr(sk("title")));
             if (r != null) {
                 if (r.fluidInputA != null) {
                     lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
@@ -1231,9 +1243,9 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (saw && GuiGaugeSC.isOver(SAW_X, WEAR_Y - 2, WATER_X - SAW_X - 4, 14, mouseX, mouseY)) {
             net.minecraft.item.ItemStack wire = wire();
-            lines.add(Lang.tr("sc.gui.saw.wire.title"));
-            lines.add(wire == null ? Lang.tr("sc.gui.saw.nowire")
-                    : Lang.tr("sc.gui.saw.left", wire.getMaxDamage() - wire.getItemDamage(), wire.getMaxDamage()));
+            lines.add(Lang.tr(sk("wire.title")));
+            lines.add(wire == null ? Lang.tr(sk("nowire"))
+                    : Lang.tr(sk("left"), wire.getMaxDamage() - wire.getItemDamage(), wire.getMaxDamage()));
             return lines;
         }
         if (puller && GuiGaugeSC.isOver(FURNACE_X, FURNACE_Y, FURNACE_W, FURNACE_H, mouseX, mouseY)) {

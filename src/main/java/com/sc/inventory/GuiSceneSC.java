@@ -502,6 +502,49 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The dicing saw from above: the metallized wafer on its tape frame, the diamond blade (turning)
+     * running along the cut lines - four across, then four down - the lines done staying cut, water
+     * spraying where it cuts.
+     */
+    public static void dicingSaw(int x, int y, int w, int h, float t, boolean running, float progress) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int cx = x + w / 2 - 8, cy = y + h / 2, r = Math.min(18, h / 2 - 3);
+        disc(cx, cy, r + 3, 0xFF3A4048);                                       // the tape frame
+        disc(cx, cy, r + 2, 0xFF12181E);
+        disc(cx, cy, r, 0xFF8A94A8);                                           // the wafer
+        disc(cx, cy, r - 1, 0xFFD8844A);
+        int[] lines = {-9, -3, 3, 9};
+        int done = running ? (int) (8 * progress) : 0;
+        for (int i = 0; i < 4; i++) {
+            int half = (int) Math.sqrt(Math.max(0, (r - 1) * (r - 1) - lines[i] * lines[i]));
+            if (i < done) {
+                rect(cx + lines[i], cy - half, 1, 2 * half, 0xFF0A1218);
+            }
+            if (i + 4 < done) {
+                rect(cx - half, cy + lines[i], 2 * half, 1, 0xFF0A1218);
+            }
+        }
+        int bx = done < 4 ? cx + lines[Math.min(done, 3)] : cx + 22, by = y + 6;
+        disc(bx, by, 5, 0xFF6A707A);                                           // the blade
+        disc(bx, by, 4, 0xFFB8C4D8);
+        disc(bx, by, 1, 0xFF3A4048);
+        float a = running ? t * 0.8F : 0F;
+        for (int k = 0; k < 4; k++) {
+            double ang = a + k * Math.PI / 2;
+            for (int d = 2; d < 4; d++) {
+                rect(bx + (int) (d * Math.cos(ang)), by + (int) (d * Math.sin(ang)), 1, 1, 0xFF8A94A8);
+            }
+        }
+        if (running) {
+            rect(bx, by + 5, 1, cy - by - 5, 0xFF6AB4F0);                      // the water on the cut
+            for (int k = 0; k < 4; k++) {
+                rect(bx - 3 + k * 2, by + 6 + (int) ((t * 1.3F + k * 5) % 10), 1, 1, 0xFF9AD8FF);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
