@@ -839,11 +839,11 @@ public class GuiMachineSC extends GuiContainer {
         for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
             used += machine.getStackInSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
         }
-        int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
-        fit(Lang.tr("sc.gui.big.upgrades.effect", String.format(java.util.Locale.ROOT, "%.2f", speed),
-                String.format(java.util.Locale.ROOT, "%.2f", energy)), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
+        int tr = GuiBigSC.UPG_TEXT_W;
+        fit(Lang.tr("sc.gui.big.upgrades.effect", String.format(java.util.Locale.ROOT, "%.1f", speed),
+                String.format(java.util.Locale.ROOT, "%.1f", energy)), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
         String second = blast || step || ion ? Lang.tr("sc.gui.blast.sinks", machine.upgradeCount(UpgradeType.HEAT_SINK),
-                String.format(java.util.Locale.ROOT, "%.2f", 1.0 / (machine.upgradeCount(UpgradeType.HEAT_SINK) + 1)))
+                String.format(java.util.Locale.ROOT, "%.1f", 1.0 / (machine.upgradeCount(UpgradeType.HEAT_SINK) + 1)))
                 : Lang.tr("sc.gui.big.upgrades.count", used, TileEntityMachineSC.UPGRADE_SLOTS);
         fit(second, GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y + 9, tr, 0x808894);
     }

@@ -208,7 +208,7 @@ def audit(lang):
     check(lang, "field upgrades count", t("sc.fieldgui.upgrades.count", 16, 16, 160000), 232)
     check(lang, "field input", t("sc.fieldgui.upgrades.input", "XV", 32768), 232)
     # ---- the large screens (GuiBigSC): upgrade row, tank labels, generator and storage readings
-    check(lang, "big upgrades effect", t("sc.gui.big.upgrades.effect", "10.54", "12.34"), 248 - 8 - 124)
+    check(lang, "big upgrades effect", t("sc.gui.big.upgrades.effect", "4.2", "16.0"), 214 - 4 - 124)
     check(lang, "big upgrades count", t("sc.gui.big.upgrades.count", 4, 4), 248 - 8 - 124)
     check(lang, "big upgrades label", t("sc.gui.big.upgrades"), 49 - 1 - 8 - 2)
     for k in ("in", "out"):

@@ -434,7 +434,7 @@ public class GuiGeneratorSC extends GuiContainer {
             for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
                 used += generator.getStackInSlot(TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
             }
-            int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
+            int tr = GuiBigSC.UPG_TEXT_W;
             fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
         }
     }

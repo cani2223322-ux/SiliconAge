@@ -22,6 +22,8 @@ public final class GuiBigSC {
     public static final int SCREEN_RIGHT = SCREEN_X + SCREEN_W - 3;
     /** Upgrade slots: a row inside the window (item coordinates of the first), the label left of it. */
     public static final int UPG_X = 49, UPG_Y = 121, UPG_LABEL_X = 8, UPG_TEXT_X = 124;
+    /** The text beside the upgrade row ends before the gauge column (the battery slot sits there). */
+    public static final int UPG_TEXT_W = GAUGE_X - 4 - UPG_TEXT_X;
     /** The player's inventory, centred (item coordinates). */
     public static final int INV_X = 44, INV_Y = 155, HOTBAR_Y = 213;
     private static final int SEPARATOR_Y = 141;

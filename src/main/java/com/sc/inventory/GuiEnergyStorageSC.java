@@ -141,7 +141,7 @@ public class GuiEnergyStorageSC extends GuiContainer {
             used += storage.getStackInSlot(TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
         }
         fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityEnergyStorageSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y,
-                GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X, 0x505864);
+                GuiBigSC.UPG_TEXT_W, 0x505864);
         fit(Lang.tr("sc.gui.holo.storage"), 14, 24, 80, GuiHoloSC.CYAN & 0xFFFFFF);
         small(Lang.tr("sc.storage.gui.lbl.discharge"), ContainerEnergyStorageSC.DIS_X - 1, ContainerEnergyStorageSC.DIS_Y - 6, 22, GuiHoloSC.LABEL);
         // the battery's percent
