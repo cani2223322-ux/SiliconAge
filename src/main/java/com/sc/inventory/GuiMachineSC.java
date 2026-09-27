@@ -39,7 +39,9 @@ public class GuiMachineSC extends GuiContainer {
     public static final int IN_Y = 30, OUT_Y = 88;
     /** The progress bar (NEI: a click on it opens this machine's recipes), the status, the heat bar. */
     public static final int PROGRESS_X = 14, PROGRESS_Y = 58, PROGRESS_W = 60, PROGRESS_H = 6;
-    private static final int STATUS_Y = 66, PERCENT_Y = 75, HEAT_Y = 83, HEAT_H = 3;
+    private static final int STATUS_Y = 66, HEAT_Y = 83, HEAT_H = 3;
+    /** Without tanks: the picture window (a scene, or the pictogram) and two columns of numbers under it. */
+    private static final int SCENE_Y = 38, SCENE_H = 40, STATS_Y = 82;
     /** The right-hand block starts here; tanks 31 x 70 each, 33 apart. */
     private static final int RIGHT_TANKS = 76, RIGHT_PLAIN = 88, CAPTION_Y = 25, TANK_Y = 42, TANK_LABEL_Y = 32, TANK_GAP = 33;
 
@@ -77,6 +79,32 @@ public class GuiMachineSC extends GuiContainer {
 
     private int rightX() {
         return withTanks ? RIGHT_TANKS : RIGHT_PLAIN;
+    }
+
+    /** The best byproduct chance of the recipe the inputs make right now ("-" without one). */
+    private String bonusChance() {
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+        }
+        com.sc.machine.MachineRecipe r = RecipeRegistry.findMatch(machine.getMachineType(), in, machine.getTank(0).getFluid(),
+                machine.getTank(1).getFluid());
+        float best = 0F;
+        if (r != null) {
+            for (float c : r.byproductChances) {
+                best = Math.max(best, c);
+            }
+        }
+        return best > 0F ? Math.round(best * 100) + "%" : "-";
+    }
+
+    /** Small caption text (5/8 size), foreground coordinates. */
+    private void small(String text, int x, int y, int color) {
+        GL11.glPushMatrix();
+        GL11.glTranslatef(x, y, 0F);
+        GL11.glScalef(0.625F, 0.625F, 1F);
+        fontRendererObj.drawString(text, 0, 0, color);
+        GL11.glPopMatrix();
     }
 
     /** Beside the tanks the pictogram shrinks to its own size, top right - if the tanks leave it room. */
@@ -124,14 +152,21 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (shownCount == 0) {                                          // the pictogram, double size, in a frame
-            drawRect(x + rx, y + 38, x + rx + 36, y + 74, 0xFF1E3444);
-            drawRect(x + rx + 1, y + 39, x + rx + 35, y + 73, 0xFF0A1218);
-            GL11.glPushMatrix();
-            GL11.glTranslatef(x + rx + 2, y + 40, 0F);
-            GL11.glScalef(2F, 2F, 1F);
-            drawProcessDisplay(0, 0);
-            GL11.glPopMatrix();
+        if (shownCount == 0) {                                          // the picture window
+            int wx = x + rx + 2, ww = GuiBigSC.SCREEN_RIGHT - rx - 2;
+            boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+            if (machine.getMachineType() == com.sc.machine.MachineType.CRUSHER) {
+                float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+                GuiSceneSC.crusher(wx, y + SCENE_Y, ww, SCENE_H, t, running, progress);
+            } else {                                                     // the pictogram, double size, centred
+                GuiSceneSC.frame(wx, y + SCENE_Y, ww, SCENE_H);
+                GuiGaugeSC.bind(mc, TEXTURE);
+                GL11.glPushMatrix();
+                GL11.glTranslatef(wx + ww / 2 - 16, y + SCENE_Y + SCENE_H / 2 - 16, 0F);
+                GL11.glScalef(2F, 2F, 1F);
+                drawProcessDisplay(0, 0);
+                GL11.glPopMatrix();
+            }
         } else if (smallIconFits()) {
             drawProcessDisplay(x + GuiBigSC.SCREEN_RIGHT - 17, y + 23);
         }
@@ -157,7 +192,14 @@ public class GuiMachineSC extends GuiContainer {
         GuiBigSC.labels(fontRendererObj, Lang.tr("sc.gui.big.upgrades"), Lang.tr("container.inventory"));
         MachineStatus status = machine.getStatus();
         int ticks = machine.getCurrentRecipeTicks();
-        fit(status.localized(), PROGRESS_X, STATUS_Y, barW(), statusColor(status));
+        String pctNow = ticks > 0 ? machine.getProgressTicks() * 100 / ticks + "%" : "";
+        int pw = pctNow.isEmpty() ? 0 : fontRendererObj.getStringWidth(pctNow) + 3;
+        fit(status.localized(), PROGRESS_X, STATUS_Y, barW() - pw, statusColor(status));
+        if (pw > 0) {
+            fontRendererObj.drawString(pctNow, PROGRESS_X + barW() - pw + 3, STATUS_Y, GuiHoloSC.VALUE);
+        }
+        small(Lang.tr("sc.gui.holo.in"), slotX(withTanks, 0), IN_Y + 18, 0x4A96BE);
+        small(Lang.tr("sc.gui.holo.out"), slotX(withTanks, 0), OUT_Y + 19, 0x4A96BE);
         int rx = rightX();
         int captionRoom = (shownCount > 0 && smallIconFits() ? GuiBigSC.SCREEN_RIGHT - 19 : GuiBigSC.SCREEN_RIGHT) - rx;
         fit(Lang.tr("sc.gui.holo.process." + processKind(machine.getMachineType())), rx, CAPTION_Y, captionRoom, GuiHoloSC.CYAN & 0xFFFFFF);
@@ -170,9 +212,27 @@ public class GuiMachineSC extends GuiContainer {
         int nx = shownCount == 0 ? rx + 40 : rx + shownCount * TANK_GAP + 2;
         int room = GuiBigSC.SCREEN_RIGHT - nx;
         String done = Lang.tr("sc.gui.holo.progress", ticks > 0 ? machine.getProgressTicks() * 100 / ticks + "%" : "-");
-        if (room < 40) {                                               // no room on the right: the progress under the status
-            fit(done, PROGRESS_X, PERCENT_Y, barW(), GuiHoloSC.VALUE);
-        } else {
+        int oc = machine.upgradeCount(UpgradeType.OVERCLOCKER), q = machine.upgradeCount(UpgradeType.QUALITY);
+        double speed = 1 / Math.pow(0.7, oc), energy = Math.pow(1.6, oc) * Math.pow(1.25, q);
+        int used = 0;
+        for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
+            used += machine.getStackInSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
+        }
+        if (shownCount == 0) {                                          // two columns under the picture
+            String[][] cols = {
+                    {Lang.tr("sc.gui.big.col.done"), ticks > 0 ? machine.getProgressTicks() * 100 / ticks + "%" : "-"},
+                    {Lang.tr("sc.gui.big.col.energy"), machine.effectiveEuPerTick() + " EU/t"},
+                    {Lang.tr("sc.gui.big.col.input"), machine.inputTier().name() + " (" + machine.inputTier().getVoltage() + ")"},
+                    {Lang.tr("sc.gui.big.col.upgrades"), Lang.tr("sc.gui.big.of", used, TileEntityMachineSC.UPGRADE_SLOTS)},
+                    {Lang.tr("sc.gui.big.col.speed"), "x" + String.format(java.util.Locale.ROOT, "%.2f", speed)},
+                    {Lang.tr("sc.gui.big.col.bonus"), bonusChance()}};
+            int cx = rx + 2, half = (GuiBigSC.SCREEN_RIGHT - cx) / 2;
+            for (int i = 0; i < cols.length; i++) {
+                int colX = cx + (i / 3) * half, rowY = STATS_Y + (i % 3) * 10;
+                fit(cols[i][0], colX, rowY, 27, GuiHoloSC.LABEL);
+                fit(cols[i][1], colX + 29, rowY, half - 31, GuiHoloSC.VALUE);
+            }
+        } else if (room >= 40) {
             List<String> rows = new ArrayList<String>();
             rows.add(done);
             rows.add(Lang.tr("sc.gui.holo.energy", machine.effectiveEuPerTick()));
@@ -186,12 +246,6 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
         // what the upgrades do
-        int oc = machine.upgradeCount(UpgradeType.OVERCLOCKER), q = machine.upgradeCount(UpgradeType.QUALITY);
-        double speed = 1 / Math.pow(0.7, oc), energy = Math.pow(1.6, oc) * Math.pow(1.25, q);
-        int used = 0;
-        for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
-            used += machine.getStackInSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
-        }
         int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
         fit(Lang.tr("sc.gui.big.upgrades.effect", String.format(java.util.Locale.ROOT, "%.2f", speed),
                 String.format(java.util.Locale.ROOT, "%.2f", energy)), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
