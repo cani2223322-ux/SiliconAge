@@ -54,6 +54,9 @@ public class GuiMachineSC extends GuiContainer {
     /** Which of the four tanks any recipe of this machine type ever uses - fixed per type. */
     private final boolean[] tankUsed = new boolean[ContainerMachineSC.TANK_COUNT];
     private final boolean withTanks;
+    /** The Ore Washer's own screen: its washing tub shows the water tank, the full tank gauge beside it. */
+    private final boolean washer;
+    private static final int TUB_X = 90, TUB_Y = 36, TUB_W = 82, TUB_H = 50, WATER_X = 175, WATER_Y = 40;
     /** Tanks shown this frame (used by the type or holding fluid), left to right. */
     private final int[] shownTanks = new int[ContainerMachineSC.TANK_COUNT];
     private int shownCount;
@@ -64,7 +67,8 @@ public class GuiMachineSC extends GuiContainer {
         for (int i = 0; i < tankUsed.length; i++) {
             tankUsed[i] = RecipeRegistry.usesTank(machine.getMachineType(), i);
         }
-        withTanks = ContainerMachineSC.usesTanks(machine.getMachineType());
+        withTanks = ContainerMachineSC.tightSlots(machine.getMachineType());
+        washer = machine.getMachineType() == com.sc.machine.MachineType.ORE_WASHER;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -118,6 +122,9 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
+        if (washer) {
+            return;                                                     // its tank has a screen of its own
+        }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
             if (tankUsed[i] || machine.getTank(i).getFluidAmount() > 0) {
                 shownTanks[shownCount++] = i;
@@ -152,7 +159,12 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (shownCount == 0) {                                          // the picture window
+        if (washer) {                                                   // the washing tub: its water is the tank
+            FluidTank water = machine.getTank(0);
+            float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
+        } else if (shownCount == 0) {                                   // the picture window
             int wx = x + rx + 2, ww = GuiBigSC.SCREEN_RIGHT - rx - 2;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
             if (machine.getMachineType() == com.sc.machine.MachineType.CRUSHER) {
@@ -175,6 +187,10 @@ public class GuiMachineSC extends GuiContainer {
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
+        if (washer) {
+            FluidTank water = machine.getTank(0);
+            GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
+        }
         for (int k = 0; k < shownCount; k++) {
             FluidTank tank = machine.getTank(shownTanks[k]);
             GuiTankGaugeSC.draw(mc, x + rx + k * TANK_GAP, y + TANK_Y, tank.getFluid(), tank.getCapacity(), null, false);
@@ -201,6 +217,11 @@ public class GuiMachineSC extends GuiContainer {
         small(Lang.tr("sc.gui.holo.in"), slotX(withTanks, 0), IN_Y + 18, 0x4A96BE);
         small(Lang.tr("sc.gui.holo.out"), slotX(withTanks, 0), OUT_Y + 19, 0x4A96BE);
         int rx = rightX();
+        if (washer) {
+            drawWasherText(rx, ticks);
+            drawUpgradeLine();
+            return;
+        }
         int captionRoom = (shownCount > 0 && smallIconFits() ? GuiBigSC.SCREEN_RIGHT - 19 : GuiBigSC.SCREEN_RIGHT) - rx;
         fit(Lang.tr("sc.gui.holo.process." + processKind(machine.getMachineType())), rx, CAPTION_Y, captionRoom, GuiHoloSC.CYAN & 0xFFFFFF);
         for (int k = 0; k < shownCount; k++) {
@@ -245,12 +266,57 @@ public class GuiMachineSC extends GuiContainer {
                 fit(rows.get(i), nx, y0 + i * 11, room, i == 0 ? GuiHoloSC.VALUE : GuiHoloSC.LABEL);
             }
         }
-        // what the upgrades do
+        drawUpgradeLine();
+    }
+
+    /** What the upgrades do, beside their row. */
+    private void drawUpgradeLine() {
+        int oc = machine.upgradeCount(UpgradeType.OVERCLOCKER), q = machine.upgradeCount(UpgradeType.QUALITY);
+        double speed = 1 / Math.pow(0.7, oc), energy = Math.pow(1.6, oc) * Math.pow(1.25, q);
+        int used = 0;
+        for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
+            used += machine.getStackInSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
+        }
         int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
         fit(Lang.tr("sc.gui.big.upgrades.effect", String.format(java.util.Locale.ROOT, "%.2f", speed),
                 String.format(java.util.Locale.ROOT, "%.2f", energy)), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
         fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityMachineSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y + 9, tr,
                 0x808894);
+    }
+
+    /** The Ore Washer: caption, the water level on the tub, its tank's label, and done / water a wash / washes left. */
+    private void drawWasherText(int rx, int ticks) {
+        fit(Lang.tr("sc.gui.holo.washing"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
+        FluidTank water = machine.getTank(0);
+        int pct = water.getCapacity() > 0 ? water.getFluidAmount() * 100 / water.getCapacity() : 0;
+        String p = pct + "%";
+        fontRendererObj.drawStringWithShadow(p, TUB_X + TUB_W / 2 - fontRendererObj.getStringWidth(p) / 2, TUB_Y + 20, 0xFFFFFF);
+        TextFitSC.drawCentered(fontRendererObj, Lang.tr("sc.gui.holo.gen.tank.water"), WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7,
+                GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        int perWash = waterPerWash();
+        String[][] rows = {
+                {Lang.tr("sc.gui.big.col.done"), ticks > 0 ? machine.getProgressTicks() * 100 / ticks + "%" : "-"},
+                {Lang.tr("sc.gui.washer.per"), perWash > 0 ? Lang.tr("sc.gui.washer.mb", perWash) : "-"},
+                {Lang.tr("sc.gui.washer.left"), perWash > 0 ? Lang.tr("sc.gui.washer.washes", water.getFluidAmount() / perWash) : "-"}};
+        for (int i = 0; i < rows.length; i++) {
+            int ry = TUB_Y + TUB_H + 3 + i * 8;
+            fit(rows[i][0], TUB_X, ry, 29, GuiHoloSC.LABEL);
+            fit(rows[i][1], TUB_X + 31, ry, WATER_X - TUB_X - 35, GuiHoloSC.VALUE);
+        }
+    }
+
+    /** Water one wash takes: the recipe the inputs make now, or the washer's first recipe. */
+    private int waterPerWash() {
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+        }
+        com.sc.machine.MachineRecipe r = RecipeRegistry.findMatch(machine.getMachineType(), in, machine.getTank(0).getFluid(),
+                machine.getTank(1).getFluid());
+        if (r == null && !RecipeRegistry.recipesFor(machine.getMachineType()).isEmpty()) {
+            r = RecipeRegistry.recipesFor(machine.getMachineType()).get(0);
+        }
+        return r != null && r.fluidInputA != null ? r.fluidInputA.amount : 0;
     }
 
     /**
@@ -360,6 +426,14 @@ public class GuiMachineSC extends GuiContainer {
             return lines;
         }
 
+        if (washer && (GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY)
+                || GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY))) {
+            FluidTank tank = machine.getTank(0);
+            lines.add(Lang.tr("sc.gui.tank.input", 1));
+            lines.add(GuiGaugeSC.fluidLabel(tank.getFluid(), tank.getCapacity()));
+            lines.add(GuiTankGaugeSC.percentLine(tank.getFluid(), tank.getCapacity()));
+            return lines;
+        }
         for (int k = 0; k < shownCount; k++) {
             int i = shownTanks[k];
             if (GuiGaugeSC.isOver(rightX() + k * TANK_GAP, TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {

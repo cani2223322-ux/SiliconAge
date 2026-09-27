@@ -223,6 +223,12 @@ def audit(lang):
     check(lang, "big gen now", t("sc.gui.gen.now", 32768), 88)
     check(lang, "big storage", t("sc.storage.gui.stored", "2000000000"), 206 - 42)
     check(lang, "big storage", t("sc.storage.gui.capacity", "2000000000", 100), 206 - 42)
+    # ---- the Ore Washer's own screen
+    check(lang, "washer caption", t("sc.gui.holo.washing"), 175 - 88 - 4)
+    for k in ("per", "left"):
+        check(lang, "washer label", t("sc.gui.washer." + k), 29)
+    check(lang, "washer value", t("sc.gui.washer.mb", 1000), 175 - 90 - 35)
+    check(lang, "washer value", t("sc.gui.washer.washes", 4), 175 - 90 - 35)
     # ---- the machines' holo screen: its number rows (no tanks: 71 px)
     check(lang, "machine holo row", t("sc.gui.holo.progress", "100%"), 71)
     check(lang, "machine holo row", t("sc.gui.holo.energy", 1900), 71)

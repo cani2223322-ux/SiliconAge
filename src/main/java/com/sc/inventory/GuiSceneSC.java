@@ -9,6 +9,8 @@ import net.minecraft.client.gui.Gui;
  * The Crusher: a hopper grid on top, two toothed jaws that close and open while it works, an ore
  * lump dropping between them, chips falling and a tray below filling with dust as the recipe
  * goes on. Still (and without chips) while the machine waits.
+ * The Ore Washer: a steel tub whose water level is the machine's water tank, nozzles spraying,
+ * ore bobbing on the water, bubbles rising, silt on the bottom, level marks on the side.
  */
 @SideOnly(Side.CLIENT)
 public final class GuiSceneSC {
@@ -58,6 +60,58 @@ public final class GuiSceneSC {
         int dust = Math.max(1, Math.round(3 * Math.max(0F, Math.min(1F, progress))));
         rect(tx0, y + h - 3 - dust, trayW, dust, 0xFF9A8A7A);
         rect(tx0, y + h - 3 - dust, trayW, 1, 0xFFB8A898);
+    }
+
+    /** @param level the water tank's fill, 0..1 - the tub's water line */
+    public static void washer(int x, int y, int w, int h, float t, boolean running, float level) {
+        frame(x, y, w, h);
+        int tx0 = x + 6, tx1 = x + w - 6, ty0 = y + 12, ty1 = y + h - 4;
+        rect(tx0 - 2, ty0, 2, ty1 - ty0 + 2, 0xFF8A909A);                   // the tub
+        rect(tx1, ty0, 2, ty1 - ty0 + 2, 0xFF6A707A);
+        rect(tx0 - 2, ty1, tx1 - tx0 + 4, 2, 0xFF5A606A);
+        level = Math.max(0F, Math.min(1F, level));
+        int wl = ty1 - Math.round((ty1 - ty0) * level);
+        if (wl < ty1) {                                                     // water, gently rippling rows
+            for (int yy = wl; yy < ty1; yy++) {
+                int shade = ((yy - wl) + (int) (t * 0.3F)) % 5 == 0 ? 0xFF3C78E6 : (yy - wl) > (ty1 - wl) / 2 ? 0xFF2452B8 : 0xFF2E64D0;
+                rect(tx0, yy, tx1 - tx0, 1, shade);
+            }
+            rect(tx0, wl, tx1 - tx0, 1, 0xFFA8D8FF);
+        }
+        rect(tx0, ty1 - 2, tx1 - tx0, 2, 0xFF4A3A2A);                       // silt
+        for (int k = 0; k < 3; k++) {                                       // nozzles and drops
+            int nx = tx0 + 6 + k * (tx1 - tx0 - 12) / 2;
+            rect(nx - 2, y + 3, 5, 3, 0xFF8A909A);
+            rect(nx - 1, y + 6, 3, 1, 0xFF6A707A);
+            if (running) {
+                for (int d = 0; d < 3; d++) {
+                    int dy = y + 8 + (int) ((t * 1.3F + d * 4 + k * 2) % 10);
+                    if (dy < wl) {
+                        rect(nx, dy, 1, 2, 0xFF7AB8FF);
+                    }
+                }
+            }
+        }
+        if (running && wl < ty1 - 3) {
+            float[][] lumps = {{0.3F, 0F}, {0.55F, 1.7F}, {0.75F, 3.1F}};
+            for (float[] lp : lumps) {                                      // ore bobbing on the water
+                int lx = tx0 + (int) ((tx1 - tx0) * lp[0]) - 3;
+                int ly = Math.max(ty0 + 2, wl - 2 + (int) Math.round(Math.sin(t * 0.3F + lp[1])));
+                rect(lx, ly, 7, 5, 0xFF7A6E62);
+                rect(lx + 1, ly + 1, 2, 2, 0xFFB07050);
+            }
+            for (int b = 0; b < 6; b++) {                                   // bubbles
+                int bx = tx0 + 4 + (b * 17) % Math.max(1, tx1 - tx0 - 8);
+                int by = ty1 - 3 - (int) ((t * 0.9F + b * 5) % Math.max(1, ty1 - wl - 3));
+                if (by > wl) {
+                    rect(bx, by, 1, 1, 0xFFE0F4FF);
+                }
+            }
+        }
+        for (int k = 0; k <= 4; k++) {                                      // level marks
+            int my = ty0 + Math.round((ty1 - ty0) * k / 4F);
+            rect(tx1 + 2, my, 2, 1, k % 2 == 0 ? 0xFFF0C450 : 0xFF3C4048);
+        }
     }
 
     private static void rect(int x, int y, int w, int h, int c) {

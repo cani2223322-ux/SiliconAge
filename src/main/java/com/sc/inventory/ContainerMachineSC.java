@@ -21,7 +21,7 @@ public class ContainerMachineSC extends Container {
     public ContainerMachineSC(InventoryPlayer playerInv, TileEntityMachineSC machine) {
         this.machine = machine;
 
-        boolean tanks = usesTanks(machine.getMachineType());
+        boolean tanks = tightSlots(machine.getMachineType());
         for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {
             addSlotToContainer(new SlotRecipeInput(machine, i, slotX(tanks, i), GuiMachineSC.IN_Y));
         }
@@ -50,6 +50,14 @@ public class ContainerMachineSC extends Container {
             }
         }
         return false;
+    }
+
+    /**
+     * The tighter slot layout: machines whose tanks stand as full gauges beside the slots. The Ore
+     * Washer has its own screen (its tub is its water tank) and keeps the roomy one.
+     */
+    public static boolean tightSlots(com.sc.machine.MachineType type) {
+        return usesTanks(type) && type != com.sc.machine.MachineType.ORE_WASHER;
     }
 
     /** Where slot i of a row sits: 18 apart beside tanks, 22 apart otherwise. */
