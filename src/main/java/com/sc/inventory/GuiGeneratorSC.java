@@ -1182,7 +1182,7 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(labels[i], cx + (24 - lw) / 2, 38, 22, GuiHoloSC.LABEL);
             fontRendererObj.drawString(vals[i], cx + (24 - fontRendererObj.getStringWidth(vals[i])) / 2, 46, GuiHoloSC.VALUE);
         }
-        fontRendererObj.drawString("×", 124, 42, GuiHoloSC.VALUE);
+        fontRendererObj.drawString("x", 124, 42, GuiHoloSC.VALUE);
         fontRendererObj.drawString("=", 156, 42, GuiHoloSC.VALUE);
         fit(Lang.tr("sc.gui.sol.now", generator.getLastOutput()), 98, 60, GuiBigSC.SCREEN_RIGHT - 100, GuiHoloSC.VALUE);
         smallFit(Lang.tr("sc.gui.holo.gen.out", generator.outputTier().name(), generator.outputTier().getVoltage()), 98, 70, 100, GuiHoloSC.LABEL);
@@ -1318,8 +1318,8 @@ public class GuiGeneratorSC extends GuiContainer {
             int vw = fontRendererObj.getStringWidth(vals[i]);
             fontRendererObj.drawString(vals[i], cx + (w - Math.min(w - 2, vw)) / 2, 46, GuiHoloSC.VALUE);
         }
-        fontRendererObj.drawString("×", 110, 42, GuiHoloSC.VALUE);
-        fontRendererObj.drawString("÷8", 146, 42, GuiHoloSC.VALUE);
+        fontRendererObj.drawString("x", 110, 42, GuiHoloSC.VALUE);
+        fontRendererObj.drawString("/8", 146, 42, GuiHoloSC.VALUE);
         int out = generator.getLastOutput();
         fit(out + " EU/t", 84, 60, 42, out > 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
         smallFit(Lang.tr("sc.gui.ww.of", type.euPerTick), 128, 62, 44, GuiHoloSC.LABEL);
@@ -1486,7 +1486,7 @@ public class GuiGeneratorSC extends GuiContainer {
                 smallFit(v, cx + 2, 47, w - 4, rotor ? GuiHoloSC.VALUE : 0x465A6E);
             }
             if (i < 2) {
-                fontRendererObj.drawString("×", cx + w + 2, 42, GuiHoloSC.VALUE);
+                fontRendererObj.drawString("x", cx + w + 2, 42, GuiHoloSC.VALUE);
             }
         }
         // the output and the rotor
@@ -1597,7 +1597,7 @@ public class GuiGeneratorSC extends GuiContainer {
             } else {                                                           // 4096, 16384: shrink to fit the chip
                 smallFit(values[i], cx + 2, 47, w - 4, sky ? cols[i] : 0x465A6E);
             }
-            fontRendererObj.drawString(i < 2 ? "×" : "=", cx + w + 2, 42, GuiHoloSC.VALUE);
+            fontRendererObj.drawString(i < 2 ? "x" : "=", cx + w + 2, 42, GuiHoloSC.VALUE);
         }
         int now = solarNow();
         GeneratorStatus status = generator.getStatus();
@@ -1628,7 +1628,7 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.sol.connect"), SOL_SKY_X, SOL_STRIP_Y + 21, SOL_STRIP_W, GuiHoloSC.WARN);
             return;
         }
-        smallFit(Lang.tr(day ? "sc.gui.sol.tosunset" : "sc.gui.sol.tosunrise", min) + " · "
+        smallFit(Lang.tr(day ? "sc.gui.sol.tosunset" : "sc.gui.sol.tosunrise", min) + " - "
                         + Lang.tr("sc.gui.holo.gen.out", generator.outputTier().name(), generator.outputTier().getVoltage()),
                 SOL_SKY_X, SOL_STRIP_Y + 21, SOL_STRIP_W, GuiHoloSC.LABEL);
     }

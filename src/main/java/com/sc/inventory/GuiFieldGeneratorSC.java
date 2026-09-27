@@ -223,7 +223,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             }
             if (id >= TAB_BASE) {
                 if (id >= REMOVE_BASE && id - REMOVE_BASE < field.getAccess().size()) {
-                    b.displayString = "§c×§r " + field.getAccess().get(id - REMOVE_BASE);
+                    b.displayString = "§cx§r " + field.getAccess().get(id - REMOVE_BASE);
                 }
                 continue;
             }

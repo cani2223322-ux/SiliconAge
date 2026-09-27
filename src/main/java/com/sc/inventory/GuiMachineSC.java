@@ -116,7 +116,7 @@ public class GuiMachineSC extends GuiContainer {
     private static final int[] SPUT_COLOURS = {0xFFD8844A, 0xFFC8D0DC, 0xFF8A8A9A};
     private static final int SPUT_WEAR_X = 116, SPUT_WEAR_Y = 99, SPUT_WEAR_W = 56;
     private static final int ION_BADGE_W = 26, ION_HEAT_Y = 100;
-    private static final String[] ION_BADGES = {"P · n", "B · p", "As · n"};
+    private static final String[] ION_BADGES = {"P - n", "B - p", "As - n"};
     private static final int STEP_W = 40, STEP_H = 44, MAP_X = 132, MAP_R = 17, MASK_Y = 82, STEP_HEAT_Y = 90;
     private static final int COAT_W = 48, COAT_H = 50, STAGE_X = 141, STAGE_W = 31, STAGE_Y = 38, STAGE_GAP = 12;
     private static final int OX_Y = 36, OX_H = 38, OX_WAFER_Y = 79, OX_BADGE_W = 40;
@@ -952,7 +952,7 @@ public class GuiMachineSC extends GuiContainer {
         }
         String line = heatLine();
         line = line.isEmpty() ? line : line.substring(0, 1).toLowerCase() + line.substring(1);
-        smallFit(Lang.tr("sc.gui.step.heat", machine.getHeat(), TileEntityMachineSC.getHeatCapacity()) + " · " + line,
+        smallFit(Lang.tr("sc.gui.step.heat", machine.getHeat(), TileEntityMachineSC.getHeatCapacity()) + " - " + line,
                 SAW_X, ION_HEAT_Y + 5, SAW_W, 0xFFAA5A);
     }
 
@@ -968,7 +968,7 @@ public class GuiMachineSC extends GuiContainer {
                 SAW_X, MASK_Y + 1, MAP_X - SAW_X - 3, mask == null ? 0xE65A5A : 0x6AA8C8);
         String line = heatLine();
         line = line.isEmpty() ? line : line.substring(0, 1).toLowerCase() + line.substring(1);
-        smallFit(Lang.tr("sc.gui.step.heat", machine.getHeat(), TileEntityMachineSC.getHeatCapacity()) + " · " + line,
+        smallFit(Lang.tr("sc.gui.step.heat", machine.getHeat(), TileEntityMachineSC.getHeatCapacity()) + " - " + line,
                 SAW_X, STEP_HEAT_Y + 7, SAW_W, 0xFFAA5A);
         int ticks = machine.getCurrentRecipeTicks(), dies = GuiSceneSC.dieCount(MAP_R);
         int done = ticks > 0 && machine.getStatus() == MachineStatus.PROCESSING ? machine.getProgressTicks() * dies / ticks : 0;
@@ -1280,7 +1280,7 @@ public class GuiMachineSC extends GuiContainer {
                 : o == com.sc.init.ModItems.component("ceramicPackage") ? 3 : o == com.sc.init.ModItems.component("wTiPlate") ? 4 : -1;
     }
 
-    /** The Kiln: the badges' names, the curve's stage names (the current one lit), "inputs -> product · time". */
+    /** The Kiln: the badges' names, the curve's stage names (the current one lit), "inputs -> product - time". */
     private void drawKilnText() {
         int k = kilnProduct();
         for (int i = 0; i < 5; i++) {
@@ -1308,11 +1308,11 @@ public class GuiMachineSC extends GuiContainer {
             StringBuilder b = new StringBuilder();
             for (net.minecraft.item.ItemStack s : r.inputs) {
                 if (s != null) {
-                    b.append(b.length() == 0 ? "" : " + ").append(s.stackSize > 1 ? s.stackSize + " × " : "").append(s.getDisplayName());
+                    b.append(b.length() == 0 ? "" : " + ").append(s.stackSize > 1 ? s.stackSize + " x " : "").append(s.getDisplayName());
                 }
             }
             net.minecraft.item.ItemStack o = r.outputs[0];
-            line = Lang.tr("sc.gui.kiln.row", b.toString(), (o.stackSize > 1 ? o.stackSize + " × " : "") + o.getDisplayName(),
+            line = Lang.tr("sc.gui.kiln.row", b.toString(), (o.stackSize > 1 ? o.stackSize + " x " : "") + o.getDisplayName(),
                     Math.max(1, machine.effectiveTicks(r) / 20));
         }
         smallFit(line, KILN_X + 2, KILN_CURVE_Y + KILN_CURVE_H + 8, w - 4, r == null ? 0x6AA8C8 : 0xE6F0FA);
@@ -1374,7 +1374,7 @@ public class GuiMachineSC extends GuiContainer {
             StringBuilder b = new StringBuilder();
             for (net.minecraft.item.ItemStack s : r.inputs) {
                 if (s != null) {
-                    b.append(b.length() == 0 ? "" : " + ").append(s.stackSize > 1 ? s.stackSize + " × " : "").append(s.getDisplayName());
+                    b.append(b.length() == 0 ? "" : " + ").append(s.stackSize > 1 ? s.stackSize + " x " : "").append(s.getDisplayName());
                 }
             }
             smallFit(b.toString(), ST_X + 2, y0, w, 0xE6F0FA);
