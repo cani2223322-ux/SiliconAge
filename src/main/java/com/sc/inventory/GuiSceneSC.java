@@ -1156,6 +1156,40 @@ public final class GuiSceneSC {
     }
 
     /**
+     * The Exo Reactor's singularity: a black core, an accretion disk swirling round it (going whiter
+     * as it heats, `heat` 0..1), jets up and down, stars round the edge; unlit, a faint violet ring.
+     */
+    public static void singularity(int x, int y, int w, int h, float t, boolean lit, float heat) {
+        frame(x, y, w, h);
+        rect(x + 1, y + 1, w - 2, h - 2, 0xFF04060A);
+        int cx = x + w / 2, cy = y + h / 2;
+        for (int i = 0; i < 12; i++) {
+            rect(x + 3 + (i * 23) % (w - 6), y + 3 + (i * 13) % (h - 6), 1, 1, 0xFF8A9AB0);
+        }
+        if (lit) {
+            float white = Math.max(0F, Math.min(1F, 0.3F + (1 - heat) * 0.5F));
+            for (int r = 13; r <= 19; r += 2) {
+                int base = mix(0xFFFF7A20, 0xFFB050FF, (r - 13) / 6F);
+                int col = mix(0xFFFFFFFF, base, white);
+                for (int k = 0; k < 180; k++) {
+                    double a = k * 2 * Math.PI / 180 + t * 0.06;
+                    if (Math.sin(a * 3 + r) > -0.3) {
+                        rect((int) (cx + r * Math.cos(a)), (int) (cy + r * 0.35 * Math.sin(a)), 1, 1, col);
+                    }
+                }
+            }
+            for (int i = 0; i < 5; i++) {                                       // the jets
+                int k = (int) ((t * 0.9F + i * 3) % 14);
+                rect(cx, cy - 6 - k, 1, 2, 0xFFB8F0FF);
+                rect(cx, cy + 5 + k, 1, 2, 0xFFB8F0FF);
+            }
+        } else {
+            disc(cx, cy, 7, 0xFF3A2A5A);
+        }
+        disc(cx, cy, 5, 0xFF000000);
+    }
+
+    /**
      * The Tokamak's ring from above: the reactor in the middle, its eight neighbours - a coil in place
      * gold, a missing one red with a cross. `mask` bit k: the k-th place (NW, N, NE, W, E, SW, S, SE).
      */

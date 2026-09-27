@@ -83,6 +83,10 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean rtg;
     /** The High-Pressure Plasma Reactor: two feeds into the pressure chamber, the plasma end-on, dials, the 4 : 1 bar. */
     private final boolean preact;
+    /** The Exo Reactor: stages, the singularity, four dials, the ignition charge bar, the helium tank. */
+    private final boolean exo;
+    private static final int EX_BAR_X = 14, EX_BAR_Y = 95, EX_BAR_W = 102;
+    private static final int[][] EX_DIALS = {{92, 56}, {132, 56}, {92, 78}, {132, 78}};
     private static final int PR_TANK_X = 142, PR_BAR_X = 40, PR_BAR_Y = 96, PR_BAR_W = 96;
     private static final int FC_X = 14, FC_Y = 39, FC_W = 90, FC_H = 38, FC_BAR_X = 40, FC_BAR_Y = 80, FC_BAR_W = 64;
     /** Display order of the sides (ForgeDirection ordinals): up, down, north, south, west, east. */
@@ -133,6 +137,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.fcell = type == GeneratorType.FUEL_CELL;
         this.rtg = type == GeneratorType.RTG;
         this.preact = type == GeneratorType.PLASMA_REACTOR;
+        this.exo = type == GeneratorType.EXO_REACTOR;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -209,6 +214,9 @@ public class GuiGeneratorSC extends GuiContainer {
         if (preact) {
             return PR_TANK_X + i * TANK_GAP;
         }
+        if (exo) {
+            return COMB_TANK_X;
+        }
         return comb || turb ? COMB_TANK_X : RIGHT_X + i * TANK_GAP;
     }
 
@@ -234,7 +242,7 @@ public class GuiGeneratorSC extends GuiContainer {
                 GuiHoloSC.slot(x + ContainerGeneratorSC.slotX(type, slot), y + ContainerGeneratorSC.slotY(type), false);
             }
         }
-        if (isReactor() && !fus) {
+        if (isReactor() && !fus && !exo) {
             float charge = generator.isIgnited() ? 1f : (float) generator.getIgnitionEU() / type.ignitionThreshold();
             GuiHoloSC.bar(x + LEFT_X, y + IGNITION_Y, LEFT_W, IGNITION_H, charge, 14, 0xFF6EE6FF);
             GuiHoloSC.bar(x + LEFT_X, y + HEAT_Y, LEFT_W, HEAT_H, (float) generator.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT,
@@ -260,6 +268,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawRtgBackground(x, y, partialTicks);
         } else if (preact) {
             drawPrBackground(x, y, partialTicks);
+        } else if (exo) {
+            drawExoBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -279,7 +289,7 @@ public class GuiGeneratorSC extends GuiContainer {
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawing a fluid leaves the blocks atlas bound
             FluidTank t = tank(i);
-            GuiTankGaugeSC.draw(mc, x + tankX(i), y + (comb || turb || preact ? 40 : TANK_Y), t.getFluid(), t.getCapacity(), null, false);
+            GuiTankGaugeSC.draw(mc, x + tankX(i), y + (comb || turb || preact || exo ? 40 : TANK_Y), t.getFluid(), t.getCapacity(), null, false);
         }
         GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         GuiGaugeSC.bind(mc, TEXTURE);
@@ -343,6 +353,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (preact) {
             drawPrText();
+            drawUpgradeCount();
+            return;
+        }
+        if (exo) {
+            drawExoText();
             drawUpgradeCount();
             return;
         }
@@ -918,6 +933,120 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.sf.fuels"), 14, 99, 158, GuiHoloSC.LABEL);
         }
         smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
+    }
+
+    // ---- the Exo Reactor ----
+
+    /** 0 charge, 1 ignition, 2 ramp-up, 3 running. */
+    private int exoStage() {
+        if (generator.isIgnited()) {
+            return generator.getRamp() < TileEntityGeneratorSC.RAMP_FULL && generator.getStatus() != GeneratorStatus.BUFFER_FULL ? 2 : 3;
+        }
+        return generator.getIgnitionEU() < type.ignitionThreshold() ? 0 : 1;
+    }
+
+    /** Seconds the helium in the tank lasts at 1 mB/t (with the upgrades). */
+    private double exoHeliumSecs() {
+        return generator.getFuelTank().getFluidAmount() / (type.fuelRatePerTick * Math.max(0.01, generator.fuelMultiplier())) / 20.0;
+    }
+
+    private void drawExoBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        int stage = exoStage();
+        for (int i = 0; i < 4; i++) {                                          // the stages
+            int bx = x + 14 + i * 38, by = y + FU_STEP_Y;
+            drawRect(bx, by, bx + 36, by + 11, i == stage ? 0xFF2A6A8A : i < stage ? 0xFF1E4A3A : 0xFF1A3444);
+            drawRect(bx + 1, by + 1, bx + 35, by + 10, i == stage ? 0xFF0E3A50 : 0xFF0A1218);
+        }
+        boolean lit = generator.isIgnited();
+        float heat = (float) generator.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT;
+        GuiSceneSC.singularity(x + 14, y + 48, 64, 40, t, lit, heat);
+        float charge = lit ? 1F : (float) generator.getIgnitionEU() / type.ignitionThreshold();
+        FluidTank he = generator.getFuelTank();
+        float[] v = {charge, generator.getRamp() / (float) TileEntityGeneratorSC.RAMP_FULL, heat,
+                he.getCapacity() > 0 ? (float) he.getFluidAmount() / he.getCapacity() : 0F};
+        for (int i = 0; i < 4; i++) {
+            GuiSceneSC.dial(x + EX_DIALS[i][0], y + EX_DIALS[i][1], 8, Math.min(1F, v[i]));
+        }
+        if (!lit) {                                                            // the ignition charge bar
+            int bx = x + EX_BAR_X, by = y + EX_BAR_Y;
+            drawRect(bx, by, bx + EX_BAR_W, by + 6, 0xFF04080C);
+            for (int i = 0; i < 25; i++) {
+                drawRect(bx + 1 + i * 4, by + 1, bx + 4 + i * 4, by + 5, (i + 0.5F) / 25 < charge ? 0xFF6EE6FF : 0xFF2A3038);
+            }
+        }
+    }
+
+    private void drawExoText() {
+        fit(Lang.tr("sc.gui.ex.title"), 14, CAPTION_Y, 110, GuiHoloSC.CYAN & 0xFFFFFF);
+        TextFitSC.drawCentered(fontRendererObj, tankLabel(0), COMB_TANK_X, 30, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        int stage = exoStage();
+        for (int i = 0; i < 4; i++) {
+            String s = Lang.tr("sc.gui.ex.step." + i);
+            int w = Math.min(32, (int) (fontRendererObj.getStringWidth(s) * 0.625F));
+            smallFit(s, 14 + i * 38 + 18 - w / 2, FU_STEP_Y + 3, 32, i == stage ? GuiHoloSC.VALUE : i < stage ? GuiHoloSC.OK : 0x465A6E);
+        }
+        boolean lit = generator.isIgnited();
+        GeneratorStatus status = generator.getStatus();
+        long ign = generator.getIgnitionEU(), need = type.ignitionThreshold();
+        double heSecs = exoHeliumSecs();
+        int plasma = generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT;
+        boolean noHe = status == GeneratorStatus.NO_COOLANT;
+        String[] labels = {Lang.tr("sc.gui.ex.d.ign"), Lang.tr("sc.gui.fus.power"), Lang.tr("sc.gui.fus.plasma"), Lang.tr("sc.gui.ex.d.he")};
+        String[] vals = {lit ? Lang.tr("sc.gui.ex.ready") : (int) (100 * ign / Math.max(1, need)) + "%", generator.getRamp() / 10 + "%",
+                Lang.tr("sc.gui.gen.plasma.short", plasma), heSecs <= 0 ? Lang.tr("sc.gui.ex.none") : fusTime(heSecs)};
+        int[] cols = {GuiHoloSC.VALUE, GuiHoloSC.VALUE, noHe || generator.getHeat() > 700 ? GuiHoloSC.BAD : GuiHoloSC.VALUE,
+                heSecs <= 0 ? GuiHoloSC.BAD : GuiHoloSC.VALUE};
+        for (int i = 0; i < 4; i++) {
+            smallFit(labels[i], EX_DIALS[i][0] + 11, EX_DIALS[i][1] - 6, 28, GuiHoloSC.LABEL);
+            smallFit(vals[i], EX_DIALS[i][0] + 11, EX_DIALS[i][1], 28, cols[i]);
+        }
+        if (!lit) {
+            smallFit(Lang.tr("sc.gui.fus.charge"), EX_BAR_X, 89, 80, GuiHoloSC.LABEL);
+            smallFit(fusEu(ign) + " / " + fusEu(need) + " EU", EX_BAR_X + EX_BAR_W + 4, EX_BAR_Y, 54, GuiHoloSC.VALUE);
+            String line;
+            int col;
+            if (status == GeneratorStatus.OVERHEATED) {
+                line = Lang.tr("sc.gui.fus.st.overheat", plasma);
+                col = GuiHoloSC.BAD;
+            } else if (status == GeneratorStatus.DISABLED || status == GeneratorStatus.REDSTONE) {
+                line = status.localized();
+                col = GuiHoloSC.IDLE;
+            } else {
+                line = Lang.tr(heSecs > 0 ? "sc.gui.ex.st.charge.he" : "sc.gui.ex.st.charge.nohe");
+                col = GuiHoloSC.CYAN & 0xFFFFFF;
+            }
+            smallFit(line, 14, 104, 190, col);
+            return;
+        }
+        int out = generator.getLastOutput();
+        fit(out + " EU/t", 14, 88, 100, noHe ? GuiHoloSC.WARN : GuiHoloSC.OK);
+        String line, hint;
+        int col, hintCol = GuiHoloSC.WARN;
+        int toLimit = (int) Math.max(0, (TileEntityGeneratorSC.HEAT_LIMIT - generator.getHeat()) / 2 / 20);
+        if (noHe) {
+            line = Lang.tr("sc.gui.ex.st.nohe", toLimit);
+            col = GuiHoloSC.BAD;
+            hint = Lang.tr("sc.gui.ex.fill");
+        } else if (status == GeneratorStatus.BUFFER_FULL) {
+            line = Lang.tr("sc.gui.fus.st.full");
+            col = GuiHoloSC.WARN;
+            hint = Lang.tr("sc.gui.ex.warn", toLimit);
+        } else if (status == GeneratorStatus.DISABLED || status == GeneratorStatus.REDSTONE) {
+            line = status.localized();
+            col = GuiHoloSC.IDLE;
+            hint = Lang.tr("sc.gui.ex.warn", toLimit);
+        } else if (stage == 2) {
+            line = Lang.tr("sc.gui.fus.st.ramp", generator.getRamp() / 10);
+            col = GuiHoloSC.CYAN & 0xFFFFFF;
+            hint = Lang.tr("sc.gui.ex.warn", toLimit);
+        } else {
+            line = Lang.tr("sc.gui.ex.st.ok", generator.outputTier().name(), generator.outputTier().getVoltage(), fusTime(heSecs));
+            col = GuiHoloSC.OK;
+            hint = Lang.tr("sc.gui.ex.warn", toLimit);
+        }
+        smallFit(line, 14, 98, 190, col);
+        smallFit(hint, 14, 105, 190, hintCol);
     }
 
     // ---- the High-Pressure Plasma Reactor ----
@@ -1662,7 +1791,7 @@ public class GuiGeneratorSC extends GuiContainer {
         }
 
         for (int i = 0; i < tankCount(); i++) {
-            if (GuiGaugeSC.isOver(tankX(i), comb || turb || preact ? 40 : TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
+            if (GuiGaugeSC.isOver(tankX(i), comb || turb || preact || exo ? 40 : TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
                 FluidTank t = tank(i);
                 lines.add(Lang.tr(i == 2 ? "sc.gui.gen.water" : type.kind == GeneratorType.Kind.EXO ? "sc.gui.gen.coolant" : "sc.gui.fuel"));
                 lines.add(GuiGaugeSC.fluidLabel(t.getFluid(), t.getCapacity()));
@@ -1765,7 +1894,23 @@ public class GuiGeneratorSC extends GuiContainer {
                 return lines;
             }
         }
-        if (isReactor() && !fus) {
+        if (exo) {
+            if (GuiGaugeSC.isOver(14, 48, 64, 40, mouseX, mouseY)) {
+                lines.add(Lang.tr("sc.gui.gen.heat"));
+                lines.add(Lang.tr("sc.gui.gen.plasma", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT)
+                        + "  (" + generator.getHeat() / 10 + "%)");
+                lines.add(Lang.tr("sc.gui.ex.tip.1"));
+                lines.add(Lang.tr("sc.gui.ex.tip.2"));
+                return lines;
+            }
+            if (!generator.isIgnited() && GuiGaugeSC.isOver(EX_BAR_X, EX_BAR_Y - 6, EX_BAR_W + 80, 14, mouseX, mouseY)) {
+                lines.add(Lang.tr("sc.gui.ignition"));
+                lines.add(generator.getIgnitionEU() + " / " + type.ignitionThreshold() + " EU");
+                lines.add(Lang.tr("sc.gui.fus.charge.hint"));
+                return lines;
+            }
+        }
+        if (isReactor() && !fus && !exo) {
             if (!generator.isIgnited() && GuiGaugeSC.isOver(LEFT_X - 1, IGNITION_Y - 1, LEFT_W + 2, IGNITION_H + 2, mouseX, mouseY)) {
                 lines.add(Lang.tr("sc.gui.ignition"));
                 lines.add(generator.getIgnitionEU() + " / " + type.ignitionThreshold() + " EU");
