@@ -53,6 +53,8 @@ public abstract class MachineRecipeHandlerSC extends TemplateRecipeHandler {
     private static final int[] OUT_TANK_X = {108, 118};
     private static final int TANK_Y = 4, TANK_W = 8, TANK_H = 36;
     private static final int ARROW_X = 82, ARROW_Y = 14;
+    /** The scene's band (between the input and output tanks). */
+    private static final int SCENE_Y = 3, SCENE_H = 38;
 
     private final MachineType type;
     private final Gui gui = new Gui();
@@ -192,26 +194,33 @@ public abstract class MachineRecipeHandlerSC extends TemplateRecipeHandler {
 
     // ---- drawing ----
 
+    /**
+     * The machine screens' look: a dark holo panel, holo slot pockets, and in the middle the
+     * machine's own animated scene (the same one its screen shows) between its fluid tanks.
+     */
     @Override
     public void drawBackground(int recipe) {
         CachedMachineRecipe r = (CachedMachineRecipe) arecipes.get(recipe);
         GL11.glColor4f(1f, 1f, 1f, 1f);
-        GuiDraw.changeTexture(SHEET);
+        com.sc.inventory.GuiHoloSC.screen(0, 0, 166, 63);
         for (int i = 0; i < IN_SLOTS.length; i++) {
             if (i < r.recipe.inputs.length) {
-                pocket(IN_SLOTS[i][0], IN_SLOTS[i][1]);
+                com.sc.inventory.GuiHoloSC.slot(IN_SLOTS[i][0], IN_SLOTS[i][1], false);
             }
         }
         for (int i = 0; i < OUT_SLOTS.length; i++) {
             if (i < r.outputCount) {
-                pocket(OUT_SLOTS[i][0], OUT_SLOTS[i][1]);
+                com.sc.inventory.GuiHoloSC.slot(OUT_SLOTS[i][0], OUT_SLOTS[i][1], i == 0);
             }
         }
-        gui.drawTexturedModalRect(ARROW_X, ARROW_Y, GuiGaugeSC.SPR_ARROW_R_U, GuiGaugeSC.SPR_ARROW_R_V, 24, 17);
-    }
-
-    private void pocket(int x, int y) {
-        gui.drawTexturedModalRect(x - 1, y - 1, GuiGaugeSC.SPR_SLOT_U, GuiGaugeSC.SPR_SLOT_V, 18, 18);
+        MachineRecipe m = r.recipe;
+        int x0 = m.fluidInputB != null ? 80 : m.fluidInputA != null ? 70 : 58;
+        int x1 = m.fluidOutputA != null || m.fluidOutputB != null ? 106 : 128;
+        float t = cycleticks, p = (cycleticks % 80) / 80F;
+        if (!NeiScenesSC.draw(type, m, x0, SCENE_Y, x1 - x0, SCENE_H, t, p)) {
+            NeiScenesSC.arrow(x0, SCENE_Y, x1 - x0, SCENE_H, p);
+        }
+        GL11.glColor4f(1f, 1f, 1f, 1f);
     }
 
     @Override
@@ -225,7 +234,8 @@ public abstract class MachineRecipeHandlerSC extends TemplateRecipeHandler {
                 continue;
             }
             int x = tankX(i);
-            GuiGaugeSC.drawWell(x, TANK_Y, TANK_W, TANK_H);
+            Gui.drawRect(x - 2, TANK_Y - 2, x + TANK_W + 2, TANK_Y + TANK_H + 2, com.sc.inventory.GuiHoloSC.CYAN_MID);
+            Gui.drawRect(x - 1, TANK_Y - 1, x + TANK_W + 1, TANK_Y + TANK_H + 1, 0xFF0E1A26);
             // At least a third full, so a 20 mB input still reads as "this fluid" at a glance.
             int capacity = Math.max(tanks[i].amount, 1000);
             FluidStack shown = tanks[i].copy();
@@ -235,16 +245,13 @@ public abstract class MachineRecipeHandlerSC extends TemplateRecipeHandler {
             GuiGaugeSC.drawBlended(gui, x, TANK_Y, GuiGaugeSC.SPR_GLASS_U, GuiGaugeSC.SPR_GLASS_V, TANK_W, TANK_H);
         }
 
-        GuiGaugeSC.bind(mc, SHEET);
-        float progress = (cycleticks % 40) / 40f;
-        GuiGaugeSC.drawSpriteHorizontal(gui, ARROW_X, ARROW_Y, GuiGaugeSC.SPR_ARROW_R_FULL_U, GuiGaugeSC.SPR_ARROW_R_V,
-                24, 17, progress);
-
         String time = String.format(java.util.Locale.ROOT, "%.1f", r.recipe.ticks / 20f);
-        GuiDraw.drawString(Lang.tr("sc.nei.cost", type.euPerTick, time), 22, 47, 0x404040, false);
+        GuiDraw.drawString(Lang.tr("sc.nei.cost", type.euPerTick, time), 22, 45, com.sc.inventory.GuiHoloSC.VALUE, false);
         if (r.recipe.defectChance > 0) {
-            GuiDraw.drawString(Lang.tr("sc.nei.defect", Math.round(r.recipe.defectChance * 100)), 22, 56, 0x8A2A1A, false);
+            GuiDraw.drawString(Lang.tr("sc.nei.defect", Math.round(r.recipe.defectChance * 100)), 22, 54, 0xFF7A5A, false);
         }
+        com.sc.inventory.GuiHoloSC.glint(0, 0, 166, 63);
+        GL11.glColor4f(1f, 1f, 1f, 1f);
     }
 
     private static int tankX(int i) {
