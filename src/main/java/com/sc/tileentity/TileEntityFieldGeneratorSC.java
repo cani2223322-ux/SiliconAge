@@ -72,11 +72,22 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** Switches, bits of "Flags". */
     public static final int F_NO_SPAWN = 1, F_NO_ENDER = 2, F_PRIVATE = 4, F_PUSH_PLAYERS = 8, F_DAMAGE = 16,
             F_WARN = 32, F_CHARGE = 64, F_HEAL = 128, F_SHOW = 256, F_CHARGE_FX = 512,
-            F_BEAMS = 1024, F_HUM = 2048, F_DASH = 4096;
+            F_BEAMS = 1024, F_HUM = 2048, F_DASH = 4096,
+            /** Wireless charging leaves IC2 batteries / energy crystals in the inventory alone. */
+            F_SKIP_BATTERIES = 8192,
+            /** With a charge booster in: every item being charged gets the full rate, not a share of it. */
+            F_CHARGE_EACH = 16384;
     /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell and charging sparks shown. */
     public static final int DEFAULT_FLAGS = F_DAMAGE | F_WARN | F_SHOW | F_CHARGE_FX;
-    /** What charges first: armour, the held item, everything evenly, or the armour alone. */
-    public static final int CHARGE_ARMOR_FIRST = 0, CHARGE_HELD_FIRST = 1, CHARGE_EVEN = 2, CHARGE_ARMOR_ONLY = 3, CHARGE_MODES = 4;
+    /**
+     * What charges first: armour; the held item; everything at once (the rate shared among what isn't
+     * full, a finished item's share going to the rest); the armour alone; the emptiest first; the
+     * nearly full first; only what's worn and held.
+     */
+    public static final int CHARGE_ARMOR_FIRST = 0, CHARGE_HELD_FIRST = 1, CHARGE_EVEN = 2, CHARGE_ARMOR_ONLY = 3,
+            CHARGE_LOWEST_FIRST = 4, CHARGE_FULLEST_FIRST = 5, CHARGE_WORN_ONLY = 6, CHARGE_MODES = 7;
+    /** Charging only tops up what's below this percent: 10..100 in steps of 10 (100: everything not full). */
+    public static final int CHARGE_BELOW_STEP = 10, CHARGE_BELOW_MIN = 10;
     /** The charging reserve: 0..90% of the buffer, in steps of 10. */
     public static final int RESERVE_STEP = 10, RESERVE_MAX = 90;
     /** RF per EU when charging other mods' RF items (Thermal Expansion's rate). */
@@ -126,7 +137,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     private final int[] rgb = {DEFAULT_RGB, DEFAULT_RGB, DEFAULT_RGB};
     /** zoneNodes(), rebuilt after any change (changed(), a load). */
     private List<int[]> zoneCache;
-    private int chargeMode = CHARGE_ARMOR_FIRST, chargeReserve;
+    private int chargeMode = CHARGE_ARMOR_FIRST, chargeReserve, chargeBelow = 100;
     /** Last second's charging: EU given out and players served (the screen shows them). */
     private int chargedLastSecond, playersLastSecond;
     private String owner = "";
@@ -314,6 +325,21 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         changed();
     }
 
+    /** Items charge only while below this percent. */
+    public int getChargeBelow() {
+        return chargeBelow;
+    }
+
+    public void adjustChargeBelow(int delta) {
+        chargeBelow = Math.max(CHARGE_BELOW_MIN, Math.min(100, chargeBelow + delta));
+        changed();
+    }
+
+    /** "Full rate for each item" is on and has a charge booster to work with. */
+    public boolean chargesEachAtFullRate() {
+        return has(F_CHARGE_EACH) && upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER) > 0;
+    }
+
     /** EU a second one player can get: the base, x2 per charge booster (up to 4). */
     public int chargeRate() {
         return CHARGE_PER_SECOND << Math.min(com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS,
@@ -432,6 +458,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         copyZone(from);
         chargeMode = from.chargeMode;
         chargeReserve = from.chargeReserve;
+        chargeBelow = from.chargeBelow;
         owner = from.owner;
         access.clear();
         access.addAll(from.access);
@@ -503,6 +530,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nbt.setInteger("Filter", filter);
         nbt.setInteger("ChargeMode", chargeMode);
         nbt.setInteger("ChargeReserve", chargeReserve);
+        nbt.setInteger("ChargeBelow", chargeBelow);
         writeZone(nbt);
     }
 
@@ -518,6 +546,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         filter = loadFilter(nbt.getInteger("Filter"));
         chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
         chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
+        chargeBelow = nbt.hasKey("ChargeBelow") ? Math.max(CHARGE_BELOW_MIN, Math.min(100, nbt.getInteger("ChargeBelow"))) : 100;
         readZone(nbt);
         if (anchor == ANCHOR_POINT && (anchorPoint == null || Math.abs(anchorPoint[0] - xCoord) > MAX_LINK_DISTANCE
                 || Math.abs(anchorPoint[1] - yCoord) > MAX_LINK_DISTANCE || Math.abs(anchorPoint[2] - zCoord) > MAX_LINK_DISTANCE)) {
@@ -963,7 +992,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             int spare = Math.min(getEnergyStored() - upkeepPerTick() * 40,
                     getEnergyStored() - (int) ((long) getMaxEnergyStored() * chargeReserve / 100));
             if (has(F_CHARGE) && spare > 0) {
-                int used = chargePlayer(p, Math.min(chargeRate(), spare));
+                int used = chargePlayer(p, spare);
                 if (used > 0) {
                     chargedLastSecond += used;
                     playersLastSecond++;
@@ -979,8 +1008,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
     }
 
-    /** One player's items, in the order the charge mode says, up to `budget` EU. @return EU used */
-    private int chargePlayer(EntityPlayer p, int budget) {
+    /**
+     * One player's items, as the charge mode says, out of `spare` EU: a player's rate a second in all
+     * - or, with "full rate for each item" and a booster, that rate for every item being charged.
+     * Items at or above the threshold, and batteries when they're left out, are skipped.
+     * @return EU used
+     */
+    private int chargePlayer(EntityPlayer p, int spare) {
         ItemStack held = p.isUsingItem() ? null : p.getCurrentEquippedItem();   // a blocking blade keeps its block
         List<ItemStack> order = new ArrayList<ItemStack>();
         if (chargeMode == CHARGE_HELD_FIRST && held != null) {
@@ -991,33 +1025,85 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 order.add(s);
             }
         }
-        if (chargeMode != CHARGE_ARMOR_ONLY) {
-            if (chargeMode == CHARGE_ARMOR_FIRST && held != null) {
-                order.add(held);
-            }
+        if (chargeMode != CHARGE_ARMOR_ONLY && chargeMode != CHARGE_HELD_FIRST && held != null) {
+            order.add(held);
+        }
+        if (chargeMode != CHARGE_ARMOR_ONLY && chargeMode != CHARGE_WORN_ONLY) {
             for (ItemStack s : p.inventory.mainInventory) {
                 if (s != null && s != held && s != p.getCurrentEquippedItem()) {
                     order.add(s);
                 }
             }
-            if (chargeMode == CHARGE_EVEN && held != null) {
-                order.add(held);
-            }
         }
+        final java.util.Map<ItemStack, Float> level = new java.util.IdentityHashMap<ItemStack, Float>();
+        List<ItemStack> todo = new ArrayList<ItemStack>();
+        for (ItemStack s : order) {
+            float f = chargeLevel(s);
+            if (f * 100 >= chargeBelow || has(F_SKIP_BATTERIES) && isBattery(s)) {
+                continue;
+            }
+            level.put(s, f);
+            todo.add(s);
+        }
+        if (todo.isEmpty()) {
+            return 0;
+        }
+        if (chargeMode == CHARGE_LOWEST_FIRST || chargeMode == CHARGE_FULLEST_FIRST) {
+            final int sign = chargeMode == CHARGE_LOWEST_FIRST ? 1 : -1;
+            java.util.Collections.sort(todo, new java.util.Comparator<ItemStack>() {
+                @Override
+                public int compare(ItemStack a, ItemStack b) {
+                    return sign * Float.compare(level.get(a), level.get(b));
+                }
+            });
+        }
+        boolean each = chargesEachAtFullRate();
+        int rate = chargeRate();
+        int budget = (int) Math.min(spare, each ? (long) rate * todo.size() : rate);
         int used = 0;
-        if (chargeMode == CHARGE_EVEN && !order.isEmpty()) {
-            int share = Math.max(1, budget / order.size());
-            for (ItemStack s : order) {
-                used += chargeInto(p, s, Math.min(share, budget - used));
+        if (chargeMode == CHARGE_EVEN) {
+            // everything at once: equal shares of what's left among the items still taking it
+            List<ItemStack> active = new ArrayList<ItemStack>(todo);
+            java.util.Map<ItemStack, Integer> got = new java.util.IdentityHashMap<ItemStack, Integer>();
+            for (int round = 0; round < 4 && !active.isEmpty() && used < budget; round++) {
+                int share = Math.max(1, (budget - used) / active.size());
+                for (java.util.Iterator<ItemStack> it = active.iterator(); it.hasNext() && used < budget; ) {
+                    ItemStack s = it.next();
+                    int already = got.containsKey(s) ? got.get(s) : 0;
+                    int want = Math.min(share, budget - used);
+                    if (each) {
+                        want = Math.min(want, rate - already);
+                    }
+                    int took = want > 0 ? chargeInto(p, s, want) : 0;
+                    used += took;
+                    got.put(s, already + took);
+                    if (took < want || each && already + took >= rate) {
+                        it.remove();                // full, not chargeable, or at its own rate
+                    }
+                }
             }
+            return used;
         }
-        for (ItemStack s : order) {                           // what's left, in order
+        for (ItemStack s : todo) {                        // one after another, in order
             if (used >= budget) {
                 break;
             }
-            used += chargeInto(p, s, budget - used);
+            used += chargeInto(p, s, each ? Math.min(rate, budget - used) : budget - used);
         }
         return used;
+    }
+
+    /** How charged an item is, 0..1, from its durability bar (the mod's gear, IC2's and RF items show theirs so); 0 if none. */
+    private static float chargeLevel(ItemStack s) {
+        if (s == null || s.getItem() == null || !s.getItem().showDurabilityBar(s)) {
+            return 0F;
+        }
+        return (float) Math.max(0, Math.min(1, 1 - s.getItem().getDurabilityForDisplay(s)));
+    }
+
+    /** An IC2 battery or energy crystal: an electric item that can give its energy away. */
+    private static boolean isBattery(ItemStack s) {
+        return cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) && Ic2Charge.isBattery(s);
     }
 
     /** Sparks in the field's colour from the nearest node to the player being charged. */
@@ -1083,6 +1169,10 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
         static int charge(ItemStack s, int max) {
             return (int) ic2.api.item.ElectricItem.manager.charge(s, max, Integer.MAX_VALUE, true, false);
+        }
+
+        static boolean isBattery(ItemStack s) {
+            return s != null && s.getItem() instanceof ic2.api.item.IElectricItem && ((ic2.api.item.IElectricItem) s.getItem()).canProvideEnergy(s);
         }
     }
 
@@ -1592,6 +1682,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
         chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
         chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
+        chargeBelow = nbt.hasKey("ChargeBelow") ? Math.max(CHARGE_BELOW_MIN, Math.min(100, nbt.getInteger("ChargeBelow"))) : 100;
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
         filter = loadFilter(nbt.getInteger("Filter"));
         readZone(nbt);
@@ -1639,6 +1730,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nbt.setInteger("Flags", flags);
         nbt.setInteger("ChargeMode", chargeMode);
         nbt.setInteger("ChargeReserve", chargeReserve);
+        nbt.setInteger("ChargeBelow", chargeBelow);
         nbt.setInteger("Redstone", redstone);
         nbt.setInteger("Filter", filter);
         writeZone(nbt);

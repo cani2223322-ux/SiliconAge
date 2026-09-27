@@ -149,6 +149,10 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_CHARGE_MODE, x, y + 38, W - 16, 20, ""));
                     buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RESERVE_MINUS, x, y + 62, 34, 20, "-10%"));
                     buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RESERVE_PLUS, x + 36, y + 62, 34, 20, "+10%"));
+                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_BELOW_MINUS, x, y + 86, 34, 20, "-10%"));
+                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_BELOW_PLUS, x + 36, y + 86, 34, 20, "+10%"));
+                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_SKIP_BATTERIES), x, y + 110, 114, 20, ""));
+                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_CHARGE_EACH), x + 118, y + 110, 114, 20, ""));
                     break;
                 }
                 int[] rows = {TileEntityFieldGeneratorSC.F_NO_SPAWN, TileEntityFieldGeneratorSC.F_NO_ENDER, TileEntityFieldGeneratorSC.F_DAMAGE,
@@ -235,6 +239,10 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             } else if (id == ContainerFieldGeneratorSC.BTN_RESERVE_MINUS || id == ContainerFieldGeneratorSC.BTN_RESERVE_PLUS) {
                 b.enabled = mayEdit() && (id == ContainerFieldGeneratorSC.BTN_RESERVE_MINUS ? field.getChargeReserve() > 0
                         : field.getChargeReserve() < TileEntityFieldGeneratorSC.RESERVE_MAX);
+                continue;
+            } else if (id == ContainerFieldGeneratorSC.BTN_BELOW_MINUS || id == ContainerFieldGeneratorSC.BTN_BELOW_PLUS) {
+                b.enabled = mayEdit() && (id == ContainerFieldGeneratorSC.BTN_BELOW_MINUS
+                        ? field.getChargeBelow() > TileEntityFieldGeneratorSC.CHARGE_BELOW_MIN : field.getChargeBelow() < 100);
                 continue;
             } else if (id >= ContainerFieldGeneratorSC.BTN_FLAG_BASE) {
                 int flag = 1 << (id - ContainerFieldGeneratorSC.BTN_FLAG_BASE);
@@ -786,12 +794,13 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         fit(Lang.tr("sc.fieldgui.charge.reserve", field.getChargeReserve(), reserveEu), 82, 98, W - 90, c);
         int boosters = Math.min(com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS,
                 field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER));
-        fit(Lang.tr("sc.fieldgui.charge.rate", field.chargeRate()), 8, 124, W - 16, c);
-        fit(Lang.tr("sc.fieldgui.charge.boosters", boosters, com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS), 8, 136, W - 16, c);
+        fit(Lang.tr(field.getChargeBelow() >= 100 ? "sc.fieldgui.charge.below.all" : "sc.fieldgui.charge.below", field.getChargeBelow()),
+                82, 122, W - 90, c);
+        fit(Lang.tr(field.chargesEachAtFullRate() ? "sc.fieldgui.charge.rate.each" : "sc.fieldgui.charge.rate", field.chargeRate()), 8, 166, W - 16, c);
+        fit(Lang.tr("sc.fieldgui.charge.boosters", boosters, com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS), 8, 176, W - 16, c);
         boolean on = field.has(TileEntityFieldGeneratorSC.F_CHARGE) && field.isActive();
         fit(on ? Lang.tr("sc.fieldgui.charge.now", field.getChargedLastSecond(), field.getPlayersLastSecond())
-                : Lang.tr("sc.fieldgui.charge.off"), 8, 150, W - 16, on ? 0x2E7D32 : 0xA02020);
-        fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.charge.items"), 8, 168, W - 16, dim);
+                : Lang.tr("sc.fieldgui.charge.off"), 8, 188, W - 124, on ? 0x2E7D32 : 0xA02020);
     }
 
     private void legend(int x, int y, int color, String text) {
@@ -888,6 +897,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 key = "sc.fieldgui.charge.mode.desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_RESERVE_MINUS || b.id == ContainerFieldGeneratorSC.BTN_RESERVE_PLUS) {
                 key = "sc.fieldgui.charge.reserve.desc";
+            } else if (b.id == ContainerFieldGeneratorSC.BTN_BELOW_MINUS || b.id == ContainerFieldGeneratorSC.BTN_BELOW_PLUS) {
+                key = "sc.fieldgui.charge.below.desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_OUTLINE) {
                 key = "sc.fieldzone.outline.desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_ANIM) {
