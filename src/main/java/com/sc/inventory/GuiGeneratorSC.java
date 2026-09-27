@@ -43,6 +43,16 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean solar;
     /** The GaAs panel: the Silicon panel's screen with near-black cells and the panel -> buffer -> line flow. */
     private final boolean gaas;
+
+    /** The panel's cells {body, edge}: GaAs near black / violet, Nano teal, Quantum violet, Exo black / gold. */
+    private int[] solarCells() {
+        switch (type) {
+            case SOLAR_NANO: return new int[]{0xFF0E2A2A, 0xFF3AE0C8};
+            case SOLAR_QUANTUM: return new int[]{0xFF2A0E3A, 0xFFE05AF0};
+            case SOLAR_EXO: return new int[]{0xFF1A1408, 0xFFFFC840};
+            default: return new int[]{0xFF1E1830, 0xFF7A5AC8};
+        }
+    }
     /** GaAs flow: the stored energy a second ago, and whether energy has been leaving the buffer since. */
     private int flowStored = -1, flowTicks;
     private boolean flowOut = true;
@@ -102,8 +112,9 @@ public class GuiGeneratorSC extends GuiContainer {
         this.generator = generator;
         this.type = generator.getGeneratorType();
         this.comb = type == GeneratorType.COMBUSTION;
-        this.solar = type == GeneratorType.SOLAR_SI || type == GeneratorType.SOLAR_GAAS;
-        this.gaas = type == GeneratorType.SOLAR_GAAS;
+        this.gaas = type == GeneratorType.SOLAR_GAAS || type == GeneratorType.SOLAR_NANO || type == GeneratorType.SOLAR_QUANTUM
+                || type == GeneratorType.SOLAR_EXO;
+        this.solar = type == GeneratorType.SOLAR_SI || gaas;
         this.turb = type == GeneratorType.STEAM_TURBINE || type == GeneratorType.GAS_TURBINE || type == GeneratorType.PLASMA_GENERATOR
                 || type == GeneratorType.GEOTHERMAL;
         this.geo = type == GeneratorType.GEOTHERMAL;
@@ -1276,7 +1287,8 @@ public class GuiGeneratorSC extends GuiContainer {
         long time = dayTime();
         float arc = day ? Math.min(1F, time / 12000F) : Math.max(0F, (time - 12000) / 12000F);
         if (gaas) {
-            GuiSceneSC.sky(x + SOL_SKY_X, y + SOL_SKY_Y, SOL_SKY_W, SOL_SKY_H, t, day, rain, arc, !solarSky(), 0xFF1E1830, 0xFF7A5AC8);
+            int[] cells = solarCells();
+            GuiSceneSC.sky(x + SOL_SKY_X, y + SOL_SKY_Y, SOL_SKY_W, SOL_SKY_H, t, day, rain, arc, !solarSky(), cells[0], cells[1]);
             boolean paused = generator.getStatus() == GeneratorStatus.BUFFER_FULL || !solarSky();
             int fx = x + GA_FLOW_X, fy = y + GA_FLOW_Y;
             for (int i = 0; i < 3; i++) {                                          // panel -> buffer -> the line
@@ -1316,7 +1328,11 @@ public class GuiGeneratorSC extends GuiContainer {
             int lw = fontRendererObj.getStringWidth(labels[i]) / 2;
             smallFit(labels[i], cx + (w - Math.min(lw, w - 2)) / 2, 38, w - 2, sky ? GuiHoloSC.LABEL : 0x465A6E);
             int vw = fontRendererObj.getStringWidth(values[i]);
-            fontRendererObj.drawString(values[i], cx + (w - vw) / 2, 46, sky ? cols[i] : 0x465A6E);
+            if (vw <= w - 2) {
+                fontRendererObj.drawString(values[i], cx + (w - vw) / 2, 46, sky ? cols[i] : 0x465A6E);
+            } else {                                                           // 4096, 16384: shrink to fit the chip
+                smallFit(values[i], cx + 2, 47, w - 4, sky ? cols[i] : 0x465A6E);
+            }
             fontRendererObj.drawString(i < 2 ? "×" : "=", cx + w + 2, 42, GuiHoloSC.VALUE);
         }
         int now = solarNow();
@@ -1532,6 +1548,12 @@ public class GuiGeneratorSC extends GuiContainer {
         if (turb && GuiGaugeSC.isOver(14, TB_Y, 158, TB_H, mouseX, mouseY)) {
             lines.add(Lang.tr(tk("title")));
             lines.add(Lang.tr(tk("hint")));
+            return lines;
+        }
+        if (solar && GuiGaugeSC.isOver(SOL_SKY_X, SOL_SKY_Y, SOL_SKY_W, SOL_SKY_H, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.sol.ladder"));
+            lines.add(Lang.tr("sc.gui.sol.ladder.1"));
+            lines.add(Lang.tr("sc.gui.sol.ladder.2"));
             return lines;
         }
         if (solar && GuiGaugeSC.isOver(SOL_SKY_X, SOL_STRIP_Y - 2, SOL_STRIP_W, 14, mouseX, mouseY)) {
