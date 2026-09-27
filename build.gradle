@@ -68,6 +68,11 @@ dependencies {
     )
 }
 
+// ic2/api/energy/tile/IMultiEnergySource is only compiled against: Industrial Upgrade ships the real one
+jar {
+    exclude 'ic2/api/energy/tile/IMultiEnergySource.class'
+}
+
 processResources {
     inputs.property "version", project.version
     inputs.property "mcversion", project.minecraft.version

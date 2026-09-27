@@ -498,9 +498,16 @@ public final class SelfTestSC {
         ItemStack od = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE);
         gen.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od);
         gen.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 1, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
-        boolean upg = gen.ratedOutput() == 48 && gen.outputTier() == com.sc.energy.Tier.MV
+        boolean upg = gen.ratedOutput() == 48 && gen.outputTier() == com.sc.energy.Tier.MV && gen.packetsPerTick() == 1
                 && gen.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 2, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ECONOMIZER))
                 && !gen.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 2, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER));
+        com.sc.tileentity.TileEntityGeneratorSC odLv = new com.sc.tileentity.TileEntityGeneratorSC();
+        odLv.setGeneratorType(com.sc.energy.GeneratorType.COMBUSTION);
+        odLv.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od.copy());
+        odLv.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 1, od.copy());
+        check(odLv.ratedOutput() == 72 && odLv.outputTier() == com.sc.energy.Tier.LV && odLv.packetsPerTick() == 3
+                        && odLv.sendMultibleEnergyPackets() && odLv.getMultibleEnergyPacketAmount() == 3,
+                "overdrive: 72 EU/t at LV goes out as 3 packets of 32 a tick, not 1 and a stalled buffer");
         com.sc.tileentity.TileEntityGeneratorSC sol = new com.sc.tileentity.TileEntityGeneratorSC();
         sol.setGeneratorType(com.sc.energy.GeneratorType.SOLAR_EXO);
         sol.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od.copy());

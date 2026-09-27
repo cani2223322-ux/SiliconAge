@@ -453,11 +453,16 @@ public final class EnergyNetSC {
             return move(buffers, consumers, capacity, used, sent);   // shortfall is drawn from them
         }
 
-        /** What a tile can still give this tick: one packet of its output voltage in all, whatever it touches. */
+        /** What a tile can still give this tick: its packets of the output voltage in all, whatever it touches. */
         private static int offerOf(TileEntityEnergyBase tile, Map<TileEntityEnergyBase, Integer> sent) {
             Integer already = sent.get(tile);
-            int room = tile.outputTier().getVoltage() - (already == null ? 0 : already);
-            return Math.max(0, Math.min(tile.offerableEnergy(), room));
+            int packets = tile.packetsPerTick();
+            int room = tile.outputTier().getVoltage() * packets - (already == null ? 0 : already);
+            int offer = tile.offerableEnergy();
+            if (packets > 1 && offer > 0) {
+                offer = tile.getEnergyStored();
+            }
+            return Math.max(0, Math.min(offer, room));
         }
 
         /** One supply -> demand pass within what's left of the network's rating. */

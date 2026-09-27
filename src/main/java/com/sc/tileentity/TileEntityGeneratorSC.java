@@ -48,7 +48,9 @@ import net.minecraftforge.fluids.IFluidHandler;
  * Four upgrade slots: Overdrive / Economizer (fuel-burning kinds), Transformer (a higher output
  * tier), Energy Storage (+10 000 EU of buffer).
  */
-public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler {
+@cpw.mods.fml.common.Optional.Interface(iface = "ic2.api.energy.tile.IMultiEnergySource", modid = "industrialupgrade")
+public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler,
+        ic2.api.energy.tile.IMultiEnergySource {
 
     public static final int MODULE_LIFE_TICKS = 1000000;
     /**
@@ -287,6 +289,28 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     /** Rated output with the upgrades - what a fuel generator makes each tick while it runs. */
     public int ratedOutput() {
         return (int) Math.round(generatorType.euPerTick * outputMultiplier());
+    }
+
+    /**
+     * Overdrive can make more than one packet of the output voltage holds: the generator then sends
+     * as many packets a tick as its output needs (48 EU/t at LV = 2 x 32), not one packet and a buffer
+     * that fills and stalls it. The voltage stays the same, so nothing on the line blows.
+     */
+    @Override
+    public int packetsPerTick() {
+        int v = outputTier().getVoltage();
+        return Math.max(1, Math.min(64, (ratedOutput() + v - 1) / v));
+    }
+
+    /** Industrial Upgrade's energy net: several packets a tick (see packetsPerTick()). */
+    @Override
+    public boolean sendMultibleEnergyPackets() {
+        return packetsPerTick() > 1;
+    }
+
+    @Override
+    public double getMultibleEnergyPacketAmount() {
+        return packetsPerTick();
     }
 
     /** Transformer upgrades raise the output voltage a tier each; the Creative Generator's is chosen on its screen. */

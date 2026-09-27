@@ -299,6 +299,14 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         return isEnergySource() ? Math.min(energyStored, outputTier().getVoltage()) : 0;
     }
 
+    /**
+     * Packets of the output voltage this tile may send a tick: 1, more for a generator whose
+     * upgrades make more than one packet holds (an LV generator under Overdrive, 48 EU/t = 2 x 32).
+     */
+    public int packetsPerTick() {
+        return 1;
+    }
+
     @Override
     public int demandedEnergy() {
         return isEnergySink() ? Math.max(0, getMaxEnergyStored() - energyStored) : 0;
