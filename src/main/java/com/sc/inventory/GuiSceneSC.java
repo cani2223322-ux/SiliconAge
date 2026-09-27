@@ -1155,6 +1155,32 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The High-Pressure Plasma Reactor's chamber: the MHD channel squeezed by thick compression
+     * rings, deuterium injectors firing into the argon plasma from above, a white-hot core line.
+     */
+    public static void pressureChamber(int x, int y, int w, int h, float t, boolean running) {
+        plasmaChannel(x, y, w, h, t, running);
+        int cy = y + h / 2;
+        for (int k = 0; k < 3; k++) {
+            int rx = x + 20 + k * (w - 34) / 2;
+            rect(rx, cy - 9, 4, 18, 0xFF8A909A);
+            rect(rx + 1, cy - 8, 2, 16, 0xFFB0B8C4);
+        }
+        for (int k = 0; k < 2; k++) {
+            int ix = x + 28 + k * (w - 40) / 2;
+            rect(ix, y + 2, 3, 5, 0xFF6A707A);
+            if (running && (int) (t + k * 2) % 4 < 2) {
+                rect(ix + 1, y + 7, 1, 4, 0xFF6AE0FF);
+            }
+        }
+        if (running) {
+            for (int xx = x + 16; xx < x + w - 11; xx += 2) {
+                rect(xx, cy - 1, 1, 2, 0xFFFFFFFF);
+            }
+        }
+    }
+
     /** The plasma channel end-on: the coils round it, the plasma a violet-white core that breathes. */
     public static void plasmaRing(int cx, int cy, int r, float t, boolean running) {
         disc(cx, cy, r + 4, 0xFF8A909A);

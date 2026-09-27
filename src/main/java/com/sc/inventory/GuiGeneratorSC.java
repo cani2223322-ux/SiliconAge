@@ -79,6 +79,9 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean fcell;
     /** The RTG: the finned drum with its capsules glowing, the slots under their bays with their life, capsules x 32. */
     private final boolean rtg;
+    /** The High-Pressure Plasma Reactor: two feeds into the pressure chamber, the plasma end-on, dials, the 4 : 1 bar. */
+    private final boolean preact;
+    private static final int PR_TANK_X = 142, PR_BAR_X = 40, PR_BAR_Y = 96, PR_BAR_W = 96;
     private static final int FC_X = 14, FC_Y = 39, FC_W = 90, FC_H = 38, FC_BAR_X = 40, FC_BAR_Y = 80, FC_BAR_W = 64;
     /** Display order of the sides (ForgeDirection ordinals): up, down, north, south, west, east. */
     private static final int[] TH_ORDER = {1, 0, 2, 3, 4, 5};
@@ -126,6 +129,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.thermo = type == GeneratorType.THERMOELECTRIC;
         this.fcell = type == GeneratorType.FUEL_CELL;
         this.rtg = type == GeneratorType.RTG;
+        this.preact = type == GeneratorType.PLASMA_REACTOR;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -199,6 +203,9 @@ public class GuiGeneratorSC extends GuiContainer {
 
     /** Where tank i stands: the Combustion Generator's on the right edge, the others from RIGHT_X. */
     private int tankX(int i) {
+        if (preact) {
+            return PR_TANK_X + i * TANK_GAP;
+        }
         return comb || turb ? COMB_TANK_X : RIGHT_X + i * TANK_GAP;
     }
 
@@ -248,6 +255,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawFcBackground(x, y, partialTicks);
         } else if (rtg) {
             drawRtgBackground(x, y, partialTicks);
+        } else if (preact) {
+            drawPrBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -267,7 +276,7 @@ public class GuiGeneratorSC extends GuiContainer {
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawing a fluid leaves the blocks atlas bound
             FluidTank t = tank(i);
-            GuiTankGaugeSC.draw(mc, x + tankX(i), y + (comb || turb ? 40 : TANK_Y), t.getFluid(), t.getCapacity(), null, false);
+            GuiTankGaugeSC.draw(mc, x + tankX(i), y + (comb || turb || preact ? 40 : TANK_Y), t.getFluid(), t.getCapacity(), null, false);
         }
         GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         GuiGaugeSC.bind(mc, TEXTURE);
@@ -326,6 +335,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (rtg) {
             drawRtgText();
+            drawUpgradeCount();
+            return;
+        }
+        if (preact) {
+            drawPrText();
             drawUpgradeCount();
             return;
         }
@@ -864,6 +878,87 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.sf.fuels"), 14, 99, 158, GuiHoloSC.LABEL);
         }
         smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
+    }
+
+    // ---- the High-Pressure Plasma Reactor ----
+
+    /** Seconds each gas lasts at the rate it burns: {argon, deuterium}. */
+    private double[] prSeconds() {
+        double fm = Math.max(0.01, generator.fuelMultiplier());
+        return new double[]{generator.getFuelTank().getFluidAmount() / (type.fuelRatePerTick * fm) / 20.0,
+                generator.getFuelTank2().getFluidAmount() / (type.fuel2RatePerTick * fm) / 20.0};
+    }
+
+    private void drawPrBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
+        GuiSceneSC.frame(x + 14, y + 34, 124, 38);
+        int sx = x + 19, sy = y + 38;                                          // the air separator
+        drawRect(sx + 3, sy - 2, sx + 9, sy, 0xFF6A707A);
+        drawRect(sx, sy, sx + 12, sy + 20, 0xFF8A909A);
+        drawRect(sx + 1, sy + 1, sx + 11, sy + 19, 0xFF1A2A3A);
+        for (int i = 0; i < 4; i++) {
+            drawRect(sx + 2, sy + 3 + i * 4, sx + 10, sy + 4 + i * 4, running ? 0xFF6EA0C8 : 0xFF3A4A5A);
+        }
+        drawRect(x + 20, y + 64, x + 30, y + 70, 0xFF3A4450);                  // the deuterium feed
+        drawRect(x + 21, y + 65, x + 29, y + 69, 0xFF6AE0FF);
+        drawRect(x + 32, y + 48, x + 40, y + 51, 0xFF6A707A);                  // the pipe
+        if (running) {
+            for (int i = 0; i < 2; i++) {
+                int d = (int) ((t * 1.5F + i * 4) % 8);
+                drawRect(x + 32 + d, y + 49, x + 34 + d, y + 50, 0xFFC890FF);
+            }
+        }
+        GuiSceneSC.pressureChamber(x + 40, y + 36, 66, 34, t, running);
+        GuiSceneSC.frame(x + 107, y + 36, 30, 34);
+        GuiSceneSC.plasmaRing(x + 122, y + 53, 9, t, running);
+        // the dials: how long each gas lasts, against a full tank's worth
+        FluidTank a = generator.getFuelTank(), d = generator.getFuelTank2();
+        GuiSceneSC.dial(x + 22, y + 85, 8, a.getCapacity() > 0 ? (float) a.getFluidAmount() / a.getCapacity() : 0F);
+        GuiSceneSC.dial(x + 68, y + 85, 8, d.getCapacity() > 0 ? (float) d.getFluidAmount() / d.getCapacity() : 0F);
+        // the gases as the 4 : 1 they burn in, each part filled with how full its tank is
+        int bx = x + PR_BAR_X, by = y + PR_BAR_Y, part = (PR_BAR_W - 2) * 4 / 5;
+        float af = a.getCapacity() > 0 ? (float) a.getFluidAmount() / a.getCapacity() : 0F;
+        float df = d.getCapacity() > 0 ? (float) d.getFluidAmount() / d.getCapacity() : 0F;
+        drawRect(bx, by, bx + PR_BAR_W, by + 6, 0xFF04080C);
+        drawRect(bx + 1, by + 1, bx + 1 + (int) (part * af), by + 5, 0xFFC890FF);
+        drawRect(bx + 1 + part, by + 1, bx + 1 + part + (int) ((PR_BAR_W - 2 - part) * df), by + 5, 0xFF6AE0FF);
+        drawRect(bx + part, by - 1, bx + part + 1, by + 7, 0xFFFFFFFF);
+    }
+
+    private void drawPrText() {
+        fit(Lang.tr("sc.gui.pr.title"), 14, CAPTION_Y, 120, GuiHoloSC.CYAN & 0xFFFFFF);
+        for (int i = 0; i < tankCount(); i++) {
+            TextFitSC.drawCentered(fontRendererObj, tankLabel(i), tankX(i), 31, GuiTankGaugeSC.WIDTH - 7,
+                    GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
+        smallFit(Lang.tr("sc.gui.pr.argon"), 17, 61, 22, GuiHoloSC.LABEL);
+        smallFit("D", 31, 65, 8, 0xA0E6FF);
+        smallFit(generator.getLastOutput() + " EU/t", 108, 73, 30, generator.getLastOutput() > 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        double[] secs = prSeconds();
+        String[] labels = {Lang.tr("sc.gui.pr.argon"), Lang.tr("sc.gui.pr.deut")};
+        for (int i = 0; i < 2; i++) {
+            int cx = i == 0 ? 22 : 68;
+            smallFit(labels[i], cx + 11, 79, 34, GuiHoloSC.LABEL);
+            smallFit(Lang.tr("sc.gui.pr.for", fusTime(secs[i])), cx + 11, 85, 34, secs[i] <= 0 ? GuiHoloSC.BAD : GuiHoloSC.VALUE);
+        }
+        smallFit(Lang.tr("sc.gui.pr.ratio"), 14, PR_BAR_Y, 25, GuiHoloSC.LABEL);
+        GeneratorStatus status = generator.getStatus();
+        String line;
+        int col;
+        boolean noA = generator.getFuelTank().getFluidAmount() <= 0, noD = generator.getFuelTank2().getFluidAmount() <= 0;
+        double need = type.fuelRatePerTick * Math.max(0.01, generator.fuelMultiplier());
+        if (status == GeneratorStatus.GENERATING) {
+            line = Lang.tr("sc.gui.pr.running", (int) Math.min(secs[0], secs[1]), Math.round(generator.ratedOutput() / need));
+            col = GuiHoloSC.OK;
+        } else if (status == GeneratorStatus.NO_FUEL) {
+            line = Lang.tr(noA && noD ? "sc.gui.pr.nogas" : noA || secs[0] < secs[1] ? "sc.gui.pr.noargon" : "sc.gui.pr.nodeut");
+            col = GuiHoloSC.BAD;
+        } else {
+            line = status.localized();
+            col = status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN : GuiHoloSC.IDLE;
+        }
+        smallFit(line, 14, 105, 190, col);
     }
 
     // ---- the RTG ----
@@ -1527,7 +1622,7 @@ public class GuiGeneratorSC extends GuiContainer {
         }
 
         for (int i = 0; i < tankCount(); i++) {
-            if (GuiGaugeSC.isOver(tankX(i), comb || turb ? 40 : TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
+            if (GuiGaugeSC.isOver(tankX(i), comb || turb || preact ? 40 : TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
                 FluidTank t = tank(i);
                 lines.add(Lang.tr(i == 2 ? "sc.gui.gen.water" : type.kind == GeneratorType.Kind.EXO ? "sc.gui.gen.coolant" : "sc.gui.fuel"));
                 lines.add(GuiGaugeSC.fluidLabel(t.getFluid(), t.getCapacity()));
@@ -1566,6 +1661,13 @@ public class GuiGeneratorSC extends GuiContainer {
         if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comb.table.title"));
             lines.add(Lang.tr("sc.gui.comb.table.hint"));
+            return lines;
+        }
+        if (preact && GuiGaugeSC.isOver(14, 34, 124, 38, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.pr.tip"));
+            lines.add(Lang.tr("sc.gui.pr.tip.1"));
+            lines.add(Lang.tr("sc.gui.pr.tip.2"));
+            lines.add(Lang.tr("sc.gui.pr.tip.3"));
             return lines;
         }
         if (fcell && GuiGaugeSC.isOver(FC_X, FC_Y, FC_W, FC_H, mouseX, mouseY)) {
