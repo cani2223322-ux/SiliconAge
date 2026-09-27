@@ -2060,6 +2060,27 @@ sc.gui.ww.tip=How to place the wheel
 sc.gui.ww.tip.1=§7Water must flow past its sides: north, south, west, east
 sc.gui.ww.tip.2=§7Put the source higher up or further along so the water runs past the wheel
 sc.gui.ww.tip.3=§7Each side with a current +4 EU/t, up to 16; still water doesn't count
+sc.gui.th.title=THERMOPAIRS
+sc.gui.th.s.up=up
+sc.gui.th.s.down=down
+sc.gui.th.up=up
+sc.gui.th.down=down
+sc.gui.th.pairs=pairs
+sc.gui.th.dt=ΔT, K
+sc.gui.th.kind.1=lava
+sc.gui.th.kind.2=fire
+sc.gui.th.kind.3=water
+sc.gui.th.kind.4=ice
+sc.gui.th.kind.5=p.ice
+sc.gui.th.running=Running · %s (%d) · hot %d K, cold %d K
+sc.gui.th.none=No pairs: it needs a hot side (lava, fire) and a cold one (water, ice)
+sc.gui.th.nohot=No hot side: put lava or fire beside it
+sc.gui.th.nocold=No cold side: put water, ice or snow beside it
+sc.gui.th.best=best: 3 lava + 3 packed ice = 384 EU/t
+sc.gui.th.tip=What counts
+sc.gui.th.tip.1=§7Hot: lava 1300 K, fire 1000 K
+sc.gui.th.tip.2=§7Cold: water 300 K, ice and snow 270 K, packed ice 250 K
+sc.gui.th.tip.3=§7A pair = a hot side + a cold one; output = pairs × ΔT ÷ 8, up to 384 EU/t. All 6 sides count
 sc.gui.holo.washing=WASHING
 sc.gui.washer.per=A wash
 sc.gui.washer.left=Enough

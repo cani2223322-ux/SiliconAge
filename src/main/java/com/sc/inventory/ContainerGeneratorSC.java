@@ -122,7 +122,7 @@ public class ContainerGeneratorSC extends Container {
     private static final int ID_ENERGY = 0, ID_F1 = 1, ID_F1_AMT = 2, ID_F2 = 3, ID_F2_AMT = 4, ID_OUT = 5, ID_OUT_AMT = 6,
             ID_IGNITION = 7, ID_IGNITED = 8, ID_STATUS = 9, ID_OUTPUT = 10, ID_HEAT = 11, ID_RAMP = 12, ID_INFO_A = 13,
             ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, ID_CELL = 18,
-            ID_LIFE = 19, ID_SOLID = 20, ID_SOLID_TOTAL = 21, ID_SOLID_ITEM = 22, COUNT = 23;
+            ID_LIFE = 19, ID_SOLID = 20, ID_SOLID_TOTAL = 21, ID_SOLID_ITEM = 22, ID_SIDES = 23, COUNT = 24;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
@@ -155,6 +155,7 @@ public class ContainerGeneratorSC extends Container {
             case ID_SOLID: return (int) Math.ceil(generator.getSolidBurn());
             case ID_SOLID_TOTAL: return generator.getSolidBurnTotal();
             case ID_SOLID_ITEM: return generator.getSolidBurnItem();
+            case ID_SIDES: return generator.getSideInfo();
             default: return generator.getCreativeTier().ordinal();
         }
     }
@@ -209,6 +210,9 @@ public class ContainerGeneratorSC extends Container {
             case ID_SOLID_TOTAL:
             case ID_SOLID_ITEM:
                 generator.setSolidClient(sync.value(ID_SOLID), sync.value(ID_SOLID_TOTAL), sync.value(ID_SOLID_ITEM));
+                break;
+            case ID_SIDES:
+                generator.setSideInfoClient(sync.value(ID_SIDES));
                 break;
             case ID_POWER:
                 generator.setPowerFlagsClient(sync.value(ID_POWER));

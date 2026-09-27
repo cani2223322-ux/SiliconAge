@@ -61,6 +61,14 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean wind;
     /** The Water Wheel: the wheel from above with its four sides, the output in four steps, a row per side. */
     private final boolean water;
+    /** The Thermoelectric Generator: its six neighbours round it, the pairs x dT / 8 chain, a row per side. */
+    private final boolean thermo;
+    /** Display order of the sides (ForgeDirection ordinals): up, down, north, south, west, east. */
+    private static final int[] TH_ORDER = {1, 0, 2, 3, 4, 5};
+    private static final int TH_C = 14, TH_CX = 39, TH_CY = 56;
+    /** Where each side's tile goes, by ForgeDirection ordinal (down, up, north, south, west, east). */
+    private static final int[][] TH_POS = {{61, 75}, {17, 37}, {TH_CX, TH_CY - TH_C - 1}, {TH_CX, TH_CY + TH_C + 1},
+            {TH_CX - TH_C - 1, TH_CY}, {TH_CX + TH_C + 1, TH_CY}};
     private static final int WW_X = 14, WW_Y = 34, WW_CELL = 18, WW_RIGHT = 76;
     private static final int WD_LAND_X = 14, WD_LAND_Y = 34, WD_LAND_W = 64, WD_LAND_H = 56;
     private static final int[] WD_CHIP_X = {84, 116, 148};
@@ -95,6 +103,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.solid = type == GeneratorType.SOLID_FUEL;
         this.wind = type == GeneratorType.WIND_TURBINE;
         this.water = type == GeneratorType.WATER_WHEEL;
+        this.thermo = type == GeneratorType.THERMOELECTRIC;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -211,6 +220,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawWindBackground(x, y, partialTicks);
         } else if (water) {
             drawWaterBackground(x, y, partialTicks);
+        } else if (thermo) {
+            drawThermoBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -274,6 +285,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (water) {
             drawWaterText();
+            drawUpgradeCount();
+            return;
+        }
+        if (thermo) {
+            drawThermoText();
             drawUpgradeCount();
             return;
         }
@@ -790,6 +806,84 @@ public class GuiGeneratorSC extends GuiContainer {
         smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
     }
 
+    // ---- the Thermoelectric Generator ----
+
+    /** thermoKind() of the side with this ForgeDirection ordinal. */
+    private int thermoSide(int dir) {
+        return generator.getSideInfo() >> (dir * 3) & 7;
+    }
+
+    private void drawThermoBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        GuiSceneSC.frame(x + 14, y + 34, 64, 58);
+        drawRect(x + TH_CX, y + TH_CY, x + TH_CX + TH_C, y + TH_CY + TH_C, 0xFF8A909A);
+        GuiSceneSC.peltier(x + TH_CX + 1, y + TH_CY + 1, TH_C - 2, TH_C - 2, t, generator.getInfoA(), 3);
+        for (int d = 0; d < 6; d++) {
+            GuiSceneSC.thermoTile(x + TH_POS[d][0], y + TH_POS[d][1], TH_C, thermoSide(d), t);
+        }
+        for (int i = 0; i < 2; i++) {                                          // the chips: pairs, dT
+            int cx = x + (i == 0 ? 84 : 116), w = i == 0 ? 24 : 28;
+            drawRect(cx, y + 36, cx + w, y + 56, 0xFF2A6A8A);
+            drawRect(cx + 1, y + 37, cx + w - 1, y + 55, 0xFF0E3A50);
+        }
+    }
+
+    private void drawThermoText() {
+        fit(Lang.tr("sc.gui.th.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        String[] shortNames = {"sc.gui.th.s.down", "sc.gui.th.s.up", "sc.gui.ww.n", "sc.gui.ww.s", "sc.gui.ww.w", "sc.gui.ww.e"};
+        for (int d = 0; d < 6; d++) {
+            smallFit(Lang.tr(shortNames[d]), TH_POS[d][0] + 1, TH_POS[d][1] + 1, TH_C - 1, 0xF0F5FF);
+        }
+        // pairs x dT / 8
+        String[] labels = {Lang.tr("sc.gui.th.pairs"), Lang.tr("sc.gui.th.dt")};
+        String[] vals = {String.valueOf(generator.getInfoA()), String.valueOf(generator.getInfoB())};
+        for (int i = 0; i < 2; i++) {
+            int cx = i == 0 ? 84 : 116, w = i == 0 ? 24 : 28;
+            int lw = Math.min(w - 2, (int) (fontRendererObj.getStringWidth(labels[i]) * 0.625F));
+            smallFit(labels[i], cx + (w - lw) / 2, 38, w - 2, GuiHoloSC.LABEL);
+            int vw = fontRendererObj.getStringWidth(vals[i]);
+            fontRendererObj.drawString(vals[i], cx + (w - Math.min(w - 2, vw)) / 2, 46, GuiHoloSC.VALUE);
+        }
+        fontRendererObj.drawString("×", 110, 42, GuiHoloSC.VALUE);
+        fontRendererObj.drawString("÷8", 146, 42, GuiHoloSC.VALUE);
+        int out = generator.getLastOutput();
+        fit(out + " EU/t", 84, 60, 42, out > 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit(Lang.tr("sc.gui.ww.of", type.euPerTick), 128, 62, 44, GuiHoloSC.LABEL);
+        // a row per side
+        String[] names = {"sc.gui.th.down", "sc.gui.th.up", "sc.gui.ww.north", "sc.gui.ww.south", "sc.gui.ww.west", "sc.gui.ww.east"};
+        int hot = 0, cold = 0, hotSum = 0, coldSum = 0;
+        for (int i = 0; i < 6; i++) {
+            int d = TH_ORDER[i], k = thermoSide(d), kelvin = TileEntityGeneratorSC.THERMO_KELVIN[k];
+            int rx = 84 + (i % 2) * 46, ry = 70 + (i / 2) * 7;
+            smallFit(Lang.tr(names[d]), rx, ry, 17, GuiHoloSC.LABEL);
+            String v = k == 0 ? "-" : Lang.tr("sc.gui.th.kind." + k) + " " + kelvin;
+            smallFit(v, rx + 18, ry, 28, k == 0 ? 0x465A6E : k <= 2 ? 0xFF965A : 0x82BEFF);
+            if (k == 1 || k == 2) {
+                hot++;
+                hotSum += kelvin;
+            } else if (k >= 3) {
+                cold++;
+                coldSum += kelvin;
+            }
+        }
+        GeneratorStatus status = generator.getStatus();
+        String line;
+        int col;
+        if (status == GeneratorStatus.GENERATING) {
+            line = Lang.tr("sc.gui.th.running", generator.outputTier().name(), generator.outputTier().getVoltage(),
+                    hot > 0 ? hotSum / hot : 0, cold > 0 ? coldSum / cold : 0);
+            col = GuiHoloSC.OK;
+        } else if (status == GeneratorStatus.NO_HEAT) {
+            line = Lang.tr(hot == 0 && cold == 0 ? "sc.gui.th.none" : hot == 0 ? "sc.gui.th.nohot" : "sc.gui.th.nocold");
+            col = GuiHoloSC.BAD;
+        } else {
+            line = status.localized();
+            col = status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN : GuiHoloSC.IDLE;
+        }
+        smallFit(line, 14, 96, 190, col);
+        smallFit(Lang.tr("sc.gui.th.best"), 14, 104, 190, GuiHoloSC.LABEL);
+    }
+
     // ---- the Water Wheel ----
 
     /** Each side (north, south, east, west): 0 no water, 1 flowing, 2 standing - from infoB. */
@@ -1251,6 +1345,13 @@ public class GuiGeneratorSC extends GuiContainer {
         if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comb.table.title"));
             lines.add(Lang.tr("sc.gui.comb.table.hint"));
+            return lines;
+        }
+        if (thermo && GuiGaugeSC.isOver(14, 34, 64, 58, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.th.tip"));
+            lines.add(Lang.tr("sc.gui.th.tip.1"));
+            lines.add(Lang.tr("sc.gui.th.tip.2"));
+            lines.add(Lang.tr("sc.gui.th.tip.3"));
             return lines;
         }
         if (water && GuiGaugeSC.isOver(WW_X, WW_Y, WW_CELL * 3 + 4, WW_CELL * 3 + 4, mouseX, mouseY)) {

@@ -1286,6 +1286,43 @@ public final class GuiSceneSC {
         }
     }
 
+    /** A neighbour of the Thermoelectric Generator: 0 nothing, 1 lava, 2 fire, 3 water, 4 ice / snow, 5 packed ice. */
+    public static void thermoTile(int x, int y, int s, int kind, float t) {
+        int[] cols = {0xFF3A3024, 0xFFE8641E, 0xFFFFA030, 0xFF2A5AA0, 0xFF9AD0F0, 0xFF7AB0E0};
+        rect(x, y, s, s, cols[Math.max(0, Math.min(5, kind))]);
+        if (kind == 1) {
+            for (int i = 0; i < 4; i++) {
+                rect(x + (i * 5 + (int) t / 4) % (s - 2), y + (i * 7) % (s - 2), 2, 2, 0xFFFFD060);
+            }
+        } else if (kind == 2) {
+            for (int i = 0; i < 3; i++) {
+                int h = 3 + (int) (2 + 2 * Math.sin(t * 0.7F + i));
+                rect(x + 2 + i * 4, y + s - 2 - h, 2, h, 0xFFFFE070);
+            }
+        } else if (kind == 3) {
+            for (int i = 0; i < 3; i++) {
+                rect(x + 2 + (i * 5 + (int) (t / 3)) % (s - 5), y + 3 + i * 4, 3, 1, 0xFF8AC0FF);
+            }
+        } else if (kind >= 4) {
+            rect(x + 2, y + 2, s - 6, 1, 0xFFE8F8FF);
+            rect(x + 3, y + 4, 1, s - 7, 0xFFE8F8FF);
+        }
+    }
+
+    /** The Thermoelectric Generator itself: a hot plate on top, a cold one under, `pairs` of its legs lit. */
+    public static void peltier(int x, int y, int w, int h, float t, int pairs, int legs) {
+        rect(x, y, w, 3, 0xFFC8502A);
+        rect(x, y + h - 3, w, 3, 0xFF3A6AB0);
+        for (int i = 0; i < legs; i++) {
+            int lx = x + 1 + i * (w - 2) / legs;
+            boolean on = i < pairs;
+            rect(lx, y + 3, 2, h - 6, on ? 0xFFB08A6A : 0xFF3A3A40);
+            if (on && h > 8) {
+                rect(lx, y + 3 + (int) ((t * 0.8F + i * 3) % (h - 7)), 1, 1, 0xFF6EE6FF);
+            }
+        }
+    }
+
     /** Three wind turbine blades round a hub, turning at `spin` (0 still .. 1 full). */
     public static void windBlades(int cx, int cy, int r, float t, float spin) {
         double a0 = t * 0.25 * spin;

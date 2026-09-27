@@ -286,6 +286,17 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         solidBurnItem = item;
     }
 
+    /** What's on each side for the screen: 3 bits per ForgeDirection ordinal (Thermoelectric: thermoKind()). */
+    private int sideInfo;
+
+    public int getSideInfo() {
+        return sideInfo;
+    }
+
+    public void setSideInfoClient(int v) {
+        sideInfo = v;
+    }
+
     public void setInflowClient(int tenths) {
         inflowTenths = tenths;
     }
@@ -681,9 +692,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      */
     private void updateThermo() {
         if (worldObj.getTotalWorldTime() % 20 == 0) {
-            int hot = 0, cold = 0, hotSum = 0, coldSum = 0;
+            int hot = 0, cold = 0, hotSum = 0, coldSum = 0, sides = 0;
             for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
                 int t = temperatureAt(xCoord + d.offsetX, yCoord + d.offsetY, zCoord + d.offsetZ);
+                sides |= thermoKind(t) << (d.ordinal() * 3);
                 if (t >= 700) {
                     hot++;
                     hotSum += t;
@@ -696,10 +708,26 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             int dT = pairs == 0 ? 0 : hotSum / hot - coldSum / cold;
             infoA = pairs;
             infoB = dT;
+            sideInfo = sides;
             cachedOutput = Math.min(generatorType.euPerTick, pairs * dT / 8);
         }
         give(cachedOutput, GeneratorStatus.NO_HEAT);
     }
+
+    /** For the screen: 0 nothing, 1 lava, 2 fire, 3 water, 4 ice / snow, 5 packed ice - from its Kelvin. */
+    public static int thermoKind(int kelvin) {
+        switch (kelvin) {
+            case 1300: return 1;
+            case 1000: return 2;
+            case 300: return 3;
+            case 270: return 4;
+            case 250: return 5;
+            default: return 0;
+        }
+    }
+
+    /** Kelvin of each thermoKind(). */
+    public static final int[] THERMO_KELVIN = {0, 1300, 1000, 300, 270, 250};
 
     /** Kelvin of a block next to the generator, 0 if it neither heats nor cools. */
     private int temperatureAt(int x, int y, int z) {
