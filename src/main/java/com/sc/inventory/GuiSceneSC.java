@@ -995,6 +995,12 @@ public final class GuiSceneSC {
      * on their stand, light rays hitting them on a clear day. `covered`: something over the panel.
      */
     public static void sky(int x, int y, int w, int h, float t, boolean day, boolean rain, float arc, boolean covered) {
+        sky(x, y, w, h, t, day, rain, arc, covered, 0xFF2A3A8A, 0xFF4A6AC8);
+    }
+
+    /** The same with the panel's own cells: `cell` their body, `edge` the light catching their top. */
+    public static void sky(int x, int y, int w, int h, float t, boolean day, boolean rain, float arc, boolean covered,
+                           int cell, int edge) {
         rect(x, y, w, h, 0xFF1E3444);
         int top = day ? 0xFF3A7AC8 : 0xFF0A1024, bot = day ? 0xFF9AC8F0 : 0xFF1A2A4A;
         if (rain) {
@@ -1024,8 +1030,8 @@ public final class GuiSceneSC {
             rect(x + 1, py - 8, w - 2, 4, 0xFF5A4A3A);
         }
         for (int i = px0; i + 5 <= px1; i += 6) {                              // the panel
-            rect(i, py, 5, 4, 0xFF2A3A8A);
-            rect(i, py, 5, 1, 0xFF4A6AC8);
+            rect(i, py, 5, 4, cell);
+            rect(i, py, 5, 1, edge);
         }
         rect(px0 - 1, py + 4, px1 - px0 + 2, 1, 0xFF8A909A);
         rect(x + w / 2 - 1, py + 5, 2, y + h - py - 6, 0xFF6A707A);
