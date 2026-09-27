@@ -38,6 +38,10 @@ public class GuiGeneratorSC extends GuiContainer {
     private final GeneratorType type;
     /** The Combustion Generator's own screen: a tachometer, the engine, the fuels table, the reserve bar, the tank on the right. */
     private final boolean comb;
+    /** The Silicon Solar Panel's own screen: the sky, the multiplier chain, the day strip. */
+    private final boolean solar;
+    private static final int SOL_SKY_X = 14, SOL_SKY_Y = 34, SOL_SKY_W = 60, SOL_SKY_H = 44, SOL_STRIP_Y = 84, SOL_STRIP_W = 190;
+    private static final int[] SOL_CHIP_X = {80, 118, 154}, SOL_CHIP_W = {28, 26, 26};
     private static final int COMB_TANK_X = 175, COMB_ENGINE_X = 44, COMB_ENGINE_W = 56, COMB_TABLE_X = 103, COMB_TABLE_W = 69,
             COMB_TOP = 24, COMB_TABLE_H = 66, COMB_RESERVE_Y = 93;
     /** The fuels it burns: the fluid names (the first one found counts) and their lang keys, best first. */
@@ -49,6 +53,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.generator = generator;
         this.type = generator.getGeneratorType();
         this.comb = type == GeneratorType.COMBUSTION;
+        this.solar = type == GeneratorType.SOLAR_SI;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -145,10 +150,14 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (comb) {
             drawCombBackground(x, y, partialTicks);
+        } else if (solar) {
+            // the solar screen has no divider
         } else {
             drawRect(x + RIGHT_X - 4, y + GuiBigSC.SCREEN_Y + 6, x + RIGHT_X - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
         }
-        if (type.kind == GeneratorType.Kind.PASSIVE) {
+        if (solar) {
+            drawSolarBackground(x, y, partialTicks);
+        } else if (type.kind == GeneratorType.Kind.PASSIVE) {
             GuiGaugeSC.bind(mc, TEXTURE);
             GL11.glColor4f(1F, 1F, 1F, 1F);
             boolean lit = generator.getStatus() != GeneratorStatus.NO_SUNLIGHT;
@@ -179,6 +188,11 @@ public class GuiGeneratorSC extends GuiContainer {
         GuiBigSC.labels(fontRendererObj, upgrades() ? Lang.tr("sc.gui.big.upgrades") : null, Lang.tr("container.inventory"));
         if (comb) {
             drawCombText();
+            drawUpgradeCount();
+            return;
+        }
+        if (solar) {
+            drawSolarText();
             drawUpgradeCount();
             return;
         }
@@ -253,6 +267,75 @@ public class GuiGeneratorSC extends GuiContainer {
             int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
             fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
         }
+    }
+
+    // ---- the Silicon Solar Panel ----
+
+    /** The time of day in ticks, 0 sunrise .. 12000 sunset .. 24000. */
+    private long dayTime() {
+        return mc.theWorld == null ? 0 : (mc.theWorld.getWorldTime() % 24000 + 24000) % 24000;
+    }
+
+    private boolean solarSky() {
+        return generator.getStatus() != GeneratorStatus.NO_SUNLIGHT;
+    }
+
+    /** The multipliers now: {day or night, rain} (the server's view, via infoA / infoB). */
+    private double[] solarFactors() {
+        return new double[]{generator.getInfoA() != 0 ? 1.0 : 0.5, generator.getInfoB() != 0 ? 0.6 : 1.0};
+    }
+
+    private void drawSolarBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        boolean day = generator.getInfoA() != 0, rain = generator.getInfoB() != 0;
+        long time = dayTime();
+        float arc = day ? Math.min(1F, time / 12000F) : Math.max(0F, (time - 12000) / 12000F);
+        GuiSceneSC.sky(x + SOL_SKY_X, y + SOL_SKY_Y, SOL_SKY_W, SOL_SKY_H, t, day, rain, arc, !solarSky());
+        for (int i = 0; i < 3; i++) {
+            int cx = x + SOL_CHIP_X[i], cy = y + 36;
+            drawRect(cx, cy, cx + SOL_CHIP_W[i], cy + 20, solarSky() ? 0xFF2A6A8A : 0xFF1A2430);
+            drawRect(cx + 1, cy + 1, cx + SOL_CHIP_W[i] - 1, cy + 19, solarSky() ? 0xFF0E3A50 : 0xFF0A1218);
+        }
+        int sx = x + SOL_SKY_X, sy = y + SOL_STRIP_Y;                          // the day strip: day, then night
+        drawRect(sx, sy, sx + SOL_STRIP_W, sy + 10, 0xFF04080C);
+        drawRect(sx + 1, sy + 1, sx + 1 + (SOL_STRIP_W - 2) / 2, sy + 9, 0xFFE8C850);
+        drawRect(sx + 1 + (SOL_STRIP_W - 2) / 2, sy + 4, sx + SOL_STRIP_W - 1, sy + 9, 0xFF3A5AA8);
+        int mx = sx + 1 + (int) ((SOL_STRIP_W - 2) * (time / 24000F));
+        drawRect(mx, sy - 2, mx + 1, sy + 12, 0xFFFFFFFF);
+    }
+
+    private void drawSolarText() {
+        fit(Lang.tr("sc.gui.holo.gen.passive"), SOL_SKY_X, CAPTION_Y, 60, GuiHoloSC.CYAN & 0xFFFFFF);
+        boolean sky = solarSky(), day = generator.getInfoA() != 0, rain = generator.getInfoB() != 0;
+        double[] f = solarFactors();
+        int rated = generator.ratedOutput();
+        String[] labels = {Lang.tr("sc.gui.sol.rated"), Lang.tr(day ? "sc.gui.sol.day" : "sc.gui.sol.night"),
+                Lang.tr(rain ? "sc.gui.sol.rain" : "sc.gui.sol.dry")};
+        String[] values = {String.valueOf(rated), day ? "1" : "0,5", rain ? "0,6" : "1"};
+        int[] cols = {GuiHoloSC.VALUE, day ? 0xFFDC64 : 0x8CAAFF, rain ? 0x8CBEFF : GuiHoloSC.VALUE};
+        for (int i = 0; i < 3; i++) {
+            int w = SOL_CHIP_W[i], cx = SOL_CHIP_X[i];
+            int lw = fontRendererObj.getStringWidth(labels[i]) / 2;
+            smallFit(labels[i], cx + (w - Math.min(lw, w - 2)) / 2, 38, w - 2, sky ? GuiHoloSC.LABEL : 0x465A6E);
+            int vw = fontRendererObj.getStringWidth(values[i]);
+            fontRendererObj.drawString(values[i], cx + (w - vw) / 2, 46, sky ? cols[i] : 0x465A6E);
+            fontRendererObj.drawString(i < 2 ? "×" : "=", cx + w + 2, 42, GuiHoloSC.VALUE);
+        }
+        int now = sky ? Math.max(1, (int) Math.round(rated * f[0] * f[1])) : 0;
+        fit(Lang.tr("sc.gui.sol.now", now), 80, 60, GuiBigSC.SCREEN_RIGHT - 82, GuiHoloSC.VALUE);
+        GeneratorStatus status = generator.getStatus();
+        String st = !sky ? Lang.tr("sc.gui.sol.nosky") : status == GeneratorStatus.BUFFER_FULL ? status.localized()
+                : Lang.tr(day ? (rain ? "sc.gui.sol.dayrain" : "sc.gui.sol.dayclear") : (rain ? "sc.gui.sol.nightrain" : "sc.gui.sol.nightclear"));
+        smallFit(st, 80, 71, GuiBigSC.SCREEN_RIGHT - 82, !sky ? GuiHoloSC.BAD : status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN
+                : day ? 0xFFDC64 : 0x8CAAFF);
+        smallFit(Lang.tr("sc.gui.sol.dayout", rated), SOL_SKY_X, SOL_STRIP_Y + 13, 90, 0xE8C850);
+        smallFit(Lang.tr("sc.gui.sol.nightout", Math.max(1, (int) Math.round(rated * 0.5))), SOL_SKY_X + SOL_STRIP_W / 2, SOL_STRIP_Y + 13, 90, 0x7896DC);
+        long time = dayTime();
+        long left = day ? Math.max(0, 12000 - time) : time >= 12000 ? 24000 - time : 0;
+        int min = (int) Math.max(1, (left / 20 + 59) / 60);
+        smallFit(Lang.tr(day ? "sc.gui.sol.tosunset" : "sc.gui.sol.tosunrise", min) + " · "
+                        + Lang.tr("sc.gui.holo.gen.out", generator.outputTier().name(), generator.outputTier().getVoltage()),
+                SOL_SKY_X, SOL_STRIP_Y + 21, SOL_STRIP_W, GuiHoloSC.LABEL);
     }
 
     // ---- the Combustion Generator ----
@@ -431,6 +514,13 @@ public class GuiGeneratorSC extends GuiContainer {
             }
         }
 
+        if (solar && GuiGaugeSC.isOver(SOL_SKY_X, SOL_STRIP_Y - 2, SOL_STRIP_W, 14, mouseX, mouseY)) {
+            long time = dayTime();
+            lines.add(Lang.tr("sc.gui.sol.strip"));
+            lines.add(Lang.tr("sc.gui.sol.clock", (int) ((time / 1000 + 6) % 24), (int) (time % 1000 * 60 / 1000)));
+            lines.add(Lang.tr("sc.gui.sol.strip.hint"));
+            return lines;
+        }
         if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comb.table.title"));
             lines.add(Lang.tr("sc.gui.comb.table.hint"));

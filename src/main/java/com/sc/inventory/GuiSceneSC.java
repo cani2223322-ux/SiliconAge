@@ -989,6 +989,60 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The sky over a solar panel: a day or night gradient (greyed in the rain), stars by night, the
+     * sun or the moon on its arc at `arc` (0 rising .. 1 setting), rain streaks, the panel's cells
+     * on their stand, light rays hitting them on a clear day. `covered`: something over the panel.
+     */
+    public static void sky(int x, int y, int w, int h, float t, boolean day, boolean rain, float arc, boolean covered) {
+        rect(x, y, w, h, 0xFF1E3444);
+        int top = day ? 0xFF3A7AC8 : 0xFF0A1024, bot = day ? 0xFF9AC8F0 : 0xFF1A2A4A;
+        if (rain) {
+            top = mix(top, 0xFF5A6070, 0.6F);
+            bot = mix(bot, 0xFF7A8090, 0.6F);
+        }
+        for (int yy = y + 1; yy < y + h - 1; yy++) {
+            rect(x + 1, yy, w - 2, 1, mix(top, bot, (float) (yy - y) / h));
+        }
+        if (!day) {
+            for (int i = 0; i < 12; i++) {
+                rect(x + 3 + (i * 17) % Math.max(1, w - 6), y + 3 + (i * 7) % Math.max(1, h / 2), 1, 1, 0xFFE0E8FF);
+            }
+        }
+        arc = Math.max(0F, Math.min(1F, arc));
+        int cx = x + w / 2 + (int) ((w / 2 - 8) * Math.cos(Math.PI * (1 - arc)));
+        int cy = y + h / 2 + 2 - (int) ((h / 2 - 6) * Math.sin(Math.PI * arc));
+        if (day) {
+            disc(cx, cy, 5, 0xFFFFE070);
+            disc(cx, cy, 3, 0xFFFFF4B0);
+        } else {
+            disc(cx, cy, 4, 0xFFD8E0F0);
+            disc(cx + 2, cy - 1, 3, top);
+        }
+        int px0 = x + 6, px1 = x + w - 6, py = y + h - 12;
+        if (covered) {                                                         // a roof over the panel
+            rect(x + 1, py - 8, w - 2, 4, 0xFF5A4A3A);
+        }
+        for (int i = px0; i + 5 <= px1; i += 6) {                              // the panel
+            rect(i, py, 5, 4, 0xFF2A3A8A);
+            rect(i, py, 5, 1, 0xFF4A6AC8);
+        }
+        rect(px0 - 1, py + 4, px1 - px0 + 2, 1, 0xFF8A909A);
+        rect(x + w / 2 - 1, py + 5, 2, y + h - py - 6, 0xFF6A707A);
+        if (day && !rain && !covered) {
+            for (int i = 0; i < 4; i++) {
+                float k = (t * 0.05F + i * 0.25F) % 1F;
+                int tx = px0 + 6 + i * (px1 - px0 - 12) / 3;
+                rect((int) (cx + (tx - cx) * k), (int) (cy + (py - cy) * k), 1, 1, 0xFFFFF0A0);
+            }
+        }
+        if (rain) {
+            for (int i = 0; i < 14; i++) {
+                rect(x + 3 + (i * 11 + (int) (t * 2)) % Math.max(1, w - 6), y + 2 + (int) ((t * 3 + i * 7) % Math.max(1, h - 4)), 1, 3, 0xFF8AB0E8);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
