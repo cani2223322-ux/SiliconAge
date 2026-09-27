@@ -228,6 +228,46 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The CVD Chamber: a Siemens bell jar - a glass dome over two glowing silicon rods and their
+     * bridge on a base plate; the rods thicken as silicon deposits (with the recipe's progress),
+     * gas swirls inside while it works, the two gas inlets in their fluids' colours.
+     */
+    public static void bell(int x, int y, int w, int h, float t, boolean running, float progress, int colA, int colB) {
+        frame(x, y, w, h);
+        int cx = x + w / 2, base = y + h - 8;
+        rect(x + 4, base, w - 8, 3, 0xFF6A707A);                               // the base plate
+        rect(x + 4, base, w - 8, 1, 0xFF9AA0AA);
+        int rw = (w - 16) / 2, rh = h - 20;
+        for (int yy = base - rh; yy < base; yy++) {                           // the dome
+            double k = (double) (yy - (base - rh)) / rh;
+            int half = (int) (rw * Math.sqrt(Math.max(0.0, 1 - (1 - k) * (1 - k))));
+            rect(cx - half - 1, yy, 1, 1, 0xFF9AB8D0);
+            rect(cx + half, yy, 1, 1, 0xFF9AB8D0);
+            if (half > 0) {
+                rect(cx - half, yy, 2 * half, 1, 0xFF0E1C28);
+            }
+        }
+        rect(cx - 2, base - rh - 1, 4, 1, 0xFF9AB8D0);
+        int thick = 1 + Math.round(3 * Math.max(0F, Math.min(1F, progress)));
+        int glow = running ? 0xFFFF9A40 : 0xFF8A5A30, hot = running ? 0xFFFFD8A0 : 0xFFA07850;
+        for (int rx0 : new int[]{cx - 9, cx + 6}) {                           // the rods
+            rect(rx0 - (thick - 1) / 2, base - rh + 8, thick + 1, rh - 8, glow);
+            rect(rx0 - (thick - 1) / 2, base - rh + 8, 1, rh - 8, hot);
+        }
+        rect(cx - 9, base - rh + 7, 16, thick, glow);                          // the bridge
+        if (running) {
+            for (int i = 0; i < 8; i++) {                                     // swirling gas
+                double a = t * 0.3F + i * 0.8;
+                int px = cx + (int) ((rw - 4) * Math.cos(a) * 0.8);
+                int py = base - 6 - (int) ((rh - 10) * ((i * 0.13 + t * 0.02) % 1.0));
+                rect(px, py, 1, 1, i % 2 == 0 ? (colA != 0 ? colA : 0xFFB8D8A0) : (colB != 0 ? colB : 0xFFD8E8F8));
+            }
+        }
+        rect(x + 3, base + 3, 8, 2, colA != 0 ? colA : 0xFF3A4450);           // the gas inlets
+        rect(x + w - 11, base + 3, 8, 2, colB != 0 ? colB : 0xFF3A4450);
+    }
+
     private static int lighter(int c) {
         int r = Math.min(255, ((c >> 16) & 255) + 50), g = Math.min(255, ((c >> 8) & 255) + 50), b = Math.min(255, (c & 255) + 50);
         return 0xFF000000 | r << 16 | g << 8 | b;

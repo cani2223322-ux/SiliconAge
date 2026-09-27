@@ -1732,3 +1732,5 @@ sc.gui.blast.cooling=Cooling: ~%d s
 sc.gui.blast.cold=Cold
 sc.gui.blast.sinks=Heat sinks: %d · heating x%s
 sc.gui.chem.run=a run
+sc.gui.cvd.run=a run: %s mB
+sc.gui.cvd.defect=defects %d%% · %d s

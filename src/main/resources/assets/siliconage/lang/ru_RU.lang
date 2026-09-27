@@ -1732,3 +1732,5 @@ sc.gui.blast.cooling=Остывает: ~%d с
 sc.gui.blast.cold=Холодная
 sc.gui.blast.sinks=Радиаторов: %d · нагрев x%s
 sc.gui.chem.run=за раз
+sc.gui.cvd.run=за раз: %s мБ
+sc.gui.cvd.defect=брак %d%% · %d с
