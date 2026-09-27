@@ -59,6 +59,9 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean solid;
     /** The Wind Turbine: the landscape (height), the multiplier chips, a dial, the rotor with its wear. */
     private final boolean wind;
+    /** The Water Wheel: the wheel from above with its four sides, the output in four steps, a row per side. */
+    private final boolean water;
+    private static final int WW_X = 14, WW_Y = 34, WW_CELL = 18, WW_RIGHT = 76;
     private static final int WD_LAND_X = 14, WD_LAND_Y = 34, WD_LAND_W = 64, WD_LAND_H = 56;
     private static final int[] WD_CHIP_X = {84, 116, 148};
     private static final int WD_CHIP_W = 24;
@@ -91,6 +94,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.fus = type == GeneratorType.FUSION_REACTOR;
         this.solid = type == GeneratorType.SOLID_FUEL;
         this.wind = type == GeneratorType.WIND_TURBINE;
+        this.water = type == GeneratorType.WATER_WHEEL;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -205,6 +209,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawSolidBackground(x, y, partialTicks);
         } else if (wind) {
             drawWindBackground(x, y, partialTicks);
+        } else if (water) {
+            drawWaterBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -263,6 +269,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (wind) {
             drawWindText();
+            drawUpgradeCount();
+            return;
+        }
+        if (water) {
+            drawWaterText();
             drawUpgradeCount();
             return;
         }
@@ -779,6 +790,67 @@ public class GuiGeneratorSC extends GuiContainer {
         smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
     }
 
+    // ---- the Water Wheel ----
+
+    /** Each side (north, south, east, west): 0 no water, 1 flowing, 2 standing - from infoB. */
+    private int[] waterSides() {
+        int bits = generator.getInfoB();
+        return new int[]{bits & 3, bits >> 2 & 3, bits >> 4 & 3, bits >> 6 & 3};
+    }
+
+    private void drawWaterBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        int n = generator.getInfoA();
+        float spin = generator.getStatus() == GeneratorStatus.GENERATING ? Math.max(0.25F, n / 4F) : 0F;
+        GuiSceneSC.waterCross(x + WW_X, y + WW_Y, WW_CELL, t, waterSides(), spin);
+        for (int i = 0; i < 4; i++) {                                          // the output in four steps
+            int bx = x + WW_RIGHT + i * 24, by = y + 45;
+            drawRect(bx, by, bx + 22, by + 6, 0xFF04080C);
+            drawRect(bx + 1, by + 1, bx + 21, by + 5, i < n ? 0xFF4A9AE8 : 0xFF2A3038);
+        }
+    }
+
+    private void drawWaterText() {
+        fit(Lang.tr("sc.gui.ww.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        int[] sides = waterSides();
+        String[] letters = {"sc.gui.ww.n", "sc.gui.ww.s", "sc.gui.ww.e", "sc.gui.ww.w"};
+        int c = WW_CELL, cx = WW_X + 2 + c, cy = WW_Y + 2 + c;
+        int[][] pos = {{cx, cy - c}, {cx, cy + c}, {cx + c, cy}, {cx - c, cy}};
+        String[] mark = {"sc.gui.ww.mark.none", "sc.gui.ww.mark.flow", "sc.gui.ww.mark.still"};
+        int[] markCol = {0x966E5A, GuiHoloSC.VALUE, 0xFF966E};
+        for (int s = 0; s < 4; s++) {
+            smallFit(Lang.tr(letters[s]), pos[s][0] + 2, pos[s][1] + 1, 6, GuiHoloSC.LABEL);
+            String m = Lang.tr(mark[sides[s]]);
+            int w = Math.min(c - 2, (int) (fontRendererObj.getStringWidth(m) * 0.625F));
+            smallFit(m, pos[s][0] + (c - w) / 2, pos[s][1] + c / 2 - 1, c - 2, markCol[sides[s]]);
+        }
+        int n = generator.getInfoA(), out = generator.getLastOutput();
+        fit(out + " EU/t", WW_RIGHT, 34, 36, out > 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit(Lang.tr("sc.gui.ww.of", type.euPerTick), 112, 36, 40, GuiHoloSC.LABEL);
+        String[] names = {"sc.gui.ww.north", "sc.gui.ww.south", "sc.gui.ww.east", "sc.gui.ww.west"};
+        String[] vals = {"sc.gui.ww.row.none", "sc.gui.ww.row.flow", "sc.gui.ww.row.still"};
+        for (int s = 0; s < 4; s++) {
+            int ry = 55 + s * 8;
+            smallFit(Lang.tr(names[s]), WW_RIGHT, ry, 24, GuiHoloSC.LABEL);
+            smallFit(Lang.tr(vals[sides[s]]), WW_RIGHT + 26, ry, 94, sides[s] == 1 ? GuiHoloSC.VALUE : 0xFF8C6E);
+        }
+        GeneratorStatus status = generator.getStatus();
+        String line;
+        int col;
+        if (status == GeneratorStatus.GENERATING) {
+            line = Lang.tr("sc.gui.ww.running", generator.outputTier().name(), generator.outputTier().getVoltage());
+            col = GuiHoloSC.OK;
+        } else if (status == GeneratorStatus.NO_WATER) {
+            line = Lang.tr("sc.gui.ww.nowater");
+            col = GuiHoloSC.BAD;
+        } else {
+            line = status.localized();
+            col = status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN : GuiHoloSC.IDLE;
+        }
+        fit(line, 14, 96, 158, col);
+        smallFit(Lang.tr("sc.gui.ww.hint"), 14, 105, 190, GuiHoloSC.LABEL);
+    }
+
     // ---- the Wind Turbine ----
 
     /** {height, free air, weather} factors as the server works them out (the weather from the client's world). */
@@ -1179,6 +1251,13 @@ public class GuiGeneratorSC extends GuiContainer {
         if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comb.table.title"));
             lines.add(Lang.tr("sc.gui.comb.table.hint"));
+            return lines;
+        }
+        if (water && GuiGaugeSC.isOver(WW_X, WW_Y, WW_CELL * 3 + 4, WW_CELL * 3 + 4, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.ww.tip"));
+            lines.add(Lang.tr("sc.gui.ww.tip.1"));
+            lines.add(Lang.tr("sc.gui.ww.tip.2"));
+            lines.add(Lang.tr("sc.gui.ww.tip.3"));
             return lines;
         }
         if (wind && GuiGaugeSC.isOver(WD_LAND_X, WD_LAND_Y, WD_CHIP_X[2] + WD_CHIP_W - WD_LAND_X, WD_LAND_H - 20, mouseX, mouseY)) {

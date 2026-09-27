@@ -1256,6 +1256,36 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The Water Wheel from above: the wheel in the middle, and on its four sides (north, south, east,
+     * west in `states`: 0 no water, 1 flowing, 2 standing) water with the current running across it,
+     * still dark water, or bare ground. `c` is a cell's size.
+     */
+    public static void waterCross(int x, int y, int c, float t, int[] states, float spin) {
+        frame(x, y, c * 3 + 4, c * 3 + 4);
+        int cx = x + 2 + c, cy = y + 2 + c;
+        rect(cx, cy, c, c, 0xFF8A5A2A);
+        rect(cx + 2, cy + 2, c - 4, c - 4, 0xFF6A4A2A);
+        windBlades(cx + c / 2, cy + c / 2, 8, t, spin);
+        int[][] pos = {{cx, cy - c}, {cx, cy + c}, {cx + c, cy}, {cx - c, cy}};
+        for (int s = 0; s < 4; s++) {
+            int tx = pos[s][0], ty = pos[s][1];
+            if (states[s] == 1) {
+                rect(tx, ty, c, c, 0xFF2A5AA0);
+                for (int i = 0; i < 3; i++) {
+                    int d = (int) ((t * 1.5F + i * 6) % c);
+                    if (s < 2) {
+                        rect(tx + 4 + i * 5, ty + Math.min(d, c - 3), 1, 3, 0xFF8AC0FF);
+                    } else {
+                        rect(tx + Math.min(d, c - 3), ty + 4 + i * 5, 3, 1, 0xFF8AC0FF);
+                    }
+                }
+            } else {
+                rect(tx, ty, c, c, states[s] == 2 ? 0xFF1E3A6A : 0xFF3A3024);
+            }
+        }
+    }
+
     /** Three wind turbine blades round a hub, turning at `spin` (0 still .. 1 full). */
     public static void windBlades(int cx, int cy, int r, float t, float spin) {
         double a0 = t * 0.25 * spin;

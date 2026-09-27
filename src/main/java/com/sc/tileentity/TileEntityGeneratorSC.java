@@ -652,17 +652,26 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
     }
 
-    /** 4 EU/t for each side (north, south, east, west) with flowing water against it. */
+    /**
+     * 4 EU/t for each side (north, south, east, west) with flowing water against it. infoB tells the
+     * screen each side, 2 bits apiece in that order: 0 no water, 1 flowing, 2 standing (a source).
+     */
     private void updateWater() {
-        int flowing = 0;
+        int flowing = 0, sides = 0, i = 0;
         for (ForgeDirection d : new ForgeDirection[]{ForgeDirection.NORTH, ForgeDirection.SOUTH, ForgeDirection.EAST, ForgeDirection.WEST}) {
             int x = xCoord + d.offsetX, z = zCoord + d.offsetZ;
             Block b = worldObj.getBlock(x, yCoord, z);
-            if (b.getMaterial() == Material.water && (b == Blocks.flowing_water || worldObj.getBlockMetadata(x, yCoord, z) != 0)) {
+            int state = 0;
+            if (b.getMaterial() == Material.water) {
+                state = b == Blocks.flowing_water || worldObj.getBlockMetadata(x, yCoord, z) != 0 ? 1 : 2;
+            }
+            if (state == 1) {
                 flowing++;
             }
+            sides |= state << (i++ * 2);
         }
         infoA = flowing;
+        infoB = sides;
         give(flowing * 4, GeneratorStatus.NO_WATER);
     }
 
