@@ -125,7 +125,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public static final int RGB_SHELL = 0, RGB_OUTLINE = 1, RGB_FLASH = 2, RGB_TARGETS = 3;
     public static final int DEFAULT_RGB = 0x59E6FF;
     /** The screen's eight ready colours: cyan, green, red, violet, gold, white, pink, orange. */
-    public static final int[] PRESETS = {0x59E6FF, 0x59FF73, 0xFF4D4D, 0xBF73FF, 0xFFCC4D, 0xFFFFFF, 0xFF78BE, 0xFF8C1E};
+    /** Ready colours, named sc.fieldzone.preset.N (the first eight are the old ones - cycleColor went through them). */
+    public static final int[] PRESETS = {0x59E6FF, 0x59FF73, 0xFF4D4D, 0xBF73FF, 0xFFCC4D, 0xFFFFFF, 0xFF78BE, 0xFF8C1E, 0xFFF04D, 0xB4FF3C, 0x2EE6A0, 0x3CD2C8, 0x78B4FF, 0x3C64FF, 0x7850FF, 0xE63CE6, 0xE6286E, 0xFF7F66, 0xFFA028, 0xE6C88C, 0xA06432, 0xA0A0A0, 0x505A64, 0xC8F0FF};
 
     private int flags = DEFAULT_FLAGS;
     private int redstone = REDSTONE_ALWAYS, filter = FILTER_HOSTILE;

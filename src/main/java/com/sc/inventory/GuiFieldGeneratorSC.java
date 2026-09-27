@@ -132,9 +132,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     buttonList.add(new HoloButton(right[i], rx, guiTop + 30 + i * 14, rw, 13, ""));
                 }
                 buttonList.add(new HoloButton(Z_TARGET, rx, guiTop + 130, rw - 18, 13, ""));
-                for (int i = 0; i < TileEntityFieldGeneratorSC.PRESETS.length; i++) {
-                    buttonList.add(new HoloButton(Z_PRESET + i, rx + i * 13, guiTop + 146, 12, 12, ""));
-                }
+                buttonList.add(new HoloButton(Z_PRESET, rx, guiTop + 146, 16, 12, "<"));        // leaf through the ready colours
+                buttonList.add(new HoloButton(Z_PRESET + 1, rx + rw - 16, guiTop + 146, 16, 12, ">"));
                 for (int ch = 0; ch < 3; ch++) {
                     buttonList.add(new Slider(Z_SLIDER + ch, rx, guiTop + 162 + ch * 14, rw, 12, ch));
                 }
@@ -422,8 +421,10 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             colorTarget = (colorTarget + 1) % TileEntityFieldGeneratorSC.RGB_TARGETS;
             editRgb = field.getRgb(colorTarget);
             return;
-        } else if (id >= Z_PRESET && id < Z_PRESET + TileEntityFieldGeneratorSC.PRESETS.length) {
-            editRgb = TileEntityFieldGeneratorSC.PRESETS[id - Z_PRESET];
+        } else if (id == Z_PRESET || id == Z_PRESET + 1) {
+            int n = TileEntityFieldGeneratorSC.PRESETS.length, at = presetIndex(editRgb);
+            at = at < 0 ? (id == Z_PRESET ? n - 1 : 0) : (at + (id == Z_PRESET ? n - 1 : 1)) % n;
+            editRgb = TileEntityFieldGeneratorSC.PRESETS[at];
             sendRgb();
             return;
         } else {
@@ -801,18 +802,17 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         for (int k = 0; k < labels.length; k++) {
             fit(labels[k], 8, 30 + k * 24, 114, c);
         }
-        // the colour being edited, and a frame round the ready colour it matches
+        // the colour being edited; between < and > the ready colour it is (its name, which of how many) or "own"
         int rx = 126;
         drawRect(rx + 64, 130, rx + 80, 143, 0xFF1E3444);
         drawRect(rx + 65, 131, rx + 79, 142, 0xFF000000 | editRgb);
-        for (int i = 0; i < TileEntityFieldGeneratorSC.PRESETS.length; i++) {
-            int px = rx + i * 13;
-            int col = TileEntityFieldGeneratorSC.PRESETS[i];
-            if (col == editRgb) {
-                drawRect(px - 1, 145, px + 13, 159, 0xFF6EE6FF);
-            }
-            drawRect(px + 2, 148, px + 10, 156, 0xFF000000 | col);
-        }
+        drawRect(rx + 17, 146, rx + 63, 158, 0xFF1E3444);
+        drawRect(rx + 18, 147, rx + 62, 157, 0xFF000000 | editRgb);
+        int at = presetIndex(editRgb);
+        String name = at < 0 ? Lang.tr("sc.fieldzone.preset.own")
+                : Lang.tr("sc.fieldzone.preset." + at) + " " + (at + 1) + "/" + TileEntityFieldGeneratorSC.PRESETS.length;
+        int lum = ((editRgb >> 16 & 255) * 3 + (editRgb >> 8 & 255) * 6 + (editRgb & 255)) / 10;
+        small(name, rx + 40, 149, 42, lum > 140 ? 0x0A1420 : 0xF0F4FA, true);
         // the readout: blocks held and the upkeep, for the draft
         int[] point = {draft[D_PX], draft[D_PX + 1], draft[D_PX + 2]};
         List<int[]> nodes = TileEntityFieldGeneratorSC.zoneNodesFor(field.getNodePositions(), draft[D_ANCHOR], point,
@@ -872,6 +872,16 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         fit(text, x + 9, y, SCREEN_R - 3 - x - 9, GuiHoloSC.VALUE);
     }
 
+    /** Which ready colour this is, or -1. */
+    private static int presetIndex(int rgb) {
+        for (int i = 0; i < TileEntityFieldGeneratorSC.PRESETS.length; i++) {
+            if (TileEntityFieldGeneratorSC.PRESETS[i] == (rgb & 0xFFFFFF)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /** A small label (5/8 size) fitted into `maxW`, centred on x when `centre`. */
     private void small(String text, int x, int y, int maxW, int color, boolean centre) {
         float k = Math.min(0.625F, maxW / (float) Math.max(1, fontRendererObj.getStringWidth(text)));
@@ -916,7 +926,14 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 tw -= 6;
             }
             int color = !enabled ? 0x465A6E : hover ? 0xFFFFA0 : lamp == 0xFF3A4450 ? 0x8AA0B4 : 0xE6F0FA;
-            TextFitSC.drawCentered(mc.fontRenderer, text, tx, yPosition + (height - 8) / 2, tw, color, false, 0, 0);
+            // shrink to fit rather than cut (down to 0.4 - the redstone button's "без сигнала" in 26 px)
+            int sw = mc.fontRenderer.getStringWidth(text);
+            float k = Math.max(0.4F, Math.min(1F, tw / (float) Math.max(1, sw)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(tx + (tw - sw * k) / 2F, yPosition + (height - 8 * k) / 2F, 0F);
+            GL11.glScalef(k, k, 1F);
+            mc.fontRenderer.drawString(text, 0, 0, color);
+            GL11.glPopMatrix();
         }
     }
 
