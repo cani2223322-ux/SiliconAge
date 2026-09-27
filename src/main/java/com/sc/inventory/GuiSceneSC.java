@@ -238,6 +238,50 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The oxidation furnace: a quartz tube inside glowing heater coils, a boat of wafers standing in it
+     * (n of them, up to 6), oxygen flowing through when gas; the wafers take their colour with the
+     * progress - blue-violet oxide, or a warm anneal.
+     */
+    public static void tubeFurnace(int x, int y, int w, int h, float t, boolean running, float progress, int n, boolean gas, boolean oxide) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        n = Math.max(1, Math.min(6, n));
+        int ty0 = y + h / 2 - 9, ty1 = y + h / 2 + 9, tx0 = x + 8, tx1 = x + w - 6;
+        rect(tx0 + 8, ty0 - 4, tx1 - tx0 - 16, ty1 - ty0 + 8, 0xFF3A2418);     // the furnace body
+        for (int i = tx0 + 10; i < tx1 - 10; i += 4) {                         // the coils
+            int c = !running ? 0xFF5A2A20 : (i / 4 + (int) (t * 0.3F)) % 3 == 0 ? 0xFFFFA040 : 0xFFFF6A2A;
+            rect(i, ty0 - 3, 2, ty1 - ty0 + 6, c);
+        }
+        rect(tx0, ty0, tx1 - tx0, ty1 - ty0, 0xFF9AB8D0);                      // the quartz tube
+        rect(tx0 + 1, ty0 + 1, tx1 - tx0 - 2, ty1 - ty0 - 2, 0xFF1A2A36);
+        rect(tx0 + 1, ty0 + 1, tx1 - tx0 - 2, 1, 0xFFCFE4F4);
+        rect(tx0 - 4, ty0 + 6, 5, 6, 0xFF6A707A);                              // the gas inlet
+        int bx0 = x + w / 2 - n * 3 - 2;
+        rect(bx0, ty1 - 4, n * 6 + 3, 2, 0xFFDDE8F0);                          // the boat
+        int col = mix(0xFF8A94A8, oxide ? 0xFF6A5AE0 : 0xFFE0A860, progress);
+        int hi = mix(0xFFC8D0DC, oxide ? 0xFFA8A0FF : 0xFFFFD8A0, progress);
+        for (int i = 0; i < n; i++) {
+            rect(bx0 + 2 + i * 6, ty0 + 3, 3, ty1 - ty0 - 7, col);
+            rect(bx0 + 2 + i * 6, ty0 + 3, 1, ty1 - ty0 - 7, hi);
+        }
+        if (running && gas) {
+            for (int i = 0; i < 7; i++) {                                      // oxygen flowing through
+                int d = (int) ((t * 1.3F + i * 9) % (tx1 - tx0 - 4));
+                rect(tx0 + 2 + d, ty0 + 3 + (i * 5) % (ty1 - ty0 - 6), 2, 1, 0xFF9AD8FF);
+            }
+        }
+    }
+
+    /** A colour between a and b (k 0..1), opaque. */
+    public static int mix(int a, int b, float k) {
+        k = Math.max(0F, Math.min(1F, k));
+        int r = (int) (((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * k);
+        int g = (int) (((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * k);
+        int bl = (int) ((a & 255) + ((b & 255) - (a & 255)) * k);
+        return 0xFF000000 | (r << 16) | (g << 8) | bl;
+    }
+
     /** A thermometer beside the furnace: bulb, fill in the zone colour, marks at 0 / 50 / resume / 100. */
     public static void thermometer(int x, int y, int h, float heat, float resume) {
         heat = Math.max(0F, Math.min(1F, heat));
