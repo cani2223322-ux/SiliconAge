@@ -494,10 +494,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             feedWash();
         }
         pushOut();
-        if (scanDirty || scanY > 0) {
+        if (powerOn && (scanDirty || scanY > 0)) {                 // switched off: no scan, no magnet
             scanStep();
         }
-        if (time % 20 == 0) {
+        if (powerOn && time % 20 == 0) {
             magnet();
         }
         if (time % 40 == 0 && running) {
@@ -2051,6 +2051,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setInteger("Cursor", cursor);
         nbt.setLong("Mined", mined);
         nbt.setInteger("Xp", xp);
+        nbt.setBoolean("PowerOff", !powerOn);
+        nbt.setInteger("BatteryMode", batteryMode);
         writeTanks(nbt);
         if (water.getFluidAmount() > 0) {
             nbt.setTag("Water", water.writeToNBT(new NBTTagCompound()));
@@ -2067,6 +2069,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         mined = nbt.getLong("Mined");
         xp = nbt.getInteger("Xp");
+        powerOn = !nbt.getBoolean("PowerOff");
+        batteryMode = nbt.getInteger("BatteryMode") & 1;
         resetCursor();
         markDirty();
     }

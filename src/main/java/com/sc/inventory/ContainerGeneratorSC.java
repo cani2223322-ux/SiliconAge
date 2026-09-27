@@ -97,7 +97,7 @@ public class ContainerGeneratorSC extends Container {
         }
         // the battery slot under the gauge - last, so the player's slots keep their indices
         addSlotToContainer(new SlotBatterySC(generator, TileEntityGeneratorSC.SLOT_BATTERY,
-                GuiBatterySlotSC.itemX(GuiBigSC.GAUGE_X), GuiBatterySlotSC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
+                SlotBatterySC.itemX(GuiBigSC.GAUGE_X), SlotBatterySC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
     }
 
     public TileEntityGeneratorSC getGenerator() {
@@ -257,7 +257,7 @@ public class ContainerGeneratorSC extends Container {
                 return null;
             }
         } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
-            if (!mergeItemStack(original, battery, battery + 1, false)) {
+            if (!SlotMergeSC.mergeValid(inventorySlots, original, battery, battery + 1)) {
                 return null;
             }
         } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, generatorSlots)
@@ -282,7 +282,7 @@ public class ContainerGeneratorSC extends Container {
     private boolean shuffleInPlayerInventory(ItemStack stack, int slotIndex, int firstPlayerSlot) {
         int hotbarStart = firstPlayerSlot + 27;
         return slotIndex < hotbarStart
-                ? mergeItemStack(stack, hotbarStart, inventorySlots.size(), false)
+                ? mergeItemStack(stack, hotbarStart, firstPlayerSlot + 36, false)
                 : mergeItemStack(stack, firstPlayerSlot, hotbarStart, false);
     }
 

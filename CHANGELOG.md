@@ -6,6 +6,21 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Проверка на баги (изменения с 26.09), исправлено:**
+  - вылет игры на сообщениях в чате: предупреждения карьера, карта области, ключ, предупреждение кабеля, «слишком далеко» у зоны поля, переливание жидкостей (формат %d не поддерживается чатом 1.7.10);
+  - взрыв уничтожал машину, генератор или хранилище вместе с модулями в 3 случаях из 4 — теперь блок выпадает целиком;
+  - крафт хранилища следующего уровня или зарядной плиты терял вставленные модули;
+  - shift-клик в генераторе мог положить любой предмет в слот аккумулятора; в слот аккумулятора всегда кладётся ровно 1 предмет;
+  - чужой игрок мог забрать аккумулятор из карьера;
+  - аккумулятор в режиме «рука» / «всё» сбрасывал копание дрелью;
+  - выключенное хранилище / зарядная плита продолжали заряжать и разряжать предметы; выключенный карьер продолжал сканировать за энергию;
+  - воронки вытаскивали модули из хранилища (теперь им доступны только слоты зарядки и разрядки);
+  - сигнал компаратора хранилища мог превысить 15; переполнение энергии у XV-хранилища с модулями;
+  - генератор поля: режим аккумулятора не обновлялся на экране, аккумулятор «застревал» при объединении узлов, выключенное поле включалось при смене мастера, защита от дождя мерцала при нехватке энергии, могла превратить лёд игрока в воду и убрать его снег, лёд образовывался в сухую погоду;
+  - молния, упавшая в поле, больше не бьёт существ рядом с полем и гасит только свой огонь (не камины игрока);
+  - карьер, снятый ключом, помнит выключатель и режим аккумулятора;
+  - название жидкости в чате — на языке игрока; творческий режим не наполняет ёмкость в руке; NEI показывает применение второго топлива (кислород, дейтерий);
+  - /scenergy — только для операторов; подсказка модулей не накладывается на аккумулятор; анимации экранов не дёргаются в старых мирах.
 - **Слот аккумулятора у генераторов:** генератор заряжает аккумулятор своей выработкой (не быстрее своего выхода). Режимы: «излишек» — только то, что не забрала сеть (пока буфер выше половины; солнечная панель на паузе с полным буфером теперь заряжает аккумулятор), «всегда» — часть выработки идёт в аккумулятор даже при полной нагрузке. Стрелки вниз из шкалы в слот горят при зарядке, в подсказке — скорость и время до полного. Трубы кладут пустые аккумуляторы и забирают полные.
 - Подписи под модулями короче («скор. x1.4, EU x1.6», «модулей 2 из 4», «радиат. 1, нагрев x0.5») и заканчиваются перед слотом аккумулятора; слишком длинная строка ужимается, полный текст — при наведении.
 - **Слот аккумулятора под шкалой энергии** у всех машин, карьеров, экзо-буровой и генератора поля (шкала осталась полного размера). Аккумулятор мода (или батарейка / кристалл IC2) любого уровня подпитывает буфер со скоростью входа машины. Режим кнопкой под слотом: «запас» — только когда буфер ниже половины (сеть в приоритете), «всегда» — держит буфер полным. Стрелки над слотом горят, пока идёт подпитка, рядом — полоска заряда аккумулятора; в подсказке — скорость и на сколько хватит. Выключенная машина из аккумулятора не берёт. Shift-клик кладёт аккумулятор в слот; трубы и воронки кладут заряженные и забирают пустые. У карьера нижний экран вкладки «Карьер» и у генератора поля сводка стали уже, чтобы освободить место.
@@ -82,6 +97,21 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - Меню солнечной панели всегда писало «День», даже ночью (выработка при этом уже была ночной, вдвое меньше), и не всегда видело дождь. Теперь день/ночь и дождь приходят с сервера.
 
 ### English
+- **Bug check (changes since 09-26), fixed:**
+  - a crash on chat messages: quarry warnings, area card, wrench, cable warning, the field zone's "too far", fluid pouring (1.7.10's chat doesn't support %d);
+  - an explosion destroyed a machine, generator or storage with its upgrades 3 times in 4 — the block now drops whole;
+  - crafting a storage into the next tier or a charge pad lost its upgrades;
+  - shift-click in a generator could put any item into the battery slot; a battery slot always takes exactly 1 item;
+  - a stranger could take the battery out of a quarry;
+  - a battery in "held" / "all" mode reset mining with the drill;
+  - a switched-off storage / charge pad still charged and emptied items; a switched-off quarry still scanned for energy;
+  - hoppers pulled upgrades out of a storage (they now reach only the charge and discharge slots);
+  - the storage's comparator could go over 15; energy overflow on an XV storage with upgrades;
+  - field generator: the battery mode didn't update on screen, a battery got stuck when nodes linked, a switched-off field came back on when the master changed, the rain shield flickered when short of energy, could turn the player's ice to water and take their snow, ice formed in dry weather;
+  - lightning falling into a field no longer strikes creatures next to it and puts out only its own fire (not the player's fireplaces);
+  - a quarry taken with the wrench keeps its power switch and battery mode;
+  - fluid names in chat in the player's language; creative mode doesn't fill a held container; NEI shows the second fuel's use (oxygen, deuterium);
+  - /scenergy is for operators only; the upgrades' tooltip no longer covers the battery; screen animations no longer stutter on old worlds.
 - **A battery slot on the generators:** the generator charges a battery with its output (no faster than its output voltage). Modes: "surplus" — only what the grid doesn't take (while the buffer is over half; a solar panel paused on a full buffer now charges the battery), "always" — part of the output goes to the battery even under full load. Arrows down from the gauge light while charging; the tooltip gives the rate and time to full. Pipes put empty batteries in and take full ones out.
 - The text beside the upgrade row is shorter ("speed x1.4, EU x1.6", "upgrades 2 of 4") and ends before the battery slot; a line too long shrinks, the full text on hover.
 - **A battery slot under the energy gauge** of every machine, quarry, the Exo rig and the field generator (the gauge keeps its full height). A portable battery of the mod (or an IC2 battery / crystal), any tier, tops up the buffer at the machine's input voltage. Mode button under it: "reserve" — only while the buffer is under half (the grid first), "always" — keeps it full. Arrows over the slot light while it gives, a strip beside it shows the battery's charge; the tooltip gives the rate and how long it lasts. A switched-off machine takes nothing from it. Shift-click puts a battery in; pipes and hoppers put charged ones in and take empty ones out. The quarry's lower screen on its Quarry tab and the field generator's summary are narrower to make room.

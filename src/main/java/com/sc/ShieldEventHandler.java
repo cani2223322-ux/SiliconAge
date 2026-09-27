@@ -159,8 +159,10 @@ public class ShieldEventHandler {
             return;
         }
         if (event.placedBlock == net.minecraft.init.Blocks.snow_layer || event.placedBlock == net.minecraft.init.Blocks.ice) {
-            for (TileEntityFieldGeneratorSC f : TileEntityFieldGeneratorSC.activeFieldsIn(event.world)) {
-                f.playerPlacedAt(event.x, event.z);         // the rain shield leaves the player's snow and ice alone
+            for (Object o : event.world.loadedTileEntityList) {   // every field, up or down: it remembers the player's own
+                if (o instanceof TileEntityFieldGeneratorSC && ((TileEntityFieldGeneratorSC) o).isMaster()) {
+                    ((TileEntityFieldGeneratorSC) o).playerPlacedAt(event.x, event.z);
+                }
             }
         }
     }
@@ -168,8 +170,10 @@ public class ShieldEventHandler {
     /** Under a rain shield lightning strikes no one (the bolt itself is put out on the world tick, CommonEventHandler). */
     @SubscribeEvent
     public void onLightning(net.minecraftforge.event.entity.EntityStruckByLightningEvent event) {
-        net.minecraft.entity.Entity en = event.entity;
-        if (!en.worldObj.isRemote && TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, en.posX, en.posY, en.posZ) != null) {
+        net.minecraft.entity.Entity en = event.entity, bolt = event.lightning;
+        // the bolt's place counts: one falling into a field strikes no one round it, even just outside
+        if (!en.worldObj.isRemote && (TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, bolt.posX, bolt.posY, bolt.posZ) != null
+                || TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, en.posX, en.posY, en.posZ) != null)) {
             event.setCanceled(true);
         }
     }

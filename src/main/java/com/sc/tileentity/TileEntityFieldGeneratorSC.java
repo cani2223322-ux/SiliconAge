@@ -155,7 +155,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** The rain shield is up: raining over the field, switched on and paid for (clients hide the rain inside). */
     private boolean rainShield;
     /** Snow and ice: columns of the zone seen clear, so snow or ice there now is the weather's, not the player's. */
-    private java.util.BitSet clearCols, seenCols;
+    private java.util.BitSet clearCols, seenCols, waterCols;
+    /** Each column's precipitation height when it was seen clear: another height now is a player's build. */
+    private int[] topCols;
     private AxisAlignedBB snowBox;
     private int snowSweep;
     private boolean lowWarned;
@@ -181,6 +183,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     /** The power switch (master): off, the field is down and takes no energy. */
+    @Override
+    public void cycleBatteryMode() {
+        super.cycleBatteryMode();
+        changed();
+    }
+
     public void togglePower() {
         powerOn = !powerOn;
         changed();
@@ -438,7 +446,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** A player put snow or ice in this column: it's theirs, the shield leaves it. */
     public void playerPlacedAt(int x, int z) {
         int i = snowColumn(x, z);
-        if (i >= 0) {
+        if (i >= 0 && clearCols != null) {
             clearCols.clear(i);
             seenCols.set(i);
         }
@@ -469,10 +477,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             snowBox = box;
             clearCols = new java.util.BitSet(w * d);
             seenCols = new java.util.BitSet(w * d);
+            waterCols = new java.util.BitSet(w * d);
+            topCols = new int[w * d];
             snowSweep = 0;
         }
         for (int k = 0; k < Math.min(64, w * d); k++) {
-            int i = snowSweep++ % (w * d);
+            int i = snowSweep;
+            snowSweep = (snowSweep + 1) % (w * d);
             int x = x0 + i % w, z = z0 + i / w;
             if (!worldObj.blockExists(x, 64, z)) {
                 continue;
@@ -485,12 +496,18 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
             if (!snow && !ice) {
                 clearCols.set(i);
+                topCols[i] = y;
+                waterCols.set(i, worldObj.getBlock(x, y - 1, z).getMaterial() == net.minecraft.block.material.Material.water);
             } else if (!seenCols.get(i) || !clearCols.get(i)) {
                 // there before we looked, or put there by a player: left alone
+            } else if (topCols[i] != y) {
+                clearCols.clear(i);                        // the column was built on: whatever is on top is the player's
             } else if (snow) {
                 worldObj.setBlockToAir(x, y, z);
+            } else if (waterCols.get(i)) {
+                worldObj.setBlock(x, y - 1, z, net.minecraft.init.Blocks.water);   // only water that froze turns back
             } else {
-                worldObj.setBlock(x, y - 1, z, net.minecraft.init.Blocks.water);
+                clearCols.clear(i);
             }
             seenCols.set(i);
         }
@@ -580,6 +597,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         owner = from.owner;
         access.clear();
         access.addAll(from.access);
+        powerOn = from.powerOn;                     // a switched-off field stays off
+        batteryMode = from.batteryMode;
     }
 
     private void copyZone(TileEntityFieldGeneratorSC from) {
@@ -1041,10 +1060,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             // the rain shield: paid on top, and the first thing to go when the energy runs short
             int rainEu = has(F_RAIN) && rainOverField()
                     ? upkeep * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100 : 0;
-            boolean shield = rainEu > 0 && getEnergyStored() >= rainEu;
+            // back on only with a second's worth in hand - else a trickle flicked it every few ticks
+            boolean shield = rainEu > 0 && getEnergyStored() >= (rainShield ? rainEu : rainEu * 20);
             if (shield) {
                 removeEnergy(rainEu);
-                keepSnowOff();
+            }
+            if (shield || has(F_RAIN) && !rainOverField()) {
+                keepSnowOff();                      // water freezes in dry cold weather too
             }
             if (shield != rainShield) {
                 rainShield = shield;
@@ -1603,6 +1625,14 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     /** A node joining a cluster: its upgrades into the master's free room, the rest dropped where it stands. */
     private void handUpgradesTo(TileEntityFieldGeneratorSC to) {
+        if (battery != null) {                      // the battery too: a node has no screen to take it from
+            if (to.battery == null) {
+                to.battery = battery;
+            } else if (worldObj != null) {
+                worldObj.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, battery));
+            }
+            battery = null;
+        }
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
             ItemStack s = upgrades[i];
             if (s == null) {

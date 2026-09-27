@@ -307,7 +307,7 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     }
 
     protected void addEnergy(int amount) {
-        energyStored = Math.min(getMaxEnergyStored(), energyStored + amount);
+        energyStored = (int) Math.max(0L, Math.min(getMaxEnergyStored(), (long) energyStored + amount));
     }
 
     /** For subclasses (consuming machines) spending their own buffer on an operation. */

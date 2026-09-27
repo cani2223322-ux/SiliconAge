@@ -33,7 +33,7 @@ public class BatteryElectricManagerSC implements IElectricItemManager {
 
     @Override
     public double discharge(ItemStack stack, double amount, int tier, boolean ignoreTransferLimit, boolean externally, boolean simulate) {
-        if (!ok(stack) || amount <= 0 || tier < ItemBatterySC.tierOf(stack).toIc2Tier() && !ignoreTransferLimit) {
+        if (!ok(stack) || amount <= 0 || tier < ItemBatterySC.tierOf(stack).toIc2Tier()) {
             return 0;
         }
         double limit = ignoreTransferLimit ? amount : Math.min(amount, ItemBatterySC.rateOf(stack));

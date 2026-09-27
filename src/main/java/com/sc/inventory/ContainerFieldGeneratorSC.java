@@ -133,7 +133,7 @@ public class ContainerFieldGeneratorSC extends Container {
             return result;
         }
         if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
-            if (!mergeItemStack(original, battery, battery + 1, false)) {
+            if (!SlotMergeSC.mergeValid(inventorySlots, original, battery, battery + 1)) {
                 return null;
             }
             slot.putStack(original.stackSize == 0 ? null : original);

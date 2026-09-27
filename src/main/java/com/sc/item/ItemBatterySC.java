@@ -44,7 +44,10 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
     private static final int EVERY = 10;
     private static final int STEPS = 5;
 
-    private final IIcon[][] icons = new IIcon[KEYS.length][STEPS];
+    /** Client only (IIcon doesn't exist on a dedicated server): made in registerIcons. */
+    @SideOnly(Side.CLIENT)
+    private IIcon[][] icons;
+    @SideOnly(Side.CLIENT)
     private IIcon lamp, blank;
     private Object ic2Manager;
 
@@ -149,7 +152,11 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
             }
         }
         if (mode == MODE_HELD || mode == MODE_ALL) {
-            spent += give(p.getCurrentEquippedItem(), budget - spent, stack);
+            ItemStack hand = p.getCurrentEquippedItem();
+            // not while it digs: a changed tag restarts the block's breaking on the client
+            if (hand != null && !DrillLogicSC.digging(p, hand) && !p.isSwingInProgress) {
+                spent += give(hand, budget - spent, stack);
+            }
         }
         if (mode == MODE_ALL) {
             for (ItemStack s : p.inventory.mainInventory) {
@@ -181,6 +188,7 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
     @Override
     @SideOnly(Side.CLIENT)
     public void registerIcons(IIconRegister register) {
+        icons = new IIcon[KEYS.length][STEPS];
         for (int t = 0; t < KEYS.length; t++) {
             for (int k = 0; k < STEPS; k++) {
                 icons[t][k] = register.registerIcon(Reference.ASSETS + ":battery_" + KEYS[t] + "_" + k);
@@ -212,6 +220,7 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
     }
 
     @Override
+    @SideOnly(Side.CLIENT)
     public IIcon getIcon(ItemStack stack, int pass) {
         if (pass == 1) {
             return modeOf(stack) != MODE_OFF ? lamp : blank;
@@ -220,11 +229,13 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
     }
 
     @Override
+    @SideOnly(Side.CLIENT)
     public IIcon getIconFromDamage(int damage) {
         return icons[Math.max(0, Math.min(KEYS.length - 1, damage))][0];
     }
 
     @Override
+    @SideOnly(Side.CLIENT)
     public IIcon getIconFromDamageForRenderPass(int damage, int pass) {
         return pass == 1 ? blank : getIconFromDamage(damage);
     }

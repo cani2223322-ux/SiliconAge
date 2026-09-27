@@ -89,7 +89,7 @@ public final class FluidHandSC {
                     player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.fluid.empty"));
                     return;
                 }
-                int took = item.fill(held, avail.copy(), true);
+                int took = item.fill(held, avail.copy(), !creative);     // creative hands don't change
                 FluidStack drained = took <= 0 ? null : te.drain(ForgeDirection.UNKNOWN, new FluidStack(avail, took), true);
                 if (drained != null) {
                     splash(world, x, y, z);
@@ -101,7 +101,8 @@ public final class FluidHandSC {
     }
 
     private static void tell(EntityPlayer player, String key, FluidStack f) {
-        player.addChatComponentMessage(new ChatComponentTranslation(key, f.amount, f.getLocalizedName()));
+        // the fluid's name translated by the player's client, not the server
+        player.addChatComponentMessage(new ChatComponentTranslation(key, f.amount, new ChatComponentTranslation(f.getFluid().getUnlocalizedName(f))));
     }
 
     private static void splash(World world, int x, int y, int z) {

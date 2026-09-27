@@ -22,12 +22,10 @@ public final class Ic2LoadQueueSC {
         void joinEnergyNetNow();
     }
 
-    private static final List<TileEntity> PENDING = new ArrayList<TileEntity>();
+    private static final java.util.Set<TileEntity> PENDING = new java.util.LinkedHashSet<TileEntity>();
 
     public static void queue(TileEntity te) {
-        if (!PENDING.contains(te)) {
-            PENDING.add(te);
-        }
+        PENDING.add(te);
     }
 
     public static void cancel(TileEntity te) {
@@ -43,7 +41,8 @@ public final class Ic2LoadQueueSC {
         PENDING.clear();
         for (TileEntity te : now) {
             World w = te.getWorldObj();
-            if (te.isInvalid() || w == null || !w.blockExists(te.xCoord, te.yCoord, te.zCoord)
+            if (te.isInvalid() || w == null || net.minecraftforge.common.DimensionManager.getWorld(w.provider.dimensionId) != w
+                    || !w.blockExists(te.xCoord, te.yCoord, te.zCoord)
                     || w.getTileEntity(te.xCoord, te.yCoord, te.zCoord) != te) {
                 continue;                                     // gone again, or not the tile its block holds
             }

@@ -105,8 +105,9 @@ public class BlockEnergyStorageSC extends Block {
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
         if (com.sc.block.BlockConduitSC.isWrench(player.getCurrentEquippedItem())) {      // a wrench: the output to the clicked face
             TileEntity te = world.getTileEntity(x, y, z);
-            if (!world.isRemote && te instanceof TileEntityEnergyStorageSC) {
-                ((TileEntityEnergyStorageSC) te).setFacing(ForgeDirection.getOrientation(side));
+            ForgeDirection face = ForgeDirection.getOrientation(side);
+            if (!world.isRemote && te instanceof TileEntityEnergyStorageSC && !(face == ForgeDirection.UP && this instanceof BlockChargePadSC)) {
+                ((TileEntityEnergyStorageSC) te).setFacing(face);     // a pad's top is where one stands, never its output
                 te.markDirty();
                 world.markBlockForUpdate(x, y, z);
             }
@@ -159,6 +160,15 @@ public class BlockEnergyStorageSC extends Block {
     public void harvestBlock(World world, EntityPlayer player, int x, int y, int z, int meta) {
         super.harvestBlock(world, player, x, y, z, meta);
         world.setBlockToAir(x, y, z);
+    }
+
+    /**
+     * An explosion drops the block whole: its upgrades and charge ride in the item, and the
+     * explosion's usual 1-in-size chance would have lost them with it.
+     */
+    @Override
+    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int meta, float chance, int fortune) {
+        super.dropBlockAsItemWithChance(world, x, y, z, meta, 1.0F, fortune);
     }
 
     @Override

@@ -42,7 +42,7 @@ public class ContainerMachineSC extends Container {
         }
         // the battery slot under the gauge - last, so the player's slots keep their indices
         addSlotToContainer(new SlotBatterySC(machine, TileEntityMachineSC.SLOT_BATTERY,
-                GuiBatterySlotSC.itemX(GuiBigSC.GAUGE_X), GuiBatterySlotSC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
+                SlotBatterySC.itemX(GuiBigSC.GAUGE_X), SlotBatterySC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
     }
 
     /** A machine type with any tank gets the tighter slot layout beside its tank gauges. */
@@ -219,7 +219,7 @@ public class ContainerMachineSC extends Container {
                 return null;
             }
         } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
-            if (!mergeItemStack(original, battery, battery + 1, false)) {
+            if (!SlotMergeSC.mergeValid(inventorySlots, original, battery, battery + 1)) {
                 return null;
             }
         } else if (original.getItem() instanceof com.sc.item.ItemUpgradeSC) {

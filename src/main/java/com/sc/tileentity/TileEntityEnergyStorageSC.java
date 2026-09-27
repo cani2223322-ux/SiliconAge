@@ -19,7 +19,7 @@ import net.minecraftforge.common.util.ForgeDirection;
  * Broken and picked up, it keeps its charge in the item (BlockEnergyStorageSC).
  */
 @cpw.mods.fml.common.Optional.Interface(iface = "ic2.api.energy.tile.IMultiEnergySource", modid = "industrialupgrade")
-public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements IInventory, ic2.api.energy.tile.IMultiEnergySource {
+public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements net.minecraft.inventory.ISidedInventory, ic2.api.energy.tile.IMultiEnergySource {
 
     /** Slots: 0 charges an item, 1 takes the energy out of one, 2..5 the upgrades. */
     public static final int SLOT_CHARGE = 0, SLOT_DISCHARGE = 1, FIRST_UPGRADE_SLOT = 2, UPGRADE_SLOTS = 4,
@@ -149,7 +149,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     public int comparatorLevel() {
         int e = getEnergyStored();
-        return e <= 0 ? 0 : 1 + (int) (14L * e / Math.max(1, getMaxEnergyStored()));
+        return e <= 0 ? 0 : Math.min(15, 1 + (int) (14L * e / Math.max(1, getMaxEnergyStored())));
     }
 
     public ForgeDirection getFacing() {
@@ -224,8 +224,10 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         if (worldObj == null || worldObj.isRemote) {
             return;
         }
-        chargeRound();
-        dischargeRound();
+        if (switchedOn()) {                                          // off: no charging or emptying items either
+            chargeRound();
+            dischargeRound();
+        }
         if (worldObj.getTotalWorldTime() % 10 == 0) {
             int level = comparatorLevel();
             if (level != lastComparator) {
@@ -520,6 +522,29 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             return slot - FIRST_EXTRA_CHARGE + 1 < chargeSlots() && isChargeable(stack) && tierAllows(stack);
         }
         return slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE && acceptsUpgrade(stack);
+    }
+
+    // ---- automation: hoppers and pipes reach the charge slots and the discharge slot, never the upgrades ----
+
+    @Override
+    public int[] getAccessibleSlotsFromSide(int side) {
+        int n = chargeSlots();
+        int[] out = new int[n + 1];
+        for (int k = 0; k < n; k++) {
+            out[k] = chargeSlotIndex(k);
+        }
+        out[n] = SLOT_DISCHARGE;
+        return out;
+    }
+
+    @Override
+    public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        return (slot < FIRST_UPGRADE_SLOT || slot >= FIRST_EXTRA_CHARGE) && getStackInSlot(slot) == null && isItemValidForSlot(slot, stack);
+    }
+
+    @Override
+    public boolean canExtractItem(int slot, ItemStack stack, int side) {
+        return slot < FIRST_UPGRADE_SLOT || slot >= FIRST_EXTRA_CHARGE;
     }
 
     /** Weapons and armor pieces go in the charge slot (isItemValidForSlot adds the tier rule). */

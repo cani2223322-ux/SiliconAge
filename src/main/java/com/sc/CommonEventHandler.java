@@ -53,9 +53,9 @@ public class CommonEventHandler {
             }
             int bx = net.minecraft.util.MathHelper.floor_double(bolt.posX), by = net.minecraft.util.MathHelper.floor_double(bolt.posY),
                     bz = net.minecraft.util.MathHelper.floor_double(bolt.posZ);
-            for (int dx = -3; dx <= 3; dx++) {
-                for (int dy = -3; dy <= 3; dy++) {
-                    for (int dz = -3; dz <= 3; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {                     // where a bolt lights its fire, no further
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
                         if (world.getBlock(bx + dx, by + dy, bz + dz) == net.minecraft.init.Blocks.fire) {
                             world.setBlockToAir(bx + dx, by + dy, bz + dz);
                         }

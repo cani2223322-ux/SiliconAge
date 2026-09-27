@@ -114,7 +114,7 @@ public class ContainerQuarrySC extends Container {
             setExample(slotId, player.inventory.getItemStack(), player);
             return null;
         }
-        if (slotId >= 0 && slotId < FIRST_PLAYER && !quarry.allowed(player)) {
+        if ((slotId >= 0 && slotId < FIRST_PLAYER || slotId == inventorySlots.size() - 1) && !quarry.allowed(player)) {
             return null;                            // only the owner takes the output or changes the modules
         }
         return super.slotClick(slotId, button, mode, player);
@@ -141,7 +141,7 @@ public class ContainerQuarrySC extends Container {
                 return null;
             }
         } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
-            if (!mergeItemStack(original, battery, battery + 1, false)) {
+            if (!SlotMergeSC.mergeValid(inventorySlots, original, battery, battery + 1)) {
                 return null;
             }
         } else if (!SlotMergeSC.mergeValid(inventorySlots, original, FIRST_UPGRADE, FIRST_PLAYER)

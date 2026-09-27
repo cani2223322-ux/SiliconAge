@@ -111,8 +111,8 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
         for (GenEntry e : allEntries(furnaceFuel ? oneOf(ingredient) : null)) {
             if (isGenerator && NEIServerUtils.areStacksSameTypeCrafting(e.generatorStack(), ingredient)) {
                 arecipes.add(e);
-            } else if (fluid != null && e.type.fuelFluidName != null && e.fuel != null && !e.isSolidFuel()
-                    && fluid.getFluid().getName().equals(e.type.fuelFluidName)) {
+            } else if (fluid != null && e.fuel != null && !e.isSolidFuel()
+                    && (fluid.getFluid().getName().equals(e.type.fuelFluidName) || fluid.getFluid().getName().equals(e.type.fuel2FluidName))) {
                 arecipes.add(e);
             } else if (e.type.kind == GeneratorType.Kind.FUSION && (sameItem(ingredient, ModItems.deuteriumCell)
                     || sameItem(ingredient, ModItems.component("liBlanketModule")))) {

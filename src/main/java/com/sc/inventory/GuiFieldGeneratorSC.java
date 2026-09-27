@@ -650,7 +650,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         int gx = guiLeft, gy = guiTop;
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         window(gx, gy - TABS_UP, W, H + TABS_UP);
         // the holo screen: short where something sits under it (the Field tab's summary, the inventory)
         int screenH = tab == 0 ? 94 : tab == TAB_UPGRADES ? 106 : H - 14;

@@ -39,16 +39,25 @@ public class StorageUpgradeRecipeSC extends ShapedOreRecipe {
     public ItemStack getCraftingResult(InventoryCrafting grid) {
         ItemStack out = super.getCraftingResult(grid);
         long stored = 0;
+        NBTTagCompound ups = null;
         for (int i = 0; i < grid.getSizeInventory(); i++) {
             ItemStack s = grid.getStackInSlot(i);
             if (isStorage(s) && s.hasTagCompound()) {
                 stored += Math.max(0, s.getTagCompound().getInteger("EnergySC"));
+                if (s.getTagCompound().hasKey("UpgradesSC")) {
+                    ups = (NBTTagCompound) s.getTagCompound().getCompoundTag("UpgradesSC").copy();
+                }
             }
         }
-        if (stored > 0 && out != null) {
-            int cap = TileEntityEnergyStorageSC.capacityOf(BlockEnergyStorageSC.tierFor(out.getItemDamage()));
+        if (out != null && (stored > 0 || ups != null)) {
             NBTTagCompound nbt = out.hasTagCompound() ? out.getTagCompound() : new NBTTagCompound();
-            nbt.setInteger("EnergySC", (int) Math.min(cap, stored));
+            if (ups != null) {
+                nbt.setTag("UpgradesSC", ups);             // the upgrades come along: the charge they allowed fits again
+            }
+            if (stored > 0) {
+                int cap = TileEntityEnergyStorageSC.capacityOf(BlockEnergyStorageSC.tierFor(out.getItemDamage()));
+                nbt.setInteger("EnergySC", (int) Math.min(ups != null ? Integer.MAX_VALUE : cap, stored));
+            }
             out.setTagCompound(nbt);
         }
         return out;

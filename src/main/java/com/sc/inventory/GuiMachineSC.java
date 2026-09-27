@@ -325,7 +325,7 @@ public class GuiMachineSC extends GuiContainer {
 
         GuiGaugeSC.bind(mc, TEXTURE);
         if (boil) {                                                     // the fuel badges, the boiler, the dial
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int fuel = boilFuel();
             for (int i = 0; i < 2; i++) {
                 int bx = x + CHEM_X + i * (BOIL_BADGE_W + 2), by = y + CAPTION_Y - 3;
@@ -337,7 +337,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.dial(x + BOIL_X + 8, y + BOIL_Y + BOIL_H + 9, 7,
                     steam.getCapacity() > 0 ? (float) steam.getFluidAmount() / steam.getCapacity() : 0F);
         } else if (refi) {                                              // the products, the flow sheet, the catalyst
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING, pt = refiCatalyst();
             for (int i = 0; i < 5; i++) {
                 boolean on = pt == i >= 2;
@@ -366,7 +366,7 @@ public class GuiMachineSC extends GuiContainer {
                 }
             }
         } else if (air) {                                               // the mode badges, the column between the tanks
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int mode = airMode();
             for (int i = 0; i < 2; i++) {
                 int bx = x + CHEM_X + i * (AIR_BADGE_W + 2), by = y + CAPTION_Y - 1;
@@ -375,7 +375,7 @@ public class GuiMachineSC extends GuiContainer {
             }
             GuiSceneSC.airColumn(x + CHEM_X + 33, y + TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress);
         } else if (elec) {                                              // the badges, the cell between the tanks
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int mode = elecMode();
             for (int i = 0; i < 3; i++) {
                 int bx = x + CHEM_X + i * (ELEC_BADGE_W + 2), by = y + CAPTION_Y - 1;
@@ -387,19 +387,19 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.electrolysisCell(x + CHEM_X + 33, y + TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, t, machine.getStatus() == MachineStatus.PROCESSING,
                     colourOf(machine.getTank(ob != null ? 3 : 2).getFluid(), ob != null ? ob : oa), colourOf(machine.getTank(2).getFluid(), oa));
         } else if (etch) {                                              // the two baths between the two tanks
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             com.sc.machine.MachineRecipe r = shownRecipe();
             GuiSceneSC.etchBaths(x + CVD_BELL_X, y + TANK_Y, CVD_BELL_W, CVD_BELL_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
                     colourOf(machine.getTank(0).getFluid(), r == null ? null : r.fluidInputA),
                     colourOf(machine.getTank(1).getFluid(), r == null ? null : r.fluidInputB));
         } else if (cvd) {                                               // the bell jar between the two gas tanks
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             com.sc.machine.MachineRecipe r = shownRecipe();
             GuiSceneSC.bell(x + CVD_BELL_X, y + TANK_Y, CVD_BELL_W, CVD_BELL_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
                     colourOf(machine.getTank(0).getFluid(), r == null ? null : r.fluidInputA),
                     colourOf(machine.getTank(1).getFluid(), r == null ? null : r.fluidInputB));
         } else if (chem) {                                              // the flask between the input and output tanks
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             com.sc.machine.MachineRecipe r = shownRecipe();
             GuiSceneSC.flask(x + CHEM_X + CHEM_FLASK, y + TANK_Y, CHEM_FLASK_W, CHEM_FLASK_H, t,
                     machine.getStatus() == MachineStatus.PROCESSING,
@@ -407,7 +407,7 @@ public class GuiMachineSC extends GuiContainer {
                     colourOf(machine.getTank(1).getFluid(), r == null ? null : r.fluidInputB),
                     colourOf(machine.getTank(2).getFluid(), r == null ? null : r.fluidOutputA), progress);
         } else if (blast) {                                                    // the furnace, its thermometer, the zoned heat bar
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             float h = (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity();
             if (puller) {
                 GuiSceneSC.puller(x + FURNACE_X, y + FURNACE_Y, FURNACE_W, FURNACE_H, t, machine.getStatus() == MachineStatus.PROCESSING,
@@ -419,7 +419,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.heatBar(x + HEATBAR_X, y + HEATBAR_Y, HEATBAR_W, HEATBAR_H, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
         } else if (sput) {                                              // the target badges, the chamber, the wear
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int k = target();
             for (int i = 0; i < 3; i++) {
                 int bx = x + SAW_X + i * (ION_BADGE_W + 2), by = y + CAPTION_Y - 1;
@@ -439,7 +439,7 @@ public class GuiMachineSC extends GuiContainer {
                         ? (left > 0.25F ? 0xFF5AE66E : 0xFFE63C3C) : 0xFF2A3038);
             }
         } else if (ion) {                                               // the dopant badges, the beam line, the heat
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int d = dopant();
             for (int i = 0; i < 3; i++) {
                 int bx = x + SAW_X + i * (ION_BADGE_W + 2), by = y + CAPTION_Y - 1;
@@ -451,7 +451,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.heatBar(x + SAW_X, y + ION_HEAT_Y, SAW_W, 3, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
         } else if (step) {                                              // the column, the die map, the mask, the heat
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
             GuiSceneSC.stepperColumn(x + SAW_X, y + SAW_Y, STEP_W, STEP_H, t, running, progress);
             GuiSceneSC.frame(x + MAP_X, y + SAW_Y, STEP_W, STEP_H);
@@ -469,7 +469,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.heatBar(x + SAW_X, y + STEP_HEAT_Y, SAW_W, HEATBAR_H, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
         } else if (coat) {                                              // the spin coater and its stages
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
             com.sc.machine.MachineRecipe r = shownRecipe();
             GuiSceneSC.spinCoater(x + SAW_X, y + SAW_Y, COAT_W, COAT_H, t, running, progress,
@@ -482,7 +482,7 @@ public class GuiMachineSC extends GuiContainer {
                 drawRect(sx + 1, sy + 1, sx + STAGE_W - 1, sy + 9, cur ? 0xFF0E3A50 : done ? 0xFF0E2A1A : 0xFF0A1218);
             }
         } else if (oxid) {                                              // the mode badges, the tube furnace, the wafers
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING, ox = oxidising();
             int n = Math.max(1, Math.min(6, wafersPerRun())), lit = running ? (int) (progress * n) : 0;
             for (int i = 0; i < 2; i++) {
@@ -499,7 +499,7 @@ public class GuiMachineSC extends GuiContainer {
                 drawRect(wx + 1, wy + 1, wx + 9, wy + 9, GuiSceneSC.mix(0xFF8A94A8, ox ? 0xFF6A5AE0 : 0xFFE0A860, k));
             }
         } else if (saw) {                                               // the saw, the wafers, the wire's wear
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
             if (dice) {
                 GuiSceneSC.dicingSaw(x + SAW_X, y + SAW_Y, SAW_W, SAW_H, t, running, progress);
@@ -526,10 +526,10 @@ public class GuiMachineSC extends GuiContainer {
         } else if (washer) {                                            // the washing tub: its water is the tank
             FluidTank water = machine.getTank(0);
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
         } else if (fill) {                                              // the fluid badges, the filler, the capsules row
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int mode = fillMode();
             for (int i = 0; i < 2; i++) {
                 int bx = x + SAW_X + i * (FILL_BADGE_W + 2), by = y + CAPTION_Y - 1;
@@ -544,7 +544,7 @@ public class GuiMachineSC extends GuiContainer {
                 GuiSceneSC.capsule(x + SAW_X + i * 10, y + FILL_ROW_Y, 8, 12, i < n ? 1F : 0F, c == 0 ? 0xFF12181E : c);
             }
         } else if (kiln) {                                              // the product badges, the kiln, the curve
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
             int k = kilnProduct();
             for (int i = 0; i < 5; i++) {
@@ -560,7 +560,7 @@ public class GuiMachineSC extends GuiContainer {
                     from == 0xFF5AE66E ? 0xFF6A6A72 : from, k < 0 ? 0xFF8A8A92 : KILN_COLOURS[k]);
             GuiSceneSC.firingCurve(x + KILN_X, y + KILN_CURVE_Y, GuiBigSC.SCREEN_RIGHT - KILN_X, KILN_CURVE_H, running ? progress : 0F);
         } else if (station) {                                           // the tier ladder and the bench
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int[] ld = stationLadder();
             int[] cols = ld[0] == 1 ? ST_CHIP : ST_GEAR;
             for (int i = 0; i < 3; i++) {
@@ -574,7 +574,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.upgradeBench(x + ST_X, y + ST_Y, GuiBigSC.SCREEN_RIGHT - ST_X, ST_H, t, machine.getStatus() == MachineStatus.PROCESSING,
                     progress, cols[step - 1], cols[step], ld[0] == 1);
         } else if (roll) {                                              // the mold badges, the mill, the wear
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int k = rollMold();
             for (int i = 0; i < ROLL_MOLDS.length; i++) {
                 int bx = x + rollBadgeX(i), by = y + rollBadgeY(i);
@@ -593,7 +593,7 @@ public class GuiMachineSC extends GuiContainer {
                         ? (left > 0.25F ? 0xFF5AE66E : 0xFFE63C3C) : 0xFF2A3038);
             }
         } else if (cent) {                                              // the rotor, the chance bars
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             com.sc.machine.MachineRecipe r = centRecipe();
             net.minecraft.item.ItemStack[] outs = centOutputs(r);
             GuiSceneSC.centrifuge(x + CENT_X, y + CENT_Y, CENT_S, CENT_S, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
@@ -607,7 +607,7 @@ public class GuiMachineSC extends GuiContainer {
                         itemColour(outs[i]) | 0xFF000000);
             }
         } else if (pack) {                                              // the assembly scene and its stages
-            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
             int[] pd = packPinsDies();
             GuiSceneSC.packager(x + PACK_X, y + PACK_Y, PACK_W, PACK_H, t, running, progress, pd[0], pd[1]);
@@ -622,7 +622,7 @@ public class GuiMachineSC extends GuiContainer {
             int wx = x + rx + 2, ww = GuiBigSC.SCREEN_RIGHT - rx - 2;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
             if (machine.getMachineType() == com.sc.machine.MachineType.CRUSHER) {
-                float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+                float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
                 GuiSceneSC.crusher(wx, y + SCENE_Y, ww, SCENE_H, t, running, progress);
             } else {                                                     // the pictogram, double size, centred
                 GuiSceneSC.frame(wx, y + SCENE_Y, ww, SCENE_H);
@@ -2107,7 +2107,7 @@ public class GuiMachineSC extends GuiContainer {
             return lines;
         }
 
-        if (GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.W - 16, 18, mouseX, mouseY)
+        if (GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.GAUGE_X - 4 - GuiBigSC.UPG_LABEL_X, 18, mouseX, mouseY)
                 && !GuiBigSC.overUpgradeSlot(mouseX, mouseY, TileEntityMachineSC.UPGRADE_SLOTS)) {
             lines.add(Lang.tr("sc.gui.upgrades"));
             lines.add(Lang.tr("sc.gui.upgrades.hint"));

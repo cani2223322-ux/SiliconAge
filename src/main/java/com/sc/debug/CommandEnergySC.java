@@ -34,12 +34,12 @@ public class CommandEnergySC extends CommandBase {
 
     @Override
     public int getRequiredPermissionLevel() {
-        return 0;
+        return 2;                                               // ops only: it loads chunks
     }
 
     @Override
     public boolean canCommandSenderUseCommand(ICommandSender sender) {
-        return true;
+        return sender.canCommandSenderUseCommand(getRequiredPermissionLevel(), getCommandName());
     }
 
     @Override

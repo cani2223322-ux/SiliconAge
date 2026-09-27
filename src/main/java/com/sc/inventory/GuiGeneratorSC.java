@@ -457,7 +457,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawTurbBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING, feeding = turbSupply() > 0;
         GuiSceneSC.frame(x + 14, y + TB_Y, 158, TB_H);
         int bx = x + 19, by = y + 40;
@@ -647,7 +647,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawFusBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         int stage = fusStageShown(), steps = tok ? 6 : 5, step = tok ? 27 : 32;
         for (int i = 0; i < steps; i++) {                                      // the stages
             int bx = x + 14 + i * step, by = y + FU_STEP_Y;
@@ -847,7 +847,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawSolidBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         boolean burning = sfBurning();
         GuiSceneSC.firebox(x + SF_BOX_X, y + SF_BOX_Y, SF_BOX_W, SF_BOX_H, t,
                 burning && generator.getStatus() == GeneratorStatus.GENERATING, sfLeft());
@@ -957,7 +957,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawExoBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         int stage = exoStage();
         for (int i = 0; i < 4; i++) {                                          // the stages
             int bx = x + 14 + i * 38, by = y + FU_STEP_Y;
@@ -1065,7 +1065,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawPrBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
         GuiSceneSC.frame(x + 14, y + 34, 124, 38);
         int sx = x + 19, sy = y + 38;                                          // the air separator
@@ -1145,7 +1145,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawRtgBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         GuiSceneSC.rtgBody(x + 14, y + 34, 78, 50, t, rtgCapsule(0) != null, rtgCapsule(1) != null);
         for (int s = 0; s < 2; s++) {                                          // each capsule's life
             int bx = x + (s == 0 ? ContainerGeneratorSC.RTG_SLOT_X0 : ContainerGeneratorSC.RTG_SLOT_X1) + 18;
@@ -1227,7 +1227,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawFcBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
         GuiSceneSC.fuelCellSection(x + FC_X, y + FC_Y, FC_W, FC_H, t, running);
         // the gases as the 2 : 1 they burn in; each part filled with how full its tank is
@@ -1294,7 +1294,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawThermoBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         GuiSceneSC.frame(x + 14, y + 34, 64, 58);
         drawRect(x + TH_CX, y + TH_CY, x + TH_CX + TH_C, y + TH_CY + TH_C, 0xFF8A909A);
         GuiSceneSC.peltier(x + TH_CX + 1, y + TH_CY + 1, TH_C - 2, TH_C - 2, t, generator.getInfoA(), 3);
@@ -1373,7 +1373,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawWaterBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         int n = generator.getInfoA();
         float spin = generator.getStatus() == GeneratorStatus.GENERATING ? Math.max(0.25F, n / 4F) : 0F;
         GuiSceneSC.waterCross(x + WW_X, y + WW_Y, WW_CELL, t, waterSides(), spin);
@@ -1441,7 +1441,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawWindBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         double[] f = windFactors();
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
         float spin = running ? Math.max(0.3F, Math.min(1F, generator.getLastOutput() / (float) type.euPerTick)) : 0F;
@@ -1552,7 +1552,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawSolarBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         boolean day = generator.getInfoA() != 0, rain = generator.getInfoB() != 0;
         long time = dayTime();
         float arc = day ? Math.min(1F, time / 12000F) : Math.max(0F, (time - 12000) / 12000F);
@@ -1663,7 +1663,7 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawCombBackground(int x, int y, float partialTicks) {
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
         int rated = Math.max(1, generator.ratedOutput());
         GuiSceneSC.dial(x + 26, y + 79, 11, Math.min(1F, (float) generator.getLastOutput() / rated));
@@ -1936,7 +1936,7 @@ public class GuiGeneratorSC extends GuiContainer {
             }
         }
 
-        if (upgrades() && GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.W - 16, 18, mouseX, mouseY)
+        if (upgrades() && GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.GAUGE_X - 4 - GuiBigSC.UPG_LABEL_X, 18, mouseX, mouseY)
                 && !GuiBigSC.overUpgradeSlot(mouseX, mouseY, TileEntityGeneratorSC.UPGRADE_SLOTS)) {
             lines.add(Lang.tr("sc.gui.upgrades"));
             lines.add(Lang.tr("sc.gui.gen.upgrades.hint"));

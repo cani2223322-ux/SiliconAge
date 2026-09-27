@@ -44,11 +44,11 @@ public final class GuiBatterySlotSC {
 
     /** Where the slot's item goes (for the container). */
     public static int itemX(int columnX) {
-        return columnX + 3;
+        return SlotBatterySC.itemX(columnX);
     }
 
     public static int itemY(int gaugeBottom) {
-        return gaugeBottom + 4;
+        return SlotBatterySC.itemY(gaugeBottom);
     }
 
     /** A generator's texts live under sc.gui.battery.gen.*. */

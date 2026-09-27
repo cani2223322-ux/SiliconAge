@@ -65,7 +65,7 @@ public class GuiEnergyStorageSC extends GuiContainer {
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         int x = guiLeft, y = guiTop;
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         GuiBigSC.window(x, y, true, TileEntityEnergyStorageSC.UPGRADE_SLOTS);
         GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         for (int k = 0; k < storage.chargeSlots(); k++) {                      // the charge column, a bar under each slot
@@ -205,7 +205,7 @@ public class GuiEnergyStorageSC extends GuiContainer {
             lines.add(Lang.tr("sc.storage.tooltip.comparator"));
             return lines;
         }
-        if (GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.W - 16, 18, mx, my)
+        if (GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.GAUGE_X - 4 - GuiBigSC.UPG_LABEL_X, 18, mx, my)
                 && !GuiBigSC.overUpgradeSlot(mx, my, TileEntityEnergyStorageSC.UPGRADE_SLOTS)) {
             lines.add(Lang.tr("sc.gui.upgrades"));
             lines.add(Lang.tr("sc.storage.upgrades.hint.1"));

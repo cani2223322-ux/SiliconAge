@@ -56,6 +56,7 @@ public final class SelfTestSC {
             batteries();
             batterySlot();
             generatorBattery();
+            audit2Fixes();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1076,6 +1077,53 @@ public final class SelfTestSC {
                 && pad.chargeItem(ionCutter, 640) == 640
                 && pad.chargeItem(new ItemStack(net.minecraft.init.Items.iron_sword), 640) == 0;
         check(ok, "charge pad MV: Nano armour / blade and LV-MV weapons charge, Quantum / Exo and plain items don't");
+    }
+
+    /** Fixes of the second bug audit: chat texts only %s (1.7.10's chat throws on %d), comparator, storage automation. */
+    private static void audit2Fixes() {
+        String[] families = {"sc.areacard.", "sc.cable.warn", "sc.field.zone.toofar", "sc.quarry.warn.", "sc.wrench.missing",
+                "sc.wrench.nocharge", "sc.chat.", "sc.field.warn."};
+        boolean chatOk = true;
+        String bad = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.io.InputStream in = SelfTestSC.class.getResourceAsStream("/assets/siliconage/lang/" + lang + ".lang");
+            if (in == null) {
+                chatOk = false;
+                bad = lang + " missing";
+                continue;
+            }
+            try {
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
+                for (String line; (line = r.readLine()) != null; ) {
+                    int eq = line.indexOf('=');
+                    if (eq <= 0) {
+                        continue;
+                    }
+                    String key = line.substring(0, eq), val = line.substring(eq + 1);
+                    for (String f : families) {
+                        if (key.startsWith(f) && val.matches(".*%(\\d+\\$)?[a-rt-zA-Z].*")) {
+                            chatOk = false;
+                            bad = key;
+                        }
+                    }
+                }
+                r.close();
+            } catch (java.io.IOException e) {
+                chatOk = false;
+            }
+        }
+        check(chatOk, "chat texts use %s only (1.7.10's chat throws on %d)" + (bad.isEmpty() ? "" : ": " + bad));
+        com.sc.tileentity.TileEntityEnergyStorageSC st = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        st.setStorageTier(com.sc.energy.Tier.LV);
+        st.setEnergyStoredClient(st.getMaxEnergyStored() * 2);             // as after an Energy Storage upgrade came out
+        boolean upgradesHidden = true;
+        for (int slot : st.getAccessibleSlotsFromSide(0)) {
+            upgradesHidden &= slot < com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT
+                    || slot >= com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_EXTRA_CHARGE;
+        }
+        check(st.comparatorLevel() == 15 && upgradesHidden
+                        && !st.canExtractItem(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT, null, 0),
+                "storage: comparator at most 15, hoppers never reach the upgrade slots");
     }
 
     private static void generatorBattery() {

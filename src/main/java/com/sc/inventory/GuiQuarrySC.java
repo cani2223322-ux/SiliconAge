@@ -626,7 +626,7 @@ public class GuiQuarrySC extends GuiContainer {
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         int x = guiLeft, y = guiTop;
-        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         boolean exo = quarry.isExo();
         window(x, y, W, H);
         drawRect(x + W - 24, y + 4, x + W - 6, y + 14, badgeColour());
