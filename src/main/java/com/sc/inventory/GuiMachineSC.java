@@ -69,6 +69,10 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean coat;
     /** The Stepper's own screen: its column and the die map, the photomask's wear, the zoned heat bar. */
     private final boolean step;
+    /** The Ion Implanter's own screen: the dopant badges (P, B, As), the beam line, the heat bar, its gas. */
+    private final boolean ion;
+    private static final int ION_BADGE_W = 26, ION_HEAT_Y = 100;
+    private static final String[] ION_BADGES = {"P · n", "B · p", "As · n"};
     private static final int STEP_W = 40, STEP_H = 44, MAP_X = 132, MAP_R = 17, MASK_Y = 82, STEP_HEAT_Y = 90;
     private static final int COAT_W = 48, COAT_H = 50, STAGE_X = 141, STAGE_W = 31, STAGE_Y = 38, STAGE_GAP = 12;
     private static final int OX_Y = 36, OX_H = 38, OX_WAFER_Y = 79, OX_BADGE_W = 40;
@@ -109,6 +113,7 @@ public class GuiMachineSC extends GuiContainer {
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
         step = machine.getMachineType() == com.sc.machine.MachineType.STEPPER
                 || machine.getMachineType() == com.sc.machine.MachineType.STEPPER_EV;
+        ion = machine.getMachineType() == com.sc.machine.MachineType.ION_IMPLANTER;
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         etch = machine.getMachineType() == com.sc.machine.MachineType.ETCHING_BATH;
@@ -140,7 +145,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiBigSC.ClearButton b = (GuiBigSC.ClearButton) o;
             int tank = b.id - ContainerMachineSC.BTN_CLEAR;
             int gx = -1;
-            if (washer || blast || saw || oxid || coat || step) {
+            if (washer || blast || saw || oxid || coat || step || ion) {
                 gx = tank == 0 ? WATER_X : -1;
             } else if (ownTanks != null) {
                 for (int k = 0; k < ownTanks.length; k++) {
@@ -219,7 +224,7 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast || saw || oxid || coat || step || ownTanks != null) {
+        if (washer || blast || saw || oxid || coat || step || ion || ownTanks != null) {
             return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -248,7 +253,7 @@ public class GuiMachineSC extends GuiContainer {
         float progress = ticks > 0 ? (float) machine.getProgressTicks() / ticks : 0F;
         GuiHoloSC.bar(x + PROGRESS_X, y + PROGRESS_Y, barW(), PROGRESS_H, progress, 12,
                 machine.getStatus() == MachineStatus.PROCESSING ? 0xFFFF8C1E : 0xFF6E7C8C);
-        if (heat() && !blast && !step) {
+        if (heat() && !blast && !step && !ion) {
             GuiHoloSC.bar(x + PROGRESS_X, y + HEAT_Y, barW(), HEAT_H, (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity(),
                     12, 0xFFFF5A3C);
         }
@@ -287,6 +292,18 @@ public class GuiMachineSC extends GuiContainer {
             }
             GuiSceneSC.thermometer(x + THERMO_X, y + FURNACE_Y, FURNACE_H, h, (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
             GuiSceneSC.heatBar(x + HEATBAR_X, y + HEATBAR_Y, HEATBAR_W, HEATBAR_H, h,
+                    (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
+        } else if (ion) {                                               // the dopant badges, the beam line, the heat
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            int d = dopant();
+            for (int i = 0; i < 3; i++) {
+                int bx = x + SAW_X + i * (ION_BADGE_W + 2), by = y + CAPTION_Y - 1;
+                drawRect(bx, by, bx + ION_BADGE_W, by + 9, i == d ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + ION_BADGE_W - 1, by + 8, i == d ? 0xFF0E3A50 : 0xFF0A1218);
+            }
+            GuiSceneSC.beamLine(x + SAW_X, y + SAW_Y, SAW_W, 44, t, machine.getStatus() == MachineStatus.PROCESSING, progress);
+            float h = (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity();
+            GuiSceneSC.heatBar(x + SAW_X, y + ION_HEAT_Y, SAW_W, 3, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
         } else if (step) {                                              // the column, the die map, the mask, the heat
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
@@ -385,7 +402,7 @@ public class GuiMachineSC extends GuiContainer {
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
-        if (washer || blast || saw || oxid || coat || step) {
+        if (washer || blast || saw || oxid || coat || step || ion) {
             FluidTank water = machine.getTank(0);
             GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
         }
@@ -434,6 +451,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (blast) {
             drawBlastText(rx);
+            drawUpgradeLine();
+            return;
+        }
+        if (ion) {
+            drawIonText();
             drawUpgradeLine();
             return;
         }
@@ -525,7 +547,7 @@ public class GuiMachineSC extends GuiContainer {
         int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
         fit(Lang.tr("sc.gui.big.upgrades.effect", String.format(java.util.Locale.ROOT, "%.2f", speed),
                 String.format(java.util.Locale.ROOT, "%.2f", energy)), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
-        String second = blast || step ? Lang.tr("sc.gui.blast.sinks", machine.upgradeCount(UpgradeType.HEAT_SINK),
+        String second = blast || step || ion ? Lang.tr("sc.gui.blast.sinks", machine.upgradeCount(UpgradeType.HEAT_SINK),
                 String.format(java.util.Locale.ROOT, "%.2f", 1.0 / (machine.upgradeCount(UpgradeType.HEAT_SINK) + 1)))
                 : Lang.tr("sc.gui.big.upgrades.count", used, TileEntityMachineSC.UPGRADE_SLOTS);
         fit(second, GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y + 9, tr, 0x808894);
@@ -575,6 +597,39 @@ public class GuiMachineSC extends GuiContainer {
             return Lang.tr("sc.gui.blast.topause", Math.max(0, (cap - heat) * (sinks + 1) / 20));
         }
         return heat > 0 ? Lang.tr("sc.gui.blast.cooling", heat / 2 / 20 + 1) : Lang.tr("sc.gui.blast.cold");
+    }
+
+    /** Which dopant the Ion Implanter's tank holds: 0 phosphorus, 1 boron, 2 arsenic, -1 none. */
+    private int dopant() {
+        net.minecraftforge.fluids.FluidStack f = machine.getTank(0).getFluid();
+        if (f == null || f.amount <= 0 || f.getFluid() == null) {
+            return -1;
+        }
+        return f.getFluid() == com.sc.init.ModFluids.ph3 ? 0 : f.getFluid() == com.sc.init.ModFluids.bcl3 ? 1
+                : f.getFluid() == com.sc.init.ModFluids.ash3 ? 2 : -1;
+    }
+
+    /** The Ion Implanter: the badges' names, its tank's label, the dopant and its type, defects, the heat line. */
+    private void drawIonText() {
+        int d = dopant();
+        for (int i = 0; i < 3; i++) {
+            int sw = fontRendererObj.getStringWidth(ION_BADGES[i]) * 5 / 8;
+            small(ION_BADGES[i], SAW_X + i * (ION_BADGE_W + 2) + (ION_BADGE_W - sw) / 2, CAPTION_Y + 1, i == d ? 0x96F0FF : 0x465A6E);
+        }
+        FluidTank tank = machine.getTank(0);
+        String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : Lang.tr("sc.gui.ion.gas");
+        TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        smallFit(d < 0 ? Lang.tr("sc.gui.ion.nogas")
+                : Lang.tr("sc.gui.ion.dopant", Lang.tr("sc.gui.ion.el." + d), d == 1 ? "p" : "n", r == null || r.fluidInputA == null ? 100 : r.fluidInputA.amount),
+                SAW_X, 83, SAW_W, d < 0 ? 0xE65A5A : 0xE6F0FA);
+        if (r != null) {
+            small(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)), SAW_X, 90, 0x6AA8C8);
+        }
+        String line = heatLine();
+        line = line.isEmpty() ? line : line.substring(0, 1).toLowerCase() + line.substring(1);
+        smallFit(Lang.tr("sc.gui.step.heat", machine.getHeat(), TileEntityMachineSC.getHeatCapacity()) + " · " + line,
+                SAW_X, ION_HEAT_Y + 5, SAW_W, 0xFFAA5A);
     }
 
     /** The Stepper: caption, its tank's label, the mask's uses, the heat and what it does next, dies done and defects. */
@@ -990,7 +1045,7 @@ public class GuiMachineSC extends GuiContainer {
         }
 
         boolean overTub = washer && GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY);
-        boolean overOwnTank = (washer || blast || saw || oxid || coat || step)
+        boolean overOwnTank = (washer || blast || saw || oxid || coat || step || ion)
                 && GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY);
         if (ownTanks != null) {
             for (int k = 0; k < ownTanks.length; k++) {
@@ -1022,6 +1077,13 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (ion && GuiGaugeSC.isOver(SAW_X, CAPTION_Y - 1, SAW_W, SAW_Y + 44 - CAPTION_Y + 1, mouseX, mouseY)) {
+            int d = dopant();
+            lines.add(Lang.tr("sc.gui.ion.title"));
+            lines.add(d < 0 ? Lang.tr("sc.gui.ion.nogas") : Lang.tr("sc.gui.ion.now", Lang.tr("sc.gui.ion.el." + d), d == 1 ? "p" : "n"));
+            lines.add(Lang.tr("sc.gui.ion.hint"));
+            return lines;
+        }
         if (etch && GuiGaugeSC.isOver(CVD_BELL_X, TANK_Y, CVD_BELL_W, CVD_BELL_H, mouseX, mouseY)) {
             com.sc.machine.MachineRecipe r = shownRecipe();
             int ticks = machine.getCurrentRecipeTicks();
@@ -1108,7 +1170,7 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (heat() && (blast ? GuiGaugeSC.isOver(HEATBAR_X - 1, HEATBAR_Y - 10, WATER_X - HEATBAR_X - 4, 30, mouseX, mouseY)
                 || GuiGaugeSC.isOver(THERMO_X, FURNACE_Y, 13, FURNACE_H, mouseX, mouseY)
-                : step ? GuiGaugeSC.isOver(SAW_X - 1, STEP_HEAT_Y - 1, SAW_W + 2, 13, mouseX, mouseY)
+                : step || ion ? GuiGaugeSC.isOver(SAW_X - 1, (step ? STEP_HEAT_Y : ION_HEAT_Y) - 1, SAW_W + 2, step ? 13 : 12, mouseX, mouseY)
                 : GuiGaugeSC.isOver(PROGRESS_X - 1, HEAT_Y - 1, barW() + 2, HEAT_H + 2, mouseX, mouseY))) {
             lines.add(Lang.tr("sc.gui.heat"));
             lines.add(machine.getHeat() + " / " + TileEntityMachineSC.getHeatCapacity());

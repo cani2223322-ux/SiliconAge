@@ -431,6 +431,45 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The ion implanter's beam line from above: the ion source, the analysing magnet bending the
+     * beam up and over, the wafer at the end swept by it and taking colour with the progress.
+     */
+    public static void beamLine(int x, int y, int w, int h, float t, boolean running, float progress) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int beam = 0xFF6AE0FF, shift = (int) (t * 2);
+        int sx = x + 4, sy = y + h - 12;
+        rect(sx, sy - 3, 9, 8, 0xFF6A707A);                                    // the source
+        rect(sx + 2, sy - 1, 5, 4, running ? 0xFFFFB040 : 0xFF5A4020);
+        int mx = x + w / 2 - 6, my = y + h - 16;
+        rect(mx, my, 14, 12, 0xFF3A4A8A);                                      // the magnet
+        rect(mx + 2, my + 2, 10, 8, 0xFF1A2A5A);
+        int cx = x + w - 9, cy = y + 12;
+        if (running) {
+            for (int i = sx + 9; i < mx + 7; i++) {                            // in, bent up, over to the wafer
+                if ((i + shift) % 3 != 0) {
+                    rect(i, sy + 1, 1, 1, beam);
+                }
+            }
+            for (int j = y + 12; j < my + 7; j++) {
+                if ((j + shift) % 3 != 0) {
+                    rect(mx + 7, j, 1, 1, beam);
+                }
+            }
+            for (int i = mx + 7; i < cx - 5; i++) {
+                if ((i + shift) % 3 != 0) {
+                    rect(i, cy, 1, 1, beam);
+                }
+            }
+        }
+        rect(cx - 3, cy - 7, 6, 14, 0xFF8A94A8);                               // the wafer, swept
+        rect(cx - 2, cy - 6, 4, 12, mix(0xFF6A5AE0, 0xFF3AA0FF, progress));
+        if (running) {
+            rect(cx - 3, cy + (int) (5 * Math.sin(t * 0.4F)), 6, 1, 0xFFFFFFFF);
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
