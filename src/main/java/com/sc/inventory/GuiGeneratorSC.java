@@ -50,6 +50,10 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean turb;
     /** The Gas Turbine: the Steam Turbine's screen, hydrogen from electrolysis into a gas turbine. */
     private final boolean gas;
+    /** The Plasma Generator: the turbines' screen with an air separator, an MHD channel and a card where argon comes from. */
+    private final boolean plasma;
+    /** Argon an Air Separator yields: 800 mB per 400-tick operation. */
+    private static final double SEPARATOR_ARGON_PER_TICK = 2.0;
     private static final int TB_Y = 34, TB_H = 38, TB_DIAL_Y = 83, TB_SUPPLY_Y = 96, TB_RESERVE_Y = 103, TB_BAR_X = 44, TB_BAR_W = 128;
     private static final int SOL_SKY_X = 14, SOL_SKY_Y = 34, SOL_SKY_W = 60, SOL_SKY_H = 44, SOL_STRIP_Y = 84, SOL_STRIP_W = 190;
     private static final int[] SOL_CHIP_X = {80, 118, 154}, SOL_CHIP_W = {28, 26, 26};
@@ -66,7 +70,8 @@ public class GuiGeneratorSC extends GuiContainer {
         this.comb = type == GeneratorType.COMBUSTION;
         this.solar = type == GeneratorType.SOLAR_SI || type == GeneratorType.SOLAR_GAAS;
         this.gaas = type == GeneratorType.SOLAR_GAAS;
-        this.turb = type == GeneratorType.STEAM_TURBINE || type == GeneratorType.GAS_TURBINE;
+        this.turb = type == GeneratorType.STEAM_TURBINE || type == GeneratorType.GAS_TURBINE || type == GeneratorType.PLASMA_GENERATOR;
+        this.plasma = type == GeneratorType.PLASMA_GENERATOR;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -316,7 +321,14 @@ public class GuiGeneratorSC extends GuiContainer {
         boolean running = generator.getStatus() == GeneratorStatus.GENERATING, feeding = turbSupply() > 0;
         GuiSceneSC.frame(x + 14, y + TB_Y, 158, TB_H);
         int bx = x + 19, by = y + 40;
-        if (gas) {                                                             // an electrolysis cell
+        if (plasma) {                                                          // an air separator column
+            drawRect(bx + 1, by - 2, bx + 7, by, 0xFF6A707A);
+            drawRect(bx - 2, by, bx + 10, by + 20, 0xFF8A909A);
+            drawRect(bx - 1, by + 1, bx + 9, by + 19, 0xFF1A2A3A);
+            for (int i = 0; i < 4; i++) {
+                drawRect(bx, by + 3 + i * 4, bx + 8, by + 4 + i * 4, feeding ? 0xFF6EA0C8 : 0xFF3A4A5A);
+            }
+        } else if (gas) {                                                             // an electrolysis cell
             drawRect(bx, by, bx + 16, by + 20, 0xFF8A909A);
             drawRect(bx + 1, by + 1, bx + 15, by + 19, 0xFF2A4A6A);
             drawRect(bx + 5, by + 3, bx + 7, by + 17, 0xFF6A707A);
@@ -336,16 +348,22 @@ public class GuiGeneratorSC extends GuiContainer {
         if (feeding) {
             for (int i = 0; i < 3; i++) {
                 int d = (int) ((t * 1.5F + i * 4) % 12);
-                drawRect(x + 36 + d, y + 51, x + 38 + d, y + 52, 0xFFE0E8F0);
+                drawRect(x + 36 + d, y + 51, x + 38 + d, y + 52, plasma ? 0xFFC890FF : 0xFFE0E8F0);
             }
         }
-        if (gas) {
+        if (plasma) {
+            GuiSceneSC.plasmaChannel(x + 48, y + 36, 64, 34, t, running);
+        } else if (gas) {
             GuiSceneSC.gasTurbine(x + 48, y + 36, 64, 34, t, running);
         } else {
             GuiSceneSC.turbineSide(x + 48, y + 36, 64, 34, t, running);
         }
         GuiSceneSC.frame(x + 113, y + 36, 30, 34);
-        GuiSceneSC.rotorFront(x + 128, y + 53, 12, t, running);
+        if (plasma) {
+            GuiSceneSC.plasmaRing(x + 128, y + 53, 9, t, running);
+        } else {
+            GuiSceneSC.rotorFront(x + 128, y + 53, 12, t, running);
+        }
         if (running) {
             for (int i = 0; i < 3; i++) {                                      // power going out
                 int d = (int) ((t * 2 + i * 8) % 24);
@@ -355,9 +373,13 @@ public class GuiGeneratorSC extends GuiContainer {
         int rated = Math.max(1, generator.ratedOutput());
         float need = (float) turbNeed();
         GuiSceneSC.dial(x + 26, y + TB_DIAL_Y, 9, Math.min(1F, turbSupply() / Math.max(0.1F, need)));
-        GuiSceneSC.dial(x + 78, y + TB_DIAL_Y, 9, running ? 1F : 0F);
-        GuiSceneSC.dial(x + 130, y + TB_DIAL_Y, 9, Math.min(1F, (float) generator.getLastOutput() / rated));
-        int fuelCol = gas ? 0xFF9AD8FF : 0xFFE0E8F0;
+        if (plasma) {                                                          // the card: where argon comes from
+            GuiSceneSC.frame(x + 66, y + TB_DIAL_Y - 9, 106, 19);
+        } else {
+            GuiSceneSC.dial(x + 78, y + TB_DIAL_Y, 9, running ? 1F : 0F);
+            GuiSceneSC.dial(x + 130, y + TB_DIAL_Y, 9, Math.min(1F, (float) generator.getLastOutput() / rated));
+        }
+        int fuelCol = plasma ? 0xFFC890FF : gas ? 0xFF9AD8FF : 0xFFE0E8F0;
         boolean short_ = turbSupply() < need - 0.05F;
         drawRect(x + TB_BAR_X, y + TB_SUPPLY_Y, x + TB_BAR_X + TB_BAR_W, y + TB_SUPPLY_Y + 4, 0xFF04080C);
         int sw = (int) ((TB_BAR_W - 2) * Math.min(1F, turbSupply() / Math.max(0.1F, need)));
@@ -374,7 +396,7 @@ public class GuiGeneratorSC extends GuiContainer {
 
     /** The Steam Turbine's key, or the Gas Turbine's own wording of it. */
     private String tk(String key) {
-        return (gas ? "sc.gui.gturb." : "sc.gui.turb.") + key;
+        return (plasma ? "sc.gui.pgen." : gas ? "sc.gui.gturb." : "sc.gui.turb.") + key;
     }
 
     private void drawTurbText() {
@@ -391,7 +413,7 @@ public class GuiGeneratorSC extends GuiContainer {
         String needS = String.format(java.util.Locale.ROOT, need == (int) need ? "%.0f" : "%.1f", need);
         String[] labels = {Lang.tr(tk("steam")), Lang.tr("sc.gui.turb.speed"), Lang.tr("sc.gui.turb.out")};
         String[] vals = {sup + "/" + needS, running ? "100%" : "0%", String.valueOf(generator.getLastOutput())};
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < (plasma ? 1 : 3); i++) {
             int cx = 26 + i * 52;
             smallFit(labels[i], cx + 12, TB_DIAL_Y - 6, 38, GuiHoloSC.LABEL);
             smallFit(vals[i], cx + 12, TB_DIAL_Y, 38, i == 0 && short_ ? GuiHoloSC.BAD : GuiHoloSC.VALUE);
@@ -401,7 +423,14 @@ public class GuiGeneratorSC extends GuiContainer {
         FluidTank tank = generator.getFuelTank();
         int secs = need <= 0 ? 0 : (int) (tank.getFluidAmount() / need / 20);
         // a source: an LV boiler's 40 mB/t of steam, or an electrolysis run's 500 mB of hydrogen per 15 s
-        int boilers = (int) Math.ceil(need / (gas ? 500.0 / 300.0 : 40.0) - 1e-6);
+        int boilers = (int) Math.ceil(need / (plasma ? SEPARATOR_ARGON_PER_TICK : gas ? 500.0 / 300.0 : 40.0) - 1e-6);
+        if (plasma) {
+            int perMb = need <= 0 ? 0 : Math.round(generator.ratedOutput() / need);
+            smallFit(Lang.tr("sc.gui.pgen.card"), 68, TB_DIAL_Y - 7, 100, GuiHoloSC.LABEL);
+            smallFit(Lang.tr("sc.gui.pgen.card.src", String.format(java.util.Locale.ROOT, "%.0f", SEPARATOR_ARGON_PER_TICK)),
+                    68, TB_DIAL_Y - 1, 100, GuiHoloSC.VALUE);
+            smallFit(Lang.tr("sc.gui.pgen.card.need", boilers, perMb), 68, TB_DIAL_Y + 5, 100, GuiHoloSC.LABEL);
+        }
         String line;
         int col;
         if (tank.getFluidAmount() <= 0 && supply <= 0) {

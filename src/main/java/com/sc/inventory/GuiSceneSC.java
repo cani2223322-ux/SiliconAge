@@ -1112,6 +1112,66 @@ public final class GuiSceneSC {
     }
 
     /** A turbine rotor end-on: curved blades turning while it runs, the hub in the middle. */
+    /**
+     * An MHD channel from the side: a magnet above (N, red) and below (S, blue), the argon nozzle on
+     * the left, the plasma jet glowing violet-white through the tube, the electrodes along it taking
+     * the current off in sparks, the spent gas fading out on the right.
+     */
+    public static void plasmaChannel(int x, int y, int w, int h, float t, boolean running) {
+        frame(x, y, w, h);
+        int cy = y + h / 2;
+        rect(x + 12, y + 3, w - 22, 6, 0xFF8A2A2A);
+        rect(x + 13, y + 4, w - 24, 4, 0xFFC84A4A);
+        rect(x + 12, y + h - 9, w - 22, 6, 0xFF2A3A8A);
+        rect(x + 13, y + h - 8, w - 24, 4, 0xFF4A6AC8);
+        rect(x + 3, cy - 3, 10, 6, 0xFF6A707A);                                // the nozzle
+        rect(x + 12, cy - 5, 3, 10, 0xFF8A909A);
+        rect(x + 15, cy - 6, w - 26, 12, 0xFF3A4450);                          // the tube
+        rect(x + 15, cy - 5, w - 26, 10, 0xFF12081E);
+        for (int k = 0; k < 4; k++) {                                          // the electrodes
+            int ex = x + 22 + k * (w - 40) / 3;
+            rect(ex, cy - 8, 3, 2, 0xFFD6A432);
+            rect(ex, cy + 6, 3, 2, 0xFFD6A432);
+        }
+        if (!running) {
+            return;
+        }
+        for (int xx = x + 16; xx < x + w - 11; xx++) {
+            float k = (xx - x - 16) / (float) (w - 27);
+            int wob = (int) (1.5 * Math.sin(t * 0.8F + xx * 0.35F));
+            rect(xx, cy - 3 + wob, 1, 6, mix(0xFFFFFFFF, 0xFF9A50E0, Math.min(1F, k * 1.2F)));
+            rect(xx, cy - 1 + wob, 1, 2, mix(0xFFFFF0FF, 0xFFD8B0FF, k));
+        }
+        for (int k = 0; k < 4; k++) {                                          // sparks to the electrodes
+            if ((int) (t + k * 3) % 5 < 2) {
+                int ex = x + 23 + k * (w - 40) / 3;
+                rect(ex, cy - 6, 1, 2, 0xFFFFF4A0);
+                rect(ex, cy + 4, 1, 2, 0xFFFFF4A0);
+            }
+        }
+        for (int i = 0; i < 4; i++) {
+            float d = (t * 1.3F + i * 3) % 9;
+            rect(x + w - 10 + (int) d, cy - 3 + (i * 2) % 6, 1, 1, mix(0xFFC890FF, 0xFF0A1218, d / 9F));
+        }
+    }
+
+    /** The plasma channel end-on: the coils round it, the plasma a violet-white core that breathes. */
+    public static void plasmaRing(int cx, int cy, int r, float t, boolean running) {
+        disc(cx, cy, r + 4, 0xFF8A909A);
+        disc(cx, cy, r + 3, 0xFF12181E);
+        for (int k = 0; k < 8; k++) {
+            double a = k * Math.PI / 4;
+            int px = cx + (int) Math.round((r + 2) * Math.cos(a)), py = cy + (int) Math.round((r + 2) * Math.sin(a));
+            rect(px - 1, py - 1, 3, 3, 0xFFD6A432);
+        }
+        if (running) {
+            int rr = r - 2 + (int) (1.5 * Math.sin(t * 0.5F));
+            for (int d = rr; d > 0; d--) {
+                disc(cx, cy, d, mix(0xFFFFFFFF, 0xFF7A3AC8, d / (float) rr));
+            }
+        }
+    }
+
     public static void rotorFront(int cx, int cy, int r, float t, boolean running) {
         disc(cx, cy, r + 2, 0xFF8A909A);
         disc(cx, cy, r + 1, 0xFF12181E);
