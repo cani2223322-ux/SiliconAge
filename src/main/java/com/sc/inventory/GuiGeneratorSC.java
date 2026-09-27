@@ -57,6 +57,11 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean fus;
     /** The Solid Fuel Generator: the firebox, its slot and flame, a table of what each fuel gives. */
     private final boolean solid;
+    /** The Wind Turbine: the landscape (height), the multiplier chips, a dial, the rotor with its wear. */
+    private final boolean wind;
+    private static final int WD_LAND_X = 14, WD_LAND_Y = 34, WD_LAND_W = 64, WD_LAND_H = 56;
+    private static final int[] WD_CHIP_X = {84, 116, 148};
+    private static final int WD_CHIP_W = 24;
     private static final int SF_BOX_X = 14, SF_BOX_Y = 34, SF_BOX_W = 62, SF_BOX_H = 44, SF_TAB_X = 102, SF_TAB_Y = 34,
             SF_TAB_W = 70, SF_TAB_H = 52, SF_FLAME_X = 83, SF_FLAME_Y = 56;
     /** The table's rows: coal, planks, a blaze rod, a lava bucket. */
@@ -85,6 +90,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.plasma = type == GeneratorType.PLASMA_GENERATOR;
         this.fus = type == GeneratorType.FUSION_REACTOR;
         this.solid = type == GeneratorType.SOLID_FUEL;
+        this.wind = type == GeneratorType.WIND_TURBINE;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -197,6 +203,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawFusBackground(x, y, partialTicks);
         } else if (solid) {
             drawSolidBackground(x, y, partialTicks);
+        } else if (wind) {
+            drawWindBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -250,6 +258,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (solid) {
             drawSolidText();
+            drawUpgradeCount();
+            return;
+        }
+        if (wind) {
+            drawWindText();
             drawUpgradeCount();
             return;
         }
@@ -766,6 +779,110 @@ public class GuiGeneratorSC extends GuiContainer {
         smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
     }
 
+    // ---- the Wind Turbine ----
+
+    /** {height, free air, weather} factors as the server works them out (the weather from the client's world). */
+    private double[] windFactors() {
+        double h = Math.max(0, Math.min(1, generator.getInfoA() / 96.0));
+        double free = Math.max(0, generator.getInfoB() / 100.0);
+        double weather = mc.theWorld != null && mc.theWorld.isThundering() ? 1.5 : mc.theWorld != null && mc.theWorld.isRaining() ? 1.25 : 1;
+        return new double[]{h, free, weather};
+    }
+
+    private boolean windRotor() {
+        ItemStack r = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL);
+        return r != null && r.getItem() == com.sc.init.ModItems.windRotor;
+    }
+
+    private void drawWindBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        double[] f = windFactors();
+        boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
+        float spin = running ? Math.max(0.3F, Math.min(1F, generator.getLastOutput() / (float) type.euPerTick)) : 0F;
+        boolean rain = f[2] > 1;
+        GuiSceneSC.windLandscape(x + WD_LAND_X, y + WD_LAND_Y, WD_LAND_W, WD_LAND_H, t, (float) f[0], rain, windRotor() ? spin : 0F);
+        for (int i = 0; i < 3; i++) {
+            int cx = x + WD_CHIP_X[i], cy = y + 36;
+            drawRect(cx, cy, cx + WD_CHIP_W, cy + 20, windRotor() ? 0xFF2A6A8A : 0xFF1A2430);
+            drawRect(cx + 1, cy + 1, cx + WD_CHIP_W - 1, cy + 19, windRotor() ? 0xFF0E3A50 : 0xFF0A1218);
+        }
+        GuiSceneSC.dial(x + 95, y + 69, 10, Math.min(1F, generator.getLastOutput() / (float) type.euPerTick));
+        // the rotor's wear
+        ItemStack r = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL);
+        int bx = x + ContainerGeneratorSC.WD_SLOT_X + 19, by = y + ContainerGeneratorSC.WD_SLOT_Y + 6;
+        drawRect(bx, by, bx + 44, by + 4, 0xFF04080C);
+        if (windRotor()) {
+            float life = 1F - (float) r.getItemDamage() / Math.max(1, r.getMaxDamage());
+            int col = life > 0.5F ? 0xFF5AE66E : life > 0.2F ? 0xFFFFB040 : 0xFFE63C3C;
+            drawRect(bx + 1, by + 1, bx + 1 + (int) (42 * life), by + 3, col);
+        }
+    }
+
+    private void drawWindText() {
+        fit(Lang.tr("sc.gui.wd.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        double[] f = windFactors();
+        boolean rotor = windRotor();
+        // the landscape's labels
+        int sea = WD_LAND_Y + WD_LAND_H - 8, full = WD_LAND_Y + 5;
+        int ny = sea - (int) ((sea - full) * f[0]);
+        smallFit(Lang.tr("sc.gui.wd.full"), WD_LAND_X + WD_LAND_W - 22, full + 1, 21, 0x5AE66E);
+        smallFit(Lang.tr("sc.gui.wd.sea"), WD_LAND_X + WD_LAND_W - 26, sea - 6, 25, 0xC8E6FF);
+        smallFit("+" + generator.getInfoA(), WD_LAND_X + WD_LAND_W / 2 + 10, (ny + sea) / 2 - 3, 20, 0xFFE678);
+        // the chips
+        String[] labels = {Lang.tr("sc.gui.wd.height"), Lang.tr("sc.gui.wd.free"),
+                Lang.tr(f[2] >= 1.5 ? "sc.gui.wd.storm" : f[2] > 1 ? "sc.gui.wd.rain" : "sc.gui.wd.weather")};
+        for (int i = 0; i < 3; i++) {
+            int cx = WD_CHIP_X[i], w = WD_CHIP_W;
+            String v = String.format(java.util.Locale.ROOT, "%.2f", f[i]).replace('.', ',');
+            if (v.endsWith(",00")) {
+                v = v.substring(0, v.length() - 3);
+            }
+            int lw = Math.min(w - 2, (int) (fontRendererObj.getStringWidth(labels[i]) * 0.625F));
+            smallFit(labels[i], cx + (w - lw) / 2, 38, w - 2, rotor ? GuiHoloSC.LABEL : 0x465A6E);
+            int vw = Math.min(w - 2, fontRendererObj.getStringWidth(v));
+            if (fontRendererObj.getStringWidth(v) <= w - 2) {
+                fontRendererObj.drawString(v, cx + (w - vw) / 2, 46, rotor ? (i == 2 && f[2] > 1 ? 0x8CBEFF : GuiHoloSC.VALUE) : 0x465A6E);
+            } else {
+                smallFit(v, cx + 2, 47, w - 4, rotor ? GuiHoloSC.VALUE : 0x465A6E);
+            }
+            if (i < 2) {
+                fontRendererObj.drawString("×", cx + w + 2, 42, GuiHoloSC.VALUE);
+            }
+        }
+        // the output and the rotor
+        int out = generator.getLastOutput();
+        fit(out + " EU/t", 108, 60, 64, out > 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit(Lang.tr("sc.gui.wd.of", type.euPerTick), 108, 70, 64, GuiHoloSC.LABEL);
+        int rx = ContainerGeneratorSC.WD_SLOT_X + 19, ry = ContainerGeneratorSC.WD_SLOT_Y;
+        smallFit(Lang.tr("sc.gui.wd.rotor"), rx, ry - 1, 44, GuiHoloSC.LABEL);
+        ItemStack r = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL);
+        if (rotor) {
+            int secs = Math.max(0, r.getMaxDamage() - r.getItemDamage());
+            smallFit(sfTime(secs), rx, ry + 11, 44, GuiHoloSC.VALUE);
+        } else {
+            smallFit(Lang.tr("sc.gui.wd.norotor.short"), rx, ry + 11, 44, GuiHoloSC.BAD);
+        }
+        // the status
+        GeneratorStatus status = generator.getStatus();
+        String line;
+        int col;
+        if (status == GeneratorStatus.GENERATING) {
+            line = Lang.tr("sc.gui.wd.running", generator.outputTier().name(), generator.outputTier().getVoltage());
+            col = GuiHoloSC.OK;
+        } else if (status == GeneratorStatus.NO_ROTOR) {
+            line = Lang.tr("sc.gui.wd.norotor");
+            col = GuiHoloSC.BAD;
+        } else if (status == GeneratorStatus.NO_WIND) {
+            line = Lang.tr("sc.gui.wd.nowind");
+            col = GuiHoloSC.BAD;
+        } else {
+            line = status.localized();
+            col = status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN : GuiHoloSC.IDLE;
+        }
+        fit(line, 14, 96, 158, col);
+        smallFit(Lang.tr(generator.getInfoA() <= 0 && rotor ? "sc.gui.wd.hint.sea" : "sc.gui.wd.hint"), 14, 105, 190, GuiHoloSC.LABEL);
+    }
+
     // ---- the Silicon Solar Panel ----
 
     /** The time of day in ticks, 0 sunrise .. 12000 sunset .. 24000. */
@@ -1062,6 +1179,13 @@ public class GuiGeneratorSC extends GuiContainer {
         if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comb.table.title"));
             lines.add(Lang.tr("sc.gui.comb.table.hint"));
+            return lines;
+        }
+        if (wind && GuiGaugeSC.isOver(WD_LAND_X, WD_LAND_Y, WD_CHIP_X[2] + WD_CHIP_W - WD_LAND_X, WD_LAND_H - 20, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.wd.tip"));
+            lines.add(Lang.tr("sc.gui.wd.tip.1"));
+            lines.add(Lang.tr("sc.gui.wd.tip.2"));
+            lines.add(Lang.tr("sc.gui.wd.tip.3"));
             return lines;
         }
         if (solid && GuiGaugeSC.isOver(SF_TAB_X, SF_TAB_Y, SF_TAB_W, SF_TAB_H, mouseX, mouseY)) {

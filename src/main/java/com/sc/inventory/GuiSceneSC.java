@@ -1256,6 +1256,61 @@ public final class GuiSceneSC {
         }
     }
 
+    /** Three wind turbine blades round a hub, turning at `spin` (0 still .. 1 full). */
+    public static void windBlades(int cx, int cy, int r, float t, float spin) {
+        double a0 = t * 0.25 * spin;
+        for (int k = 0; k < 3; k++) {
+            double a = a0 + k * 2 * Math.PI / 3;
+            for (int d = 2; d < r; d++) {
+                int w = d > r * 0.6 ? 1 : 2;
+                rect((int) (cx + d * Math.cos(a)), (int) (cy + d * Math.sin(a)), w, w, 0xFFE0E8F0);
+            }
+        }
+        disc(cx, cy, 2, 0xFF8A909A);
+    }
+
+    /**
+     * A wind turbine side-on against the sky: the sea at the bottom, a green dashed line where it
+     * gets full power (96 blocks above the sea), the mast up to `height` (0..1 of that), the blades
+     * turning with `spin`, streaks of wind, rain. Returns the nacelle's y, for the labels.
+     */
+    public static int windLandscape(int x, int y, int w, int h, float t, float height, boolean rain, float spin) {
+        rect(x, y, w, h, 0xFF1E3444);
+        int top = 0xFF3A7AC8, bot = 0xFF9AC8F0;
+        if (rain) {
+            top = mix(top, 0xFF5A6070, 0.6F);
+            bot = mix(bot, 0xFF7A8090, 0.6F);
+        }
+        for (int yy = y + 1; yy < y + h - 1; yy++) {
+            rect(x + 1, yy, w - 2, 1, mix(top, bot, (yy - y) / (float) h));
+        }
+        int sea = y + h - 8, full = y + 5;
+        rect(x + 1, sea, w - 2, 7, 0xFF3A6AB0);
+        rect(x + 1, sea, w - 2, 1, 0xFF6EA0E0);
+        rect(x + 1, sea - 3, 20, 3, 0xFF4A8A3A);                               // a shore
+        for (int i = x + 2; i < x + w - 2; i += 4) {
+            rect(i, full, 2, 1, 0xFF5AE66E);
+        }
+        int ny = sea - (int) ((sea - full) * Math.max(0F, Math.min(1F, height)));
+        int mx = x + w / 2 - 6;
+        rect(mx, ny, 2, Math.max(1, sea - 3 - ny), 0xFFB0B8C4);
+        rect(mx - 3, ny - 2, 8, 4, 0xFFD8E0E8);
+        windBlades(mx - 3, ny, 12, t, spin);
+        rect(mx + 14, ny, 1, Math.max(1, sea - 3 - ny), 0xFFFFE070);           // the height marker
+        if (spin > 0) {
+            for (int i = 0; i < 4; i++) {
+                float d = (t * 2 * Math.max(0.3F, spin) + i * 13) % (w - 10);
+                rect(x + 3 + (int) d, y + 12 + i * 7, 5, 1, 0xCCFFFFFF);
+            }
+        }
+        if (rain) {
+            for (int i = 0; i < 14; i++) {
+                rect(x + 3 + (i * 11 + (int) (t * 2)) % (w - 6), y + 2 + (int) ((t * 3 + i * 7) % (h - 12)), 1, 3, 0xFF8AB0E8);
+            }
+        }
+        return ny;
+    }
+
     public static void rotorFront(int cx, int cy, int r, float t, boolean running) {
         disc(cx, cy, r + 2, 0xFF8A909A);
         disc(cx, cy, r + 1, 0xFF12181E);
