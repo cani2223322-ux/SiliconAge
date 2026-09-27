@@ -62,6 +62,7 @@ public class SCMod {
         // without an accepted EULA never gets past preInit.
         if (Boolean.getBoolean("sc.selftest")) {
             registerRecipes();
+            com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
             com.sc.debug.SelfTestSC.run();
         }
         if (System.getProperty("sc.dumpRecipes") != null) {
@@ -91,6 +92,7 @@ public class SCMod {
         // Weight 0, like most ore generators - runs alongside vanilla ore gen each chunk.
         GameRegistry.registerWorldGenerator(new OreGenSC(), 0);
         registerRecipes();
+        com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
         // WAILA finds its plugin through IMC and loads the class itself - nothing of WAILA's is
         // touched when it isn't installed.
         cpw.mods.fml.common.event.FMLInterModComms.sendMessage("Waila", "register", "com.sc.compat.WailaSC.callbackRegister");

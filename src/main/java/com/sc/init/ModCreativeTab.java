@@ -46,7 +46,7 @@ public class ModCreativeTab extends CreativeTabs {
         add(order, ModItems.crushedOre, ModItems.purifiedCrushedOre, ModItems.dust, ModItems.dustTiny, ModItems.ingot,
                 ModItems.siliconMaterial, ModItems.coke, ModItems.rubber, ModItems.rubberBlue, ModItems.rubberHeatResist,
                 ModItems.compound, ModItems.alFoil, ModItems.leadFrame3, ModItems.leadFrame16, ModItems.leadFrame40,
-                ModItems.liquidHeCell, ModItems.deuteriumCell);
+                ModItems.liquidHeCell, ModItems.deuteriumCell, ModItems.fluidBucket);
         // parts, in the order they were registered
         order.addAll(ModItems.COMPONENTS.values());
         // tools and upgrades

@@ -69,6 +69,8 @@ public final class ModItems {
     public static ItemSCManual manual;
     /** NEI-only stand-ins for fluids (ItemFluidDropSC) - never obtainable in play. */
     public static com.sc.item.ItemFluidDropSC fluidDrop;
+    /** Buckets of the mod's fluids (ItemFluidBucketSC) - into machines and tanks, never onto the ground. */
+    public static com.sc.item.ItemFluidBucketSC fluidBucket;
     /** Step 11: every remaining §1/§2/§5-§7 component that's just a plain item with no metadata/behaviour, keyed by its own name (== texture name == unlocalized suffix). */
     public static final java.util.Map<String, ItemSimpleSC> COMPONENTS = new java.util.LinkedHashMap<String, ItemSimpleSC>();   // registration order (the creative tab lists them so)
 
@@ -214,6 +216,8 @@ public final class ModItems {
         GameRegistry.registerItem(manual, "scManual");
         fluidDrop = new com.sc.item.ItemFluidDropSC();
         GameRegistry.registerItem(fluidDrop, "fluidDrop");
+        fluidBucket = new com.sc.item.ItemFluidBucketSC();
+        GameRegistry.registerItem(fluidBucket, "fluidBucket");
 
         // Step 11 (§1/§2/§5-§7): the remaining plain components those recipes need - see
         // ModRecipesCrafting for what consumes each of these.

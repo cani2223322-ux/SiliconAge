@@ -245,6 +245,16 @@ public final class SelfTestSC {
         }
         check(ok, "NEI fluid drops: " + names.size() + " fluids, all round-trip (" + names + ")");
         check(names.contains("ticl4") && names.contains("steam") && names.contains("water"), "drops cover TiCl4, steam, water");
+        // buckets: an empty bucket fills from HCl into ours, ours drains back to 1000 mB and an empty bucket
+        net.minecraftforge.fluids.FluidStack hcl = new net.minecraftforge.fluids.FluidStack(FluidRegistry.getFluid("hcl"), 1000);
+        ItemStack full = net.minecraftforge.fluids.FluidContainerRegistry.fillFluidContainer(hcl, new ItemStack(net.minecraft.init.Items.bucket));
+        net.minecraftforge.fluids.FluidStack in = net.minecraftforge.fluids.FluidContainerRegistry.getFluidForFilledItem(full);
+        ItemStack empty = net.minecraftforge.fluids.FluidContainerRegistry.drainFluidContainer(full);
+        check(full != null && full.getItem() == ModItems.fluidBucket && in != null && in.amount == 1000 && in.getFluid() == hcl.getFluid()
+                        && empty != null && empty.getItem() == net.minecraft.init.Items.bucket
+                        && com.sc.item.ItemFluidBucketSC.registered().size() >= 15,
+                "fluid buckets: HCl fills an empty bucket, drains back; " + com.sc.item.ItemFluidBucketSC.registered().size()
+                        + " of " + com.sc.item.ItemFluidBucketSC.FLUIDS.length + " registered");
     }
 
     /** Energy storage: capacity per tier, energy only in on the sides, out at the tier voltage. */
