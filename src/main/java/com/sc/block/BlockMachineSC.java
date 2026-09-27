@@ -235,6 +235,13 @@ public class BlockMachineSC extends Block {
             }
             return true;
         }
+        if (com.sc.util.FluidHandSC.isContainer(player.getCurrentEquippedItem())) {    // a bucket / cell: pour in or take out
+            TileEntity te = world.getTileEntity(x, y, z);
+            if (!world.isRemote && te instanceof net.minecraftforge.fluids.IFluidHandler) {
+                com.sc.util.FluidHandSC.use(world, x, y, z, player, (net.minecraftforge.fluids.IFluidHandler) te, player.getCurrentEquippedItem());
+            }
+            return true;
+        }
         if (player.isSneaking() && player.getCurrentEquippedItem() == null) {
             TileEntity te = world.getTileEntity(x, y, z);
             if (!world.isRemote && te instanceof TileEntityMachineSC) {

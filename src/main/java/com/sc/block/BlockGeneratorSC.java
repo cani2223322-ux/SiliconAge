@@ -182,6 +182,13 @@ public class BlockGeneratorSC extends Block {
 
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
+        if (com.sc.util.FluidHandSC.isContainer(player.getCurrentEquippedItem())) {    // a bucket / cell: pour in or take out
+            TileEntity te = world.getTileEntity(x, y, z);
+            if (!world.isRemote && te instanceof net.minecraftforge.fluids.IFluidHandler) {
+                com.sc.util.FluidHandSC.use(world, x, y, z, player, (net.minecraftforge.fluids.IFluidHandler) te, player.getCurrentEquippedItem());
+            }
+            return true;
+        }
         if (!world.isRemote) {
             player.openGui(SCMod.instance, GuiHandlerSC.GENERATOR_GUI_ID, world, x, y, z);
         }
