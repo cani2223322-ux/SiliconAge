@@ -1731,3 +1731,4 @@ sc.gui.blast.paused=Cooling to %d: ~%d s
 sc.gui.blast.cooling=Cooling: ~%d s
 sc.gui.blast.cold=Cold
 sc.gui.blast.sinks=Heat sinks: %d · heating x%s
+sc.gui.chem.run=a run

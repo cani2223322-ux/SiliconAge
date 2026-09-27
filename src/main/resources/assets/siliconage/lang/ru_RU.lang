@@ -1731,3 +1731,4 @@ sc.gui.blast.paused=Остывает до %d: ~%d с
 sc.gui.blast.cooling=Остывает: ~%d с
 sc.gui.blast.cold=Холодная
 sc.gui.blast.sinks=Радиаторов: %d · нагрев x%s
+sc.gui.chem.run=за раз

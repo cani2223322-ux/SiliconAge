@@ -58,6 +58,12 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean washer;
     /** The Blast Furnace's own screen: the furnace and a thermometer, the zoned heat bar under them, its tank. */
     private final boolean blast;
+    /** The Chemical Reactor's own screen: its recipe as a formula, tank + tank -> flask -> tank. */
+    private final boolean chem;
+    private static final int CHEM_X = 76, CHEM_IN2 = 32, CHEM_FLASK = 64, CHEM_OUT = 97, CHEM_FLASK_W = 30, CHEM_FLASK_H = 50;
+    /** Chemical Reactor tanks drawn: input 1, input 2, output 1 - and where. */
+    private static final int[] CHEM_TANKS = {0, 1, 2};
+    private static final int[] CHEM_TANK_X = {CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT};
     private static final int FURNACE_X = 90, FURNACE_Y = 36, FURNACE_W = 64, FURNACE_H = 44, THERMO_X = 158,
             HEATBAR_X = 90, HEATBAR_Y = 91, HEATBAR_W = 80, HEATBAR_H = 4;
     private static final int TUB_X = 90, TUB_Y = 36, TUB_W = 82, TUB_H = 50, WATER_X = 175, WATER_Y = 40;
@@ -74,6 +80,7 @@ public class GuiMachineSC extends GuiContainer {
         withTanks = ContainerMachineSC.tightSlots(machine.getMachineType());
         washer = machine.getMachineType() == com.sc.machine.MachineType.ORE_WASHER;
         blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE;
+        chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -101,6 +108,12 @@ public class GuiMachineSC extends GuiContainer {
             int gx = -1;
             if (washer || blast) {
                 gx = tank == 0 ? WATER_X : -1;
+            } else if (chem) {
+                for (int k = 0; k < CHEM_TANKS.length; k++) {
+                    if (CHEM_TANKS[k] == tank) {
+                        gx = CHEM_TANK_X[k];
+                    }
+                }
             } else {
                 for (int k = 0; k < shownCount; k++) {
                     if (shownTanks[k] == tank) {
@@ -169,8 +182,8 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast) {
-            return;                                                     // its tank has a place of its own
+        if (washer || blast || chem) {
+            return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
             if (tankUsed[i] || machine.getTank(i).getFluidAmount() > 0) {
@@ -206,7 +219,15 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (blast) {                                                    // the furnace, its thermometer, the zoned heat bar
+        if (chem) {                                                     // the flask between the input and output tanks
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            GuiSceneSC.flask(x + CHEM_X + CHEM_FLASK, y + TANK_Y, CHEM_FLASK_W, CHEM_FLASK_H, t,
+                    machine.getStatus() == MachineStatus.PROCESSING,
+                    colourOf(machine.getTank(0).getFluid(), r == null ? null : r.fluidInputA),
+                    colourOf(machine.getTank(1).getFluid(), r == null ? null : r.fluidInputB),
+                    colourOf(machine.getTank(2).getFluid(), r == null ? null : r.fluidOutputA), progress);
+        } else if (blast) {                                                    // the furnace, its thermometer, the zoned heat bar
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             float h = (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity();
             GuiSceneSC.furnace(x + FURNACE_X, y + FURNACE_Y, FURNACE_W, FURNACE_H, t, machine.getStatus() == MachineStatus.PROCESSING, h);
@@ -245,6 +266,12 @@ public class GuiMachineSC extends GuiContainer {
             FluidTank water = machine.getTank(0);
             GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
         }
+        if (chem) {
+            for (int k = 0; k < CHEM_TANKS.length; k++) {
+                FluidTank tank = machine.getTank(CHEM_TANKS[k]);
+                GuiTankGaugeSC.draw(mc, x + CHEM_TANK_X[k], y + TANK_Y, tank.getFluid(), tank.getCapacity(), null, false);
+            }
+        }
         for (int k = 0; k < shownCount; k++) {
             FluidTank tank = machine.getTank(shownTanks[k]);
             GuiTankGaugeSC.draw(mc, x + rx + k * TANK_GAP, y + TANK_Y, tank.getFluid(), tank.getCapacity(), null, false);
@@ -278,6 +305,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (blast) {
             drawBlastText(rx);
+            drawUpgradeLine();
+            return;
+        }
+        if (chem) {
+            drawChemText();
             drawUpgradeLine();
             return;
         }
@@ -386,6 +418,102 @@ public class GuiMachineSC extends GuiContainer {
             line = heat > 0 ? Lang.tr("sc.gui.blast.cooling", heat / 2 / 20 + 1) : Lang.tr("sc.gui.blast.cold");
         }
         fit(line, HEATBAR_X, HEATBAR_Y + 13, WATER_X - HEATBAR_X - 4, GuiHoloSC.VALUE);
+    }
+
+    /**
+     * The recipe the Chemical Reactor shows: the one its inputs make now, else the one that best
+     * fits the fluids in its tanks, else the first with two fluids in.
+     */
+    private com.sc.machine.MachineRecipe shownRecipe() {
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+        }
+        net.minecraftforge.fluids.FluidStack a = machine.getTank(0).getFluid(), b = machine.getTank(1).getFluid();
+        com.sc.machine.MachineRecipe r = RecipeRegistry.findMatch(machine.getMachineType(), in, a, b);
+        if (r != null) {
+            return r;
+        }
+        com.sc.machine.MachineRecipe best = null;
+        int bestScore = -1;
+        for (com.sc.machine.MachineRecipe c : RecipeRegistry.recipesFor(machine.getMachineType())) {
+            int score = (sameFluid(a, c.fluidInputA) || sameFluid(a, c.fluidInputB) ? 4 : 0)
+                    + (sameFluid(b, c.fluidInputB) || sameFluid(b, c.fluidInputA) ? 4 : 0)
+                    + (c.fluidInputA != null ? 1 : 0) + (c.fluidInputB != null ? 1 : 0);
+            if (score > bestScore) {
+                best = c;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    private static boolean sameFluid(net.minecraftforge.fluids.FluidStack have, net.minecraftforge.fluids.FluidStack want) {
+        return have != null && want != null && have.getFluid() == want.getFluid();
+    }
+
+    /** A tank's fluid colour, or the recipe's when the tank is empty (0: nothing). */
+    private static int colourOf(net.minecraftforge.fluids.FluidStack have, net.minecraftforge.fluids.FluidStack recipe) {
+        net.minecraftforge.fluids.FluidStack f = have != null && have.amount > 0 ? have : recipe;
+        return f == null || f.getFluid() == null ? 0 : GuiTankGaugeSC.colourOf(f.getFluid());
+    }
+
+    /** A tank's label: its fluid, or the recipe's, or "In 1" / "Out 1". */
+    private String chemLabel(int tank, net.minecraftforge.fluids.FluidStack recipe) {
+        net.minecraftforge.fluids.FluidStack have = machine.getTank(tank).getFluid();
+        if (have != null && have.amount > 0) {
+            return have.getLocalizedName();
+        }
+        if (recipe != null) {
+            return recipe.getLocalizedName();
+        }
+        return Lang.tr(tank < 2 ? "sc.gui.holo.tank.in" : "sc.gui.holo.tank.out", (tank % 2) + 1);
+    }
+
+    /** The Chemical Reactor: the formula on top, the tanks' fluid names, the amounts a run takes under the flask. */
+    private void drawChemText() {
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        String formula;
+        if (r == null) {
+            formula = Lang.tr("sc.gui.holo.process.2");
+        } else {
+            java.util.List<String> ins = new java.util.ArrayList<String>();
+            for (net.minecraft.item.ItemStack s : r.inputs) {
+                if (s != null) {
+                    ins.add(s.getDisplayName());
+                }
+            }
+            if (r.fluidInputA != null) {
+                ins.add(r.fluidInputA.getLocalizedName());
+            }
+            if (r.fluidInputB != null) {
+                ins.add(r.fluidInputB.getLocalizedName());
+            }
+            String out = r.fluidOutputA != null ? r.fluidOutputA.getLocalizedName()
+                    : r.outputs.length > 0 && r.outputs[0] != null ? r.outputs[0].getDisplayName() : "?";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < ins.size(); i++) {
+                sb.append(i > 0 ? " + " : "").append(ins.get(i));
+            }
+            formula = sb.append(" \u2192 ").append(out).toString();
+        }
+        fit(formula, CHEM_X, CAPTION_Y - 1, GuiBigSC.SCREEN_RIGHT - CHEM_X, GuiHoloSC.CYAN & 0xFFFFFF);
+        net.minecraftforge.fluids.FluidStack[] want = {r == null ? null : r.fluidInputA, r == null ? null : r.fluidInputB,
+                r == null ? null : r.fluidOutputA};
+        for (int k = 0; k < CHEM_TANKS.length; k++) {
+            TextFitSC.drawCentered(fontRendererObj, chemLabel(CHEM_TANKS[k], want[k]), CHEM_TANK_X[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
+                    GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
+        if (r != null) {                                                // what one run takes and gives, small, under the flask
+            int fx = CHEM_X + CHEM_FLASK, fy = TANK_Y + CHEM_FLASK_H + 2;
+            String a = r.fluidInputA != null ? String.valueOf(r.fluidInputA.amount) : "";
+            String b = r.fluidInputB != null ? String.valueOf(r.fluidInputB.amount) : "";
+            String in = a.isEmpty() ? b : b.isEmpty() ? a : a + "+" + b;
+            String out = r.fluidOutputA != null ? "\u2192" + r.fluidOutputA.amount : "";
+            small(Lang.tr("sc.gui.chem.run"), fx + 1, fy, 0x4A96BE);
+            small(in.isEmpty() ? "-" : in, fx + 1, fy + 6, 0xE6F0FA);
+            small(out + (out.isEmpty() ? "" : " mB"), fx + 1, fy + 12, 0xE6F0FA);
+        }
     }
 
     /** The fluid this furnace's recipes take (for the label while the tank is empty). */
@@ -529,6 +657,18 @@ public class GuiMachineSC extends GuiContainer {
         boolean overTub = washer && GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY);
         boolean overOwnTank = (washer || blast)
                 && GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY);
+        if (chem) {
+            for (int k = 0; k < CHEM_TANKS.length; k++) {
+                if (GuiGaugeSC.isOver(CHEM_TANK_X[k], TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
+                    int i = CHEM_TANKS[k];
+                    FluidTank tank = machine.getTank(i);
+                    lines.add(Lang.tr(i < 2 ? "sc.gui.tank.input" : "sc.gui.tank.output", (i % 2) + 1));
+                    lines.add(GuiGaugeSC.fluidLabel(tank.getFluid(), tank.getCapacity()));
+                    lines.add(GuiTankGaugeSC.percentLine(tank.getFluid(), tank.getCapacity()));
+                    return lines;
+                }
+            }
+        }
         if (overTub || overOwnTank) {
             FluidTank tank = machine.getTank(0);
             lines.add(Lang.tr("sc.gui.tank.input", 1));

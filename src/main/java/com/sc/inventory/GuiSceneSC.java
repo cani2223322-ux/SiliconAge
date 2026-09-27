@@ -185,6 +185,54 @@ public final class GuiSceneSC {
         rect(x + w - 1, y - 3, 1, h + 5, 0xFFE63C3C);
     }
 
+    /**
+     * The Chemical Reactor's flask: a round-bottom flask fed from both sides at the top (in the
+     * two input fluids' colours), draining at the bottom, the mix in the product's colour, bubbling
+     * while it works; the mix rises with the recipe's progress.
+     */
+    public static void flask(int x, int y, int w, int h, float t, boolean running, int colA, int colB, int colOut, float progress) {
+        frame(x, y, w, h);
+        int cx = x + w / 2, r = Math.min(w / 2 - 3, 11), cy = y + h - r - 5;
+        int mix = colOut != 0 ? colOut : 0xFF7ABCA8;
+        float level = running ? 0.35F + 0.4F * Math.max(0F, Math.min(1F, progress)) : 0.3F;
+        int wl = cy + r - Math.round(2 * r * level);
+        for (int yy = cy - r; yy <= cy + r; yy++) {
+            for (int xx = cx - r; xx <= cx + r; xx++) {
+                double d = Math.hypot(xx + 0.5 - cx, yy + 0.5 - cy);
+                if (d > r) {
+                    continue;
+                }
+                if (d >= r - 1) {
+                    rect(xx, yy, 1, 1, 0xFFB0C8D8);                            // the glass
+                } else if (yy >= wl) {
+                    rect(xx, yy, 1, 1, (xx + yy) % 3 != 0 ? mix : lighter(mix));
+                }
+            }
+        }
+        rect(cx - 3, y + 7, 6, cy - r - y - 6, 0xFFB0C8D8);                 // the neck
+        rect(cx - 2, y + 7, 4, cy - r - y - 6, 0xFF0A1218);
+        rect(x + 3, y + 5, cx - 3 - x - 3, 2, colA != 0 ? colA : 0xFF3A4450);  // the feeds
+        rect(cx + 3, y + 5, x + w - 3 - cx - 3, 2, colB != 0 ? colB : 0xFF3A4450);
+        rect(cx - 3, y + 5, 6, 2, 0xFF8A909A);
+        rect(cx - 1, cy + r, 2, y + h - 2 - cy - r, mix);                    // the drain
+        if (running) {
+            for (int i = 0; i < 5; i++) {                                     // bubbles
+                int bx = cx - r + 3 + (i * 5) % Math.max(1, 2 * r - 4);
+                int by = cy + r - 2 - (int) ((t * 0.8F + i * 3) % Math.max(1, cy + r - wl - 1));
+                if (by > wl) {
+                    rect(bx, by, 1, 1, 0xFFE8FFF8);
+                }
+            }
+            int drop = y + 8 + (int) ((t * 1.2F) % Math.max(1, cy - r - y - 7));    // a drop running down the neck
+            rect(cx - 1, drop, 2, 2, mix);
+        }
+    }
+
+    private static int lighter(int c) {
+        int r = Math.min(255, ((c >> 16) & 255) + 50), g = Math.min(255, ((c >> 8) & 255) + 50), b = Math.min(255, (c & 255) + 50);
+        return 0xFF000000 | r << 16 | g << 8 | b;
+    }
+
     private static void rect(int x, int y, int w, int h, int c) {
         if (w > 0 && h > 0) {
             Gui.drawRect(x, y, x + w, y + h, c);
