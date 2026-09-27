@@ -774,6 +774,44 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The upgrade station's bench: the piece (a helmet shape, or a chip) on a pedestal under a
+     * ring of light, an arm fitting the parts, the piece shifting from the old tier's colour to
+     * the new one with the progress, sparks at the join.
+     */
+    public static void upgradeBench(int x, int y, int w, int h, float t, boolean running, float progress, int from, int to, boolean chip) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int cx = x + w / 2, cy = y + h - 9;
+        rect(cx - 14, cy + 2, 28, 4, 0xFF6A707A);                              // the pedestal
+        rect(cx - 12, cy + 1, 24, 1, 0xFF9AA0AA);
+        for (int i = 0; i < 9; i++) {                                          // the ring of light
+            double a = t * 0.2 + i * 0.7;
+            rect(cx + (int) (15 * Math.cos(a)), y + 10 + (int) (4 * Math.sin(a)), 2, 1, running ? 0xFF6AE0FF : 0xFF2A4A5A);
+        }
+        int c = mix(from, to, running ? progress : 0F);
+        if (chip) {                                                            // a chip: a package with pins
+            for (int i = 0; i < 5; i++) {
+                rect(cx - 9 + i * 4, cy - 17, 1, 3, 0xFFB0B8C4);
+                rect(cx - 9 + i * 4, cy - 2, 1, 3, 0xFFB0B8C4);
+            }
+            rect(cx - 11, cy - 14, 22, 12, c);
+            rect(cx - 8, cy - 11, 6, 6, mix(c, 0xFFFFFFFF, 0.35F));
+        } else {                                                               // a helmet
+            rect(cx - 8, cy - 16, 16, 4, c);
+            rect(cx - 12, cy - 12, 24, 12, c);
+            rect(cx - 8, cy - 8, 16, 4, 0xFF0A1218);
+            rect(cx - 6, cy - 8, 12, 2, 0xFF8AE8FF);
+        }
+        rect(x + 6, y + 4, 3, 16, 0xFF6A707A);                                 // the arm
+        rect(x + 6, y + 18, 18 + (running ? (int) (6 * Math.sin(t * 0.3F)) : 0), 3, 0xFF8A909A);
+        if (running) {
+            for (int i = 0; i < 3; i++) {
+                rect(cx - 10 + (int) (4 * Math.sin(t + i)), cy - 10 + i * 2, 1, 1, 0xFFFFE08A);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

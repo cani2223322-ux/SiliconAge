@@ -77,6 +77,10 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean refi;
     /** The Rolling Machine: its seven molds as badges (the one in the slot lit), the mill, the product, the mold's wear. */
     private final boolean roll;
+    /** The Upgrade Stations: the tier ladder (Nano > Quantum > Exo, or chip I > II > III), the bench, what goes in and out. */
+    private final boolean station;
+    private static final int ST_X = 88, ST_STEP_W = 36, ST_Y = 40, ST_H = 44;
+    private static final int[] ST_GEAR = {0xFF4A8AD8, 0xFF9A5AE0, 0xFF3AD8A0}, ST_CHIP = {0xFF8A94A8, 0xFF4AA8E8, 0xFFE8C850};
     private static final com.sc.util.SCToolType[] ROLL_MOLDS = {com.sc.util.SCToolType.MOLD_PLATE, com.sc.util.SCToolType.MOLD_COIL,
             com.sc.util.SCToolType.MOLD_BLADE, com.sc.util.SCToolType.MOLD_TARGET, com.sc.util.SCToolType.MOLD_LEAD_FRAME_3,
             com.sc.util.SCToolType.MOLD_LEAD_FRAME_16, com.sc.util.SCToolType.MOLD_LEAD_FRAME_40};
@@ -145,6 +149,9 @@ public class GuiMachineSC extends GuiContainer {
         air = machine.getMachineType() == com.sc.machine.MachineType.AIR_SEPARATOR;
         refi = machine.getMachineType() == com.sc.machine.MachineType.REFINERY;
         roll = machine.getMachineType() == com.sc.machine.MachineType.ROLLING_MACHINE;
+        station = machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_MV
+                || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_HV
+                || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_EV;
         saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW || dice;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
@@ -492,6 +499,20 @@ public class GuiMachineSC extends GuiContainer {
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
+        } else if (station) {                                           // the tier ladder and the bench
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            int[] ld = stationLadder();
+            int[] cols = ld[0] == 1 ? ST_CHIP : ST_GEAR;
+            for (int i = 0; i < 3; i++) {
+                int bx = x + ST_X + i * (ST_STEP_W + 4), by = y + CAPTION_Y - 1;
+                boolean now = i == ld[1], done = i < ld[1] && ld[1] >= 0, lock = i > ld[2];
+                drawRect(bx, by, bx + ST_STEP_W, by + 12, now ? 0xFF2A6A8A : done ? 0xFF1E4A30 : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + ST_STEP_W - 1, by + 11, 0xFF0A1218);
+                drawRect(bx + 3, by + 3, bx + 9, by + 9, lock ? GuiSceneSC.mix(cols[i], 0xFF0A1218, 0.6F) : cols[i]);
+            }
+            int step = Math.max(1, ld[1]);
+            GuiSceneSC.upgradeBench(x + ST_X, y + ST_Y, GuiBigSC.SCREEN_RIGHT - ST_X, ST_H, t, machine.getStatus() == MachineStatus.PROCESSING,
+                    progress, cols[step - 1], cols[step], ld[0] == 1);
         } else if (roll) {                                              // the mold badges, the mill, the wear
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             int k = rollMold();
@@ -664,6 +685,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (cvd || etch) {
             drawCvdText();
+            drawUpgradeLine();
+            return;
+        }
+        if (station) {
+            drawStationText();
             drawUpgradeLine();
             return;
         }
@@ -1064,6 +1090,75 @@ public class GuiMachineSC extends GuiContainer {
         for (int k = 0; k < ownTanks.length; k++) {
             TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
                     GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
+    }
+
+    /**
+     * The Upgrade Station's ladder: {kind (0 gear, 1 chip), the step the shown recipe makes (1 or 2,
+     * -1 none), the highest step this station can make}.
+     */
+    private int[] stationLadder() {
+        com.sc.machine.MachineType type = machine.getMachineType();
+        int stationTier = type == com.sc.machine.MachineType.UPGRADE_STATION_MV ? 0 : type == com.sc.machine.MachineType.UPGRADE_STATION_HV ? 1 : 2;
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        boolean any = false;
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+            any |= in[i] != null;
+        }
+        com.sc.machine.MachineRecipe r = any ? RecipeRegistry.findMatch(type, in, null, null) : null;
+        net.minecraft.item.ItemStack out = r == null || r.outputs.length == 0 ? null : r.outputs[0];
+        int kind = 0, step = -1;
+        if (out != null && out.getItem() instanceof com.sc.item.ItemArmorChipSC) {
+            kind = 1;
+            step = com.sc.item.ItemArmorChipSC.tierAt(out.getItemDamage()) - 1;
+        } else if (out != null && out.getItem() instanceof com.sc.item.ItemArmorSC) {
+            step = ((com.sc.item.ItemArmorSC) out.getItem()).getSuit().ordinal();
+        } else if (out != null && out.getItem() instanceof com.sc.item.ItemBladeSC) {
+            step = ((com.sc.item.ItemBladeSC) out.getItem()).getType().ordinal();
+        } else if (out != null && out.getItem() instanceof com.sc.item.ItemDrillSC) {
+            step = ((com.sc.item.ItemDrillSC) out.getItem()).getType().ordinal();
+        } else if (!any && stationTier == 0) {
+            kind = 1;                                                   // an empty MV station: chips are all it does
+        }
+        int max = kind == 1 ? Math.min(2, stationTier + 1) : stationTier;
+        return new int[]{kind, step, max, r == null ? 0 : 1};
+    }
+
+    /** The Upgrade Station: the steps' names, what goes in, what comes out and the time, the step it can't make. */
+    private void drawStationText() {
+        int[] ld = stationLadder();
+        for (int i = 0; i < 3; i++) {
+            boolean now = i == ld[1], done = i < ld[1] && ld[1] >= 0, lock = i > ld[2];
+            String s = Lang.tr((ld[0] == 1 ? "sc.gui.station.chip." : "sc.gui.station.gear.") + i);
+            smallFit(s, ST_X + i * (ST_STEP_W + 4) + 11, CAPTION_Y + 2, ST_STEP_W - 13,
+                    now ? 0x96F0FF : done ? 0x5AE66E : lock ? 0x3A4658 : 0x6A7A8A);
+            if (i < 2) {
+                small("›", ST_X + i * (ST_STEP_W + 4) + ST_STEP_W + 1, CAPTION_Y + 2, 0x6AA8C8);
+            }
+        }
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+        }
+        com.sc.machine.MachineRecipe r = RecipeRegistry.findMatch(machine.getMachineType(), in, null, null);
+        int y0 = ST_Y + ST_H + 3, w = GuiBigSC.SCREEN_RIGHT - ST_X - 2;
+        if (r == null) {
+            smallFit(Lang.tr("sc.gui.station.empty"), ST_X + 2, y0, w, 0x6AA8C8);
+        } else {
+            StringBuilder b = new StringBuilder();
+            for (net.minecraft.item.ItemStack s : r.inputs) {
+                if (s != null) {
+                    b.append(b.length() == 0 ? "" : " + ").append(s.stackSize > 1 ? s.stackSize + " × " : "").append(s.getDisplayName());
+                }
+            }
+            smallFit(b.toString(), ST_X + 2, y0, w, 0xE6F0FA);
+            smallFit(Lang.tr("sc.gui.station.out", r.outputs[0].getDisplayName(), Math.max(1, machine.effectiveTicks(r) / 20)),
+                    ST_X + 2, y0 + 8, w, 0x6AA8C8);
+        }
+        if (ld[2] < 2) {
+            String next = Lang.tr((ld[0] == 1 ? "sc.gui.station.chip." : "sc.gui.station.gear.") + (ld[2] + 1));
+            smallFit(Lang.tr("sc.gui.station.locked", next, ld[0] == 1 ? "HV" : ld[2] == 0 ? "HV" : "EV"), ST_X + 2, y0 + 16, w, 0x465A6E);
         }
     }
 
@@ -1613,6 +1708,11 @@ public class GuiMachineSC extends GuiContainer {
                 lines.add(Lang.tr("sc.gui.elec.run", in, out, Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.elec.hint"));
+            return lines;
+        }
+        if (station && GuiGaugeSC.isOver(ST_X, CAPTION_Y - 1, GuiBigSC.SCREEN_RIGHT - ST_X, ST_Y + ST_H - CAPTION_Y + 1, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.station.title"));
+            lines.add(Lang.tr("sc.gui.station.hint"));
             return lines;
         }
         if (roll && GuiGaugeSC.isOver(ROLL_X, CAPTION_Y - 2, GuiBigSC.SCREEN_RIGHT - ROLL_X, ROLL_Y + ROLL_H - CAPTION_Y + 2, mouseX, mouseY)) {
