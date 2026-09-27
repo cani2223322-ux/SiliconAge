@@ -83,6 +83,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean kiln;
     /** The Fluid Cell Filler: its two fluids as badges, the filler, a row of the capsules the tank still fills. */
     private final boolean fill;
+    /** The Boilers: the fuel badges (coal, diesel), water + diesel tanks -> the boiler -> steam, a pressure dial. */
+    private final boolean boil;
+    private static final int BOIL_X = 140, BOIL_W = 33, BOIL_Y = 36, BOIL_H = 56, BOIL_BADGE_W = 31;
     private static final int FILL_Y = 36, FILL_H = 42, FILL_ROW_Y = 81, FILL_BADGE_W = 40;
     private static final int KILN_X = 88, KILN_Y = 37, KILN_H = 36, KILN_CURVE_Y = 75, KILN_CURVE_H = 18, KILN_BADGE_W = 22;
     private static final int[] KILN_COLOURS = {0xFF6A6A72, 0xFF3A3A3A, 0xFFB04A2A, 0xFFE8E0D0, 0xFF9AA0B8};
@@ -158,6 +161,7 @@ public class GuiMachineSC extends GuiContainer {
         roll = machine.getMachineType() == com.sc.machine.MachineType.ROLLING_MACHINE;
         kiln = machine.getMachineType() == com.sc.machine.MachineType.KILN;
         fill = machine.getMachineType() == com.sc.machine.MachineType.FLUID_CELL_FILLER;
+        boil = machine.getMachineType() == com.sc.machine.MachineType.BOILER_LV || machine.getMachineType() == com.sc.machine.MachineType.BOILER_MV;
         station = machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_MV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_HV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_EV;
@@ -171,8 +175,8 @@ public class GuiMachineSC extends GuiContainer {
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         etch = machine.getMachineType() == com.sc.machine.MachineType.ETCHING_BATH;
-        ownTanks = chem ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : elec || air ? new int[]{0, 2, 3} : refi ? new int[]{0, 2} : null;
-        ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : cvd || etch ? new int[]{CHEM_X, CVD_TANK2_X}
+        ownTanks = chem || boil ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : elec || air ? new int[]{0, 2, 3} : refi ? new int[]{0, 2} : null;
+        ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : boil ? new int[]{CHEM_X, CHEM_X + 32, WATER_X} : cvd || etch ? new int[]{CHEM_X, CVD_TANK2_X}
                 : elec || air ? new int[]{CHEM_X, WATER_X - 33, WATER_X} : refi ? new int[]{CHEM_X, WATER_X} : null;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -316,7 +320,19 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (refi) {                                                     // the products, the flow sheet, the catalyst
+        if (boil) {                                                     // the fuel badges, the boiler, the dial
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            int fuel = boilFuel();
+            for (int i = 0; i < 2; i++) {
+                int bx = x + CHEM_X + i * (BOIL_BADGE_W + 2), by = y + CAPTION_Y - 3;
+                drawRect(bx, by, bx + BOIL_BADGE_W, by + 8, i == fuel ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + BOIL_BADGE_W - 1, by + 7, i == fuel ? 0xFF0E3A50 : 0xFF0A1218);
+            }
+            GuiSceneSC.boiler(x + BOIL_X, y + BOIL_Y, BOIL_W, BOIL_H, t, machine.getStatus() == MachineStatus.PROCESSING, fuel != 1);
+            FluidTank steam = machine.getTank(2);
+            GuiSceneSC.dial(x + BOIL_X + 8, y + BOIL_Y + BOIL_H + 9, 7,
+                    steam.getCapacity() > 0 ? (float) steam.getFluidAmount() / steam.getCapacity() : 0F);
+        } else if (refi) {                                              // the products, the flow sheet, the catalyst
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING, pt = refiCatalyst();
             for (int i = 0; i < 5; i++) {
@@ -708,6 +724,11 @@ public class GuiMachineSC extends GuiContainer {
             drawUpgradeLine();
             return;
         }
+        if (boil) {
+            drawBoilText();
+            drawUpgradeLine();
+            return;
+        }
         if (refi) {
             drawRefiText();
             drawUpgradeLine();
@@ -1045,6 +1066,52 @@ public class GuiMachineSC extends GuiContainer {
     private boolean oxidising() {
         com.sc.machine.MachineRecipe r = shownRecipe();
         return r == null || r.fluidInputA != null;
+    }
+
+    /** The Boiler's recipe for what it holds now, or null. */
+    private com.sc.machine.MachineRecipe boilRecipe() {
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+        }
+        return RecipeRegistry.findMatch(machine.getMachineType(), in, machine.getTank(0).getFluid(), machine.getTank(1).getFluid());
+    }
+
+    /** What the Boiler burns: 0 coal, 1 diesel, -1 neither in. */
+    private int boilFuel() {
+        com.sc.machine.MachineRecipe r = boilRecipe();
+        if (r != null) {
+            return r.fluidInputB != null ? 1 : 0;
+        }
+        for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {
+            net.minecraft.item.ItemStack s = machine.getStackInSlot(i);
+            if (s != null && s.getItem() == net.minecraft.init.Items.coal) {
+                return 0;
+            }
+        }
+        return machine.getTank(1).getFluidAmount() > 0 ? 1 : -1;
+    }
+
+    /** The Boiler: the badges' names, its tanks' labels (water, diesel, steam), the dial's caption. */
+    private void drawBoilText() {
+        int fuel = boilFuel();
+        for (int i = 0; i < 2; i++) {
+            String s = Lang.tr("sc.gui.boil.fuel." + i);
+            int sw = fontRendererObj.getStringWidth(s) / 2;
+            GL11.glPushMatrix();
+            GL11.glTranslatef(CHEM_X + i * (BOIL_BADGE_W + 2) + (BOIL_BADGE_W - sw) / 2F, CAPTION_Y - 1, 0F);
+            GL11.glScalef(0.5F, 0.5F, 1F);
+            fontRendererObj.drawString(s, 0, 0, i == fuel ? 0x96F0FF : 0x465A6E);
+            GL11.glPopMatrix();
+        }
+        net.minecraftforge.fluids.FluidStack[] want = {new net.minecraftforge.fluids.FluidStack(net.minecraftforge.fluids.FluidRegistry.WATER, 1),
+                new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.diesel, 1), new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.steam, 1)};
+        for (int k = 0; k < ownTanks.length; k++) {
+            TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
+                    GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
+        smallFit(Lang.tr("sc.gui.boil.rate"), BOIL_X + 17, BOIL_Y + BOIL_H + 3, WATER_X - BOIL_X - 18, 0xE6F0FA);
+        smallFit(Lang.tr("sc.gui.boil.turbine"), BOIL_X + 17, BOIL_Y + BOIL_H + 10, WATER_X - BOIL_X - 18, 0x6AA8C8);
     }
 
     /** Whether the Refinery's shown recipe is the catalysed one (platinum in: photoresist and plastics). */
@@ -1834,6 +1901,18 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (boil && GuiGaugeSC.isOver(BOIL_X, BOIL_Y, BOIL_W, BOIL_H + 20, mouseX, mouseY)) {
+            com.sc.machine.MachineRecipe r = boilRecipe();
+            lines.add(Lang.tr("sc.gui.boil.title"));
+            if (r != null) {
+                String fuel = r.fluidInputB != null ? Lang.tr("sc.gui.boil.fuelmb", r.fluidInputB.amount, r.fluidInputB.getLocalizedName())
+                        : r.inputs.length > 0 && r.inputs[0] != null ? r.inputs[0].getDisplayName() : "-";
+                lines.add(Lang.tr("sc.gui.boil.run", r.fluidInputA == null ? 0 : r.fluidInputA.amount, fuel,
+                        r.fluidOutputA == null ? 0 : r.fluidOutputA.amount, machine.effectiveTicks(r) / 20F));
+            }
+            lines.add(Lang.tr("sc.gui.boil.hint"));
+            return lines;
+        }
         if (refi && (GuiGaugeSC.isOver(CHEM_X, CAPTION_Y - 2, 5 * (REFI_BADGE_W + 2), 11, mouseX, mouseY)
                 || GuiGaugeSC.isOver(REFI_TOWER_X, TANK_Y, REFI_CAT_X + 22 - REFI_TOWER_X, CHEM_FLASK_H, mouseX, mouseY))) {
             lines.add(Lang.tr("sc.gui.refi.title"));

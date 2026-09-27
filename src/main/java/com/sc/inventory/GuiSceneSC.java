@@ -897,6 +897,58 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The boiler: the water drum bubbling over a firebox (coal lumps, or a diesel burner) with its
+     * flames, steam leaving by the pipe on top.
+     */
+    public static void boiler(int x, int y, int w, int h, float t, boolean running, boolean coal) {
+        frame(x, y, w, h);
+        int cx = x + w / 2, dw = w - 8, d0 = cx - dw / 2;
+        rect(d0, y + 10, dw, h - 30, 0xFF8A909A);                              // the drum
+        rect(d0 + 1, y + 11, dw - 2, h - 32, 0xFF1A2A3A);
+        int lv = y + 11 + (int) ((h - 32) * 0.35F);
+        rect(d0 + 1, lv, dw - 2, y + h - 21 - lv, 0xFF3A6AB0);                 // the water
+        rect(cx - 2, y + 3, 4, 8, 0xFF8A909A);                                 // the steam pipe
+        int fy = y + h - 19;
+        rect(d0, fy, dw, 16, 0xFF3A2418);                                      // the firebox
+        rect(d0 + 2, fy + 2, dw - 4, 12, 0xFF1A0A06);
+        if (coal) {
+            for (int i = 0; i < 4; i++) {
+                rect(d0 + 3 + i * (dw - 6) / 4, fy + 10, 3, 3, 0xFF2A2A2E);
+            }
+        } else {
+            rect(cx - 6, fy + 11, 12, 2, 0xFF6A707A);                          // the burner
+        }
+        if (!running) {
+            return;
+        }
+        int rise = Math.max(1, y + h - 23 - lv);
+        for (int i = 0; i < 6; i++) {                                          // bubbles
+            rect(d0 + 3 + (i * 7) % Math.max(1, dw - 6), y + h - 23 - (int) ((t * 0.9F + i * 3) % rise), 1, 1, 0xFFB8D8F8);
+        }
+        for (int i = 0; i < 3; i++) {                                          // steam out
+            rect(cx - 1 + i, y + 2, 1, 1 + (int) (t + i) % 2, 0xFFE0E8F0);
+        }
+        for (int i = 0; i < 4; i++) {                                          // flames
+            int fh = 3 + (int) (2 + 2 * Math.sin(t * 0.8F + i));
+            rect(d0 + 4 + i * (dw - 8) / 4, fy + 10 - fh, 2, fh, 0xFFFFB040);
+        }
+    }
+
+    /** A little pressure dial: ticks round the top, the last ones red, the needle at `v` (0..1). */
+    public static void dial(int cx, int cy, int r, float v) {
+        disc(cx, cy, r + 1, 0xFF8A909A);
+        disc(cx, cy, r, 0xFF12181E);
+        for (int i = 0; i < 9; i++) {
+            double a = Math.PI * (0.75 + i * 1.5 / 8);
+            rect(cx + (int) ((r - 2) * Math.cos(a)), cy + (int) ((r - 2) * Math.sin(a)), 1, 1, i > 6 ? 0xFFE63C3C : 0xFFB0B8C4);
+        }
+        double a = Math.PI * (0.75 + 1.5 * Math.max(0F, Math.min(1F, v)));
+        for (int d = 0; d < r - 2; d++) {
+            rect(cx + (int) (d * Math.cos(a)), cy + (int) (d * Math.sin(a)), 1, 1, 0xFFFF8C1E);
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
