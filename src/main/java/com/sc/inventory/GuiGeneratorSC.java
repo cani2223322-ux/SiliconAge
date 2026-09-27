@@ -65,6 +65,9 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean water;
     /** The Thermoelectric Generator: its six neighbours round it, the pairs x dT / 8 chain, a row per side. */
     private final boolean thermo;
+    /** The Hydrogen Fuel Cell: the reaction, the cell cut through, the 2 : 1 gas bar, the water warning; its three tanks as before. */
+    private final boolean fcell;
+    private static final int FC_X = 14, FC_Y = 39, FC_W = 90, FC_H = 38, FC_BAR_X = 40, FC_BAR_Y = 80, FC_BAR_W = 64;
     /** Display order of the sides (ForgeDirection ordinals): up, down, north, south, west, east. */
     private static final int[] TH_ORDER = {1, 0, 2, 3, 4, 5};
     private static final int TH_C = 14, TH_CX = 39, TH_CY = 56;
@@ -108,6 +111,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.wind = type == GeneratorType.WIND_TURBINE;
         this.water = type == GeneratorType.WATER_WHEEL;
         this.thermo = type == GeneratorType.THERMOELECTRIC;
+        this.fcell = type == GeneratorType.FUEL_CELL;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -226,6 +230,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawWaterBackground(x, y, partialTicks);
         } else if (thermo) {
             drawThermoBackground(x, y, partialTicks);
+        } else if (fcell) {
+            drawFcBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -294,6 +300,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (thermo) {
             drawThermoText();
+            drawUpgradeCount();
+            return;
+        }
+        if (fcell) {
+            drawFcText();
             drawUpgradeCount();
             return;
         }
@@ -832,6 +843,76 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.sf.fuels"), 14, 99, 158, GuiHoloSC.LABEL);
         }
         smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
+    }
+
+    // ---- the Hydrogen Fuel Cell ----
+
+    /** Seconds each gas lasts at the rate it burns: {hydrogen, oxygen}. */
+    private double[] fcSeconds() {
+        double fm = Math.max(0.01, generator.fuelMultiplier());
+        double h = generator.getFuelTank().getFluidAmount() / (type.fuelRatePerTick * fm) / 20.0;
+        double o = generator.getFuelTank2().getFluidAmount() / (type.fuel2RatePerTick * fm) / 20.0;
+        return new double[]{h, o};
+    }
+
+    private void drawFcBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        boolean running = generator.getStatus() == GeneratorStatus.GENERATING;
+        GuiSceneSC.fuelCellSection(x + FC_X, y + FC_Y, FC_W, FC_H, t, running);
+        // the gases as the 2 : 1 they burn in; each part filled with how full its tank is
+        int bx = x + FC_BAR_X, by = y + FC_BAR_Y, a = (FC_BAR_W - 2) * 2 / 3;
+        FluidTank h = generator.getFuelTank(), o = generator.getFuelTank2();
+        float hf = h.getCapacity() > 0 ? (float) h.getFluidAmount() / h.getCapacity() : 0F;
+        float of = o.getCapacity() > 0 ? (float) o.getFluidAmount() / o.getCapacity() : 0F;
+        drawRect(bx, by, bx + FC_BAR_W, by + 6, 0xFF04080C);
+        drawRect(bx + 1, by + 1, bx + 1 + (int) (a * hf), by + 5, 0xFF9AD8FF);
+        drawRect(bx + 1 + a, by + 1, bx + 1 + a + (int) ((FC_BAR_W - 2 - a) * of), by + 5, 0xFFFF8A8A);
+        drawRect(bx + 1 + a, by - 1, bx + 2 + a, by + 7, 0xFFFFFFFF);
+    }
+
+    private void drawFcText() {
+        fit(Lang.tr("sc.gui.fc.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        for (int i = 0; i < tankCount(); i++) {
+            TextFitSC.drawCentered(fontRendererObj, tankLabel(i), RIGHT_X + i * TANK_GAP, TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
+                    GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
+        smallFit(Lang.tr("sc.gui.fc.eq"), 14, 33, 90, GuiHoloSC.LABEL);
+        smallFit("H2", FC_X + 4, FC_Y + 2, 12, 0x96DCFF);
+        smallFit("O2", FC_X + FC_W - 14, FC_Y + 2, 12, 0xFF9696);
+        smallFit(Lang.tr("sc.gui.fc.ratio"), 14, FC_BAR_Y, 25, GuiHoloSC.LABEL);
+        double[] secs = fcSeconds();
+        int hs = (int) secs[0], os = (int) secs[1];
+        int low = Math.min(hs, os);
+        smallFit(Lang.tr("sc.gui.fc.h2", hs), FC_BAR_X, FC_BAR_Y + 7, 40,
+                hs <= 0 ? GuiHoloSC.BAD : hs == low && hs < 10 ? GuiHoloSC.WARN : 0x96DCFF);
+        smallFit(Lang.tr("sc.gui.fc.o2", os), FC_BAR_X + 42, FC_BAR_Y + 7, 34,
+                os <= 0 ? GuiHoloSC.BAD : os == low && os < 10 ? GuiHoloSC.WARN : 0xFF9696);
+        double fm = Math.max(0.01, generator.fuelMultiplier());
+        String water = String.format(java.util.Locale.ROOT, "%.0f", type.fuel2RatePerTick * fm);
+        GeneratorStatus status = generator.getStatus();
+        String head, hint;
+        int headCol, hintCol = GuiHoloSC.WARN;
+        boolean noH = generator.getFuelTank().getFluidAmount() <= 0, noO = generator.getFuelTank2().getFluidAmount() <= 0;
+        if (status == GeneratorStatus.GENERATING) {
+            head = Lang.tr("sc.gui.fc.running", generator.getLastOutput());
+            headCol = GuiHoloSC.OK;
+            hint = Lang.tr("sc.gui.fc.water", water);
+        } else if (status == GeneratorStatus.WATER_FULL) {
+            head = Lang.tr("sc.gui.fc.waterfull");
+            headCol = GuiHoloSC.BAD;
+            hint = Lang.tr("sc.gui.fc.pump", water);
+        } else if (status == GeneratorStatus.NO_FUEL) {
+            head = Lang.tr(noH && noO ? "sc.gui.fc.nogas" : noH || secs[0] < secs[1] ? "sc.gui.fc.noh2" : "sc.gui.fc.noo2");
+            headCol = GuiHoloSC.BAD;
+            hint = Lang.tr("sc.gui.fc.sources");
+            hintCol = GuiHoloSC.LABEL;
+        } else {
+            head = status.localized();
+            headCol = status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN : GuiHoloSC.IDLE;
+            hint = Lang.tr("sc.gui.fc.water", water);
+        }
+        fit(head, 14, 95, 90, headCol);
+        smallFit(hint, 14, 104, 190, hintCol);
     }
 
     // ---- the Thermoelectric Generator ----
@@ -1373,6 +1454,13 @@ public class GuiGeneratorSC extends GuiContainer {
         if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comb.table.title"));
             lines.add(Lang.tr("sc.gui.comb.table.hint"));
+            return lines;
+        }
+        if (fcell && GuiGaugeSC.isOver(FC_X, FC_Y, FC_W, FC_H, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.fc.tip"));
+            lines.add(Lang.tr("sc.gui.fc.tip.1"));
+            lines.add(Lang.tr("sc.gui.fc.tip.2"));
+            lines.add(Lang.tr("sc.gui.fc.tip.3"));
             return lines;
         }
         if (thermo && GuiGaugeSC.isOver(14, 34, 64, 58, mouseX, mouseY)) {

@@ -1356,6 +1356,47 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * A hydrogen fuel cell cut through: the hydrogen side (anode, left), the membrane, the oxygen side
+     * (cathode, right); gas bubbles drifting to the membrane, H+ crossing it, electrons running round
+     * an outer wire through a lamp, water drops coming out at the bottom right.
+     */
+    public static void fuelCellSection(int x, int y, int w, int h, float t, boolean running) {
+        frame(x, y, w, h);
+        int ax = x + 6, mx = x + w / 2 - 2, cx = x + w - 12, top = y + 10, ch = h - 15;
+        rect(ax, top, 6, ch, 0xFF6A707A);                                       // the electrodes
+        rect(cx, top, 6, ch, 0xFF6A707A);
+        rect(ax + 6, top, mx - ax - 6, ch, 0xFF10243A);
+        rect(mx + 4, top, cx - mx - 4, ch, 0xFF2A1418);
+        rect(mx, top, 4, ch, 0xFFD6A432);                                       // the membrane
+        rect(ax + 2, y + 4, 2, top - y - 4, 0xFFB0B8C4);                        // the outer wire
+        rect(cx + 2, y + 4, 2, top - y - 4, 0xFFB0B8C4);
+        rect(ax + 2, y + 3, cx - ax + 2, 2, 0xFFB0B8C4);
+        int lx = (ax + cx) / 2;
+        disc(lx, y + 4, 3, running ? 0xFFFFE070 : 0xFF3A3A40);
+        if (!running) {
+            return;
+        }
+        for (int i = 0; i < 4; i++) {                                           // H2 in, O2 in
+            int d = (int) ((t * 1.3F + i * 5) % Math.max(1, mx - ax - 8));
+            rect(ax + 7 + d, top + 3 + i * (ch - 6) / 4, 2, 2, 0xFF9AD8FF);
+            int d2 = (int) ((t * 1.3F + i * 5) % Math.max(1, cx - mx - 8));
+            rect(cx - 3 - d2, top + 5 + i * (ch - 6) / 4, 2, 2, 0xFFFF8A8A);
+        }
+        for (int i = 0; i < 3; i++) {                                           // H+ through the membrane
+            int d = (int) ((t * 0.9F + i * 3) % 10);
+            rect(mx - 4 + d, top + 6 + i * (ch - 8) / 3, 1, 1, 0xFFFFFFFF);
+        }
+        for (int i = 0; i < 4; i++) {                                           // electrons round the wire
+            int k = (int) ((t * 1.5F + i * 7) % (cx - ax));
+            rect(ax + 2 + k, y + 3, 1, 1, 0xFF6EE6FF);
+        }
+        for (int i = 0; i < 2; i++) {                                           // water out
+            int k = (int) ((t * 0.8F + i * 5) % 8);
+            rect(cx - 6 + i * 3, y + h - 6 + k / 3, 2, 2, 0xFF4A8AE8);
+        }
+    }
+
     /** Three wind turbine blades round a hub, turning at `spin` (0 still .. 1 full). */
     public static void windBlades(int cx, int cy, int r, float t, float spin) {
         double a0 = t * 0.25 * spin;
