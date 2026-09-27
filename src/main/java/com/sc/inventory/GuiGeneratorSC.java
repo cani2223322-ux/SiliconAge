@@ -148,8 +148,9 @@ public class GuiGeneratorSC extends GuiContainer {
         switch (type.kind) {
             case PASSIVE: {
                 boolean sky = status != GeneratorStatus.NO_SUNLIGHT;
-                rows.add(new String[]{!sky ? Lang.tr("sc.gui.gen.nosky") : Lang.tr(mc.theWorld.isDaytime() ? "sc.gui.gen.day" : "sc.gui.gen.night"), lab});
-                if (sky && mc.theWorld.isRaining()) {
+                // day and rain as the server sees them (the client world always says "day")
+                rows.add(new String[]{!sky ? Lang.tr("sc.gui.gen.nosky") : Lang.tr(generator.getInfoA() != 0 ? "sc.gui.gen.day" : "sc.gui.gen.night"), lab});
+                if (sky && generator.getInfoB() != 0) {
                     rows.add(new String[]{Lang.tr("sc.gui.gen.rain"), String.valueOf(0x6AA0E8)});
                 }
                 break;

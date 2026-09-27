@@ -340,12 +340,18 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Open sky only: full by day, half at night, 60% of that in the rain. */
     private void updateSolar() {
+        // The screen shows day / night and rain from these (infoA: 1 by day, infoB: 1 in the rain) -
+        // the client's own world can't tell: its isDaytime() is always true (skylight isn't
+        // computed client-side in 1.7.10), which made the screen say "Day" all night.
+        boolean day = worldObj.isDaytime(), rain = worldObj.canLightningStrikeAt(xCoord, yCoord + 1, zCoord);
+        infoA = day ? 1 : 0;
+        infoB = rain ? 1 : 0;
         if (!worldObj.canBlockSeeTheSky(xCoord, yCoord + 1, zCoord)) {
             status = GeneratorStatus.NO_SUNLIGHT;
             return;
         }
-        double f = worldObj.isDaytime() ? 1.0 : 0.5;
-        if (worldObj.canLightningStrikeAt(xCoord, yCoord + 1, zCoord)) {
+        double f = day ? 1.0 : 0.5;
+        if (rain) {
             f *= 0.6;
         }
         give(Math.max(1, (int) Math.round(generatorType.euPerTick * f)), GeneratorStatus.NO_SUNLIGHT);
