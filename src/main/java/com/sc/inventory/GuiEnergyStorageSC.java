@@ -18,7 +18,7 @@ import net.minecraft.entity.player.InventoryPlayer;
  */
 public class GuiEnergyStorageSC extends GuiContainer {
 
-    private static final int TEXT_X = 42, BAR_X = 14, BAR_Y = 98, BAR_W = 186, BAR_H = 9;
+    private static final int TEXT_X = 58, BAR_X = 14, BAR_Y = 98, BAR_W = 186, BAR_H = 9;
 
     private final TileEntityEnergyStorageSC storage;
 
@@ -55,7 +55,10 @@ public class GuiEnergyStorageSC extends GuiContainer {
         int x = guiLeft, y = guiTop;
         GuiBigSC.window(x, y, true, TileEntityEnergyStorageSC.UPGRADE_SLOTS);
         GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
-        GuiHoloSC.slot(x + ContainerEnergyStorageSC.SLOT_X, y + ContainerEnergyStorageSC.SLOT_Y, storage.getStackInSlot(0) != null);
+        for (int k = 0; k < storage.chargeSlots(); k++) {
+            GuiHoloSC.slot(x + ContainerEnergyStorageSC.chargeX(k), y + ContainerEnergyStorageSC.chargeY(k),
+                    storage.getStackInSlot(TileEntityEnergyStorageSC.chargeSlotIndex(k)) != null);
+        }
         GuiHoloSC.slot(x + ContainerEnergyStorageSC.DIS_X, y + ContainerEnergyStorageSC.DIS_Y,
                 storage.getStackInSlot(TileEntityEnergyStorageSC.SLOT_DISCHARGE) != null);
         GuiHoloSC.bar(x + BAR_X, y + BAR_Y, BAR_W, BAR_H, fraction(), 24, GuiEnergyGaugeSC.colour(fraction()));
@@ -77,7 +80,9 @@ public class GuiEnergyStorageSC extends GuiContainer {
         }
         fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityEnergyStorageSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y,
                 GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X, 0x505864);
-        smallText(Lang.tr("sc.storage.gui.lbl.charge"), ContainerEnergyStorageSC.SLOT_X - 2, ContainerEnergyStorageSC.SLOT_Y + 18, 22);
+        int rows = (storage.chargeSlots() + 1) / 2;
+        smallText(Lang.tr("sc.storage.gui.lbl.charge", storage.chargeSlots()), ContainerEnergyStorageSC.SLOT_X - 2,
+                ContainerEnergyStorageSC.SLOT_Y + rows * 18, 38);
         smallText(Lang.tr("sc.storage.gui.lbl.discharge"), ContainerEnergyStorageSC.DIS_X - 2, ContainerEnergyStorageSC.DIS_Y + 18, 22);
         int room = GuiBigSC.SCREEN_RIGHT - TEXT_X;
         fit(Lang.tr("sc.gui.holo.storage"), TEXT_X, 25, room, GuiHoloSC.CYAN & 0xFFFFFF);
@@ -142,10 +147,13 @@ public class GuiEnergyStorageSC extends GuiContainer {
             lines.add(storage.getEnergyStored() + " / " + storage.getMaxEnergyStored() + " EU");
             return lines;
         }
-        if (storage.getStackInSlot(0) == null
-                && GuiGaugeSC.isOver(ContainerEnergyStorageSC.SLOT_X, ContainerEnergyStorageSC.SLOT_Y, 16, 16, mx, my)) {
-            lines.add(Lang.tr("sc.storage.gui.slot", storage.getTier().name()));
-            return lines;
+        for (int k = 0; k < storage.chargeSlots(); k++) {
+            if (storage.getStackInSlot(TileEntityEnergyStorageSC.chargeSlotIndex(k)) == null
+                    && GuiGaugeSC.isOver(ContainerEnergyStorageSC.chargeX(k), ContainerEnergyStorageSC.chargeY(k), 16, 16, mx, my)) {
+                lines.add(Lang.tr("sc.storage.gui.slot", storage.getTier().name()));
+                lines.add(Lang.tr("sc.storage.gui.slots.hint", storage.chargeSlots(), storage.getTier().getVoltage()));
+                return lines;
+            }
         }
         return null;
     }

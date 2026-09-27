@@ -2165,7 +2165,8 @@ sc.gui.ex.warn=without helium it overheats in ~%d s and goes out
 sc.gui.ex.tip.1=§7Once lit, liquid helium (1 mB/t) cools the core
 sc.gui.ex.tip.2=§7Without helium it keeps running but heats up; at the limit it goes out, no blast - it needs lighting again
 sc.storage.gui.output.n=Output: %d EU/t × %d = %d EU/t
-sc.storage.gui.lbl.charge=charge
+sc.storage.gui.lbl.charge=charge ×%d
+sc.storage.gui.slots.hint=§7Charge slots: %d - each charges on its own at %d EU/t. Bigger storages have more: HV and EV 2, IV 3, QV and XV 4
 sc.storage.gui.lbl.discharge=drain
 sc.storage.gui.slot.discharge=Discharging: batteries, suits, blades and drills give their energy to the storage
 sc.storage.tooltip.wrench=§7A wrench on a face turns the output to it

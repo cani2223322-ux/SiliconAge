@@ -23,7 +23,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     /** Slots: 0 charges an item, 1 takes the energy out of one, 2..5 the upgrades. */
     public static final int SLOT_CHARGE = 0, SLOT_DISCHARGE = 1, FIRST_UPGRADE_SLOT = 2, UPGRADE_SLOTS = 4,
-            SLOT_COUNT = FIRST_UPGRADE_SLOT + UPGRADE_SLOTS;
+            FIRST_EXTRA_CHARGE = FIRST_UPGRADE_SLOT + UPGRADE_SLOTS, MAX_CHARGE_SLOTS = 4,
+            SLOT_COUNT = FIRST_EXTRA_CHARGE + MAX_CHARGE_SLOTS - 1;
     /** Capacity upgrade: +25% of the tier's capacity each. */
     public static final int CAPACITY_PERCENT_PER_UPGRADE = 25;
     /** Overdrive: one more packet of the output voltage a tick each, at most this many. */
@@ -34,6 +35,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     private ForgeDirection facing = ForgeDirection.SOUTH;
     private ItemStack chargeSlot;
+    /** Charge slots 2..4 (inventory slots 6..8) - how many are open goes by the tier (chargeSlots()). */
+    private final ItemStack[] extraCharge = new ItemStack[MAX_CHARGE_SLOTS - 1];
     private ItemStack dischargeSlot;
     private final ItemStack[] upgradeSlots = new ItemStack[UPGRADE_SLOTS];
     /** Set once the upgrades went into the dropped item, so breakBlock doesn't drop them loose too. */
@@ -238,11 +241,42 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         }
     }
 
-    /** One tick's charging: the slot's item, at most one packet of the tier's voltage. */
+    /**
+     * Charge slots by the tier: LV and MV one, HV and EV two, IV three, QV and XV four - each
+     * charging on its own at the tier's voltage, so a bigger storage charges more at once.
+     */
+    public int chargeSlots() {
+        switch (getTier()) {
+            case LV:
+            case MV: return 1;
+            case HV:
+            case EV: return 2;
+            case IV: return 3;
+            default: return 4;
+        }
+    }
+
+    /** The self-test's handle on one charging round (chargeRound is protected). */
+    public void chargeRoundForTest() {
+        chargeRound();
+    }
+
+    /** The inventory slot of charge slot k (0 .. chargeSlots()-1). */
+    public static int chargeSlotIndex(int k) {
+        return k == 0 ? SLOT_CHARGE : FIRST_EXTRA_CHARGE + k - 1;
+    }
+
+    /** One tick's charging: each open slot's item, at most one packet of the tier's voltage each. */
     protected void chargeRound() {
-        int taken = chargeSlotItem(Math.min(getEnergyStored(), getTier().getVoltage()));
-        if (taken > 0) {
-            removeEnergy(taken);
+        boolean any = false;
+        for (int k = 0; k < chargeSlots(); k++) {
+            int taken = chargeItem(getStackInSlot(chargeSlotIndex(k)), Math.min(getEnergyStored(), getTier().getVoltage()));
+            if (taken > 0) {
+                removeEnergy(taken);
+                any = true;
+            }
+        }
+        if (any) {
             markDirty();
         }
     }
@@ -297,7 +331,11 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     /** Charges the slot's item up to `max` EU (the caller takes them out of the buffer). @return EU taken */
     protected int chargeSlotItem(int max) {
-        return chargeItem(chargeSlot, max);
+        int start = max;
+        for (int k = 0; k < chargeSlots() && max > 0; k++) {       // the charge pad: one budget across its slots
+            max -= chargeItem(getStackInSlot(chargeSlotIndex(k)), max);
+        }
+        return start - max;
     }
 
     /**
@@ -388,7 +426,10 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         if (slot == SLOT_DISCHARGE) {
             return dischargeSlot;
         }
-        return slot >= FIRST_UPGRADE_SLOT && slot < SLOT_COUNT ? upgradeSlots[slot - FIRST_UPGRADE_SLOT] : null;
+        if (slot >= FIRST_EXTRA_CHARGE && slot < SLOT_COUNT) {
+            return extraCharge[slot - FIRST_EXTRA_CHARGE];
+        }
+        return slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE ? upgradeSlots[slot - FIRST_UPGRADE_SLOT] : null;
     }
 
     @Override
@@ -416,7 +457,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             chargeSlot = stack;
         } else if (slot == SLOT_DISCHARGE) {
             dischargeSlot = stack;
-        } else if (slot >= FIRST_UPGRADE_SLOT && slot < SLOT_COUNT) {
+        } else if (slot >= FIRST_EXTRA_CHARGE && slot < SLOT_COUNT) {
+            extraCharge[slot - FIRST_EXTRA_CHARGE] = stack;
+        } else if (slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE) {
             upgradeSlots[slot - FIRST_UPGRADE_SLOT] = stack;
             if (worldObj != null && !worldObj.isRemote) {
                 refreshEnergyNet();   // a transformer changes the output tier IC2 cached
@@ -464,7 +507,10 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         if (slot == SLOT_DISCHARGE) {
             return isDischargeable(stack);
         }
-        return slot >= FIRST_UPGRADE_SLOT && slot < SLOT_COUNT && acceptsUpgrade(stack);
+        if (slot >= FIRST_EXTRA_CHARGE && slot < SLOT_COUNT) {
+            return slot - FIRST_EXTRA_CHARGE + 1 < chargeSlots() && isChargeable(stack) && tierAllows(stack);
+        }
+        return slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE && acceptsUpgrade(stack);
     }
 
     /** Weapons and armor pieces go in the charge slot (isItemValidForSlot adds the tier rule). */
@@ -489,6 +535,10 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             String k = "Upgrade" + i;
             upgradeSlots[i] = nbt.hasKey(k) ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag(k)) : null;
         }
+        for (int i = 0; i < extraCharge.length; i++) {
+            String k = "ChargeSlot" + (i + 2);
+            extraCharge[i] = nbt.hasKey(k) ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag(k)) : null;
+        }
     }
 
     @Override
@@ -504,6 +554,11 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
             if (upgradeSlots[i] != null) {
                 nbt.setTag("Upgrade" + i, upgradeSlots[i].writeToNBT(new NBTTagCompound()));
+            }
+        }
+        for (int i = 0; i < extraCharge.length; i++) {
+            if (extraCharge[i] != null) {
+                nbt.setTag("ChargeSlot" + (i + 2), extraCharge[i].writeToNBT(new NBTTagCompound()));
             }
         }
     }

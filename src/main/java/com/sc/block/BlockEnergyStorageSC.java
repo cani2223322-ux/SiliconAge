@@ -189,8 +189,10 @@ public class BlockEnergyStorageSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityEnergyStorageSC) {
             TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
-            int last = s.upgradesInItem() ? TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT : TileEntityEnergyStorageSC.SLOT_COUNT;
-            for (int i = 0; i < last; i++) {
+            for (int i = 0; i < TileEntityEnergyStorageSC.SLOT_COUNT; i++) {
+                if (s.upgradesInItem() && i >= TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT && i < TileEntityEnergyStorageSC.FIRST_EXTRA_CHARGE) {
+                    continue;
+                }
                 ItemStack in = s.getStackInSlot(i);
                 if (in != null) {
                     world.spawnEntityInWorld(new EntityItem(world, x + 0.5, y + 0.5, z + 0.5, in));

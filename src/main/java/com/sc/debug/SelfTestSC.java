@@ -293,6 +293,23 @@ public final class SelfTestSC {
         check(got == 32 && com.sc.item.ItemArmorSC.chargeOf(boots) == 968
                         && com.sc.tileentity.TileEntityEnergyStorageSC.isDischargeable(boots),
                 "storage discharge slot takes 32 EU a tick out of a charged suit piece (" + got + ")");
+        // charge slots by tier, each charging on its own
+        com.sc.tileentity.TileEntityEnergyStorageSC hv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        hv.setStorageTier(com.sc.energy.Tier.HV);
+        com.sc.tileentity.TileEntityEnergyStorageSC xv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        xv.setStorageTier(com.sc.energy.Tier.XV);
+        ItemStack b1 = new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[3]);
+        ItemStack b2 = new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[2]);
+        boolean thirdRefused = !hv.isItemValidForSlot(com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotIndex(2), b1.copy());
+        hv.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotIndex(0), b1);
+        hv.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotIndex(1), b2);
+        hv.setStoredFromItem(10000);
+        int before = hv.getEnergyStored();
+        hv.chargeRoundForTest();
+        check(new com.sc.tileentity.TileEntityEnergyStorageSC().chargeSlots() == 1 && hv.chargeSlots() == 2 && xv.chargeSlots() == 4
+                        && thirdRefused && before - hv.getEnergyStored() == 1024
+                        && com.sc.item.ItemArmorSC.chargeOf(b1) == 512 && com.sc.item.ItemArmorSC.chargeOf(b2) == 512,
+                "charge slots by tier: LV 1, HV 2, XV 4; HV charges two pieces at 512 EU/t each (" + (before - hv.getEnergyStored()) + ")");
     }
 
     /** Electric armor: no protection while empty, EU paid per absorbed damage, charged by the storage slot. */
