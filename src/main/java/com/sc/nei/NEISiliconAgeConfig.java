@@ -37,14 +37,15 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         GeneratorRecipeHandlerSC generators = new GeneratorRecipeHandlerSC();
         API.registerRecipeHandler(generators);
         API.registerUsageHandler(generators);
-        // Clicking the progress arrow of any machine screen opens that machine's recipe page.
+        // Clicking the progress bar of any machine screen opens that machine's recipe page.
         List<Class<? extends GuiContainer>> guis = new ArrayList<Class<? extends GuiContainer>>();
         guis.add(GuiMachineSC.class);
         List<TemplateRecipeHandler.RecipeTransferRect> rects = new ArrayList<TemplateRecipeHandler.RecipeTransferRect>();
         rects.add(new TemplateRecipeHandler.RecipeTransferRect(
                 // NEI measures these from (guiLeft + 5, guiTop + 11) on a screen with no overlay
                 // (RecipeInfo.getGuiOffset) - unshifted, the rect sat over the output slots.
-                new Rectangle(GuiMachineSC.PROGRESS_X - 5, GuiMachineSC.PROGRESS_Y - 11, 16, 16), MachineRecipeHandlerSC.ID_OPEN_MACHINE));
+                new Rectangle(GuiMachineSC.PROGRESS_X - 5, GuiMachineSC.PROGRESS_Y - 1 - 11, GuiMachineSC.PROGRESS_W,
+                        GuiMachineSC.PROGRESS_H + 2), MachineRecipeHandlerSC.ID_OPEN_MACHINE));
         TemplateRecipeHandler.RecipeTransferRectHandler.registerRectsToGuis(guis, rects);
     }
 

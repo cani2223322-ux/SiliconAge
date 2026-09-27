@@ -15,14 +15,14 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.FluidTank;
 
 /**
- * Generic GUI for every machine (§13). The background texture bakes in the slot pockets and the
- * recessed wells; everything live is drawn on top of them here - the progress arrow (inputs row
- * down to outputs row), the four fluid tanks (2 inputs with blue rims + 2 outputs with amber
- * rims, drawn with the fluid's own texture; tanks this machine never uses are hatched out),
- * heat for heat-capable machines, and the energy buffer - each with a hover tooltip carrying
- * the actual numbers, since a bare bar can't tell a player whether "nearly full" means 90 EU
- * or 9000. A tier plate sits at the right of the title and the status line is coloured by
- * state, so a stalled machine reads as one at a glance.
+ * Generic GUI for every machine (§13), holo-screen style: the sheet's steel panel and the player's
+ * inventory, and above them one big dark screen (GuiHoloSC) holding the machine's slots in cyan
+ * pockets, a segmented progress bar with the status under it, and on the right what the machine
+ * does (a caption and its animated pictogram) with either the numbers (progress, energy use, input
+ * voltage) or its fluid tanks - only the ones this machine uses or that hold something - and, for
+ * heat-capable machines, a heat bar. The energy gauge (GuiEnergyGaugeSC) stands to the right of
+ * the screen, the upgrade slots on their own side panel. Every gauge has a hover tooltip with the
+ * actual numbers.
  *
  * All of these read the TileEntity directly; ContainerMachineSC is what keeps the client's copy
  * of those fields current (see its detectAndSendChanges).
@@ -31,22 +31,19 @@ public class GuiMachineSC extends GuiContainer {
 
     private static final ResourceLocation TEXTURE = new ResourceLocation(Reference.ASSETS, "textures/gui/guiMachine.png");
 
-    // Between the middle input and middle output slot, pointing down the way items travel.
-    public static final int PROGRESS_X = 44, PROGRESS_Y = 35;
-    /** The process display baked into the sheet between the slots and the tanks. */
-    private static final int DISPLAY_X = 80, DISPLAY_Y = 30;
-    private static final int PROGRESS_SIZE = 16;
-    // Gauges start below the title row's divider (y 15), so a long machine name has the whole
-    // top row to itself - at y 13 the tank and energy rims sat inside the title's line, and seven
-    // English / eight Russian names ran straight into them.
-    /** Compact tank gauges (GuiTankGaugeSC.drawCompact) over the sheet's old wells, energy gauge on their right. */
-    private static final int TANK_X = 102, TANK_Y = 16, TANK_W = 11, TANK_H = 54, TANK_GAP = 12;
-    /** Text rooms end at ENERGY_X; the energy gauge (GuiEnergyGaugeSC) sits over the sheet's old well. */
-    private static final int ENERGY_X = 152, GAUGE_X = 150, GAUGE_Y = 16, GAUGE_W = 22, GAUGE_H = 54;
-    // The status line owns y 72 (it used to be drawn at y 60, straight across the output slots);
-    // heat sits on the same row, right of the longest status text (108 px).
-    private static final int STATUS_X = 8, STATUS_Y = 72;
-    private static final int HEAT_X = 120, HEAT_Y = 73, HEAT_W = 42, HEAT_H = 5;
+    /** The holo screen over the sheet's old slot and gauge area (the title bar above, the inventory's divider below). */
+    private static final int SCREEN_X = 6, SCREEN_Y = 17, SCREEN_W = 142, SCREEN_H = 62;
+    /** Slot rows (ContainerMachineSC places the slots here). */
+    public static final int SLOT_X = 12, IN_Y = 22, OUT_Y = 58;
+    /** The progress bar between the rows (NEI: a click opens this machine's recipes), the status under it. */
+    public static final int PROGRESS_X = 12, PROGRESS_Y = 42, PROGRESS_W = 52, PROGRESS_H = 5;
+    private static final int STATUS_Y = 48;
+    /** The right-hand block: caption and pictogram, then numbers or tanks, heat at the bottom. */
+    private static final int RIGHT_X = 72, CAPTION_Y = 21, PICTO_X = 130, PICTO_Y = 19, ROWS_Y = 37;
+    private static final int TANK_Y = 37, TANK_W = 11, TANK_GAP = 12;
+    private static final int HEAT_X = 74, HEAT_Y = 73, HEAT_W = 70, HEAT_H = 3;
+    /** The energy gauge (GuiEnergyGaugeSC) right of the screen. */
+    private static final int GAUGE_X = 150, GAUGE_Y = 16, GAUGE_W = 22, GAUGE_H = 54;
 
     /**
      * Upgrade side panel (IC2 style): its own little window right next to the main sheet, top
@@ -57,12 +54,15 @@ public class GuiMachineSC extends GuiContainer {
 
     private final TileEntityMachineSC machine;
 
-    /** For NEI: which machine's recipe page the progress-arrow click should open. */
+    /** For NEI: which machine's recipe page the progress-bar click should open. */
     public com.sc.machine.MachineType getMachineType() {
         return machine.getMachineType();
     }
     /** Which of the four tanks any recipe of this machine type ever uses - fixed per type. */
     private final boolean[] tankUsed = new boolean[ContainerMachineSC.TANK_COUNT];
+    /** Tanks shown this frame (used by the type or holding fluid), left to right. */
+    private final int[] shownTanks = new int[ContainerMachineSC.TANK_COUNT];
+    private int shownCount;
 
     public GuiMachineSC(InventoryPlayer playerInv, TileEntityMachineSC machine) {
         super(new ContainerMachineSC(playerInv, machine));
@@ -74,6 +74,23 @@ public class GuiMachineSC extends GuiContainer {
         ySize = 166;
     }
 
+    private boolean heat() {
+        return machine.getMachineType().heatCapable;
+    }
+
+    private void collectTanks() {
+        shownCount = 0;
+        for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
+            if (tankUsed[i] || machine.getTank(i).getFluidAmount() > 0) {
+                shownTanks[shownCount++] = i;
+            }
+        }
+    }
+
+    private int tankH() {
+        return (heat() ? HEAT_Y - 3 : SCREEN_Y + SCREEN_H - 2) - TANK_Y;
+    }
+
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         GuiGaugeSC.bind(mc, TEXTURE);
@@ -82,31 +99,46 @@ public class GuiMachineSC extends GuiContainer {
         drawTexturedModalRect(x, y, 0, 0, 176, ySize);
         drawUpgradePanel(x, y);
 
-        drawProcessDisplay(x + DISPLAY_X, y + DISPLAY_Y);
-
+        collectTanks();
+        // the sheet's old wells and pockets (slots, tanks, heat) go under plain steel first
+        drawRect(x + 5, y + 16, x + 172, y + 80, 0xFFB9C1CC);
+        GuiHoloSC.screen(x + SCREEN_X, y + SCREEN_Y, SCREEN_W, SCREEN_H);
+        for (int i = 0; i < 3; i++) {
+            GuiHoloSC.slot(x + SLOT_X + i * 18, y + IN_Y, false);
+            GuiHoloSC.slot(x + SLOT_X + i * 18, y + OUT_Y,
+                    machine.getStackInSlot(TileEntityMachineSC.INPUT_SLOTS + i) != null);
+        }
         int ticks = machine.getCurrentRecipeTicks();
-        if (ticks > 0) {
-            GuiGaugeSC.drawSpriteDown(this, x + PROGRESS_X, y + PROGRESS_Y, GuiGaugeSC.SPR_ARROW_U, GuiGaugeSC.SPR_ARROW_V,
-                    PROGRESS_SIZE, PROGRESS_SIZE, (float) machine.getProgressTicks() / ticks);
+        float progress = ticks > 0 ? (float) machine.getProgressTicks() / ticks : 0F;
+        GuiHoloSC.bar(x + PROGRESS_X, y + PROGRESS_Y, PROGRESS_W, PROGRESS_H, progress, 10,
+                machine.getStatus() == MachineStatus.PROCESSING ? 0xFFFF8C1E : 0xFF6E7C8C);
+        for (int i = 0; i < 3; i++) {                           // little arrows: the way items go
+            int ax = x + SLOT_X + i * 18 + 6;
+            drawRect(ax, y + 40, ax + 4, y + 41, GuiHoloSC.CYAN_DIM);
+            drawRect(ax + 1, y + 41, ax + 3, y + 42, GuiHoloSC.CYAN_DIM);
         }
 
-        if (machine.getMachineType().heatCapable) {
-            GuiGaugeSC.drawSpriteHorizontal(this, x + HEAT_X, y + HEAT_Y, GuiGaugeSC.SPR_HEAT_U, GuiGaugeSC.SPR_HEAT_V,
-                    HEAT_W, HEAT_H, (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity());
+        GuiGaugeSC.bind(mc, TEXTURE);
+        drawProcessDisplay(x + PICTO_X, y + PICTO_Y);
+
+        if (heat()) {
+            GuiHoloSC.bar(x + HEAT_X, y + HEAT_Y, HEAT_W, HEAT_H, (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity(),
+                    14, 0xFFFF5A3C);
         }
 
         GuiEnergyGaugeSC.draw(x + GAUGE_X, y + GAUGE_Y, GAUGE_W, GAUGE_H,
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
-        GuiGaugeSC.bind(mc, TEXTURE);
 
-        // Tanks last: drawFluid() switches to the blocks atlas, so the sheet is rebound per tank.
-        for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
-            int tx = x + TANK_X + i * TANK_GAP;
+        // Tanks last: drawFluid() switches to the blocks atlas.
+        for (int k = 0; k < shownCount; k++) {
+            int i = shownTanks[k];
             FluidTank tank = machine.getTank(i);
-            GuiTankGaugeSC.drawCompact(mc, tx, y + TANK_Y, TANK_W, TANK_H, tank.getFluid(), tank.getCapacity(),
-                    !tankUsed[i] && tank.getFluidAmount() == 0);
-            GuiGaugeSC.bind(mc, TEXTURE);
+            GuiTankGaugeSC.drawCompact(mc, x + RIGHT_X + 2 + k * TANK_GAP, y + TANK_Y, TANK_W, tankH(), tank.getFluid(),
+                    tank.getCapacity(), false);
         }
+        GuiHoloSC.glint(x + SCREEN_X, y + SCREEN_Y, SCREEN_W, SCREEN_H);
+        GuiGaugeSC.bind(mc, TEXTURE);
+        org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
     @Override
@@ -114,7 +146,26 @@ public class GuiMachineSC extends GuiContainer {
         fit(machine.getMachineType().localizedName(), 8, 5, titleRoom(machine.getMachineType().tier), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, machine.getMachineType().tier, 176 - 6, 3);
         MachineStatus status = machine.getStatus();
-        fit(status.localized(), STATUS_X, STATUS_Y, (machine.getMachineType().heatCapable ? HEAT_X - 4 : 170) - STATUS_X, statusColor(status));
+        fit(status.localized(), PROGRESS_X, STATUS_Y, 58, statusColor(status));
+        fit(Lang.tr("sc.gui.holo.process." + processKind(machine.getMachineType())), RIGHT_X, CAPTION_Y, PICTO_X - RIGHT_X - 2,
+                GuiHoloSC.CYAN & 0xFFFFFF);
+        // the numbers, right of the tanks (or the whole block without tanks)
+        int rx = RIGHT_X + 2 + (shownCount > 0 ? shownCount * TANK_GAP + 2 : 0);
+        int room = SCREEN_X + SCREEN_W - 3 - rx;
+        if (room >= 26) {
+            int ticks = machine.getCurrentRecipeTicks();
+            List<String> rows = new ArrayList<String>();
+            rows.add(Lang.tr("sc.gui.holo.progress", ticks > 0 ? machine.getProgressTicks() * 100 / ticks + "%" : "-"));
+            rows.add(Lang.tr("sc.gui.holo.energy", machine.effectiveEuPerTick()));
+            rows.add(Lang.tr("sc.gui.holo.input", machine.inputTier().name(), machine.inputTier().getVoltage()));
+            if (heat()) {
+                rows.add(Lang.tr("sc.gui.holo.heat", machine.getHeat() * 100 / Math.max(1, TileEntityMachineSC.getHeatCapacity())));
+            }
+            int bottom = heat() ? HEAT_Y - 3 : SCREEN_Y + SCREEN_H - 2;      // with heat, its bar says it (and the tooltip)
+            for (int i = 0; i < rows.size() && ROWS_Y + i * 9 + 8 <= bottom; i++) {
+                fit(rows.get(i), rx, ROWS_Y + i * 9, room, i == 0 ? GuiHoloSC.VALUE : GuiHoloSC.LABEL);
+            }
+        }
     }
 
     /**
@@ -226,13 +277,14 @@ public class GuiMachineSC extends GuiContainer {
         return 176 - 6 - (fontRendererObj.getStringWidth(tier.name()) + 4) - 4 - 8;
     }
 
+    /** Status colours for the dark screen. */
     private static int statusColor(MachineStatus status) {
         switch (status) {
-            case PROCESSING: return 0x2E7D32;
-            case OUTPUT_FULL: return 0x9A6200;
+            case PROCESSING: return GuiHoloSC.OK;
+            case OUTPUT_FULL: return GuiHoloSC.WARN;
             case NO_POWER:
-            case OVERHEATED: return 0xB02418;
-            default: return 0x606060;
+            case OVERHEATED: return GuiHoloSC.BAD;
+            default: return GuiHoloSC.IDLE;
         }
     }
 
@@ -257,22 +309,18 @@ public class GuiMachineSC extends GuiContainer {
             return lines;
         }
 
-        for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
-            if (GuiGaugeSC.isOver(TANK_X + i * TANK_GAP, TANK_Y, TANK_W, TANK_H, mouseX, mouseY)) {
+        for (int k = 0; k < shownCount; k++) {
+            int i = shownTanks[k];
+            if (GuiGaugeSC.isOver(RIGHT_X + 2 + k * TANK_GAP, TANK_Y, TANK_W, tankH(), mouseX, mouseY)) {
                 FluidTank tank = machine.getTank(i);
                 lines.add(Lang.tr(i < 2 ? "sc.gui.tank.input" : "sc.gui.tank.output", (i % 2) + 1));
-                if (!tankUsed[i] && tank.getFluidAmount() == 0) {
-                    lines.add(Lang.tr("sc.gui.tank.unused"));
-                    return lines;
-                }
                 lines.add(GuiGaugeSC.fluidLabel(tank.getFluid(), tank.getCapacity()));
                 lines.add(GuiTankGaugeSC.percentLine(tank.getFluid(), tank.getCapacity()));
                 return lines;
             }
         }
 
-        if (machine.getMachineType().heatCapable
-                && GuiGaugeSC.isOver(HEAT_X, HEAT_Y, HEAT_W, HEAT_H, mouseX, mouseY)) {
+        if (heat() && GuiGaugeSC.isOver(HEAT_X - 1, HEAT_Y - 1, HEAT_W + 2, HEAT_H + 2, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.heat"));
             lines.add(machine.getHeat() + " / " + TileEntityMachineSC.getHeatCapacity());
             lines.add(Lang.tr("sc.gui.heat.warning"));
@@ -286,7 +334,7 @@ public class GuiMachineSC extends GuiContainer {
         }
 
         int ticks = machine.getCurrentRecipeTicks();
-        if (ticks > 0 && GuiGaugeSC.isOver(PROGRESS_X, PROGRESS_Y, PROGRESS_SIZE, PROGRESS_SIZE, mouseX, mouseY)) {
+        if (ticks > 0 && GuiGaugeSC.isOver(PROGRESS_X - 1, PROGRESS_Y - 1, PROGRESS_W + 2, PROGRESS_H + 2, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.progress"));
             lines.add(machine.getProgressTicks() * 100 / ticks + "%  (" + machine.getProgressTicks() + " / " + ticks + ")");
             return lines;

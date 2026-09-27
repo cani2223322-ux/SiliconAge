@@ -5,6 +5,14 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 ## Не выпущено / Unreleased
 
+### Русский
+- **Новое меню машин — голо-экран.** Вся рабочая часть — на одном тёмном экране: слоты в голубых рамках, сегментная полоса прогресса (клик по ней с NEI открывает рецепты) и состояние под ней; справа — что делает машина (ДРОБЛЕНИЕ, НАГРЕВ, ЖИДКОСТИ…) с анимированным значком и цифры: готовность, расход, напряжение входа. Баки показываются, только если машина ими пользуется или в них что-то есть — заштрихованных «пустых» баков больше нет. Нагрев — полосой внизу экрана. Справочник обновлён.
+- Состояние «Перегрев - пауза» сокращено до «Перегрев».
+
+### English
+- **A new machine screen - a holo screen.** Everything that works is on one dark screen: slots in cyan frames, a segmented progress bar (with NEI a click opens the recipes) and the status under it; on the right what the machine does (CRUSHING, HEATING, FLUIDS...) with its animated icon and the numbers: progress, energy use, input voltage. Tanks show only if the machine uses them or they hold something - no more hatched "unused" tanks. Heat is a bar along the screen's bottom. The handbook is updated.
+- The "Overheated - paused" status is now just "Overheated".
+
 ## 0.1.3-alpha — 2026-09-27
 
 ### Русский

@@ -19,10 +19,10 @@ public class ContainerMachineSC extends Container {
         this.machine = machine;
 
         for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {
-            addSlotToContainer(new SlotRecipeInput(machine, i, 26 + i * 18, 17));
+            addSlotToContainer(new SlotRecipeInput(machine, i, GuiMachineSC.SLOT_X + i * 18, GuiMachineSC.IN_Y));
         }
         for (int i = 0; i < TileEntityMachineSC.OUTPUT_SLOTS; i++) {
-            addSlotToContainer(new SlotOutputOnly(machine, TileEntityMachineSC.INPUT_SLOTS + i, 26 + i * 18, 53));
+            addSlotToContainer(new SlotOutputOnly(machine, TileEntityMachineSC.INPUT_SLOTS + i, GuiMachineSC.SLOT_X + i * 18, GuiMachineSC.OUT_Y));
         }
         for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
             addSlotToContainer(new SlotUpgrade(machine, TileEntityMachineSC.FIRST_UPGRADE_SLOT + i,

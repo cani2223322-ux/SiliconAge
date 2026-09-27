@@ -207,6 +207,10 @@ def audit(lang):
     check(lang, "zone readout", t("sc.fieldzone.info", "16 777 216", 99999) + " " + t("sc.fieldzone.pending"), 232)
     check(lang, "field upgrades count", t("sc.fieldgui.upgrades.count", 16, 16, 160000), 232)
     check(lang, "field input", t("sc.fieldgui.upgrades.input", "XV", 32768), 232)
+    # ---- the machines' holo screen: its number rows (no tanks: 71 px)
+    check(lang, "machine holo row", t("sc.gui.holo.progress", "100%"), 71)
+    check(lang, "machine holo row", t("sc.gui.holo.energy", 1900), 71)
+    check(lang, "machine holo row", t("sc.gui.holo.input", "EV", 2048), 71)
     # ---- generators, machines, storages
     for k, v in L.items():
         if k.startswith("sc.generator.") and "." not in k[len("sc.generator."):]:
@@ -216,7 +220,9 @@ def audit(lang):
         if k.startswith("sc.machine.") and k.count(".") == 2:
             check(lang, "machine title", v, 176 - 6 - 20 - 12)
         if k.startswith("sc.status.machine."):
-            check(lang, "machine status (heat bar)", v, 120 - 4 - 8)
+            check(lang, "machine status (holo screen)", v, 58)
+        if k.startswith("sc.gui.holo.process."):
+            check(lang, "machine process caption", v, 130 - 72 - 2)
     for k, a in (("sc.gui.gen.height", (192,)), ("sc.gui.gen.free", (100,)), ("sc.gui.gen.flow", (4,)),
                  ("sc.gui.gen.pairs", (3,)), ("sc.gui.gen.dt", (1050,)), ("sc.gui.gen.capsules", (2,))):
         check(lang, "generator info", t(k, *a), 152 - 4 - 68)
