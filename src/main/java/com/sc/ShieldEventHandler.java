@@ -156,6 +156,21 @@ public class ShieldEventHandler {
     public void onPlace(net.minecraftforge.event.world.BlockEvent.PlaceEvent event) {
         if (privateFor(event.world, event.player, event.x, event.y, event.z)) {
             event.setCanceled(true);
+            return;
+        }
+        if (event.placedBlock == net.minecraft.init.Blocks.snow_layer || event.placedBlock == net.minecraft.init.Blocks.ice) {
+            for (TileEntityFieldGeneratorSC f : TileEntityFieldGeneratorSC.activeFieldsIn(event.world)) {
+                f.playerPlacedAt(event.x, event.z);         // the rain shield leaves the player's snow and ice alone
+            }
+        }
+    }
+
+    /** Under a rain shield lightning strikes no one (the bolt itself is put out on the world tick, CommonEventHandler). */
+    @SubscribeEvent
+    public void onLightning(net.minecraftforge.event.entity.EntityStruckByLightningEvent event) {
+        net.minecraft.entity.Entity en = event.entity;
+        if (!en.worldObj.isRemote && TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, en.posX, en.posY, en.posZ) != null) {
+            event.setCanceled(true);
         }
     }
 

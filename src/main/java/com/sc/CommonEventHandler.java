@@ -28,6 +28,41 @@ public class CommonEventHandler {
     public void onWorldTick(TickEvent.WorldTickEvent event) {
         if (event.phase == TickEvent.Phase.END && event.world != null && !event.world.isRemote) {
             EnergyNetSC.instance().serverTick(event.world);
+            takeLightning(event.world);
+        }
+    }
+
+    /**
+     * A bolt that fell into a field with its rain shield up: the shield takes it (LIGHTNING_COST EU) -
+     * the fire it lit round itself goes out, and it's gone before it can light more.
+     */
+    private static void takeLightning(net.minecraft.world.World world) {
+        for (Object o : world.weatherEffects) {
+            if (!(o instanceof net.minecraft.entity.effect.EntityLightningBolt)) {
+                continue;
+            }
+            net.minecraft.entity.Entity bolt = (net.minecraft.entity.Entity) o;
+            if (bolt.isDead || bolt.getEntityData().getBoolean("SCShieldSeen")) {
+                continue;
+            }
+            bolt.getEntityData().setBoolean("SCShieldSeen", true);
+            com.sc.tileentity.TileEntityFieldGeneratorSC f =
+                    com.sc.tileentity.TileEntityFieldGeneratorSC.rainShieldAt(world, bolt.posX, bolt.posY, bolt.posZ);
+            if (f == null || !f.pay(com.sc.tileentity.TileEntityFieldGeneratorSC.LIGHTNING_COST)) {
+                continue;
+            }
+            int bx = net.minecraft.util.MathHelper.floor_double(bolt.posX), by = net.minecraft.util.MathHelper.floor_double(bolt.posY),
+                    bz = net.minecraft.util.MathHelper.floor_double(bolt.posZ);
+            for (int dx = -3; dx <= 3; dx++) {
+                for (int dy = -3; dy <= 3; dy++) {
+                    for (int dz = -3; dz <= 3; dz++) {
+                        if (world.getBlock(bx + dx, by + dy, bz + dz) == net.minecraft.init.Blocks.fire) {
+                            world.setBlockToAir(bx + dx, by + dy, bz + dz);
+                        }
+                    }
+                }
+            }
+            bolt.setDead();
         }
     }
 

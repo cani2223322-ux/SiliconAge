@@ -28,7 +28,7 @@ public class ContainerFieldGeneratorSC extends Container {
             BTN_CHARGE_MODE = 8, BTN_RESERVE_MINUS = 9, BTN_RESERVE_PLUS = 30,
             BTN_OUTLINE = 31, BTN_ANIM = 32, BTN_BRIGHT = 33, BTN_BELOW_MINUS = 34, BTN_BELOW_PLUS = 35, BTN_POWER = 36;
     /** Switches: BTN_FLAG_BASE + the bit's index (TileEntityFieldGeneratorSC.F_*). */
-    public static final int BTN_FLAG_BASE = 10, FLAG_COUNT = 15;
+    public static final int BTN_FLAG_BASE = 10, FLAG_COUNT = 16;
 
     /** Server side of the screen's buttons, master only, owner / access list only. */
     @Override

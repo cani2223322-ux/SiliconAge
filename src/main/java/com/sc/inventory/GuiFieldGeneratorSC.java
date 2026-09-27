@@ -158,7 +158,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     break;
                 }
                 int[] rows = {TileEntityFieldGeneratorSC.F_NO_SPAWN, TileEntityFieldGeneratorSC.F_NO_ENDER, TileEntityFieldGeneratorSC.F_DAMAGE,
-                        -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL};
+                        -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL, TileEntityFieldGeneratorSC.F_RAIN};
                 for (int i = 0; i < rows.length; i++) {
                     int id = rows[i] < 0 ? ContainerFieldGeneratorSC.BTN_FILTER : flagId(rows[i]);
                     buttonList.add(new HoloButton(id, x, y + i * 22, CW, 20, ""));
@@ -737,11 +737,25 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     drawRect(fx, fy + 1, fx + 4, fy + 5, on ? 0xFF5AE66E : 0xFF3A4450);
                     fit(Lang.tr("sc.fieldgui.flag." + flags[i]), fx + 7, fy, 104, on ? c : 0x465A6E);
                 }
+                String rain;
+                int rainCol = dim;
+                if (!field.has(TileEntityFieldGeneratorSC.F_RAIN)) {
+                    rain = Lang.tr("sc.fieldgui.sum.rain.off");
+                } else if (!field.rainOverField()) {
+                    rain = Lang.tr("sc.fieldgui.sum.rain.dry");
+                } else if (field.isRainShield()) {
+                    rain = Lang.tr("sc.fieldgui.sum.rain.on", field.rainExtraPerTick());
+                    rainCol = GuiHoloSC.OK;
+                } else {
+                    rain = Lang.tr("sc.fieldgui.sum.rain.low", field.rainExtraPerTick());
+                    rainCol = GuiHoloSC.WARN;
+                }
+                small(rain, 14, 171, W - 28, rainCol, false);
                 small(Lang.tr("sc.fieldgui.sum.modules", field.storageUpgrades(),
-                        field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER)), 14, 174, W - 28, dim, false);
+                        field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER)), 14, 180, W - 28, dim, false);
                 small(Lang.tr("sc.fieldgui.sum.input", field.inputTier().name(), field.inputTier().getVoltage(),
-                        field.getEnergyStored(), field.getMaxEnergyStored()), 14, 182, W - 28, dim, false);
-                small(Lang.tr("sc.fieldgui.sum.hint"), 14, 194, W - 28, 0x465A6E, false);
+                        field.getEnergyStored(), field.getMaxEnergyStored()), 14, 188, W - 28, dim, false);
+                small(Lang.tr("sc.fieldgui.sum.hint"), 14, 198, W - 28, 0x465A6E, false);
                 break;
             }
             case 1:

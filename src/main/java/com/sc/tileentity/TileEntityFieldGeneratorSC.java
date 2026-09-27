@@ -76,7 +76,11 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             /** Wireless charging leaves IC2 batteries / energy crystals in the inventory alone. */
             F_SKIP_BATTERIES = 8192,
             /** With a charge booster in: every item being charged gets the full rate, not a share of it. */
-            F_CHARGE_EACH = 16384;
+            F_CHARGE_EACH = 16384,
+            /** Rain shield: while it rains over the field, upkeep +25% (+50% in a storm); no rain inside, no snow or ice, lightning taken. */
+            F_RAIN = 32768;
+    /** The rain shield's extra upkeep, % of the field's, in rain and in a thunderstorm; and what a lightning bolt costs. */
+    public static final int RAIN_PCT = 25, THUNDER_PCT = 50, LIGHTNING_COST = 2000;
     /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell and charging sparks shown. */
     public static final int DEFAULT_FLAGS = F_DAMAGE | F_WARN | F_SHOW | F_CHARGE_FX;
     /**
@@ -145,6 +149,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     private final List<String> access = new ArrayList<String>();
     /** Switched off by its redstone setting right now (shown on the screen). */
     private boolean redstoneOff;
+    /** The rain shield is up: raining over the field, switched on and paid for (clients hide the rain inside). */
+    private boolean rainShield;
+    /** Snow and ice: columns of the zone seen clear, so snow or ice there now is the weather's, not the player's. */
+    private java.util.BitSet clearCols, seenCols;
+    private AxisAlignedBB snowBox;
+    private int snowSweep;
     private boolean lowWarned;
     private long lastDownWarning = -10000;
 
@@ -389,6 +399,98 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     public boolean isRedstoneOff() {
         return redstoneOff;
+    }
+
+    public boolean isRainShield() {
+        return rainShield;
+    }
+
+    /** Rain (or snow) is falling on the master's spot - from the world's weather, not the client's faded copy. */
+    public boolean rainOverField() {
+        if (worldObj == null || !worldObj.getWorldInfo().isRaining()) {
+            return false;
+        }
+        net.minecraft.world.biome.BiomeGenBase b = worldObj.getBiomeGenForCoords(xCoord, zCoord);
+        return b.canSpawnLightningBolt() || b.getEnableSnow();
+    }
+
+    /** What the rain shield adds to the upkeep right now (0 when it's off or dry). */
+    public int rainExtraPerTick() {
+        if (!has(F_RAIN) || !rainOverField()) {
+            return 0;
+        }
+        return upkeepPerTick() * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100;
+    }
+
+    /** A shielded field over this point, or null (lightning, snow placed by players). */
+    public static TileEntityFieldGeneratorSC rainShieldAt(World world, double x, double y, double z) {
+        for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
+            if (f.rainShield && (f.fieldContains(x, y, z) || f.fieldContains(x, y - 1, z) || f.fieldContains(x, y + 1, z))) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /** A player put snow or ice in this column: it's theirs, the shield leaves it. */
+    public void playerPlacedAt(int x, int z) {
+        int i = snowColumn(x, z);
+        if (i >= 0) {
+            clearCols.clear(i);
+            seenCols.set(i);
+        }
+    }
+
+    private int snowColumn(int x, int z) {
+        if (snowBox == null) {
+            return -1;
+        }
+        int x0 = net.minecraft.util.MathHelper.floor_double(snowBox.minX), z0 = net.minecraft.util.MathHelper.floor_double(snowBox.minZ);
+        int w = net.minecraft.util.MathHelper.floor_double(snowBox.maxX) - x0 + 1, d = net.minecraft.util.MathHelper.floor_double(snowBox.maxZ) - z0 + 1;
+        return x < x0 || z < z0 || x >= x0 + w || z >= z0 + d ? -1 : (z - z0) * w + (x - x0);
+    }
+
+    /**
+     * No new snow or ice under the shield: the zone's columns are swept, 64 a tick; a column seen
+     * clear that has snow on top (or ice on its water) now got it from the weather, and loses it.
+     * Snow and ice that were there before - or that a player put down - stay.
+     */
+    private void keepSnowOff() {
+        AxisAlignedBB box = zoneBounds();
+        int x0 = net.minecraft.util.MathHelper.floor_double(box.minX), z0 = net.minecraft.util.MathHelper.floor_double(box.minZ);
+        int w = net.minecraft.util.MathHelper.floor_double(box.maxX) - x0 + 1, d = net.minecraft.util.MathHelper.floor_double(box.maxZ) - z0 + 1;
+        if (w <= 0 || d <= 0 || (long) w * d > (1 << 18)) {
+            return;
+        }
+        if (snowBox == null || !snowBox.toString().equals(box.toString())) {
+            snowBox = box;
+            clearCols = new java.util.BitSet(w * d);
+            seenCols = new java.util.BitSet(w * d);
+            snowSweep = 0;
+        }
+        for (int k = 0; k < Math.min(64, w * d); k++) {
+            int i = snowSweep++ % (w * d);
+            int x = x0 + i % w, z = z0 + i / w;
+            if (!worldObj.blockExists(x, 64, z)) {
+                continue;
+            }
+            int y = worldObj.getPrecipitationHeight(x, z);
+            boolean snow = worldObj.getBlock(x, y, z) == net.minecraft.init.Blocks.snow_layer;
+            boolean ice = worldObj.getBlock(x, y - 1, z) == net.minecraft.init.Blocks.ice;
+            if (!fieldContains(x + 0.5, y + 0.5, z + 0.5) && !fieldContains(x + 0.5, y - 0.5, z + 0.5)) {
+                continue;
+            }
+            if (!snow && !ice) {
+                clearCols.set(i);
+            } else if (!seenCols.get(i) || !clearCols.get(i)) {
+                // there before we looked, or put there by a player: left alone
+            } else if (snow) {
+                worldObj.setBlockToAir(x, y, z);
+            } else {
+                worldObj.setBlock(x, y - 1, z, net.minecraft.init.Blocks.water);
+            }
+            seenCols.set(i);
+        }
     }
 
     public String getOwner() {
@@ -930,6 +1032,18 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (!rsOff && getEnergyStored() >= (active ? upkeep : upkeep * 20)) {
             removeEnergy(upkeep);
             active = true;
+            // the rain shield: paid on top, and the first thing to go when the energy runs short
+            int rainEu = has(F_RAIN) && rainOverField()
+                    ? upkeep * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100 : 0;
+            boolean shield = rainEu > 0 && getEnergyStored() >= rainEu;
+            if (shield) {
+                removeEnergy(rainEu);
+                keepSnowOff();
+            }
+            if (shield != rainShield) {
+                rainShield = shield;
+                changed();
+            }
             // A big field spans hundreds of chunks - scan it every 4th tick instead of every tick
             // (projectiles cover ~3 blocks a tick, well inside even the smallest such field).
             if (range <= 32 || worldObj.getTotalWorldTime() % 4 == 0) {
@@ -948,6 +1062,10 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             ACTIVE.remove(this);
             chargedLastSecond = 0;
             playersLastSecond = 0;
+            if (rainShield) {
+                rainShield = false;
+                changed();
+            }
         }
         if (active != wasActive) {
             changed();          // turn the visible shield on/off for nearby clients
@@ -1702,6 +1820,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         readZone(nbt);
         owner = nbt.getString("Owner");
         redstoneOff = nbt.getBoolean("RedstoneOff");
+        rainShield = nbt.getBoolean("RainShield");
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
             upgrades[i] = null;
         }
@@ -1750,6 +1869,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         writeZone(nbt);
         nbt.setString("Owner", owner);
         nbt.setBoolean("RedstoneOff", redstoneOff);
+        nbt.setBoolean("RainShield", rainShield);
         NBTTagList names = new NBTTagList();
         for (String n : access) {
             names.appendTag(new net.minecraft.nbt.NBTTagString(n));
