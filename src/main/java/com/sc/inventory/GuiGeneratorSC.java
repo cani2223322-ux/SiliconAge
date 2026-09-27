@@ -67,6 +67,8 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean thermo;
     /** The Hydrogen Fuel Cell: the reaction, the cell cut through, the 2 : 1 gas bar, the water warning; its three tanks as before. */
     private final boolean fcell;
+    /** The RTG: the finned drum with its capsules glowing, the slots under their bays with their life, capsules x 32. */
+    private final boolean rtg;
     private static final int FC_X = 14, FC_Y = 39, FC_W = 90, FC_H = 38, FC_BAR_X = 40, FC_BAR_Y = 80, FC_BAR_W = 64;
     /** Display order of the sides (ForgeDirection ordinals): up, down, north, south, west, east. */
     private static final int[] TH_ORDER = {1, 0, 2, 3, 4, 5};
@@ -112,6 +114,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.water = type == GeneratorType.WATER_WHEEL;
         this.thermo = type == GeneratorType.THERMOELECTRIC;
         this.fcell = type == GeneratorType.FUEL_CELL;
+        this.rtg = type == GeneratorType.RTG;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -232,6 +235,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawThermoBackground(x, y, partialTicks);
         } else if (fcell) {
             drawFcBackground(x, y, partialTicks);
+        } else if (rtg) {
+            drawRtgBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -305,6 +310,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (fcell) {
             drawFcText();
+            drawUpgradeCount();
+            return;
+        }
+        if (rtg) {
+            drawRtgText();
             drawUpgradeCount();
             return;
         }
@@ -843,6 +853,86 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.sf.fuels"), 14, 99, 158, GuiHoloSC.LABEL);
         }
         smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
+    }
+
+    // ---- the RTG ----
+
+    /** The capsule in slot `s` (0 / 1), or null. */
+    private ItemStack rtgCapsule(int s) {
+        ItemStack c = generator.getStackInSlot(s == 0 ? TileEntityGeneratorSC.SLOT_FUEL : TileEntityGeneratorSC.SLOT_BLANKET);
+        return c != null && c.getItem() == com.sc.init.ModItems.isotopeCapsule ? c : null;
+    }
+
+    private void drawRtgBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        GuiSceneSC.rtgBody(x + 14, y + 34, 78, 50, t, rtgCapsule(0) != null, rtgCapsule(1) != null);
+        for (int s = 0; s < 2; s++) {                                          // each capsule's life
+            int bx = x + (s == 0 ? ContainerGeneratorSC.RTG_SLOT_X0 : ContainerGeneratorSC.RTG_SLOT_X1) + 18;
+            int by = y + ContainerGeneratorSC.RTG_SLOT_Y + 1;
+            drawRect(bx, by, bx + 20, by + 4, 0xFF04080C);
+            ItemStack c = rtgCapsule(s);
+            if (c != null) {
+                float f = 1F - (float) c.getItemDamage() / Math.max(1, c.getMaxDamage());
+                drawRect(bx + 1, by + 1, bx + 1 + (int) (18 * f), by + 3, f > 0.5F ? 0xFF5AE66E : f > 0.2F ? 0xFFFFB040 : 0xFFE63C3C);
+            }
+        }
+        for (int i = 0; i < 2; i++) {                                          // the chips: capsules x EU/t
+            int cx = x + (i == 0 ? 98 : 130);
+            drawRect(cx, y + 36, cx + 24, y + 56, 0xFF2A6A8A);
+            drawRect(cx + 1, y + 37, cx + 23, y + 55, 0xFF0E3A50);
+        }
+    }
+
+    private void drawRtgText() {
+        fit(Lang.tr("sc.gui.rtg.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        int caps = (rtgCapsule(0) != null ? 1 : 0) + (rtgCapsule(1) != null ? 1 : 0);
+        long first = Long.MAX_VALUE;
+        for (int s = 0; s < 2; s++) {
+            int tx = (s == 0 ? ContainerGeneratorSC.RTG_SLOT_X0 : ContainerGeneratorSC.RTG_SLOT_X1) + 18;
+            int ty = ContainerGeneratorSC.RTG_SLOT_Y + 6;
+            ItemStack c = rtgCapsule(s);
+            if (c != null) {
+                long secs = Math.max(0, c.getMaxDamage() - c.getItemDamage());
+                first = Math.min(first, secs);
+                smallFit(sfTime(secs), tx, ty, 20, GuiHoloSC.VALUE);
+            } else {
+                smallFit(Lang.tr("sc.gui.rtg.empty"), tx, ty, 20, 0x465A6E);
+            }
+        }
+        String[] labels = {Lang.tr("sc.gui.rtg.caps"), "EU/t"};
+        String[] vals = {String.valueOf(caps), String.valueOf(TileEntityGeneratorSC.CAPSULE_EU)};
+        for (int i = 0; i < 2; i++) {
+            int cx = i == 0 ? 98 : 130;
+            int lw = Math.min(22, (int) (fontRendererObj.getStringWidth(labels[i]) * 0.625F));
+            smallFit(labels[i], cx + (24 - lw) / 2, 38, 22, GuiHoloSC.LABEL);
+            fontRendererObj.drawString(vals[i], cx + (24 - fontRendererObj.getStringWidth(vals[i])) / 2, 46, GuiHoloSC.VALUE);
+        }
+        fontRendererObj.drawString("×", 124, 42, GuiHoloSC.VALUE);
+        fontRendererObj.drawString("=", 156, 42, GuiHoloSC.VALUE);
+        fit(Lang.tr("sc.gui.sol.now", generator.getLastOutput()), 98, 60, GuiBigSC.SCREEN_RIGHT - 100, GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.holo.gen.out", generator.outputTier().name(), generator.outputTier().getVoltage()), 98, 70, 100, GuiHoloSC.LABEL);
+        GeneratorStatus status = generator.getStatus();
+        String head;
+        int col;
+        if (status == GeneratorStatus.GENERATING) {
+            head = Lang.tr("sc.gui.rtg.running");
+            col = GuiHoloSC.OK;
+        } else if (status == GeneratorStatus.NO_CAPSULE) {
+            head = Lang.tr("sc.gui.rtg.nocaps");
+            col = GuiHoloSC.BAD;
+        } else if (status == GeneratorStatus.BUFFER_FULL && caps > 0) {
+            head = Lang.tr("sc.gui.rtg.wasted");
+            col = GuiHoloSC.WARN;
+        } else {
+            head = status.localized();
+            col = status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN : GuiHoloSC.IDLE;
+        }
+        fit(head, 98, 79, GuiBigSC.SCREEN_RIGHT - 100, col);
+        smallFit(Lang.tr("sc.gui.rtg.warn.1"), 98, 89, 106, GuiHoloSC.WARN);
+        smallFit(Lang.tr("sc.gui.rtg.warn.2"), 98, 95, 106, GuiHoloSC.WARN);
+        if (first != Long.MAX_VALUE) {
+            smallFit(Lang.tr("sc.gui.rtg.first", sfTime(first)), 98, 104, 106, GuiHoloSC.LABEL);
+        }
     }
 
     // ---- the Hydrogen Fuel Cell ----

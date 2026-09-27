@@ -1397,6 +1397,40 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The RTG from the side: a finned drum (radiators all round), two capsule bays inside glowing
+     * green where a capsule sits, heat shimmering off the fins.
+     */
+    public static void rtgBody(int x, int y, int w, int h, float t, boolean cap0, boolean cap1) {
+        frame(x, y, w, h);
+        int bx0 = x + 12, bx1 = x + w - 12, by0 = y + 8, by1 = y + h - 8;
+        for (int i = by0; i < by1; i += 3) {                                    // the fins
+            rect(x + 4, i, 8, 2, 0xFF6A707A);
+            rect(bx1, i, 8, 2, 0xFF6A707A);
+        }
+        rect(bx0, by0, bx1 - bx0, by1 - by0, 0xFF8A909A);
+        rect(bx0 + 2, by0 + 2, bx1 - bx0 - 4, by1 - by0 - 4, 0xFF2A3038);
+        int bw = (bx1 - bx0 - 10) / 2;
+        boolean[] caps = {cap0, cap1};
+        for (int k = 0; k < 2; k++) {
+            int px = bx0 + 3 + k * (bw + 4);
+            rect(px, by0 + 4, bw, by1 - by0 - 8, 0xFF12181E);
+            if (caps[k]) {
+                float pulse = (float) (0.5 + 0.5 * Math.sin(t * 0.25F + k));
+                rect(px + 2, by0 + 6, bw - 4, by1 - by0 - 12, mix(0xFF2A8A3A, 0xFF7AFF6A, pulse * 0.6F));
+                rect(px + bw / 2 - 1, by0 + 7, 2, by1 - by0 - 14, 0xFFD0FFC0);
+            }
+        }
+        if (cap0 || cap1) {
+            for (int i = 0; i < 6; i++) {                                       // heat off the fins
+                int k = (int) ((t * 0.6F + i * 4) % 10);
+                int side = i % 2 == 1 ? x + 2 : bx1 + 8;
+                rect(side + i % 3, by0 + 4 + (i * 7) % Math.max(1, by1 - by0 - 8) - k, 1, 2, 0x66FFB060);
+            }
+        }
+        rect(x + w / 2 - 2, y + 2, 4, 5, 0xFFD6A432);                           // the terminal
+    }
+
     /** Three wind turbine blades round a hub, turning at `spin` (0 still .. 1 full). */
     public static void windBlades(int cx, int cy, int r, float t, float spin) {
         double a0 = t * 0.25 * spin;

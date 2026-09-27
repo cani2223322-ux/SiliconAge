@@ -32,6 +32,8 @@ public class ContainerGeneratorSC extends Container {
     public static final int WD_SLOT_X = 108, WD_SLOT_Y = 78;
     /** The Geothermal Generator's bucket slot, at the head of its flow sheet. */
     public static final int GEO_SLOT_X = 19, GEO_SLOT_Y = 41;
+    /** The RTG's two capsule slots, under their bays. */
+    public static final int RTG_SLOT_X0 = 20, RTG_SLOT_X1 = 58, RTG_SLOT_Y = 88;
 
     public static int slotX(GeneratorType type, int slot) {
         if (type == GeneratorType.SOLID_FUEL) {
@@ -43,6 +45,9 @@ public class ContainerGeneratorSC extends Container {
         if (type == GeneratorType.GEOTHERMAL) {
             return slot == 0 ? GEO_SLOT_X : SLOT_BLANKET_X;
         }
+        if (type == GeneratorType.RTG) {
+            return slot == 0 ? RTG_SLOT_X0 : RTG_SLOT_X1;
+        }
         if (type == GeneratorType.FUSION_REACTOR) {
             return slot == 0 ? FUS_FUEL_X : FUS_BLANKET_X;
         }
@@ -51,7 +56,8 @@ public class ContainerGeneratorSC extends Container {
 
     public static int slotY(GeneratorType type) {
         return type == GeneratorType.FUSION_REACTOR ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
-                : type == GeneratorType.WIND_TURBINE ? WD_SLOT_Y : type == GeneratorType.GEOTHERMAL ? GEO_SLOT_Y : SLOT_Y;
+                : type == GeneratorType.WIND_TURBINE ? WD_SLOT_Y : type == GeneratorType.GEOTHERMAL ? GEO_SLOT_Y
+                : type == GeneratorType.RTG ? RTG_SLOT_Y : SLOT_Y;
     }
     /** enchantItem button: the Creative Generator's tier. */
     public static final int BTN_CREATIVE_TIER = 0;
