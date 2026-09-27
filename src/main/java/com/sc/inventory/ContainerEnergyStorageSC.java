@@ -13,6 +13,9 @@ public class ContainerEnergyStorageSC extends Container {
 
     /** On the large screen's holo panel, left of the readings (GuiEnergyStorageSC / GuiBigSC). */
     public static final int SLOT_X = 16, SLOT_Y = 30;
+    /** The discharge slot, under the charge slot. */
+    public static final int DIS_X = 16, DIS_Y = 60;
+    private static final int TILE_SLOTS = TileEntityEnergyStorageSC.SLOT_COUNT;
 
     private final TileEntityEnergyStorageSC storage;
     private final IntSyncSC sync = new IntSyncSC(3);   // energy, flow per tick, the power switch
@@ -42,7 +45,31 @@ public class ContainerEnergyStorageSC extends Container {
             public boolean isItemValid(ItemStack stack) {
                 return ContainerEnergyStorageSC.this.storage.isItemValidForSlot(0, stack);       // chargeable, and of the block's tier or lower
             }
+
+            @Override
+            public int getSlotStackLimit() {
+                return 1;
+            }
         });
+        addSlotToContainer(new Slot(storage, TileEntityEnergyStorageSC.SLOT_DISCHARGE, DIS_X, DIS_Y) {
+            @Override
+            public boolean isItemValid(ItemStack stack) {
+                return TileEntityEnergyStorageSC.isDischargeable(stack);
+            }
+
+            @Override
+            public int getSlotStackLimit() {
+                return 1;
+            }
+        });
+        for (int i = 0; i < TileEntityEnergyStorageSC.UPGRADE_SLOTS; i++) {
+            addSlotToContainer(new Slot(storage, TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + i, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y) {
+                @Override
+                public boolean isItemValid(ItemStack stack) {
+                    return TileEntityEnergyStorageSC.acceptsUpgrade(stack);
+                }
+            });
+        }
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, GuiBigSC.INV_X + col * 18, GuiBigSC.INV_Y + row * 18));
@@ -84,15 +111,15 @@ public class ContainerEnergyStorageSC extends Container {
         }
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
-        if (slotIndex == 0) {
-            if (!mergeItemStack(original, 1, inventorySlots.size(), true)) {
+        if (slotIndex < TILE_SLOTS) {
+            if (!mergeItemStack(original, TILE_SLOTS, inventorySlots.size(), true)) {
                 return null;
             }
-        } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, 1)) {
-            int hotbarStart = 1 + 27;
+        } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, TILE_SLOTS)) {
+            int hotbarStart = TILE_SLOTS + 27;
             boolean moved = slotIndex < hotbarStart
                     ? mergeItemStack(original, hotbarStart, inventorySlots.size(), false)
-                    : mergeItemStack(original, 1, hotbarStart, false);
+                    : mergeItemStack(original, TILE_SLOTS, hotbarStart, false);
             if (!moved) {
                 return null;
             }

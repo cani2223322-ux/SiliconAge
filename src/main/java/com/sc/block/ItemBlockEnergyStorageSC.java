@@ -34,6 +34,9 @@ public class ItemBlockEnergyStorageSC extends ItemBlock {
         Tier tier = BlockEnergyStorageSC.tierFor(stack.getItemDamage());
         int stored = stack.hasTagCompound() ? stack.getTagCompound().getInteger("EnergySC") : 0;
         list.add(Lang.tr("sc.storage.tooltip.charge", String.valueOf(stored), String.valueOf(TileEntityEnergyStorageSC.capacityOf(tier))));
+        if (stack.hasTagCompound() && stack.getTagCompound().hasKey("UpgradesSC")) {
+            list.add(Lang.tr("sc.storage.tooltip.upgrades"));
+        }
         if (com.sc.util.TooltipSC.shift()) {
             com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.storage.tooltip.io", tier.getVoltage()), "\u00a77");
             if (field_150939_a instanceof BlockChargePadSC) {

@@ -73,6 +73,9 @@ public class BlockEnergyStorageSC extends Block {
         storage.setFacing(facingToward(placer));
         storage.setPowerOn(false);                             // placed off, as a machine: on once the line's checked
         if (stack.hasTagCompound()) {
+            if (stack.getTagCompound().hasKey("UpgradesSC")) {     // first: a capacity upgrade makes room for the charge
+                storage.loadUpgradesFromItem(stack.getTagCompound().getCompoundTag("UpgradesSC"));
+            }
             storage.setStoredFromItem(stack.getTagCompound().getInteger("EnergySC"));
         }
         world.markBlockForUpdate(x, y, z);
@@ -100,10 +103,46 @@ public class BlockEnergyStorageSC extends Block {
 
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
+        if (com.sc.block.BlockConduitSC.isWrench(player.getCurrentEquippedItem())) {      // a wrench: the output to the clicked face
+            TileEntity te = world.getTileEntity(x, y, z);
+            if (!world.isRemote && te instanceof TileEntityEnergyStorageSC) {
+                ((TileEntityEnergyStorageSC) te).setFacing(ForgeDirection.getOrientation(side));
+                te.markDirty();
+                world.markBlockForUpdate(x, y, z);
+            }
+            return true;
+        }
         if (!world.isRemote) {
             player.openGui(SCMod.instance, GuiHandlerSC.ENERGY_STORAGE_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    /** Other mods' wrenches: the output a quarter turn round the vertical axis. */
+    @Override
+    public boolean rotateBlock(World world, int x, int y, int z, ForgeDirection axis) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityEnergyStorageSC)) {
+            return false;
+        }
+        TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
+        ForgeDirection f = s.getFacing();
+        s.setFacing(f.offsetY != 0 ? ForgeDirection.NORTH : f.getRotation(ForgeDirection.UP));
+        te.markDirty();
+        world.markBlockForUpdate(x, y, z);
+        return true;
+    }
+
+    /** A comparator reads how full it is (0 empty .. 15 full). */
+    @Override
+    public boolean hasComparatorInputOverride() {
+        return true;
+    }
+
+    @Override
+    public int getComparatorInputOverride(World world, int x, int y, int z, int side) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof TileEntityEnergyStorageSC ? ((TileEntityEnergyStorageSC) te).comparatorLevel() : 0;
     }
 
     // ---- keep the charge in the dropped item: drop while the tile entity still exists ----
@@ -127,10 +166,19 @@ public class BlockEnergyStorageSC extends Block {
         ArrayList<ItemStack> drops = new ArrayList<ItemStack>();
         ItemStack stack = new ItemStack(this, 1, meta);
         TileEntity te = world.getTileEntity(x, y, z);
-        if (te instanceof TileEntityEnergyStorageSC && ((TileEntityEnergyStorageSC) te).getEnergyStored() > 0) {
+        if (te instanceof TileEntityEnergyStorageSC) {
+            TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
             NBTTagCompound nbt = new NBTTagCompound();
-            nbt.setInteger("EnergySC", ((TileEntityEnergyStorageSC) te).getEnergyStored());
-            stack.setTagCompound(nbt);
+            if (s.getEnergyStored() > 0) {
+                nbt.setInteger("EnergySC", s.getEnergyStored());
+            }
+            NBTTagCompound ups = s.upgradesForItem();        // the upgrades go with the block, as a machine's
+            if (ups != null) {
+                nbt.setTag("UpgradesSC", ups);
+            }
+            if (!nbt.hasNoTags()) {
+                stack.setTagCompound(nbt);
+            }
         }
         drops.add(stack);
         return drops;
@@ -140,10 +188,14 @@ public class BlockEnergyStorageSC extends Block {
     public void breakBlock(World world, int x, int y, int z, Block block, int meta) {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityEnergyStorageSC) {
-            ItemStack charging = ((TileEntityEnergyStorageSC) te).getStackInSlot(0);
-            if (charging != null) {
-                world.spawnEntityInWorld(new EntityItem(world, x + 0.5, y + 0.5, z + 0.5, charging));
-                ((TileEntityEnergyStorageSC) te).setInventorySlotContents(0, null);   // no second copy for a GUI still open
+            TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
+            int last = s.upgradesInItem() ? TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT : TileEntityEnergyStorageSC.SLOT_COUNT;
+            for (int i = 0; i < last; i++) {
+                ItemStack in = s.getStackInSlot(i);
+                if (in != null) {
+                    world.spawnEntityInWorld(new EntityItem(world, x + 0.5, y + 0.5, z + 0.5, in));
+                    s.setInventorySlotContents(i, null);   // no second copy for a GUI still open
+                }
             }
         }
         super.breakBlock(world, x, y, z, block, meta);

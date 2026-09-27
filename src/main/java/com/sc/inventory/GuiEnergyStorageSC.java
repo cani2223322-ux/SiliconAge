@@ -53,9 +53,11 @@ public class GuiEnergyStorageSC extends GuiContainer {
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         int x = guiLeft, y = guiTop;
-        GuiBigSC.window(x, y, false, 0);
+        GuiBigSC.window(x, y, true, TileEntityEnergyStorageSC.UPGRADE_SLOTS);
         GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         GuiHoloSC.slot(x + ContainerEnergyStorageSC.SLOT_X, y + ContainerEnergyStorageSC.SLOT_Y, storage.getStackInSlot(0) != null);
+        GuiHoloSC.slot(x + ContainerEnergyStorageSC.DIS_X, y + ContainerEnergyStorageSC.DIS_Y,
+                storage.getStackInSlot(TileEntityEnergyStorageSC.SLOT_DISCHARGE) != null);
         GuiHoloSC.bar(x + BAR_X, y + BAR_Y, BAR_W, BAR_H, fraction(), 24, GuiEnergyGaugeSC.colour(fraction()));
         GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H, fraction());
         GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
@@ -68,7 +70,15 @@ public class GuiEnergyStorageSC extends GuiContainer {
                 + storage.getTier().name().toLowerCase(java.util.Locale.ROOT) + ".name");
         fit(title, 8, 5, GuiBigSC.titleRoom(fontRendererObj, storage.getTier()), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, storage.getTier(), GuiBigSC.W - 6, 3);
-        GuiBigSC.labels(fontRendererObj, null, Lang.tr("container.inventory"));
+        GuiBigSC.labels(fontRendererObj, Lang.tr("sc.gui.big.upgrades"), Lang.tr("container.inventory"));
+        int used = 0;
+        for (int i = 0; i < TileEntityEnergyStorageSC.UPGRADE_SLOTS; i++) {
+            used += storage.getStackInSlot(TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
+        }
+        fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityEnergyStorageSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y,
+                GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X, 0x505864);
+        smallText(Lang.tr("sc.storage.gui.lbl.charge"), ContainerEnergyStorageSC.SLOT_X - 2, ContainerEnergyStorageSC.SLOT_Y + 18, 22);
+        smallText(Lang.tr("sc.storage.gui.lbl.discharge"), ContainerEnergyStorageSC.DIS_X - 2, ContainerEnergyStorageSC.DIS_Y + 18, 22);
         int room = GuiBigSC.SCREEN_RIGHT - TEXT_X;
         fit(Lang.tr("sc.gui.holo.storage"), TEXT_X, 25, room, GuiHoloSC.CYAN & 0xFFFFFF);
         fit(Lang.tr("sc.storage.gui.stored", String.valueOf(storage.getEnergyStored())), TEXT_X, 40, room, GuiHoloSC.VALUE);
@@ -77,11 +87,23 @@ public class GuiEnergyStorageSC extends GuiContainer {
         int flow = storage.getFlowPerTick();
         fit(Lang.tr("sc.storage.gui.flow", (flow > 0 ? "+" : "") + flow), TEXT_X, 66, room,
                 flow > 0 ? GuiHoloSC.OK : flow < 0 ? GuiHoloSC.BAD : GuiHoloSC.IDLE);
-        fit(Lang.tr("sc.storage.gui.output", storage.getTier().getVoltage()), TEXT_X, 77, room, GuiHoloSC.LABEL);
+        int packets = storage.packetsPerTick(), volt = storage.outputTier().getVoltage();
+        fit(packets > 1 ? Lang.tr("sc.storage.gui.output.n", volt, packets, volt * packets) : Lang.tr("sc.storage.gui.output", volt),
+                TEXT_X, 77, room, storage.outputTier() != storage.getTier() ? GuiHoloSC.WARN : GuiHoloSC.LABEL);
         String pct = Math.round(fraction() * 100) + "%";
         fontRendererObj.drawString(pct, BAR_X + BAR_W - fontRendererObj.getStringWidth(pct), BAR_Y - 10, GuiEnergyGaugeSC.colour(fraction()) & 0xFFFFFF);
         power.drawGaugeOff(fontRendererObj);
         power.drawWarning(fontRendererObj, TEXT_X, 52, GuiBigSC.SCREEN_RIGHT - TEXT_X, guiLeft, guiTop);
+    }
+
+    /** A small label (5/8 size), fitted into `maxW`. */
+    private void smallText(String text, int x, int y, int maxW) {
+        float k = Math.min(0.625F, maxW / (float) Math.max(1, fontRendererObj.getStringWidth(text)));
+        org.lwjgl.opengl.GL11.glPushMatrix();
+        org.lwjgl.opengl.GL11.glTranslatef(x, y, 0F);
+        org.lwjgl.opengl.GL11.glScalef(k, k, 1F);
+        fontRendererObj.drawString(text, 0, 0, GuiHoloSC.LABEL);
+        org.lwjgl.opengl.GL11.glPopMatrix();
     }
 
     /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
@@ -96,7 +118,22 @@ public class GuiEnergyStorageSC extends GuiContainer {
         }
         List<String> lines = new ArrayList<String>();
         if (GuiGaugeSC.isOver(TEXT_X, 76, GuiBigSC.SCREEN_RIGHT - TEXT_X, 10, mx, my)) {
-            lines.add(Lang.tr("sc.storage.tooltip.io", storage.getTier().getVoltage()));
+            lines.add(Lang.tr("sc.storage.tooltip.io", storage.outputTier().getVoltage()));
+            lines.add(Lang.tr("sc.storage.tooltip.wrench"));
+            lines.add(Lang.tr("sc.storage.tooltip.comparator"));
+            return lines;
+        }
+        if (GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.W - 16, 18, mx, my)
+                && !GuiBigSC.overUpgradeSlot(mx, my, TileEntityEnergyStorageSC.UPGRADE_SLOTS)) {
+            lines.add(Lang.tr("sc.gui.upgrades"));
+            lines.add(Lang.tr("sc.storage.upgrades.hint.1"));
+            lines.add(Lang.tr("sc.storage.upgrades.hint.2"));
+            lines.add(Lang.tr("sc.storage.upgrades.hint.3"));
+            return lines;
+        }
+        if (storage.getStackInSlot(TileEntityEnergyStorageSC.SLOT_DISCHARGE) == null
+                && GuiGaugeSC.isOver(ContainerEnergyStorageSC.DIS_X, ContainerEnergyStorageSC.DIS_Y, 16, 16, mx, my)) {
+            lines.add(Lang.tr("sc.storage.gui.slot.discharge"));
             return lines;
         }
         if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H, mx, my)

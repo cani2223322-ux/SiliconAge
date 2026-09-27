@@ -269,6 +269,30 @@ public final class SelfTestSC {
         te.setStoredFromItem(3000000);
         check(te.getEnergyStored() == 3000500 && te.offerableEnergy() == 512, "storage keeps item charge beyond the tier buffer and offers 512 EU/t");
         check(te.outputFaces().length == 1 && te.outputFaces()[0] == net.minecraftforge.common.util.ForgeDirection.NORTH, "storage outputs only through its front");
+        // upgrades: transformer a tier up, +25% capacity each, overdrive +1 packet each; the comparator
+        com.sc.tileentity.TileEntityEnergyStorageSC lv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        int emptyLevel = lv.comparatorLevel();
+        ItemStack two = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE);
+        two.stackSize = 2;
+        lv.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT, two);
+        lv.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 1,
+                ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
+        lv.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 2,
+                ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE));
+        lv.setStoredFromItem(30000);
+        check(lv.getMaxEnergyStored() == 60000 && lv.outputTier() == com.sc.energy.Tier.MV && lv.packetsPerTick() == 2
+                        && emptyLevel == 0 && lv.comparatorLevel() == 1 + 14 * 30000 / 60000
+                        && lv.isItemValidForSlot(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 3,
+                                ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE))
+                        && !lv.isItemValidForSlot(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 3,
+                                ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER)),
+                "storage upgrades: 2x capacity +50% = 60000, transformer LV->MV, overdrive 2 packets, comparator " + lv.comparatorLevel());
+        ItemStack boots = new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[3]);
+        com.sc.item.ItemArmorSC.setCharge(boots, 1000);
+        int got = lv.dischargeItem(boots, 32);
+        check(got == 32 && com.sc.item.ItemArmorSC.chargeOf(boots) == 968
+                        && com.sc.tileentity.TileEntityEnergyStorageSC.isDischargeable(boots),
+                "storage discharge slot takes 32 EU a tick out of a charged suit piece (" + got + ")");
     }
 
     /** Electric armor: no protection while empty, EU paid per absorbed damage, charged by the storage slot. */

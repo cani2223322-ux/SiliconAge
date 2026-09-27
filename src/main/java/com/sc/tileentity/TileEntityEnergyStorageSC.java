@@ -1,6 +1,7 @@
 package com.sc.tileentity;
 
 import com.sc.energy.Tier;
+import com.sc.machine.UpgradeType;
 import com.sc.energy.TileEntityEnergyBase;
 import com.sc.item.ItemWeaponSC;
 
@@ -17,13 +18,28 @@ import net.minecraftforge.common.util.ForgeDirection;
  * block's tier or lower from the stored energy.
  * Broken and picked up, it keeps its charge in the item (BlockEnergyStorageSC).
  */
-public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements IInventory {
+@cpw.mods.fml.common.Optional.Interface(iface = "ic2.api.energy.tile.IMultiEnergySource", modid = "industrialupgrade")
+public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements IInventory, ic2.api.energy.tile.IMultiEnergySource {
+
+    /** Slots: 0 charges an item, 1 takes the energy out of one, 2..5 the upgrades. */
+    public static final int SLOT_CHARGE = 0, SLOT_DISCHARGE = 1, FIRST_UPGRADE_SLOT = 2, UPGRADE_SLOTS = 4,
+            SLOT_COUNT = FIRST_UPGRADE_SLOT + UPGRADE_SLOTS;
+    /** Capacity upgrade: +25% of the tier's capacity each. */
+    public static final int CAPACITY_PERCENT_PER_UPGRADE = 25;
+    /** Overdrive: one more packet of the output voltage a tick each, at most this many. */
+    public static final int MAX_EXTRA_PACKETS = 4;
 
     /** TODO(design doc has no storage blocks): capacities per tier, LV..XV (XV close to the int ceiling). */
     public static final int[] CAPACITY = {40000, 300000, 4000000, 40000000, 300000000, 1000000000, 2000000000};
 
     private ForgeDirection facing = ForgeDirection.SOUTH;
     private ItemStack chargeSlot;
+    private ItemStack dischargeSlot;
+    private final ItemStack[] upgradeSlots = new ItemStack[UPGRADE_SLOTS];
+    /** Set once the upgrades went into the dropped item, so breakBlock doesn't drop them loose too. */
+    private boolean upgradesInItem;
+    /** The comparator level last announced to the neighbours. */
+    private int lastComparator = -1;
     /** EU gained (+) or lost (-) per tick, averaged over the last second - shown on the screen. */
     private int flowPerTick;
     private int energyAtWindowStart = -1;
@@ -42,7 +58,95 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     @Override
     public int getMaxEnergyStored() {
-        return capacityOf(getTier());
+        long cap = capacityOf(getTier()) * (100L + (long) CAPACITY_PERCENT_PER_UPGRADE * upgradeCount(UpgradeType.ENERGY_STORAGE)) / 100L;
+        return (int) Math.min(Integer.MAX_VALUE, cap);
+    }
+
+    // ---- upgrades: Transformer (output a tier up), Energy Storage (+25%), Overdrive (+1 packet a tick) ----
+
+    public static boolean acceptsUpgrade(ItemStack s) {
+        if (s == null || !(s.getItem() instanceof com.sc.item.ItemUpgradeSC)) {
+            return false;
+        }
+        UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
+        return t == UpgradeType.TRANSFORMER || t == UpgradeType.ENERGY_STORAGE || t == UpgradeType.OVERDRIVE;
+    }
+
+    public int upgradeCount(UpgradeType type) {
+        int n = 0;
+        for (ItemStack s : upgradeSlots) {
+            if (s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == type) {
+                n += s.stackSize;
+            }
+        }
+        return Math.min(n, type == UpgradeType.OVERDRIVE ? MAX_EXTRA_PACKETS : UpgradeType.MAX_EFFECTIVE);
+    }
+
+    /** Transformer upgrades send the output out a tier higher each (up to XV). */
+    @Override
+    public Tier outputTier() {
+        Tier[] tiers = Tier.values();
+        return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
+    }
+
+    /** One packet a tick, and one more per Overdrive upgrade. */
+    @Override
+    public int packetsPerTick() {
+        return 1 + upgradeCount(UpgradeType.OVERDRIVE);
+    }
+
+    /** Industrial Upgrade's energy net: several packets a tick (see packetsPerTick()). */
+    @Override
+    public boolean sendMultibleEnergyPackets() {
+        return packetsPerTick() > 1;
+    }
+
+    @Override
+    public double getMultibleEnergyPacketAmount() {
+        return packetsPerTick();
+    }
+
+    /** The upgrades as an item NBT compound for the dropped block (null when empty) - see TileEntityMachineSC. */
+    public NBTTagCompound upgradesForItem() {
+        net.minecraft.nbt.NBTTagList list = new net.minecraft.nbt.NBTTagList();
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            if (upgradeSlots[i] != null) {
+                NBTTagCompound t = upgradeSlots[i].writeToNBT(new NBTTagCompound());
+                t.setByte("Slot", (byte) i);
+                list.appendTag(t);
+            }
+        }
+        upgradesInItem = list.tagCount() > 0;
+        if (!upgradesInItem) {
+            return null;
+        }
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setTag("Items", list);
+        return tag;
+    }
+
+    public boolean upgradesInItem() {
+        return upgradesInItem;
+    }
+
+    /** Puts back what upgradesForItem() saved (on placement, before the charge is loaded). */
+    public void loadUpgradesFromItem(NBTTagCompound tag) {
+        net.minecraft.nbt.NBTTagList list = tag == null ? null : tag.getTagList("Items", 10);
+        for (int k = 0; list != null && k < list.tagCount(); k++) {
+            NBTTagCompound t = list.getCompoundTagAt(k);
+            int i = t.getByte("Slot");
+            if (i >= 0 && i < UPGRADE_SLOTS) {
+                upgradeSlots[i] = ItemStack.loadItemStackFromNBT(t);
+            }
+        }
+        markDirty();
+    }
+
+    // ---- the comparator: 0 empty, 1..15 by how full ----
+
+    public int comparatorLevel() {
+        int e = getEnergyStored();
+        return e <= 0 ? 0 : 1 + (int) (14L * e / Math.max(1, getMaxEnergyStored()));
     }
 
     public ForgeDirection getFacing() {
@@ -118,6 +222,14 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             return;
         }
         chargeRound();
+        dischargeRound();
+        if (worldObj.getTotalWorldTime() % 10 == 0) {
+            int level = comparatorLevel();
+            if (level != lastComparator) {
+                lastComparator = level;
+                worldObj.func_147453_f(xCoord, yCoord, zCoord, getBlockType());   // tell the comparators round it
+            }
+        }
         if (worldObj.getTotalWorldTime() % 20 == 0) {
             if (energyAtWindowStart >= 0) {
                 flowPerTick = (getEnergyStored() - energyAtWindowStart) / 20;
@@ -133,6 +245,54 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             removeEnergy(taken);
             markDirty();
         }
+    }
+
+    /**
+     * One tick's discharging: energy out of the discharge slot's item into the buffer, at most one
+     * packet of the tier's voltage and what room there is.
+     */
+    protected void dischargeRound() {
+        int room = getMaxEnergyStored() - getEnergyStored();
+        if (dischargeSlot == null || room <= 0) {
+            return;
+        }
+        int got = dischargeItem(dischargeSlot, Math.min(room, getTier().getVoltage()));
+        if (got > 0) {
+            addEnergy(got);
+            markDirty();
+        }
+    }
+
+    /** Takes up to `max` EU out of an item: the mod's suits, blades and drills, and with IC2 any battery. @return EU got */
+    public int dischargeItem(ItemStack s, int max) {
+        if (s == null || max <= 0) {
+            return 0;
+        }
+        if (s.getItem() instanceof com.sc.item.ItemArmorSC) {
+            return com.sc.item.ItemArmorSC.discharge(s, max);
+        }
+        if (s.getItem() instanceof com.sc.item.ItemBladeSC) {
+            return com.sc.item.ItemBladeSC.discharge(s, max);
+        }
+        if (s.getItem() instanceof com.sc.item.ItemDrillSC) {
+            return com.sc.item.ItemDrillSC.discharge(s, max);
+        }
+        if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
+            return Ic2Charge.discharge(s, max, getTier().toIc2Tier());
+        }
+        return 0;
+    }
+
+    /** What goes in the discharge slot: something the storage can take energy out of. */
+    public static boolean isDischargeable(ItemStack stack) {
+        if (stack == null) {
+            return false;
+        }
+        if (stack.getItem() instanceof com.sc.item.ItemArmorSC || stack.getItem() instanceof com.sc.item.ItemBladeSC
+                || stack.getItem() instanceof com.sc.item.ItemDrillSC) {
+            return true;
+        }
+        return cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) && Ic2Charge.providesEnergy(stack);
     }
 
     /** Charges the slot's item up to `max` EU (the caller takes them out of the buffer). @return EU taken */
@@ -199,28 +359,47 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             }
             return (int) ic2.api.item.ElectricItem.manager.charge(s, max, tier, false, false);
         }
+
+        static int discharge(ItemStack s, int max, int tier) {
+            if (!(s.getItem() instanceof ic2.api.item.IElectricItem) || ic2.api.item.ElectricItem.manager == null
+                    || !((ic2.api.item.IElectricItem) s.getItem()).canProvideEnergy(s)) {
+                return 0;
+            }
+            return (int) ic2.api.item.ElectricItem.manager.discharge(s, max, tier, false, true, false);
+        }
+
+        static boolean providesEnergy(ItemStack s) {
+            return s.getItem() instanceof ic2.api.item.IElectricItem && ((ic2.api.item.IElectricItem) s.getItem()).canProvideEnergy(s);
+        }
     }
 
     // ---- the charge slot ----
 
     @Override
     public int getSizeInventory() {
-        return 1;
+        return SLOT_COUNT;
     }
 
     @Override
     public ItemStack getStackInSlot(int slot) {
-        return slot == 0 ? chargeSlot : null;
+        if (slot == SLOT_CHARGE) {
+            return chargeSlot;
+        }
+        if (slot == SLOT_DISCHARGE) {
+            return dischargeSlot;
+        }
+        return slot >= FIRST_UPGRADE_SLOT && slot < SLOT_COUNT ? upgradeSlots[slot - FIRST_UPGRADE_SLOT] : null;
     }
 
     @Override
     public ItemStack decrStackSize(int slot, int amount) {
-        if (slot != 0 || chargeSlot == null) {
+        ItemStack s = getStackInSlot(slot);
+        if (s == null) {
             return null;
         }
-        ItemStack out = chargeSlot.splitStack(amount);
-        if (chargeSlot.stackSize <= 0) {
-            chargeSlot = null;
+        ItemStack out = s.splitStack(amount);
+        if (s.stackSize <= 0) {
+            setInventorySlotContents(slot, null);
         }
         markDirty();
         return out;
@@ -233,10 +412,19 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     @Override
     public void setInventorySlotContents(int slot, ItemStack stack) {
-        if (slot == 0) {
+        if (slot == SLOT_CHARGE) {
             chargeSlot = stack;
-            markDirty();
+        } else if (slot == SLOT_DISCHARGE) {
+            dischargeSlot = stack;
+        } else if (slot >= FIRST_UPGRADE_SLOT && slot < SLOT_COUNT) {
+            upgradeSlots[slot - FIRST_UPGRADE_SLOT] = stack;
+            if (worldObj != null && !worldObj.isRemote) {
+                refreshEnergyNet();   // a transformer changes the output tier IC2 cached
+            }
+        } else {
+            return;
         }
+        markDirty();
     }
 
     @Override
@@ -251,7 +439,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     @Override
     public int getInventoryStackLimit() {
-        return 1;
+        return 64;
     }
 
     @Override
@@ -270,7 +458,13 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
 
     @Override
     public boolean isItemValidForSlot(int slot, ItemStack stack) {
-        return slot == 0 && isChargeable(stack) && tierAllows(stack);
+        if (slot == SLOT_CHARGE) {
+            return isChargeable(stack) && tierAllows(stack);
+        }
+        if (slot == SLOT_DISCHARGE) {
+            return isDischargeable(stack);
+        }
+        return slot >= FIRST_UPGRADE_SLOT && slot < SLOT_COUNT && acceptsUpgrade(stack);
     }
 
     /** Weapons and armor pieces go in the charge slot (isItemValidForSlot adds the tier rule). */
@@ -290,6 +484,11 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             facing = ForgeDirection.SOUTH;
         }
         chargeSlot = nbt.hasKey("ChargeSlot") ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag("ChargeSlot")) : null;
+        dischargeSlot = nbt.hasKey("DischargeSlot") ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag("DischargeSlot")) : null;
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            String k = "Upgrade" + i;
+            upgradeSlots[i] = nbt.hasKey(k) ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag(k)) : null;
+        }
     }
 
     @Override
@@ -298,6 +497,14 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         nbt.setInteger("Facing", facing.ordinal());
         if (chargeSlot != null) {
             nbt.setTag("ChargeSlot", chargeSlot.writeToNBT(new NBTTagCompound()));
+        }
+        if (dischargeSlot != null) {
+            nbt.setTag("DischargeSlot", dischargeSlot.writeToNBT(new NBTTagCompound()));
+        }
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            if (upgradeSlots[i] != null) {
+                nbt.setTag("Upgrade" + i, upgradeSlots[i].writeToNBT(new NBTTagCompound()));
+            }
         }
     }
 

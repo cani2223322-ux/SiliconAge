@@ -2164,6 +2164,16 @@ sc.gui.ex.fill=залейте жидкий гелий (капсулой или �
 sc.gui.ex.warn=без гелия перегреется за ~%d с и заглохнет
 sc.gui.ex.tip.1=§7После розжига жидкий гелий (1 мБ/т) охлаждает ядро
 sc.gui.ex.tip.2=§7Без гелия реактор работает, но греется; на пределе глохнет без взрыва - нужен новый розжиг
+sc.storage.gui.output.n=Выход: %d EU/t × %d = %d EU/t
+sc.storage.gui.lbl.charge=заряд
+sc.storage.gui.lbl.discharge=разряд
+sc.storage.gui.slot.discharge=Разрядка: батареи, броня, клинки и буры отдают энергию в накопитель
+sc.storage.tooltip.wrench=§7Гаечный ключ по грани - выход на эту грань
+sc.storage.tooltip.comparator=§7Компаратор рядом показывает заряд: 0 - пусто, 15 - полон
+sc.storage.tooltip.upgrades=§7С модулями внутри
+sc.storage.upgrades.hint.1=§7Трансформатор: выход на уровень выше за каждый
+sc.storage.upgrades.hint.2=§7Накопитель: +25% ёмкости за каждый
+sc.storage.upgrades.hint.3=§7Форсаж: +1 пакет выхода за такт за каждый (до 4)
 sc.gui.holo.washing=ПРОМЫВКА
 sc.gui.washer.per=За раз
 sc.gui.washer.left=Хватит
