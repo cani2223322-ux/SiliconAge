@@ -86,7 +86,16 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** Wireless charging: EU a second per player, from the master's buffer 1:1. Healing: EU per point healed. */
     public static final int CHARGE_PER_SECOND = 10240, HEAL_COST = 400;
     public static final int REDSTONE_ALWAYS = 0, REDSTONE_ON = 1, REDSTONE_OFF = 2;
+    /**
+     * Targets: hostile mobs, or every creature but players (strangers are the Access tab's "push
+     * strangers"). 2 was "all but animals and villagers" - now inside NEUTRAL, and loads as it.
+     */
     public static final int FILTER_HOSTILE = 0, FILTER_NEUTRAL = 1, FILTER_ALL = 2;
+
+    /** An old save's filter to 0 or 1. */
+    private static int loadFilter(int f) {
+        return f >= FILTER_NEUTRAL ? FILTER_NEUTRAL : FILTER_HOSTILE;
+    }
     public static final int MAX_ACCESS = 16;
     /** The old five shell colours (cyan, green, red, violet, gold) - only to read fields saved before RGB colours. */
     public static final float[][] COLORS = {{0.35F, 0.9F, 1F}, {0.35F, 1F, 0.45F}, {1F, 0.3F, 0.3F}, {0.75F, 0.45F, 1F}, {1F, 0.8F, 0.3F}};
@@ -150,7 +159,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public void cycleFilter() {
-        filter = (filter + 1) % 3;
+        filter = filter == FILTER_HOSTILE ? FILTER_NEUTRAL : FILTER_HOSTILE;
         changed();
     }
 
@@ -389,26 +398,30 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return removed;
     }
 
-    /** What the field pushes out (and keeps from spawning): by the filter; never villagers, golems or pets. */
+    /**
+     * What creature the field pushes out (and keeps from spawning): hostile ones only, or every
+     * creature - animals, villagers and golems too. The pets of the owner and of the access list stay;
+     * anyone else's pet is a creature like any other. Players are handled by pushesPlayer().
+     */
     public boolean targets(Entity e) {
-        if (!(e instanceof EntityLiving) || e instanceof net.minecraft.entity.INpc
-                || e instanceof net.minecraft.entity.monster.EntityGolem) {
+        if (!(e instanceof EntityLiving)) {
             return false;
         }
         if (e instanceof net.minecraft.entity.IEntityOwnable) {
             String tamer = ((net.minecraft.entity.IEntityOwnable) e).func_152113_b();
-            if (tamer != null && !tamer.isEmpty()) {
-                return false;                       // someone's pet
+            if (tamer != null && !tamer.isEmpty() && allowedName(tamer)) {
+                return false;                       // our own side's pet
             }
         }
-        if (e instanceof IMob) {
-            return true;
+        if (filter == FILTER_HOSTILE) {
+            return e instanceof IMob;
         }
-        if (filter >= FILTER_NEUTRAL && (e instanceof net.minecraft.entity.passive.EntityAmbientCreature
-                || e instanceof net.minecraft.entity.passive.EntityWaterMob || e instanceof net.minecraft.entity.passive.EntityWolf)) {
-            return true;
-        }
-        return filter == FILTER_ALL && !(e instanceof net.minecraft.entity.passive.EntityAnimal);
+        return true;
+    }
+
+    /** A player the field pushes out: a stranger to a private field set to push them (the Access tab). */
+    public boolean pushesPlayer(EntityPlayer p) {
+        return !allowed(p) && !p.capabilities.isCreativeMode && has(F_PRIVATE) && has(F_PUSH_PLAYERS);
     }
 
     /** A new master (unlink) takes the old one's settings along with its shape. */
@@ -502,7 +515,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             flags |= F_CHARGE_FX;                  // copied before the charging settings: sparks stay on
         }
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
-        filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
+        filter = loadFilter(nbt.getInteger("Filter"));
         chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
         chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
         readZone(nbt);
@@ -1202,8 +1215,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (has(F_PRIVATE) && has(F_PUSH_PLAYERS)) {
             for (Object o : worldObj.getEntitiesWithinAABB(EntityPlayer.class, box)) {
                 EntityPlayer p = (EntityPlayer) o;
-                if (!allowed(p) && !p.capabilities.isCreativeMode) {
-                    living.add(p);                  // strangers out of a private field (not hurt)
+                if (pushesPlayer(p)) {
+                    living.add(p);                  // strangers out (not hurt)
                 }
             }
         }
@@ -1580,7 +1593,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
         chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
         redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
-        filter = Math.max(0, Math.min(2, nbt.getInteger("Filter")));
+        filter = loadFilter(nbt.getInteger("Filter"));
         readZone(nbt);
         owner = nbt.getString("Owner");
         redstoneOff = nbt.getBoolean("RedstoneOff");
