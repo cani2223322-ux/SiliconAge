@@ -86,6 +86,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private double cellBurnRemaining;
     /** Ticks of burning left on the solid fuel item (fractional for the same reason). */
     private double solidBurnTicks;
+    /** The piece burning now: the ticks it gave, and what it was (item id << 16 | damage) - for the screen. */
+    private int solidBurnTotal, solidBurnItem;
     private double fuelDebt, fuel2Debt;
     private int heat, ramp;
     /** Wind / thermo output worked out once a second; wind height and freedom, thermo pairs and dT - for the screen. */
@@ -257,6 +259,31 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     public void setFusionClient(int cellTicks, int moduleLife) {
         cellBurnRemaining = cellTicks;
         moduleLifeRemaining = moduleLife;
+    }
+
+    /** Solid fuel: ticks the piece burning now has left (at one a tick), and how many it gave. */
+    public double getSolidBurn() {
+        return solidBurnTicks;
+    }
+
+    public int getSolidBurnTotal() {
+        return solidBurnTotal;
+    }
+
+    /** The piece burning now as a stack, or null. */
+    public ItemStack getSolidBurnStack() {
+        Item item = solidBurnItem == 0 ? null : Item.getItemById(solidBurnItem >>> 16);
+        return item == null ? null : new ItemStack(item, 1, solidBurnItem & 0xFFFF);
+    }
+
+    public int getSolidBurnItem() {
+        return solidBurnItem;
+    }
+
+    public void setSolidClient(int burn, int total, int item) {
+        solidBurnTicks = burn;
+        solidBurnTotal = total;
+        solidBurnItem = item;
     }
 
     public void setInflowClient(int tenths) {
@@ -547,6 +574,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 return false;
             }
             solidBurnTicks += Math.max(1, TileEntityFurnace.getItemBurnTime(fuel) / divisor);
+            solidBurnTotal = (int) Math.ceil(solidBurnTicks);
+            solidBurnItem = Item.getIdFromItem(fuel.getItem()) << 16 | (fuel.getItemDamage() & 0xFFFF);
             ItemStack container = fuel.getItem().getContainerItem(fuel); // lava bucket -> bucket
             fuel.stackSize--;
             if (fuel.stackSize <= 0) {

@@ -1206,6 +1206,56 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * A firebox from the front: a brick hearth, the open mouth with its grate, the fire on it - the
+     * coal bed glowing and shrinking as the piece burns down (`left` 1..0), flames flickering, sparks.
+     */
+    public static void firebox(int x, int y, int w, int h, float t, boolean burning, float left) {
+        frame(x, y, w, h);
+        for (int row = 0; row < h - 4; row += 4) {                             // the bricks
+            int off = (row / 4) % 2 == 1 ? 3 : 0;
+            for (int col = -off; col < w - 4; col += 7) {
+                int bx = x + 2 + Math.max(0, col);
+                rect(bx, y + 2 + row, Math.min(6, x + w - 2 - bx), 3, (row + col) % 3 != 0 ? 0xFF6A3A2A : 0xFF7A4A34);
+            }
+        }
+        int fw = 32, fx = x + w / 2 - fw / 2, fy = y + 8, fh = h - 14;
+        rect(fx - 2, fy - 2, fw + 4, fh + 4, 0xFF3A3A40);                      // the mouth
+        rect(fx, fy, fw, fh, 0xFF0A0604);
+        rect(fx, fy + fh - 4, fw, 1, 0xFF6A707A);                              // the grate
+        for (int i = 0; i < fw; i += 3) {
+            rect(fx + i, fy + fh - 3, 1, 3, 0xFF4A4A50);
+        }
+        if (!burning) {
+            return;
+        }
+        left = Math.max(0.15F, Math.min(1F, left));
+        int bed = Math.max(2, (int) (6 * left));
+        for (int i = 0; i < fw; i++) {
+            rect(fx + i, fy + fh - 4 - bed + (i * 7 % 3 == 0 ? 1 : 0), 1, bed, mix(0xFFFF7A20, 0xFF8A2A10, (i * 13 % 7) / 7F));
+        }
+        for (int i = 0; i < 7; i++) {
+            int ph = (int) ((5 + (int) (4 + 3 * Math.sin(t * 0.7F + i * 1.3F))) * left);
+            for (int k = 0; k < ph; k++) {
+                rect(fx + 3 + i * 4, fy + fh - 5 - bed - k, 2, 1, mix(0xFFFFE070, 0xFFFF5A20, k / (float) Math.max(1, ph)));
+            }
+        }
+        for (int i = 0; i < 3; i++) {
+            int sy = (int) ((t * 1.5F + i * 7) % (fh - 6));
+            rect(fx + 6 + i * 9 + (int) (2 * Math.sin(t + i)), fy + fh - 8 - sy, 1, 1, 0xFFFFD060);
+        }
+    }
+
+    /** The furnace's flame, burnt down to `frac` (14 high, 14 wide). */
+    public static void furnaceFlame(int x, int y, float frac) {
+        for (int yy = 0; yy < 14; yy++) {
+            float k = yy / 13F;
+            int wdt = k > 0.1F ? (int) (6 - 5 * Math.abs(k - 0.65F) * 1.6F) : 1;
+            boolean on = (13 - yy) / 13F < frac;
+            rect(x + 7 - wdt, y + yy, wdt * 2, 1, on ? mix(0xFFFFE070, 0xFFFF5A20, k) : 0xFF2A3038);
+        }
+    }
+
     public static void rotorFront(int cx, int cy, int r, float t, boolean running) {
         disc(cx, cy, r + 2, 0xFF8A909A);
         disc(cx, cy, r + 1, 0xFF12181E);

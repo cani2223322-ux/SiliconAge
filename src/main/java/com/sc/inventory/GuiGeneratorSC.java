@@ -14,6 +14,7 @@ import com.sc.tileentity.TileEntityGeneratorSC;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.InventoryPlayer;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.FluidTank;
 
@@ -54,6 +55,13 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean plasma;
     /** The Fusion Reactor: its stages, the torus from above, the ignition charge / the plasma, the cell and blanket timers. */
     private final boolean fus;
+    /** The Solid Fuel Generator: the firebox, its slot and flame, a table of what each fuel gives. */
+    private final boolean solid;
+    private static final int SF_BOX_X = 14, SF_BOX_Y = 34, SF_BOX_W = 62, SF_BOX_H = 44, SF_TAB_X = 102, SF_TAB_Y = 34,
+            SF_TAB_W = 70, SF_TAB_H = 52, SF_FLAME_X = 83, SF_FLAME_Y = 56;
+    /** The table's rows: coal, planks, a blaze rod, a lava bucket. */
+    private static final ItemStack[] SF_FUELS = {new ItemStack(net.minecraft.init.Items.coal), new ItemStack(net.minecraft.init.Blocks.planks),
+            new ItemStack(net.minecraft.init.Items.blaze_rod), new ItemStack(net.minecraft.init.Items.lava_bucket)};
     private static final int FU_STEP_Y = 34, FU_TOR_Y = 48, FU_TOR_W = 106, FU_TOR_H = 38, FU_COL_X = 126, FU_STATUS_Y = 107;
     /** Argon an Air Separator yields: 800 mB per 400-tick operation. */
     private static final double SEPARATOR_ARGON_PER_TICK = 2.0;
@@ -76,6 +84,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.turb = type == GeneratorType.STEAM_TURBINE || type == GeneratorType.GAS_TURBINE || type == GeneratorType.PLASMA_GENERATOR;
         this.plasma = type == GeneratorType.PLASMA_GENERATOR;
         this.fus = type == GeneratorType.FUSION_REACTOR;
+        this.solid = type == GeneratorType.SOLID_FUEL;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -186,6 +195,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawTurbBackground(x, y, partialTicks);
         } else if (fus) {
             drawFusBackground(x, y, partialTicks);
+        } else if (solid) {
+            drawSolidBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -234,6 +245,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (fus) {
             drawFusText();
+            drawUpgradeCount();
+            return;
+        }
+        if (solid) {
+            drawSolidText();
             drawUpgradeCount();
             return;
         }
@@ -626,6 +642,130 @@ public class GuiGeneratorSC extends GuiContainer {
         smallFit(line, 14, FU_STATUS_Y, 190, col);
     }
 
+    // ---- the Solid Fuel Generator ----
+
+    /** Which table row a stack is (coal / planks / blaze rod / lava bucket), or -1. */
+    private static int sfRow(ItemStack st) {
+        if (st == null) {
+            return -1;
+        }
+        for (int i = 0; i < SF_FUELS.length; i++) {
+            if (st.getItem() == SF_FUELS[i].getItem()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Output ticks a piece of `st` burns here (furnace burn time / 4). */
+    private static int sfTicks(ItemStack st) {
+        return st == null ? 0 : Math.max(1, net.minecraft.tileentity.TileEntityFurnace.getItemBurnTime(st) / TileEntityGeneratorSC.SOLID_GEN_DIVISOR);
+    }
+
+    private float sfLeft() {
+        int total = generator.getSolidBurnTotal();
+        return total <= 0 ? 0F : (float) Math.max(0, Math.min(1, generator.getSolidBurn() / total));
+    }
+
+    private boolean sfBurning() {
+        return generator.getSolidBurn() > 0 && generator.getStatus() != GeneratorStatus.NO_FUEL;
+    }
+
+    private void drawSolidBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        boolean burning = sfBurning();
+        GuiSceneSC.firebox(x + SF_BOX_X, y + SF_BOX_Y, SF_BOX_W, SF_BOX_H, t,
+                burning && generator.getStatus() == GeneratorStatus.GENERATING, sfLeft());
+        GuiSceneSC.furnaceFlame(x + SF_FLAME_X, y + SF_FLAME_Y, burning ? sfLeft() : 0F);
+        GuiSceneSC.frame(x + SF_TAB_X, y + SF_TAB_Y, SF_TAB_W, SF_TAB_H);
+        int cur = burning ? sfRow(generator.getSolidBurnStack()) : -1;
+        if (cur >= 0) {
+            int ry = y + SF_TAB_Y + 9 + cur * 10;
+            drawRect(x + SF_TAB_X + 2, ry - 1, x + SF_TAB_X + SF_TAB_W - 2, ry + 9, 0xFF3A2A14);
+        }
+    }
+
+    /** "10 мин 40 с" / "1 ч 5 мин" / "12 с". */
+    private static String sfTime(double seconds) {
+        long s = (long) Math.ceil(seconds);
+        if (s >= 3600) {
+            return Lang.tr("sc.gui.t.hm", s / 3600, s % 3600 / 60);
+        }
+        if (s >= 60) {
+            return s % 60 == 0 ? Lang.tr("sc.gui.fus.min", s / 60) : Lang.tr("sc.gui.t.ms", s / 60, s % 60);
+        }
+        return Lang.tr("sc.gui.fus.sec", s);
+    }
+
+    /** 204800 -> "204 800". */
+    private static String sfEu(long eu) {
+        return String.format(java.util.Locale.ROOT, "%,d", eu).replace(',', ' ');
+    }
+
+    private void drawSolidText() {
+        fit(Lang.tr("sc.gui.sf.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        double fm = Math.max(0.01, generator.fuelMultiplier());
+        int rated = generator.ratedOutput();
+        boolean burning = sfBurning();
+        double leftSecs = generator.getSolidBurn() / fm / 20.0;
+        smallFit(burning ? sfTime(leftSecs) : "-", 80, 72, 20, GuiHoloSC.VALUE);
+        // the table: what each fuel gives here
+        smallFit(Lang.tr("sc.gui.sf.table"), SF_TAB_X + 3, SF_TAB_Y + 2, SF_TAB_W - 6, GuiHoloSC.LABEL);
+        int cur = burning ? sfRow(generator.getSolidBurnStack()) : -1;
+        for (int i = 0; i < SF_FUELS.length; i++) {
+            int ry = SF_TAB_Y + 9 + i * 10;
+            int ticks = sfTicks(SF_FUELS[i]);
+            smallFit(SF_FUELS[i].getDisplayName(), SF_TAB_X + 13, ry, SF_TAB_W - 15, i == cur ? 0xFFC86E : GuiHoloSC.VALUE);
+            smallFit(Lang.tr("sc.gui.sf.row", sfTime(ticks / fm / 20.0), sfEu(Math.round(ticks / fm * rated))),
+                    SF_TAB_X + 13, ry + 5, SF_TAB_W - 15, GuiHoloSC.LABEL);
+        }
+        net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
+        for (int i = 0; i < SF_FUELS.length; i++) {
+            GL11.glPushMatrix();
+            GL11.glTranslatef(SF_TAB_X + 3, SF_TAB_Y + 9 + i * 10, 0F);
+            GL11.glScalef(0.5F, 0.5F, 1F);
+            itemRender.renderItemAndEffectIntoGUI(fontRendererObj, mc.getTextureManager(), SF_FUELS[i], 0, 0);
+            GL11.glPopMatrix();
+        }
+        net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting();
+        GL11.glDisable(GL11.GL_LIGHTING);
+        // the status and what's left
+        GeneratorStatus status = generator.getStatus();
+        ItemStack inSlot = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL);
+        boolean fuelIn = inSlot != null && net.minecraft.tileentity.TileEntityFurnace.isItemFuel(inSlot);
+        String head;
+        int headCol;
+        if (status == GeneratorStatus.GENERATING) {
+            head = Lang.tr("sc.gui.sf.running", generator.getLastOutput());
+            headCol = GuiHoloSC.OK;
+        } else if (status == GeneratorStatus.NO_FUEL) {
+            head = Lang.tr("sc.gui.sf.nofuel");
+            headCol = GuiHoloSC.BAD;
+        } else {
+            head = status.localized();
+            headCol = status == GeneratorStatus.BUFFER_FULL ? GuiHoloSC.WARN : GuiHoloSC.IDLE;
+        }
+        fit(head, 14, 82, SF_TAB_X - 16 + SF_TAB_W, headCol);
+        if (burning) {
+            ItemStack piece = generator.getSolidBurnStack();
+            String name = piece != null ? piece.getDisplayName() : Lang.tr("sc.gui.sf.piece");
+            smallFit(Lang.tr("sc.gui.sf.burns", name, sfTime(leftSecs)), 14, 92, 158, GuiHoloSC.VALUE);
+            if (fuelIn) {
+                double secs = leftSecs + (double) inSlot.stackSize * sfTicks(inSlot) / fm / 20.0;
+                smallFit(Lang.tr("sc.gui.sf.stock", sfTime(secs), sfEu(Math.round(secs * 20 * rated))), 14, 99, 158, GuiHoloSC.LABEL);
+            } else {
+                smallFit(Lang.tr("sc.gui.sf.last"), 14, 99, 158, GuiHoloSC.WARN);
+            }
+        } else if (fuelIn) {
+            double secs = (double) inSlot.stackSize * sfTicks(inSlot) / fm / 20.0;
+            smallFit(Lang.tr("sc.gui.sf.stock", sfTime(secs), sfEu(Math.round(secs * 20 * rated))), 14, 92, 158, GuiHoloSC.VALUE);
+        } else {
+            smallFit(Lang.tr("sc.gui.sf.put"), 14, 92, 158, GuiHoloSC.VALUE);
+            smallFit(Lang.tr("sc.gui.sf.fuels"), 14, 99, 158, GuiHoloSC.LABEL);
+        }
+        smallFit(Lang.tr("sc.gui.sf.od"), 14, 106, 158, 0x465A6E);
+    }
+
     // ---- the Silicon Solar Panel ----
 
     /** The time of day in ticks, 0 sunrise .. 12000 sunset .. 24000. */
@@ -922,6 +1062,11 @@ public class GuiGeneratorSC extends GuiContainer {
         if (comb && GuiGaugeSC.isOver(COMB_TABLE_X, COMB_TOP, COMB_TABLE_W, COMB_TABLE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comb.table.title"));
             lines.add(Lang.tr("sc.gui.comb.table.hint"));
+            return lines;
+        }
+        if (solid && GuiGaugeSC.isOver(SF_TAB_X, SF_TAB_Y, SF_TAB_W, SF_TAB_H, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.sf.table"));
+            lines.add(Lang.tr("sc.gui.sf.table.hint"));
             return lines;
         }
         if (fus) {

@@ -26,7 +26,13 @@ public class ContainerGeneratorSC extends Container {
     /** The Fusion Reactor's deuterium and blanket slots, under its torus (GuiGeneratorSC). */
     public static final int FUS_FUEL_X = 14, FUS_BLANKET_X = 90, FUS_SLOT_Y = 89;
 
+    /** The Solid Fuel Generator's slot, beside its firebox. */
+    public static final int SF_SLOT_X = 82, SF_SLOT_Y = 36;
+
     public static int slotX(GeneratorType type, int slot) {
+        if (type == GeneratorType.SOLID_FUEL) {
+            return slot == 0 ? SF_SLOT_X : SLOT_BLANKET_X;
+        }
         if (type == GeneratorType.FUSION_REACTOR) {
             return slot == 0 ? FUS_FUEL_X : FUS_BLANKET_X;
         }
@@ -34,7 +40,7 @@ public class ContainerGeneratorSC extends Container {
     }
 
     public static int slotY(GeneratorType type) {
-        return type == GeneratorType.FUSION_REACTOR ? FUS_SLOT_Y : SLOT_Y;
+        return type == GeneratorType.FUSION_REACTOR ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y : SLOT_Y;
     }
     /** enchantItem button: the Creative Generator's tier. */
     public static final int BTN_CREATIVE_TIER = 0;
@@ -110,7 +116,7 @@ public class ContainerGeneratorSC extends Container {
     private static final int ID_ENERGY = 0, ID_F1 = 1, ID_F1_AMT = 2, ID_F2 = 3, ID_F2_AMT = 4, ID_OUT = 5, ID_OUT_AMT = 6,
             ID_IGNITION = 7, ID_IGNITED = 8, ID_STATUS = 9, ID_OUTPUT = 10, ID_HEAT = 11, ID_RAMP = 12, ID_INFO_A = 13,
             ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, ID_CELL = 18,
-            ID_LIFE = 19, COUNT = 20;
+            ID_LIFE = 19, ID_SOLID = 20, ID_SOLID_TOTAL = 21, ID_SOLID_ITEM = 22, COUNT = 23;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
@@ -140,6 +146,9 @@ public class ContainerGeneratorSC extends Container {
             case ID_INFLOW: return generator.getInflowTenths();
             case ID_CELL: return (int) Math.ceil(generator.getCellBurnRemaining());
             case ID_LIFE: return generator.getModuleLife();
+            case ID_SOLID: return (int) Math.ceil(generator.getSolidBurn());
+            case ID_SOLID_TOTAL: return generator.getSolidBurnTotal();
+            case ID_SOLID_ITEM: return generator.getSolidBurnItem();
             default: return generator.getCreativeTier().ordinal();
         }
     }
@@ -189,6 +198,11 @@ public class ContainerGeneratorSC extends Container {
             case ID_CELL:
             case ID_LIFE:
                 generator.setFusionClient(sync.value(ID_CELL), sync.value(ID_LIFE));
+                break;
+            case ID_SOLID:
+            case ID_SOLID_TOTAL:
+            case ID_SOLID_ITEM:
+                generator.setSolidClient(sync.value(ID_SOLID), sync.value(ID_SOLID_TOTAL), sync.value(ID_SOLID_ITEM));
                 break;
             case ID_POWER:
                 generator.setPowerFlagsClient(sync.value(ID_POWER));
