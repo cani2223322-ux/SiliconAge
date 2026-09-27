@@ -1156,6 +1156,50 @@ public final class GuiSceneSC {
     }
 
     /**
+     * The Field Generator's field from the side: the ground, the generator block with a node on each
+     * side, and over them the shell in its colour - a box of dots (box, prism, cylinder) or a dome
+     * (union, dome) - faint cells inside, a glint running along its top. Off: no shell, a dark lamp.
+     */
+    public static void fieldScene(int x, int y, int w, int h, float t, boolean box, boolean on, int rgb) {
+        frame(x, y, w, h);
+        int gy = y + h - 8, cx = x + w / 2;
+        rect(x + 1, gy, w - 2, 7, 0xFF2A3A24);
+        rect(x + 1, gy, w - 2, 1, 0xFF4A8A3A);
+        rect(cx - 4, gy - 8, 8, 8, 0xFF3A4A5A);
+        rect(cx - 2, gy - 6, 4, 4, on ? 0xFF6EE6FF : 0xFF3A4450);
+        rect(cx - 24, gy - 4, 4, 4, 0xFF6A707A);
+        rect(cx + 20, gy - 4, 4, 4, 0xFF6A707A);
+        if (!on) {
+            return;
+        }
+        int col = 0xFF000000 | rgb, faint = 0x66000000 | rgb;
+        if (box) {
+            int x0 = cx - 34, x1 = cx + 34, y0 = gy - 38;
+            for (int xx = x0; xx <= x1; xx += 2) {
+                rect(xx, y0, 1, 1, col);
+            }
+            for (int yy = y0; yy < gy; yy += 2) {
+                rect(x0, yy, 1, 1, col);
+                rect(x1, yy, 1, 1, col);
+            }
+            for (int j = y0 + 6; j < gy; j += 6) {
+                for (int i = x0 + 4 + (j / 6 % 2) * 3; i < x1 - 2; i += 6) {
+                    rect(i, j, 1, 1, faint);
+                }
+            }
+            rect(x0 + (int) (t * 2) % (x1 - x0), y0, 3, 1, 0xFFFFFFFF);
+        } else {
+            int r = Math.min(38, gy - y - 4);
+            for (int a = 0; a <= 180; a += 3) {
+                double ang = Math.toRadians(a);
+                rect((int) (cx + r * Math.cos(ang)), (int) (gy - r * Math.sin(ang)), 1, 1, col);
+            }
+            double g = Math.toRadians((t * 3) % 180);
+            rect((int) (cx + r * Math.cos(g)), (int) (gy - r * Math.sin(g)), 2, 2, 0xFFFFFFFF);
+        }
+    }
+
+    /**
      * An energy storage's battery standing up: a metal case edged in its tier's colour (`tint`), the
      * charge (`f` 0..1) as glowing energy with a wave on top, level ticks at the quarters, sparks going
      * up while it charges (down while it empties).

@@ -46,9 +46,11 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     private static final int[] STEP_BIG = {-16, -1, 1, 16}, STEP_OFF = {-8, -1, 1, 8};
     /** Draft indices: range, height, offset x / y / z, anchor, shape, set point x / y / z. */
     private static final int D_RANGE = 0, D_HEIGHT = 1, D_OX = 2, D_OY = 3, D_OZ = 4, D_ANCHOR = 5, D_MODE = 6, D_PX = 7;
-    /** The energy gauge (GuiEnergyGaugeSC); the Field tab's text rooms end 4 px before it. */
-    private static final int ENERGY_X = 222, ENERGY_Y = 33, ENERGY_W = 22, ENERGY_H = 79;
-    private static final int MAP_X = 10, MAP_Y = 34, MAP = 150, CELL = 2;
+    /** The energy gauge right of the screen, on every tab, under the redstone button (as a machine's). */
+    private static final int ENERGY_X = 214, ENERGY_Y = 24, ENERGY_W = 26, ENERGY_H = 82;
+    private static final int MAP_X = 10, MAP_Y = 34, MAP = 140, CELL = 2;
+    /** The holo screen: its left edge and where the content's room ends (the gauge column past it). */
+    private static final int SCREEN_X = 7, SCREEN_R = 209, CW = 198;
 
     private static int tab;                 // remembered while the game runs
     /** The Functions tab's second page: wireless charging. */
@@ -94,47 +96,44 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 new net.minecraft.item.ItemStack(net.minecraft.init.Items.map),
                 com.sc.init.ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE),
                 new net.minecraft.item.ItemStack(net.minecraft.init.Items.compass)};
-        int tw = (W - 16 - 2 * 3) / 4;
         for (int i = 0; i < tabs.length; i++) {
-            GuiButton b = new TextFitSC.Tab(TAB_BASE + i, guiLeft + 8 + i % 4 * (tw + 2), guiTop + 5 - TABS_UP + i / 4 * TABS_UP, tw, 20, icons[i],
+            GuiButton b = new HoloTab(TAB_BASE + i, guiLeft + 7 + i * 34, guiTop - 4, 33, 13, icons[i],
                     Lang.tr(tabs[i] + ".short"), Lang.tr(tabs[i]));
-            b.enabled = i != tab;
+            ((HoloTab) b).current = i == tab;
             buttonList.add(b);
         }
         ((ContainerFieldGeneratorSC) inventorySlots).setSlotsShown(tab == TAB_UPGRADES);
         nameField = null;
+        buttonList.add(new HoloButton(ContainerFieldGeneratorSC.BTN_REDSTONE, guiLeft + ENERGY_X, guiTop + 11, ENERGY_W, 11, ""));
         int x = guiLeft + 8, y = guiTop + 30;
         switch (tab) {
-            case 0: {
-                // radius, shape, colour and shell moved to the Zone tab
-                buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_REDSTONE, x, guiTop + 142, W - 16, 20, ""));
+            case 0:
                 break;
-            }
             case TAB_ZONE: {
                 ensureDraft();
                 int[] bases = {Z_RANGE, Z_HEIGHT, Z_OFFX, Z_OFFZ, Z_OFFY};
                 for (int k = 0; k < bases.length; k++) {
                     int[] steps = k < 2 ? STEP_BIG : STEP_OFF;
                     for (int j = 0; j < 4; j++) {
-                        buttonList.add(new TextFitSC.Button(bases[k] + j, x + j * 28, guiTop + 40 + k * 24, 27, 12,
+                        buttonList.add(new HoloButton(bases[k] + j, x + j * 28, guiTop + 40 + k * 24, 27, 12,
                                 (steps[j] > 0 ? "+" : "") + steps[j]));
                     }
                 }
-                buttonList.add(new TextFitSC.Button(Z_SHAPE, x, guiTop + 152, 114, 13, ""));
-                buttonList.add(new TextFitSC.Button(Z_ANCHOR, x, guiTop + 167, 114, 13, ""));
-                buttonList.add(new TextFitSC.Button(Z_PREVIEW, x, guiTop + 182, 114, 13, ""));
-                buttonList.add(new TextFitSC.Button(Z_APPLY, x, guiTop + 197, 56, 13, Lang.tr("sc.fieldzone.apply")));
-                buttonList.add(new TextFitSC.Button(Z_CANCEL, x + 58, guiTop + 197, 56, 13, Lang.tr("sc.fieldzone.cancel")));
-                int rx = guiLeft + 126, rw = 114;
+                buttonList.add(new HoloButton(Z_SHAPE, x, guiTop + 152, 114, 13, ""));
+                buttonList.add(new HoloButton(Z_ANCHOR, x, guiTop + 167, 114, 13, ""));
+                buttonList.add(new HoloButton(Z_PREVIEW, x, guiTop + 182, 114, 13, ""));
+                buttonList.add(new HoloButton(Z_APPLY, x, guiTop + 197, 56, 13, Lang.tr("sc.fieldzone.apply")));
+                buttonList.add(new HoloButton(Z_CANCEL, x + 58, guiTop + 197, 56, 13, Lang.tr("sc.fieldzone.cancel")));
+                int rx = guiLeft + 126, rw = 80;
                 int[] right = {ContainerFieldGeneratorSC.BTN_OUTLINE, flagId(TileEntityFieldGeneratorSC.F_DASH),
                         flagId(TileEntityFieldGeneratorSC.F_SHOW), ContainerFieldGeneratorSC.BTN_ANIM, ContainerFieldGeneratorSC.BTN_BRIGHT,
                         flagId(TileEntityFieldGeneratorSC.F_BEAMS), flagId(TileEntityFieldGeneratorSC.F_HUM)};
                 for (int i = 0; i < right.length; i++) {
-                    buttonList.add(new TextFitSC.Button(right[i], rx, guiTop + 30 + i * 14, rw, 13, ""));
+                    buttonList.add(new HoloButton(right[i], rx, guiTop + 30 + i * 14, rw, 13, ""));
                 }
-                buttonList.add(new TextFitSC.Button(Z_TARGET, rx, guiTop + 130, rw - 18, 13, ""));
+                buttonList.add(new HoloButton(Z_TARGET, rx, guiTop + 130, rw - 18, 13, ""));
                 for (int i = 0; i < TileEntityFieldGeneratorSC.PRESETS.length; i++) {
-                    buttonList.add(new TextFitSC.Button(Z_PRESET + i, rx + i * 14 + 1, guiTop + 146, 13, 12, ""));
+                    buttonList.add(new HoloButton(Z_PRESET + i, rx + i * 13, guiTop + 146, 12, 12, ""));
                 }
                 for (int ch = 0; ch < 3; ch++) {
                     buttonList.add(new Slider(Z_SLIDER + ch, rx, guiTop + 162 + ch * 14, rw, 12, ch));
@@ -142,41 +141,41 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 break;
             }
             case 1: {
-                buttonList.add(new TextFitSC.Button(PAGE_ID, guiLeft + W - 8 - 110, guiTop + H - 26, 110, 20, ""));
+                buttonList.add(new HoloButton(PAGE_ID, guiLeft + SCREEN_R - 4 - 90, guiTop + H - 26, 90, 18, ""));
                 if (chargePage) {
-                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_CHARGE), x, y + 14, 114, 20, ""));
-                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_CHARGE_FX), x + 118, y + 14, 114, 20, ""));
-                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_CHARGE_MODE, x, y + 38, W - 16, 20, ""));
-                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RESERVE_MINUS, x, y + 62, 34, 20, "-10%"));
-                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_RESERVE_PLUS, x + 36, y + 62, 34, 20, "+10%"));
-                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_BELOW_MINUS, x, y + 86, 34, 20, "-10%"));
-                    buttonList.add(new TextFitSC.Button(ContainerFieldGeneratorSC.BTN_BELOW_PLUS, x + 36, y + 86, 34, 20, "+10%"));
-                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_SKIP_BATTERIES), x, y + 110, 114, 20, ""));
-                    buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_CHARGE_EACH), x + 118, y + 110, 114, 20, ""));
+                    buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_CHARGE), x, y + 14, 96, 20, ""));
+                    buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_CHARGE_FX), x + 100, y + 14, 98, 20, ""));
+                    buttonList.add(new HoloButton(ContainerFieldGeneratorSC.BTN_CHARGE_MODE, x, y + 38, CW, 20, ""));
+                    buttonList.add(new HoloButton(ContainerFieldGeneratorSC.BTN_RESERVE_MINUS, x, y + 62, 34, 20, "-10%"));
+                    buttonList.add(new HoloButton(ContainerFieldGeneratorSC.BTN_RESERVE_PLUS, x + 36, y + 62, 34, 20, "+10%"));
+                    buttonList.add(new HoloButton(ContainerFieldGeneratorSC.BTN_BELOW_MINUS, x, y + 86, 34, 20, "-10%"));
+                    buttonList.add(new HoloButton(ContainerFieldGeneratorSC.BTN_BELOW_PLUS, x + 36, y + 86, 34, 20, "+10%"));
+                    buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_SKIP_BATTERIES), x, y + 110, 96, 20, ""));
+                    buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_CHARGE_EACH), x + 100, y + 110, 98, 20, ""));
                     break;
                 }
                 int[] rows = {TileEntityFieldGeneratorSC.F_NO_SPAWN, TileEntityFieldGeneratorSC.F_NO_ENDER, TileEntityFieldGeneratorSC.F_DAMAGE,
                         -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL};
                 for (int i = 0; i < rows.length; i++) {
                     int id = rows[i] < 0 ? ContainerFieldGeneratorSC.BTN_FILTER : flagId(rows[i]);
-                    buttonList.add(new TextFitSC.Button(id, x, y + i * 22, W - 16, 20, ""));
+                    buttonList.add(new HoloButton(id, x, y + i * 22, CW, 20, ""));
                 }
                 break;
             }
             case 2: {
-                buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_PRIVATE), x, y + 14, 114, 20, ""));
-                buttonList.add(new TextFitSC.Button(flagId(TileEntityFieldGeneratorSC.F_PUSH_PLAYERS), x + 118, y + 14, 114, 20, ""));
+                buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_PRIVATE), x, y + 14, 96, 20, ""));
+                buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_PUSH_PLAYERS), x + 100, y + 14, 98, 20, ""));
                 List<String> names = field.getAccess();
                 for (int i = 0; i < names.size() && i < TileEntityFieldGeneratorSC.MAX_ACCESS; i++) {
                     int col = i % 3, row = i / 3;
-                    GuiButton b = new TextFitSC.Button(REMOVE_BASE + i, x + col * 78, y + 56 + row * 16, 76, 15, "");
+                    GuiButton b = new HoloButton(REMOVE_BASE + i, x + 2 + col * 65, y + 56 + row * 16, 63, 15, "");
                     b.enabled = mayEditAccess();
                     buttonList.add(b);
                 }
-                nameField = new GuiTextField(fontRendererObj, x + 1, guiTop + H - 24, 160, 16);
+                nameField = new GuiTextField(fontRendererObj, x + 1, guiTop + H - 24, 126, 16);
                 nameField.setMaxStringLength(16);
                 nameField.setEnabled(mayEditAccess());
-                GuiButton add = new TextFitSC.Button(ADD_ID, x + 166, guiTop + H - 26, 66, 20, Lang.tr("sc.fieldgui.access.add"));
+                GuiButton add = new HoloButton(ADD_ID, x + 132, guiTop + H - 26, 66, 20, Lang.tr("sc.fieldgui.access.add"));
                 add.enabled = mayEditAccess();
                 buttonList.add(add);
                 break;
@@ -251,7 +250,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             } else if (id == ContainerFieldGeneratorSC.BTN_MODE) {
                 b.displayString = Lang.tr("sc.fieldgui.shape", modeName(field.getMode()));
             } else if (id == ContainerFieldGeneratorSC.BTN_REDSTONE) {
-                b.displayString = Lang.tr("sc.fieldgui.redstone", Lang.tr("sc.fieldgui.redstone." + field.getRedstone()));
+                b.displayString = Lang.tr("sc.fieldgui.redstone.short." + field.getRedstone());
             } else if (id == ContainerFieldGeneratorSC.BTN_FILTER) {
                 b.displayString = Lang.tr("sc.fieldgui.filter", Lang.tr("sc.fieldgui.filter." + field.getFilter()));
             } else if (id <= ContainerFieldGeneratorSC.BTN_RANGE_PLUS_16) {
@@ -615,40 +614,77 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         drawRect(x + w - 2, y + 2, x + w - 1, y + h - 1, 0xFF555555);
     }
 
-    /** A sunken inset (energy bar, map, name list). */
+    /** A dark well on the holo screen (map, name list, slots). */
     private void inset(int x, int y, int w, int h) {
-        drawRect(x, y, x + w, y + h, 0xFF373737);
-        drawRect(x + 1, y + 1, x + w, y + h, 0xFFFFFFFF);
-        drawRect(x + 1, y + 1, x + w - 1, y + h - 1, 0xFF8B8B8B);
+        drawRect(x, y, x + w, y + h, 0xFF1E3444);
+        drawRect(x + 1, y + 1, x + w - 1, y + h - 1, 0xFF050A10);
     }
+
+    /** The window as a machine's: the frame, the dark title strip. */
+    private void window(int x, int y, int w, int h) {
+        drawRect(x, y, x + w, y + h, 0xFF1E2024);
+        drawRect(x + 1, y + 1, x + w - 1, y + h - 1, 0xFFB9C1CC);
+        drawRect(x + 1, y + 1, x + w - 2, y + 2, 0xFFECF0F6);
+        drawRect(x + 1, y + 1, x + 2, y + h - 2, 0xFFE2E8F0);
+        drawRect(x + 2, y + h - 2, x + w - 1, y + h - 1, 0xFF6E747E);
+        drawRect(x + w - 2, y + 2, x + w - 1, y + h - 1, 0xFF767C86);
+        drawRect(x + 3, y + 3, x + w - 3, y + 4, 0xFF6E747E);
+        drawRect(x + 3, y + 3, x + 4, y + 16, 0xFF6E747E);
+        drawRect(x + 4, y + 4, x + w - 4, y + 15, 0xFF2E3642);
+        drawRect(x + 4, y + 15, x + w - 4, y + 16, 0xFFF0F2F6);
+    }
+
+    /** The Field tab's four readings: mode, nodes, range, upkeep. */
+    private static final int[][] F_CARDS = {{14, 28}, {58, 28}, {14, 52}, {58, 52}};
 
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
-        panel(guiLeft, guiTop - TABS_UP, W, H + TABS_UP);
+        int gx = guiLeft, gy = guiTop;
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        window(gx, gy - TABS_UP, W, H + TABS_UP);
+        // the holo screen: short where something sits under it (the Field tab's summary, the inventory)
+        int screenH = tab == 0 ? 94 : tab == TAB_UPGRADES ? 106 : H - 14;
+        GuiHoloSC.screen(gx + SCREEN_X, gy + 12, SCREEN_R - SCREEN_X, screenH);
+        GuiEnergyGaugeSC.draw(gx + ENERGY_X, gy + ENERGY_Y, ENERGY_W, ENERGY_H,
+                (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored()));
         if (tab == 0) {
-            GuiEnergyGaugeSC.draw(guiLeft + ENERGY_X, guiTop + ENERGY_Y, ENERGY_W, ENERGY_H,
-                    (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored()));
+            for (int[] c : F_CARDS) {
+                drawRect(gx + c[0], gy + c[1], gx + c[0] + 42, gy + c[1] + 20, 0xFF2A6A8A);
+                drawRect(gx + c[0] + 1, gy + c[1] + 1, gx + c[0] + 41, gy + c[1] + 19, 0xFF0E3A50);
+            }
+            float[] rgb = field.rgbF(TileEntityFieldGeneratorSC.RGB_SHELL);
+            int col = (int) (rgb[0] * 255) << 16 | (int) (rgb[1] * 255) << 8 | (int) (rgb[2] * 255);
+            FieldMode mode = field.getMode();
+            GuiSceneSC.fieldScene(gx + 104, gy + 18, 100, 82, t, mode != FieldMode.UNION && mode != FieldMode.DOME,
+                    field.isActive(), col);
+            GuiHoloSC.screen(gx + SCREEN_X, gy + 110, W - 14, H - 112);        // the summary under it
+            GuiHoloSC.glint(gx + SCREEN_X, gy + 110, W - 14, H - 112);
         } else if (tab == 2) {
-            inset(guiLeft + 7, guiTop + 84, W - 14, 6 * 16 + 4);
+            inset(gx + 8, gy + 84, CW, 6 * 16 + 4);
         } else if (tab == 3) {
             inset(guiLeft + MAP_X - 1, guiTop + MAP_Y - 1, MAP + 2, MAP + 2);
             drawMap(guiLeft + MAP_X, guiTop + MAP_Y);
         } else if (tab == TAB_UPGRADES) {
             for (int i = 0; i < TileEntityFieldGeneratorSC.UPGRADE_SLOTS; i++) {
-                inset(guiLeft + ContainerFieldGeneratorSC.UPGRADE_X - 1 + i * 18, guiTop + ContainerFieldGeneratorSC.UPGRADE_Y - 1, 18, 18);
+                GuiHoloSC.slot(gx + ContainerFieldGeneratorSC.UPGRADE_X + i * 18, gy + ContainerFieldGeneratorSC.UPGRADE_Y, false);
             }
             for (int row = 0; row < 4; row++) {
-                int y = guiTop + ContainerFieldGeneratorSC.INV_Y - 1 + row * 18 + (row == 3 ? 4 : 0);
+                int y = gy + ContainerFieldGeneratorSC.INV_Y - 1 + row * 18 + (row == 3 ? 4 : 0);
                 for (int col = 0; col < 9; col++) {
-                    inset(guiLeft + ContainerFieldGeneratorSC.INV_X - 1 + col * 18, y, 18, 18);
+                    int px = gx + ContainerFieldGeneratorSC.INV_X - 1 + col * 18;
+                    drawRect(px, y, px + 18, y + 18, 0xFF343C48);
+                    drawRect(px + 1, y + 1, px + 18, y + 18, 0xFFECF1F7);
+                    drawRect(px + 1, y + 1, px + 17, y + 17, 0xFF707A88);
                 }
             }
-            // the buffer, as a horizontal bar
-            int bx = guiLeft + 44, by = guiTop + 101, bw = W - 88;
-            inset(bx - 1, by - 1, bw + 2, 10);
-            float fill = (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored());
-            drawRect(bx, by, bx + (int) (bw * Math.min(1F, fill)), by + 8, 0xFFD02020);
-            drawRect(bx, by, bx + (int) (bw * Math.min(1F, fill)), by + 2, 0xFFFF6060);
+            // the buffer, as a segmented bar
+            int bx = gx + 14, by = gy + 101, n = 36;
+            GuiHoloSC.bar(bx, by, 188, 6, (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored()), n, 0xFF6EE6FF);
+        }
+        if (tab != 0) {
+            GuiHoloSC.glint(gx + SCREEN_X, gy + 12, SCREEN_R - SCREEN_X, screenH);
+        } else {
+            GuiHoloSC.glint(gx + SCREEN_X, gy + 12, SCREEN_R - SCREEN_X, screenH);
         }
         if (nameField != null) {
             nameField.drawTextBox();
@@ -657,18 +693,46 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-        int c = 0x404040, dim = 0x606060;
+        int c = GuiHoloSC.VALUE, dim = GuiHoloSC.LABEL;
+        fontRendererObj.drawString(Lang.tr("tile.siliconage.fieldGeneratorSC.name"), 8, 5 - TABS_UP, 0xF0F4FA);
+        String[] captions = {"sc.fieldgui.cap.field", chargePage ? "sc.fieldgui.cap.charge" : "sc.fieldgui.cap.functions",
+                "sc.fieldgui.cap.access", "sc.fieldgui.cap.map", "sc.fieldgui.cap.upgrades", "sc.fieldgui.cap.zone"};
+        if (tab != 0) {
+            fit(Lang.tr(captions[tab]), 12, 15, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        }
         switch (tab) {
             case 0: {
-                String status = field.isRedstoneOff() ? Lang.tr("sc.fieldgui.status.redstone")
-                        : Lang.tr(field.isActive() ? "sc.gui.field.active" : "sc.gui.field.inactive");
-                int room = ENERGY_X - 12;
-                fit(status, 8, 32, room, field.isActive() ? 0x2E7D32 : field.isRedstoneOff() ? 0x8A5A00 : 0xA02020);
-                fit(Lang.tr("sc.gui.field.mode", modeName(field.getMode())), 8, 46, room, c);
-                fit(Lang.tr("sc.gui.field.nodes", field.getNodeCount()), 8, 58, room, c);
-                fit(Lang.tr("sc.gui.field.range", field.getRange()), 8, 70, room, c);
-                fit(Lang.tr("sc.gui.field.upkeep", field.upkeepPerTick()), 8, 82, room, c);
-                fit(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 8, 96, room, dim);
+                fit(Lang.tr(captions[0]), 12, 15, 40, GuiHoloSC.CYAN & 0xFFFFFF);
+                String status = field.isRedstoneOff() ? Lang.tr("sc.fieldgui.state.redstone")
+                        : Lang.tr(field.isActive() ? "sc.fieldgui.state.on" : "sc.fieldgui.state.off");
+                fit(status, 54, 16, 48, field.isActive() ? GuiHoloSC.OK : field.isRedstoneOff() ? GuiHoloSC.WARN : GuiHoloSC.BAD);
+                String[] lab = {Lang.tr("sc.fieldgui.card.mode"), Lang.tr("sc.fieldgui.card.nodes"), Lang.tr("sc.fieldgui.card.range"),
+                        Lang.tr("sc.fieldgui.card.upkeep")};
+                String[] val = {modeName(field.getMode()), String.valueOf(field.getNodeCount()),
+                        Lang.tr("sc.fieldgui.card.blocks", field.getRange()), field.upkeepPerTick() + " EU/t"};
+                for (int i = 0; i < 4; i++) {
+                    int cx = F_CARDS[i][0], cy = F_CARDS[i][1];
+                    small(lab[i], cx + 21, cy + 2, 38, dim, true);
+                    TextFitSC.drawCentered(fontRendererObj, val[i], cx + 1, cy + 9, 40, c, false, guiLeft, guiTop);
+                }
+                small(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 14, 78, 88, dim, false);
+                small(Lang.tr("sc.fieldgui.card.access", field.getAccess().size()), 14, 86, 88, dim, false);
+                // the summary: what's switched on
+                fit(Lang.tr("sc.fieldgui.cap.summary"), 12, 114, 120, GuiHoloSC.CYAN & 0xFFFFFF);
+                int[] flags = {TileEntityFieldGeneratorSC.F_NO_SPAWN, TileEntityFieldGeneratorSC.F_NO_ENDER, TileEntityFieldGeneratorSC.F_DAMAGE,
+                        TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL, TileEntityFieldGeneratorSC.F_CHARGE,
+                        TileEntityFieldGeneratorSC.F_PRIVATE, TileEntityFieldGeneratorSC.F_PUSH_PLAYERS};
+                for (int i = 0; i < flags.length; i++) {
+                    int fx = 14 + (i % 2) * 114, fy = 127 + (i / 2) * 11;
+                    boolean on = field.has(flags[i]);
+                    drawRect(fx, fy + 1, fx + 4, fy + 5, on ? 0xFF5AE66E : 0xFF3A4450);
+                    fit(Lang.tr("sc.fieldgui.flag." + flags[i]), fx + 7, fy, 104, on ? c : 0x465A6E);
+                }
+                small(Lang.tr("sc.fieldgui.sum.modules", field.storageUpgrades(),
+                        field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER)), 14, 174, W - 28, dim, false);
+                small(Lang.tr("sc.fieldgui.sum.input", field.inputTier().name(), field.inputTier().getVoltage(),
+                        field.getEnergyStored(), field.getMaxEnergyStored()), 14, 182, W - 28, dim, false);
+                small(Lang.tr("sc.fieldgui.sum.hint"), 14, 194, W - 28, 0x465A6E, false);
                 break;
             }
             case 1:
@@ -677,13 +741,13 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 }
                 break;
             case 2: {
-                fit(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 8, 32, W - 16, c);
-                fit(Lang.tr("sc.fieldgui.access.list", field.getAccess().size(), TileEntityFieldGeneratorSC.MAX_ACCESS), 8, 72, W - 16, c);
+                fit(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 100, 15, CW - 92, c);
+                fit(Lang.tr("sc.fieldgui.access.list", field.getAccess().size(), TileEntityFieldGeneratorSC.MAX_ACCESS), 8, 72, CW, dim);
                 if (field.getAccess().isEmpty()) {
-                    fit(Lang.tr("sc.fieldgui.access.empty"), 12, 90, W - 24, 0xE0E0E0);
+                    fit(Lang.tr("sc.fieldgui.access.empty"), 12, 90, CW - 8, 0x465A6E);
                 }
                 if (!mayEditAccess()) {
-                    fit(Lang.tr("sc.fieldgui.access.ownerOnly"), 8, H - 38, W - 16, 0xA02020);
+                    fit(Lang.tr("sc.fieldgui.access.ownerOnly"), 8, H - 38, CW, GuiHoloSC.BAD);
                 }
                 break;
             }
@@ -693,8 +757,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             case TAB_UPGRADES: {
                 String title = Lang.tr("sc.fieldgui.upgrades.title");
                 fitCentered(title, 32, c);
-                int tw = Math.min(W - 30, fontRendererObj.getStringWidth(title));
-                TextFitSC.help(fontRendererObj, (W + tw) / 2 + 3, 31, Lang.tr("sc.fieldgui.upgrades.hint"), guiLeft, guiTop);
+                int tw = Math.min(CW - 14, fontRendererObj.getStringWidth(title));
+                TextFitSC.help(fontRendererObj, 8 + (CW + tw) / 2 + 3, 31, Lang.tr("sc.fieldgui.upgrades.hint"), guiLeft, guiTop);
                 int n = field.storageUpgrades();
                 String count = Lang.tr("sc.fieldgui.upgrades.count", n, com.sc.machine.UpgradeType.MAX_EFFECTIVE,
                         n * com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE);
@@ -703,12 +767,12 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 fitCentered(buf, 80, c);
                 String input = Lang.tr("sc.fieldgui.upgrades.input", field.inputTier().name(), field.inputTier().getVoltage());
                 fitCentered(input, 90, c);
-                fit(Lang.tr("container.inventory"), ContainerFieldGeneratorSC.INV_X, ContainerFieldGeneratorSC.INV_Y - 11, 162, c);
+                fit(Lang.tr("container.inventory"), ContainerFieldGeneratorSC.INV_X, ContainerFieldGeneratorSC.INV_Y - 11, 162, 0x404040);
                 break;
             }
             default: {
                 int lx = MAP_X + MAP + 8;
-                fit(Lang.tr("sc.fieldgui.map.title"), lx, 32, W - lx - 6, c);
+                fit(Lang.tr("sc.fieldgui.map.title"), lx, 32, SCREEN_R - 3 - lx, GuiHoloSC.CYAN & 0xFFFFFF);
                 legend(lx, 48, 0xFFFFE040, Lang.tr("sc.fieldgui.map.master"));
                 legend(lx, 60, 0xFFFFFFFF, Lang.tr("sc.fieldgui.map.node"));
                 legend(lx, 72, 0xFFFF4040, Lang.tr("sc.fieldgui.map.you"));
@@ -720,7 +784,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     int wBlocks = (int) Math.round(mapBounds.maxX - mapBounds.minX), dBlocks = (int) Math.round(mapBounds.maxZ - mapBounds.minZ);
                     fontRendererObj.drawString(wBlocks + " x " + dBlocks, lx, 104, dim);
                 }
-                fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.map.hint"), lx, 120, W - lx - 6, dim);
+                fontRendererObj.drawSplitString(Lang.tr("sc.fieldgui.map.hint"), lx, 120, SCREEN_R - 3 - lx, dim);
                 GL11.glColor4f(1F, 1F, 1F, 1F);
             }
         }
@@ -739,15 +803,15 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         }
         // the colour being edited, and a frame round the ready colour it matches
         int rx = 126;
-        drawRect(rx + 97, 130, rx + 114, 143, 0xFF000000);
-        drawRect(rx + 98, 131, rx + 113, 142, 0xFF000000 | editRgb);
+        drawRect(rx + 64, 130, rx + 80, 143, 0xFF1E3444);
+        drawRect(rx + 65, 131, rx + 79, 142, 0xFF000000 | editRgb);
         for (int i = 0; i < TileEntityFieldGeneratorSC.PRESETS.length; i++) {
-            int px = rx + i * 14 + 1;
+            int px = rx + i * 13;
             int col = TileEntityFieldGeneratorSC.PRESETS[i];
             if (col == editRgb) {
-                drawRect(px - 1, 145, px + 14, 159, 0xFFFFFFFF);
+                drawRect(px - 1, 145, px + 13, 159, 0xFF6EE6FF);
             }
-            drawRect(px + 2, 148, px + 11, 156, 0xFF000000 | col);
+            drawRect(px + 2, 148, px + 10, 156, 0xFF000000 | col);
         }
         // the readout: blocks held and the upkeep, for the draft
         int[] point = {draft[D_PX], draft[D_PX + 1], draft[D_PX + 2]};
@@ -765,7 +829,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         if (pending) {
             info += " " + Lang.tr("sc.fieldzone.pending");
         }
-        fit(info, 8, 213, W - 16, pending ? 0xB06000 : 0x2A62A8);
+        fit(info, 8, 213, CW, pending ? GuiHoloSC.WARN : 0x6EB4FF);
     }
 
     private static String signed(int v) {
@@ -788,25 +852,121 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     private void drawChargePage(int c, int dim) {
         String title = Lang.tr("sc.fieldgui.charge.title");
         fitCentered(title, 32, c);
-        int tw = Math.min(W - 30, fontRendererObj.getStringWidth(title));
-        TextFitSC.help(fontRendererObj, (W + tw) / 2 + 3, 31, Lang.tr("sc.fieldgui.charge.help"), guiLeft, guiTop);
+        int tw = Math.min(CW - 14, fontRendererObj.getStringWidth(title));
+        TextFitSC.help(fontRendererObj, 8 + (CW + tw) / 2 + 3, 31, Lang.tr("sc.fieldgui.charge.help"), guiLeft, guiTop);
         int reserveEu = (int) ((long) field.getMaxEnergyStored() * field.getChargeReserve() / 100);
-        fit(Lang.tr("sc.fieldgui.charge.reserve", field.getChargeReserve(), reserveEu), 82, 98, W - 90, c);
+        fit(Lang.tr("sc.fieldgui.charge.reserve", field.getChargeReserve(), reserveEu), 82, 98, CW - 74, c);
         int boosters = Math.min(com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS,
                 field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER));
         fit(Lang.tr(field.getChargeBelow() >= 100 ? "sc.fieldgui.charge.below.all" : "sc.fieldgui.charge.below", field.getChargeBelow()),
-                82, 122, W - 90, c);
-        fit(Lang.tr(field.chargesEachAtFullRate() ? "sc.fieldgui.charge.rate.each" : "sc.fieldgui.charge.rate", field.chargeRate()), 8, 166, W - 16, c);
-        fit(Lang.tr("sc.fieldgui.charge.boosters", boosters, com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS), 8, 176, W - 16, c);
+                82, 122, CW - 74, c);
+        fit(Lang.tr(field.chargesEachAtFullRate() ? "sc.fieldgui.charge.rate.each" : "sc.fieldgui.charge.rate", field.chargeRate()), 8, 166, CW, c);
+        fit(Lang.tr("sc.fieldgui.charge.boosters", boosters, com.sc.machine.UpgradeType.MAX_CHARGE_BOOSTERS), 8, 176, CW, dim);
         boolean on = field.has(TileEntityFieldGeneratorSC.F_CHARGE) && field.isActive();
         fit(on ? Lang.tr("sc.fieldgui.charge.now", field.getChargedLastSecond(), field.getPlayersLastSecond())
-                : Lang.tr("sc.fieldgui.charge.off"), 8, 188, W - 124, on ? 0x2E7D32 : 0xA02020);
+                : Lang.tr("sc.fieldgui.charge.off"), 8, 188, CW - 96, on ? GuiHoloSC.OK : GuiHoloSC.BAD);
     }
 
     private void legend(int x, int y, int color, String text) {
         drawRect(x, y + 1, x + 6, y + 7, color);
-        fit(text, x + 9, y, W - x - 15, 0x404040);
+        fit(text, x + 9, y, SCREEN_R - 3 - x - 9, GuiHoloSC.VALUE);
     }
+
+    /** A small label (5/8 size) fitted into `maxW`, centred on x when `centre`. */
+    private void small(String text, int x, int y, int maxW, int color, boolean centre) {
+        float k = Math.min(0.625F, maxW / (float) Math.max(1, fontRendererObj.getStringWidth(text)));
+        GL11.glPushMatrix();
+        GL11.glTranslatef(centre ? x - fontRendererObj.getStringWidth(text) * k / 2 : x, y, 0F);
+        GL11.glScalef(k, k, 1F);
+        fontRendererObj.drawString(text, 0, 0, color);
+        GL11.glPopMatrix();
+    }
+
+    /**
+     * A button in the holo style: dark, cyan-edged, brighter under the mouse. A switch's caption
+     * starting "§a" / "§7" gets a lamp - green on, grey off - and the colour code is dropped.
+     */
+    private static class HoloButton extends TextFitSC.Button {
+        HoloButton(int id, int x, int y, int w, int h, String text) {
+            super(id, x, y, w, h, text);
+        }
+
+        @Override
+        public void drawButton(net.minecraft.client.Minecraft mc, int mx, int my) {
+            if (!visible) {
+                return;
+            }
+            field_146123_n = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+            boolean hover = field_146123_n && enabled;
+            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, hover ? 0xFF6EE6FF : 0xFF2A6A8A);
+            drawRect(xPosition + 1, yPosition + 1, xPosition + width - 1, yPosition + height - 1, enabled ? 0xFF0E3A50 : 0xFF0A1C26);
+            String text = displayString;
+            int lamp = 0;
+            if (text.startsWith("\u00a7a")) {
+                lamp = 0xFF5AE66E;
+                text = text.substring(2);
+            } else if (text.startsWith("\u00a77")) {
+                lamp = 0xFF3A4450;
+                text = text.substring(2);
+            }
+            int tx = xPosition + 3, tw = width - 6;
+            if (lamp != 0) {
+                drawRect(xPosition + 3, yPosition + height / 2 - 2, xPosition + 7, yPosition + height / 2 + 2, lamp);
+                tx += 6;
+                tw -= 6;
+            }
+            int color = !enabled ? 0x465A6E : hover ? 0xFFFFA0 : lamp == 0xFF3A4450 ? 0x8AA0B4 : 0xE6F0FA;
+            TextFitSC.drawCentered(mc.fontRenderer, text, tx, yPosition + (height - 8) / 2, tw, color, false, 0, 0);
+        }
+    }
+
+    /** A tab in the holo style: a small icon and the short name; the current one lit. */
+    private static class HoloTab extends TextFitSC.Tab {
+        boolean current;
+        private final net.minecraft.item.ItemStack icon;
+        private final String full;
+
+        HoloTab(int id, int x, int y, int w, int h, net.minecraft.item.ItemStack icon, String shortName, String fullName) {
+            super(id, x, y, w, h, icon, shortName, fullName);
+            this.icon = icon;
+            this.full = fullName;
+        }
+
+        @Override
+        public void drawButton(net.minecraft.client.Minecraft mc, int mx, int my) {
+            if (!visible) {
+                return;
+            }
+            boolean hover = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, current ? 0xFF6EE6FF : hover ? 0xFF3CAADC : 0xFF1E3444);
+            drawRect(xPosition + 1, yPosition + 1, xPosition + width - 1, yPosition + height - (current ? 0 : 1),
+                    current ? 0xFF0E3A50 : 0xFF0A1218);
+            if (icon != null) {
+                GL11.glPushMatrix();
+                GL11.glTranslatef(xPosition + 2, yPosition + 2.5F, 0F);
+                GL11.glScalef(0.5F, 0.5F, 1F);
+                net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
+                GL11.glEnable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
+                itemRender.renderItemAndEffectIntoGUI(mc.fontRenderer, mc.getTextureManager(), icon, 0, 0);
+                net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting();
+                GL11.glDisable(GL11.GL_LIGHTING);
+                GL11.glPopMatrix();
+                GL11.glColor4f(1F, 1F, 1F, 1F);
+            }
+            String text = displayString;
+            float k = Math.min(0.625F, (width - 13) / (float) Math.max(1, mc.fontRenderer.getStringWidth(text)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(xPosition + 11, yPosition + (height - 8 * k) / 2F + 0.5F, 0F);
+            GL11.glScalef(k, k, 1F);
+            mc.fontRenderer.drawString(text, 0, 0, current ? 0xE6F0FA : hover ? 0xFFFFA0 : 0x6AA8C8);
+            GL11.glPopMatrix();
+            if (hover) {
+                TextFitSC.hover(xPosition, yPosition, width, height, full);
+            }
+        }
+    }
+
+    private static final net.minecraft.client.renderer.entity.RenderItem itemRender = new net.minecraft.client.renderer.entity.RenderItem();
 
     /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
     private void fit(String text, int x, int y, int maxW, int color) {
@@ -814,7 +974,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     }
 
     private void fitCentered(String text, int y, int color) {
-        TextFitSC.drawCentered(fontRendererObj, text, 8, y, W - 16, color, false, guiLeft, guiTop);
+        TextFitSC.drawCentered(fontRendererObj, text, 8, y, CW, color, false, guiLeft, guiTop);
     }
 
     /** The field at the master's height, seen from above (north up), with the nodes and the player. */
@@ -923,6 +1083,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             } else if (b.id == ContainerFieldGeneratorSC.BTN_MODE) {
                 key = "sc.fieldgui.shape.desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_REDSTONE) {
+                tip.add(Lang.tr("sc.fieldgui.redstone", Lang.tr("sc.fieldgui.redstone." + field.getRedstone())));
                 key = "sc.fieldgui.redstone.desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_FILTER) {
                 key = "sc.fieldgui.filter.desc";
@@ -933,7 +1094,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 tip.addAll(fontRendererObj.listFormattedStringToWidth(Lang.tr(key), 200));
             }
         }
-        if (tab == 0 && mouseX >= guiLeft + ENERGY_X && mouseX < guiLeft + ENERGY_X + ENERGY_W
+        if (mouseX >= guiLeft + ENERGY_X && mouseX < guiLeft + ENERGY_X + ENERGY_W
                 && mouseY >= guiTop + ENERGY_Y && mouseY < guiTop + ENERGY_Y + ENERGY_H) {
             tip.add(Lang.tr("sc.gui.energy"));
             tip.add(field.getEnergyStored() + " / " + field.getMaxEnergyStored() + " EU");
