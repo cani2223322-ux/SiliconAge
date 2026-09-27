@@ -1069,6 +1069,42 @@ public final class GuiSceneSC {
         rect(c0, cy - 1, x + w - 3 - c0, 2, 0xFFB0B8C4);                        // the shaft
     }
 
+    /**
+     * A gas turbine from the side: the compressor fan at the intake, the combustion chamber with
+     * hydrogen burning pale blue, the turbine stages, the hot exhaust shimmering out.
+     */
+    public static void gasTurbine(int x, int y, int w, int h, float t, boolean running) {
+        frame(x, y, w, h);
+        int cy = y + h / 2, spin = (int) (t * 2);
+        rect(x + 3, cy - 12, w - 12, 24, 0xFF8A909A);                          // the casing
+        rect(x + 4, cy - 11, w - 14, 22, 0xFF1A2430);
+        for (int k = 0; k < 3; k++) {                                          // the compressor
+            for (int j = -9 + k; j < 10 - k; j += 2) {
+                rect(x + 7 + k * 5, cy + j, 2, 1, running && (j + spin + k) % 4 == 0 ? 0xFFD8E0E8 : 0xFF8A94A8);
+            }
+        }
+        int c0 = x + 24;
+        rect(c0, cy - 7, 20, 14, 0xFF3A2418);                                  // the combustor
+        if (running) {
+            for (int i = 0; i < 5; i++) {
+                int fh = 3 + (int) (2 + 2 * Math.sin(t * 0.9F + i));
+                rect(c0 + 2 + i * 4, cy - fh / 2, 2, fh, i % 2 == 1 ? 0xFF8AD0FF : 0xFFE0F4FF);
+            }
+        }
+        for (int k = 0; k < 3; k++) {                                          // the turbine stages
+            for (int j = -8 - k; j < 9 + k; j += 2) {
+                rect(c0 + 24 + k * 5, cy + j, 2, 1, running && (j + spin + k) % 4 == 0 ? 0xFFD8E0E8 : 0xFF8A94A8);
+            }
+        }
+        rect(x + 4, cy - 1, w - 7, 2, 0xFFB0B8C4);                             // the shaft, out to the right
+        if (running) {
+            for (int i = 0; i < 5; i++) {                                      // the exhaust shimmer
+                float d = (t * 1.2F + i * 3) % 8;
+                rect(x + w - 9 + (int) d, cy - 6 + (i * 3) % 12, 1, 1, mix(0xFFFFB070, 0xFF0A1218, d / 8F));
+            }
+        }
+    }
+
     /** A turbine rotor end-on: curved blades turning while it runs, the hub in the middle. */
     public static void rotorFront(int cx, int cy, int r, float t, boolean running) {
         disc(cx, cy, r + 2, 0xFF8A909A);
