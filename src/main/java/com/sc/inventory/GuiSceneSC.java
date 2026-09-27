@@ -329,6 +329,71 @@ public final class GuiSceneSC {
         }
     }
 
+    private static final int UV = 0xFFB070FF, RESIST = 0xFFE07A30;
+
+    /**
+     * The stepper's column from the side: the UV lamp, the photomask, the lenses narrowing the beam,
+     * the wafer on its stage stepping under it from field to field.
+     */
+    public static void stepperColumn(int x, int y, int w, int h, float t, boolean running, float progress) {
+        frame(x, y, w, h);
+        int cx = x + w / 2;
+        rect(cx - 10, y + 3, 20, 5, 0xFF3A4048);                                // the lamp
+        rect(cx - 8, y + 5, 16, 2, !running ? 0xFF4A3A5A : (int) t % 4 != 0 ? UV : 0xFFD8B0FF);
+        rect(cx - 12, y + 11, 24, 2, 0xFF9AB8D0);                              // the mask
+        for (int i = -10; i <= 10; i += 3) {
+            rect(cx + i, y + 11, 1, 2, 0xFF1A2A36);
+        }
+        for (int k = 0; k < 3; k++) {                                          // the lenses
+            rect(cx - 9 + k * 2, y + 16 + k * 6, 18 - k * 4, 2, 0xFF6A8AA8);
+        }
+        if (running) {                                                         // the beam
+            for (int yy = y + 8; yy < y + h - 12; yy++) {
+                float k = (float) (yy - y - 8) / (h - 20);
+                int half = (int) (8 - 7 * k);
+                rect(cx - half, yy, 2 * half, 1, yy % 2 == 0 ? 0x40B070FF : 0x30B070FF);
+            }
+        }
+        int span = Math.max(4, w - 20);
+        int sx = cx - span / 2 + (int) (span * ((progress * 6) % 1F));        // the stage steps
+        rect(x + 3, y + h - 7, w - 6, 3, 0xFF6A707A);
+        rect(sx - 10, y + h - 10, 20, 3, 0xFF3A4048);
+        rect(sx - 9, y + h - 11, 18, 1, RESIST);
+        if (running) {
+            rect(cx - 1, y + h - 12, 3, 1, 0xFFFFFFFF);
+        }
+    }
+
+    /** How many dies the die map of radius r shows. */
+    public static int dieCount(int r) {
+        int n = 0;
+        for (int j = -r; j < r; j += 5) {
+            for (int i = -r; i < r; i += 5) {
+                if ((i + 2.5) * (i + 2.5) + (j + 2.5) * (j + 2.5) <= (r - 2) * (r - 2)) {
+                    n++;
+                }
+            }
+        }
+        return n;
+    }
+
+    /** The wafer from above as a grid of dies: exposed ones violet, the current one flashing white. */
+    public static void dieMap(int cx, int cy, int r, int done, float t, boolean running) {
+        disc(cx, cy, r + 1, 0xFF8A94A8);
+        disc(cx, cy, r, RESIST);
+        int idx = 0;
+        for (int j = -r; j < r; j += 5) {
+            for (int i = -r; i < r; i += 5) {
+                if ((i + 2.5) * (i + 2.5) + (j + 2.5) * (j + 2.5) > (r - 2) * (r - 2)) {
+                    continue;
+                }
+                int c = idx < done ? UV : idx == done && running && (int) t % 10 < 5 ? 0xFFFFFFFF : 0xFFB05A20;
+                rect(cx + i + 1, cy + j + 1, 4, 4, c);
+                idx++;
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
