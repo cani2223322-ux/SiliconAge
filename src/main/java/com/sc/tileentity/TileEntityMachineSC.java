@@ -268,6 +268,90 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         return tag;
     }
 
+    /**
+     * The power switch: off, the machine takes no energy at all (so no line can overvolt it) and
+     * does nothing. A placed machine starts off - upgrades in first, then switch on.
+     */
+    private boolean powerOn = true;
+    /** 0 works always, 1 only with a redstone signal, 2 only without one. */
+    private int redstoneMode;
+    public static final String ITEM_REDSTONE_KEY = "RedstoneSC";
+
+    public boolean isPowerOn() {
+        return powerOn;
+    }
+
+    public void setPowerOn(boolean on) {
+        powerOn = on;
+        markDirty();
+    }
+
+    public int getRedstoneMode() {
+        return redstoneMode;
+    }
+
+    public void setRedstoneMode(int mode) {
+        redstoneMode = Math.max(0, Math.min(2, mode));
+        markDirty();
+    }
+
+    /** Switch and redstone mode as one int for the container sync. */
+    public int powerFlags() {
+        return (powerOn ? 1 : 0) | redstoneMode << 1;
+    }
+
+    public void setPowerFlagsClient(int flags) {
+        powerOn = (flags & 1) != 0;
+        redstoneMode = (flags >> 1) & 3;
+    }
+
+    @Override
+    public int demandedEnergy() {
+        return powerOn ? super.demandedEnergy() : 0;
+    }
+
+    @Override
+    public int receiveEnergy(net.minecraftforge.common.util.ForgeDirection from, int voltage, int amount, boolean simulate) {
+        return powerOn ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
+    }
+
+    private boolean redstoneAllows() {
+        if (redstoneMode == 0) {
+            return true;
+        }
+        boolean signal = worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
+        return redstoneMode == 1 ? signal : !signal;
+    }
+
+    /**
+     * The strongest voltage a neighbour can bring in: a cable beside the machine, or an energy
+     * source touching it; null when there's none. Works on the client too (for the screen).
+     */
+    public com.sc.energy.Tier lineTier() {
+        com.sc.energy.Tier best = null;
+        for (net.minecraftforge.common.util.ForgeDirection dir : net.minecraftforge.common.util.ForgeDirection.VALID_DIRECTIONS) {
+            net.minecraft.tileentity.TileEntity te = worldObj == null ? null : neighbour(dir);
+            com.sc.energy.Tier t = null;
+            if (te instanceof TileEntityConduitBundleSC && ((TileEntityConduitBundleSC) te).getCable() != null) {
+                t = ((TileEntityConduitBundleSC) te).getCable().tier;
+            } else if (te instanceof TileEntityCableSC && ((TileEntityCableSC) te).getCableType() != null) {
+                t = ((TileEntityCableSC) te).getCableType().tier;
+            } else if (te instanceof com.sc.energy.TileEntityEnergyBase && ((com.sc.energy.TileEntityEnergyBase) te).isEnergySource()) {
+                t = ((com.sc.energy.TileEntityEnergyBase) te).outputTier();
+            }
+            if (t != null && (best == null || t.ordinal() > best.ordinal())) {
+                best = t;
+            }
+        }
+        return best;
+    }
+
+    /** A line beside it stronger than its input (and no universal transformer): switching on would blow it up. */
+    public boolean lineTooStrong() {
+        com.sc.energy.Tier t = lineTier();
+        return t != null && !acceptsAnyVoltage() && inputTier().excessTiersOf(t) > 0;
+    }
+
     /** NBT key the machine's item carries its upgrades under - they come back with it on placement. */
     public static final String ITEM_UPGRADES_KEY = "UpgradesSC";
     /** Set once the upgrades went into the dropped item, so breakBlock doesn't drop them loose too. */
@@ -389,6 +473,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
         if (upgradeCount(UpgradeType.PULLER) > 0 && worldObj.getTotalWorldTime() % PULL_INTERVAL == 0) {
             pull();
+        }
+        if (!powerOn || !redstoneAllows()) {
+            status = powerOn ? MachineStatus.REDSTONE : MachineStatus.DISABLED;
+            dissipateHeat();
+            return;
         }
 
         ItemStack[] inputs = new ItemStack[INPUT_SLOTS];
@@ -1016,6 +1105,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         heat = nbt.getInteger("Heat");
         coolingDown = nbt.getBoolean("CoolingDown");
         overheatedThisRun = nbt.getBoolean("OverheatedRun");
+        powerOn = !nbt.getBoolean("PowerOff");                  // machines saved before the switch: on
+        redstoneMode = Math.max(0, Math.min(2, nbt.getInteger("RedstoneMode")));
         tankA.readFromNBT(nbt.getCompoundTag("TankA"));
         tankB.readFromNBT(nbt.getCompoundTag("TankB"));
         outputTankA.readFromNBT(nbt.getCompoundTag("TankOutA"));
@@ -1043,6 +1134,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         nbt.setInteger("Progress", progressTicks);
         nbt.setInteger("Heat", heat);
         nbt.setBoolean("CoolingDown", coolingDown);
+        nbt.setBoolean("PowerOff", !powerOn);
+        nbt.setInteger("RedstoneMode", redstoneMode);
         nbt.setBoolean("OverheatedRun", overheatedThisRun);
         nbt.setTag("TankA", tankA.writeToNBT(new NBTTagCompound()));
         nbt.setTag("TankB", tankB.writeToNBT(new NBTTagCompound()));

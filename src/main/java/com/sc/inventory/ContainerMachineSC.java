@@ -75,6 +75,8 @@ public class ContainerMachineSC extends Container {
 
     /** enchantItem buttons: BTN_CLEAR + tank index pours that tank out for EU. */
     public static final int BTN_CLEAR = 0;
+    /** The power switch and the redstone mode (cycles always / with a signal / without). */
+    public static final int BTN_POWER = 10, BTN_REDSTONE = 11;
 
     @Override
     public boolean enchantItem(EntityPlayer player, int id) {
@@ -83,6 +85,14 @@ public class ContainerMachineSC extends Container {
         }
         if (id >= BTN_CLEAR && id < BTN_CLEAR + TANK_COUNT) {
             machine.clearTank(id - BTN_CLEAR);
+            return true;
+        }
+        if (id == BTN_POWER) {
+            machine.setPowerOn(!machine.isPowerOn());
+            return true;
+        }
+        if (id == BTN_REDSTONE) {
+            machine.setRedstoneMode((machine.getRedstoneMode() + 1) % 3);
             return true;
         }
         return false;
@@ -105,8 +115,9 @@ public class ContainerMachineSC extends Container {
     private static final int ID_RECIPE_TICKS = 2;
     private static final int ID_HEAT = 3;
     private static final int ID_STATUS = 4;
+    private static final int ID_POWER = 5;
     /** Sync slots from here on carry the four tanks as (fluid id, amount) pairs. */
-    private static final int TANK_ID_BASE = 5;
+    private static final int TANK_ID_BASE = 6;
 
     private final IntSyncSC sync = new IntSyncSC(TANK_ID_BASE + TANK_COUNT * 2);
 
@@ -123,6 +134,7 @@ public class ContainerMachineSC extends Container {
             case ID_PROGRESS: return machine.getProgressTicks();
             case ID_RECIPE_TICKS: return machine.getCurrentRecipeTicks();
             case ID_HEAT: return machine.getHeat();
+            case ID_POWER: return machine.powerFlags();
             default: return machine.getStatus().ordinal();
         }
     }
@@ -168,6 +180,9 @@ public class ContainerMachineSC extends Container {
                 break;
             case ID_HEAT:
                 machine.setHeatClient(data);
+                break;
+            case ID_POWER:
+                machine.setPowerFlagsClient(data);
                 break;
             default:
                 machine.setStatusClient(MachineStatus.byOrdinal(data));

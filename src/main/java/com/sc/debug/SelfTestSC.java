@@ -762,6 +762,19 @@ public final class SelfTestSC {
         check(u.acceptsAnyVoltage() && !new TileEntityMachineSC().acceptsAnyVoltage() && u.upgradesInItem() && u2.acceptsAnyVoltage()
                         && TileEntityMachineSC.upgradesOf(ut)[0] != null && new TileEntityMachineSC().upgradesForItem() == null,
                 "universal transformer: no voltage limit for IC2 nets; a machine's upgrades go with its item and come back on placement");
+        TileEntityMachineSC off = new TileEntityMachineSC();
+        off.setMachineType(MachineType.CRUSHER);
+        off.setPowerOn(false);
+        off.setRedstoneMode(2);
+        net.minecraft.nbt.NBTTagCompound offNbt = new net.minecraft.nbt.NBTTagCompound();
+        off.writeToNBT(offNbt);
+        TileEntityMachineSC back = new TileEntityMachineSC();
+        back.readFromNBT(offNbt);
+        TileEntityMachineSC legacy = new TileEntityMachineSC();
+        legacy.readFromNBT(new net.minecraft.nbt.NBTTagCompound());
+        check(off.demandedEnergy() == 0 && off.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 100, false) == 0
+                        && !back.isPowerOn() && back.getRedstoneMode() == 2 && legacy.isPowerOn() && legacy.getRedstoneMode() == 0,
+                "power switch: off takes no energy (an XV packet doesn't blow an LV machine up), saved with the redstone mode; old saves stay on");
         boolean hidden = true;
         for (int slot : c.getAccessibleSlotsFromSide(1)) {
             hidden &= slot < TileEntityMachineSC.FIRST_UPGRADE_SLOT;

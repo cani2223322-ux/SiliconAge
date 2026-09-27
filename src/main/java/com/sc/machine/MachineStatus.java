@@ -13,7 +13,11 @@ public enum MachineStatus {
     PROCESSING,
     NO_POWER,
     OUTPUT_FULL,
-    OVERHEATED;
+    OVERHEATED,
+    /** The power switch is off: no energy taken, no work. */
+    DISABLED,
+    /** Held by its redstone mode (a signal wanted, or one there that shouldn't be). */
+    REDSTONE;
 
     public String localized() {
         return Lang.tr("sc.status.machine." + name().toLowerCase(java.util.Locale.ROOT));

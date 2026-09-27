@@ -159,6 +159,13 @@ public class BlockMachineSC extends Block {
             ((TileEntityMachineSC) te).setFacing(toPlacer[quarter]);
             world.markBlockForUpdate(x, y, z);
         }
+        // placed switched off: nothing can overvolt it before its upgrades are in and it's switched on
+        if (te instanceof TileEntityMachineSC) {
+            ((TileEntityMachineSC) te).setPowerOn(false);
+            if (stack.hasTagCompound()) {
+                ((TileEntityMachineSC) te).setRedstoneMode(stack.getTagCompound().getInteger(TileEntityMachineSC.ITEM_REDSTONE_KEY));
+            }
+        }
         // the upgrades first: a transformer must be in before the machine's first energy tick
         if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
                 && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_UPGRADES_KEY)) {
@@ -193,8 +200,12 @@ public class BlockMachineSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         net.minecraft.nbt.NBTTagCompound tanks = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).tanksForItem() : null;
         net.minecraft.nbt.NBTTagCompound ups = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).upgradesForItem() : null;
-        if (tanks != null || ups != null) {
+        int redstone = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getRedstoneMode() : 0;
+        if (tanks != null || ups != null || redstone != 0) {
             net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+            if (redstone != 0) {
+                nbt.setInteger(TileEntityMachineSC.ITEM_REDSTONE_KEY, redstone);
+            }
             if (tanks != null) {
                 nbt.setTag(TileEntityMachineSC.ITEM_TANKS_KEY, tanks);
             }
