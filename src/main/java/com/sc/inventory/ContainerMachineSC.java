@@ -69,6 +69,21 @@ public class ContainerMachineSC extends Container {
         return machine;
     }
 
+    /** enchantItem buttons: BTN_CLEAR + tank index pours that tank out for EU. */
+    public static final int BTN_CLEAR = 0;
+
+    @Override
+    public boolean enchantItem(EntityPlayer player, int id) {
+        if (!canInteractWith(player)) {
+            return false;
+        }
+        if (id >= BTN_CLEAR && id < BTN_CLEAR + TANK_COUNT) {
+            machine.clearTank(id - BTN_CLEAR);
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public boolean canInteractWith(EntityPlayer player) {
         return machine.isUseableByPlayer(player);

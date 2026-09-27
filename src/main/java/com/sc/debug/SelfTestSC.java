@@ -441,6 +441,26 @@ public final class SelfTestSC {
                         && baseEu == MachineType.CRUSHER.euPerTick,
                 "upgrades: 2 overclockers x0.49 time / x2.56 energy, transformer +1 tier, storage +10000 EU ("
                         + baseTicks + "->" + c.effectiveTicks(r) + " t, " + baseEu + "->" + c.effectiveEuPerTick() + " EU/t)");
+        // Tank Extension: +8000 mB a tank each (4 count), taking them out pours nothing; Clear costs 1 EU / 10 mB
+        TileEntityMachineSC tk = new TileEntityMachineSC();
+        tk.setMachineType(MachineType.CVD_CHAMBER);
+        int cap0 = tk.getTank(0).getCapacity();
+        ItemStack ext = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION);
+        ext.stackSize = 5;
+        tk.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ext);
+        int cap4 = tk.getTank(0).getCapacity();
+        int in = tk.fill(net.minecraftforge.common.util.ForgeDirection.SOUTH, new FluidStack(ModFluids.hydrogen, 30000), true);
+        tk.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, null);
+        boolean kept = tk.getTank(0).getFluidAmount() + tk.getTank(1).getFluidAmount() == in && tk.getTank(0).getCapacity() == cap0;
+        int full = tk.getTank(0).getFluidAmount() > 0 ? 0 : 1;
+        int cost = tk.clearCost(full);
+        boolean refused = !tk.clearTank(full);
+        tk.setEnergyStoredClient(cost);                     // a buffer holding exactly the price
+        int e0 = tk.getEnergyStored();
+        boolean paid = e0 >= cost && tk.clearTank(full) && tk.getTank(full).getFluidAmount() == 0 && e0 - tk.getEnergyStored() == cost;
+        check(cap0 == 4000 && cap4 == 36000 && in == 30000 && kept && cost == 3000 && refused && paid,
+                "tank extension: 4000 -> 36000 mB (5 count as 4), 30000 mB kept after taking them out, clear 3000 EU paid only in full ("
+                        + cap0 + "/" + cap4 + "/" + in + "/" + cost + ")");
         TileEntityMachineSC fm = new TileEntityMachineSC();
         fm.setMachineType(MachineType.CRUSHER);
         boolean southFirst = fm.getFacing() == net.minecraftforge.common.util.ForgeDirection.SOUTH;

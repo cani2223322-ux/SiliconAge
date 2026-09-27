@@ -52,6 +52,13 @@ public class GuiGeneratorSC extends GuiContainer {
         if (type == GeneratorType.CREATIVE) {
             buttonList.add(new TextFitSC.Button(ContainerGeneratorSC.BTN_CREATIVE_TIER, guiLeft + LEFT_X, guiTop + 28, LEFT_W, 16, ""));
         }
+        for (int i = 0; i < tankCount(); i++) {
+            GuiBigSC.ClearButton b = new GuiBigSC.ClearButton(ContainerGeneratorSC.BTN_CLEAR + i);
+            b.visible = true;
+            b.xPosition = guiLeft + RIGHT_X + i * TANK_GAP + GuiTankGaugeSC.WIDTH - 7;
+            b.yPosition = guiTop + 31;
+            buttonList.add(b);
+        }
     }
 
     @Override
@@ -59,7 +66,10 @@ public class GuiGeneratorSC extends GuiContainer {
         super.updateScreen();
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
-            if (b.id == ContainerGeneratorSC.BTN_CREATIVE_TIER) {
+            if (b instanceof GuiBigSC.ClearButton) {
+                int i = b.id - ContainerGeneratorSC.BTN_CLEAR;
+                b.enabled = tank(i).getFluidAmount() > 0 && generator.getEnergyStored() >= generator.clearCost(i);
+            } else if (b.id == ContainerGeneratorSC.BTN_CREATIVE_TIER) {
                 b.displayString = Lang.tr("sc.gui.gen.creativetier", generator.getCreativeTier().name(), generator.getCreativeTier().getVoltage());
                 b.enabled = mc.thePlayer.capabilities.isCreativeMode;
             }
@@ -258,6 +268,13 @@ public class GuiGeneratorSC extends GuiContainer {
 
     private List<String> tooltipAt(int mouseX, int mouseY) {
         List<String> lines = new ArrayList<String>();
+
+        for (Object o : buttonList) {
+            if (o instanceof GuiBigSC.ClearButton && ((GuiBigSC.ClearButton) o).over(mouseX + guiLeft, mouseY + guiTop)) {
+                int i = ((GuiBigSC.ClearButton) o).id - ContainerGeneratorSC.BTN_CLEAR;
+                return GuiBigSC.clearTip(tank(i).getFluidAmount(), generator.clearCost(i), generator.getEnergyStored());
+            }
+        }
 
         if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));

@@ -31,7 +31,13 @@ public enum UpgradeType {
     /** Generators only: fuel x0.7 and output x0.9 per upgrade (at most 4 count). */
     ECONOMIZER("upgradeEconomizer"),
     /** Field generator only: wireless charging x2 per upgrade (at most 4 count). */
-    CHARGE_BOOSTER("upgradeChargeBooster");
+    CHARGE_BOOSTER("upgradeChargeBooster"),
+    /** Machines and generators: +8000 mB to every tank per upgrade (at most 4 count). */
+    TANK_EXTENSION("upgradeTankExtension");
+
+    public static final int MAX_TANK_UPGRADES = 4, TANK_PER_UPGRADE = 8000;
+    /** EU to pour out a machine's or generator's tank: 1 per 10 mB (as the quarry's tanks). */
+    public static final int CLEAR_MB_PER_EU = 10;
 
     public static final int MAX_CHARGE_BOOSTERS = 4;
 
@@ -50,7 +56,7 @@ public enum UpgradeType {
 
     /** What a generator's upgrade slots take. */
     public boolean forGenerators() {
-        return this == OVERDRIVE || this == ECONOMIZER || this == TRANSFORMER || this == ENERGY_STORAGE;
+        return this == OVERDRIVE || this == ECONOMIZER || this == TRANSFORMER || this == ENERGY_STORAGE || this == TANK_EXTENSION;
     }
 
     /** Effects stop growing past this many upgrades of one kind (IC2 lets a slot hold 64). */

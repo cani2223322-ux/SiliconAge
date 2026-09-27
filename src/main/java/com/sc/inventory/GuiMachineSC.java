@@ -73,6 +73,48 @@ public class GuiMachineSC extends GuiContainer {
         ySize = GuiBigSC.H;
     }
 
+    @Override
+    public void initGui() {
+        super.initGui();
+        buttonList.clear();
+        for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
+            buttonList.add(new GuiBigSC.ClearButton(ContainerMachineSC.BTN_CLEAR + i));
+        }
+    }
+
+    /** The Clear buttons sit above the tanks shown (the Ore Washer: above its Water gauge). */
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        collectTanks();
+        for (Object o : buttonList) {
+            if (!(o instanceof GuiBigSC.ClearButton)) {
+                continue;
+            }
+            GuiBigSC.ClearButton b = (GuiBigSC.ClearButton) o;
+            int tank = b.id - ContainerMachineSC.BTN_CLEAR;
+            int gx = -1;
+            if (washer) {
+                gx = tank == 0 ? WATER_X : -1;
+            } else {
+                for (int k = 0; k < shownCount; k++) {
+                    if (shownTanks[k] == tank) {
+                        gx = rightX() + k * TANK_GAP;
+                    }
+                }
+            }
+            b.visible = gx >= 0;
+            b.xPosition = guiLeft + gx + GuiTankGaugeSC.WIDTH - 7;
+            b.yPosition = guiTop + 31;
+            b.enabled = machine.getTank(tank).getFluidAmount() > 0 && machine.getEnergyStored() >= machine.clearCost(tank);
+        }
+    }
+
+    @Override
+    protected void actionPerformed(net.minecraft.client.gui.GuiButton button) {
+        mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
+    }
+
     private static int slotX(boolean tanks, int i) {
         return ContainerMachineSC.slotX(tanks, i);
     }
@@ -417,6 +459,13 @@ public class GuiMachineSC extends GuiContainer {
     /** @return the lines to show for whatever gauge the cursor is over, or null for none. */
     private List<String> tooltipAt(int mouseX, int mouseY) {
         List<String> lines = new ArrayList<String>();
+
+        for (Object o : buttonList) {
+            if (o instanceof GuiBigSC.ClearButton && ((GuiBigSC.ClearButton) o).over(mouseX + guiLeft, mouseY + guiTop)) {
+                int tank = ((GuiBigSC.ClearButton) o).id - ContainerMachineSC.BTN_CLEAR;
+                return GuiBigSC.clearTip(machine.getTank(tank).getFluidAmount(), machine.clearCost(tank), machine.getEnergyStored());
+            }
+        }
 
         if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));

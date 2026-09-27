@@ -65,6 +65,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     private static final int PULL_ITEMS = 16;
     private static final int PULL_INTERVAL = 4;
     public static final int TANK_CAPACITY = 4000; // TODO(design doc): no machine tank capacity is specified anywhere; defaulted.
+    /** With four Tank Extension upgrades. */
+    public static final int MAX_TANK_CAPACITY = TANK_CAPACITY + UpgradeType.MAX_TANK_UPGRADES * UpgradeType.TANK_PER_UPGRADE;
 
     private static final int HEAT_CAPACITY = 100;
     private static final int HEAT_OVERFLOW = 150;
@@ -192,8 +194,45 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         return outputTankB;
     }
 
+    /** Every tank's size: 4000 mB + 8000 per Tank Extension upgrade (up to 4). */
+    public int tankCapacity() {
+        return TANK_CAPACITY + Math.min(UpgradeType.MAX_TANK_UPGRADES, upgradeCount(UpgradeType.TANK_EXTENSION)) * UpgradeType.TANK_PER_UPGRADE;
+    }
+
+    /**
+     * The tanks follow the upgrades. Taking upgrades out doesn't pour anything away: a tank then
+     * holding more than it can takes nothing in until it has been used down.
+     */
+    private void syncTankCapacity() {
+        int c = tankCapacity();
+        if (tankA.getCapacity() != c) {
+            for (FluidTank t : new FluidTank[]{tankA, tankB, outputTankA, outputTankB}) {
+                t.setCapacity(c);
+            }
+        }
+    }
+
+    /** EU to pour out a tank (1 per 10 mB). */
+    public int clearCost(int index) {
+        return (getTank(index).getFluidAmount() + UpgradeType.CLEAR_MB_PER_EU - 1) / UpgradeType.CLEAR_MB_PER_EU;
+    }
+
+    /** The screen's Clear button: the tank is emptied for EU from the buffer - only if it can pay it all. */
+    public boolean clearTank(int index) {
+        FluidTank t = getTank(index);
+        int cost = clearCost(index);
+        if (t.getFluidAmount() <= 0 || getEnergyStored() < cost) {
+            return false;
+        }
+        removeEnergy(cost);
+        t.setFluid(null);
+        markDirty();
+        return true;
+    }
+
     /** Indexed view of the four tanks (0/1 = fluid inputs, 2/3 = fluid outputs) for the GUI and its sync. */
     public FluidTank getTank(int index) {
+        syncTankCapacity();
         switch (index) {
             case 0: return tankA;
             case 1: return tankB;
@@ -242,7 +281,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             if (tag.hasKey(ITEM_TANK_NAMES[i])) {
                 FluidStack fluid = FluidStack.loadFluidStackFromNBT(tag.getCompoundTag(ITEM_TANK_NAMES[i]));
                 if (fluid != null && fluid.amount > 0) {
-                    fluids[i] = new FluidStack(fluid.getFluid(), Math.min(TANK_CAPACITY, fluid.amount));
+                    fluids[i] = new FluidStack(fluid.getFluid(), Math.min(MAX_TANK_CAPACITY, fluid.amount));
                 }
             }
         }
@@ -280,6 +319,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (worldObj == null || worldObj.isRemote) {
             return;
         }
+        syncTankCapacity();
 
         if (upgradeCount(UpgradeType.EJECTOR) > 0) {
             eject();
@@ -929,6 +969,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 slots[slot] = ItemStack.loadItemStackFromNBT(slotNbt);
             }
         }
+        syncTankCapacity();
     }
 
     @Override

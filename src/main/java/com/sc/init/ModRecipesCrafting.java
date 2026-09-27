@@ -448,6 +448,8 @@ public final class ModRecipesCrafting {
                 'I', ingot(Material.TIN), 'P', Blocks.sticky_piston, 'W', wire, 'T', transistor);
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.HEAT_SINK), "AAA", "ACA", "ATA",
                 'A', ingot(Material.ALUMINIUM), 'C', ingot(Material.COPPER), 'T', transistor);
+        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION), "IGI", "WXW", " T ",
+                'I', ingot(Material.TIN), 'G', Blocks.glass, 'W', wire, 'X', new ItemStack(ModBlocks.tankSC, 1, 0), 'T', transistor);
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.QUALITY), " L ", "SXS", " T ",
                 'L', comp("lens"), 'S', comp("sensor"), 'X', silicon(SiliconMaterial.CONTROLLER), 'T', transistor);
     }

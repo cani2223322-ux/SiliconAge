@@ -91,6 +91,49 @@ public final class GuiBigSC {
         return false;
     }
 
+    /** A tank's small Clear button (7 x 7, a cross) above its gauge's side slot. */
+    public static class ClearButton extends net.minecraft.client.gui.GuiButton {
+        public ClearButton(int id) {
+            super(id, 0, 0, 7, 7, "");
+            visible = false;
+        }
+
+        @Override
+        public void drawButton(net.minecraft.client.Minecraft mc, int mx, int my) {
+            if (!visible) {
+                return;
+            }
+            boolean over = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+            rect(xPosition, yPosition, 7, 7, 0xFF1E0A0A);
+            rect(xPosition + 1, yPosition + 1, 5, 5, !enabled ? 0xFF2A2E36 : over ? 0xFF9A2E2E : 0xFF5A1E1E);
+            int c = enabled ? 0xFFFF9A9A : 0xFF5A606A;
+            for (int i = 0; i < 3; i++) {
+                rect(xPosition + 2 + i, yPosition + 2 + i, 1, 1, c);
+                rect(xPosition + 4 - i, yPosition + 2 + i, 1, 1, c);
+            }
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+        }
+
+        public boolean over(int mx, int my) {
+            return visible && mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+        }
+    }
+
+    /** The Clear button's tooltip: what it pours out and costs, or why it can't. */
+    public static java.util.List<String> clearTip(int amount, int cost, int have) {
+        java.util.List<String> lines = new java.util.ArrayList<String>();
+        lines.add(com.sc.manual.Lang.tr("sc.gui.tank.clear"));
+        if (amount <= 0) {
+            lines.add("\u00a77" + com.sc.manual.Lang.tr("sc.gui.tank.clear.empty"));
+        } else {
+            lines.add(com.sc.manual.Lang.tr("sc.gui.tank.clear.cost", amount, cost, have));
+            if (have < cost) {
+                lines.add("\u00a7c" + com.sc.manual.Lang.tr("sc.gui.tank.clear.nopower"));
+            }
+        }
+        return lines;
+    }
+
     private static void rect(int x, int y, int w, int h, int c) {
         if (w > 0 && h > 0) {
             Gui.drawRect(x, y, x + w, y + h, c);

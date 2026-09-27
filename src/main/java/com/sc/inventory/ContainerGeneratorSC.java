@@ -25,6 +25,8 @@ public class ContainerGeneratorSC extends Container {
     public static final int SLOT_FUEL_X = 16, SLOT_BLANKET_X = 38, SLOT_Y = 30;
     /** enchantItem button: the Creative Generator's tier. */
     public static final int BTN_CREATIVE_TIER = 0;
+    /** enchantItem buttons: BTN_CLEAR + tank (0 fuel, 1 second fuel, 2 water) pours it out for EU. */
+    public static final int BTN_CLEAR = 1;
 
     private final TileEntityGeneratorSC generator;
 
@@ -71,6 +73,10 @@ public class ContainerGeneratorSC extends Container {
     public boolean enchantItem(EntityPlayer player, int id) {
         if (id == BTN_CREATIVE_TIER && generator.getGeneratorType() == GeneratorType.CREATIVE && player.capabilities.isCreativeMode) {
             generator.cycleCreativeTier();
+            return true;
+        }
+        if (id >= BTN_CLEAR && id < BTN_CLEAR + 3 && canInteractWith(player)) {
+            generator.clearTank(id - BTN_CLEAR);
             return true;
         }
         return false;

@@ -127,15 +127,56 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     public FluidTank getFuelTank() {
+        syncTankCapacity();
         return fuelTank;
     }
 
     public FluidTank getFuelTank2() {
+        syncTankCapacity();
         return fuelTank2;
     }
 
     public FluidTank getOutTank() {
+        syncTankCapacity();
         return outTank;
+    }
+
+    /** Every tank's size: 4000 mB + 8000 per Tank Extension upgrade (up to 4). */
+    public int tankCapacity() {
+        return TANK_CAPACITY + Math.min(UpgradeType.MAX_TANK_UPGRADES, upgradeCount(UpgradeType.TANK_EXTENSION)) * UpgradeType.TANK_PER_UPGRADE;
+    }
+
+    /** The tanks follow the upgrades; taking them out pours nothing away (a fuller tank just takes nothing in). */
+    private void syncTankCapacity() {
+        int c = tankCapacity();
+        if (fuelTank.getCapacity() != c) {
+            for (FluidTank t : new FluidTank[]{fuelTank, fuelTank2, outTank}) {
+                t.setCapacity(c);
+            }
+        }
+    }
+
+    /** 0 fuel, 1 second fuel, 2 the Fuel Cell's water. */
+    private FluidTank tankAt(int i) {
+        return i == 0 ? fuelTank : i == 1 ? fuelTank2 : outTank;
+    }
+
+    /** EU to pour out a tank (1 per 10 mB). */
+    public int clearCost(int i) {
+        return (tankAt(i).getFluidAmount() + UpgradeType.CLEAR_MB_PER_EU - 1) / UpgradeType.CLEAR_MB_PER_EU;
+    }
+
+    /** The screen's Clear button: the tank is emptied for EU from the buffer - only if it can pay it all. */
+    public boolean clearTank(int i) {
+        FluidTank t = tankAt(i);
+        int cost = clearCost(i);
+        if (t.getFluidAmount() <= 0 || getEnergyStored() < cost) {
+            return false;
+        }
+        removeEnergy(cost);
+        t.setFluid(null);
+        markDirty();
+        return true;
     }
 
     public int getLastOutput() {
@@ -300,6 +341,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (worldObj == null || worldObj.isRemote) {
             return;
         }
+        syncTankCapacity();
         int before = getEnergyStored();
         switch (generatorType.kind) {
             case PASSIVE: updateSolar(); break;
