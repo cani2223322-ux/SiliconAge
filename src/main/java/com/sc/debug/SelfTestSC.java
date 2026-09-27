@@ -53,6 +53,7 @@ public final class SelfTestSC {
             armorFunctions();
             bladeFunctions();
             chargePad();
+            batteries();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1073,6 +1074,28 @@ public final class SelfTestSC {
                 && pad.chargeItem(ionCutter, 640) == 640
                 && pad.chargeItem(new ItemStack(net.minecraft.init.Items.iron_sword), 640) == 0;
         check(ok, "charge pad MV: Nano armour / blade and LV-MV weapons charge, Quantum / Exo and plain items don't");
+    }
+
+    private static void batteries() {
+        com.sc.tileentity.TileEntityChargePadSC pad = new com.sc.tileentity.TileEntityChargePadSC();
+        pad.setStorageTier(com.sc.energy.Tier.MV);
+        ItemStack lv = new ItemStack(ModItems.battery, 1, 0), mv = new ItemStack(ModItems.battery, 1, 1);
+        ItemStack hv = new ItemStack(ModItems.battery, 1, 2), xv = new ItemStack(ModItems.battery, 1, 5);
+        boolean ok = pad.chargeItem(lv, 1000) == 32 && com.sc.item.ItemBatterySC.chargeOf(lv) == 32
+                && pad.chargeItem(mv, 1000) == 128 && pad.chargeItem(hv, 1000) == 0
+                && pad.dischargeItem(mv, 1000) == 128 && com.sc.item.ItemBatterySC.chargeOf(mv) == 0;
+        check(ok, "batteries: an MV pad charges LV at 32 and MV at 128, not HV; empties them at their rate");
+        com.sc.item.ItemBatterySC.setCharge(xv, 4000000000L);
+        com.sc.item.ItemBatterySC.setCharge(lv, 1L << 40);
+        ok = com.sc.item.ItemBatterySC.chargeOf(xv) == 4000000000L && com.sc.item.ItemBatterySC.discharge(xv, 100000) == 32768
+                && com.sc.item.ItemBatterySC.chargeOf(xv) == 4000000000L - 32768 && com.sc.item.ItemBatterySC.chargeOf(lv) == 40000;
+        check(ok, "batteries: the XV core holds 4 billion (a long), gives 32768 a call; charge capped at capacity");
+        ItemStack nano = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[1]);
+        ItemStack quantum = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.QUANTUM)[1]);
+        ok = com.sc.item.ItemChargeSC.charge(nano, 500, com.sc.energy.Tier.HV) > 0
+                && com.sc.item.ItemChargeSC.charge(quantum, 500, com.sc.energy.Tier.LV) == 0
+                && com.sc.item.ItemChargeSC.isBattery(hv) && !com.sc.item.ItemChargeSC.isBattery(nano);
+        check(ok, "batteries: charge worn suits up to their own tier; a battery counts as a battery");
     }
 
     /** Kept in its own class so IC2's API is only loaded when IC2 is. */

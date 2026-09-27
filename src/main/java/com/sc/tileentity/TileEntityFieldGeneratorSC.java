@@ -1235,7 +1235,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     /** An IC2 battery or energy crystal: an electric item that can give its energy away. */
     private static boolean isBattery(ItemStack s) {
-        return cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) && Ic2Charge.isBattery(s);
+        return com.sc.item.ItemChargeSC.isBattery(s);
     }
 
     /** Sparks in the field's colour from the nearest node to the player being charged. */
@@ -1283,6 +1283,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             took = com.sc.item.ItemWeaponSC.charge(s, ((com.sc.item.ItemWeaponSC) s.getItem()).getType(), max);
         } else if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             took = com.sc.item.ItemWrenchSC.charge(s, max);
+        } else if (com.sc.item.ItemBatterySC.isBattery(s)) {
+            took = com.sc.item.ItemBatterySC.charge(s, max);
         } else if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) && Ic2Charge.is(s)) {
             took = Ic2Charge.charge(s, max);
         } else {

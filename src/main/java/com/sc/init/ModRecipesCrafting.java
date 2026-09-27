@@ -35,6 +35,8 @@ public final class ModRecipesCrafting {
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         net.minecraftforge.oredict.RecipeSorter.register("siliconage:storageupgrade", StorageUpgradeRecipeSC.class,
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:battery", BatteryRecipeSC.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         cablesAndPipes();
         baseMaterials();
         passiveComponents();
@@ -43,6 +45,7 @@ public final class ModRecipesCrafting {
         quarry();
         armorAndChips();
         weaponsAndField();
+        batteries();
         upgrades();
         tubeParts();
         tanks();
@@ -379,6 +382,32 @@ public final class ModRecipesCrafting {
     }
 
     // ---- §7 ----
+
+    /**
+     * Portable batteries: the LV cell from an energy cell and a silicon wafer; each tier after it
+     * round two of the tier below (their charge comes along - BatteryRecipeSC).
+     */
+    private static void batteries() {
+        net.minecraft.item.Item b = ModItems.battery;
+        GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 0), " C ", "IWI", "IEI",
+                'C', cable(CableType.COPPER_BARE), 'I', new ItemStack(Items.iron_ingot),
+                'W', silicon(SiliconMaterial.SI_WAFER), 'E', comp("energyCellLV")));
+        GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 1), " C ", "BEB", "KSK",
+                'C', cable(CableType.COPPER_INSULATED), 'B', new ItemStack(b, 1, 0), 'E', comp("energyCellMV"),
+                'K', comp("copperCoil"), 'S', comp("steelCasing")));
+        GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 2), " C ", "BEB", "GDG",
+                'C', cable(CableType.TUNGSTEN), 'B', new ItemStack(b, 1, 1), 'E', comp("energyCellHV"),
+                'G', new ItemStack(Items.gold_ingot), 'D', new ItemStack(Items.diamond)));
+        GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 3), " C ", "BXB", "QTQ",
+                'C', cable(CableType.SUPERCONDUCTOR), 'B', new ItemStack(b, 1, 2), 'X', silicon(SiliconMaterial.CONTROLLER),
+                'Q', new ItemStack(Items.quartz), 'T', comp("tantalumCapacitor")));
+        GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 4), " C ", "BXB", "NMN",
+                'C', cable(CableType.QUANTUM), 'B', new ItemStack(b, 1, 3), 'X', silicon(SiliconMaterial.CONTROLLER),
+                'N', comp("nb3SnCoil"), 'M', silicon(SiliconMaterial.MEMORY_CHIP)));
+        GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 5), " C ", "BSB", "HXH",
+                'C', cable(CableType.EXO), 'B', new ItemStack(b, 1, 4), 'S', new ItemStack(Items.nether_star),
+                'H', ingot(Material.HAFNIUM), 'X', silicon(SiliconMaterial.CONTROLLER)));
+    }
 
     private static void weaponsAndField() {
         OreRecipes.shapeless(weapon(WeaponType.ION_CUTTER),

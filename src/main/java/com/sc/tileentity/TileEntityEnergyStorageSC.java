@@ -311,6 +311,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         if (s.getItem() instanceof com.sc.item.ItemDrillSC) {
             return com.sc.item.ItemDrillSC.discharge(s, max);
         }
+        if (com.sc.item.ItemBatterySC.isBattery(s)) {
+            return com.sc.item.ItemBatterySC.discharge(s, max);
+        }
         if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
             return Ic2Charge.discharge(s, max, getTier().toIc2Tier());
         }
@@ -323,7 +326,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
             return false;
         }
         if (stack.getItem() instanceof com.sc.item.ItemArmorSC || stack.getItem() instanceof com.sc.item.ItemBladeSC
-                || stack.getItem() instanceof com.sc.item.ItemDrillSC) {
+                || stack.getItem() instanceof com.sc.item.ItemDrillSC || com.sc.item.ItemBatterySC.isBattery(stack)) {
             return true;
         }
         return cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) && Ic2Charge.providesEnergy(stack);
@@ -362,6 +365,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             return com.sc.item.ItemWrenchSC.charge(s, max);
         }
+        if (com.sc.item.ItemBatterySC.isBattery(s)) {
+            return com.sc.item.ItemBatterySC.charge(s, max);
+        }
         if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
             return Ic2Charge.charge(s, max, getTier().toIc2Tier());
         }
@@ -385,6 +391,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
         }
         if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             return com.sc.item.ItemWrenchSC.tierOf(s).chargeTier.ordinal() <= block.ordinal();
+        }
+        if (com.sc.item.ItemBatterySC.isBattery(s)) {
+            return com.sc.item.ItemBatterySC.tierOf(s).ordinal() <= block.ordinal();
         }
         return true;
     }
@@ -517,7 +526,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
     public static boolean isChargeable(ItemStack stack) {
         return stack != null && (stack.getItem() instanceof ItemWeaponSC || stack.getItem() instanceof com.sc.item.ItemArmorSC
                 || stack.getItem() instanceof com.sc.item.ItemBladeSC || stack.getItem() instanceof com.sc.item.ItemDrillSC
-                || com.sc.item.ItemWrenchSC.isElectric(stack));
+                || com.sc.item.ItemWrenchSC.isElectric(stack) || com.sc.item.ItemBatterySC.isBattery(stack));
     }
 
     // ---- NBT ----
