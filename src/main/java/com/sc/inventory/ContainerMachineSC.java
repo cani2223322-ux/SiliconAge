@@ -64,6 +64,7 @@ public class ContainerMachineSC extends Container {
                 && type != com.sc.machine.MachineType.STEPPER && type != com.sc.machine.MachineType.STEPPER_EV
                 && type != com.sc.machine.MachineType.ION_IMPLANTER && type != com.sc.machine.MachineType.SPUTTERER
                 && type != com.sc.machine.MachineType.DICING_SAW;
+        // (the Rolling Machine has no tanks: its slots are roomy already)
     }
 
     /** Where slot i of a row sits: 18 apart beside tanks, 22 apart otherwise. */

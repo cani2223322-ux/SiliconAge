@@ -731,6 +731,49 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The rolling mill from the side: the ingot coming in from the left, two rolls squeezing it
+     * into a strip that grows with the progress, the press over it stamping with the mold.
+     */
+    public static void rollingMill(int x, int y, int w, int h, float t, boolean running, float progress, int metal) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        if (metal == 0) {
+            metal = 0xFFD8844A;
+        }
+        int ly = y + h / 2 + 2;
+        rect(x + 3, ly + 3, w - 6, 2, 0xFF3A4048);                             // the table
+        int rx = x + 26;
+        for (int s = -1; s <= 1; s += 2) {                                     // the rolls
+            int cy = ly + (s < 0 ? -7 : 9);
+            disc(rx, cy, 6, 0xFF6A707A);
+            disc(rx, cy, 5, 0xFF9AA0AA);
+            disc(rx, cy, 1, 0xFF3A4048);
+            double a = running ? s * t * 0.6 : 0;
+            for (int k = 0; k < 3; k++) {
+                double aa = a + k * 2.09;
+                rect(rx + (int) (3 * Math.cos(aa)), cy + (int) (3 * Math.sin(aa)), 1, 1, 0xFF4A505A);
+            }
+        }
+        rect(x + 4, ly - 3, rx - 10 - x, 6, metal);                            // the ingot
+        rect(x + 4, ly - 3, rx - 10 - x, 1, mix(metal, 0xFFFFFFFF, 0.4F));
+        int sx = rx + 6, len = running || progress > 0F ? (int) ((x + w - 8 - sx) * progress) : 0;
+        if (len > 0) {
+            rect(sx, ly + 1, len, 2, metal);                                   // the strip
+            rect(sx, ly + 1, len, 1, mix(metal, 0xFFFFFFFF, 0.4F));
+        }
+        int px = x + w - 20;
+        rect(px - 1, y + 3, 14, 3, 0xFF6A707A);                                // the press
+        rect(px + 5, y + 6, 2, 5, 0xFF8A909A);
+        int down = running ? (int) (4 * Math.max(0, Math.sin(t * 0.25F))) : 0;
+        rect(px, y + 11 + down, 12, 4, 0xFF8A5AA0);                            // the mold
+        if (running && len > 0) {
+            for (int i = 0; i < 3; i++) {
+                rect(sx + (int) ((t * 1.3F + i * 6) % len), ly + 4, 1, 1, 0xFFFFD8A0);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

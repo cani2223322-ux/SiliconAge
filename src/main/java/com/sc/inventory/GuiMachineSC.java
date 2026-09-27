@@ -75,6 +75,12 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean air;
     /** The Refinery: its products as a row (the ones made now lit), crude -> the tower -> the product, the catalyst frame. */
     private final boolean refi;
+    /** The Rolling Machine: its seven molds as badges (the one in the slot lit), the mill, the product, the mold's wear. */
+    private final boolean roll;
+    private static final com.sc.util.SCToolType[] ROLL_MOLDS = {com.sc.util.SCToolType.MOLD_PLATE, com.sc.util.SCToolType.MOLD_COIL,
+            com.sc.util.SCToolType.MOLD_BLADE, com.sc.util.SCToolType.MOLD_TARGET, com.sc.util.SCToolType.MOLD_LEAD_FRAME_3,
+            com.sc.util.SCToolType.MOLD_LEAD_FRAME_16, com.sc.util.SCToolType.MOLD_LEAD_FRAME_40};
+    private static final int ROLL_X = 88, ROLL_BADGE_W = 28, ROLL_Y = 42, ROLL_H = 40, ROLL_WEAR_X = 116, ROLL_WEAR_Y = 94, ROLL_WEAR_W = 56;
     private static final int REFI_TOWER_X = 112, REFI_TOWER_W = 34, REFI_CAT_X = 148, REFI_CAT_Y = 66, REFI_BADGE_W = 24;
     private static final int[] REFI_COLOURS = {0xFFD8A040, 0xFF5A5A5A, 0xFFE07A30, 0xFFC8D0DC, 0xFFF0F0F0};
     private static final int AIR_BADGE_W = 64;
@@ -138,6 +144,7 @@ public class GuiMachineSC extends GuiContainer {
         elec = machine.getMachineType() == com.sc.machine.MachineType.CHLOR_ALKALI_ELECTROLYZER;
         air = machine.getMachineType() == com.sc.machine.MachineType.AIR_SEPARATOR;
         refi = machine.getMachineType() == com.sc.machine.MachineType.REFINERY;
+        roll = machine.getMachineType() == com.sc.machine.MachineType.ROLLING_MACHINE;
         saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW || dice;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
@@ -485,6 +492,25 @@ public class GuiMachineSC extends GuiContainer {
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
+        } else if (roll) {                                              // the mold badges, the mill, the wear
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            int k = rollMold();
+            for (int i = 0; i < ROLL_MOLDS.length; i++) {
+                int bx = x + rollBadgeX(i), by = y + rollBadgeY(i);
+                drawRect(bx, by, bx + ROLL_BADGE_W - 1, by + 8, i == k ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + ROLL_BADGE_W - 2, by + 7, i == k ? 0xFF0E3A50 : 0xFF0A1218);
+            }
+            com.sc.machine.MachineRecipe r = k < 0 ? null : shownRecipe();
+            GuiSceneSC.rollingMill(x + ROLL_X, y + ROLL_Y, GuiBigSC.SCREEN_RIGHT - ROLL_X, ROLL_H, t, machine.getStatus() == MachineStatus.PROCESSING,
+                    progress, r == null ? 0 : itemColour(rollMetal(r)));
+            net.minecraft.item.ItemStack mold = wire();
+            float left = mold == null ? 0F : 1F - (float) mold.getItemDamage() / Math.max(1, mold.getMaxDamage());
+            drawRect(x + ROLL_WEAR_X, y + ROLL_WEAR_Y, x + ROLL_WEAR_X + ROLL_WEAR_W, y + ROLL_WEAR_Y + 4, 0xFF04080C);
+            for (int i = 0; i < 16; i++) {
+                int a = x + ROLL_WEAR_X + 1 + i * (ROLL_WEAR_W - 2) / 16, b = x + ROLL_WEAR_X + 1 + (i + 1) * (ROLL_WEAR_W - 2) / 16 - 1;
+                drawRect(a, y + ROLL_WEAR_Y + 1, b, y + ROLL_WEAR_Y + 3, (i + 0.5F) / 16 < left
+                        ? (left > 0.25F ? 0xFF5AE66E : 0xFFE63C3C) : 0xFF2A3038);
+            }
         } else if (cent) {                                              // the rotor, the chance bars
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             com.sc.machine.MachineRecipe r = centRecipe();
@@ -638,6 +664,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (cvd || etch) {
             drawCvdText();
+            drawUpgradeLine();
+            return;
+        }
+        if (roll) {
+            drawRollText();
             drawUpgradeLine();
             return;
         }
@@ -1033,6 +1064,66 @@ public class GuiMachineSC extends GuiContainer {
         for (int k = 0; k < ownTanks.length; k++) {
             TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
                     GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
+    }
+
+    /** Badge i's place: four in the top row, the three lead frames under them. */
+    private static int rollBadgeX(int i) {
+        return ROLL_X + (i < 4 ? i : i - 4) * (ROLL_BADGE_W + 2);
+    }
+
+    private static int rollBadgeY(int i) {
+        return CAPTION_Y - 2 + (i < 4 ? 0 : 9);
+    }
+
+    /** Which mold is in the Rolling Machine (index into ROLL_MOLDS), -1 none. */
+    private int rollMold() {
+        net.minecraft.item.ItemStack s = wire();
+        if (s == null || !(s.getItem() instanceof com.sc.item.ItemToolSC)) {
+            return -1;
+        }
+        com.sc.util.SCToolType type = ((com.sc.item.ItemToolSC) s.getItem()).getType();
+        for (int i = 0; i < ROLL_MOLDS.length; i++) {
+            if (ROLL_MOLDS[i] == type) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The recipe's metal: its first input that isn't a tool. */
+    private static net.minecraft.item.ItemStack rollMetal(com.sc.machine.MachineRecipe r) {
+        for (net.minecraft.item.ItemStack s : r.inputs) {
+            if (s != null && !(s.getItem() instanceof com.sc.item.ItemToolSC)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    /** The Rolling Machine: the badges' names, "N x metal -> product", the mold's presses left and the time. */
+    private void drawRollText() {
+        int k = rollMold();
+        for (int i = 0; i < ROLL_MOLDS.length; i++) {
+            String s = Lang.tr("sc.gui.roll.mold." + i);
+            float sc = Math.min(0.5F, (ROLL_BADGE_W - 4) / (float) Math.max(1, fontRendererObj.getStringWidth(s)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(rollBadgeX(i) + (ROLL_BADGE_W - 1 - fontRendererObj.getStringWidth(s) * sc) / 2F, rollBadgeY(i) + 2, 0F);
+            GL11.glScalef(sc, sc, 1F);
+            fontRendererObj.drawString(s, 0, 0, i == k ? 0x96F0FF : 0x465A6E);
+            GL11.glPopMatrix();
+        }
+        com.sc.machine.MachineRecipe r = k < 0 ? null : shownRecipe();
+        net.minecraft.item.ItemStack metal = r == null ? null : rollMetal(r);
+        String product = r != null && r.outputs.length > 0 && r.outputs[0] != null ? r.outputs[0].getDisplayName() : "-";
+        smallFit(k < 0 ? Lang.tr("sc.gui.roll.nomold")
+                : metal == null ? product : Lang.tr("sc.gui.roll.row", metal.stackSize, metal.getDisplayName(), product),
+                ROLL_X + 2, ROLL_Y + ROLL_H + 3, GuiBigSC.SCREEN_RIGHT - ROLL_X - 4, k < 0 ? 0xE65A5A : 0xE6F0FA);
+        small(Lang.tr("sc.gui.roll.mold"), ROLL_X + 2, ROLL_WEAR_Y, 0x6AA8C8);
+        net.minecraft.item.ItemStack mold = wire();
+        if (mold != null) {
+            small(Lang.tr("sc.gui.roll.left", mold.getMaxDamage() - mold.getItemDamage(), mold.getMaxDamage(),
+                    r == null ? 0 : Math.max(1, machine.effectiveTicks(r) / 20)), ROLL_X + 2, ROLL_WEAR_Y + 7, 0x6AA8C8);
         }
     }
 
@@ -1522,6 +1613,13 @@ public class GuiMachineSC extends GuiContainer {
                 lines.add(Lang.tr("sc.gui.elec.run", in, out, Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.elec.hint"));
+            return lines;
+        }
+        if (roll && GuiGaugeSC.isOver(ROLL_X, CAPTION_Y - 2, GuiBigSC.SCREEN_RIGHT - ROLL_X, ROLL_Y + ROLL_H - CAPTION_Y + 2, mouseX, mouseY)) {
+            int k = rollMold();
+            lines.add(Lang.tr("sc.gui.roll.title"));
+            lines.add(k < 0 ? Lang.tr("sc.gui.roll.nomold") : Lang.tr("sc.gui.roll.now", Lang.tr("sc.gui.roll.mold." + k)));
+            lines.add(Lang.tr("sc.gui.roll.hint"));
             return lines;
         }
         if (cent && GuiGaugeSC.isOver(CENT_X, CENT_Y, GuiBigSC.SCREEN_RIGHT - CENT_X, CENT_S, mouseX, mouseY)) {
