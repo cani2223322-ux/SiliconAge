@@ -56,6 +56,10 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean withTanks;
     /** The Ore Washer's own screen: its washing tub shows the water tank, the full tank gauge beside it. */
     private final boolean washer;
+    /** The Blast Furnace's own screen: the furnace and a thermometer, the zoned heat bar under them, its tank. */
+    private final boolean blast;
+    private static final int FURNACE_X = 90, FURNACE_Y = 36, FURNACE_W = 64, FURNACE_H = 44, THERMO_X = 158,
+            HEATBAR_X = 90, HEATBAR_Y = 91, HEATBAR_W = 80, HEATBAR_H = 4;
     private static final int TUB_X = 90, TUB_Y = 36, TUB_W = 82, TUB_H = 50, WATER_X = 175, WATER_Y = 40;
     /** Tanks shown this frame (used by the type or holding fluid), left to right. */
     private final int[] shownTanks = new int[ContainerMachineSC.TANK_COUNT];
@@ -69,6 +73,7 @@ public class GuiMachineSC extends GuiContainer {
         }
         withTanks = ContainerMachineSC.tightSlots(machine.getMachineType());
         washer = machine.getMachineType() == com.sc.machine.MachineType.ORE_WASHER;
+        blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -94,7 +99,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiBigSC.ClearButton b = (GuiBigSC.ClearButton) o;
             int tank = b.id - ContainerMachineSC.BTN_CLEAR;
             int gx = -1;
-            if (washer) {
+            if (washer || blast) {
                 gx = tank == 0 ? WATER_X : -1;
             } else {
                 for (int k = 0; k < shownCount; k++) {
@@ -164,8 +169,8 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
-        if (washer) {
-            return;                                                     // its tank has a screen of its own
+        if (washer || blast) {
+            return;                                                     // its tank has a place of its own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
             if (tankUsed[i] || machine.getTank(i).getFluidAmount() > 0) {
@@ -193,7 +198,7 @@ public class GuiMachineSC extends GuiContainer {
         float progress = ticks > 0 ? (float) machine.getProgressTicks() / ticks : 0F;
         GuiHoloSC.bar(x + PROGRESS_X, y + PROGRESS_Y, barW(), PROGRESS_H, progress, 12,
                 machine.getStatus() == MachineStatus.PROCESSING ? 0xFFFF8C1E : 0xFF6E7C8C);
-        if (heat()) {
+        if (heat() && !blast) {
             GuiHoloSC.bar(x + PROGRESS_X, y + HEAT_Y, barW(), HEAT_H, (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity(),
                     12, 0xFFFF5A3C);
         }
@@ -201,7 +206,14 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (washer) {                                                   // the washing tub: its water is the tank
+        if (blast) {                                                    // the furnace, its thermometer, the zoned heat bar
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            float h = (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity();
+            GuiSceneSC.furnace(x + FURNACE_X, y + FURNACE_Y, FURNACE_W, FURNACE_H, t, machine.getStatus() == MachineStatus.PROCESSING, h);
+            GuiSceneSC.thermometer(x + THERMO_X, y + FURNACE_Y, FURNACE_H, h, (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
+            GuiSceneSC.heatBar(x + HEATBAR_X, y + HEATBAR_Y, HEATBAR_W, HEATBAR_H, h,
+                    (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
+        } else if (washer) {                                            // the washing tub: its water is the tank
             FluidTank water = machine.getTank(0);
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
@@ -229,7 +241,7 @@ public class GuiMachineSC extends GuiContainer {
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
-        if (washer) {
+        if (washer || blast) {
             FluidTank water = machine.getTank(0);
             GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
         }
@@ -261,6 +273,11 @@ public class GuiMachineSC extends GuiContainer {
         int rx = rightX();
         if (washer) {
             drawWasherText(rx, ticks);
+            drawUpgradeLine();
+            return;
+        }
+        if (blast) {
+            drawBlastText(rx);
             drawUpgradeLine();
             return;
         }
@@ -322,8 +339,10 @@ public class GuiMachineSC extends GuiContainer {
         int tr = GuiBigSC.W - 8 - GuiBigSC.UPG_TEXT_X;
         fit(Lang.tr("sc.gui.big.upgrades.effect", String.format(java.util.Locale.ROOT, "%.2f", speed),
                 String.format(java.util.Locale.ROOT, "%.2f", energy)), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
-        fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityMachineSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y + 9, tr,
-                0x808894);
+        String second = blast ? Lang.tr("sc.gui.blast.sinks", machine.upgradeCount(UpgradeType.HEAT_SINK),
+                String.format(java.util.Locale.ROOT, "%.2f", 1.0 / (machine.upgradeCount(UpgradeType.HEAT_SINK) + 1)))
+                : Lang.tr("sc.gui.big.upgrades.count", used, TileEntityMachineSC.UPGRADE_SLOTS);
+        fit(second, GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y + 9, tr, 0x808894);
     }
 
     /** The Ore Washer: caption, the water level on the tub, its tank's label, and done / water a wash / washes left. */
@@ -345,6 +364,38 @@ public class GuiMachineSC extends GuiContainer {
             fit(rows[i][0], TUB_X, ry, 29, GuiHoloSC.LABEL);
             fit(rows[i][1], TUB_X + 31, ry, WATER_X - TUB_X - 35, GuiHoloSC.VALUE);
         }
+    }
+
+    /** The Blast Furnace: caption, its tank's label, the heat, the 70 / 100 marks, what happens next. */
+    private void drawBlastText(int rx) {
+        fit(Lang.tr("sc.gui.holo.smelting"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
+        FluidTank tank = machine.getTank(0);
+        String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
+        TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        int heat = machine.getHeat(), cap = TileEntityMachineSC.getHeatCapacity(), resume = TileEntityMachineSC.HEAT_RESUME;
+        fit(Lang.tr("sc.gui.blast.heat", heat, cap), HEATBAR_X, HEATBAR_Y - 9, HEATBAR_W, 0xFFAA5A);
+        small(String.valueOf(resume), HEATBAR_X + HEATBAR_W * resume / cap - 3, HEATBAR_Y + 6, 0xF0C450);
+        small(String.valueOf(cap), HEATBAR_X + HEATBAR_W - 9, HEATBAR_Y + 6, 0xE65A5A);
+        int sinks = machine.upgradeCount(UpgradeType.HEAT_SINK);
+        String line;
+        if (machine.getStatus() == MachineStatus.OVERHEATED) {
+            line = Lang.tr("sc.gui.blast.paused", resume, Math.max(1, (heat - resume) / 2 / 20));
+        } else if (machine.getStatus() == MachineStatus.PROCESSING) {
+            line = Lang.tr("sc.gui.blast.topause", Math.max(0, (cap - heat) * (sinks + 1) / 20));
+        } else {
+            line = heat > 0 ? Lang.tr("sc.gui.blast.cooling", heat / 2 / 20 + 1) : Lang.tr("sc.gui.blast.cold");
+        }
+        fit(line, HEATBAR_X, HEATBAR_Y + 13, WATER_X - HEATBAR_X - 4, GuiHoloSC.VALUE);
+    }
+
+    /** The fluid this furnace's recipes take (for the label while the tank is empty). */
+    private String recipeFluidName() {
+        for (com.sc.machine.MachineRecipe r : RecipeRegistry.recipesFor(machine.getMachineType())) {
+            if (r.fluidInputA != null) {
+                return r.fluidInputA.getLocalizedName();
+            }
+        }
+        return "-";
     }
 
     /** Water one wash takes: the recipe the inputs make now, or the washer's first recipe. */
@@ -475,8 +526,10 @@ public class GuiMachineSC extends GuiContainer {
             return lines;
         }
 
-        if (washer && (GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY)
-                || GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY))) {
+        boolean overTub = washer && GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY);
+        boolean overOwnTank = (washer || blast)
+                && GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY);
+        if (overTub || overOwnTank) {
             FluidTank tank = machine.getTank(0);
             lines.add(Lang.tr("sc.gui.tank.input", 1));
             lines.add(GuiGaugeSC.fluidLabel(tank.getFluid(), tank.getCapacity()));
@@ -494,7 +547,9 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
-        if (heat() && GuiGaugeSC.isOver(PROGRESS_X - 1, HEAT_Y - 1, barW() + 2, HEAT_H + 2, mouseX, mouseY)) {
+        if (heat() && (blast ? GuiGaugeSC.isOver(HEATBAR_X - 1, HEATBAR_Y - 10, WATER_X - HEATBAR_X - 4, 30, mouseX, mouseY)
+                || GuiGaugeSC.isOver(THERMO_X, FURNACE_Y, 13, FURNACE_H, mouseX, mouseY)
+                : GuiGaugeSC.isOver(PROGRESS_X - 1, HEAT_Y - 1, barW() + 2, HEAT_H + 2, mouseX, mouseY))) {
             lines.add(Lang.tr("sc.gui.heat"));
             lines.add(machine.getHeat() + " / " + TileEntityMachineSC.getHeatCapacity());
             lines.add(Lang.tr("sc.gui.heat.warning"));

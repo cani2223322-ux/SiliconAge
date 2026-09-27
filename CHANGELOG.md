@@ -13,6 +13,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - **Промывщик руды — своё меню:** анимированная ванна, уровень воды в которой — это бак машины (форсунки, куски руды на воде, пузырьки, отметки уровня, процент), рядом полноразмерный бак «Вода»; под ванной «Готово», «За раз: 1000 мБ» и «Хватит на N промывок». Слоты — с обычным шагом.
 - Новый **модуль расширенного бака** для машин и генераторов: +8000 мБ каждому баку за модуль, до 4 (4000 → 36 000 мБ). Если модуль вынуть, жидкость не пропадает — бак просто ничего не принимает, пока не опустеет до нового объёма. Крафт: жестяные слитки, стекло, провода, бак мода и транзистор.
 - **Кнопка «×» (очистить) над баками** в меню машин и генераторов: выливает бак за энергию из буфера — 1 EU за 10 мБ (как в карьере); в подсказке — сколько вылить, цена и сколько энергии есть.
+- **Доменная печь — своё меню:** анимированный горн (кирпич, пламя, тигель с расплавом, свечение по нагреву), рядом термометр с зонами, под ними «НАГРЕВ N / 100» и полоса нагрева по зонам с отметками 70 (снова в работу) и 100 (пауза), строка «Пауза через ~N с» / «Остывает до 70: ~N с»; бак подписан жидкостью (TiCl4); в ряду модулей — число радиаторов и во сколько раз медленнее нагрев. Слоты — с обычным шагом.
 
 **Исправлено**
 - Меню солнечной панели всегда писало «День», даже ночью (выработка при этом уже была ночной, вдвое меньше), и не всегда видело дождь. Теперь день/ночь и дождь приходят с сервера.
@@ -25,6 +26,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - **The Ore Washer gets its own screen:** an animated tub whose water level is the machine's tank (nozzles, ore bobbing, bubbles, level marks, the percentage) beside a full-size Water tank gauge; under the tub Done, "A wash: 1000 mB" and how many washes the water is enough for. Its slots keep the roomy spacing.
 - A new **Tank Extension upgrade** for machines and generators: +8000 mB to every tank each, up to 4 (4000 → 36,000 mB). Taken out, no fluid is lost - the tank just takes nothing in until it is down to its new size. Recipe: tin ingots, glass, wires, the mod's tank and a transistor.
 - **A Clear button (a small cross) above the tanks** of machines and generators: pours the tank out for EU from the buffer - 1 EU per 10 mB (as the quarry's); its tooltip shows the amount, the price and the energy there is.
+- **The Blast Furnace gets its own screen:** an animated furnace (bricks, flames, a crucible of melt, glowing with the heat), a zoned thermometer beside it, under them "HEAT N / 100" and a zoned heat bar with marks at 70 (back to work) and 100 (pause), a line "Pause in ~N s" / "Cooling to 70: ~N s"; the tank is labelled with its fluid (TiCl4); the upgrade row shows the heat sinks and how much slower it heats. Its slots keep the roomy spacing.
 
 **Fixed**
 - The solar panel screen always said "Day", even at night (while its output was already the night's half), and didn't always see rain. Day / night and rain now come from the server.

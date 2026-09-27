@@ -114,6 +114,77 @@ public final class GuiSceneSC {
         }
     }
 
+    /** The Blast Furnace: brick walls, a glowing mouth (brighter the hotter), flames while it works, a crucible, shimmer. */
+    public static void furnace(int x, int y, int w, int h, float t, boolean running, float heat) {
+        frame(x, y, w, h);
+        int bx0 = x + 5, bx1 = x + w - 5, by0 = y + 3, by1 = y + h - 3;
+        for (int yy = by0, row = 0; yy + 3 <= by1; yy += 4, row++) {         // bricks
+            int off = row % 2 == 0 ? 0 : 4;
+            for (int xx = bx0 - off; xx < bx1; xx += 8) {
+                int a = Math.max(bx0, xx), e = Math.min(bx1, xx + 7);
+                rect(a, yy, e - a, 3, 0xFF6A3A2A);
+                rect(a, yy, e - a, 1, 0xFF8A4A34);
+            }
+        }
+        int mx0 = bx0 + 9, mx1 = bx1 - 9, my0 = by0 + 9, my1 = by1 - 2;       // the mouth
+        rect(mx0 - 1, my0 - 1, mx1 - mx0 + 2, my1 - my0 + 1, 0xFF2A1810);
+        int[] glow = {0xFF3A1206, 0xFF7A2A08, 0xFFC04A10, 0xFFFF8C1E, 0xFFFFD050};
+        float bright = 0.35F + 0.65F * Math.max(0F, Math.min(1F, heat));
+        for (int yy = my0; yy < my1; yy++) {
+            float k = (float) (yy - my0) / Math.max(1, my1 - my0);
+            rect(mx0, yy, mx1 - mx0, 1, glow[Math.min(4, (int) (k * 5 * bright))]);
+        }
+        if (running) {
+            for (int i = 0; i < 6; i++) {                                     // flames
+                int fx = mx0 + 2 + i * (mx1 - mx0 - 4) / 5;
+                int fh = 3 + (int) Math.round(2.5 + 2.5 * Math.sin(t * 0.7F + i * 1.3F));
+                rect(fx, my1 - fh, 2, fh, 0xFFFFB040);
+                rect(fx, my1 - fh, 2, 1, 0xFFFFF0A0);
+            }
+            for (int i = 0; i < 4; i++) {                                     // shimmer over the mouth
+                rect(mx0 + 3 + i * 6, by0 + 1 + (int) ((t * 0.5F + i) % 4), 1, 1, 0xFFFFD890);
+            }
+        }
+        int cx = (mx0 + mx1) / 2;                                              // the crucible
+        rect(cx - 7, my0 + 3, 14, 6, 0xFF5A606A);
+        rect(cx - 6, my0 + 3, 12, 2, heat > 0.05F ? 0xFFFFC060 : 0xFF6A5A4A);
+        rect(cx - 6, my0 + 5, 12, 1, heat > 0.05F ? 0xFFFF8C1E : 0xFF4A3A2A);
+    }
+
+    /** A thermometer beside the furnace: bulb, fill in the zone colour, marks at 0 / 50 / resume / 100. */
+    public static void thermometer(int x, int y, int h, float heat, float resume) {
+        heat = Math.max(0F, Math.min(1F, heat));
+        rect(x + 2, y, 7, h - 8, 0xFF8A909A);
+        rect(x + 3, y + 1, 5, h - 9, 0xFF101418);
+        rect(x, y + h - 10, 11, 10, 0xFF8A909A);
+        rect(x + 1, y + h - 9, 9, 8, heat > 0F ? 0xFFE63C3C : 0xFF3A2020);
+        rect(x + 2, y + h - 8, 2, 2, 0xFFFF9090);
+        int col = heat < resume ? 0xFF5AE66E : heat < 0.9F ? 0xFFFF8C1E : 0xFFE63C3C;
+        int top = y + 1 + Math.round((h - 10) * (1 - heat));
+        rect(x + 4, top, 3, y + h - 9 - top, col);
+        float[] marks = {0F, 0.5F, resume, 1F};
+        int[] cols = {0xFF3C4048, 0xFF3C4048, 0xFFF0C450, 0xFFE63C3C};
+        for (int i = 0; i < marks.length; i++) {
+            rect(x + 9, y + 1 + Math.round((h - 10) * (1 - marks[i])), 3, 1, cols[i]);
+        }
+    }
+
+    /** The heat as 20 segments in zone colours (green to resume, orange, red), marks at resume and 100. */
+    public static void heatBar(int x, int y, int w, int h, float heat, float resume) {
+        rect(x - 1, y - 1, w + 2, h + 2, 0xFF04080C);
+        int n = 20;
+        for (int i = 0; i < n; i++) {
+            int a = x + i * w / n, b = x + (i + 1) * w / n - 1;
+            float v = (i + 0.5F) / n;
+            int col = v < resume ? 0xFF5AE66E : v < 0.9F ? 0xFFFF8C1E : 0xFFE63C3C;
+            boolean on = v <= heat;
+            rect(a, y, b - a, h, on ? col : 0xFF16222E);
+            rect(a, y, b - a, 1, on ? (col | 0xFF505050) : 0xFF20303E);
+        }
+        rect(x + Math.round(w * resume), y - 3, 1, h + 5, 0xFFF0C450);
+        rect(x + w - 1, y - 3, 1, h + 5, 0xFFE63C3C);
+    }
+
     private static void rect(int x, int y, int w, int h, int c) {
         if (w > 0 && h > 0) {
             Gui.drawRect(x, y, x + w, y + h, c);

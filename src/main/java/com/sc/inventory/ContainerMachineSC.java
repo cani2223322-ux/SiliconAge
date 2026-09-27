@@ -54,10 +54,10 @@ public class ContainerMachineSC extends Container {
 
     /**
      * The tighter slot layout: machines whose tanks stand as full gauges beside the slots. The Ore
-     * Washer has its own screen (its tub is its water tank) and keeps the roomy one.
+     * Washer and the Blast Furnace have screens of their own and keep the roomy one.
      */
     public static boolean tightSlots(com.sc.machine.MachineType type) {
-        return usesTanks(type) && type != com.sc.machine.MachineType.ORE_WASHER;
+        return usesTanks(type) && type != com.sc.machine.MachineType.ORE_WASHER && type != com.sc.machine.MachineType.BLAST_FURNACE;
     }
 
     /** Where slot i of a row sits: 18 apart beside tanks, 22 apart otherwise. */

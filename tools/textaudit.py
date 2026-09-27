@@ -223,6 +223,13 @@ def audit(lang):
     check(lang, "big gen now", t("sc.gui.gen.now", 32768), 88)
     check(lang, "big storage", t("sc.storage.gui.stored", "2000000000"), 206 - 42)
     check(lang, "big storage", t("sc.storage.gui.capacity", "2000000000", 100), 206 - 42)
+    # ---- the Blast Furnace's own screen
+    check(lang, "blast caption", t("sc.gui.holo.smelting"), 175 - 88 - 4)
+    check(lang, "blast heat", t("sc.gui.blast.heat", 100, 100), 80)
+    check(lang, "blast line", t("sc.gui.blast.topause", 99), 175 - 90 - 4)
+    check(lang, "blast line", t("sc.gui.blast.paused", 70, 9), 175 - 90 - 4)
+    check(lang, "blast line", t("sc.gui.blast.cooling", 9), 175 - 90 - 4)
+    check(lang, "blast sinks", t("sc.gui.blast.sinks", 16, "0.06"), 248 - 8 - 124)
     # ---- the Ore Washer's own screen
     check(lang, "washer caption", t("sc.gui.holo.washing"), 175 - 88 - 4)
     for k in ("per", "left"):
