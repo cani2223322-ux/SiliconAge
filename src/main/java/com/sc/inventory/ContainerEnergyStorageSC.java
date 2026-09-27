@@ -13,15 +13,17 @@ public class ContainerEnergyStorageSC extends Container {
 
     /** On the large screen's holo panel, left of the readings (GuiEnergyStorageSC / GuiBigSC). */
     public static final int SLOT_X = 16, SLOT_Y = 30;
-    /** The discharge slot, under the charge slots. */
-    public static final int DIS_X = 16, DIS_Y = 74;
-    /** The charge slots in a 2 x 2 block: slot k at (chargeX(k), chargeY(k)). */
+    /** The discharge slot, at the foot of the charge column, beside it. */
+    public static final int DIS_X = 34, DIS_Y = 94;
+    /** The charge slots one under another down the left edge, 20 apart (a charge bar under each). */
+    public static final int CHARGE_X = 14, CHARGE_Y = 34, CHARGE_STEP = 20;
+
     public static int chargeX(int k) {
-        return SLOT_X + (k % 2) * 18;
+        return CHARGE_X;
     }
 
     public static int chargeY(int k) {
-        return SLOT_Y + (k / 2) * 18;
+        return CHARGE_Y + k * CHARGE_STEP;
     }
 
     /** The storage's own slots in this container: its charge slots, the discharge slot, the upgrades. */

@@ -1156,6 +1156,46 @@ public final class GuiSceneSC {
     }
 
     /**
+     * An energy storage's battery standing up: a metal case edged in its tier's colour (`tint`), the
+     * charge (`f` 0..1) as glowing energy with a wave on top, level ticks at the quarters, sparks going
+     * up while it charges (down while it empties).
+     */
+    public static void storageCell(int x, int y, int w, int h, float t, float f, int tint, int flowSign) {
+        rect(x + w / 2 - 4, y, 8, 3, tint);                                     // the terminal cap
+        rect(x, y + 3, w, h - 3, 0xFF8A909A);
+        rect(x, y + 3, w, 2, tint);
+        rect(x, y + h - 2, w, 2, tint);
+        rect(x + 2, y + 5, w - 4, h - 7, 0xFF0A1218);
+        int iy0 = y + 5, ih = h - 7;
+        f = Math.max(0F, Math.min(1F, f));
+        int top = iy0 + (int) (ih * (1 - f));
+        for (int yy = top; yy < iy0 + ih; yy++) {
+            rect(x + 2, yy, w - 4, 1, mix(0xFF2A7AA8, 0xFF6EE6FF, (yy - top) / (float) Math.max(1, ih) * 0.2F + 0.6F));
+        }
+        if (f > 0) {
+            for (int xx = x + 2; xx < x + w - 2; xx++) {
+                int wy = top + (int) (1.2 * Math.sin(t * 0.3F + xx * 0.5F));
+                rect(xx, Math.max(iy0, wy), 1, 1, 0xFFE0FFFF);
+            }
+        }
+        for (int i = 1; i < 10; i++) {
+            rect(x + 2, iy0 + i * ih / 10, w - 4, 1, 0x40000000);
+        }
+        for (int i = 1; i < 4; i++) {                                           // the quarter ticks
+            rect(x + w, y + 5 + i * ih / 4, 2, 1, 0xFF8A909A);
+        }
+        if (flowSign != 0) {
+            for (int i = 0; i < 3; i++) {
+                int k = (int) ((t * 0.8F + i * 5) % Math.max(1, ih - 4));
+                int yy = flowSign > 0 ? iy0 + ih - 2 - k : iy0 + 2 + k;
+                if (yy > top) {
+                    rect(x + 4 + i * (w - 10) / 3, yy, 1, 2, 0xFFFFFFFF);
+                }
+            }
+        }
+    }
+
+    /**
      * The Exo Reactor's singularity: a black core, an accretion disk swirling round it (going whiter
      * as it heats, `heat` 0..1), jets up and down, stars round the edge; unlit, a faint violet ring.
      */
