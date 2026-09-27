@@ -19,6 +19,8 @@
   - Кабели каждого уровня с потерями; кабель под слишком высоким напряжением сгорает с дымом, как в IC2.
   - Трансформаторы, энергонакопители до 2 млрд EU, **зарядные плиты**, модуль трансформатора и **универсальный модуль трансформатора** (любое напряжение).
 - **Генераторы (20+):** твердотопливный, водяное колесо, ветрогенератор, РИТЭГ, термоэлектрический, геотермальный, водородный топливный элемент, внутреннего сгорания (дизель, нефть, биотопливо…), солнечные панели от кремниевых до Нано / Квант / Экзо, паровая и газовая турбины, плазменный генератор, термоядерный реактор, **токамак** и **экзо-сингулярный реактор**. Модули «Форсаж» и «Экономайзер».
+- **Переносные аккумуляторы LV–XV:** от кремниевой батарейки (40 000 EU) до экзо-ядра (4 млрд EU); режимы Shift + ПКМ — заряжать броню, предмет в руке или всё с собой. **Слот аккумулятора** под шкалой энергии у всех машин, карьеров и генератора поля (питает их) и у генераторов (заряжается выработкой); автоматика кладёт и забирает аккумуляторы.
+- **Кнопка питания и красный камень** у машин, генераторов, накопителей, карьеров и генератора поля: выключенный блок не берёт энергию и не работает.
 - **Кремниевый карьер LV–EV и Экзо-буровая установка (XV):**
   - Своё меню из 7 вкладок, область с картой и лазерной рамкой в мире, сменные головки бура.
   - **23 модуля**: скорость, удача, шёлковое касание, дробление, промывка, центрифуга, насос, магнит, радиус, жила, двойной бур, утилизатор, защита от жидкостей, мягкий режим, ремонт головки, энергоэкономия, **расширенный бак**, **насосная жила** и другие. Слоты модулей растут с уровнем.
@@ -37,8 +39,12 @@
   - Запрет спавна, приватная зона со списком доступа, лечение союзников.
   - **Беспроводная зарядка** предметов мода, IC2 и RF: модуль усилителя, приоритет, резерв буфера, искры.
   - Модули энергонакопителя и трансформатора, управление редстоуном, схема поля в экране генератора.
-  - Вкладка **«Зона»**: радиус, высота, смещение, центр и форма поля с предпросмотром; граница, бегущий пунктир, анимация, яркость, лучи между узлами, гудение и три цвета RGB.
-- **Индикаторы в меню:** шкала энергии в стиле голо-экрана с процентами (зелёная / оранжевая / красная по заряду) и индикаторы баков с текстурой жидкости во всех машинах и генераторах.
+  - Вкладка **«Зона»**: радиус, высота, смещение, центр и форма поля с предпросмотром; граница, бегущий пунктир, анимация, яркость, лучи между узлами, гудение, три цвета RGB и 24 готовых цвета.
+  - **Защита от дождя:** внутри поля нет дождя и снега, вода не замерзает, молнии гасятся.
+  - Режимы беспроводной зарядки: всё сразу, сначала броня / рука, самые разряженные или почти полные, порог «заряжать ниже N%».
+- **Меню-голоэкраны:** у каждой машины и генератора свой экран с анимированной сценой процесса (дробилка, CVD, степпер, турбины, реакторы, солнечные панели…), шкала энергии с процентами, полноразмерные баки с текстурой жидкости; тот же стиль у карьера, генератора поля и страниц NEI.
+- **Энергонакопители:** компаратор, выход поворачивается ключом, слот разрядки, модули (трансформатор, объём, форсаж), до 4 слотов зарядки на старших уровнях.
+- **Жидкости:** вёдра для всех 22 жидкостей мода, заливка и слив ведром или капсулой по машине, модуль расширенного бака и очистка баков за энергию.
 - **Справочник инженера** в игре: выдаётся при первом крафте любого предмета мода.
 
 ### Управление
@@ -51,7 +57,7 @@
 
 ### Требования и установка
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (или новее для 1.7.10), Java 8.
-2. Скачайте `SiliconAgeAlpha-0.1.3.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
+2. Скачайте `SiliconAgeAlpha-0.1.4.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
 
 ### Моды, которые помогут (необязательны)
 | Мод | Что даёт вместе с Silicon Age |
@@ -84,6 +90,8 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
   - Cables for every tier with loss; a cable under too high a voltage burns out with smoke, as in IC2.
   - Transformers, energy storages up to 2B EU, **charge pads**, the transformer upgrade and the **universal transformer upgrade** (any voltage).
 - **Generators (20+):** solid fuel, water wheel, wind turbine, RTG, thermoelectric, geothermal, hydrogen fuel cell, combustion (diesel, crude oil, biofuel...), solar panels from silicon up to Nano / Quantum / Exo, steam and gas turbines, plasma generator, fusion reactor, **tokamak** and the **Exo singularity reactor**. Overdrive and Economizer upgrades.
+- **Portable batteries LV-XV:** from the silicon cell (40,000 EU) to the Exo core (4B EU); sneak + right-click modes charge your armour, the held item or everything you carry. **A battery slot** under the energy gauge of every machine, quarry and the field generator (it powers them) and of the generators (their output charges it); automation puts batteries in and takes them out.
+- **A power switch and redstone control** on machines, generators, storages, quarries and the field generator: a switched-off block takes no energy and does nothing.
 - **Silicon Quarry LV-EV and the Exo Drilling Rig (XV):**
   - A seven-tab screen, an area with a map and a laser frame in the world, swappable drill heads.
   - **23 modules**: speed, fortune, silk touch, crushing, washing, centrifuge, pump, magnet, radius, vein miner, twin drill, trash disposal, fluid guard, gentle mode, head repair, energy saver, **tank extension**, **fluid vein** and more. Module slots grow with the tier.
@@ -102,8 +110,12 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
   - No spawning, a private zone with an access list, healing of allies.
   - **Wireless charging** of the mod's, IC2 and RF items: a charge booster upgrade, priority, a buffer reserve, sparks.
   - Energy storage and transformer upgrades, redstone control, a map of the field on its screen.
-  - A **Zone** tab: the field's radius, height, offset, centre and shape with a preview; outline, running dashes, animation, brightness, node beams, hum and three RGB colours.
-- **Screen gauges:** a holo-screen energy gauge with the percentage (green / orange / red by charge) and tank gauges in the fluid's texture in every machine and generator.
+  - A **Zone** tab: the field's radius, height, offset, centre and shape with a preview; outline, running dashes, animation, brightness, node beams, hum, three RGB colours and 24 ready colours.
+  - **Rain shield:** no rain or snow inside the field, no water freezing, lightning put out.
+  - Wireless charging modes: all at once, armour / held item first, emptiest or nearly full first, a "charge below N%" threshold.
+- **Holo-screen menus:** every machine and generator has its own screen with an animated scene of its process (crusher, CVD, stepper, turbines, reactors, solar panels...), an energy gauge with the percentage and full-size tank gauges in the fluid's texture; the quarry, the field generator and the NEI pages share the style.
+- **Energy storages:** comparator output, the output face turned with a wrench, a discharge slot, upgrades (transformer, capacity, overdrive), up to 4 charge slots on the higher tiers.
+- **Fluids:** buckets for all 22 of the mod's fluids, filling and draining machines with a bucket or a cell, a tank extension upgrade and clearing tanks for energy.
 - **Engineer's handbook** in game: given on the first craft of any item of the mod.
 
 ### Controls
@@ -116,7 +128,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 
 ### Requirements and installation
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (or newer for 1.7.10), Java 8.
-2. Download `SiliconAgeAlpha-0.1.3.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
+2. Download `SiliconAgeAlpha-0.1.4.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
 
 ### Mods that help (optional)
 | Mod | What it adds with Silicon Age |
