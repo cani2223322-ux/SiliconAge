@@ -73,6 +73,10 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean elec;
     /** The Air Separator: its two modes (air, water) as badges, water -> the column -> two product tanks. */
     private final boolean air;
+    /** The Refinery: its products as a row (the ones made now lit), crude -> the tower -> the product, the catalyst frame. */
+    private final boolean refi;
+    private static final int REFI_TOWER_X = 112, REFI_TOWER_W = 34, REFI_CAT_X = 148, REFI_CAT_Y = 66, REFI_BADGE_W = 24;
+    private static final int[] REFI_COLOURS = {0xFFD8A040, 0xFF5A5A5A, 0xFFE07A30, 0xFFC8D0DC, 0xFFF0F0F0};
     private static final int AIR_BADGE_W = 64;
     private static final int ELEC_CELL_W = 32, ELEC_BADGE_W = 42;
     private static final String[] ELEC_BADGES = {"NaOH+Cl2", "F2", "H2+D"};
@@ -133,6 +137,7 @@ public class GuiMachineSC extends GuiContainer {
         cent = machine.getMachineType() == com.sc.machine.MachineType.CENTRIFUGE;
         elec = machine.getMachineType() == com.sc.machine.MachineType.CHLOR_ALKALI_ELECTROLYZER;
         air = machine.getMachineType() == com.sc.machine.MachineType.AIR_SEPARATOR;
+        refi = machine.getMachineType() == com.sc.machine.MachineType.REFINERY;
         saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW || dice;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
@@ -143,9 +148,9 @@ public class GuiMachineSC extends GuiContainer {
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         etch = machine.getMachineType() == com.sc.machine.MachineType.ETCHING_BATH;
-        ownTanks = chem ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : elec || air ? new int[]{0, 2, 3} : null;
+        ownTanks = chem ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : elec || air ? new int[]{0, 2, 3} : refi ? new int[]{0, 2} : null;
         ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : cvd || etch ? new int[]{CHEM_X, CVD_TANK2_X}
-                : elec || air ? new int[]{CHEM_X, WATER_X - 33, WATER_X} : null;
+                : elec || air ? new int[]{CHEM_X, WATER_X - 33, WATER_X} : refi ? new int[]{CHEM_X, WATER_X} : null;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -288,7 +293,36 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (air) {                                                      // the mode badges, the column between the tanks
+        if (refi) {                                                     // the products, the flow sheet, the catalyst
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            boolean running = machine.getStatus() == MachineStatus.PROCESSING, pt = refiCatalyst();
+            for (int i = 0; i < 5; i++) {
+                boolean on = pt == i >= 2;
+                int bx = x + CHEM_X + i * (REFI_BADGE_W + 2), by = y + CAPTION_Y - 2;
+                drawRect(bx, by, bx + REFI_BADGE_W, by + 11, on ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + REFI_BADGE_W - 1, by + 10, on ? 0xFF0E3A50 : 0xFF0A1218);
+                drawRect(bx + 2, by + 8, bx + REFI_BADGE_W - 2, by + 10, on ? REFI_COLOURS[i] : GuiSceneSC.mix(REFI_COLOURS[i], 0xFF0A1218, 0.65F));
+            }
+            int product = pt ? REFI_COLOURS[2] : REFI_COLOURS[0];
+            drawRect(x + CHEM_X + GuiTankGaugeSC.WIDTH, y + 76, x + REFI_TOWER_X, y + 78, 0xFF8A5A2A);         // crude in
+            drawRect(x + REFI_TOWER_X + REFI_TOWER_W, y + 58, x + WATER_X, y + 60, product);                   // the product out
+            if (running) {
+                for (int i = 0; i < 3; i++) {
+                    int d = (int) ((t * 1.3F + i * 9) % (WATER_X - REFI_TOWER_X - REFI_TOWER_W));
+                    drawRect(x + REFI_TOWER_X + REFI_TOWER_W + d, y + 58, x + REFI_TOWER_X + REFI_TOWER_W + d + 2, y + 60, 0xFFFFF0C0);
+                }
+            }
+            GuiSceneSC.refineryTower(x + REFI_TOWER_X, y + TANK_Y, REFI_TOWER_W, CHEM_FLASK_H, t, running, pt ? 1 : 2);
+            int cx = x + REFI_CAT_X, cy = y + REFI_CAT_Y;
+            drawRect(cx, cy, cx + 22, cy + 22, pt ? 0xFFE8C850 : 0xFF3A4450);                                  // the catalyst frame
+            drawRect(cx + 1, cy + 1, cx + 21, cy + 21, 0xFF0A1218);
+            if (pt) {
+                for (int k = 0; k < 5; k++) {
+                    int px = cx + 6 + (k * 3) % 9, py = cy + 7 + (k * 4) % 8;
+                    drawRect(px, py, px + 3, py + 3, 0xFFD8D8E0);
+                }
+            }
+        } else if (air) {                                               // the mode badges, the column between the tanks
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             int mode = airMode();
             for (int i = 0; i < 2; i++) {
@@ -584,6 +618,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (chem) {
             drawChemText();
+            drawUpgradeLine();
+            return;
+        }
+        if (refi) {
+            drawRefiText();
             drawUpgradeLine();
             return;
         }
@@ -899,6 +938,46 @@ public class GuiMachineSC extends GuiContainer {
     private boolean oxidising() {
         com.sc.machine.MachineRecipe r = shownRecipe();
         return r == null || r.fluidInputA != null;
+    }
+
+    /** Whether the Refinery's shown recipe is the catalysed one (platinum in: photoresist and plastics). */
+    private boolean refiCatalyst() {
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        return r != null && r.fluidOutputA != null && r.fluidOutputA.getFluid() == com.sc.init.ModFluids.photoresist;
+    }
+
+    /** The Refinery: the products' names, the tanks' labels, the catalyst's caption, what else comes out, amounts and time. */
+    private void drawRefiText() {
+        boolean pt = refiCatalyst();
+        for (int i = 0; i < 5; i++) {
+            boolean on = pt == i >= 2;
+            String s = Lang.tr("sc.gui.refi.p." + i);
+            float k = Math.min(0.5F, (REFI_BADGE_W - 3) / (float) Math.max(1, fontRendererObj.getStringWidth(s)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(CHEM_X + i * (REFI_BADGE_W + 2) + (REFI_BADGE_W - fontRendererObj.getStringWidth(s) * k) / 2F, CAPTION_Y, 0F);
+            GL11.glScalef(k, k, 1F);
+            fontRendererObj.drawString(s, 0, 0, on ? 0x96F0FF : 0x465A6E);
+            GL11.glPopMatrix();
+        }
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        net.minecraftforge.fluids.FluidStack[] want = {r == null ? null : r.fluidInputA, r == null ? null : r.fluidOutputA};
+        for (int k = 0; k < ownTanks.length; k++) {
+            TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
+                    GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
+        smallFit(Lang.tr("sc.gui.refi.catalyst"), REFI_CAT_X, REFI_CAT_Y + 23, 26, pt ? 0xE8C850 : 0x6AA8C8);
+        if (r == null) {
+            return;
+        }
+        StringBuilder extra = new StringBuilder();
+        for (net.minecraft.item.ItemStack s : r.outputs) {
+            if (s != null) {
+                extra.append(extra.length() == 0 ? "+ " : ", ").append(s.stackSize > 1 ? s.stackSize + " " : "").append(s.getDisplayName());
+            }
+        }
+        smallFit(extra.toString(), REFI_TOWER_X, TANK_Y + CHEM_FLASK_H + 3, WATER_X - REFI_TOWER_X - 2, 0xE6F0FA);
+        smallFit(Lang.tr("sc.gui.refi.run", r.fluidInputA == null ? 0 : r.fluidInputA.amount, r.fluidOutputA == null ? 0 : r.fluidOutputA.amount,
+                Math.max(1, machine.effectiveTicks(r) / 20)), REFI_TOWER_X, TANK_Y + CHEM_FLASK_H + 10, WATER_X - REFI_TOWER_X - 2, 0x6AA8C8);
     }
 
     /** The Air Separator's mode: 0 air into oxygen and argon, 1 water into liquid helium, -1 none. */
@@ -1411,6 +1490,13 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (refi && (GuiGaugeSC.isOver(CHEM_X, CAPTION_Y - 2, 5 * (REFI_BADGE_W + 2), 11, mouseX, mouseY)
+                || GuiGaugeSC.isOver(REFI_TOWER_X, TANK_Y, REFI_CAT_X + 22 - REFI_TOWER_X, CHEM_FLASK_H, mouseX, mouseY))) {
+            lines.add(Lang.tr("sc.gui.refi.title"));
+            lines.add(Lang.tr(refiCatalyst() ? "sc.gui.refi.now.1" : "sc.gui.refi.now.0"));
+            lines.add(Lang.tr("sc.gui.refi.hint"));
+            return lines;
+        }
         if (air && (GuiGaugeSC.isOver(CHEM_X, CAPTION_Y - 1, 2 * (AIR_BADGE_W + 2), 10, mouseX, mouseY)
                 || GuiGaugeSC.isOver(CHEM_X + 33, TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, mouseX, mouseY))) {
             com.sc.machine.MachineRecipe r = shownRecipe();

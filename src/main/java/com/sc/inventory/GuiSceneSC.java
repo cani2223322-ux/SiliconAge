@@ -700,6 +700,37 @@ public final class GuiSceneSC {
         }
     }
 
+    private static final int[] FRACTIONS = {0xFFE8E8C8, 0xFFE8C850, 0xFFD8A040, 0xFF8A5A2A};
+
+    /**
+     * The refinery's fractionating tower: the furnace under it, vapour rising, four fraction bands
+     * (gas, petrol, diesel, residue) with their draw-offs, the one being made glowing.
+     */
+    public static void refineryTower(int x, int y, int w, int h, float t, boolean running, int hot) {
+        frame(x, y, w, h);
+        int c0 = x + w / 2 - 8, c1 = x + w / 2 + 6;
+        rect(c0 - 1, y + 3, c1 - c0 + 2, h - 14, 0xFF8A909A);
+        rect(c0, y + 4, c1 - c0, h - 16, 0xFF1A2430);
+        int band = (h - 16) / 4;
+        for (int i = 0; i < 4; i++) {
+            int yy = y + 4 + i * band;
+            rect(c0, yy, c1 - c0, band, mix(0xFF1A2430, FRACTIONS[i], 0.35F));
+            rect(c0, yy, c1 - c0, 1, 0xFF6A707A);
+            rect(c1 + 1, yy + band / 2, 5, 2, i == hot ? FRACTIONS[i] : mix(FRACTIONS[i], 0xFF0A1218, 0.6F));
+        }
+        rect(c0 - 3, y + h - 11, c1 - c0 + 6, 8, 0xFF3A2418);                 // the furnace
+        if (running) {
+            for (int i = 0; i < 4; i++) {
+                int fh = 2 + (int) (2 + 2 * Math.sin(t * 0.7F + i));
+                rect(c0 - 1 + i * 4, y + h - 3 - fh, 2, fh, 0xFFFFB040);
+            }
+            int rise = Math.max(1, h - 18);
+            for (int i = 0; i < 6; i++) {                                      // vapour rising
+                rect(c0 + 2 + (i * 3) % 10, y + h - 13 - (int) ((t * 1.1F + i * 6) % rise), 1, 1, 0xFFE8E0D0);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
