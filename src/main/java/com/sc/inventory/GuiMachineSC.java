@@ -62,6 +62,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean saw;
     /** The Oxidation Furnace's own screen: its two modes as badges, the tube furnace, the wafers taking colour, its oxygen. */
     private final boolean oxid;
+    /** The Photoresist Coater's own screen: the spin coater from above, its four stages, the film's cover, its resist. */
+    private final boolean coat;
+    private static final int COAT_W = 48, COAT_H = 50, STAGE_X = 141, STAGE_W = 31, STAGE_Y = 38, STAGE_GAP = 12;
     private static final int OX_Y = 36, OX_H = 38, OX_WAFER_Y = 79, OX_BADGE_W = 40;
     private static final int SAW_X = 90, SAW_Y = 36, SAW_W = 82, SAW_H = 42, WAFER_Y = 82, WEAR_X = 124, WEAR_Y = 102, WEAR_W = 48;
     /** The Czochralski Puller's own screen: as the Blast Furnace's, the puller in place of the furnace. */
@@ -94,6 +97,7 @@ public class GuiMachineSC extends GuiContainer {
         blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE || puller;
         saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
+        coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         ownTanks = chem ? new int[]{0, 1, 2} : cvd ? new int[]{0, 1} : null;
@@ -123,7 +127,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiBigSC.ClearButton b = (GuiBigSC.ClearButton) o;
             int tank = b.id - ContainerMachineSC.BTN_CLEAR;
             int gx = -1;
-            if (washer || blast || saw || oxid) {
+            if (washer || blast || saw || oxid || coat) {
                 gx = tank == 0 ? WATER_X : -1;
             } else if (ownTanks != null) {
                 for (int k = 0; k < ownTanks.length; k++) {
@@ -199,7 +203,7 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast || saw || oxid || ownTanks != null) {
+        if (washer || blast || saw || oxid || coat || ownTanks != null) {
             return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -262,6 +266,19 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.thermometer(x + THERMO_X, y + FURNACE_Y, FURNACE_H, h, (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
             GuiSceneSC.heatBar(x + HEATBAR_X, y + HEATBAR_Y, HEATBAR_W, HEATBAR_H, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
+        } else if (coat) {                                              // the spin coater and its stages
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            GuiSceneSC.spinCoater(x + SAW_X, y + SAW_Y, COAT_W, COAT_H, t, running, progress,
+                    colourOf(machine.getTank(0).getFluid(), r == null ? null : r.fluidInputA));
+            int stage = running ? GuiSceneSC.coatStage(progress) : -1;
+            for (int i = 0; i < 4; i++) {
+                int sy = y + STAGE_Y + i * STAGE_GAP, sx = x + STAGE_X;
+                boolean cur = i == stage, done = i < stage;
+                drawRect(sx, sy, sx + STAGE_W, sy + 10, cur ? 0xFF2A6A8A : done ? 0xFF1E4A30 : 0xFF1A2430);
+                drawRect(sx + 1, sy + 1, sx + STAGE_W - 1, sy + 9, cur ? 0xFF0E3A50 : done ? 0xFF0E2A1A : 0xFF0A1218);
+            }
         } else if (oxid) {                                              // the mode badges, the tube furnace, the wafers
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING, ox = oxidising();
@@ -328,7 +345,7 @@ public class GuiMachineSC extends GuiContainer {
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
-        if (washer || blast || saw || oxid) {
+        if (washer || blast || saw || oxid || coat) {
             FluidTank water = machine.getTank(0);
             GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
         }
@@ -371,6 +388,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (blast) {
             drawBlastText(rx);
+            drawUpgradeLine();
+            return;
+        }
+        if (coat) {
+            drawCoatText(rx);
             drawUpgradeLine();
             return;
         }
@@ -543,6 +565,37 @@ public class GuiMachineSC extends GuiContainer {
         small(r != null && r.fluidInputA != null
                 ? Lang.tr("sc.gui.oxid.gas", r.fluidInputA.getLocalizedName(), r.fluidInputA.amount, secs)
                 : Lang.tr("sc.gui.oxid.nogas", secs), SAW_X, OX_WAFER_Y + 23, 0x6AA8C8);
+    }
+
+    /** The Photoresist Coater: caption, the stages' names, its tank's label, the cover and defects, resist a run and runs left. */
+    private void drawCoatText(int rx) {
+        fit(Lang.tr("sc.gui.holo.coating"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
+        boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+        int ticks = machine.getCurrentRecipeTicks();
+        float p = ticks > 0 ? (float) machine.getProgressTicks() / ticks : 0F;
+        int stage = running ? GuiSceneSC.coatStage(p) : -1;
+        for (int i = 0; i < 4; i++) {
+            String s = Lang.tr("sc.gui.coat.stage." + i);
+            float k = Math.min(0.5F, (STAGE_W - 3) / (float) Math.max(1, fontRendererObj.getStringWidth(s)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(STAGE_X + (STAGE_W - fontRendererObj.getStringWidth(s) * k) / 2F, STAGE_Y + i * STAGE_GAP + 3, 0F);
+            GL11.glScalef(k, k, 1F);
+            fontRendererObj.drawString(s, 0, 0, i == stage ? 0x96F0FF : i < stage ? 0x5AE66E : 0x465A6E);
+            GL11.glPopMatrix();
+        }
+        FluidTank tank = machine.getTank(0);
+        String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
+        TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        String defect = Lang.tr("sc.gui.saw.defect", r == null ? 0 : Math.round(r.defectChance * 100));
+        int dw = fontRendererObj.getStringWidth(defect) * 5 / 8;
+        int cover = running ? Math.round(GuiSceneSC.coatCover(p) * 100) : 0;
+        fit(Lang.tr("sc.gui.coat.cover", cover), SAW_X, SAW_Y + COAT_H + 5, WATER_X - SAW_X - dw - 8, GuiHoloSC.VALUE);
+        small(defect, WATER_X - 4 - dw, SAW_Y + COAT_H + 7, 0x6AA8C8);
+        int per = r == null || r.fluidInputA == null ? 0 : r.fluidInputA.amount;
+        if (per > 0) {
+            small(Lang.tr("sc.gui.coat.run", per, tank.getFluidAmount() / per), SAW_X, SAW_Y + COAT_H + 15, 0x6AA8C8);
+        }
     }
 
     /** Whether the Oxidation Furnace's shown recipe takes gas (oxidation) or not (annealing). */
@@ -848,7 +901,7 @@ public class GuiMachineSC extends GuiContainer {
         }
 
         boolean overTub = washer && GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY);
-        boolean overOwnTank = (washer || blast || saw || oxid)
+        boolean overOwnTank = (washer || blast || saw || oxid || coat)
                 && GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY);
         if (ownTanks != null) {
             for (int k = 0; k < ownTanks.length; k++) {
@@ -880,6 +933,18 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (coat && GuiGaugeSC.isOver(SAW_X, SAW_Y, STAGE_X + STAGE_W - SAW_X, COAT_H, mouseX, mouseY)) {
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            lines.add(Lang.tr("sc.gui.coat.title"));
+            if (r != null) {
+                if (r.fluidInputA != null) {
+                    lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
+                }
+                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+            }
+            lines.add(Lang.tr("sc.gui.coat.hint"));
+            return lines;
+        }
         if (oxid && GuiGaugeSC.isOver(SAW_X, CAPTION_Y - 1, SAW_W, OX_WAFER_Y + 10 - CAPTION_Y + 1, mouseX, mouseY)) {
             com.sc.machine.MachineRecipe r = shownRecipe();
             lines.add(Lang.tr(oxidising() ? "sc.gui.oxid.title.0" : "sc.gui.oxid.title.1"));

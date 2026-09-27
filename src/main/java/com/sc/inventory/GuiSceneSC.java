@@ -273,6 +273,62 @@ public final class GuiSceneSC {
         }
     }
 
+    /** The Photoresist Coater's stages by progress: drop, spin-up, spreading, drying (0..3). */
+    public static int coatStage(float progress) {
+        return progress < 0.1F ? 0 : progress < 0.3F ? 1 : progress < 0.85F ? 2 : 3;
+    }
+
+    /** How much of the wafer the resist film covers at this progress, 0..1. */
+    public static float coatCover(float progress) {
+        return Math.max(0F, Math.min(1F, (progress - 0.1F) / 0.75F));
+    }
+
+    /**
+     * The spin coater from above: the catch cup, the (oxidised) wafer turning on its chuck, the resist
+     * film spreading out from the centre, droplets spun off its edge, the nozzle dropping resist.
+     */
+    public static void spinCoater(int x, int y, int w, int h, float t, boolean running, float progress, int resist) {
+        frame(x, y, w, h);
+        if (resist == 0) {
+            resist = 0xFFE07A30;
+        }
+        int cx = x + w / 2, cy = y + h / 2 + 2, r = Math.min(w, h) / 2 - 5;
+        disc(cx, cy, r + 3, 0xFF3A4048);                                       // the catch cup
+        disc(cx, cy, r + 2, 0xFF12181E);
+        disc(cx, cy, r, 0xFF8A94A8);                                           // the wafer
+        disc(cx, cy, r - 1, 0xFF6A5AE0);
+        int stage = running ? coatStage(progress) : -1;
+        int rr = Math.round((r - 1) * (running ? coatCover(progress) : 0F));
+        if (stage == 0 || stage == 1) {
+            disc(cx, cy, 2, resist);                                           // the puddle before it spreads
+        }
+        if (rr > 0) {
+            disc(cx, cy, rr, stage == 3 ? mix(resist, 0xFF404040, 0.25F) : resist);
+        }
+        float a = running && stage > 0 ? t * (stage == 1 ? 0.4F : 0.9F) : 0F;
+        for (int k = 0; k < r - 2; k++) {                                      // the turning mark
+            rect(cx + (int) (k * Math.cos(a)), cy + (int) (k * Math.sin(a)), 1, 1, k % 3 != 0 ? 0xFFD8E8F8 : 0xFF0A1218);
+        }
+        if (stage == 2) {
+            for (int i = 0; i < 10; i++) {                                     // spun-off droplets
+                double b = a * 1.3 + i * 0.63;
+                float d = r + 1 + (t * 2 + i * 3) % 3;
+                rect(cx + (int) (d * Math.cos(b)), cy + (int) (d * Math.sin(b)), 1, 1, resist);
+            }
+        }
+        rect(cx - 1, y + 3, 3, 6, 0xFF8A909A);                                 // the nozzle
+        if (stage == 0) {
+            rect(cx, y + 9, 1, 2 + (int) t % 3, resist);
+        }
+    }
+
+    private static void disc(int cx, int cy, int r, int c) {
+        for (int yy = -r; yy <= r; yy++) {
+            int half = (int) Math.sqrt(Math.max(0, r * r - yy * yy));
+            rect(cx - half, cy + yy, 2 * half + 1, 1, c);
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

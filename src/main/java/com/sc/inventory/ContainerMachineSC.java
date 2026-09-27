@@ -59,7 +59,8 @@ public class ContainerMachineSC extends Container {
     public static boolean tightSlots(com.sc.machine.MachineType type) {
         return usesTanks(type) && type != com.sc.machine.MachineType.ORE_WASHER && type != com.sc.machine.MachineType.BLAST_FURNACE
                 && type != com.sc.machine.MachineType.CZOCHRALSKI_PULLER && type != com.sc.machine.MachineType.CZOCHRALSKI_PULLER_EV
-                && type != com.sc.machine.MachineType.WIRE_SAW && type != com.sc.machine.MachineType.OXIDATION_FURNACE;
+                && type != com.sc.machine.MachineType.WIRE_SAW && type != com.sc.machine.MachineType.OXIDATION_FURNACE
+                && type != com.sc.machine.MachineType.PHOTORESIST_COATER;
     }
 
     /** Where slot i of a row sits: 18 apart beside tanks, 22 apart otherwise. */
