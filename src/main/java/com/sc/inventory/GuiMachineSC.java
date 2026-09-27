@@ -67,6 +67,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean dice;
     /** The Packager's own screen: the assembly scene, its four stages, the product and its pins. */
     private final boolean pack;
+    /** The Centrifuge's own screen: the rotor, and what comes out with each product's chance as a bar. */
+    private final boolean cent;
+    private static final int CENT_X = 88, CENT_Y = 36, CENT_S = 50, CENT_LIST_X = 142, CENT_BAR_W = 62;
     private static final int PACK_X = 88, PACK_Y = 36, PACK_W = 76, PACK_H = 50, PACK_STAGE_X = 167, PACK_STAGE_W = 39;
     /** The Oxidation Furnace's own screen: its two modes as badges, the tube furnace, the wafers taking colour, its oxygen. */
     private final boolean oxid;
@@ -120,6 +123,7 @@ public class GuiMachineSC extends GuiContainer {
         blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE || puller;
         dice = machine.getMachineType() == com.sc.machine.MachineType.DICING_SAW;
         pack = machine.getMachineType() == com.sc.machine.MachineType.PACKAGER;
+        cent = machine.getMachineType() == com.sc.machine.MachineType.CENTRIFUGE;
         saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW || dice;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
@@ -416,6 +420,20 @@ public class GuiMachineSC extends GuiContainer {
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
+        } else if (cent) {                                              // the rotor, the chance bars
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            com.sc.machine.MachineRecipe r = centRecipe();
+            net.minecraft.item.ItemStack[] outs = centOutputs(r);
+            GuiSceneSC.centrifuge(x + CENT_X, y + CENT_Y, CENT_S, CENT_S, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
+                    outs.length > 0 ? itemColour(outs[0]) : 0);
+            int rowH = centRowH(outs.length);
+            for (int i = 0; i < outs.length; i++) {
+                int by = y + CENT_Y + 2 + i * rowH + 6;
+                float c = centChance(r, i);
+                drawRect(x + CENT_LIST_X, by, x + CENT_LIST_X + CENT_BAR_W, by + 4, 0xFF04080C);
+                drawRect(x + CENT_LIST_X + 1, by + 1, x + CENT_LIST_X + 1 + Math.max(1, (int) ((CENT_BAR_W - 2) * c)), by + 3,
+                        itemColour(outs[i]) | 0xFF000000);
+            }
         } else if (pack) {                                              // the assembly scene and its stages
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
@@ -540,6 +558,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (cvd || etch) {
             drawCvdText();
+            drawUpgradeLine();
+            return;
+        }
+        if (cent) {
+            drawCentText(rx);
             drawUpgradeLine();
             return;
         }
@@ -835,6 +858,75 @@ public class GuiMachineSC extends GuiContainer {
     private boolean oxidising() {
         com.sc.machine.MachineRecipe r = shownRecipe();
         return r == null || r.fluidInputA != null;
+    }
+
+    /** The Centrifuge's recipe: the one its input makes, or null (nothing to separate). */
+    private com.sc.machine.MachineRecipe centRecipe() {
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+        }
+        return RecipeRegistry.findMatch(machine.getMachineType(), in, null, null);
+    }
+
+    /** The main product, then the byproducts. */
+    private static net.minecraft.item.ItemStack[] centOutputs(com.sc.machine.MachineRecipe r) {
+        if (r == null) {
+            return new net.minecraft.item.ItemStack[0];
+        }
+        java.util.List<net.minecraft.item.ItemStack> l = new java.util.ArrayList<net.minecraft.item.ItemStack>();
+        for (net.minecraft.item.ItemStack s : r.outputs) {
+            if (s != null) {
+                l.add(s);
+            }
+        }
+        int main = l.size();
+        for (net.minecraft.item.ItemStack s : r.byproducts) {
+            l.add(s);
+        }
+        return l.subList(0, Math.min(l.size(), Math.max(main, 4))).toArray(new net.minecraft.item.ItemStack[0]);
+    }
+
+    /** Output i's chance: 1 for the main products, the recipe's own for a byproduct. */
+    private static float centChance(com.sc.machine.MachineRecipe r, int i) {
+        int main = 0;
+        for (net.minecraft.item.ItemStack s : r.outputs) {
+            main += s != null ? 1 : 0;
+        }
+        return i < main ? 1F : i - main < r.byproductChances.length ? r.byproductChances[i - main] : 0F;
+    }
+
+    private static int centRowH(int n) {
+        return n <= 3 ? 15 : 12;
+    }
+
+    /** An item's tint (a dust's metal colour), white when it has none. */
+    private static int itemColour(net.minecraft.item.ItemStack s) {
+        int c = s == null || s.getItem() == null ? 0xFFFFFF : s.getItem().getColorFromItemStack(s, 0) & 0xFFFFFF;
+        return c == 0xFFFFFF ? 0xFF5AE66E : c | 0xFF000000;             // an untinted icon: the holo green
+    }
+
+    /** The Centrifuge: caption, each output's name and chance over its bar, the ore and the time. */
+    private void drawCentText(int rx) {
+        fit(Lang.tr("sc.gui.holo.separating"), rx, CAPTION_Y, GuiBigSC.SCREEN_RIGHT - rx, GuiHoloSC.CYAN & 0xFFFFFF);
+        com.sc.machine.MachineRecipe r = centRecipe();
+        net.minecraft.item.ItemStack[] outs = centOutputs(r);
+        int rowH = centRowH(outs.length);
+        for (int i = 0; i < outs.length; i++) {
+            int ry = CENT_Y + 2 + i * rowH;
+            String pct = Math.round(centChance(r, i) * 100) + "%";
+            int pw = fontRendererObj.getStringWidth(pct) * 5 / 8;
+            smallFit(outs[i].getDisplayName(), CENT_LIST_X, ry, CENT_BAR_W - pw - 3, 0xE6F0FA);
+            small(pct, CENT_LIST_X + CENT_BAR_W - pw, ry, 0x6AA8C8);
+        }
+        if (r == null) {
+            smallFit(Lang.tr("sc.gui.cent.empty"), CENT_LIST_X, CENT_Y + 2, GuiBigSC.SCREEN_RIGHT - CENT_LIST_X, 0x6AA8C8);
+            return;
+        }
+        net.minecraft.item.ItemStack in = r.inputs.length > 0 ? r.inputs[0] : null;
+        smallFit(Lang.tr("sc.gui.cent.run", in == null ? "-" : in.getDisplayName(), Math.max(1, machine.effectiveTicks(r) / 20)),
+                CENT_X, CENT_Y + CENT_S + 4, GuiBigSC.SCREEN_RIGHT - CENT_X - 2, 0xE6F0FA);
+        small(Lang.tr("sc.gui.cent.chance"), CENT_X, CENT_Y + CENT_S + 12, 0x6AA8C8);
     }
 
     /** The Packager's lead frame pins and dies a run, from the shown recipe: {3, 1}, {16, 2} or {40, 4}. */
@@ -1222,6 +1314,11 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (cent && GuiGaugeSC.isOver(CENT_X, CENT_Y, GuiBigSC.SCREEN_RIGHT - CENT_X, CENT_S, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.cent.title"));
+            lines.add(Lang.tr("sc.gui.cent.hint"));
+            return lines;
+        }
         if (pack && GuiGaugeSC.isOver(PACK_X, PACK_Y, PACK_STAGE_X + PACK_STAGE_W - PACK_X, PACK_H, mouseX, mouseY)) {
             com.sc.machine.MachineRecipe r = shownRecipe();
             lines.add(Lang.tr("sc.gui.pack.title"));

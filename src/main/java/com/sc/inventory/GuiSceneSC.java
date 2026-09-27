@@ -598,6 +598,35 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The centrifuge's rotor from above: four tubes on their arms, spinning while it runs, the
+     * sample in them taking the main product's colour as it separates.
+     */
+    public static void centrifuge(int x, int y, int w, int h, float t, boolean running, float progress, int colour) {
+        frame(x, y, w, h);
+        int cx = x + w / 2, cy = y + h / 2, r = Math.min(w, h) / 2 - 4;
+        disc(cx, cy, r + 2, 0xFF3A4048);
+        disc(cx, cy, r + 1, 0xFF12181E);
+        double a0 = running ? t * 0.9 : 0.4;
+        int sample = mix(0xFF8A7A6A, colour != 0 ? colour : 0xFFB08A6A, running ? progress : 0F);
+        for (int k = 0; k < 4; k++) {
+            double a = a0 + k * Math.PI / 2;
+            for (int d = 3; d < r - 5; d++) {                                  // the arm
+                rect(cx + (int) (d * Math.cos(a)), cy + (int) (d * Math.sin(a)), 1, 1, 0xFF6A707A);
+            }
+            int tx = cx + (int) ((r - 4) * Math.cos(a)), ty = cy + (int) ((r - 4) * Math.sin(a));
+            disc(tx, ty, 3, 0xFF9AB8D0);                                       // the tube
+            disc(tx, ty, 2, sample);
+        }
+        disc(cx, cy, 3, 0xFF8A909A);
+        if (running) {
+            for (int i = 0; i < 6; i++) {                                      // motion blur
+                double a = a0 + i * 1.05 + 0.4;
+                rect(cx + (int) ((r - 1) * Math.cos(a)), cy + (int) ((r - 1) * Math.sin(a)), 1, 1, 0xFF3A5A7A);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
