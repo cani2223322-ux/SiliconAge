@@ -69,6 +69,10 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean pack;
     /** The Centrifuge's own screen: the rotor, and what comes out with each product's chance as a bar. */
     private final boolean cent;
+    /** The Chlor-alkali Electrolyzer: its recipe badges, water -> the cell -> two product tanks. */
+    private final boolean elec;
+    private static final int ELEC_CELL_W = 32, ELEC_BADGE_W = 42;
+    private static final String[] ELEC_BADGES = {"NaOH+Cl2", "F2", "H2+D"};
     private static final int CENT_X = 88, CENT_Y = 36, CENT_S = 50, CENT_LIST_X = 142, CENT_BAR_W = 62;
     private static final int PACK_X = 88, PACK_Y = 36, PACK_W = 76, PACK_H = 50, PACK_STAGE_X = 167, PACK_STAGE_W = 39;
     /** The Oxidation Furnace's own screen: its two modes as badges, the tube furnace, the wafers taking colour, its oxygen. */
@@ -124,6 +128,7 @@ public class GuiMachineSC extends GuiContainer {
         dice = machine.getMachineType() == com.sc.machine.MachineType.DICING_SAW;
         pack = machine.getMachineType() == com.sc.machine.MachineType.PACKAGER;
         cent = machine.getMachineType() == com.sc.machine.MachineType.CENTRIFUGE;
+        elec = machine.getMachineType() == com.sc.machine.MachineType.CHLOR_ALKALI_ELECTROLYZER;
         saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW || dice;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
@@ -134,8 +139,9 @@ public class GuiMachineSC extends GuiContainer {
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         etch = machine.getMachineType() == com.sc.machine.MachineType.ETCHING_BATH;
-        ownTanks = chem ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : null;
-        ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : cvd || etch ? new int[]{CHEM_X, CVD_TANK2_X} : null;
+        ownTanks = chem ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : elec ? new int[]{0, 2, 3} : null;
+        ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : cvd || etch ? new int[]{CHEM_X, CVD_TANK2_X}
+                : elec ? new int[]{CHEM_X, WATER_X - 33, WATER_X} : null;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -278,7 +284,19 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (etch) {                                                     // the two baths between the two tanks
+        if (elec) {                                                     // the badges, the cell between the tanks
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            int mode = elecMode();
+            for (int i = 0; i < 3; i++) {
+                int bx = x + CHEM_X + i * (ELEC_BADGE_W + 2), by = y + CAPTION_Y - 1;
+                drawRect(bx, by, bx + ELEC_BADGE_W, by + 9, i == mode ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + ELEC_BADGE_W - 1, by + 8, i == mode ? 0xFF0E3A50 : 0xFF0A1218);
+            }
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            net.minecraftforge.fluids.FluidStack oa = r == null ? null : r.fluidOutputA, ob = r == null ? null : r.fluidOutputB;
+            GuiSceneSC.electrolysisCell(x + CHEM_X + 33, y + TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, t, machine.getStatus() == MachineStatus.PROCESSING,
+                    colourOf(machine.getTank(ob != null ? 3 : 2).getFluid(), ob != null ? ob : oa), colourOf(machine.getTank(2).getFluid(), oa));
+        } else if (etch) {                                              // the two baths between the two tanks
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             com.sc.machine.MachineRecipe r = shownRecipe();
             GuiSceneSC.etchBaths(x + CVD_BELL_X, y + TANK_Y, CVD_BELL_W, CVD_BELL_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
@@ -553,6 +571,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (chem) {
             drawChemText();
+            drawUpgradeLine();
+            return;
+        }
+        if (elec) {
+            drawElecText();
             drawUpgradeLine();
             return;
         }
@@ -858,6 +881,32 @@ public class GuiMachineSC extends GuiContainer {
     private boolean oxidising() {
         com.sc.machine.MachineRecipe r = shownRecipe();
         return r == null || r.fluidInputA != null;
+    }
+
+    /** The Electrolyzer's recipe by its products: 0 lye + chlorine, 1 fluorine, 2 hydrogen + deuterium, -1 none. */
+    private int elecMode() {
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        if (r == null || r.fluidOutputA == null) {
+            return -1;
+        }
+        net.minecraftforge.fluids.Fluid f = r.fluidOutputA.getFluid();
+        return f == com.sc.init.ModFluids.naoh ? 0 : f == com.sc.init.ModFluids.fluorine ? 1 : f == com.sc.init.ModFluids.hydrogen ? 2 : -1;
+    }
+
+    /** The Electrolyzer: the badges' names and its three tanks' labels (water in, the two products out). */
+    private void drawElecText() {
+        int mode = elecMode();
+        for (int i = 0; i < 3; i++) {
+            int sw = fontRendererObj.getStringWidth(ELEC_BADGES[i]) * 5 / 8;
+            small(ELEC_BADGES[i], CHEM_X + i * (ELEC_BADGE_W + 2) + (ELEC_BADGE_W - sw) / 2, CAPTION_Y + 1, i == mode ? 0x96F0FF : 0x465A6E);
+        }
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        net.minecraftforge.fluids.FluidStack[] want = {r == null ? null : r.fluidInputA, r == null ? null : r.fluidOutputA,
+                r == null ? null : r.fluidOutputB};
+        for (int k = 0; k < ownTanks.length; k++) {
+            TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
+                    GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
     }
 
     /** The Centrifuge's recipe: the one its input makes, or null (nothing to separate). */
@@ -1314,6 +1363,20 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (elec && GuiGaugeSC.isOver(CHEM_X, CAPTION_Y - 1, 3 * (ELEC_BADGE_W + 2), 10, mouseX, mouseY)
+                || elec && GuiGaugeSC.isOver(CHEM_X + 33, TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, mouseX, mouseY)) {
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            lines.add(Lang.tr("sc.gui.elec.title"));
+            if (r != null) {
+                lines.add(formulaOf(r));
+                String in = r.fluidInputA != null ? String.valueOf(r.fluidInputA.amount) : "0";
+                String out = (r.fluidOutputA != null ? String.valueOf(r.fluidOutputA.amount) : "0")
+                        + (r.fluidOutputB != null ? " + " + r.fluidOutputB.amount : "");
+                lines.add(Lang.tr("sc.gui.elec.run", in, out, Math.max(1, machine.effectiveTicks(r) / 20)));
+            }
+            lines.add(Lang.tr("sc.gui.elec.hint"));
+            return lines;
+        }
         if (cent && GuiGaugeSC.isOver(CENT_X, CENT_Y, GuiBigSC.SCREEN_RIGHT - CENT_X, CENT_S, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.cent.title"));
             lines.add(Lang.tr("sc.gui.cent.hint"));

@@ -627,6 +627,39 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The electrolysis cell: brine behind glass, a membrane down the middle, the anode (left) and
+     * the cathode (right) on leads from the top with the current running along them, each side
+     * bubbling its own gas.
+     * @param colA the anode side's gas, @param colB the cathode side's (0: the defaults)
+     */
+    public static void electrolysisCell(int x, int y, int w, int h, float t, boolean running, int colA, int colB) {
+        frame(x, y, w, h);
+        int bx0 = x + 4, bx1 = x + w - 4, by0 = y + 12, by1 = y + h - 4;
+        rect(bx0 - 1, by0 - 1, bx1 - bx0 + 2, by1 - by0 + 2, 0xFF9AB8D0);    // the glass
+        rect(bx0, by0, bx1 - bx0, by1 - by0, 0xFF2A4A6A);                     // the brine
+        rect(bx0, by0, bx1 - bx0, 1, 0xFF5A8AB0);
+        int mx = (bx0 + bx1) / 2;
+        for (int yy = by0; yy < by1; yy += 2) {
+            rect(mx, yy, 1, 1, 0xFF8A94A8);                                    // the membrane
+        }
+        int ax = bx0 + (mx - bx0) / 2, cx = mx + (bx1 - mx) / 2;
+        rect(ax - 1, y + 5, 3, by1 - y - 8, 0xFF6A707A);                       // the anode
+        rect(cx - 1, y + 5, 3, by1 - y - 8, 0xFFB08A6A);                       // the cathode
+        rect(ax - 1, y + 3, cx - ax + 3, 1, 0xFFE8C850);                       // the leads
+        if (!running) {
+            return;
+        }
+        int a = colA != 0 ? colA : 0xFFB8D84A, b = colB != 0 ? colB : 0xFFF0F8FF;
+        int span = Math.max(1, by1 - by0 - 4);
+        for (int i = 0; i < 6; i++) {
+            int yy = by1 - 3 - (int) ((t * 0.8F + i * 4) % span);
+            rect(ax - 4 + (i % 3) * 3, yy, 1, 1, a);
+            rect(cx - 3 + (i % 3) * 3, yy, 1, 1, b);
+        }
+        rect(ax + (int) (t * 2) % Math.max(1, cx - ax), y + 3, 2, 1, 0xFFFFFFFF);   // the current
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
