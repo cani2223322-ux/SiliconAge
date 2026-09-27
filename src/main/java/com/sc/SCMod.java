@@ -48,6 +48,7 @@ public class SCMod {
         // ticked (so no power moved without IC2), armour heat never accumulated, and the manual
         // was never handed out on first craft/pickup.
         FMLCommonHandler.instance().bus().register(new CommonEventHandler());
+        FMLCommonHandler.instance().bus().register(new com.sc.energy.Ic2LoadQueueSC());   // energy tiles join IC2's net a tick late
         // World events (explosions) live on the Forge bus, not FML's.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ShieldEventHandler());
         // ...and so does WorldEvent.Unload, which frees the fallback energy net's cache of that world.
@@ -99,5 +100,11 @@ public class SCMod {
     @Mod.EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         proxy.postInit();
+    }
+
+    /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
+    @Mod.EventHandler
+    public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {
+        event.registerServerCommand(new com.sc.debug.CommandEnergySC());
     }
 }

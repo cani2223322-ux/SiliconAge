@@ -33,7 +33,7 @@ import net.minecraftforge.common.util.ForgeDirection;
         @Optional.Interface(iface = "ic2.api.energy.tile.IEnergySink", modid = Reference.IC2_MODID),
         @Optional.Interface(iface = "ic2.api.energy.tile.IEnergySource", modid = Reference.IC2_MODID)
 })
-public abstract class TileEntityEnergyBase extends TileEntity implements IEnergyHandlerSC, IEnergySink, IEnergySource {
+public abstract class TileEntityEnergyBase extends TileEntity implements IEnergyHandlerSC, IEnergySink, IEnergySource, Ic2LoadQueueSC.Deferred {
 
     private Tier tier;
     private int energyStored;
@@ -331,17 +331,31 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     @Override
     public void validate() {
         super.validate();
-        registerWithEnergyNet();
+        if (worldObj != null && !worldObj.isRemote && Loader.isModLoaded(Reference.IC2_MODID)) {
+            Ic2LoadQueueSC.queue(this);                   // IC2: on the next server tick (Ic2LoadQueueSC)
+        } else {
+            registerWithEnergyNet();
+        }
+    }
+
+    /** Ic2LoadQueueSC: the tile is in its world now - join the net. */
+    @Override
+    public void joinEnergyNetNow() {
+        if (!registeredWithEnergyNet) {
+            registerWithEnergyNet();
+        }
     }
 
     @Override
     public void invalidate() {
+        Ic2LoadQueueSC.cancel(this);
         unregisterFromEnergyNet();
         super.invalidate();
     }
 
     @Override
     public void onChunkUnload() {
+        Ic2LoadQueueSC.cancel(this);
         unregisterFromEnergyNet();
         super.onChunkUnload();
     }

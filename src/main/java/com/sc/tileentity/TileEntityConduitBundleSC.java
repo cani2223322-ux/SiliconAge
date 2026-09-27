@@ -56,7 +56,7 @@ import net.minecraftforge.fluids.IFluidHandler;
  * extracts from to the inventories on the tube network, nearest first, taking turns.
  */
 @Optional.Interface(iface = "ic2.api.energy.tile.IEnergyConductor", modid = Reference.IC2_MODID)
-public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandler, IEnergyConductor {
+public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandler, IEnergyConductor, com.sc.energy.Ic2LoadQueueSC.Deferred {
 
     // TODO(design doc §12.3): 200 ticks was a TODO-filled default, not confirmed.
     private static final int CORROSION_TICKS = 200;
@@ -1009,12 +1009,23 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
     @Override
     public void validate() {
         super.validate();
-        registerEnergy();
+        if (worldObj != null && !worldObj.isRemote && Loader.isModLoaded(Reference.IC2_MODID)) {
+            com.sc.energy.Ic2LoadQueueSC.queue(this);     // IC2: on the next server tick (Ic2LoadQueueSC)
+        } else {
+            registerEnergy();
+        }
         networksMoved();
+    }
+
+    /** Ic2LoadQueueSC: the bundle is in its world now - its cable joins the net. */
+    @Override
+    public void joinEnergyNetNow() {
+        registerEnergy();
     }
 
     @Override
     public void invalidate() {
+        com.sc.energy.Ic2LoadQueueSC.cancel(this);
         unregisterEnergy();
         networksMoved();
         super.invalidate();
@@ -1022,6 +1033,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
 
     @Override
     public void onChunkUnload() {
+        com.sc.energy.Ic2LoadQueueSC.cancel(this);
         unregisterEnergy();
         networksMoved();
         super.onChunkUnload();
