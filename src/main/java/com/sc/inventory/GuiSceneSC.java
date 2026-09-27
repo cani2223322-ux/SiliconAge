@@ -863,6 +863,40 @@ public final class GuiSceneSC {
         return progress < 0.3F ? 0 : progress < 0.75F ? 1 : 2;
     }
 
+    /** A capsule: a cap, glass, filled to `level` (0..1) in colour `c`. */
+    public static void capsule(int x, int y, int w, int h, float level, int c) {
+        rect(x + 2, y, w - 4, 2, 0xFF8A909A);
+        rect(x, y + 2, w, h - 2, 0xFF9AB8D0);
+        rect(x + 1, y + 3, w - 2, h - 4, 0xFF12181E);
+        int fill = (int) ((h - 4) * Math.max(0F, Math.min(1F, level)));
+        if (fill > 0) {
+            rect(x + 1, y + h - 1 - fill, w - 2, fill, c);
+            rect(x + 1, y + h - 1 - fill, w - 2, 1, mix(c, 0xFFFFFFFF, 0.4F));
+        }
+    }
+
+    /** The cell filler: a nozzle over a capsule on a little conveyor, the fluid running down into it as it fills. */
+    public static void cellFiller(int x, int y, int w, int h, float t, boolean running, float progress, int c) {
+        frame(x, y, w, h);
+        if (c == 0) {
+            c = 0xFF9AD8FF;
+        }
+        int cx = x + w / 2;
+        rect(x + 3, y + h - 7, w - 6, 3, 0xFF6A707A);                          // the conveyor
+        for (int i = x + 5; i < x + w - 6; i += 5) {
+            rect(i + (running ? (int) t % 5 : 0), y + h - 6, 1, 1, 0xFF3A4048);
+        }
+        rect(cx - 6, y + 3, 12, 5, 0xFF6A707A);                                // the nozzle
+        rect(cx - 1, y + 8, 3, 5, 0xFF8A909A);
+        capsule(cx - 6, y + 16, 12, h - 24, running ? progress : 0F, c);
+        if (running) {
+            rect(cx, y + 13, 1, 3, c);
+            for (int i = 0; i < 2; i++) {
+                rect(cx - 1 + i * 2, y + 14 + (int) (t * 2 + i) % 3, 1, 1, mix(c, 0xFFFFFFFF, 0.5F));
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

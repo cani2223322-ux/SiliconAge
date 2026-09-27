@@ -81,6 +81,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean station;
     /** The Kiln: its five products as badges, the kiln wide, the firing curve under it with its stages. */
     private final boolean kiln;
+    /** The Fluid Cell Filler: its two fluids as badges, the filler, a row of the capsules the tank still fills. */
+    private final boolean fill;
+    private static final int FILL_Y = 36, FILL_H = 42, FILL_ROW_Y = 81, FILL_BADGE_W = 40;
     private static final int KILN_X = 88, KILN_Y = 37, KILN_H = 36, KILN_CURVE_Y = 75, KILN_CURVE_H = 18, KILN_BADGE_W = 22;
     private static final int[] KILN_COLOURS = {0xFF6A6A72, 0xFF3A3A3A, 0xFFB04A2A, 0xFFE8E0D0, 0xFF9AA0B8};
     private static final int ST_X = 88, ST_STEP_W = 36, ST_Y = 40, ST_H = 44;
@@ -154,6 +157,7 @@ public class GuiMachineSC extends GuiContainer {
         refi = machine.getMachineType() == com.sc.machine.MachineType.REFINERY;
         roll = machine.getMachineType() == com.sc.machine.MachineType.ROLLING_MACHINE;
         kiln = machine.getMachineType() == com.sc.machine.MachineType.KILN;
+        fill = machine.getMachineType() == com.sc.machine.MachineType.FLUID_CELL_FILLER;
         station = machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_MV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_HV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_EV;
@@ -196,7 +200,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiBigSC.ClearButton b = (GuiBigSC.ClearButton) o;
             int tank = b.id - ContainerMachineSC.BTN_CLEAR;
             int gx = -1;
-            if (washer || blast || saw || oxid || coat || step || ion || sput) {
+            if (washer || blast || saw || oxid || coat || step || ion || sput || fill) {
                 gx = tank == 0 ? WATER_X : -1;
             } else if (ownTanks != null) {
                 for (int k = 0; k < ownTanks.length; k++) {
@@ -275,7 +279,7 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast || saw || oxid || coat || step || ion || sput || ownTanks != null) {
+        if (washer || blast || saw || oxid || coat || step || ion || sput || fill || ownTanks != null) {
             return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -504,6 +508,21 @@ public class GuiMachineSC extends GuiContainer {
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
+        } else if (fill) {                                              // the fluid badges, the filler, the capsules row
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            int mode = fillMode();
+            for (int i = 0; i < 2; i++) {
+                int bx = x + SAW_X + i * (FILL_BADGE_W + 2), by = y + CAPTION_Y - 1;
+                drawRect(bx, by, bx + FILL_BADGE_W, by + 9, i == mode ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + FILL_BADGE_W - 1, by + 8, i == mode ? 0xFF0E3A50 : 0xFF0A1218);
+            }
+            FluidTank tank = machine.getTank(0);
+            int c = tank.getFluid() == null ? 0 : GuiTankGaugeSC.colourOf(tank.getFluid().getFluid()) | 0xFF000000;
+            GuiSceneSC.cellFiller(x + SAW_X, y + FILL_Y, SAW_W, FILL_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress, c);
+            int n = fillCapsules();
+            for (int i = 0; i < 8; i++) {
+                GuiSceneSC.capsule(x + SAW_X + i * 10, y + FILL_ROW_Y, 8, 12, i < n ? 1F : 0F, c == 0 ? 0xFF12181E : c);
+            }
         } else if (kiln) {                                              // the product badges, the kiln, the curve
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
@@ -602,7 +621,7 @@ public class GuiMachineSC extends GuiContainer {
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
-        if (washer || blast || saw || oxid || coat || step || ion || sput) {
+        if (washer || blast || saw || oxid || coat || step || ion || sput || fill) {
             FluidTank water = machine.getTank(0);
             GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
         }
@@ -706,6 +725,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (cvd || etch) {
             drawCvdText();
+            drawUpgradeLine();
+            return;
+        }
+        if (fill) {
+            drawFillText();
             drawUpgradeLine();
             return;
         }
@@ -1117,6 +1141,56 @@ public class GuiMachineSC extends GuiContainer {
             TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
                     GuiHoloSC.LABEL, false, guiLeft, guiTop);
         }
+    }
+
+    /** The Fluid Cell Filler's recipe for the fluid in its tank, or null. */
+    private com.sc.machine.MachineRecipe fillRecipe() {
+        net.minecraftforge.fluids.FluidStack f = machine.getTank(0).getFluid();
+        if (f == null || f.amount <= 0) {
+            return null;
+        }
+        for (com.sc.machine.MachineRecipe r : RecipeRegistry.recipesFor(machine.getMachineType())) {
+            if (r.fluidInputA != null && r.fluidInputA.getFluid() == f.getFluid()) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    /** 0 liquid helium, 1 deuterium, -1 neither in the tank. */
+    private int fillMode() {
+        com.sc.machine.MachineRecipe r = fillRecipe();
+        return r == null ? -1 : r.fluidInputA.getFluid() == com.sc.init.ModFluids.deuterium ? 1 : 0;
+    }
+
+    /** How many capsules the tank still fills. */
+    private int fillCapsules() {
+        com.sc.machine.MachineRecipe r = fillRecipe();
+        return r == null ? 0 : machine.getTank(0).getFluidAmount() / Math.max(1, r.fluidInputA.amount);
+    }
+
+    /** The Fluid Cell Filler: the badges' names, its tank's label, capsules left and a capsule's worth, the recipe and time. */
+    private void drawFillText() {
+        int mode = fillMode();
+        for (int i = 0; i < 2; i++) {
+            String s = Lang.tr("sc.gui.fill.mode." + i);
+            int sw = fontRendererObj.getStringWidth(s) * 5 / 8;
+            small(s, SAW_X + i * (FILL_BADGE_W + 2) + (FILL_BADGE_W - sw) / 2, CAPTION_Y + 1, i == mode ? 0x96F0FF : 0x465A6E);
+        }
+        FluidTank tank = machine.getTank(0);
+        String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : Lang.tr("sc.gui.fill.tank");
+        TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        com.sc.machine.MachineRecipe r = fillRecipe();
+        int w = WATER_X - SAW_X - 4;
+        if (r == null) {
+            smallFit(Lang.tr("sc.gui.fill.empty"), SAW_X, FILL_ROW_Y + 14, w, 0xE65A5A);
+            return;
+        }
+        int n = fillCapsules();
+        smallFit(Lang.tr("sc.gui.fill.left", n > 8 ? "8+" : String.valueOf(n), r.fluidInputA.amount), SAW_X, FILL_ROW_Y + 14, w, 0xE6F0FA);
+        String in = r.inputs.length > 0 && r.inputs[0] != null ? r.inputs[0].getDisplayName() : "-";
+        smallFit(Lang.tr("sc.gui.fill.row", in, r.outputs[0].getDisplayName(), Math.max(1, machine.effectiveTicks(r) / 20F)),
+                SAW_X, FILL_ROW_Y + 21, w, 0x6AA8C8);
     }
 
     /** The Kiln's recipe: the one its inputs make, or null. */
@@ -1728,7 +1802,7 @@ public class GuiMachineSC extends GuiContainer {
         }
 
         boolean overTub = washer && GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY);
-        boolean overOwnTank = (washer || blast || saw || oxid || coat || step || ion || sput)
+        boolean overOwnTank = (washer || blast || saw || oxid || coat || step || ion || sput || fill)
                 && GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY);
         if (ownTanks != null) {
             for (int k = 0; k < ownTanks.length; k++) {
@@ -1792,6 +1866,11 @@ public class GuiMachineSC extends GuiContainer {
                 lines.add(Lang.tr("sc.gui.elec.run", in, out, Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.elec.hint"));
+            return lines;
+        }
+        if (fill && GuiGaugeSC.isOver(SAW_X, CAPTION_Y - 1, SAW_W, FILL_ROW_Y + 12 - CAPTION_Y + 1, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.fill.title"));
+            lines.add(Lang.tr("sc.gui.fill.hint"));
             return lines;
         }
         if (kiln && GuiGaugeSC.isOver(KILN_X, CAPTION_Y - 2, GuiBigSC.SCREEN_RIGHT - KILN_X, KILN_CURVE_Y + KILN_CURVE_H - CAPTION_Y + 2, mouseX, mouseY)) {
