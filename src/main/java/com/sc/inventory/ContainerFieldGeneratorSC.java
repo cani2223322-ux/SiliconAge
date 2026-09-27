@@ -26,7 +26,7 @@ public class ContainerFieldGeneratorSC extends Container {
     public static final int BTN_RANGE_MINUS_16 = 0, BTN_RANGE_MINUS_1 = 1, BTN_RANGE_PLUS_1 = 2,
             BTN_RANGE_PLUS_16 = 3, BTN_MODE = 4, BTN_COLOR = 5, BTN_REDSTONE = 6, BTN_FILTER = 7,
             BTN_CHARGE_MODE = 8, BTN_RESERVE_MINUS = 9, BTN_RESERVE_PLUS = 30,
-            BTN_OUTLINE = 31, BTN_ANIM = 32, BTN_BRIGHT = 33, BTN_BELOW_MINUS = 34, BTN_BELOW_PLUS = 35;
+            BTN_OUTLINE = 31, BTN_ANIM = 32, BTN_BRIGHT = 33, BTN_BELOW_MINUS = 34, BTN_BELOW_PLUS = 35, BTN_POWER = 36;
     /** Switches: BTN_FLAG_BASE + the bit's index (TileEntityFieldGeneratorSC.F_*). */
     public static final int BTN_FLAG_BASE = 10, FLAG_COUNT = 15;
 
@@ -48,6 +48,7 @@ public class ContainerFieldGeneratorSC extends Container {
             case BTN_MODE: field.cycleMode(); return true;
             case BTN_COLOR: field.cycleColor(); return true;
             case BTN_REDSTONE: field.cycleRedstone(); return true;
+            case BTN_POWER: field.togglePower(); return true;
             case BTN_FILTER: field.cycleFilter(); return true;
             case BTN_CHARGE_MODE: field.cycleChargeMode(); return true;
             case BTN_RESERVE_MINUS: field.adjustChargeReserve(-TileEntityFieldGeneratorSC.RESERVE_STEP); return true;

@@ -28,18 +28,32 @@ public final class GuiPowerSC {
 
     private final TileEntityEnergyBase te;
     private final int powerId, redstoneId;
+    /** Where the buttons sit (screen-local), the gauge column's width, the gauge under them. */
+    private final int bx, by, gw, gy, gh, rsX, rsW;
     private long armedAt;
 
     public GuiPowerSC(TileEntityEnergyBase te, int powerId, int redstoneId) {
+        this(te, powerId, redstoneId, X, Y, GuiBigSC.GAUGE_W, GAUGE_Y, GAUGE_H);
+    }
+
+    /** For a screen with its own layout: the buttons at (x, y) over a gauge column w wide, the gauge at gaugeY, gaugeH tall. */
+    public GuiPowerSC(TileEntityEnergyBase te, int powerId, int redstoneId, int x, int y, int w, int gaugeY, int gaugeH) {
         this.te = te;
         this.powerId = powerId;
         this.redstoneId = redstoneId;
+        this.bx = x;
+        this.by = y;
+        this.gw = w;
+        this.gy = gaugeY;
+        this.gh = gaugeH;
+        this.rsX = x + POWER_W + 1;
+        this.rsW = w - POWER_W - 1;
     }
 
     @SuppressWarnings("unchecked")
     public void addButtons(List buttonList, int guiLeft, int guiTop) {
-        buttonList.add(new PowerButton(guiLeft + X, guiTop + Y));
-        buttonList.add(new RedstoneButton(guiLeft + RS_X, guiTop + Y));
+        buttonList.add(new PowerButton(guiLeft + bx, guiTop + by));
+        buttonList.add(new RedstoneButton(guiLeft + rsX, guiTop + by));
     }
 
     /** False for the first click on a dangerous switch-on (it only arms it). */
@@ -62,7 +76,7 @@ public final class GuiPowerSC {
     /** The buttons' tooltips (screen-local coordinates), or null. */
     public List<String> tooltip(int mx, int my) {
         List<String> lines = new ArrayList<String>();
-        if (GuiGaugeSC.isOver(X, Y, POWER_W, H, mx, my)) {
+        if (GuiGaugeSC.isOver(bx, by, POWER_W, H, mx, my)) {
             boolean on = te.isPowerOn();
             lines.add(Lang.tr(on ? "sc.gui.power.on" : "sc.gui.power.off"));
             lines.add(Lang.tr(on ? "sc.gui.power.hint.on" : "sc.gui.power.hint.off"));
@@ -72,7 +86,7 @@ public final class GuiPowerSC {
             }
             return lines;
         }
-        if (GuiGaugeSC.isOver(RS_X, Y, RS_W, H, mx, my)) {
+        if (GuiGaugeSC.isOver(rsX, by, rsW, H, mx, my)) {
             lines.add(Lang.tr("sc.gui.redstone." + te.getRedstoneMode()));
             lines.add(Lang.tr("sc.gui.redstone.hint"));
             return lines;
@@ -85,12 +99,11 @@ public final class GuiPowerSC {
         if (te.isPowerOn()) {
             return;
         }
-        int gw = GuiBigSC.GAUGE_W;
-        Gui.drawRect(X + 2, GAUGE_Y + 10, X + gw - 2, GAUGE_Y + GAUGE_H - 12, 0xA0000000);
+        Gui.drawRect(bx + 2, gy + 10, bx + gw - 2, gy + gh - 12, 0xA0000000);
         String off = Lang.tr("sc.gui.power.label");
         int ow = fr.getStringWidth(off) * 5 / 8;
         GL11.glPushMatrix();
-        GL11.glTranslatef(X + (gw - ow) / 2F, GAUGE_Y + GAUGE_H / 2F - 3, 0F);
+        GL11.glTranslatef(bx + (gw - ow) / 2F, gy + gh / 2F - 3, 0F);
         GL11.glScalef(0.625F, 0.625F, 1F);
         fr.drawString(off, 0, 0, 0xB0B8C4);
         GL11.glPopMatrix();
@@ -152,7 +165,7 @@ public final class GuiPowerSC {
     /** A dash (always), a lit torch (with a signal), an unlit one (without). */
     private class RedstoneButton extends GuiButton {
         RedstoneButton(int x, int y) {
-            super(redstoneId, x, y, RS_W, H, "");
+            super(redstoneId, x, y, rsW, H, "");
         }
 
         @Override

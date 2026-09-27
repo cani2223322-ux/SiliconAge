@@ -129,7 +129,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public static final int[] PRESETS = {0x59E6FF, 0x59FF73, 0xFF4D4D, 0xBF73FF, 0xFFCC4D, 0xFFFFFF, 0xFF78BE, 0xFF8C1E, 0xFFF04D, 0xB4FF3C, 0x2EE6A0, 0x3CD2C8, 0x78B4FF, 0x3C64FF, 0x7850FF, 0xE63CE6, 0xE6286E, 0xFF7F66, 0xFFA028, 0xE6C88C, 0xA06432, 0xA0A0A0, 0x505A64, 0xC8F0FF};
 
     private int flags = DEFAULT_FLAGS;
-    private int redstone = REDSTONE_ALWAYS, filter = FILTER_HOSTILE;
+    private int redstone = REDSTONE_OFF, filter = FILTER_HOSTILE;      // a new one: works without a signal, a signal stops it
     /** 0: the same as the range. */
     private int height;
     private int offX, offY, offZ, anchor = ANCHOR_NODES;
@@ -159,6 +159,18 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     public int getRedstone() {
         return redstone;
+    }
+
+    /** The field keeps its own redstone setting; the power switch's button (GuiPowerSC) shows it. */
+    @Override
+    public int getRedstoneMode() {
+        return redstone;
+    }
+
+    /** The power switch (master): off, the field is down and takes no energy. */
+    public void togglePower() {
+        powerOn = !powerOn;
+        changed();
     }
 
     public void cycleRedstone() {
@@ -776,7 +788,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     @Override
     public int demandedEnergy() {
         if (master) {
-            return super.demandedEnergy();
+            return powerOn ? super.demandedEnergy() : 0;
         }
         TileEntityFieldGeneratorSC m = loadedMaster();
         return m == null ? 0 : m.demandedEnergy();
@@ -785,7 +797,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     @Override
     public int receiveEnergy(net.minecraftforge.common.util.ForgeDirection from, int voltage, int amount, boolean simulate) {
         if (master) {
-            return super.receiveEnergy(from, voltage, amount, simulate);
+            return powerOn ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
         }
         TileEntityFieldGeneratorSC m = loadedMaster();
         return m == null ? 0 : m.receiveEnergy(from, voltage, amount, simulate);
@@ -911,6 +923,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             redstoneOff = rsOff;
             changed();
         }
+        rsOff |= !powerOn;                           // switched off: down as with redstone
         int upkeep = upkeepPerTick();
         boolean wasActive = active;
         // down, it restarts only with a second's upkeep in hand - else a trickle of power flicked it on and off
@@ -1684,7 +1697,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         chargeMode = Math.max(0, Math.min(CHARGE_MODES - 1, nbt.getInteger("ChargeMode")));
         chargeReserve = Math.max(0, Math.min(RESERVE_MAX, nbt.getInteger("ChargeReserve")));
         chargeBelow = nbt.hasKey("ChargeBelow") ? Math.max(CHARGE_BELOW_MIN, Math.min(100, nbt.getInteger("ChargeBelow"))) : 100;
-        redstone = Math.max(0, Math.min(2, nbt.getInteger("Redstone")));
+        redstone = nbt.hasKey("Redstone") ? Math.max(0, Math.min(2, nbt.getInteger("Redstone"))) : REDSTONE_OFF;
         filter = loadFilter(nbt.getInteger("Filter"));
         readZone(nbt);
         owner = nbt.getString("Owner");

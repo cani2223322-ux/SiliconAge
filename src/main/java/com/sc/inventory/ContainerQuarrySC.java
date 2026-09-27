@@ -20,14 +20,14 @@ import net.minecraftforge.fluids.FluidStack;
 public class ContainerQuarrySC extends Container {
 
     public static final int G_FILTER = 0, G_BUFFER = 1, G_UPGRADES = 2, G_PLAYER = 3, G_LENS = 4, G_TOOLS = 5;
-    public static final int FILTER_X = 44, FILTER_Y = 50, BUFFER_X = 44, BUFFER_Y = 80;
-    /** 18 module slots as a 9 x 2 grid; the head, scanner and card in a row under it, each after its label. */
-    public static final int UPGRADE_X = 44, UPGRADE_Y = 40, TOOLS_Y = 90, TOOL_COL = 78, TOOL_SLOT = 52;
-    public static final int HEAD_X = 8 + TOOL_SLOT, SCANNER_X = 8 + TOOL_COL + TOOL_SLOT, CARD_X = 8 + 2 * TOOL_COL + TOOL_SLOT;
-    public static final int LENS_X = 8, LENS_Y = 40;
-    public static final int INV_X = 44, INV_Y = 157;
-    /** The screen's content starts this much lower than its coordinates say (two rows of tabs above it). */
-    public static final int TOP = 22;
+    public static final int FILTER_X = 44, FILTER_Y = 61, BUFFER_X = 44, BUFFER_Y = 91;
+    /** 18 module slots as a 9 x 2 grid; the head, scanner and card in a row under it, each over its label. */
+    public static final int UPGRADE_X = 14, UPGRADE_Y = 38, TOOLS_Y = 84, TOOL_COL = 36;
+    public static final int HEAD_X = 14, SCANNER_X = 14 + TOOL_COL, CARD_X = 14 + 2 * TOOL_COL;
+    public static final int LENS_X = 14, LENS_Y = 38;
+    public static final int INV_X = 44, INV_Y = 166;
+    /** Slot y's are counted from here (the title strip and the row of tabs above it). */
+    public static final int TOP = 14;
     public static final int FIRST_BUFFER = TileEntityQuarrySC.FILTER_SLOTS, FIRST_UPGRADE = FIRST_BUFFER + TileEntityQuarrySC.BUFFER,
             FIRST_TOOLS = FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES, FIRST_LENS = FIRST_TOOLS + 3,
             FIRST_PLAYER = FIRST_LENS + TileEntityQuarrySC.LENSES;

@@ -67,6 +67,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     private long volume;
 
     private final TileEntityFieldGeneratorSC field;
+    /** The power switch and the redstone button over the gauge, as a machine's. */
+    private GuiPowerSC power;
     private GuiTextField nameField;
     /** The map, recomputed when the field's shape changes. */
     private boolean[][] mapCells;
@@ -104,7 +106,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         }
         ((ContainerFieldGeneratorSC) inventorySlots).setSlotsShown(tab == TAB_UPGRADES);
         nameField = null;
-        buttonList.add(new HoloButton(ContainerFieldGeneratorSC.BTN_REDSTONE, guiLeft + ENERGY_X, guiTop + 11, ENERGY_W, 11, ""));
+        power = new GuiPowerSC(field, ContainerFieldGeneratorSC.BTN_POWER, ContainerFieldGeneratorSC.BTN_REDSTONE,
+                ENERGY_X, 11, ENERGY_W, ENERGY_Y, ENERGY_H);
+        power.addButtons(buttonList, guiLeft, guiTop);
         int x = guiLeft + 8, y = guiTop + 30;
         switch (tab) {
             case 0:
@@ -248,8 +252,6 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 b.displayString = (on ? "§a" : "§7") + Lang.tr("sc.fieldgui.flag." + flag) + ": " + onOff(on);
             } else if (id == ContainerFieldGeneratorSC.BTN_MODE) {
                 b.displayString = Lang.tr("sc.fieldgui.shape", modeName(field.getMode()));
-            } else if (id == ContainerFieldGeneratorSC.BTN_REDSTONE) {
-                b.displayString = Lang.tr("sc.fieldgui.redstone.short." + field.getRedstone());
             } else if (id == ContainerFieldGeneratorSC.BTN_FILTER) {
                 b.displayString = Lang.tr("sc.fieldgui.filter", Lang.tr("sc.fieldgui.filter." + field.getFilter()));
             } else if (id <= ContainerFieldGeneratorSC.BTN_RANGE_PLUS_16) {
@@ -553,6 +555,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
 
     @Override
     protected void actionPerformed(GuiButton button) {
+        if (!power.allowClick(button)) {
+            return;
+        }
         if (button.id == PAGE_ID) {
             chargePage = !chargePage;
             initGui();
@@ -696,6 +701,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         int c = GuiHoloSC.VALUE, dim = GuiHoloSC.LABEL;
         fontRendererObj.drawString(Lang.tr("tile.siliconage.fieldGeneratorSC.name"), 8, 5 - TABS_UP, 0xF0F4FA);
+        power.drawGaugeOff(fontRendererObj);
         String[] captions = {"sc.fieldgui.cap.field", chargePage ? "sc.fieldgui.cap.charge" : "sc.fieldgui.cap.functions",
                 "sc.fieldgui.cap.access", "sc.fieldgui.cap.map", "sc.fieldgui.cap.upgrades", "sc.fieldgui.cap.zone"};
         if (tab != 0) {
@@ -704,9 +710,11 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         switch (tab) {
             case 0: {
                 fit(Lang.tr(captions[0]), 12, 15, 40, GuiHoloSC.CYAN & 0xFFFFFF);
-                String status = field.isRedstoneOff() ? Lang.tr("sc.fieldgui.state.redstone")
+                String status = !field.isPowerOn() ? Lang.tr("sc.fieldgui.state.disabled")
+                        : field.isRedstoneOff() ? Lang.tr("sc.fieldgui.state.redstone")
                         : Lang.tr(field.isActive() ? "sc.fieldgui.state.on" : "sc.fieldgui.state.off");
-                fit(status, 54, 16, 48, field.isActive() ? GuiHoloSC.OK : field.isRedstoneOff() ? GuiHoloSC.WARN : GuiHoloSC.BAD);
+                fit(status, 54, 16, 48, field.isActive() ? GuiHoloSC.OK
+                        : !field.isPowerOn() ? GuiHoloSC.IDLE : field.isRedstoneOff() ? GuiHoloSC.WARN : GuiHoloSC.BAD);
                 String[] lab = {Lang.tr("sc.fieldgui.card.mode"), Lang.tr("sc.fieldgui.card.nodes"), Lang.tr("sc.fieldgui.card.range"),
                         Lang.tr("sc.fieldgui.card.upkeep")};
                 String[] val = {modeName(field.getMode()), String.valueOf(field.getNodeCount()),
@@ -896,7 +904,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
      * A button in the holo style: dark, cyan-edged, brighter under the mouse. A switch's caption
      * starting "§a" / "§7" gets a lamp - green on, grey off - and the colour code is dropped.
      */
-    private static class HoloButton extends TextFitSC.Button {
+    static class HoloButton extends TextFitSC.Button {
         HoloButton(int id, int x, int y, int w, int h, String text) {
             super(id, x, y, w, h, text);
         }
@@ -938,7 +946,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     }
 
     /** A tab in the holo style: a small icon and the short name; the current one lit. */
-    private static class HoloTab extends TextFitSC.Tab {
+    static class HoloTab extends TextFitSC.Tab {
         boolean current;
         private final net.minecraft.item.ItemStack icon;
         private final String full;
@@ -1062,6 +1070,10 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         TextFitSC.beginFrame();
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tip = new ArrayList<String>();
+        List<String> powerTip = power.tooltip(mouseX - guiLeft, mouseY - guiTop);
+        if (powerTip != null) {
+            tip.addAll(powerTip);
+        }
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
             if (mouseX < b.xPosition || mouseY < b.yPosition || mouseX >= b.xPosition + b.width || mouseY >= b.yPosition + b.height) {
@@ -1099,9 +1111,6 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 key = "sc.fieldgui.flag." + (1 << (b.id - ContainerFieldGeneratorSC.BTN_FLAG_BASE)) + ".desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_MODE) {
                 key = "sc.fieldgui.shape.desc";
-            } else if (b.id == ContainerFieldGeneratorSC.BTN_REDSTONE) {
-                tip.add(Lang.tr("sc.fieldgui.redstone", Lang.tr("sc.fieldgui.redstone." + field.getRedstone())));
-                key = "sc.fieldgui.redstone.desc";
             } else if (b.id == ContainerFieldGeneratorSC.BTN_FILTER) {
                 key = "sc.fieldgui.filter.desc";
             } else if (b.id >= REMOVE_BASE) {

@@ -87,7 +87,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public static final int POWER_FULL = 0, POWER_ECO = 1, POWER_MIN = 2;
     public static final int REDSTONE_ALWAYS = 0, REDSTONE_ON = 1, REDSTONE_OFF = 2;
 
-    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD, REPAIRING, TANK_FULL }
+    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD, REPAIRING, TANK_FULL, DISABLED }
 
     // ---- the pump's tank: compartments, each its own fluid ----
     public static final int TANKS = 4, TANK_BASE = 16000, TANK_PER_MODULE = 32000, FLUID_FILTER_MAX = 6;
@@ -516,6 +516,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     private void dig() {
         if (!running) {
             setStatus(done ? Status.DONE : Status.PAUSED);
+            return;
+        }
+        if (!powerOn) {
+            setStatus(Status.DISABLED);                // the power switch (GuiPowerSC): takes no energy either
             return;
         }
         boolean powered = worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
@@ -1611,7 +1615,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             A_FILTER_MODE = 14, A_OUT_SIDE = 15, A_SHOW = 16, A_VFLAG = 17, A_BRIGHT = 18, A_COLOR_FRAME = 19,
             A_COLOR_PLANE = 20, A_SCAN = 21, A_TANK_SIDE = 22, A_TANK_CLEAR = 23, A_TANK_TO_FILTER = 24,
             A_FF_MODE = 25, A_FF_REMOVE = 26, A_TANK_FULL = 27, A_FF_HAND = 28, A_FF_CLEAR = 29, A_FF_DELETE = 30,
-            A_TANK_PIN = 31, A_TANK_AUTO = 32, A_FVEIN = 33, A_FVEIN_RANGE = 34, A_FVEIN_FLOWING = 35, A_WASH_FEED = 36;
+            A_TANK_PIN = 31, A_TANK_AUTO = 32, A_FVEIN = 33, A_FVEIN_RANGE = 34, A_FVEIN_FLOWING = 35, A_WASH_FEED = 36,
+            A_SWITCH = 37;
 
     public void action(EntityPlayer p, int action, int value) {
         boolean area = false;
@@ -1626,6 +1631,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             case A_RESET: resetCursor(); break;
             case A_REDSTONE: redstone = (redstone + 1) % 3; break;
             case A_POWER: powerMode = (powerMode + 1) % 3; break;
+            case A_SWITCH: powerOn = !powerOn; break;
             case A_XP:
                 if (xp > 0) {
                     p.addExperience(xp);
@@ -1749,6 +1755,21 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public int getFortuneLevel() { return fortuneLevel; }
     public int getPowerMode() { return powerMode; }
     public int getRedstone() { return redstone; }
+
+    /** The quarry keeps its own redstone setting; the power switch's button (GuiPowerSC) shows it. */
+    @Override
+    public int getRedstoneMode() { return redstone; }
+
+    /** Switched off, it takes no energy - as a machine. */
+    @Override
+    public int demandedEnergy() {
+        return powerOn ? super.demandedEnergy() : 0;
+    }
+
+    @Override
+    public int receiveEnergy(net.minecraftforge.common.util.ForgeDirection from, int voltage, int amount, boolean simulate) {
+        return powerOn ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
+    }
     public int getOutSide() { return outSide; }
     public int getFilterMode() { return filterMode; }
     public int getShow() { return show; }
@@ -2280,6 +2301,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setBoolean("Done", done);
         nbt.setInteger("LayerY", layerY);
         nbt.setInteger("Cursor", cursor);
+        nbt.setBoolean("PowerOff", !powerOn);
         NBTTagList list = new NBTTagList();
         for (int i : new int[]{SLOT_CARD}) {
             if (slots[i] != null) {
@@ -2319,6 +2341,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         done = nbt.getBoolean("Done");
         layerY = nbt.getInteger("LayerY");
         cursor = nbt.getInteger("Cursor");
+        powerOn = !nbt.getBoolean("PowerOff");
         for (int i = FIRST_UPGRADE; i <= SLOT_CARD; i++) {
             if (i != SLOT_HEAD && i != SLOT_SCANNER) {
                 slots[i] = null;
