@@ -660,6 +660,46 @@ public final class GuiSceneSC {
         rect(ax + (int) (t * 2) % Math.max(1, cx - ax), y + 3, 2, 1, 0xFFFFFFFF);   // the current
     }
 
+    /**
+     * The air separator's cryogenic column: the intake fan bottom left blowing air in, the column
+     * with its trays frosting over from the bottom with the progress, the draw-offs (oxygen low,
+     * argon in the middle), nitrogen vented at the top.
+     */
+    public static void airColumn(int x, int y, int w, int h, float t, boolean running, float progress) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int fx = x + 3, fy = y + h - 12;
+        rect(fx, fy, 10, 9, 0xFF6A707A);                                       // the fan
+        rect(fx + 1, fy + 1, 8, 7, 0xFF1A2430);
+        double a = running ? t * 1.2 : 0;
+        for (int k = 0; k < 3; k++) {
+            double aa = a + k * 2.09;
+            rect(fx + 5 + (int) (3 * Math.cos(aa)), fy + 4 + (int) (3 * Math.sin(aa)), 1, 1, 0xFFB0B8C4);
+        }
+        int c0 = x + w / 2 - 4, c1 = x + w / 2 + 6;
+        rect(c0 - 1, y + 4, c1 - c0 + 2, h - 8, 0xFF9AB8D0);                  // the column
+        rect(c0, y + 5, c1 - c0, h - 10, 0xFF1A2A36);
+        int frost = running ? (int) ((h - 10) * progress) : 0;
+        for (int yy = y + h - 5 - frost; yy < y + h - 5; yy++) {
+            rect(c0, yy, c1 - c0, 1, yy % 3 != 0 ? 0xFF4A7A9A : 0xFF8AC8E8);
+        }
+        for (int i = 1; i < 6; i++) {
+            rect(c0, y + 5 + i * (h - 10) / 6, c1 - c0, 1, 0xFF6A8AA8);        // the trays
+        }
+        rect(fx + 10, fy + 4, c0 - fx - 11, 2, 0xFF6A707A);                   // the air pipe
+        rect(c1 + 1, y + h - 14, 4, 2, 0xFF8AB0E8);                            // oxygen, low
+        rect(c1 + 1, y + h / 2, 4, 2, 0xFFB070FF);                             // argon, the middle
+        if (running) {
+            int run = Math.max(1, c0 - fx - 11);
+            for (int i = 0; i < 3; i++) {
+                rect(fx + 10 + (int) ((t * 1.5F + i * 5) % run), fy + 4, 1, 1, 0xFFE8F8FF);
+            }
+            for (int i = 0; i < 3; i++) {                                      // nitrogen vented
+                rect(x + w / 2 - 1 + i * 2, y + 2, 1, 1 + (int) (t + i) % 2, 0xFFD8E8F8);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
