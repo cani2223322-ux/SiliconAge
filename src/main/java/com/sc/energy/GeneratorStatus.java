@@ -23,7 +23,11 @@ public enum GeneratorStatus {
     WATER_FULL,
     NO_STRUCTURE,
     OVERHEATED,
-    NO_COOLANT;
+    NO_COOLANT,
+    /** The power switch is off: nothing made, nothing given out. */
+    DISABLED,
+    /** Held by its redstone mode. */
+    REDSTONE;
 
     public String localized() {
         return Lang.tr("sc.status.generator." + name().toLowerCase(java.util.Locale.ROOT));

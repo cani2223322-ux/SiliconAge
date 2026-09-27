@@ -101,6 +101,93 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         return true;
     }
 
+    // ---- the power switch (machines, generators, storages): off, the tile neither takes nor gives
+    // energy, so no line can overvolt it; a redstone mode can hold it too ----
+
+    protected boolean powerOn = true;
+    /** 0 works always, 1 only with a redstone signal, 2 only without one. */
+    protected int redstoneMode;
+
+    public boolean isPowerOn() {
+        return powerOn;
+    }
+
+    public void setPowerOn(boolean on) {
+        powerOn = on;
+        markDirty();
+    }
+
+    public int getRedstoneMode() {
+        return redstoneMode;
+    }
+
+    public void setRedstoneMode(int mode) {
+        redstoneMode = Math.max(0, Math.min(2, mode));
+        markDirty();
+    }
+
+    /** Switch and redstone mode as one int for a container's sync. */
+    public int powerFlags() {
+        return (powerOn ? 1 : 0) | redstoneMode << 1;
+    }
+
+    public void setPowerFlagsClient(int flags) {
+        powerOn = (flags & 1) != 0;
+        redstoneMode = (flags >> 1) & 3;
+    }
+
+    protected boolean redstoneAllows() {
+        if (redstoneMode == 0 || worldObj == null) {
+            return true;
+        }
+        boolean signal = worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
+        return redstoneMode == 1 ? signal : !signal;
+    }
+
+    /** Switched on and not held by redstone. */
+    protected boolean switchedOn() {
+        return powerOn && redstoneAllows();
+    }
+
+    /**
+     * The strongest voltage a neighbour can bring in on a face that takes energy: a cable, or an
+     * energy source touching it; null when there's none. Works on the client too (for the screens).
+     */
+    public Tier lineTier() {
+        Tier best = null;
+        if (worldObj == null) {
+            return null;
+        }
+        for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
+            int x = xCoord + dir.offsetX, y = yCoord + dir.offsetY, z = zCoord + dir.offsetZ;
+            if (!acceptsFrom(dir) || !worldObj.blockExists(x, y, z)) {
+                continue;
+            }
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y, z);
+            Tier t = null;
+            if (te instanceof com.sc.tileentity.TileEntityConduitBundleSC && ((com.sc.tileentity.TileEntityConduitBundleSC) te).getCable() != null) {
+                t = ((com.sc.tileentity.TileEntityConduitBundleSC) te).getCable().tier;
+            } else if (te instanceof com.sc.tileentity.TileEntityCableSC && ((com.sc.tileentity.TileEntityCableSC) te).getCableType() != null) {
+                t = ((com.sc.tileentity.TileEntityCableSC) te).getCableType().tier;
+            } else if (te instanceof TileEntityEnergyBase && ((TileEntityEnergyBase) te).isEnergySource()) {
+                t = ((TileEntityEnergyBase) te).outputTier();
+            }
+            if (t != null && (best == null || t.ordinal() > best.ordinal())) {
+                best = t;
+            }
+        }
+        return best;
+    }
+
+    /** It takes energy, and a line beside it is stronger than its input: switching on would blow it up. */
+    public boolean lineTooStrong() {
+        if (!isEnergySink() || acceptsAnyVoltage()) {
+            return false;
+        }
+        Tier t = lineTier();
+        return t != null && inputTier().excessTiersOf(t) > 0;
+    }
+
     /** True when nothing overvolts this tile at all (a universal transformer upgrade). */
     public boolean acceptsAnyVoltage() {
         return false;
@@ -222,12 +309,16 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
         energyStored = nbt.getInteger("EnergySC");
+        powerOn = !nbt.getBoolean("PowerOff");                  // tiles saved before the switch: on
+        redstoneMode = Math.max(0, Math.min(2, nbt.getInteger("RedstoneMode")));
         tier = Tier.values()[Math.min(Tier.values().length - 1, Math.max(0, nbt.getInteger("TierSC")))];
     }
 
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
+        nbt.setBoolean("PowerOff", !powerOn);
+        nbt.setInteger("RedstoneMode", redstoneMode);
         nbt.setInteger("EnergySC", energyStored);
         nbt.setInteger("TierSC", tier.ordinal());
     }

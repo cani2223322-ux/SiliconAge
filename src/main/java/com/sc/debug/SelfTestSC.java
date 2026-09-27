@@ -775,6 +775,14 @@ public final class SelfTestSC {
         check(off.demandedEnergy() == 0 && off.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 100, false) == 0
                         && !back.isPowerOn() && back.getRedstoneMode() == 2 && legacy.isPowerOn() && legacy.getRedstoneMode() == 0,
                 "power switch: off takes no energy (an XV packet doesn't blow an LV machine up), saved with the redstone mode; old saves stay on");
+        com.sc.tileentity.TileEntityEnergyStorageSC sw = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        sw.setStorageTier(com.sc.energy.Tier.LV);
+        sw.setStoredFromItem(1000);
+        boolean swOn = sw.offerableEnergy() > 0 && sw.demandedEnergy() > 0;
+        sw.setPowerOn(false);
+        check(swOn && sw.offerableEnergy() == 0 && sw.demandedEnergy() == 0
+                        && sw.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 100, false) == 0,
+                "power switch: a storage switched off neither gives nor takes energy (no overvolting either)");
         boolean hidden = true;
         for (int slot : c.getAccessibleSlotsFromSide(1)) {
             hidden &= slot < TileEntityMachineSC.FIRST_UPGRADE_SLOT;

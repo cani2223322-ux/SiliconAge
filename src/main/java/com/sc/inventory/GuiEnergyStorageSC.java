@@ -29,6 +29,23 @@ public class GuiEnergyStorageSC extends GuiContainer {
         ySize = GuiBigSC.H;
     }
 
+    private GuiPowerSC power;
+
+    @Override
+    public void initGui() {
+        super.initGui();
+        buttonList.clear();
+        power = new GuiPowerSC(storage, ContainerEnergyStorageSC.BTN_POWER, ContainerEnergyStorageSC.BTN_REDSTONE);
+        power.addButtons(buttonList, guiLeft, guiTop);
+    }
+
+    @Override
+    protected void actionPerformed(net.minecraft.client.gui.GuiButton button) {
+        if (power.allowClick(button)) {
+            mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
+        }
+    }
+
     private float fraction() {
         return (float) storage.getEnergyStored() / Math.max(1, storage.getMaxEnergyStored());
     }
@@ -40,7 +57,7 @@ public class GuiEnergyStorageSC extends GuiContainer {
         GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         GuiHoloSC.slot(x + ContainerEnergyStorageSC.SLOT_X, y + ContainerEnergyStorageSC.SLOT_Y, storage.getStackInSlot(0) != null);
         GuiHoloSC.bar(x + BAR_X, y + BAR_Y, BAR_W, BAR_H, fraction(), 24, GuiEnergyGaugeSC.colour(fraction()));
-        GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H, fraction());
+        GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H, fraction());
         GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
     }
@@ -63,6 +80,8 @@ public class GuiEnergyStorageSC extends GuiContainer {
         fit(Lang.tr("sc.storage.gui.output", storage.getTier().getVoltage()), TEXT_X, 77, room, GuiHoloSC.LABEL);
         String pct = Math.round(fraction() * 100) + "%";
         fontRendererObj.drawString(pct, BAR_X + BAR_W - fontRendererObj.getStringWidth(pct), BAR_Y - 10, GuiEnergyGaugeSC.colour(fraction()) & 0xFFFFFF);
+        power.drawGaugeOff(fontRendererObj);
+        power.drawWarning(fontRendererObj, TEXT_X, 52, GuiBigSC.SCREEN_RIGHT - TEXT_X, guiLeft, guiTop);
     }
 
     /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
@@ -71,12 +90,16 @@ public class GuiEnergyStorageSC extends GuiContainer {
     }
 
     private List<String> tooltipAt(int mx, int my) {
+        List<String> powerTip = power.tooltip(mx, my);
+        if (powerTip != null) {
+            return powerTip;
+        }
         List<String> lines = new ArrayList<String>();
         if (GuiGaugeSC.isOver(TEXT_X, 76, GuiBigSC.SCREEN_RIGHT - TEXT_X, 10, mx, my)) {
             lines.add(Lang.tr("sc.storage.tooltip.io", storage.getTier().getVoltage()));
             return lines;
         }
-        if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H, mx, my)
+        if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H, mx, my)
                 || GuiGaugeSC.isOver(BAR_X - 1, BAR_Y - 1, BAR_W + 2, BAR_H + 2, mx, my)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(storage.getEnergyStored() + " / " + storage.getMaxEnergyStored() + " EU");

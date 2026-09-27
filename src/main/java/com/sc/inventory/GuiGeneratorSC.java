@@ -45,10 +45,14 @@ public class GuiGeneratorSC extends GuiContainer {
         ySize = GuiBigSC.H;
     }
 
+    private GuiPowerSC power;
+
     @Override
     public void initGui() {
         super.initGui();
         buttonList.clear();
+        power = new GuiPowerSC(generator, ContainerGeneratorSC.BTN_POWER, ContainerGeneratorSC.BTN_REDSTONE);
+        power.addButtons(buttonList, guiLeft, guiTop);
         if (type == GeneratorType.CREATIVE) {
             buttonList.add(new TextFitSC.Button(ContainerGeneratorSC.BTN_CREATIVE_TIER, guiLeft + LEFT_X, guiTop + 28, LEFT_W, 16, ""));
         }
@@ -78,6 +82,9 @@ public class GuiGeneratorSC extends GuiContainer {
 
     @Override
     protected void actionPerformed(GuiButton button) {
+        if (!power.allowClick(button)) {
+            return;
+        }
         mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
     }
 
@@ -131,7 +138,7 @@ public class GuiGeneratorSC extends GuiContainer {
             drawTexturedModalRect(x + SUN_X, y + SUN_Y, lit ? GuiGaugeSC.SPR_SUN_U : GuiGaugeSC.SPR_SUN_OFF_U, GuiGaugeSC.SPR_SUN_V, 32, 32);
         }
 
-        GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H,
+        GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H,
                 (float) generator.getEnergyStored() / Math.max(1, generator.getMaxEnergyStored()));
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawing a fluid leaves the blocks atlas bound
@@ -145,6 +152,11 @@ public class GuiGeneratorSC extends GuiContainer {
 
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
+        drawForeground();
+        power.drawGaugeOff(fontRendererObj);
+    }
+
+    private void drawForeground() {
         fit(type.localizedName(), 8, 5, GuiBigSC.titleRoom(fontRendererObj, generator.outputTier()), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, generator.outputTier(), GuiBigSC.W - 6, 3);
         GuiBigSC.labels(fontRendererObj, upgrades() ? Lang.tr("sc.gui.big.upgrades") : null, Lang.tr("container.inventory"));
@@ -276,7 +288,11 @@ public class GuiGeneratorSC extends GuiContainer {
             }
         }
 
-        if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiBigSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiBigSC.GAUGE_H, mouseX, mouseY)) {
+        List<String> powerTip = power.tooltip(mouseX, mouseY);
+        if (powerTip != null) {
+            return powerTip;
+        }
+        if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(generator.getEnergyStored() + " / " + generator.getMaxEnergyStored() + " EU");
             lines.add(Lang.tr("sc.gui.output", type == GeneratorType.CREATIVE ? generator.getCreativeTier().getVoltage() : generator.ratedOutput()));

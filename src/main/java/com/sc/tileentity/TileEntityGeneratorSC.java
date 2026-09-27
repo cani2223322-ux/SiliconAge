@@ -311,8 +311,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     @Override
+    public int offerableEnergy() {
+        return switchedOn() ? super.offerableEnergy() : 0;
+    }
+
+    @Override
     public int demandedEnergy() {
-        if (isEnergySink()) {
+        if (isEnergySink() && powerOn) {
             return (int) Math.min(Integer.MAX_VALUE, generatorType.ignitionThreshold() - ignitionEU);
         }
         return 0;
@@ -320,7 +325,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     @Override
     public int receiveEnergy(ForgeDirection from, int voltage, int amount, boolean simulate) {
-        if (!isEnergySink()) {
+        if (!isEnergySink() || !powerOn) {
             return 0; // every other generator, and an already-lit reactor, never accepts energy
         }
         int room = (int) Math.min(Integer.MAX_VALUE, generatorType.ignitionThreshold() - ignitionEU);
@@ -342,6 +347,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return;
         }
         syncTankCapacity();
+        if (!switchedOn()) {
+            status = powerOn ? GeneratorStatus.REDSTONE : GeneratorStatus.DISABLED;
+            lastOutput = 0;
+            return;
+        }
         int before = getEnergyStored();
         switch (generatorType.kind) {
             case PASSIVE: updateSolar(); break;

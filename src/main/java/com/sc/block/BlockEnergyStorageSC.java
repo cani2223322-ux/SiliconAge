@@ -71,6 +71,7 @@ public class BlockEnergyStorageSC extends Block {
         }
         TileEntityEnergyStorageSC storage = (TileEntityEnergyStorageSC) te;
         storage.setFacing(facingToward(placer));
+        storage.setPowerOn(false);                             // placed off, as a machine: on once the line's checked
         if (stack.hasTagCompound()) {
             storage.setStoredFromItem(stack.getTagCompound().getInteger("EnergySC"));
         }

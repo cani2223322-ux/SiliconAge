@@ -15,7 +15,25 @@ public class ContainerEnergyStorageSC extends Container {
     public static final int SLOT_X = 16, SLOT_Y = 30;
 
     private final TileEntityEnergyStorageSC storage;
-    private final IntSyncSC sync = new IntSyncSC(2);   // energy, flow per tick
+    private final IntSyncSC sync = new IntSyncSC(3);   // energy, flow per tick, the power switch
+    /** The power switch and the redstone mode (GuiPowerSC). */
+    public static final int BTN_POWER = 10, BTN_REDSTONE = 11;
+
+    @Override
+    public boolean enchantItem(EntityPlayer player, int id) {
+        if (!canInteractWith(player)) {
+            return false;
+        }
+        if (id == BTN_POWER) {
+            storage.setPowerOn(!storage.isPowerOn());
+            return true;
+        }
+        if (id == BTN_REDSTONE) {
+            storage.setRedstoneMode((storage.getRedstoneMode() + 1) % 3);
+            return true;
+        }
+        return false;
+    }
 
     public ContainerEnergyStorageSC(InventoryPlayer playerInv, TileEntityEnergyStorageSC storage) {
         this.storage = storage;
@@ -43,7 +61,7 @@ public class ContainerEnergyStorageSC extends Container {
     @Override
     public void detectAndSendChanges() {
         super.detectAndSendChanges();
-        sync.send(this, crafters, new int[]{storage.getEnergyStored(), storage.getFlowPerTick()});
+        sync.send(this, crafters, new int[]{storage.getEnergyStored(), storage.getFlowPerTick(), storage.powerFlags()});
     }
 
     @Override
@@ -53,6 +71,8 @@ public class ContainerEnergyStorageSC extends Container {
             storage.setEnergyStoredClient(sync.value(0));
         } else if (id == 1) {
             storage.setFlowClient(sync.value(1));
+        } else if (id == 2) {
+            storage.setPowerFlagsClient(sync.value(2));
         }
     }
 

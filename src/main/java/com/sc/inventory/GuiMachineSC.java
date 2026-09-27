@@ -46,12 +46,9 @@ public class GuiMachineSC extends GuiContainer {
     private static final int RIGHT_TANKS = 76, RIGHT_PLAIN = 88, CAPTION_Y = 25, TANK_Y = 42, TANK_LABEL_Y = 32, TANK_GAP = 33;
 
     private final TileEntityMachineSC machine;
-    /** The energy gauge sits 12 px lower: the power switch and the redstone mode button above it. */
-    private static final int MG_Y = GuiBigSC.GAUGE_Y + 12, MG_H = GuiBigSC.GAUGE_H - 12;
-    private static final int POWER_X = GuiBigSC.GAUGE_X, POWER_W = 15, REDSTONE_X = GuiBigSC.GAUGE_X + 16, BTN_Y = GuiBigSC.GAUGE_Y, BTN_H = 11;
-    /** A line too strong for the input: switching on takes two clicks, this long apart at most. */
-    private static final long DOUBLE_CLICK_MS = 1500;
-    private long armedAt;
+    /** The energy gauge sits 12 px lower: the power switch and the redstone mode button above it (GuiPowerSC). */
+    private static final int MG_Y = GuiPowerSC.GAUGE_Y, MG_H = GuiPowerSC.GAUGE_H;
+    private final GuiPowerSC power;
 
     /** For NEI: which machine's recipe page the progress-bar click should open. */
     public com.sc.machine.MachineType getMachineType() {
@@ -96,6 +93,7 @@ public class GuiMachineSC extends GuiContainer {
     public GuiMachineSC(InventoryPlayer playerInv, TileEntityMachineSC machine) {
         super(new ContainerMachineSC(playerInv, machine));
         this.machine = machine;
+        this.power = new GuiPowerSC(machine, ContainerMachineSC.BTN_POWER, ContainerMachineSC.BTN_REDSTONE);
         for (int i = 0; i < tankUsed.length; i++) {
             tankUsed[i] = RecipeRegistry.usesTank(machine.getMachineType(), i);
         }
@@ -124,8 +122,7 @@ public class GuiMachineSC extends GuiContainer {
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
             buttonList.add(new GuiBigSC.ClearButton(ContainerMachineSC.BTN_CLEAR + i));
         }
-        buttonList.add(new PowerButton(guiLeft + POWER_X, guiTop + BTN_Y));
-        buttonList.add(new RedstoneButton(guiLeft + REDSTONE_X, guiTop + BTN_Y));
+        power.addButtons(buttonList, guiLeft, guiTop);
     }
 
     /** The Clear buttons sit above the tanks shown (the Ore Washer: above its Water gauge). */
@@ -164,71 +161,10 @@ public class GuiMachineSC extends GuiContainer {
 
     @Override
     protected void actionPerformed(net.minecraft.client.gui.GuiButton button) {
-        if (button.id == ContainerMachineSC.BTN_POWER && !machine.isPowerOn() && machine.lineTooStrong()) {
-            long now = System.currentTimeMillis();
-            if (now - armedAt > DOUBLE_CLICK_MS) {
-                armedAt = now;                                  // the first click only arms it
-                return;
-            }
-            armedAt = 0;
+        if (!power.allowClick(button)) {
+            return;
         }
         mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
-    }
-
-    private boolean armed() {
-        return System.currentTimeMillis() - armedAt <= DOUBLE_CLICK_MS;
-    }
-
-    /** The power switch: green on, grey off, red off beside a line too strong for the input. */
-    private class PowerButton extends net.minecraft.client.gui.GuiButton {
-        PowerButton(int x, int y) {
-            super(ContainerMachineSC.BTN_POWER, x, y, POWER_W, BTN_H, "");
-        }
-
-        @Override
-        public void drawButton(net.minecraft.client.Minecraft mc, int mx, int my) {
-            boolean on = machine.isPowerOn(), danger = !on && machine.lineTooStrong();
-            boolean over = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
-            int edge = on ? 0xFF2A8A3A : danger ? 0xFFB03030 : 0xFF4A505A;
-            int fill = on ? 0xFF123A1A : danger ? (armed() ? 0xFF6A1818 : 0xFF3A1010) : 0xFF1A1E24;
-            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, 0xFF0A0C10);
-            drawRect(xPosition + 1, yPosition + 1, xPosition + width - 1, yPosition + height - 1, over ? GuiSceneSC.mix(edge, 0xFFFFFFFF, 0.25F) : edge);
-            drawRect(xPosition + 2, yPosition + 2, xPosition + width - 2, yPosition + height - 2, fill);
-            int c = on ? 0xFF5AE66E : danger ? 0xFFFF6A6A : 0xFF8A909A;
-            int sx = xPosition + (width - 7) / 2, sy = yPosition + 3;             // the power symbol: a broken ring and a bar
-            drawRect(sx + 1, sy + 1, sx + 2, sy + 2, c);
-            drawRect(sx + 5, sy + 1, sx + 6, sy + 2, c);
-            drawRect(sx, sy + 2, sx + 1, sy + 5, c);
-            drawRect(sx + 6, sy + 2, sx + 7, sy + 5, c);
-            drawRect(sx + 1, sy + 5, sx + 2, sy + 6, c);
-            drawRect(sx + 5, sy + 5, sx + 6, sy + 6, c);
-            drawRect(sx + 2, sy + 6, sx + 5, sy + 7, c);
-            drawRect(sx + 3, sy - 1, sx + 4, sy + 3, c);
-            GL11.glColor4f(1F, 1F, 1F, 1F);
-        }
-    }
-
-    /** The redstone mode: a dash (always), a lit torch (with a signal), an unlit one (without). */
-    private class RedstoneButton extends net.minecraft.client.gui.GuiButton {
-        RedstoneButton(int x, int y) {
-            super(ContainerMachineSC.BTN_REDSTONE, x, y, GuiBigSC.GAUGE_W - 16, BTN_H, "");
-        }
-
-        @Override
-        public void drawButton(net.minecraft.client.Minecraft mc, int mx, int my) {
-            boolean over = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
-            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, 0xFF0A0C10);
-            drawRect(xPosition + 1, yPosition + 1, xPosition + width - 1, yPosition + height - 1, over ? 0xFF6A707A : 0xFF4A505A);
-            drawRect(xPosition + 2, yPosition + 2, xPosition + width - 2, yPosition + height - 2, 0xFF1A1E24);
-            int cx = xPosition + width / 2, mode = machine.getRedstoneMode();
-            if (mode == 0) {
-                drawRect(cx - 2, yPosition + 5, cx + 2, yPosition + 7, 0xFFB0B8C4);
-            } else {
-                drawRect(cx - 1, yPosition + 5, cx + 1, yPosition + 9, 0xFF6A4020);
-                drawRect(cx - 1, yPosition + 3, cx + 1, yPosition + 5, mode == 1 ? 0xFFFF3A2A : 0xFF4A1A14);
-            }
-            GL11.glColor4f(1F, 1F, 1F, 1F);
-        }
     }
 
     private static int slotX(boolean tanks, int i) {
@@ -462,35 +398,8 @@ public class GuiMachineSC extends GuiContainer {
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         drawForeground();
-        drawPowerOverlay();
-    }
-
-    /** Switched off: the gauge dimmed with OFF on it; beside a line too strong for the input, the warning plaque. */
-    private void drawPowerOverlay() {
-        if (machine.isPowerOn()) {
-            return;
-        }
-        int gx = GuiBigSC.GAUGE_X, gw = GuiBigSC.GAUGE_W;
-        drawRect(gx + 2, MG_Y + 10, gx + gw - 2, MG_Y + MG_H - 12, 0xA0000000);
-        String off = Lang.tr("sc.gui.power.label");
-        int ow = fontRendererObj.getStringWidth(off) * 5 / 8;
-        small(off, gx + (gw - ow) / 2, MG_Y + MG_H / 2 - 3, 0xB0B8C4);
-        if (!machine.lineTooStrong()) {
-            return;
-        }
-        com.sc.energy.Tier t = machine.lineTier(), in = machine.inputTier();
-        int px = 88, py = 82, pw = GuiBigSC.SCREEN_RIGHT - px, ph = 30;
-        GL11.glPushMatrix();
-        GL11.glTranslatef(0F, 0F, 200F);                                         // over the items and the texts
-        drawRect(px, py, px + pw, py + ph, 0xFF3A1A0A);
-        drawRect(px, py, px + pw, py + 1, 0xFFFF8C1E);
-        drawRect(px, py + ph - 1, px + pw, py + ph, 0xFFFF8C1E);
-        drawRect(px + 3, py + 4, px + 12, py + 13, 0xFFFF8C1E);
-        fontRendererObj.drawString("!", px + 6, py + 5, 0x281400);
-        TextFitSC.draw(fontRendererObj, Lang.tr("sc.gui.power.warn.line", t.name(), t.getVoltage()), px + 15, py + 3, pw - 18, 0xFFC85A, guiLeft, guiTop);
-        TextFitSC.draw(fontRendererObj, Lang.tr("sc.gui.power.warn.input", in.name(), in.getVoltage()), px + 15, py + 12, pw - 18, 0xFFC85A, guiLeft, guiTop);
-        small(Lang.tr("sc.gui.power.warn.hint"), px + 3, py + 22, 0xE6C8AA);
-        GL11.glPopMatrix();
+        power.drawGaugeOff(fontRendererObj);
+        power.drawWarning(fontRendererObj, 88, 82, GuiBigSC.SCREEN_RIGHT - 88, guiLeft, guiTop);
     }
 
     private void drawForeground() {
@@ -1059,21 +968,9 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
-        if (GuiGaugeSC.isOver(POWER_X, BTN_Y, POWER_W, BTN_H, mouseX, mouseY)) {
-            boolean on = machine.isPowerOn();
-            lines.add(Lang.tr(on ? "sc.gui.power.on" : "sc.gui.power.off"));
-            lines.add(Lang.tr(on ? "sc.gui.power.hint.on" : "sc.gui.power.hint.off"));
-            if (!on && machine.lineTooStrong()) {
-                com.sc.energy.Tier t = machine.lineTier();
-                lines.add(Lang.tr("sc.gui.power.danger", t.name(), machine.inputTier().name()));
-                lines.add(Lang.tr(armed() ? "sc.gui.power.armed" : "sc.gui.power.double"));
-            }
-            return lines;
-        }
-        if (GuiGaugeSC.isOver(REDSTONE_X, BTN_Y, GuiBigSC.GAUGE_W - 16, BTN_H, mouseX, mouseY)) {
-            lines.add(Lang.tr("sc.gui.redstone." + machine.getRedstoneMode()));
-            lines.add(Lang.tr("sc.gui.redstone.hint"));
-            return lines;
+        List<String> powerTip = power.tooltip(mouseX, mouseY);
+        if (powerTip != null) {
+            return powerTip;
         }
         if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, MG_Y, GuiBigSC.GAUGE_W, MG_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));

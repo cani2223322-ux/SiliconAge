@@ -27,6 +27,8 @@ public class ContainerGeneratorSC extends Container {
     public static final int BTN_CREATIVE_TIER = 0;
     /** enchantItem buttons: BTN_CLEAR + tank (0 fuel, 1 second fuel, 2 water) pours it out for EU. */
     public static final int BTN_CLEAR = 1;
+    /** The power switch and the redstone mode (GuiPowerSC). */
+    public static final int BTN_POWER = 10, BTN_REDSTONE = 11;
 
     private final TileEntityGeneratorSC generator;
 
@@ -75,6 +77,14 @@ public class ContainerGeneratorSC extends Container {
             generator.cycleCreativeTier();
             return true;
         }
+        if (id == BTN_POWER && canInteractWith(player)) {
+            generator.setPowerOn(!generator.isPowerOn());
+            return true;
+        }
+        if (id == BTN_REDSTONE && canInteractWith(player)) {
+            generator.setRedstoneMode((generator.getRedstoneMode() + 1) % 3);
+            return true;
+        }
         if (id >= BTN_CLEAR && id < BTN_CLEAR + 3 && canInteractWith(player)) {
             generator.clearTank(id - BTN_CLEAR);
             return true;
@@ -86,7 +96,7 @@ public class ContainerGeneratorSC extends Container {
 
     private static final int ID_ENERGY = 0, ID_F1 = 1, ID_F1_AMT = 2, ID_F2 = 3, ID_F2_AMT = 4, ID_OUT = 5, ID_OUT_AMT = 6,
             ID_IGNITION = 7, ID_IGNITED = 8, ID_STATUS = 9, ID_OUTPUT = 10, ID_HEAT = 11, ID_RAMP = 12, ID_INFO_A = 13,
-            ID_INFO_B = 14, ID_TIER = 15, COUNT = 16;
+            ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, COUNT = 17;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
@@ -112,6 +122,7 @@ public class ContainerGeneratorSC extends Container {
             case ID_RAMP: return generator.getRamp();
             case ID_INFO_A: return generator.getInfoA();
             case ID_INFO_B: return generator.getInfoB();
+            case ID_POWER: return generator.powerFlags();
             default: return generator.getCreativeTier().ordinal();
         }
     }
@@ -154,6 +165,9 @@ public class ContainerGeneratorSC extends Container {
                 break;
             case ID_STATUS:
                 generator.setStatusClient(GeneratorStatus.byOrdinal(sync.value(ID_STATUS)));
+                break;
+            case ID_POWER:
+                generator.setPowerFlagsClient(sync.value(ID_POWER));
                 break;
             default:
                 generator.setLiveClient(sync.value(ID_OUTPUT), sync.value(ID_HEAT), sync.value(ID_RAMP),

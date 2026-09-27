@@ -93,6 +93,21 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements I
     }
 
     @Override
+    public int offerableEnergy() {
+        return switchedOn() ? super.offerableEnergy() : 0;
+    }
+
+    @Override
+    public int demandedEnergy() {
+        return switchedOn() ? super.demandedEnergy() : 0;
+    }
+
+    @Override
+    public int receiveEnergy(ForgeDirection from, int voltage, int amount, boolean simulate) {
+        return powerOn ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
+    }
+
+    @Override
     public boolean canUpdate() {
         return true;
     }
