@@ -55,7 +55,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public static final int SLOT_HEAD = FIRST_UPGRADE + UPGRADES, SLOT_SCANNER = SLOT_HEAD + 1, SLOT_CARD = SLOT_SCANNER + 1;
     /** 4 lens slots open, 4 more with resonator modules (appended after the old four - saves keep theirs). */
     public static final int FIRST_LENS = SLOT_CARD + 1, LENSES = 8, BASE_LENSES = 4;
-    public static final int SLOTS = FIRST_LENS + LENSES, FILTER_SLOTS = 9;
+    /** The battery slot under the energy gauge (after the lenses, so older saves keep their slots). */
+    public static final int SLOT_BATTERY = FIRST_LENS + LENSES;
+    public static final int SLOTS = SLOT_BATTERY + 1, FILTER_SLOTS = 9;
     /** Module slots open by tier: LV 6, MV 10, HV 14, EV 18 (the Exo rig: all 18). */
     public static final int[] UNLOCKED = {6, 10, 14, 18};
     /** Exo Drilling Rig: EU a haul costs, and hauls a second (x1.4 per speed module, cost x1.6). */
@@ -500,6 +502,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         if (time % 40 == 0 && running) {
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the renderer's layer line
+        }
+        if (feedFromBattery(slots[SLOT_BATTERY]) > 0) {
+            markDirty();
         }
         dig();
     }
@@ -1616,7 +1621,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             A_COLOR_PLANE = 20, A_SCAN = 21, A_TANK_SIDE = 22, A_TANK_CLEAR = 23, A_TANK_TO_FILTER = 24,
             A_FF_MODE = 25, A_FF_REMOVE = 26, A_TANK_FULL = 27, A_FF_HAND = 28, A_FF_CLEAR = 29, A_FF_DELETE = 30,
             A_TANK_PIN = 31, A_TANK_AUTO = 32, A_FVEIN = 33, A_FVEIN_RANGE = 34, A_FVEIN_FLOWING = 35, A_WASH_FEED = 36,
-            A_SWITCH = 37;
+            A_SWITCH = 37, A_BATTERY_MODE = 38;
 
     public void action(EntityPlayer p, int action, int value) {
         boolean area = false;
@@ -1632,6 +1637,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             case A_REDSTONE: redstone = (redstone + 1) % 3; break;
             case A_POWER: powerMode = (powerMode + 1) % 3; break;
             case A_SWITCH: powerOn = !powerOn; break;
+            case A_BATTERY_MODE: cycleBatteryMode(); break;
             case A_XP:
                 if (xp > 0) {
                     p.addExperience(xp);
@@ -1915,6 +1921,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (slot < BUFFER) {
             return false;                   // the quarry fills its buffer itself
         }
+        if (slot == SLOT_BATTERY) {
+            return com.sc.item.BatteryFeedSC.accepts(s);
+        }
         if (slot < FIRST_UPGRADE + UPGRADES) {
             if (slot - FIRST_UPGRADE >= unlockedUpgrades()) {
                 return false;                       // locked at this tier
@@ -1947,15 +1956,16 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return s.getItem() instanceof ItemAreaCardSC;
     }
 
-    private static final int[] BUFFER_SLOTS = new int[BUFFER];
+    private static final int[] BUFFER_SLOTS = new int[BUFFER + 1];
 
     static {
         for (int i = 0; i < BUFFER; i++) {
             BUFFER_SLOTS[i] = i;
         }
+        BUFFER_SLOTS[BUFFER] = SLOT_BATTERY;
     }
 
-    /** Pipes and hoppers only take from the buffer. */
+    /** Pipes and hoppers take from the buffer; a charged battery goes in, an empty one comes out. */
     @Override
     public int[] getAccessibleSlotsFromSide(int side) {
         return BUFFER_SLOTS;
@@ -1963,12 +1973,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     @Override
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
-        return false;
+        return slot == SLOT_BATTERY && slots[SLOT_BATTERY] == null && com.sc.item.BatteryFeedSC.accepts(stack);
     }
 
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
-        return slot < BUFFER;
+        return slot < BUFFER || slot == SLOT_BATTERY && com.sc.item.BatteryFeedSC.chargeOf(stack) <= 0;
     }
 
     // ------------------------------------------------------------------ fluids: pumped out, water for washing in
@@ -2302,6 +2312,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setInteger("LayerY", layerY);
         nbt.setInteger("Cursor", cursor);
         nbt.setBoolean("PowerOff", !powerOn);
+        nbt.setInteger("BatteryMode", batteryMode);
         NBTTagList list = new NBTTagList();
         for (int i : new int[]{SLOT_CARD}) {
             if (slots[i] != null) {
@@ -2342,6 +2353,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         layerY = nbt.getInteger("LayerY");
         cursor = nbt.getInteger("Cursor");
         powerOn = !nbt.getBoolean("PowerOff");
+        batteryMode = nbt.getInteger("BatteryMode") & 1;
         for (int i = FIRST_UPGRADE; i <= SLOT_CARD; i++) {
             if (i != SLOT_HEAD && i != SLOT_SCANNER) {
                 slots[i] = null;

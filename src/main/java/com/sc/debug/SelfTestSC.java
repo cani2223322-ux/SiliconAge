@@ -54,6 +54,7 @@ public final class SelfTestSC {
             bladeFunctions();
             chargePad();
             batteries();
+            batterySlot();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -468,7 +469,7 @@ public final class SelfTestSC {
         m.setMachineType(MachineType.CVD_CHAMBER);
         boolean everySide = true;
         for (int side = 0; side < 6; side++) {
-            everySide &= m.getAccessibleSlotsFromSide(side).length == TileEntityMachineSC.INPUT_SLOTS + TileEntityMachineSC.OUTPUT_SLOTS
+            everySide &= m.getAccessibleSlotsFromSide(side).length == TileEntityMachineSC.INPUT_SLOTS + TileEntityMachineSC.OUTPUT_SLOTS + 1   // + the battery
                     && m.canExtractItem(TileEntityMachineSC.INPUT_SLOTS, null, side)
                     && !m.canExtractItem(0, null, side)
                     && m.canFill(net.minecraftforge.common.util.ForgeDirection.getOrientation(side), ModFluids.hydrogen)
@@ -844,7 +845,7 @@ public final class SelfTestSC {
                 "power switch: a storage switched off neither gives nor takes energy (no overvolting either)");
         boolean hidden = true;
         for (int slot : c.getAccessibleSlotsFromSide(1)) {
-            hidden &= slot < TileEntityMachineSC.FIRST_UPGRADE_SLOT;
+            hidden &= slot < TileEntityMachineSC.FIRST_UPGRADE_SLOT || slot == TileEntityMachineSC.SLOT_BATTERY;
         }
         check(hidden && c.isItemValidForSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT + 3, oc)
                         && !c.isItemValidForSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT + 3, new ItemStack(net.minecraft.init.Items.iron_ingot)),
@@ -1074,6 +1075,27 @@ public final class SelfTestSC {
                 && pad.chargeItem(ionCutter, 640) == 640
                 && pad.chargeItem(new ItemStack(net.minecraft.init.Items.iron_sword), 640) == 0;
         check(ok, "charge pad MV: Nano armour / blade and LV-MV weapons charge, Quantum / Exo and plain items don't");
+    }
+
+    private static void batterySlot() {
+        com.sc.tileentity.TileEntityMachineSC m = new com.sc.tileentity.TileEntityMachineSC();
+        int slot = com.sc.tileentity.TileEntityMachineSC.SLOT_BATTERY;
+        ItemStack b = new ItemStack(ModItems.battery, 1, 1);
+        com.sc.item.ItemBatterySC.setCharge(b, 1000);
+        boolean valid = m.isItemValidForSlot(slot, b) && !m.isItemValidForSlot(slot, new ItemStack(net.minecraft.init.Items.iron_pickaxe))
+                && m.canInsertItem(slot, b, 2) && !m.canExtractItem(slot, b, 0);
+        m.setInventorySlotContents(slot, b);
+        int cap = m.getMaxEnergyStored();
+        int first = m.batteryRoundForTest();                        // LV machine, empty buffer: 32 EU/t from an MV pack
+        m.setEnergyStoredClient(cap / 2 + 10);
+        int reserve = m.batteryRoundForTest();                      // over half: the reserve waits
+        m.cycleBatteryMode();
+        int always = m.batteryRoundForTest();
+        m.setPowerOn(false);
+        int off = m.batteryRoundForTest();
+        check(valid && first == 32 && reserve == 0 && always == 32 && off == 0
+                        && com.sc.item.ItemBatterySC.chargeOf(b) == 1000 - 64,
+                "battery slot: batteries only, fed at the input voltage; reserve waits over half, always tops up, off takes nothing");
     }
 
     private static void batteries() {

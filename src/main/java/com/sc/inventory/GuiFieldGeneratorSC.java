@@ -69,6 +69,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
     private final TileEntityFieldGeneratorSC field;
     /** The power switch and the redstone button over the gauge, as a machine's. */
     private GuiPowerSC power;
+    /** The battery slot under the gauge (every tab). */
+    private GuiBatterySlotSC battery;
     private GuiTextField nameField;
     /** The map, recomputed when the field's shape changes. */
     private boolean[][] mapCells;
@@ -109,6 +111,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         power = new GuiPowerSC(field, ContainerFieldGeneratorSC.BTN_POWER, ContainerFieldGeneratorSC.BTN_REDSTONE,
                 ENERGY_X, 11, ENERGY_W, ENERGY_Y, ENERGY_H);
         power.addButtons(buttonList, guiLeft, guiTop);
+        battery = new GuiBatterySlotSC(field, ContainerFieldGeneratorSC.BTN_BATTERY_MODE, ENERGY_X, ENERGY_Y + ENERGY_H);
+        battery.addButton(buttonList, guiLeft, guiTop);
         int x = guiLeft + 8, y = guiTop + 30;
         switch (tab) {
             case 0:
@@ -653,6 +657,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         GuiHoloSC.screen(gx + SCREEN_X, gy + 12, SCREEN_R - SCREEN_X, screenH);
         GuiEnergyGaugeSC.draw(gx + ENERGY_X, gy + ENERGY_Y, ENERGY_W, ENERGY_H,
                 (float) field.getEnergyStored() / Math.max(1, field.getMaxEnergyStored()));
+        battery.draw(gx, gy, field.getStackInSlot(TileEntityFieldGeneratorSC.SLOT_BATTERY));
         if (tab == 0) {
             for (int[] c : F_CARDS) {
                 drawRect(gx + c[0], gy + c[1], gx + c[0] + 42, gy + c[1] + 20, 0xFF2A6A8A);
@@ -663,8 +668,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             FieldMode mode = field.getMode();
             GuiSceneSC.fieldScene(gx + 104, gy + 18, 100, 82, t, mode != FieldMode.UNION && mode != FieldMode.DOME,
                     field.isActive(), col);
-            GuiHoloSC.screen(gx + SCREEN_X, gy + 110, W - 14, H - 112);        // the summary under it
-            GuiHoloSC.glint(gx + SCREEN_X, gy + 110, W - 14, H - 112);
+            GuiHoloSC.screen(gx + SCREEN_X, gy + 110, SCREEN_R - SCREEN_X, H - 112);   // the summary under it
+            GuiHoloSC.glint(gx + SCREEN_X, gy + 110, SCREEN_R - SCREEN_X, H - 112);
         } else if (tab == 2) {
             inset(gx + 8, gy + 84, CW, 6 * 16 + 4);
         } else if (tab == 3) {
@@ -732,10 +737,10 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                         TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL, TileEntityFieldGeneratorSC.F_CHARGE,
                         TileEntityFieldGeneratorSC.F_PRIVATE, TileEntityFieldGeneratorSC.F_PUSH_PLAYERS};
                 for (int i = 0; i < flags.length; i++) {
-                    int fx = 14 + (i % 2) * 114, fy = 127 + (i / 2) * 11;
+                    int fx = 14 + (i % 2) * 98, fy = 127 + (i / 2) * 11;
                     boolean on = field.has(flags[i]);
                     drawRect(fx, fy + 1, fx + 4, fy + 5, on ? 0xFF5AE66E : 0xFF3A4450);
-                    fit(Lang.tr("sc.fieldgui.flag." + flags[i]), fx + 7, fy, 104, on ? c : 0x465A6E);
+                    fit(Lang.tr("sc.fieldgui.flag." + flags[i]), fx + 7, fy, 88, on ? c : 0x465A6E);
                 }
                 String rain;
                 int rainCol = dim;
@@ -750,12 +755,12 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     rain = Lang.tr("sc.fieldgui.sum.rain.low", field.rainExtraPerTick());
                     rainCol = GuiHoloSC.WARN;
                 }
-                small(rain, 14, 171, W - 28, rainCol, false);
+                small(rain, 14, 171, CW - 10, rainCol, false);
                 small(Lang.tr("sc.fieldgui.sum.modules", field.storageUpgrades(),
-                        field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER)), 14, 180, W - 28, dim, false);
+                        field.upgradeCount(com.sc.machine.UpgradeType.CHARGE_BOOSTER)), 14, 180, CW - 10, dim, false);
                 small(Lang.tr("sc.fieldgui.sum.input", field.inputTier().name(), field.inputTier().getVoltage(),
-                        field.getEnergyStored(), field.getMaxEnergyStored()), 14, 188, W - 28, dim, false);
-                small(Lang.tr("sc.fieldgui.sum.hint"), 14, 198, W - 28, 0x465A6E, false);
+                        field.getEnergyStored(), field.getMaxEnergyStored()), 14, 188, CW - 10, dim, false);
+                small(Lang.tr("sc.fieldgui.sum.hint"), 14, 198, CW - 10, 0x465A6E, false);
                 break;
             }
             case 1:
@@ -1085,6 +1090,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tip = new ArrayList<String>();
         List<String> powerTip = power.tooltip(mouseX - guiLeft, mouseY - guiTop);
+        if (powerTip == null) {
+            powerTip = battery.tooltip(mouseX - guiLeft, mouseY - guiTop, field.getStackInSlot(TileEntityFieldGeneratorSC.SLOT_BATTERY));
+        }
         if (powerTip != null) {
             tip.addAll(powerTip);
         }

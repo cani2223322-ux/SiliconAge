@@ -56,9 +56,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     public static final int OUTPUT_SLOTS = 3;
     public static final int UPGRADE_SLOTS = 4;
     public static final int FIRST_UPGRADE_SLOT = INPUT_SLOTS + OUTPUT_SLOTS;
-    private static final int SLOT_COUNT = INPUT_SLOTS + OUTPUT_SLOTS + UPGRADE_SLOTS;
-    /** Inputs and outputs - what automation sees from every side. */
-    private static final int[] IO_SLOTS = {0, 1, 2, 3, 4, 5};
+    /** The battery slot under the energy gauge (a portable battery tops up the buffer). */
+    public static final int SLOT_BATTERY = FIRST_UPGRADE_SLOT + UPGRADE_SLOTS;
+    private static final int SLOT_COUNT = SLOT_BATTERY + 1;
+    /** Inputs, outputs and the battery - what automation sees from every side. */
+    private static final int[] IO_SLOTS = {0, 1, 2, 3, 4, 5, SLOT_BATTERY};
     /** mB an ejector / puller moves per tank per tick. */
     private static final int FLUID_MOVE = 1000;
     /** Items a puller takes per pull (every PULL_INTERVAL ticks). */
@@ -123,7 +125,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     /** How many upgrades of a kind sit in the upgrade slots (effects stop growing at MAX_EFFECTIVE). */
     public int upgradeCount(UpgradeType type) {
         int n = 0;
-        for (int i = FIRST_UPGRADE_SLOT; i < SLOT_COUNT; i++) {
+        for (int i = FIRST_UPGRADE_SLOT; i < FIRST_UPGRADE_SLOT + UPGRADE_SLOTS; i++) {
             ItemStack s = slots[i];
             if (s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == type) {
                 n += s.stackSize;
@@ -402,6 +404,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
         if (upgradeCount(UpgradeType.PULLER) > 0 && worldObj.getTotalWorldTime() % PULL_INTERVAL == 0) {
             pull();
+        }
+        if (feedFromBattery(slots[SLOT_BATTERY]) > 0) {
+            markDirty();
         }
         if (!powerOn || !redstoneAllows()) {
             status = powerOn ? MachineStatus.REDSTONE : MachineStatus.DISABLED;
@@ -773,6 +778,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
     }
 
+    /** Self-test: one tick of the battery slot. */
+    public int batteryRoundForTest() {
+        return feedFromBattery(slots[SLOT_BATTERY]);
+    }
+
     // ---- IInventory / ISidedInventory (§13.3 side-config: front=output, others=input) ----
 
     @Override
@@ -846,6 +856,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         // Only things this machine actually has a recipe for - otherwise any item (or any
         // hopper) could fill the input slots with junk that can never be processed, and the
         // player has to dig it back out by hand.
+        if (slot == SLOT_BATTERY) {
+            return com.sc.item.BatteryFeedSC.accepts(stack);
+        }
         if (slot >= FIRST_UPGRADE_SLOT) {
             return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
@@ -862,6 +875,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
 
     @Override
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        if (slot == SLOT_BATTERY) {
+            return slots[SLOT_BATTERY] == null && com.sc.item.BatteryFeedSC.accepts(stack);   // a full one in
+        }
         return slot < INPUT_SLOTS && isItemValidForSlot(slot, stack) && fitsSomeRecipe(slot, stack);
     }
 
@@ -912,6 +928,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
 
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
+        if (slot == SLOT_BATTERY) {
+            return com.sc.item.BatteryFeedSC.chargeOf(stack) <= 0;                             // an empty one out
+        }
         return slot >= INPUT_SLOTS && slot < FIRST_UPGRADE_SLOT;
     }
 

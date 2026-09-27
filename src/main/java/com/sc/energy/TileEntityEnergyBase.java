@@ -7,6 +7,7 @@ import ic2.api.energy.event.EnergyTileLoadEvent;
 import ic2.api.energy.event.EnergyTileUnloadEvent;
 import ic2.api.energy.tile.IEnergySink;
 import ic2.api.energy.tile.IEnergySource;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraftforge.common.MinecraftForge;
@@ -126,14 +127,52 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         markDirty();
     }
 
-    /** Switch and redstone mode as one int for a container's sync. */
+    /** Switch, redstone mode and the battery slot's mode as one int for a container's sync. */
     public int powerFlags() {
-        return (powerOn ? 1 : 0) | redstoneMode << 1;
+        return (powerOn ? 1 : 0) | redstoneMode << 1 | batteryMode << 3;
     }
 
     public void setPowerFlagsClient(int flags) {
         powerOn = (flags & 1) != 0;
         redstoneMode = (flags >> 1) & 3;
+        batteryMode = (flags >> 3) & 1;
+    }
+
+    // ---- the battery slot (machines, quarries, the field generator): a portable battery tops up
+    // the buffer at the input voltage - only while it's under half (the grid first), or always ----
+
+    /** BatteryFeedSC.MODE_RESERVE or MODE_ALWAYS. */
+    protected int batteryMode;
+
+    public int getBatteryMode() {
+        return batteryMode;
+    }
+
+    public void cycleBatteryMode() {
+        batteryMode = (batteryMode + 1) % com.sc.item.BatteryFeedSC.MODES;
+        markDirty();
+    }
+
+    /** Whether the battery in the slot gives energy now (also on the client, for the screen's arrows). */
+    public boolean batteryFeeds(ItemStack battery) {
+        if (!powerOn || battery == null || com.sc.item.BatteryFeedSC.chargeOf(battery) <= 0) {
+            return false;
+        }
+        int stored = getEnergyStored(), cap = getMaxEnergyStored();
+        return batteryMode == com.sc.item.BatteryFeedSC.MODE_ALWAYS ? stored < cap : stored * 2 < cap;
+    }
+
+    /** One tick of the battery slot: tops the buffer up from it. @return EU taken */
+    protected int feedFromBattery(ItemStack battery) {
+        if (!batteryFeeds(battery)) {
+            return 0;
+        }
+        int want = Math.min(getMaxEnergyStored() - getEnergyStored(), inputTier().getVoltage());
+        int got = com.sc.item.BatteryFeedSC.discharge(battery, want);
+        if (got > 0) {
+            addEnergy(got);
+        }
+        return got;
     }
 
     protected boolean redstoneAllows() {
@@ -322,6 +361,7 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         energyStored = nbt.getInteger("EnergySC");
         powerOn = !nbt.getBoolean("PowerOff");                  // tiles saved before the switch: on
         redstoneMode = Math.max(0, Math.min(2, nbt.getInteger("RedstoneMode")));
+        batteryMode = Math.max(0, Math.min(com.sc.item.BatteryFeedSC.MODES - 1, nbt.getInteger("BatteryMode")));
         tier = Tier.values()[Math.min(Tier.values().length - 1, Math.max(0, nbt.getInteger("TierSC")))];
     }
 
@@ -330,6 +370,7 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         super.writeToNBT(nbt);
         nbt.setBoolean("PowerOff", !powerOn);
         nbt.setInteger("RedstoneMode", redstoneMode);
+        nbt.setInteger("BatteryMode", batteryMode);
         nbt.setInteger("EnergySC", energyStored);
         nbt.setInteger("TierSC", tier.ordinal());
     }

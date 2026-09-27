@@ -26,7 +26,8 @@ public class ContainerFieldGeneratorSC extends Container {
     public static final int BTN_RANGE_MINUS_16 = 0, BTN_RANGE_MINUS_1 = 1, BTN_RANGE_PLUS_1 = 2,
             BTN_RANGE_PLUS_16 = 3, BTN_MODE = 4, BTN_COLOR = 5, BTN_REDSTONE = 6, BTN_FILTER = 7,
             BTN_CHARGE_MODE = 8, BTN_RESERVE_MINUS = 9, BTN_RESERVE_PLUS = 30,
-            BTN_OUTLINE = 31, BTN_ANIM = 32, BTN_BRIGHT = 33, BTN_BELOW_MINUS = 34, BTN_BELOW_PLUS = 35, BTN_POWER = 36;
+            BTN_OUTLINE = 31, BTN_ANIM = 32, BTN_BRIGHT = 33, BTN_BELOW_MINUS = 34, BTN_BELOW_PLUS = 35, BTN_POWER = 36,
+            BTN_BATTERY_MODE = 37;
     /** Switches: BTN_FLAG_BASE + the bit's index (TileEntityFieldGeneratorSC.F_*). */
     public static final int BTN_FLAG_BASE = 10, FLAG_COUNT = 16;
 
@@ -49,6 +50,7 @@ public class ContainerFieldGeneratorSC extends Container {
             case BTN_COLOR: field.cycleColor(); return true;
             case BTN_REDSTONE: field.cycleRedstone(); return true;
             case BTN_POWER: field.togglePower(); return true;
+            case BTN_BATTERY_MODE: field.cycleBatteryMode(); return true;
             case BTN_FILTER: field.cycleFilter(); return true;
             case BTN_CHARGE_MODE: field.cycleChargeMode(); return true;
             case BTN_RESERVE_MINUS: field.adjustChargeReserve(-TileEntityFieldGeneratorSC.RESERVE_STEP); return true;
@@ -84,6 +86,14 @@ public class ContainerFieldGeneratorSC extends Container {
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + 58));
         }
+        // the battery slot under the gauge - last, on every tab; only the owner / access list takes it out
+        final TileEntityFieldGeneratorSC f = field;
+        addSlotToContainer(new SlotBatterySC(field, TileEntityFieldGeneratorSC.SLOT_BATTERY, BATTERY_X, BATTERY_Y) {
+            @Override
+            public boolean canTakeStack(EntityPlayer player) {
+                return f.allowed(player);
+            }
+        });
         shownX = new int[inventorySlots.size()];
         for (int i = 0; i < shownX.length; i++) {
             shownX[i] = ((Slot) inventorySlots.get(i)).xDisplayPosition;
@@ -92,13 +102,16 @@ public class ContainerFieldGeneratorSC extends Container {
 
     /** Where the Upgrades tab draws its slots (GuiFieldGeneratorSC draws the frames there). */
     public static final int UPGRADE_X = 89, UPGRADE_Y = 48, INV_X = 44, INV_Y = 144;
+    /** The battery slot's item under the gauge (GuiFieldGeneratorSC: gauge x 214, bottom 106). */
+    public static final int BATTERY_X = 217, BATTERY_Y = 110;
     private final int[] shownX;
 
     /** Client: the slots on the Upgrades tab, off-screen (not hoverable or clickable) on the others. */
     @SideOnly(Side.CLIENT)
     public void setSlotsShown(boolean shown) {
         for (int i = 0; i < shownX.length; i++) {
-            ((Slot) inventorySlots.get(i)).xDisplayPosition = shown ? shownX[i] : -10000;
+            boolean always = i == shownX.length - 1;                   // the battery slot
+            ((Slot) inventorySlots.get(i)).xDisplayPosition = shown || always ? shownX[i] : -10000;
         }
     }
 
@@ -111,7 +124,21 @@ public class ContainerFieldGeneratorSC extends Container {
         }
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
-        int n = TileEntityFieldGeneratorSC.UPGRADE_SLOTS, hotbar = n + 27, end = inventorySlots.size();
+        int n = TileEntityFieldGeneratorSC.UPGRADE_SLOTS, hotbar = n + 27, battery = inventorySlots.size() - 1, end = battery;
+        if (index == battery) {
+            if (!field.allowed(player) || !mergeItemStack(original, n, end, true)) {
+                return null;
+            }
+            slot.putStack(original.stackSize == 0 ? null : original);
+            return result;
+        }
+        if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
+            if (!mergeItemStack(original, battery, battery + 1, false)) {
+                return null;
+            }
+            slot.putStack(original.stackSize == 0 ? null : original);
+            return result;
+        }
         if (index >= n && field.isItemValidForSlot(0, original) && !field.allowed(player)) {
             return null;                            // strangers don't put upgrades in either
         }

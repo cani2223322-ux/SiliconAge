@@ -59,6 +59,8 @@ public class GuiQuarrySC extends GuiContainer {
     private final TileEntityQuarrySC quarry;
     private final ContainerQuarrySC container;
     private GuiPowerSC power;
+    /** The battery slot under the gauge (every tab). */
+    private GuiBatterySlotSC battery;
 
     public GuiQuarrySC(InventoryPlayer inv, TileEntityQuarrySC quarry) {
         super(new ContainerQuarrySC(inv, quarry));
@@ -70,7 +72,7 @@ public class GuiQuarrySC extends GuiContainer {
 
     // ------------------------------------------------------------------ layout
 
-    private static final int B_RUN = 1, B_RESET = 2, B_XP = 3, B_REDSTONE = 4, B_POWER = 5, B_SWITCH = 6, B_SHAPE = 10, B_REPLACE = 11,
+    private static final int B_RUN = 1, B_RESET = 2, B_XP = 3, B_REDSTONE = 4, B_POWER = 5, B_SWITCH = 6, B_BATTERY = 7, B_SHAPE = 10, B_REPLACE = 11,
             B_SHOW = 20, B_DASH = 21, B_PLANE = 22, B_ORES = 23, B_BRIGHT = 24, B_TARGET = 25, B_SWATCH = 30, B_SLIDER = 40,
             B_SCAN = 50, B_FILTER = 60, B_OUTSIDE = 61, B_PAGE = 62, B_OUTPAGE = 63, B_FF_MODE = 64,
             B_FF_REMOVE = 65, B_TANK_FULL = 66, B_FF_HAND = 67, B_FF_CLEAR = 68, B_TANK_SIDE = 70, B_TANK_CLEAR = 74,
@@ -115,13 +117,15 @@ public class GuiQuarrySC extends GuiContainer {
         }
         power = new GuiPowerSC(quarry, B_SWITCH, B_REDSTONE, ENERGY_X, BUTTONS_Y, ENERGY_W, ENERGY_Y, ENERGY_H);
         power.addButtons(buttonList, guiLeft, guiTop);
+        battery = new GuiBatterySlotSC(quarry, B_BATTERY, ENERGY_X, ENERGY_Y + ENERGY_H);
+        battery.addButton(buttonList, guiLeft, guiTop);
         int x = guiLeft, y = guiTop;
         switch (tab) {
             case 0:
-                buttonList.add(holo(B_RUN, x + 14, y + 144, 70, 16, ""));
-                buttonList.add(holo(B_RESET, x + 88, y + 144, 60, 16, Lang.tr("sc.quarrygui.reset")));
-                buttonList.add(holo(B_XP, x + 152, y + 144, 82, 16, ""));
-                buttonList.add(holo(B_POWER, x + 14, y + 164, 108, 16, ""));
+                buttonList.add(holo(B_RUN, x + 14, y + 144, 60, 16, ""));
+                buttonList.add(holo(B_RESET, x + 78, y + 144, 54, 16, Lang.tr("sc.quarrygui.reset")));
+                buttonList.add(holo(B_XP, x + 136, y + 144, 66, 16, ""));
+                buttonList.add(holo(B_POWER, x + 14, y + 164, 92, 16, ""));
                 break;
             case 1: {
                 int[] steps = {-16, -1, 1, 16};
@@ -468,6 +472,7 @@ public class GuiQuarrySC extends GuiContainer {
             case B_XP: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_XP, 0); break;
             case B_REDSTONE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_REDSTONE, 0); break;
             case B_SWITCH: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_SWITCH, 0); break;
+            case B_BATTERY: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_BATTERY_MODE, 0); break;
             case B_POWER: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_POWER, 0); break;
             case B_SHAPE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_SHAPE, 0); break;
             case B_REPLACE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_REPLACE, 0); break;
@@ -630,7 +635,7 @@ public class GuiQuarrySC extends GuiContainer {
         boolean inv = tab == 3 || tab == 5 || exo && tab == 2;
         if (tab == 0) {
             GuiHoloSC.screen(x + SX, y + ST, SW, 100);
-            GuiHoloSC.screen(x + SX, y + 138, 234, 118);
+            GuiHoloSC.screen(x + SX, y + 138, SW, 118);
             for (int[] c : CARDS) {
                 card(x + c[0], y + c[1], 42, 20);
             }
@@ -639,15 +644,15 @@ public class GuiQuarrySC extends GuiContainer {
             } else {
                 quarryScene(x + 104, y + 40, 100, 88, t);
             }
-            card(x + 126, y + 164, 108, 16);                     // the head: shown, not a button
+            card(x + 110, y + 164, 92, 16);                      // the head: shown, not a button
             if (exo) {
-                GuiHoloSC.bar(x + 15, y + 199, 216, 4, (float) quarry.getWater().getFluidAmount() / Math.max(1, quarry.waterCapacity()),
+                GuiHoloSC.bar(x + 15, y + 199, 186, 4, (float) quarry.getWater().getFluidAmount() / Math.max(1, quarry.waterCapacity()),
                         36, 0xFF4A8AE8);
             } else {
                 tankBars(x, y);
             }
             GuiHoloSC.glint(x + SX, y + ST, SW, 100);
-            GuiHoloSC.glint(x + SX, y + 138, 234, 118);
+            GuiHoloSC.glint(x + SX, y + 138, SW, 118);
         } else {
             int bottom = inv ? SHORT_B : FULL_B;
             GuiHoloSC.screen(x + SX, y + ST, SW, bottom - ST);
@@ -692,6 +697,7 @@ public class GuiQuarrySC extends GuiContainer {
             }
             GuiHoloSC.glint(x + SX, y + ST, SW, bottom - ST);
         }
+        battery.draw(x, y, quarry.getStackInSlot(TileEntityQuarrySC.SLOT_BATTERY));
         if (inv) {
             pockets(x + ContainerQuarrySC.INV_X, y + ContainerQuarrySC.INV_Y + TOP, 9, 3);
             pockets(x + ContainerQuarrySC.INV_X, y + ContainerQuarrySC.INV_Y + TOP + 58, 9, 1);
@@ -703,17 +709,17 @@ public class GuiQuarrySC extends GuiContainer {
     private void tankBars(int x, int y) {
         int cap = Math.max(1, quarry.tankCapacity());
         for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
-            int bx = x + 14 + i * 56, by = y + 203;
-            drawRect(bx, by, bx + 52, by + 6, 0xFF04080C);
+            int bx = x + 14 + i * 48, by = y + 203;
+            drawRect(bx, by, bx + 44, by + 6, 0xFF04080C);
             if (i >= quarry.unlockedTanks()) {
-                for (int k = 0; k < 50; k += 4) {
+                for (int k = 0; k < 42; k += 4) {
                     drawRect(bx + 1 + k, by + 1, bx + 3 + k, by + 5, 0xFF1A2430);
                 }
                 continue;
             }
             net.minecraftforge.fluids.FluidStack f = quarry.getTank(i).getFluid();
             if (f != null && f.amount > 0) {
-                int fill = Math.max(1, Math.min(50, f.amount * 50 / cap));
+                int fill = Math.max(1, Math.min(42, f.amount * 42 / cap));
                 drawRect(bx + 1, by + 1, bx + 1 + fill, by + 5, 0xFF000000 | GuiTankGaugeSC.colourOf(f.getFluid()));
             }
         }
@@ -976,7 +982,7 @@ public class GuiQuarrySC extends GuiContainer {
         for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
             used += quarry.getTank(i).getFluidAmount() > 0 ? 1 : 0;
         }
-        small(Lang.tr("sc.quarrygui.pumped", quarry.pumpedTotal(), used, quarry.unlockedTanks()), 100, 187, 134, DIM);
+        small(Lang.tr("sc.quarrygui.pumped", quarry.pumpedTotal(), used, quarry.unlockedTanks()), 100, 187, 102, DIM);
         for (int i = 0; i < TileEntityQuarrySC.TANKS; i++) {
             String label;
             if (i >= quarry.unlockedTanks()) {
@@ -985,9 +991,9 @@ public class GuiQuarrySC extends GuiContainer {
                 net.minecraftforge.fluids.FluidStack f = quarry.getTank(i).getFluid();
                 label = f != null && f.amount > 0 ? f.getLocalizedName() : Lang.tr("sc.quarrygui.tankshort", i + 1);
             }
-            small(label, 14 + i * 56, 197, 52, i >= quarry.unlockedTanks() ? 0x465A6E : DIM);
+            small(label, 14 + i * 48, 197, 44, i >= quarry.unlockedTanks() ? 0x465A6E : DIM);
         }
-        small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 214, 220, DIM);
+        small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 214, 188, DIM);
         owner();
     }
 
@@ -1008,7 +1014,7 @@ public class GuiQuarrySC extends GuiContainer {
         small(Lang.tr("sc.quarrygui.rig.line2"), 14, 104, 88, DIM);
         headCard();
         caption("sc.quarrygui.cap.wash", 14, 186);
-        small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 208, 220, DIM);
+        small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 208, 188, DIM);
         owner();
     }
 
@@ -1019,15 +1025,15 @@ public class GuiQuarrySC extends GuiContainer {
         if (h != null && h.getMaxDamage() > 0) {
             name += " " + (100 - h.getItemDamage() * 100 / h.getMaxDamage()) + "%";
         }
-        TextFitSC.drawCentered(fontRendererObj, Lang.tr("sc.quarrygui.head", name), 128, 168, 104, h == null ? GuiHoloSC.WARN : C, false,
+        TextFitSC.drawCentered(fontRendererObj, Lang.tr("sc.quarrygui.head", name), 112, 168, 88, h == null ? GuiHoloSC.WARN : C, false,
                 guiLeft, guiTop);
     }
 
     private void owner() {
         if (!quarry.allowed(mc.thePlayer)) {
-            small(Lang.tr("sc.quarrygui.owneronly"), 14, 230, 220, GuiHoloSC.BAD);
+            small(Lang.tr("sc.quarrygui.owneronly"), 14, 230, 188, GuiHoloSC.BAD);
         }
-        small(Lang.tr("sc.fieldgui.owner", quarry.getOwner().isEmpty() ? "-" : quarry.getOwner()), 14, 242, 220, 0x465A6E);
+        small(Lang.tr("sc.fieldgui.owner", quarry.getOwner().isEmpty() ? "-" : quarry.getOwner()), 14, 242, 188, 0x465A6E);
     }
 
     /** The Area tab: the five rows over their buttons, or the rig's note; the display column is buttons only. */
@@ -1199,6 +1205,9 @@ public class GuiQuarrySC extends GuiContainer {
             sendSliders();
         }
         List<String> tip = power.tooltip(mouseX - guiLeft, mouseY - guiTop);
+        if (tip == null) {
+            tip = battery.tooltip(mouseX - guiLeft, mouseY - guiTop, quarry.getStackInSlot(TileEntityQuarrySC.SLOT_BATTERY));
+        }
         if (tip == null) {
             tip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
         }

@@ -44,8 +44,8 @@ public final class GuiBigSC {
         rect(x + 3, y + 3, 1, 13, 0xFF6E747E);
         rect(x + 4, y + 4, W - 8, 11, TITLE_BAR);
         rect(x + 4, y + 15, W - 8, 1, 0xFFF0F2F6);
-        rect(x + 7, y + SEPARATOR_Y, W - 14, 1, 0xFF5A606A);
-        rect(x + 7, y + SEPARATOR_Y + 1, W - 14, 1, 0xFFF0F2F6);
+        rect(x + 7, y + SEPARATOR_Y, GAUGE_X - 10, 1, 0xFF5A606A);
+        rect(x + 7, y + SEPARATOR_Y + 1, GAUGE_X - 10, 1, 0xFFF0F2F6);
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 9; c++) {
                 pocket(x + INV_X + c * 18, y + INV_Y + r * 18);

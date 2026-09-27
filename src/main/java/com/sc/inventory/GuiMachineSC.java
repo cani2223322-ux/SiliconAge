@@ -49,6 +49,8 @@ public class GuiMachineSC extends GuiContainer {
     /** The energy gauge sits 12 px lower: the power switch and the redstone mode button above it (GuiPowerSC). */
     private static final int MG_Y = GuiPowerSC.GAUGE_Y, MG_H = GuiPowerSC.GAUGE_H;
     private final GuiPowerSC power;
+    /** The battery slot under the gauge. */
+    private final GuiBatterySlotSC battery;
 
     /** For NEI: which machine's recipe page the progress-bar click should open. */
     public com.sc.machine.MachineType getMachineType() {
@@ -144,6 +146,7 @@ public class GuiMachineSC extends GuiContainer {
         super(new ContainerMachineSC(playerInv, machine));
         this.machine = machine;
         this.power = new GuiPowerSC(machine, ContainerMachineSC.BTN_POWER, ContainerMachineSC.BTN_REDSTONE);
+        this.battery = new GuiBatterySlotSC(machine, ContainerMachineSC.BTN_BATTERY_MODE, GuiBigSC.GAUGE_X, GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H);
         for (int i = 0; i < tankUsed.length; i++) {
             tankUsed[i] = RecipeRegistry.usesTank(machine.getMachineType(), i);
         }
@@ -190,6 +193,7 @@ public class GuiMachineSC extends GuiContainer {
             buttonList.add(new GuiBigSC.ClearButton(ContainerMachineSC.BTN_CLEAR + i));
         }
         power.addButtons(buttonList, guiLeft, guiTop);
+        battery.addButton(buttonList, guiLeft, guiTop);
     }
 
     /** The Clear buttons sit above the tanks shown (the Ore Washer: above its Water gauge). */
@@ -635,6 +639,7 @@ public class GuiMachineSC extends GuiContainer {
 
         GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + MG_Y, GuiBigSC.GAUGE_W, MG_H,
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
+        battery.draw(x, y, machine.getStackInSlot(TileEntityMachineSC.SLOT_BATTERY));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
         if (washer || blast || saw || oxid || coat || step || ion || sput || fill) {
@@ -1859,6 +1864,10 @@ public class GuiMachineSC extends GuiContainer {
         List<String> powerTip = power.tooltip(mouseX, mouseY);
         if (powerTip != null) {
             return powerTip;
+        }
+        List<String> batteryTip = battery.tooltip(mouseX, mouseY, machine.getStackInSlot(TileEntityMachineSC.SLOT_BATTERY));
+        if (batteryTip != null) {
+            return batteryTip;
         }
         if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, MG_Y, GuiBigSC.GAUGE_W, MG_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));

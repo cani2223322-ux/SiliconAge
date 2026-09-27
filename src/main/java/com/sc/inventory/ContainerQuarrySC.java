@@ -19,7 +19,9 @@ import net.minecraftforge.fluids.FluidStack;
  */
 public class ContainerQuarrySC extends Container {
 
-    public static final int G_FILTER = 0, G_BUFFER = 1, G_UPGRADES = 2, G_PLAYER = 3, G_LENS = 4, G_TOOLS = 5;
+    public static final int G_FILTER = 0, G_BUFFER = 1, G_UPGRADES = 2, G_PLAYER = 3, G_LENS = 4, G_TOOLS = 5, G_BATTERY = 6;
+    /** The battery slot's item, under the gauge (GuiQuarrySC's gauge column, content coordinates). */
+    public static final int BATTERY_X = 217, BATTERY_Y = 132 - 14;
     public static final int FILTER_X = 44, FILTER_Y = 61, BUFFER_X = 44, BUFFER_Y = 91;
     /** 18 module slots as a 9 x 2 grid; the head, scanner and card in a row under it, each over its label. */
     public static final int UPGRADE_X = 14, UPGRADE_Y = 38, TOOLS_Y = 84, TOOL_COL = 36;
@@ -62,12 +64,13 @@ public class ContainerQuarrySC extends Container {
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + TOP + 58));
         }
+        addSlotToContainer(new SlotBatterySC(quarry, TileEntityQuarrySC.SLOT_BATTERY, BATTERY_X, BATTERY_Y + TOP));   // last: every tab
         shownX = new int[inventorySlots.size()];
         group = new int[inventorySlots.size()];
         for (int i = 0; i < shownX.length; i++) {
             shownX[i] = ((Slot) inventorySlots.get(i)).xDisplayPosition;
             group[i] = i < FIRST_BUFFER ? G_FILTER : i < FIRST_UPGRADE ? G_BUFFER : i < FIRST_TOOLS ? G_UPGRADES
-                    : i < FIRST_LENS ? G_TOOLS : i < FIRST_PLAYER ? G_LENS : G_PLAYER;
+                    : i < FIRST_LENS ? G_TOOLS : i < FIRST_PLAYER ? G_LENS : i < FIRST_PLAYER + 36 ? G_PLAYER : G_BATTERY;
         }
     }
 
@@ -79,7 +82,8 @@ public class ContainerQuarrySC extends Container {
     @SideOnly(Side.CLIENT)
     public void setShown(boolean... groups) {
         for (int i = 0; i < shownX.length; i++) {
-            ((Slot) inventorySlots.get(i)).xDisplayPosition = groups[group[i]] ? shownX[i] : -10000;
+            boolean on = group[i] >= groups.length || groups[group[i]];                // the battery: always
+            ((Slot) inventorySlots.get(i)).xDisplayPosition = on ? shownX[i] : -10000;
         }
     }
 
@@ -131,9 +135,13 @@ public class ContainerQuarrySC extends Container {
         }
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
-        int end = inventorySlots.size(), hotbar = FIRST_PLAYER + 27;
-        if (index < FIRST_PLAYER) {
+        int battery = inventorySlots.size() - 1, end = battery, hotbar = FIRST_PLAYER + 27;
+        if (index < FIRST_PLAYER || index == battery) {
             if (!mergeItemStack(original, FIRST_PLAYER, end, true)) {
+                return null;
+            }
+        } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
+            if (!mergeItemStack(original, battery, battery + 1, false)) {
                 return null;
             }
         } else if (!SlotMergeSC.mergeValid(inventorySlots, original, FIRST_UPGRADE, FIRST_PLAYER)

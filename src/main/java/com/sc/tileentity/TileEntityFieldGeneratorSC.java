@@ -52,7 +52,10 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * buffer each) and transformer upgrades (one tier higher voltage each - HV -> EV).
      */
     public static final int UPGRADE_SLOTS = 4;
+    /** The battery slot under the energy gauge (the master's). */
+    public static final int SLOT_BATTERY = UPGRADE_SLOTS;
     private final ItemStack[] upgrades = new ItemStack[UPGRADE_SLOTS];
+    private ItemStack battery;
 
     private FieldMode mode = FieldMode.UNION;
     private boolean master = true;
@@ -1019,6 +1022,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (worldObj.getTotalWorldTime() % 100 == 0) {
             pruneNodes();
         }
+        if (feedFromBattery(battery) > 0) {
+            markDirty();
+        }
         boolean powered = worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
         boolean rsOff = redstone == REDSTONE_ON ? !powered : redstone == REDSTONE_OFF && powered;
         if (rsOff != redstoneOff) {
@@ -1622,8 +1628,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         to.markDirty();
     }
 
-    /** Breaking the block: its upgrades drop (BlockFieldGeneratorSC.breakBlock). */
+    /** Breaking the block: its upgrades (and battery) drop (BlockFieldGeneratorSC.breakBlock). */
     public void dropUpgrades() {
+        if (battery != null && worldObj != null) {
+            worldObj.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(worldObj, xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, battery));
+        }
+        battery = null;
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
             if (upgrades[i] != null && worldObj != null) {
                 worldObj.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(worldObj, xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, upgrades[i]));
@@ -1634,11 +1644,14 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     @Override
     public int getSizeInventory() {
-        return UPGRADE_SLOTS;
+        return UPGRADE_SLOTS + 1;
     }
 
     @Override
     public ItemStack getStackInSlot(int slot) {
+        if (slot == SLOT_BATTERY) {
+            return battery;
+        }
         return slot >= 0 && slot < UPGRADE_SLOTS ? upgrades[slot] : null;
     }
 
@@ -1651,7 +1664,11 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         ItemStack out;
         if (s.stackSize <= count) {
             out = s;
-            upgrades[slot] = null;
+            if (slot == SLOT_BATTERY) {
+                battery = null;
+            } else {
+                upgrades[slot] = null;
+            }
         } else {
             out = s.splitStack(count);
         }
@@ -1666,6 +1683,11 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     @Override
     public void setInventorySlotContents(int slot, ItemStack stack) {
+        if (slot == SLOT_BATTERY) {
+            battery = stack;
+            markDirty();
+            return;
+        }
         if (slot < 0 || slot >= UPGRADE_SLOTS) {
             return;
         }
@@ -1707,7 +1729,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     @Override
     public boolean isItemValidForSlot(int slot, ItemStack stack) {
-        return isFieldUpgrade(stack);
+        return slot == SLOT_BATTERY ? com.sc.item.BatteryFeedSC.accepts(stack) : isFieldUpgrade(stack);
     }
 
     private static final int[] NO_SLOTS = new int[0];
@@ -1823,6 +1845,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         owner = nbt.getString("Owner");
         redstoneOff = nbt.getBoolean("RedstoneOff");
         rainShield = nbt.getBoolean("RainShield");
+        battery = nbt.hasKey("Battery") ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag("Battery")) : null;
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
             upgrades[i] = null;
         }
@@ -1887,5 +1910,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
         }
         nbt.setTag("Upgrades", ups);
+        if (battery != null) {
+            nbt.setTag("Battery", battery.writeToNBT(new NBTTagCompound()));
+        }
     }
 }

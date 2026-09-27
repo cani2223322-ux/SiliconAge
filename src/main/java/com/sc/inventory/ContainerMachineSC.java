@@ -40,6 +40,9 @@ public class ContainerMachineSC extends Container {
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, GuiBigSC.INV_X + col * 18, GuiBigSC.HOTBAR_Y));
         }
+        // the battery slot under the gauge - last, so the player's slots keep their indices
+        addSlotToContainer(new SlotBatterySC(machine, TileEntityMachineSC.SLOT_BATTERY,
+                GuiBatterySlotSC.itemX(GuiBigSC.GAUGE_X), GuiBatterySlotSC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
     }
 
     /** A machine type with any tank gets the tighter slot layout beside its tank gauges. */
@@ -80,7 +83,7 @@ public class ContainerMachineSC extends Container {
     /** enchantItem buttons: BTN_CLEAR + tank index pours that tank out for EU. */
     public static final int BTN_CLEAR = 0;
     /** The power switch and the redstone mode (cycles always / with a signal / without). */
-    public static final int BTN_POWER = 10, BTN_REDSTONE = 11;
+    public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_BATTERY_MODE = 12;
 
     @Override
     public boolean enchantItem(EntityPlayer player, int id) {
@@ -97,6 +100,10 @@ public class ContainerMachineSC extends Container {
         }
         if (id == BTN_REDSTONE) {
             machine.setRedstoneMode((machine.getRedstoneMode() + 1) % 3);
+            return true;
+        }
+        if (id == BTN_BATTERY_MODE) {
+            machine.cycleBatteryMode();
             return true;
         }
         return false;
@@ -205,9 +212,14 @@ public class ContainerMachineSC extends Container {
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
         int machineSlots = TileEntityMachineSC.FIRST_UPGRADE_SLOT + TileEntityMachineSC.UPGRADE_SLOTS;
+        int battery = inventorySlots.size() - 1, playerEnd = battery;
 
-        if (slotIndex < machineSlots) {
-            if (!mergeItemStack(original, machineSlots, inventorySlots.size(), true)) {
+        if (slotIndex < machineSlots || slotIndex == battery) {
+            if (!mergeItemStack(original, machineSlots, playerEnd, true)) {
+                return null;
+            }
+        } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
+            if (!mergeItemStack(original, battery, battery + 1, false)) {
                 return null;
             }
         } else if (original.getItem() instanceof com.sc.item.ItemUpgradeSC) {
@@ -232,7 +244,7 @@ public class ContainerMachineSC extends Container {
     private boolean shuffleInPlayerInventory(ItemStack stack, int slotIndex, int firstPlayerSlot) {
         int hotbarStart = firstPlayerSlot + 27;
         return slotIndex < hotbarStart
-                ? mergeItemStack(stack, hotbarStart, inventorySlots.size(), false)
+                ? mergeItemStack(stack, hotbarStart, firstPlayerSlot + 36, false)
                 : mergeItemStack(stack, firstPlayerSlot, hotbarStart, false);
     }
 
