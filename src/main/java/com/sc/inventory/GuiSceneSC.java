@@ -812,6 +812,57 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The kiln: a brick wall with an arched chamber glowing more as the firing goes on, the piece
+     * on a shelf taking its fired colour, embers under it.
+     */
+    public static void kiln(int x, int y, int w, int h, float t, boolean running, float progress, int from, int to) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int bx0 = x + 5, bx1 = x + w - 5, by0 = y + 3, by1 = y + h - 3;
+        for (int yy = by0, row = 0; yy + 3 <= by1; yy += 4, row++) {          // bricks
+            int off = row % 2 == 0 ? 0 : 4;
+            for (int xx = bx0 - off; xx < bx1; xx += 8) {
+                int a = Math.max(bx0, xx), b = Math.min(bx1, xx + 7);
+                rect(a, yy, b - a, 3, 0xFF7A3E2A);
+                rect(a, yy, b - a, 1, 0xFF9A5238);
+            }
+        }
+        int cx = (bx0 + bx1) / 2, cw = (bx1 - bx0) / 2 - 6, top = by0 + 6, bot = by1 - 3;
+        float heat = running ? 0.3F + 0.7F * progress : 0.15F;
+        for (int yy = top; yy < bot; yy++) {                                   // the arched chamber
+            float k = (float) (yy - top) / Math.max(1, bot - top);
+            int half = (int) (cw * Math.sqrt(Math.min(1F, k * 2.5F)));
+            rect(cx - half, yy, 2 * half, 1, mix(0xFF2A1208, 0xFFE0701E, heat * k));
+        }
+        rect(cx - cw + 2, bot - 6, 2 * cw - 4, 2, 0xFF8A909A);                // the shelf
+        rect(cx - 5, bot - 12, 10, 6, mix(from, to, running ? progress : 0F)); // the piece
+        if (running) {
+            for (int i = 0; i < 6; i++) {
+                int fx = cx - cw + 4 + i * (2 * cw - 8) / 5;
+                int fh = 1 + (int) (1.5 + 1.5 * Math.sin(t * 0.8F + i));
+                rect(fx, bot - fh, 2, fh, 0xFFFFB040);
+            }
+        }
+    }
+
+    /** The firing curve: heat up, hold, cool down, the part done bright, a marker at the progress. */
+    public static void firingCurve(int x, int y, int w, int h, float progress) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        for (int i = 0; i < w - 4; i++) {
+            float k = (float) i / (w - 5);
+            float v = k < 0.3F ? k / 0.3F : k < 0.75F ? 1F : Math.max(0F, 1 - (k - 0.75F) / 0.25F * 0.7F);
+            rect(x + 2 + i, y + h - 3 - (int) ((h - 6) * v), 1, 1, i < (w - 4) * progress ? 0xFFFF8C1E : 0xFF5A3A1A);
+        }
+        rect(x + 2 + (int) ((w - 4) * progress), y + 2, 1, h - 4, 0xFFFFFFFF);
+    }
+
+    /** The firing's stage: 0 heating up, 1 holding, 2 cooling. */
+    public static int firingStage(float progress) {
+        return progress < 0.3F ? 0 : progress < 0.75F ? 1 : 2;
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

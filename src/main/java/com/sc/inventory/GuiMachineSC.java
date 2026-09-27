@@ -79,6 +79,10 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean roll;
     /** The Upgrade Stations: the tier ladder (Nano > Quantum > Exo, or chip I > II > III), the bench, what goes in and out. */
     private final boolean station;
+    /** The Kiln: its five products as badges, the kiln wide, the firing curve under it with its stages. */
+    private final boolean kiln;
+    private static final int KILN_X = 88, KILN_Y = 37, KILN_H = 36, KILN_CURVE_Y = 75, KILN_CURVE_H = 18, KILN_BADGE_W = 22;
+    private static final int[] KILN_COLOURS = {0xFF6A6A72, 0xFF3A3A3A, 0xFFB04A2A, 0xFFE8E0D0, 0xFF9AA0B8};
     private static final int ST_X = 88, ST_STEP_W = 36, ST_Y = 40, ST_H = 44;
     private static final int[] ST_GEAR = {0xFF4A8AD8, 0xFF9A5AE0, 0xFF3AD8A0}, ST_CHIP = {0xFF8A94A8, 0xFF4AA8E8, 0xFFE8C850};
     private static final com.sc.util.SCToolType[] ROLL_MOLDS = {com.sc.util.SCToolType.MOLD_PLATE, com.sc.util.SCToolType.MOLD_COIL,
@@ -149,6 +153,7 @@ public class GuiMachineSC extends GuiContainer {
         air = machine.getMachineType() == com.sc.machine.MachineType.AIR_SEPARATOR;
         refi = machine.getMachineType() == com.sc.machine.MachineType.REFINERY;
         roll = machine.getMachineType() == com.sc.machine.MachineType.ROLLING_MACHINE;
+        kiln = machine.getMachineType() == com.sc.machine.MachineType.KILN;
         station = machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_MV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_HV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_EV;
@@ -499,6 +504,22 @@ public class GuiMachineSC extends GuiContainer {
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
+        } else if (kiln) {                                              // the product badges, the kiln, the curve
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+            int k = kilnProduct();
+            for (int i = 0; i < 5; i++) {
+                int bx = x + KILN_X + i * (KILN_BADGE_W + 2), by = y + CAPTION_Y - 2;
+                drawRect(bx, by, bx + KILN_BADGE_W, by + 11, i == k ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + KILN_BADGE_W - 1, by + 10, i == k ? 0xFF0E3A50 : 0xFF0A1218);
+                drawRect(bx + 2, by + 8, bx + KILN_BADGE_W - 2, by + 10,
+                        i == k ? KILN_COLOURS[i] : GuiSceneSC.mix(KILN_COLOURS[i], 0xFF0A1218, 0.65F));
+            }
+            com.sc.machine.MachineRecipe r = kilnRecipe();
+            int from = r == null || r.inputs.length == 0 ? 0xFF6A6A72 : itemColour(r.inputs[0]);
+            GuiSceneSC.kiln(x + KILN_X, y + KILN_Y, GuiBigSC.SCREEN_RIGHT - KILN_X, KILN_H, t, running, progress,
+                    from == 0xFF5AE66E ? 0xFF6A6A72 : from, k < 0 ? 0xFF8A8A92 : KILN_COLOURS[k]);
+            GuiSceneSC.firingCurve(x + KILN_X, y + KILN_CURVE_Y, GuiBigSC.SCREEN_RIGHT - KILN_X, KILN_CURVE_H, running ? progress : 0F);
         } else if (station) {                                           // the tier ladder and the bench
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             int[] ld = stationLadder();
@@ -685,6 +706,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (cvd || etch) {
             drawCvdText();
+            drawUpgradeLine();
+            return;
+        }
+        if (kiln) {
+            drawKilnText();
             drawUpgradeLine();
             return;
         }
@@ -1091,6 +1117,64 @@ public class GuiMachineSC extends GuiContainer {
             TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
                     GuiHoloSC.LABEL, false, guiLeft, guiTop);
         }
+    }
+
+    /** The Kiln's recipe: the one its inputs make, or null. */
+    private com.sc.machine.MachineRecipe kilnRecipe() {
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+        }
+        return RecipeRegistry.findMatch(machine.getMachineType(), in, null, null);
+    }
+
+    /** Which of the Kiln's five products the inputs make: 0 coke, 1 rubber, 2 heat-resistant rubber, 3 ceramic, 4 W-Ti; -1 none. */
+    private int kilnProduct() {
+        com.sc.machine.MachineRecipe r = kilnRecipe();
+        net.minecraft.item.Item o = r == null || r.outputs.length == 0 || r.outputs[0] == null ? null : r.outputs[0].getItem();
+        if (o == null) {
+            return -1;
+        }
+        return o == com.sc.init.ModItems.coke ? 0 : o == com.sc.init.ModItems.rubber ? 1 : o == com.sc.init.ModItems.rubberHeatResist ? 2
+                : o == com.sc.init.ModItems.component("ceramicPackage") ? 3 : o == com.sc.init.ModItems.component("wTiPlate") ? 4 : -1;
+    }
+
+    /** The Kiln: the badges' names, the curve's stage names (the current one lit), "inputs -> product · time". */
+    private void drawKilnText() {
+        int k = kilnProduct();
+        for (int i = 0; i < 5; i++) {
+            String s = Lang.tr("sc.gui.kiln.p." + i);
+            float sc = Math.min(0.5F, (KILN_BADGE_W - 3) / (float) Math.max(1, fontRendererObj.getStringWidth(s)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(KILN_X + i * (KILN_BADGE_W + 2) + (KILN_BADGE_W - fontRendererObj.getStringWidth(s) * sc) / 2F, CAPTION_Y, 0F);
+            GL11.glScalef(sc, sc, 1F);
+            fontRendererObj.drawString(s, 0, 0, i == k ? 0x96F0FF : 0x465A6E);
+            GL11.glPopMatrix();
+        }
+        boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+        int ticks = machine.getCurrentRecipeTicks();
+        int stage = running && ticks > 0 ? GuiSceneSC.firingStage((float) machine.getProgressTicks() / ticks) : -1;
+        int w = GuiBigSC.SCREEN_RIGHT - KILN_X;
+        int[] sx = {KILN_X + 3, KILN_X + w * 3 / 8, KILN_X + w * 4 / 5};
+        for (int i = 0; i < 3; i++) {
+            small(Lang.tr("sc.gui.kiln.stage." + i), sx[i], KILN_CURVE_Y + KILN_CURVE_H + 1, i == stage ? 0x96F0FF : 0x465A6E);
+        }
+        com.sc.machine.MachineRecipe r = kilnRecipe();
+        String line;
+        if (r == null) {
+            line = Lang.tr("sc.gui.kiln.empty");
+        } else {
+            StringBuilder b = new StringBuilder();
+            for (net.minecraft.item.ItemStack s : r.inputs) {
+                if (s != null) {
+                    b.append(b.length() == 0 ? "" : " + ").append(s.stackSize > 1 ? s.stackSize + " × " : "").append(s.getDisplayName());
+                }
+            }
+            net.minecraft.item.ItemStack o = r.outputs[0];
+            line = Lang.tr("sc.gui.kiln.row", b.toString(), (o.stackSize > 1 ? o.stackSize + " × " : "") + o.getDisplayName(),
+                    Math.max(1, machine.effectiveTicks(r) / 20));
+        }
+        smallFit(line, KILN_X + 2, KILN_CURVE_Y + KILN_CURVE_H + 8, w - 4, r == null ? 0x6AA8C8 : 0xE6F0FA);
     }
 
     /**
@@ -1708,6 +1792,11 @@ public class GuiMachineSC extends GuiContainer {
                 lines.add(Lang.tr("sc.gui.elec.run", in, out, Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.elec.hint"));
+            return lines;
+        }
+        if (kiln && GuiGaugeSC.isOver(KILN_X, CAPTION_Y - 2, GuiBigSC.SCREEN_RIGHT - KILN_X, KILN_CURVE_Y + KILN_CURVE_H - CAPTION_Y + 2, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.kiln.title"));
+            lines.add(Lang.tr("sc.gui.kiln.hint"));
             return lines;
         }
         if (station && GuiGaugeSC.isOver(ST_X, CAPTION_Y - 1, GuiBigSC.SCREEN_RIGHT - ST_X, ST_Y + ST_H - CAPTION_Y + 1, mouseX, mouseY)) {
