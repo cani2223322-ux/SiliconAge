@@ -394,6 +394,43 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The etching bath: two baths side by side (the developer, rimmed cyan; the acid, rimmed orange),
+     * a carriage on a rail over them dipping the wafer in the first for the first half of the run,
+     * in the second for the rest; bubbles in the bath in use.
+     */
+    public static void etchBaths(int x, int y, int w, int h, float t, boolean running, float progress, int colA, int colB) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int bw = (w - 12) / 2, by = y + h - 22;
+        int[] cols = {colA != 0 ? colA : 0xFF8AC8A0, colB != 0 ? colB : 0xFFA0D8B0};
+        int[] rims = {0xFF4AA8C8, 0xFFE08A30};
+        for (int i = 0; i < 2; i++) {
+            int bx = x + 4 + i * (bw + 4);
+            rect(bx - 1, by - 1, bw + 2, 19, rims[i]);
+            rect(bx, by - 1, bw, 18, 0xFF12181E);
+            int top = by + 17 - 11;
+            rect(bx, top, bw, by + 17 - top, cols[i]);
+            rect(bx, top, bw, 1, mix(cols[i], 0xFFFFFFFF, 0.35F));
+        }
+        rect(x + 3, y + 5, w - 6, 2, 0xFF6A707A);                              // the rail
+        int stage = progress < 0.5F ? 0 : 1;
+        float k = running ? (progress - stage * 0.5F) / 0.5F : 0F;
+        int cx = x + 4 + bw / 2 + stage * (bw + 4);
+        int dip = (int) (10 * Math.sin(Math.PI * Math.min(1F, k * 1.2F)));
+        rect(cx - 4, y + 4, 8, 4, 0xFF8A909A);                                 // the carriage
+        rect(cx, y + 8, 1, 6 + dip, 0xFFB0B8C4);
+        rect(cx - 1, y + 14 + dip, 2, 12, 0xFF8A94A8);                         // the wafer, edge on
+        rect(cx + 1, y + 14 + dip, 1, 12, stage == 0 ? 0xFFB070FF : 0xFF6A5AE0);
+        if (running) {
+            for (int i = 0; i < 5; i++) {                                      // bubbles in the bath in use
+                int bx = x + 6 + stage * (bw + 4) + (i * 5 + (int) t) % Math.max(1, bw - 4);
+                int bby = y + h - 6 - (int) ((t * 0.7F + i * 3) % 10);
+                rect(bx, bby, 1, 1, 0xFFE8F8FF);
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

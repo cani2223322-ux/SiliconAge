@@ -80,6 +80,8 @@ public class GuiMachineSC extends GuiContainer {
     private static final int CHEM_X = 76, CHEM_IN2 = 32, CHEM_FLASK = 64, CHEM_OUT = 97, CHEM_FLASK_W = 30, CHEM_FLASK_H = 50;
     /** The CVD Chamber's own screen: its recipe as a formula, tank -> the Siemens bell jar <- tank. */
     private final boolean cvd;
+    /** The Etching Bath's own screen, laid out as the CVD Chamber's: tank -> two baths <- tank. */
+    private final boolean etch;
     private static final int CVD_BELL_X = CHEM_X + 33, CVD_BELL_W = 64, CVD_BELL_H = 50, CVD_TANK2_X = CHEM_X + 99;
     /** Screens with tanks of their own (Chemical Reactor, CVD Chamber): which tanks, and where; null for the others. */
     private final int[] ownTanks, ownTankX;
@@ -109,8 +111,9 @@ public class GuiMachineSC extends GuiContainer {
                 || machine.getMachineType() == com.sc.machine.MachineType.STEPPER_EV;
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
-        ownTanks = chem ? new int[]{0, 1, 2} : cvd ? new int[]{0, 1} : null;
-        ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : cvd ? new int[]{CHEM_X, CVD_TANK2_X} : null;
+        etch = machine.getMachineType() == com.sc.machine.MachineType.ETCHING_BATH;
+        ownTanks = chem ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : null;
+        ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : cvd || etch ? new int[]{CHEM_X, CVD_TANK2_X} : null;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -253,7 +256,13 @@ public class GuiMachineSC extends GuiContainer {
         drawRect(x + rx - 4, y + GuiBigSC.SCREEN_Y + 6, x + rx - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
 
         GuiGaugeSC.bind(mc, TEXTURE);
-        if (cvd) {                                                      // the bell jar between the two gas tanks
+        if (etch) {                                                     // the two baths between the two tanks
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            GuiSceneSC.etchBaths(x + CVD_BELL_X, y + TANK_Y, CVD_BELL_W, CVD_BELL_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
+                    colourOf(machine.getTank(0).getFluid(), r == null ? null : r.fluidInputA),
+                    colourOf(machine.getTank(1).getFluid(), r == null ? null : r.fluidInputB));
+        } else if (cvd) {                                               // the bell jar between the two gas tanks
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             com.sc.machine.MachineRecipe r = shownRecipe();
             GuiSceneSC.bell(x + CVD_BELL_X, y + TANK_Y, CVD_BELL_W, CVD_BELL_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
@@ -453,7 +462,7 @@ public class GuiMachineSC extends GuiContainer {
             drawUpgradeLine();
             return;
         }
-        if (cvd) {
+        if (cvd || etch) {
             drawCvdText();
             drawUpgradeLine();
             return;
@@ -1013,6 +1022,18 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (etch && GuiGaugeSC.isOver(CVD_BELL_X, TANK_Y, CVD_BELL_W, CVD_BELL_H, mouseX, mouseY)) {
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            int ticks = machine.getCurrentRecipeTicks();
+            boolean second = ticks > 0 && machine.getProgressTicks() * 2 >= ticks;
+            lines.add(Lang.tr("sc.gui.etch.title"));
+            lines.add(Lang.tr(second ? "sc.gui.etch.stage.1" : "sc.gui.etch.stage.0"));
+            if (r != null) {
+                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+            }
+            lines.add(Lang.tr("sc.gui.etch.hint"));
+            return lines;
+        }
         if (step && GuiGaugeSC.isOver(SAW_X, SAW_Y, MAP_X + STEP_W - SAW_X, STEP_H, mouseX, mouseY)) {
             com.sc.machine.MachineRecipe r = shownRecipe();
             lines.add(Lang.tr("sc.gui.step.title"));
