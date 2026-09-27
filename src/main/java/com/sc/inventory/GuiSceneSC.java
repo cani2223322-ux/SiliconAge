@@ -196,6 +196,48 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The wire saw: two grooved pulleys, a web of diamond wires running between them and going down
+     * through the ingot on its holder (cuts behind it), water jets on the cut, sparks where it bites.
+     */
+    public static void wireSaw(int x, int y, int w, int h, float t, boolean running, float progress) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int ix0 = x + w / 2 - 16, ix1 = x + w / 2 + 16, top = y + 14, bot = y + h - 8;
+        int wy = top - 2 + Math.round((bot - top + 2) * progress);
+        int px0 = x + 6, px1 = x + w - 14, spin = running ? (int) t % 2 : 0;
+        for (int px : new int[]{px0, px1}) {                                   // the pulleys
+            rect(px, wy - 5, 8, 10, 0xFF6A707A);
+            rect(px + 1, wy - 4, 6, 8, 0xFF3A4048);
+            for (int k = 0; k < 4; k++) {
+                rect(px + 1, wy - 4 + k * 2 + spin, 6, 1, 0xFF9AA0AA);
+            }
+        }
+        rect(ix0, top, ix1 - ix0, bot - top, 0xFF6A7488);                     // the ingot
+        rect(ix0, top, ix1 - ix0, 1, 0xFFB8C4D8);
+        for (int i = 1; i < 8; i++) {                                          // the cuts so far
+            rect(ix0 + i * (ix1 - ix0) / 8, top, 1, wy - top, 0xFF0A1218);
+        }
+        rect(ix0 - 3, bot, ix1 - ix0 + 6, 3, 0xFF8A909A);                     // the holder
+        for (int k = 0; k < 3; k++) {                                          // the wire web
+            rect(px0 + 8, wy - 2 + k * 2, px1 - px0 - 8, 1, (k + spin) % 2 == 1 ? 0xFFD8E8F8 : 0xFFA8C8E8);
+        }
+        for (int i = 0; i < 2; i++) {                                          // the water nozzles
+            rect(ix0 - 6 + i * (ix1 - ix0 + 10), y + 4, 3, 3, 0xFF5A8AC8);
+        }
+        if (running) {
+            for (int i = 0; i < 8; i++) {                                      // sparks where it cuts
+                rect(ix0 + 2 + (i * 5 + (int) (t * 2)) % (ix1 - ix0 - 4), wy - 1, 1, 1, 0xFFFFFFFF);
+            }
+            for (int i = 0; i < 2; i++) {                                      // water jets
+                int jx = ix0 - 5 + i * (ix1 - ix0 + 10);
+                for (int k = 0; k < 5; k++) {
+                    rect(jx, y + 7 + (int) ((t * 1.5F + k * 4) % Math.max(1, wy - y - 7)), 1, 1, 0xFF6AB4F0);
+                }
+            }
+        }
+    }
+
     /** A thermometer beside the furnace: bulb, fill in the zone colour, marks at 0 / 50 / resume / 100. */
     public static void thermometer(int x, int y, int h, float heat, float resume) {
         heat = Math.max(0F, Math.min(1F, heat));

@@ -58,6 +58,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean washer;
     /** The Blast Furnace's own screen: the furnace and a thermometer, the zoned heat bar under them, its tank. */
     private final boolean blast;
+    /** The Wire Saw's own screen: the saw, the wafers lighting up with the progress, the wire's wear, its water. */
+    private final boolean saw;
+    private static final int SAW_X = 90, SAW_Y = 36, SAW_W = 82, SAW_H = 42, WAFER_Y = 82, WEAR_X = 124, WEAR_Y = 102, WEAR_W = 48;
     /** The Czochralski Puller's own screen: as the Blast Furnace's, the puller in place of the furnace. */
     private final boolean puller;
     /** The Chemical Reactor's own screen: its recipe as a formula, tank + tank -> flask -> tank. */
@@ -86,6 +89,7 @@ public class GuiMachineSC extends GuiContainer {
         puller = machine.getMachineType() == com.sc.machine.MachineType.CZOCHRALSKI_PULLER
                 || machine.getMachineType() == com.sc.machine.MachineType.CZOCHRALSKI_PULLER_EV;
         blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE || puller;
+        saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW;
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         ownTanks = chem ? new int[]{0, 1, 2} : cvd ? new int[]{0, 1} : null;
@@ -115,7 +119,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiBigSC.ClearButton b = (GuiBigSC.ClearButton) o;
             int tank = b.id - ContainerMachineSC.BTN_CLEAR;
             int gx = -1;
-            if (washer || blast) {
+            if (washer || blast || saw) {
                 gx = tank == 0 ? WATER_X : -1;
             } else if (ownTanks != null) {
                 for (int k = 0; k < ownTanks.length; k++) {
@@ -191,7 +195,7 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast || ownTanks != null) {
+        if (washer || blast || saw || ownTanks != null) {
             return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -254,6 +258,27 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.thermometer(x + THERMO_X, y + FURNACE_Y, FURNACE_H, h, (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
             GuiSceneSC.heatBar(x + HEATBAR_X, y + HEATBAR_Y, HEATBAR_W, HEATBAR_H, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
+        } else if (saw) {                                               // the saw, the wafers, the wire's wear
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+            GuiSceneSC.wireSaw(x + SAW_X, y + SAW_Y, SAW_W, SAW_H, t, running, progress);
+            int n = Math.min(8, wafersPerRun()), lit = running ? (int) (progress * n) : 0;
+            for (int i = 0; i < n; i++) {
+                int wx = x + SAW_X + i * 10, wy = y + WAFER_Y;
+                drawRect(wx, wy, wx + 8, wy + 8, i < lit ? 0xFF7A8AA8 : 0xFF3A4450);
+                drawRect(wx + 1, wy + 1, wx + 7, wy + 7, i < lit ? 0xFF9AB0D0 : 0xFF12181E);
+                if (i < lit) {
+                    drawRect(wx + 2, wy + 2, wx + 4, wy + 4, 0xFFE0ECFF);
+                }
+            }
+            net.minecraft.item.ItemStack wire = wire();
+            float left = wire == null ? 0F : 1F - (float) wire.getItemDamage() / Math.max(1, wire.getMaxDamage());
+            drawRect(x + WEAR_X, y + WEAR_Y, x + WEAR_X + WEAR_W, y + WEAR_Y + 4, 0xFF04080C);
+            for (int i = 0; i < 16; i++) {
+                int a = x + WEAR_X + 1 + i * (WEAR_W - 2) / 16, b = x + WEAR_X + 1 + (i + 1) * (WEAR_W - 2) / 16 - 1;
+                drawRect(a, y + WEAR_Y + 1, b, y + WEAR_Y + 3, (i + 0.5F) / 16 < left
+                        ? (left > 0.25F ? 0xFF5AE66E : 0xFFE63C3C) : 0xFF2A3038);
+            }
         } else if (washer) {                                            // the washing tub: its water is the tank
             FluidTank water = machine.getTank(0);
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
@@ -282,7 +307,7 @@ public class GuiMachineSC extends GuiContainer {
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
-        if (washer || blast) {
+        if (washer || blast || saw) {
             FluidTank water = machine.getTank(0);
             GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
         }
@@ -325,6 +350,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (blast) {
             drawBlastText(rx);
+            drawUpgradeLine();
+            return;
+        }
+        if (saw) {
+            drawSawText(rx);
             drawUpgradeLine();
             return;
         }
@@ -443,6 +473,43 @@ public class GuiMachineSC extends GuiContainer {
             line = heat > 0 ? Lang.tr("sc.gui.blast.cooling", heat / 2 / 20 + 1) : Lang.tr("sc.gui.blast.cold");
         }
         fit(line, HEATBAR_X, HEATBAR_Y + 13, WATER_X - HEATBAR_X - 4, GuiHoloSC.VALUE);
+    }
+
+    /** The Wire Saw: caption, its tank's label, wafers done / a run and defects, the wire's uses left. */
+    private void drawSawText(int rx) {
+        fit(Lang.tr("sc.gui.holo.sawing"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
+        FluidTank tank = machine.getTank(0);
+        String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
+        TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        int ticks = machine.getCurrentRecipeTicks(), n = wafersPerRun();
+        int done = ticks > 0 && machine.getStatus() == MachineStatus.PROCESSING ? machine.getProgressTicks() * Math.min(8, n) / ticks : 0;
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        String defect = Lang.tr("sc.gui.saw.defect", r == null ? 0 : Math.round(r.defectChance * 100));
+        int dw = fontRendererObj.getStringWidth(defect) * 5 / 8;
+        fit(Lang.tr("sc.gui.saw.wafers", done, n), SAW_X, WAFER_Y + 11, WATER_X - SAW_X - dw - 8, GuiHoloSC.VALUE);
+        small(defect, WATER_X - 4 - dw, WAFER_Y + 13, 0x6AA8C8);
+        small(Lang.tr("sc.gui.saw.wire"), SAW_X, WEAR_Y, 0x6AA8C8);
+        net.minecraft.item.ItemStack wire = wire();
+        small(wire == null ? Lang.tr("sc.gui.saw.nowire")
+                : Lang.tr("sc.gui.saw.left", wire.getMaxDamage() - wire.getItemDamage(), wire.getMaxDamage()),
+                SAW_X, WEAR_Y + 7, wire == null ? 0xE65A5A : 0x6AA8C8);
+    }
+
+    /** The Wire Saw's diamond wire (a tool in an input slot), or null. */
+    private net.minecraft.item.ItemStack wire() {
+        for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {
+            net.minecraft.item.ItemStack s = machine.getStackInSlot(i);
+            if (s != null && s.getItem() instanceof com.sc.item.ItemToolSC && s.getMaxDamage() > 0) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    /** How many wafers a run of the shown recipe gives. */
+    private int wafersPerRun() {
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        return r == null || r.outputs == null || r.outputs.length == 0 || r.outputs[0] == null ? 8 : r.outputs[0].stackSize;
     }
 
     /**
@@ -725,7 +792,7 @@ public class GuiMachineSC extends GuiContainer {
         }
 
         boolean overTub = washer && GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY);
-        boolean overOwnTank = (washer || blast)
+        boolean overOwnTank = (washer || blast || saw)
                 && GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY);
         if (ownTanks != null) {
             for (int k = 0; k < ownTanks.length; k++) {
@@ -757,6 +824,24 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (saw && GuiGaugeSC.isOver(SAW_X, SAW_Y, SAW_W, SAW_H + 20, mouseX, mouseY)) {
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            lines.add(Lang.tr("sc.gui.saw.title"));
+            if (r != null) {
+                if (r.fluidInputA != null) {
+                    lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
+                }
+                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+            }
+            return lines;
+        }
+        if (saw && GuiGaugeSC.isOver(SAW_X, WEAR_Y - 2, WATER_X - SAW_X - 4, 14, mouseX, mouseY)) {
+            net.minecraft.item.ItemStack wire = wire();
+            lines.add(Lang.tr("sc.gui.saw.wire.title"));
+            lines.add(wire == null ? Lang.tr("sc.gui.saw.nowire")
+                    : Lang.tr("sc.gui.saw.left", wire.getMaxDamage() - wire.getItemDamage(), wire.getMaxDamage()));
+            return lines;
+        }
         if (puller && GuiGaugeSC.isOver(FURNACE_X, FURNACE_Y, FURNACE_W, FURNACE_H, mouseX, mouseY)) {
             com.sc.machine.MachineRecipe r = shownRecipe();
             lines.add(Lang.tr("sc.gui.puller.title"));
