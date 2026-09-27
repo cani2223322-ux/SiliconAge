@@ -55,6 +55,7 @@ public final class SelfTestSC {
             chargePad();
             batteries();
             batterySlot();
+            generatorBattery();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1075,6 +1076,25 @@ public final class SelfTestSC {
                 && pad.chargeItem(ionCutter, 640) == 640
                 && pad.chargeItem(new ItemStack(net.minecraft.init.Items.iron_sword), 640) == 0;
         check(ok, "charge pad MV: Nano armour / blade and LV-MV weapons charge, Quantum / Exo and plain items don't");
+    }
+
+    private static void generatorBattery() {
+        com.sc.tileentity.TileEntityGeneratorSC g = new com.sc.tileentity.TileEntityGeneratorSC();
+        g.setGeneratorType(com.sc.energy.GeneratorType.COMBUSTION);
+        int slot = com.sc.tileentity.TileEntityGeneratorSC.SLOT_BATTERY;
+        ItemStack b = new ItemStack(ModItems.battery, 1, 1);
+        g.setInventorySlotContents(slot, b);
+        int cap = g.getMaxEnergyStored(), out = g.outputTier().getVoltage();
+        g.setEnergyStoredClient(cap);
+        int surplus = g.batteryRoundForTest();                     // buffer full: the surplus goes in
+        g.setEnergyStoredClient(cap / 2 - 10);
+        int low = g.batteryRoundForTest();                         // under half: the grid first
+        g.cycleBatteryMode();
+        int always = g.batteryRoundForTest();
+        com.sc.item.ItemBatterySC.setCharge(b, com.sc.item.ItemBatterySC.capacityOf(b));
+        boolean full = !g.batteryCharges(b) && g.canExtractItem(slot, b, 0);
+        check(surplus == Math.min(out, 128) && low == 0 && always == Math.min(out, 128) && full,
+                "generator battery slot: surplus charges over half only, always charges anyway, a full battery comes out");
     }
 
     private static void batterySlot() {

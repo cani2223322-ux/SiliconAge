@@ -15,23 +15,31 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.item.ItemStack;
 
 /**
- * The battery slot under a screen's energy gauge, drawn: three arrows up into the gauge (green
- * while the battery gives), the slot in a cyan frame (a battery's outline when empty), the
- * battery's charge as a strip beside it, and under it the mode button (reserve / always) - the
- * gauge keeps its full height. Positions are screen-local: x the gauge column's left, top the
- * gauge's bottom edge; the slot's item sits at (x + 3, top + 4), SlotBatterySC's place.
+ * The battery slot under a screen's energy gauge, drawn: three arrows between it and the gauge
+ * (green while energy moves - up from the battery on a consumer, down into it on a generator),
+ * the slot in a cyan frame (a battery's outline when empty), the battery's charge as a strip
+ * beside it, and under it the mode button - the gauge keeps its full height. Positions are
+ * screen-local: x the gauge column's left, top the gauge's bottom edge; the slot's item sits at
+ * (x + 3, top + 4), SlotBatterySC's place.
  */
 public final class GuiBatterySlotSC {
 
     public static final int COLUMN_W = 26;
     private final TileEntityEnergyBase te;
     private final int modeId, x, top;
+    /** A generator's slot: the output charges the battery (arrows down, "surplus / always"). */
+    private final boolean charging;
 
     public GuiBatterySlotSC(TileEntityEnergyBase te, int modeId, int x, int top) {
+        this(te, modeId, x, top, false);
+    }
+
+    public GuiBatterySlotSC(TileEntityEnergyBase te, int modeId, int x, int top, boolean charging) {
         this.te = te;
         this.modeId = modeId;
         this.x = x;
         this.top = top;
+        this.charging = charging;
     }
 
     /** Where the slot's item goes (for the container). */
@@ -43,6 +51,11 @@ public final class GuiBatterySlotSC {
         return gaugeBottom + 4;
     }
 
+    /** A generator's texts live under sc.gui.battery.gen.*. */
+    private String key(String k) {
+        return charging ? k.replace("sc.gui.battery.", "sc.gui.battery.gen.") : k;
+    }
+
     @SuppressWarnings("unchecked")
     public void addButton(List buttons, int guiLeft, int guiTop) {
         buttons.add(new ModeButton(guiLeft + x, guiTop + top + 22));
@@ -51,12 +64,17 @@ public final class GuiBatterySlotSC {
     /** Background: arrows, the slot's frame, the charge strip. */
     public void draw(int guiLeft, int guiTop, ItemStack battery) {
         int gx = guiLeft + x, gy = guiTop + top;
-        boolean feeds = te.batteryFeeds(battery);
+        boolean moving = charging ? te.batteryCharges(battery) : te.batteryFeeds(battery);
         for (int k = 0; k < 3; k++) {
-            int c = feeds ? 0xFF5AE66E : 0xFF3A4450;
+            int c = moving ? 0xFF5AE66E : 0xFF3A4450;
             int ax = gx + 6 + k * 6;
-            rect(ax, gy + 2, 3, 1, c);
-            rect(ax + 1, gy + 1, 1, 1, c);
+            if (charging) {                                      // down: the gauge into the battery
+                rect(ax, gy + 1, 3, 1, c);
+                rect(ax + 1, gy + 2, 1, 1, c);
+            } else {                                             // up: the battery into the gauge
+                rect(ax, gy + 2, 3, 1, c);
+                rect(ax + 1, gy + 1, 1, 1, c);
+            }
         }
         int sx = gx + 2, sy = gy + 3;
         rect(sx, sy, 18, 18, battery != null ? GuiHoloSC.CYAN : GuiHoloSC.CYAN_MID);
@@ -83,20 +101,21 @@ public final class GuiBatterySlotSC {
         List<String> lines = new ArrayList<String>();
         if (GuiGaugeSC.isOver(x, top + 22, COLUMN_W, 9, mx, my)) {
             int mode = te.getBatteryMode();
-            lines.add(Lang.tr("sc.gui.battery.mode", Lang.tr("sc.gui.battery.mode." + mode)));
-            lines.add("§7" + Lang.tr("sc.gui.battery.mode." + mode + ".desc"));
+            lines.add(Lang.tr(key("sc.gui.battery.mode"), Lang.tr(key("sc.gui.battery.mode." + mode))));
+            lines.add("§7" + Lang.tr(key("sc.gui.battery.mode." + mode + ".desc")));
             if (battery != null) {
-                int rate = Math.min(BatteryFeedSC.rateOf(battery), te.inputTier().getVoltage());
-                lines.add(Lang.tr("sc.gui.battery.rate", rate));
-                long ticks = rate <= 0 ? 0 : BatteryFeedSC.chargeOf(battery) / rate;
+                int rate = Math.min(BatteryFeedSC.rateOf(battery), charging ? te.outputTier().getVoltage() : te.inputTier().getVoltage());
+                lines.add(Lang.tr(key("sc.gui.battery.rate"), rate));
+                long left = charging ? BatteryFeedSC.capacityOf(battery) - BatteryFeedSC.chargeOf(battery) : BatteryFeedSC.chargeOf(battery);
+                long ticks = rate <= 0 ? 0 : left / rate;
                 long min = ticks / 20 / 60;
-                lines.add("§a" + Lang.tr("sc.gui.battery.lasts", min / 60, min % 60));
+                lines.add("§a" + Lang.tr(key("sc.gui.battery.lasts"), min / 60, min % 60));
             }
             return lines;
         }
         if (battery == null && GuiGaugeSC.isOver(x + 2, top + 3, 18, 18, mx, my)) {
             lines.add(Lang.tr("sc.gui.battery.slot"));
-            lines.add("§7" + Lang.tr("sc.gui.battery.slot.desc"));
+            lines.add("§7" + Lang.tr(key("sc.gui.battery.slot.desc")));
             return lines;
         }
         return null;
@@ -106,7 +125,7 @@ public final class GuiBatterySlotSC {
         Gui.drawRect(x, y, x + w, y + h, c);
     }
 
-    /** The mode button: a lamp (amber reserve, green always) and the mode's short name. */
+    /** The mode button: a lamp (amber reserve / blue surplus, green always) and the mode's short name. */
     private class ModeButton extends GuiButton {
         ModeButton(int bx, int by) {
             super(modeId, bx, by, COLUMN_W, 9, "");
@@ -121,8 +140,8 @@ public final class GuiBatterySlotSC {
             rect(xPosition, yPosition, width, height, over && enabled ? GuiHoloSC.CYAN : 0xFF2A6A8A);
             rect(xPosition + 1, yPosition + 1, width - 2, height - 2, 0xFF0E3A50);
             int mode = te.getBatteryMode();
-            rect(xPosition + 2, yPosition + 3, 3, 3, mode == BatteryFeedSC.MODE_ALWAYS ? 0xFF5AE66E : 0xFFF0C040);
-            String t = Lang.tr("sc.gui.battery.mode.short." + mode);
+            rect(xPosition + 2, yPosition + 3, 3, 3, mode == BatteryFeedSC.MODE_ALWAYS ? 0xFF5AE66E : charging ? 0xFF6EB4FF : 0xFFF0C040);
+            String t = Lang.tr(key("sc.gui.battery.mode.short." + mode));
             float k = Math.min(0.5F, 18F / Math.max(1, mc.fontRenderer.getStringWidth(t)));
             GL11.glPushMatrix();
             GL11.glTranslatef(xPosition + 7, yPosition + (height - 8 * k) / 2F, 0F);

@@ -71,7 +71,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     public static final int RAMP_FULL = 1000;
 
     public static final int SLOT_FUEL = 0, SLOT_BLANKET = 1, FIRST_UPGRADE_SLOT = 2, UPGRADE_SLOTS = 4;
-    public static final int SLOT_COUNT = FIRST_UPGRADE_SLOT + UPGRADE_SLOTS;
+    /** The battery slot under the gauge: the output charges a portable battery. */
+    public static final int SLOT_BATTERY = FIRST_UPGRADE_SLOT + UPGRADE_SLOTS;
+    public static final int SLOT_COUNT = SLOT_BATTERY + 1;
 
     private GeneratorType generatorType = GeneratorType.COMBUSTION;
     private final FluidTank fuelTank = new FluidTank(TANK_CAPACITY);
@@ -310,11 +312,16 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         creativeTier = tierOrdinal;
     }
 
+    /** Self-test: one tick of the battery slot. */
+    public int batteryRoundForTest() {
+        return chargeBattery(slots[SLOT_BATTERY]);
+    }
+
     // ---- upgrades ----
 
     public int upgradeCount(UpgradeType type) {
         int n = 0;
-        for (int i = FIRST_UPGRADE_SLOT; i < SLOT_COUNT; i++) {
+        for (int i = FIRST_UPGRADE_SLOT; i < FIRST_UPGRADE_SLOT + UPGRADE_SLOTS; i++) {
             ItemStack s = slots[i];
             if (s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == type) {
                 n += s.stackSize;
@@ -461,6 +468,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (generatorType != GeneratorType.CREATIVE) {
             lastOutput = Math.max(0, getEnergyStored() - before);
+        }
+        if (chargeBattery(slots[SLOT_BATTERY]) > 0) {
+            markDirty();
         }
     }
 
@@ -1069,6 +1079,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (stack == null) {
             return false;
         }
+        if (slot == SLOT_BATTERY) {
+            return com.sc.item.BatteryFeedSC.accepts(stack);
+        }
         if (slot >= FIRST_UPGRADE_SLOT) {
             return hasUpgradeSlots(generatorType) && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
                     && com.sc.item.ItemUpgradeSC.typeOf(stack).forGenerators();
@@ -1096,16 +1109,22 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     @Override
     public int[] getAccessibleSlotsFromSide(int side) {
         boolean a = usesSlot(generatorType, SLOT_FUEL), b = usesSlot(generatorType, SLOT_BLANKET);
-        return a && b ? new int[]{SLOT_FUEL, SLOT_BLANKET} : a ? new int[]{SLOT_FUEL} : new int[0];
+        return a && b ? new int[]{SLOT_FUEL, SLOT_BLANKET, SLOT_BATTERY} : a ? new int[]{SLOT_FUEL, SLOT_BATTERY} : new int[]{SLOT_BATTERY};
     }
 
     @Override
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        if (slot == SLOT_BATTERY) {
+            return slots[SLOT_BATTERY] == null && com.sc.item.BatteryFeedSC.accepts(stack);            // an empty one in
+        }
         return slot < FIRST_UPGRADE_SLOT && isItemValidForSlot(slot, stack);
     }
 
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
+        if (slot == SLOT_BATTERY) {                                  // a full one out
+            return stack != null && com.sc.item.BatteryFeedSC.chargeOf(stack) >= com.sc.item.BatteryFeedSC.capacityOf(stack);
+        }
         // Only what's left behind: the empty bucket from lava, a furnace fuel's container.
         return slot == SLOT_FUEL && stack != null && !isItemValidForSlot(slot, stack)
                 && (generatorType == GeneratorType.COMBUSTION || generatorType == GeneratorType.SOLID_FUEL

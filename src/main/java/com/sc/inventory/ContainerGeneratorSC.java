@@ -64,7 +64,7 @@ public class ContainerGeneratorSC extends Container {
     /** enchantItem buttons: BTN_CLEAR + tank (0 fuel, 1 second fuel, 2 water) pours it out for EU. */
     public static final int BTN_CLEAR = 1;
     /** The power switch and the redstone mode (GuiPowerSC). */
-    public static final int BTN_POWER = 10, BTN_REDSTONE = 11;
+    public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_BATTERY_MODE = 12;
 
     private final TileEntityGeneratorSC generator;
 
@@ -95,6 +95,9 @@ public class ContainerGeneratorSC extends Container {
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, GuiBigSC.INV_X + col * 18, GuiBigSC.HOTBAR_Y));
         }
+        // the battery slot under the gauge - last, so the player's slots keep their indices
+        addSlotToContainer(new SlotBatterySC(generator, TileEntityGeneratorSC.SLOT_BATTERY,
+                GuiBatterySlotSC.itemX(GuiBigSC.GAUGE_X), GuiBatterySlotSC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
     }
 
     public TileEntityGeneratorSC getGenerator() {
@@ -119,6 +122,10 @@ public class ContainerGeneratorSC extends Container {
         }
         if (id == BTN_REDSTONE && canInteractWith(player)) {
             generator.setRedstoneMode((generator.getRedstoneMode() + 1) % 3);
+            return true;
+        }
+        if (id == BTN_BATTERY_MODE && canInteractWith(player)) {
+            generator.cycleBatteryMode();
             return true;
         }
         if (id >= BTN_CLEAR && id < BTN_CLEAR + 3 && canInteractWith(player)) {
@@ -243,9 +250,14 @@ public class ContainerGeneratorSC extends Container {
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
 
-        int generatorSlots = generator.getSizeInventory();
-        if (slotIndex < generatorSlots) {
-            if (!mergeItemStack(original, generatorSlots, inventorySlots.size(), true)) {
+        int generatorSlots = TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + TileEntityGeneratorSC.UPGRADE_SLOTS;
+        int battery = inventorySlots.size() - 1;
+        if (slotIndex < generatorSlots || slotIndex == battery) {
+            if (!mergeItemStack(original, generatorSlots, battery, true)) {
+                return null;
+            }
+        } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
+            if (!mergeItemStack(original, battery, battery + 1, false)) {
                 return null;
             }
         } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, generatorSlots)

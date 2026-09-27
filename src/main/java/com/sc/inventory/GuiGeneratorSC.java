@@ -144,6 +144,8 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private GuiPowerSC power;
+    /** The battery slot under the gauge: the output charges it. */
+    private GuiBatterySlotSC battery;
 
     @Override
     public void initGui() {
@@ -151,6 +153,9 @@ public class GuiGeneratorSC extends GuiContainer {
         buttonList.clear();
         power = new GuiPowerSC(generator, ContainerGeneratorSC.BTN_POWER, ContainerGeneratorSC.BTN_REDSTONE);
         power.addButtons(buttonList, guiLeft, guiTop);
+        battery = new GuiBatterySlotSC(generator, ContainerGeneratorSC.BTN_BATTERY_MODE, GuiBigSC.GAUGE_X,
+                GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H, true);
+        battery.addButton(buttonList, guiLeft, guiTop);
         if (type == GeneratorType.CREATIVE) {
             buttonList.add(new TextFitSC.Button(ContainerGeneratorSC.BTN_CREATIVE_TIER, guiLeft + LEFT_X, guiTop + 28, LEFT_W, 16, ""));
         }
@@ -286,6 +291,7 @@ public class GuiGeneratorSC extends GuiContainer {
 
         GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H,
                 (float) generator.getEnergyStored() / Math.max(1, generator.getMaxEnergyStored()));
+        battery.draw(x, y, generator.getStackInSlot(TileEntityGeneratorSC.SLOT_BATTERY));
 
         for (int i = 0; i < tankCount(); i++) {      // last: drawing a fluid leaves the blocks atlas bound
             FluidTank t = tank(i);
@@ -1781,6 +1787,10 @@ public class GuiGeneratorSC extends GuiContainer {
         List<String> powerTip = power.tooltip(mouseX, mouseY);
         if (powerTip != null) {
             return powerTip;
+        }
+        List<String> batteryTip = battery.tooltip(mouseX, mouseY, generator.getStackInSlot(TileEntityGeneratorSC.SLOT_BATTERY));
+        if (batteryTip != null) {
+            return batteryTip;
         }
         if (GuiGaugeSC.isOver(GuiBigSC.GAUGE_X, GuiPowerSC.GAUGE_Y, GuiBigSC.GAUGE_W, GuiPowerSC.GAUGE_H, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.energy"));

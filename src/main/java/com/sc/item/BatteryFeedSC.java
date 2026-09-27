@@ -37,6 +37,17 @@ public final class BatteryFeedSC {
         return cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) ? Ic2.discharge(s, max) : 0;
     }
 
+    /** Puts up to `max` EU in (a generator charging it). @return EU taken */
+    public static int charge(ItemStack s, int max) {
+        if (s == null || max <= 0) {
+            return 0;
+        }
+        if (ItemBatterySC.isBattery(s)) {
+            return ItemBatterySC.charge(s, max);
+        }
+        return cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) ? Ic2.charge(s, max) : 0;
+    }
+
     public static long chargeOf(ItemStack s) {
         if (s == null) {
             return 0;
@@ -79,6 +90,13 @@ public final class BatteryFeedSC {
                 return 0;
             }
             return (int) ic2.api.item.ElectricItem.manager.discharge(s, max, Integer.MAX_VALUE, false, true, false);
+        }
+
+        static int charge(ItemStack s, int max) {
+            if (!isBattery(s) || ic2.api.item.ElectricItem.manager == null) {
+                return 0;
+            }
+            return (int) ic2.api.item.ElectricItem.manager.charge(s, max, Integer.MAX_VALUE, false, false);
         }
 
         static long charge(ItemStack s) {

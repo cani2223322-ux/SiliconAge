@@ -162,6 +162,35 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         return batteryMode == com.sc.item.BatteryFeedSC.MODE_ALWAYS ? stored < cap : stored * 2 < cap;
     }
 
+    /**
+     * A generator's battery slot: whether its output charges the battery now - "surplus" (mode 0)
+     * only while the buffer is over half (what the grid doesn't take), "always" (1) whenever
+     * there's energy. Also on the client, for the arrows.
+     */
+    public boolean batteryCharges(ItemStack battery) {
+        if (!powerOn || battery == null || com.sc.item.BatteryFeedSC.chargeOf(battery) >= com.sc.item.BatteryFeedSC.capacityOf(battery)) {
+            return false;
+        }
+        int stored = getEnergyStored(), cap = getMaxEnergyStored();
+        return batteryMode == com.sc.item.BatteryFeedSC.MODE_ALWAYS ? stored > 0 : stored * 2 > cap;
+    }
+
+    /** One tick of a generator's battery slot: charges it at up to the output voltage. @return EU given */
+    protected int chargeBattery(ItemStack battery) {
+        if (!batteryCharges(battery)) {
+            return 0;
+        }
+        int max = Math.min(getEnergyStored(), outputTier().getVoltage());
+        if (batteryMode != com.sc.item.BatteryFeedSC.MODE_ALWAYS) {
+            max = Math.min(max, getEnergyStored() - getMaxEnergyStored() / 2);
+        }
+        int moved = com.sc.item.BatteryFeedSC.charge(battery, max);
+        if (moved > 0) {
+            removeEnergy(moved);
+        }
+        return moved;
+    }
+
     /** One tick of the battery slot: tops the buffer up from it. @return EU taken */
     protected int feedFromBattery(ItemStack battery) {
         if (!batteryFeeds(battery)) {
