@@ -470,6 +470,38 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * The sputtering chamber from the side: the metal target on top (worn into a groove), the violet
+     * argon plasma under it, metal atoms flying down onto the wafer on its stage, the film growing.
+     */
+    public static void sputterChamber(int x, int y, int w, int h, float t, boolean running, float progress, int metal) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int cx = x + w / 2;
+        rect(cx - 20, y + 4, 40, 3, 0xFF6A707A);                               // the target
+        rect(cx - 18, y + 7, 36, 3, metal);
+        rect(cx - 16, y + 10, 32, 1, mix(metal, 0xFF000000, 0.4F));
+        if (running) {
+            int[] plasma = {0xFF3A1A5A, 0xFF6A2A9A, 0xFF9A4ADA};
+            for (int k = 0; k < 6; k++) {                                      // the plasma
+                rect(cx - 16 + k, y + 12 + k, 32 - 2 * k, 1, (k + (int) t) % 4 != 0 ? plasma[k % 3] : 0xFFB070FF);
+            }
+        }
+        int wy = y + h - 9;
+        rect(cx - 18, wy + 3, 36, 3, 0xFF8A4A2A);                              // the stage
+        rect(cx - 16, wy, 32, 3, 0xFF8A94A8);                                  // the wafer
+        int film = Math.max(1, (int) (3 * progress));
+        if (running || progress > 0F) {
+            rect(cx - 16, wy - film + 1, 32, film, metal);
+        }
+        if (running) {
+            int fall = Math.max(1, wy - y - 20);
+            for (int i = 0; i < 9; i++) {                                      // atoms flying down
+                rect(cx - 14 + (i * 7) % 28, y + 19 + (int) ((t * 1.2F + i * 4) % fall), 1, 1, mix(metal, 0xFFFFFFFF, 0.3F));
+            }
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));

@@ -71,6 +71,11 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean step;
     /** The Ion Implanter's own screen: the dopant badges (P, B, As), the beam line, the heat bar, its gas. */
     private final boolean ion;
+    /** The Sputterer's own screen: the target badges (Cu, Al, W), the chamber, the target's wear, its argon. */
+    private final boolean sput;
+    private static final String[] SPUT_BADGES = {"Cu", "Al", "W"};
+    private static final int[] SPUT_COLOURS = {0xFFD8844A, 0xFFC8D0DC, 0xFF8A8A9A};
+    private static final int SPUT_WEAR_X = 116, SPUT_WEAR_Y = 99, SPUT_WEAR_W = 56;
     private static final int ION_BADGE_W = 26, ION_HEAT_Y = 100;
     private static final String[] ION_BADGES = {"P · n", "B · p", "As · n"};
     private static final int STEP_W = 40, STEP_H = 44, MAP_X = 132, MAP_R = 17, MASK_Y = 82, STEP_HEAT_Y = 90;
@@ -114,6 +119,7 @@ public class GuiMachineSC extends GuiContainer {
         step = machine.getMachineType() == com.sc.machine.MachineType.STEPPER
                 || machine.getMachineType() == com.sc.machine.MachineType.STEPPER_EV;
         ion = machine.getMachineType() == com.sc.machine.MachineType.ION_IMPLANTER;
+        sput = machine.getMachineType() == com.sc.machine.MachineType.SPUTTERER;
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         etch = machine.getMachineType() == com.sc.machine.MachineType.ETCHING_BATH;
@@ -145,7 +151,7 @@ public class GuiMachineSC extends GuiContainer {
             GuiBigSC.ClearButton b = (GuiBigSC.ClearButton) o;
             int tank = b.id - ContainerMachineSC.BTN_CLEAR;
             int gx = -1;
-            if (washer || blast || saw || oxid || coat || step || ion) {
+            if (washer || blast || saw || oxid || coat || step || ion || sput) {
                 gx = tank == 0 ? WATER_X : -1;
             } else if (ownTanks != null) {
                 for (int k = 0; k < ownTanks.length; k++) {
@@ -224,7 +230,7 @@ public class GuiMachineSC extends GuiContainer {
 
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast || saw || oxid || coat || step || ion || ownTanks != null) {
+        if (washer || blast || saw || oxid || coat || step || ion || sput || ownTanks != null) {
             return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -293,6 +299,26 @@ public class GuiMachineSC extends GuiContainer {
             GuiSceneSC.thermometer(x + THERMO_X, y + FURNACE_Y, FURNACE_H, h, (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
             GuiSceneSC.heatBar(x + HEATBAR_X, y + HEATBAR_Y, HEATBAR_W, HEATBAR_H, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
+        } else if (sput) {                                              // the target badges, the chamber, the wear
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            int k = target();
+            for (int i = 0; i < 3; i++) {
+                int bx = x + SAW_X + i * (ION_BADGE_W + 2), by = y + CAPTION_Y - 1;
+                drawRect(bx, by, bx + ION_BADGE_W, by + 9, i == k ? 0xFF2A6A8A : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + ION_BADGE_W - 1, by + 8, i == k ? 0xFF0E3A50 : 0xFF0A1218);
+                int c = i == k ? SPUT_COLOURS[i] : GuiSceneSC.mix(SPUT_COLOURS[i], 0xFF0A1218, 0.6F);
+                drawRect(bx + 3, by + 2, bx + 8, by + 7, c);
+            }
+            GuiSceneSC.sputterChamber(x + SAW_X, y + SAW_Y, SAW_W, 44, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
+                    SPUT_COLOURS[Math.max(0, k)]);
+            net.minecraft.item.ItemStack tg = wire();
+            float left = tg == null ? 0F : 1F - (float) tg.getItemDamage() / Math.max(1, tg.getMaxDamage());
+            drawRect(x + SPUT_WEAR_X, y + SPUT_WEAR_Y, x + SPUT_WEAR_X + SPUT_WEAR_W, y + SPUT_WEAR_Y + 4, 0xFF04080C);
+            for (int i = 0; i < 16; i++) {
+                int a = x + SPUT_WEAR_X + 1 + i * (SPUT_WEAR_W - 2) / 16, b = x + SPUT_WEAR_X + 1 + (i + 1) * (SPUT_WEAR_W - 2) / 16 - 1;
+                drawRect(a, y + SPUT_WEAR_Y + 1, b, y + SPUT_WEAR_Y + 3, (i + 0.5F) / 16 < left
+                        ? (left > 0.25F ? 0xFF5AE66E : 0xFFE63C3C) : 0xFF2A3038);
+            }
         } else if (ion) {                                               // the dopant badges, the beam line, the heat
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             int d = dopant();
@@ -402,7 +428,7 @@ public class GuiMachineSC extends GuiContainer {
                 (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
 
         // Tanks last: drawing a fluid switches to the blocks atlas.
-        if (washer || blast || saw || oxid || coat || step || ion) {
+        if (washer || blast || saw || oxid || coat || step || ion || sput) {
             FluidTank water = machine.getTank(0);
             GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, water.getFluid(), water.getCapacity(), null, false);
         }
@@ -451,6 +477,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (blast) {
             drawBlastText(rx);
+            drawUpgradeLine();
+            return;
+        }
+        if (sput) {
+            drawSputText();
             drawUpgradeLine();
             return;
         }
@@ -597,6 +628,40 @@ public class GuiMachineSC extends GuiContainer {
             return Lang.tr("sc.gui.blast.topause", Math.max(0, (cap - heat) * (sinks + 1) / 20));
         }
         return heat > 0 ? Lang.tr("sc.gui.blast.cooling", heat / 2 / 20 + 1) : Lang.tr("sc.gui.blast.cold");
+    }
+
+    /** Which target the Sputterer has in: 0 copper, 1 aluminium, 2 tungsten, -1 none. */
+    private int target() {
+        net.minecraft.item.ItemStack s = wire();
+        if (s == null || !(s.getItem() instanceof com.sc.item.ItemToolSC)) {
+            return -1;
+        }
+        com.sc.util.SCToolType type = ((com.sc.item.ItemToolSC) s.getItem()).getType();
+        return type == com.sc.util.SCToolType.SPUTTER_TARGET_COPPER ? 0 : type == com.sc.util.SCToolType.SPUTTER_TARGET_ALUMINIUM ? 1
+                : type == com.sc.util.SCToolType.SPUTTER_TARGET_TUNGSTEN ? 2 : -1;
+    }
+
+    /** The Sputterer: the badges' names, its tank's label, the metal and argon a run, defects, the target's uses. */
+    private void drawSputText() {
+        int k = target();
+        for (int i = 0; i < 3; i++) {
+            small(SPUT_BADGES[i], SAW_X + i * (ION_BADGE_W + 2) + 11, CAPTION_Y + 1, i == k ? 0x96F0FF : 0x465A6E);
+        }
+        FluidTank tank = machine.getTank(0);
+        String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
+        TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        int per = r == null || r.fluidInputA == null ? 30 : r.fluidInputA.amount;
+        smallFit(k < 0 ? Lang.tr("sc.gui.sput.none") : Lang.tr("sc.gui.sput.row", Lang.tr("sc.gui.sput.el." + k), per),
+                SAW_X, 83, SAW_W, k < 0 ? 0xE65A5A : 0xE6F0FA);
+        if (r != null) {
+            small(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)), SAW_X, 90, 0x6AA8C8);
+        }
+        small(Lang.tr("sc.gui.sput.target"), SAW_X, SPUT_WEAR_Y, 0x6AA8C8);
+        net.minecraft.item.ItemStack tg = wire();
+        small(tg == null ? Lang.tr("sc.gui.sput.notarget")
+                : Lang.tr("sc.gui.sput.left", tg.getMaxDamage() - tg.getItemDamage(), tg.getMaxDamage()),
+                SAW_X, SPUT_WEAR_Y + 7, tg == null ? 0xE65A5A : 0x6AA8C8);
     }
 
     /** Which dopant the Ion Implanter's tank holds: 0 phosphorus, 1 boron, 2 arsenic, -1 none. */
@@ -1045,7 +1110,7 @@ public class GuiMachineSC extends GuiContainer {
         }
 
         boolean overTub = washer && GuiGaugeSC.isOver(TUB_X, TUB_Y, TUB_W, TUB_H, mouseX, mouseY);
-        boolean overOwnTank = (washer || blast || saw || oxid || coat || step || ion)
+        boolean overOwnTank = (washer || blast || saw || oxid || coat || step || ion || sput)
                 && GuiGaugeSC.isOver(WATER_X, WATER_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY);
         if (ownTanks != null) {
             for (int k = 0; k < ownTanks.length; k++) {
@@ -1077,6 +1142,20 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (sput && GuiGaugeSC.isOver(SAW_X, CAPTION_Y - 1, SAW_W, SAW_Y + 44 - CAPTION_Y + 1, mouseX, mouseY)) {
+            int k = target();
+            lines.add(Lang.tr("sc.gui.sput.title"));
+            lines.add(k < 0 ? Lang.tr("sc.gui.sput.none") : Lang.tr("sc.gui.sput.now", Lang.tr("sc.gui.sput.el." + k)));
+            lines.add(Lang.tr("sc.gui.sput.hint"));
+            return lines;
+        }
+        if (sput && GuiGaugeSC.isOver(SAW_X, SPUT_WEAR_Y - 2, SAW_W, 14, mouseX, mouseY)) {
+            net.minecraft.item.ItemStack tg = wire();
+            lines.add(Lang.tr("sc.gui.sput.target.title"));
+            lines.add(tg == null ? Lang.tr("sc.gui.sput.notarget")
+                    : Lang.tr("sc.gui.sput.left", tg.getMaxDamage() - tg.getItemDamage(), tg.getMaxDamage()));
+            return lines;
+        }
         if (ion && GuiGaugeSC.isOver(SAW_X, CAPTION_Y - 1, SAW_W, SAW_Y + 44 - CAPTION_Y + 1, mouseX, mouseY)) {
             int d = dopant();
             lines.add(Lang.tr("sc.gui.ion.title"));
