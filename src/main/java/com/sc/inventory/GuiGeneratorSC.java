@@ -67,6 +67,8 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean geo;
     /** The Fusion Reactor: its stages, the torus from above, the ignition charge / the plasma, the cell and blanket timers. */
     private final boolean fus;
+    /** The Tokamak: the Fusion Reactor's screen with a "ring" stage first and a map of its eight coils. */
+    private final boolean tok;
     /** The Solid Fuel Generator: the firebox, its slot and flame, a table of what each fuel gives. */
     private final boolean solid;
     /** The Wind Turbine: the landscape (height), the multiplier chips, a dial, the rotor with its wear. */
@@ -122,7 +124,8 @@ public class GuiGeneratorSC extends GuiContainer {
                 || type == GeneratorType.GEOTHERMAL;
         this.geo = type == GeneratorType.GEOTHERMAL;
         this.plasma = type == GeneratorType.PLASMA_GENERATOR;
-        this.fus = type == GeneratorType.FUSION_REACTOR;
+        this.fus = type == GeneratorType.FUSION_REACTOR || type == GeneratorType.TOKAMAK;
+        this.tok = type == GeneratorType.TOKAMAK;
         this.solid = type == GeneratorType.SOLID_FUEL;
         this.wind = type == GeneratorType.WIND_TURBINE;
         this.water = type == GeneratorType.WATER_WHEEL;
@@ -588,6 +591,19 @@ public class GuiGeneratorSC extends GuiContainer {
 
     // ---- the Fusion Reactor ----
 
+    /** The Tokamak's ring isn't whole (the map shows instead of the torus). */
+    private boolean tokRingOpen() {
+        return tok && generator.getSideInfo() != 0xFF;
+    }
+
+    /** The stage lit: 0 charge, 1 blanket, 2 ignition, 3 ramp-up, 4 running; the Tokamak has "ring" before them all. */
+    private int fusStageShown() {
+        if (!tok) {
+            return fusStage();
+        }
+        return tokRingOpen() ? 0 : fusStage() + 1;
+    }
+
     /** 0 charge, 1 blanket, 2 ignition, 3 ramp-up, 4 running. */
     private int fusStage() {
         if (generator.isIgnited()) {
@@ -611,17 +627,24 @@ public class GuiGeneratorSC extends GuiContainer {
 
     private void drawFusBackground(int x, int y, float partialTicks) {
         float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
-        int stage = fusStage();
-        for (int i = 0; i < 5; i++) {                                          // the stages
-            int bx = x + 14 + i * 32, by = y + FU_STEP_Y;
-            drawRect(bx, by, bx + 30, by + 11, i == stage ? 0xFF2A6A8A : i < stage ? 0xFF1E4A3A : 0xFF1A3444);
-            drawRect(bx + 1, by + 1, bx + 29, by + 10, i == stage ? 0xFF0E3A50 : 0xFF0A1218);
+        int stage = fusStageShown(), steps = tok ? 6 : 5, step = tok ? 27 : 32;
+        for (int i = 0; i < steps; i++) {                                      // the stages
+            int bx = x + 14 + i * step, by = y + FU_STEP_Y;
+            drawRect(bx, by, bx + step - 2, by + 11, i == stage ? 0xFF2A6A8A : i < stage ? 0xFF1E4A3A : 0xFF1A3444);
+            drawRect(bx + 1, by + 1, bx + step - 3, by + 10, i == stage ? 0xFF0E3A50 : 0xFF0A1218);
         }
         boolean lit = generator.isIgnited();
         float heat = (float) generator.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT;
-        GuiSceneSC.fusionTorus(x + 14, y + FU_TOR_Y, FU_TOR_W, FU_TOR_H, t, heat, lit);
+        if (tokRingOpen()) {
+            GuiSceneSC.frame(x + 14, y + FU_TOR_Y, 64, FU_TOR_H);
+            GuiSceneSC.tokamakRing(x + 28, y + FU_TOR_Y, 12, generator.getSideInfo());
+        } else {
+            GuiSceneSC.fusionTorus(x + 14, y + FU_TOR_Y, FU_TOR_W, FU_TOR_H, t, heat, lit);
+        }
         int cx = x + FU_COL_X;
-        if (!lit) {                                                            // the ignition charge
+        if (tokRingOpen()) {
+            // the right column is text only while the ring is open
+        } else if (!lit) {                                                            // the ignition charge
             float charge = (float) generator.getIgnitionEU() / type.ignitionThreshold();
             drawRect(cx, y + 56, cx + 78, y + 62, 0xFF04080C);
             for (int i = 0; i < 19; i++) {
@@ -674,16 +697,24 @@ public class GuiGeneratorSC extends GuiContainer {
     }
 
     private void drawFusText() {
-        fit(Lang.tr("sc.gui.fus.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
-        int stage = fusStage();
-        for (int i = 0; i < 5; i++) {
-            String s = Lang.tr("sc.gui.fus.step." + i);
-            int w = Math.min(28, (int) (fontRendererObj.getStringWidth(s) * 0.625F));
-            smallFit(s, 14 + i * 32 + 15 - w / 2, FU_STEP_Y + 3, 28, i == stage ? GuiHoloSC.VALUE : i < stage ? GuiHoloSC.OK : 0x465A6E);
+        fit(Lang.tr(tok ? "sc.gui.tok.title" : "sc.gui.fus.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        int stage = fusStage(), shown = fusStageShown(), n = tok ? 6 : 5, step = tok ? 27 : 32;
+        for (int i = 0; i < n; i++) {
+            String s = Lang.tr(tok && i == 0 ? "sc.gui.tok.step.ring" : "sc.gui.fus.step." + (tok ? i - 1 : i));
+            int w = Math.min(step - 4, (int) (fontRendererObj.getStringWidth(s) * 0.625F));
+            smallFit(s, 14 + i * step + (step - 2) / 2 - w / 2, FU_STEP_Y + 3, step - 4,
+                    i == shown ? GuiHoloSC.VALUE : i < shown ? GuiHoloSC.OK : 0x465A6E);
         }
         boolean lit = generator.isIgnited();
         GeneratorStatus status = generator.getStatus();
-        if (!lit) {
+        int ringMask = generator.getSideInfo(), coils = Integer.bitCount(ringMask & 0xFF);
+        if (tokRingOpen()) {
+            smallFit(Lang.tr("sc.gui.tok.ring"), 84, 49, 120, GuiHoloSC.LABEL);
+            fit(Lang.tr("sc.gui.tok.built", coils), 84, 55, 120, GuiHoloSC.WARN);
+            smallFit(Lang.tr("sc.gui.tok.hint.1"), 84, 66, 120, GuiHoloSC.LABEL);
+            smallFit(Lang.tr("sc.gui.tok.hint.2"), 84, 72, 120, GuiHoloSC.LABEL);
+            smallFit(Lang.tr("sc.gui.tok.hint.3"), 84, 78, 120, GuiHoloSC.LABEL);
+        } else if (!lit) {
             long eu = generator.getIgnitionEU(), need = type.ignitionThreshold();
             smallFit(Lang.tr("sc.gui.fus.charge"), FU_COL_X, 49, 78, GuiHoloSC.LABEL);
             smallFit(fusEu(eu) + " / " + fusEu(need) + " EU", FU_COL_X, 65, 78, GuiHoloSC.VALUE);
@@ -723,6 +754,15 @@ public class GuiGeneratorSC extends GuiContainer {
         if (status == GeneratorStatus.DISABLED || status == GeneratorStatus.REDSTONE) {
             line = status.localized();
             col = GuiHoloSC.IDLE;
+        } else if (tokRingOpen()) {
+            StringBuilder where = new StringBuilder();
+            for (int k = 0; k < 8; k++) {
+                if ((ringMask >> k & 1) == 0) {
+                    where.append(where.length() > 0 ? ", " : "").append(Lang.tr("sc.gui.tok.dir." + k));
+                }
+            }
+            line = Lang.tr("sc.gui.tok.st.open", 8 - coils, where.toString());
+            col = GuiHoloSC.BAD;
         } else if (!lit) {
             if (status == GeneratorStatus.OVERHEATED) {
                 line = Lang.tr("sc.gui.fus.st.overheat", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT);

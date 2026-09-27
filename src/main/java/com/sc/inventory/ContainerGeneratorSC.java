@@ -48,14 +48,14 @@ public class ContainerGeneratorSC extends Container {
         if (type == GeneratorType.RTG) {
             return slot == 0 ? RTG_SLOT_X0 : RTG_SLOT_X1;
         }
-        if (type == GeneratorType.FUSION_REACTOR) {
+        if (type == GeneratorType.FUSION_REACTOR || type == GeneratorType.TOKAMAK) {
             return slot == 0 ? FUS_FUEL_X : FUS_BLANKET_X;
         }
         return slot == 0 ? SLOT_FUEL_X : SLOT_BLANKET_X;
     }
 
     public static int slotY(GeneratorType type) {
-        return type == GeneratorType.FUSION_REACTOR ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
+        return type == GeneratorType.FUSION_REACTOR || type == GeneratorType.TOKAMAK ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
                 : type == GeneratorType.WIND_TURBINE ? WD_SLOT_Y : type == GeneratorType.GEOTHERMAL ? GEO_SLOT_Y
                 : type == GeneratorType.RTG ? RTG_SLOT_Y : SLOT_Y;
     }

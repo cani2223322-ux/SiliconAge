@@ -852,7 +852,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     private void updateFusion() {
         if (generatorType == GeneratorType.TOKAMAK && worldObj.getTotalWorldTime() % 20 == 0) {
-            structureOk = tokamakFormed();
+            sideInfo = tokamakMask();
+            structureOk = sideInfo == 0xFF;
         }
         if (!ignited) {
             heat = Math.max(0, heat - 5);
@@ -896,6 +897,29 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         cellBurnRemaining -= fuelMultiplier();
         moduleLifeRemaining--;
         burnPlasma(600);
+    }
+
+    /**
+     * The Tokamak's ring for the screen: bit k set where the k-th of the eight places round it (row by
+     * row from the north-west: NW, N, NE, W, E, SW, S, SE) holds a Tokamak Coil.
+     */
+    public int tokamakMask() {
+        if (worldObj == null) {
+            return 0;
+        }
+        int mask = 0, k = 0;
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                if (dx == 0 && dz == 0) {
+                    continue;
+                }
+                if (worldObj.getBlock(xCoord + dx, yCoord, zCoord + dz) == com.sc.init.ModBlocks.tokamakCoil) {
+                    mask |= 1 << k;
+                }
+                k++;
+            }
+        }
+        return mask;
     }
 
     /** The Tokamak's ring: all eight blocks round it on its level are Tokamak Coils. */

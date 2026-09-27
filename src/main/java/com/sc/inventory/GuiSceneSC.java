@@ -1156,6 +1156,35 @@ public final class GuiSceneSC {
     }
 
     /**
+     * The Tokamak's ring from above: the reactor in the middle, its eight neighbours - a coil in place
+     * gold, a missing one red with a cross. `mask` bit k: the k-th place (NW, N, NE, W, E, SW, S, SE).
+     */
+    public static void tokamakRing(int x, int y, int c, int mask) {
+        frame(x, y, c * 3 + 4, c * 3 + 4);
+        int k = 0;
+        for (int j = 0; j < 3; j++) {
+            for (int i = 0; i < 3; i++) {
+                int cx = x + 2 + i * c, cy = y + 2 + j * c;
+                if (i == 1 && j == 1) {
+                    rect(cx, cy, c - 1, c - 1, 0xFF3A4A8A);
+                    continue;
+                }
+                if ((mask >> k & 1) != 0) {
+                    rect(cx, cy, c - 1, c - 1, 0xFF8A6A20);
+                    rect(cx + 2, cy + 2, c - 5, c - 5, 0xFFD6A432);
+                } else {
+                    rect(cx, cy, c - 1, c - 1, 0xFF5A1A1A);
+                    for (int d = 0; d < c - 3; d++) {
+                        rect(cx + 1 + d, cy + 1 + d, 1, 1, 0xFFE63C3C);
+                        rect(cx + c - 3 - d, cy + 1 + d, 1, 1, 0xFFE63C3C);
+                    }
+                }
+                k++;
+            }
+        }
+    }
+
+    /**
      * The High-Pressure Plasma Reactor's chamber: the MHD channel squeezed by thick compression
      * rings, deuterium injectors firing into the argon plasma from above, a white-hot core line.
      */
