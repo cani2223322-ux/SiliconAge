@@ -1172,6 +1172,40 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * A fusion reactor from above: the vacuum vessel (an elliptic ring), twelve magnet coils round it,
+     * and - lit - the plasma ring inside, dull violet going white as it heats (`heat` 0..1), a bright
+     * pulse running round it.
+     */
+    public static void fusionTorus(int x, int y, int w, int h, float t, float heat, boolean lit) {
+        frame(x, y, w, h);
+        double cx = x + w / 2.0, cy = y + h / 2.0, ax = w / 2.0 - 6, ay = h / 2.0 - 5, q = ay / ax;
+        for (int k = 0; k < 240; k++) {                                        // the vessel walls
+            double a = k * Math.PI / 120, c = Math.cos(a), s = Math.sin(a);
+            rect((int) (cx + ax * c), (int) (cy + ay * s), 1, 1, 0xFF6A707A);
+            rect((int) (cx + (ax - 6) * c), (int) (cy + (ay - 6 * q) * s), 1, 1, 0xFF6A707A);
+        }
+        for (int k = 0; k < 12; k++) {                                         // the coils
+            double a = k * Math.PI / 6;
+            int px = (int) (cx + (ax - 3) * Math.cos(a)), py = (int) (cy + (ay - 3 * q) * Math.sin(a));
+            rect(px - 2, py - 2, 4, 4, 0xFFD6A432);
+        }
+        if (!lit) {
+            return;
+        }
+        int core = mix(0xFF7A3AC8, 0xFFFFFFFF, Math.max(0F, Math.min(1F, heat)));
+        double pulse = (t * 0.08) % (2 * Math.PI);
+        for (int k = 0; k < 360; k++) {
+            double a = k * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+            double dd = Math.abs((a - pulse + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
+            int col = dd < 0.5 ? mix(core, 0xFFFFFFFF, (float) (1 - dd * 2)) : core;
+            rect((int) (cx + (ax - 3) * c), (int) (cy + (ay - 3 * q) * s), 1, 1, col);
+            rect((int) (cx + (ax - 2) * c), (int) (cy + (ay - 2 * q) * s), 1, 1, mix(col, 0xFF0A1218, 0.3F));
+            rect((int) (cx + (ax - 4) * c), (int) (cy + (ay - 4 * q) * s), 1, 1, mix(col, 0xFF0A1218, 0.3F));
+            rect((int) (cx + (ax - 5) * c), (int) (cy + (ay - 5 * q) * s), 1, 1, mix(col, 0xFF0A1218, 0.55F));
+        }
+    }
+
     public static void rotorFront(int cx, int cy, int r, float t, boolean running) {
         disc(cx, cy, r + 2, 0xFF8A909A);
         disc(cx, cy, r + 1, 0xFF12181E);

@@ -23,6 +23,19 @@ public class ContainerGeneratorSC extends Container {
 
     /** On the large screen's holo panel (GuiGeneratorSC / GuiBigSC). */
     public static final int SLOT_FUEL_X = 16, SLOT_BLANKET_X = 38, SLOT_Y = 30;
+    /** The Fusion Reactor's deuterium and blanket slots, under its torus (GuiGeneratorSC). */
+    public static final int FUS_FUEL_X = 14, FUS_BLANKET_X = 90, FUS_SLOT_Y = 89;
+
+    public static int slotX(GeneratorType type, int slot) {
+        if (type == GeneratorType.FUSION_REACTOR) {
+            return slot == 0 ? FUS_FUEL_X : FUS_BLANKET_X;
+        }
+        return slot == 0 ? SLOT_FUEL_X : SLOT_BLANKET_X;
+    }
+
+    public static int slotY(GeneratorType type) {
+        return type == GeneratorType.FUSION_REACTOR ? FUS_SLOT_Y : SLOT_Y;
+    }
     /** enchantItem button: the Creative Generator's tier. */
     public static final int BTN_CREATIVE_TIER = 0;
     /** enchantItem buttons: BTN_CLEAR + tank (0 fuel, 1 second fuel, 2 water) pours it out for EU. */
@@ -35,8 +48,8 @@ public class ContainerGeneratorSC extends Container {
     public ContainerGeneratorSC(InventoryPlayer playerInv, TileEntityGeneratorSC generator) {
         this.generator = generator;
         GeneratorType type = generator.getGeneratorType();
-        addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_FUEL, SLOT_FUEL_X, SLOT_Y));
-        addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_BLANKET, SLOT_BLANKET_X, SLOT_Y));
+        addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_FUEL, slotX(type, 0), slotY(type)));
+        addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_BLANKET, slotX(type, 1), slotY(type)));
         for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
             addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y));
         }
@@ -96,7 +109,8 @@ public class ContainerGeneratorSC extends Container {
 
     private static final int ID_ENERGY = 0, ID_F1 = 1, ID_F1_AMT = 2, ID_F2 = 3, ID_F2_AMT = 4, ID_OUT = 5, ID_OUT_AMT = 6,
             ID_IGNITION = 7, ID_IGNITED = 8, ID_STATUS = 9, ID_OUTPUT = 10, ID_HEAT = 11, ID_RAMP = 12, ID_INFO_A = 13,
-            ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, COUNT = 18;
+            ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, ID_CELL = 18,
+            ID_LIFE = 19, COUNT = 20;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
@@ -124,6 +138,8 @@ public class ContainerGeneratorSC extends Container {
             case ID_INFO_B: return generator.getInfoB();
             case ID_POWER: return generator.powerFlags();
             case ID_INFLOW: return generator.getInflowTenths();
+            case ID_CELL: return (int) Math.ceil(generator.getCellBurnRemaining());
+            case ID_LIFE: return generator.getModuleLife();
             default: return generator.getCreativeTier().ordinal();
         }
     }
@@ -169,6 +185,10 @@ public class ContainerGeneratorSC extends Container {
                 break;
             case ID_INFLOW:
                 generator.setInflowClient(sync.value(ID_INFLOW));
+                break;
+            case ID_CELL:
+            case ID_LIFE:
+                generator.setFusionClient(sync.value(ID_CELL), sync.value(ID_LIFE));
                 break;
             case ID_POWER:
                 generator.setPowerFlagsClient(sync.value(ID_POWER));

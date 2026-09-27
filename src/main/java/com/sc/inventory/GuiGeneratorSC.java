@@ -52,6 +52,9 @@ public class GuiGeneratorSC extends GuiContainer {
     private final boolean gas;
     /** The Plasma Generator: the turbines' screen with an air separator, an MHD channel and a card where argon comes from. */
     private final boolean plasma;
+    /** The Fusion Reactor: its stages, the torus from above, the ignition charge / the plasma, the cell and blanket timers. */
+    private final boolean fus;
+    private static final int FU_STEP_Y = 34, FU_TOR_Y = 48, FU_TOR_W = 106, FU_TOR_H = 38, FU_COL_X = 126, FU_STATUS_Y = 107;
     /** Argon an Air Separator yields: 800 mB per 400-tick operation. */
     private static final double SEPARATOR_ARGON_PER_TICK = 2.0;
     private static final int TB_Y = 34, TB_H = 38, TB_DIAL_Y = 83, TB_SUPPLY_Y = 96, TB_RESERVE_Y = 103, TB_BAR_X = 44, TB_BAR_W = 128;
@@ -72,6 +75,7 @@ public class GuiGeneratorSC extends GuiContainer {
         this.gaas = type == GeneratorType.SOLAR_GAAS;
         this.turb = type == GeneratorType.STEAM_TURBINE || type == GeneratorType.GAS_TURBINE || type == GeneratorType.PLASMA_GENERATOR;
         this.plasma = type == GeneratorType.PLASMA_GENERATOR;
+        this.fus = type == GeneratorType.FUSION_REACTOR;
         this.gas = type == GeneratorType.GAS_TURBINE;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
@@ -167,11 +171,10 @@ public class GuiGeneratorSC extends GuiContainer {
         GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         for (int slot = 0; slot < TileEntityGeneratorSC.FIRST_UPGRADE_SLOT; slot++) {
             if (TileEntityGeneratorSC.usesSlot(type, slot)) {
-                GuiHoloSC.slot(x + (slot == 0 ? ContainerGeneratorSC.SLOT_FUEL_X : ContainerGeneratorSC.SLOT_BLANKET_X),
-                        y + ContainerGeneratorSC.SLOT_Y, false);
+                GuiHoloSC.slot(x + ContainerGeneratorSC.slotX(type, slot), y + ContainerGeneratorSC.slotY(type), false);
             }
         }
-        if (isReactor()) {
+        if (isReactor() && !fus) {
             float charge = generator.isIgnited() ? 1f : (float) generator.getIgnitionEU() / type.ignitionThreshold();
             GuiHoloSC.bar(x + LEFT_X, y + IGNITION_Y, LEFT_W, IGNITION_H, charge, 14, 0xFF6EE6FF);
             GuiHoloSC.bar(x + LEFT_X, y + HEAT_Y, LEFT_W, HEAT_H, (float) generator.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT,
@@ -181,6 +184,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawCombBackground(x, y, partialTicks);
         } else if (turb) {
             drawTurbBackground(x, y, partialTicks);
+        } else if (fus) {
+            drawFusBackground(x, y, partialTicks);
         } else if (solar) {
             // the solar screen has no divider
         } else {
@@ -224,6 +229,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (turb) {
             drawTurbText();
+            drawUpgradeCount();
+            return;
+        }
+        if (fus) {
+            drawFusText();
             drawUpgradeCount();
             return;
         }
@@ -444,6 +454,176 @@ public class GuiGeneratorSC extends GuiContainer {
             col = GuiHoloSC.LABEL;
         }
         smallFit(line, 14, TB_RESERVE_Y + 6, 158, col);
+    }
+
+    // ---- the Fusion Reactor ----
+
+    /** 0 charge, 1 blanket, 2 ignition, 3 ramp-up, 4 running. */
+    private int fusStage() {
+        if (generator.isIgnited()) {
+            return generator.getRamp() < TileEntityGeneratorSC.RAMP_FULL && generator.getStatus() != GeneratorStatus.BUFFER_FULL ? 3 : 4;
+        }
+        if (generator.getIgnitionEU() < type.ignitionThreshold()) {
+            return 0;
+        }
+        return generator.getStatus() == GeneratorStatus.NO_BLANKET ? 1 : 2;
+    }
+
+    /** The plasma's heat at full power: 600, and 100 more for each Overdrive. */
+    private int fusNormHeat() {
+        return 600 + 100 * generator.upgradeCount(com.sc.machine.UpgradeType.OVERDRIVE);
+    }
+
+    private boolean fusHasBlanket() {
+        net.minecraft.item.ItemStack b = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_BLANKET);
+        return b != null;
+    }
+
+    private void drawFusBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+        int stage = fusStage();
+        for (int i = 0; i < 5; i++) {                                          // the stages
+            int bx = x + 14 + i * 32, by = y + FU_STEP_Y;
+            drawRect(bx, by, bx + 30, by + 11, i == stage ? 0xFF2A6A8A : i < stage ? 0xFF1E4A3A : 0xFF1A3444);
+            drawRect(bx + 1, by + 1, bx + 29, by + 10, i == stage ? 0xFF0E3A50 : 0xFF0A1218);
+        }
+        boolean lit = generator.isIgnited();
+        float heat = (float) generator.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT;
+        GuiSceneSC.fusionTorus(x + 14, y + FU_TOR_Y, FU_TOR_W, FU_TOR_H, t, heat, lit);
+        int cx = x + FU_COL_X;
+        if (!lit) {                                                            // the ignition charge
+            float charge = (float) generator.getIgnitionEU() / type.ignitionThreshold();
+            drawRect(cx, y + 56, cx + 78, y + 62, 0xFF04080C);
+            for (int i = 0; i < 19; i++) {
+                drawRect(cx + 1 + i * 4, y + 57, cx + 4 + i * 4, y + 61, (i + 0.5F) / 19 < charge ? 0xFF6EE6FF : 0xFF2A3038);
+            }
+        } else {                                                               // the plasma thermometer
+            int ty = y + FU_TOR_Y, th = FU_TOR_H, n = (th - 2) / 2;
+            drawRect(cx, ty, cx + 7, ty + th, 0xFF04080C);
+            for (int i = 0; i < n; i++) {
+                float k = i / (float) n;
+                int col = k < heat ? (k > 0.85F ? 0xFFE63C3C : GuiSceneSC.mix(0xFF7A3AC8, 0xFFFFFFFF, k)) : 0xFF2A3038;
+                drawRect(cx + 1, ty + th - 3 - i * 2, cx + 6, ty + th - 2 - i * 2, col);
+            }
+            int ny = ty + th - 3 - (int) (n * Math.min(1F, fusNormHeat() / (float) TileEntityGeneratorSC.HEAT_LIMIT)) * 2;
+            drawRect(cx - 2, ny, cx + 9, ny + 1, 0xFF5AE66E);
+            drawRect(cx - 2, ty + 2, cx + 9, ty + 3, 0xFFE63C3C);
+        }
+        // the cell and blanket timers
+        net.minecraft.item.ItemStack cells = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL);
+        float cellF = (float) Math.min(1.0, generator.getCellBurnRemaining() / TileEntityGeneratorSC.CELL_BURN_TICKS);
+        if (cellF <= 0 && cells != null) {
+            cellF = 1F;
+        }
+        float blankF = lit ? (float) generator.getModuleLife() / TileEntityGeneratorSC.MODULE_LIFE_TICKS : fusHasBlanket() ? 1F : 0F;
+        int by = y + ContainerGeneratorSC.FUS_SLOT_Y + 6;
+        for (int s = 0; s < 2; s++) {
+            int bx = x + (s == 0 ? ContainerGeneratorSC.FUS_FUEL_X : ContainerGeneratorSC.FUS_BLANKET_X) + 19;
+            float f = s == 0 ? cellF : blankF;
+            drawRect(bx, by, bx + 48, by + 4, 0xFF04080C);
+            drawRect(bx + 1, by + 1, bx + 1 + (int) (46 * f), by + 3, s == 0 ? 0xFF9AD8FF : 0xFFC8D87A);
+        }
+    }
+
+    /** "340к" / "1 млн" - the ignition charge, short. */
+    private static String fusEu(long eu) {
+        if (eu >= 1000000) {
+            double m = eu / 1000000.0;
+            return Lang.tr("sc.gui.fus.mln", m == Math.floor(m) ? String.valueOf((long) m) : String.format(java.util.Locale.ROOT, "%.1f", m).replace('.', ','));
+        }
+        return Lang.tr("sc.gui.fus.k", eu / 1000);
+    }
+
+    /** "3 мин" / "40 с" / "11 ч". */
+    private static String fusTime(double seconds) {
+        long s = (long) Math.ceil(seconds);
+        if (s >= 3600) {
+            return Lang.tr("sc.gui.fus.h", s / 3600);
+        }
+        return s >= 60 ? Lang.tr("sc.gui.fus.min", s / 60) : Lang.tr("sc.gui.fus.sec", s);
+    }
+
+    private void drawFusText() {
+        fit(Lang.tr("sc.gui.fus.title"), 14, CAPTION_Y, 90, GuiHoloSC.CYAN & 0xFFFFFF);
+        int stage = fusStage();
+        for (int i = 0; i < 5; i++) {
+            String s = Lang.tr("sc.gui.fus.step." + i);
+            int w = Math.min(28, (int) (fontRendererObj.getStringWidth(s) * 0.625F));
+            smallFit(s, 14 + i * 32 + 15 - w / 2, FU_STEP_Y + 3, 28, i == stage ? GuiHoloSC.VALUE : i < stage ? GuiHoloSC.OK : 0x465A6E);
+        }
+        boolean lit = generator.isIgnited();
+        GeneratorStatus status = generator.getStatus();
+        if (!lit) {
+            long eu = generator.getIgnitionEU(), need = type.ignitionThreshold();
+            smallFit(Lang.tr("sc.gui.fus.charge"), FU_COL_X, 49, 78, GuiHoloSC.LABEL);
+            smallFit(fusEu(eu) + " / " + fusEu(need) + " EU", FU_COL_X, 65, 78, GuiHoloSC.VALUE);
+            String hint = "sc.gui.fus.hint." + (status == GeneratorStatus.OVERHEATED ? "cool" : String.valueOf(Math.min(2, stage)));
+            smallFit(Lang.tr(hint + "a"), FU_COL_X, 73, 78, GuiHoloSC.LABEL);
+            smallFit(Lang.tr(hint + "b"), FU_COL_X, 79, 78, GuiHoloSC.LABEL);
+        } else {
+            int tx = FU_COL_X + 11;
+            smallFit(Lang.tr("sc.gui.fus.plasma"), tx, 48, 68, GuiHoloSC.LABEL);
+            smallFit(Lang.tr("sc.gui.gen.plasma.short", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT), tx, 54, 68,
+                    generator.getHeat() > fusNormHeat() ? GuiHoloSC.WARN : GuiHoloSC.VALUE);
+            smallFit(Lang.tr("sc.gui.fus.power"), tx, 62, 68, GuiHoloSC.LABEL);
+            smallFit(generator.getRamp() / 10 + "%", tx, 68, 68, GuiHoloSC.VALUE);
+            smallFit(generator.getLastOutput() + " EU/t", tx, 76, 68, generator.getLastOutput() > 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        }
+        // the cell and the blanket
+        net.minecraft.item.ItemStack cells = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_FUEL);
+        int count = cells == null ? 0 : cells.stackSize;
+        double fm = Math.max(0.01, generator.fuelMultiplier());
+        double secs = (generator.getCellBurnRemaining() + (double) count * TileEntityGeneratorSC.CELL_BURN_TICKS) / fm / 20.0;
+        int tx = ContainerGeneratorSC.FUS_FUEL_X + 19, ty = ContainerGeneratorSC.FUS_SLOT_Y;
+        if (secs <= 0) {
+            smallFit(Lang.tr("sc.gui.fus.nocell"), tx, ty, 58, GuiHoloSC.BAD);
+        } else {
+            smallFit(Lang.tr("sc.gui.fus.cell", fusTime(secs), count), tx, ty, 58, GuiHoloSC.LABEL);
+        }
+        int bx = ContainerGeneratorSC.FUS_BLANKET_X + 19;
+        if (lit) {
+            smallFit(Lang.tr("sc.gui.fus.blanket.life", fusTime(generator.getModuleLife() / 20.0)), bx, ty, 58, GuiHoloSC.LABEL);
+        } else {
+            smallFit(Lang.tr(fusHasBlanket() ? "sc.gui.fus.blanket.in" : "sc.gui.fus.blanket.need"), bx, ty, 58,
+                    fusHasBlanket() ? GuiHoloSC.LABEL : GuiHoloSC.BAD);
+        }
+        // the status line
+        String line;
+        int col;
+        if (status == GeneratorStatus.DISABLED || status == GeneratorStatus.REDSTONE) {
+            line = status.localized();
+            col = GuiHoloSC.IDLE;
+        } else if (!lit) {
+            if (status == GeneratorStatus.OVERHEATED) {
+                line = Lang.tr("sc.gui.fus.st.overheat", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT);
+                col = GuiHoloSC.BAD;
+            } else if (status == GeneratorStatus.BLANKET_DEPLETED) {
+                line = Lang.tr("sc.gui.fus.st.depleted");
+                col = GuiHoloSC.BAD;
+            } else if (stage == 1) {
+                line = Lang.tr("sc.gui.fus.st.noblanket");
+                col = GuiHoloSC.WARN;
+            } else {
+                int pct = (int) (100 * generator.getIgnitionEU() / Math.max(1, type.ignitionThreshold()));
+                line = Lang.tr("sc.gui.fus.st.charge", pct,
+                        Lang.tr(fusHasBlanket() ? "sc.gui.fus.yes.blanket" : "sc.gui.fus.no.blanket"),
+                        Lang.tr(count > 0 ? "sc.gui.fus.yes.cell" : "sc.gui.fus.no.cell"));
+                col = GuiHoloSC.CYAN & 0xFFFFFF;
+            }
+        } else if (status == GeneratorStatus.BUFFER_FULL) {
+            line = Lang.tr("sc.gui.fus.st.full");
+            col = GuiHoloSC.WARN;
+        } else if (status == GeneratorStatus.NO_DEUTERIUM) {
+            line = Lang.tr("sc.gui.fus.st.nocell");
+            col = GuiHoloSC.BAD;
+        } else if (stage == 3) {
+            line = Lang.tr("sc.gui.fus.st.ramp", generator.getRamp() / 10);
+            col = GuiHoloSC.CYAN & 0xFFFFFF;
+        } else {
+            line = Lang.tr("sc.gui.fus.st.ok", generator.outputTier().name(), generator.outputTier().getVoltage());
+            col = GuiHoloSC.OK;
+        }
+        smallFit(line, 14, FU_STATUS_Y, 190, col);
     }
 
     // ---- the Silicon Solar Panel ----
@@ -744,7 +924,29 @@ public class GuiGeneratorSC extends GuiContainer {
             lines.add(Lang.tr("sc.gui.comb.table.hint"));
             return lines;
         }
-        if (isReactor()) {
+        if (fus) {
+            if (GuiGaugeSC.isOver(14, FU_TOR_Y, FU_TOR_W, FU_TOR_H, mouseX, mouseY)
+                    || generator.isIgnited() && GuiGaugeSC.isOver(FU_COL_X, FU_TOR_Y, 80, FU_TOR_H, mouseX, mouseY)) {
+                lines.add(Lang.tr("sc.gui.gen.heat"));
+                lines.add(Lang.tr("sc.gui.gen.plasma", generator.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT)
+                        + "  (" + generator.getHeat() / 10 + "%)");
+                lines.add(Lang.tr("sc.gui.gen.ramp", generator.getRamp() / 10));
+                lines.add(Lang.tr("sc.gui.gen.heat.hint"));
+                return lines;
+            }
+            if (!generator.isIgnited() && GuiGaugeSC.isOver(FU_COL_X, FU_TOR_Y, 80, FU_TOR_H, mouseX, mouseY)) {
+                lines.add(Lang.tr("sc.gui.ignition"));
+                lines.add(generator.getIgnitionEU() + " / " + type.ignitionThreshold() + " EU");
+                lines.add(Lang.tr("sc.gui.fus.charge.hint"));
+                return lines;
+            }
+            if (GuiGaugeSC.isOver(14, FU_STEP_Y, 160, 11, mouseX, mouseY)) {
+                lines.add(Lang.tr("sc.gui.fus.steps"));
+                lines.add(Lang.tr("sc.gui.fus.steps.hint"));
+                return lines;
+            }
+        }
+        if (isReactor() && !fus) {
             if (!generator.isIgnited() && GuiGaugeSC.isOver(LEFT_X - 1, IGNITION_Y - 1, LEFT_W + 2, IGNITION_H + 2, mouseX, mouseY)) {
                 lines.add(Lang.tr("sc.gui.ignition"));
                 lines.add(generator.getIgnitionEU() + " / " + type.ignitionThreshold() + " EU");
@@ -769,9 +971,9 @@ public class GuiGeneratorSC extends GuiContainer {
 
         // What belongs in each slot while it's still empty.
         for (int slot = 0; slot < TileEntityGeneratorSC.FIRST_UPGRADE_SLOT; slot++) {
-            int sx = slot == 0 ? ContainerGeneratorSC.SLOT_FUEL_X : ContainerGeneratorSC.SLOT_BLANKET_X;
+            int sx = ContainerGeneratorSC.slotX(type, slot);
             if (TileEntityGeneratorSC.usesSlot(type, slot) && generator.getStackInSlot(slot) == null
-                    && GuiGaugeSC.isOver(sx, ContainerGeneratorSC.SLOT_Y, 16, 16, mouseX, mouseY)) {
+                    && GuiGaugeSC.isOver(sx, ContainerGeneratorSC.slotY(type), 16, 16, mouseX, mouseY)) {
                 lines.add(Lang.tr(slotKey(slot)));
                 String hint = Lang.trOr(slotKey(slot) + ".hint", null);
                 if (hint != null) {

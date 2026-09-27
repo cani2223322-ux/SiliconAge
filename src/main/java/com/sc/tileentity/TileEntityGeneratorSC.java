@@ -244,6 +244,21 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return inflowTenths;
     }
 
+    /** Fusion: ticks the deuterium cell burning now has left (at one a tick; Overdrive / Economizer change the pace). */
+    public double getCellBurnRemaining() {
+        return cellBurnRemaining;
+    }
+
+    /** Fusion: ticks the Li-blanket module lit into the reactor has left. */
+    public int getModuleLife() {
+        return moduleLifeRemaining;
+    }
+
+    public void setFusionClient(int cellTicks, int moduleLife) {
+        cellBurnRemaining = cellTicks;
+        moduleLifeRemaining = moduleLife;
+    }
+
     public void setInflowClient(int tenths) {
         inflowTenths = tenths;
     }
