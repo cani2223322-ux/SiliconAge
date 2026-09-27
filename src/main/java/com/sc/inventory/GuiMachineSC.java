@@ -65,6 +65,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean saw;
     /** The Dicing Saw: the Wire Saw's screen, the wafer cut into dies from above, a diamond blade's wear. */
     private final boolean dice;
+    /** The Packager's own screen: the assembly scene, its four stages, the product and its pins. */
+    private final boolean pack;
+    private static final int PACK_X = 88, PACK_Y = 36, PACK_W = 76, PACK_H = 50, PACK_STAGE_X = 167, PACK_STAGE_W = 39;
     /** The Oxidation Furnace's own screen: its two modes as badges, the tube furnace, the wafers taking colour, its oxygen. */
     private final boolean oxid;
     /** The Photoresist Coater's own screen: the spin coater from above, its four stages, the film's cover, its resist. */
@@ -116,6 +119,7 @@ public class GuiMachineSC extends GuiContainer {
                 || machine.getMachineType() == com.sc.machine.MachineType.CZOCHRALSKI_PULLER_EV;
         blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE || puller;
         dice = machine.getMachineType() == com.sc.machine.MachineType.DICING_SAW;
+        pack = machine.getMachineType() == com.sc.machine.MachineType.PACKAGER;
         saw = machine.getMachineType() == com.sc.machine.MachineType.WIRE_SAW || dice;
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
@@ -412,6 +416,18 @@ public class GuiMachineSC extends GuiContainer {
             float level = water.getCapacity() > 0 ? (float) water.getFluidAmount() / water.getCapacity() : 0F;
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             GuiSceneSC.washer(x + TUB_X, y + TUB_Y, TUB_W, TUB_H, t, machine.getStatus() == MachineStatus.PROCESSING, level);
+        } else if (pack) {                                              // the assembly scene and its stages
+            float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
+            boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+            int[] pd = packPinsDies();
+            GuiSceneSC.packager(x + PACK_X, y + PACK_Y, PACK_W, PACK_H, t, running, progress, pd[0], pd[1]);
+            int stage = running ? GuiSceneSC.packStage(progress) : -1;
+            for (int i = 0; i < 4; i++) {
+                int sy = y + PACK_Y + i * 12, sx = x + PACK_STAGE_X;
+                boolean cur = i == stage, done = i < stage;
+                drawRect(sx, sy, sx + PACK_STAGE_W, sy + 10, cur ? 0xFF2A6A8A : done ? 0xFF1E4A30 : 0xFF1A2430);
+                drawRect(sx + 1, sy + 1, sx + PACK_STAGE_W - 1, sy + 9, cur ? 0xFF0E3A50 : done ? 0xFF0E2A1A : 0xFF0A1218);
+            }
         } else if (shownCount == 0) {                                   // the picture window
             int wx = x + rx + 2, ww = GuiBigSC.SCREEN_RIGHT - rx - 2;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
@@ -524,6 +540,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (cvd || etch) {
             drawCvdText();
+            drawUpgradeLine();
+            return;
+        }
+        if (pack) {
+            drawPackText(rx);
             drawUpgradeLine();
             return;
         }
@@ -814,6 +835,53 @@ public class GuiMachineSC extends GuiContainer {
     private boolean oxidising() {
         com.sc.machine.MachineRecipe r = shownRecipe();
         return r == null || r.fluidInputA != null;
+    }
+
+    /** The Packager's lead frame pins and dies a run, from the shown recipe: {3, 1}, {16, 2} or {40, 4}. */
+    private int[] packPinsDies() {
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        int pins = 3, dies = 1;
+        if (r != null) {
+            for (net.minecraft.item.ItemStack s : r.inputs) {
+                if (s == null) {
+                    continue;
+                }
+                if (s.getItem() == com.sc.init.ModItems.leadFrame16) {
+                    pins = 16;
+                } else if (s.getItem() == com.sc.init.ModItems.leadFrame40) {
+                    pins = 40;
+                } else if (!(s.getItem() == com.sc.init.ModItems.leadFrame3 || s.getItem() == com.sc.init.ModItems.compound)) {
+                    dies = s.stackSize;
+                }
+            }
+        }
+        return new int[]{pins, dies};
+    }
+
+    /** The Packager: caption, the stages' names, the product and its pins, dies a run, defects and time. */
+    private void drawPackText(int rx) {
+        fit(Lang.tr("sc.gui.holo.packaging"), rx, CAPTION_Y, GuiBigSC.SCREEN_RIGHT - rx, GuiHoloSC.CYAN & 0xFFFFFF);
+        boolean running = machine.getStatus() == MachineStatus.PROCESSING;
+        int ticks = machine.getCurrentRecipeTicks();
+        float p = ticks > 0 ? (float) machine.getProgressTicks() / ticks : 0F;
+        int stage = running ? GuiSceneSC.packStage(p) : -1;
+        for (int i = 0; i < 4; i++) {
+            String s = Lang.tr("sc.gui.pack.stage." + i);
+            float k = Math.min(0.625F, (PACK_STAGE_W - 3) / (float) Math.max(1, fontRendererObj.getStringWidth(s)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(PACK_STAGE_X + (PACK_STAGE_W - fontRendererObj.getStringWidth(s) * k) / 2F, PACK_Y + i * 12 + 3, 0F);
+            GL11.glScalef(k, k, 1F);
+            fontRendererObj.drawString(s, 0, 0, i == stage ? 0x96F0FF : i < stage ? 0x5AE66E : 0x465A6E);
+            GL11.glPopMatrix();
+        }
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        int[] pd = packPinsDies();
+        String product = r != null && r.outputs != null && r.outputs.length > 0 && r.outputs[0] != null ? r.outputs[0].getDisplayName() : "-";
+        smallFit(Lang.tr("sc.gui.pack.product", product, pd[0]), PACK_X, PACK_Y + PACK_H + 4, GuiBigSC.SCREEN_RIGHT - PACK_X - 2, 0xE6F0FA);
+        if (r != null) {
+            smallFit(Lang.tr("sc.gui.pack.run", pd[1], Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)),
+                    PACK_X, PACK_Y + PACK_H + 12, GuiBigSC.SCREEN_RIGHT - PACK_X - 2, 0x6AA8C8);
+        }
     }
 
     /** The Wire Saw's key, or the Dicing Saw's own wording of it. */
@@ -1154,6 +1222,15 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (pack && GuiGaugeSC.isOver(PACK_X, PACK_Y, PACK_STAGE_X + PACK_STAGE_W - PACK_X, PACK_H, mouseX, mouseY)) {
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            lines.add(Lang.tr("sc.gui.pack.title"));
+            if (r != null) {
+                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+            }
+            lines.add(Lang.tr("sc.gui.pack.hint"));
+            return lines;
+        }
         if (sput && GuiGaugeSC.isOver(SAW_X, CAPTION_Y - 1, SAW_W, SAW_Y + 44 - CAPTION_Y + 1, mouseX, mouseY)) {
             int k = target();
             lines.add(Lang.tr("sc.gui.sput.title"));

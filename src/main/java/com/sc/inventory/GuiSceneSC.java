@@ -545,6 +545,59 @@ public final class GuiSceneSC {
         }
     }
 
+    /** The Packager's stage by progress: 0 die attach, 1 wire bonding, 2 moulding, 3 done. */
+    public static int packStage(float progress) {
+        return progress < 0.3F ? 0 : progress < 0.65F ? 1 : progress < 0.95F ? 2 : 3;
+    }
+
+    /**
+     * The packager: a pick-and-place head on its gantry over a lead frame; the dies go down on the
+     * pad, gold wires bond them to the pins, the black body is moulded over - by the stage.
+     * @param pins 3, 16 or 40 (the lead frame); dies 1, 2 or 4
+     */
+    public static void packager(int x, int y, int w, int h, float t, boolean running, float progress, int pins, int dies) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        int stage = running ? packStage(progress) : -1;
+        rect(x + 3, y + 4, w - 6, 2, 0xFF6A707A);                              // the gantry
+        int cx = x + w / 2, cy = y + h / 2 + 6;
+        int hx = cx + (running ? (int) (10 * Math.sin(t * 0.15F)) : 0);
+        int down = running && stage == 0 ? (int) (4 * Math.abs(Math.sin(t * 0.3F))) : 0;
+        rect(hx - 1, y + 6, 3, 8 + down, 0xFF8A909A);                          // the head
+        rect(hx - 3, y + 14 + down, 7, 2, 0xFF6A707A);
+        int perSide = Math.max(1, pins / 2);
+        int pitch = perSide > 10 ? 2 : 3;
+        int bw = Math.max(12, perSide * pitch + 4), x0 = cx - bw / 2;
+        for (int i = 0; i < perSide; i++) {                                    // the lead frame
+            rect(x0 + 2 + i * pitch, cy - 10, 1, 5, 0xFFB0B8C4);
+            rect(x0 + 2 + i * pitch, cy + 5, 1, 5, 0xFFB0B8C4);
+        }
+        if (stage >= 2) {                                                      // moulded
+            float k = stage == 2 ? (progress - 0.65F) / 0.3F : 1F;
+            rect(x0, cy - 5, bw, 10, 0xFF6A707A);
+            rect(x0, cy - 5, Math.max(1, (int) (bw * Math.min(1F, k))), 10, 0xFF22262E);
+            if (stage == 3) {
+                rect(x0 + 1, cy - 4, 2, 2, 0xFF4A505A);                        // the pin-1 dot
+            }
+            return;
+        }
+        rect(x0, cy - 5, bw, 10, 0xFF6A707A);                                  // the pad
+        float k = stage == 0 ? progress / 0.3F : 1F;
+        int shown = stage < 0 ? 0 : Math.max(0, Math.min(dies, (int) Math.ceil(dies * k)));
+        for (int d = 0; d < shown; d++) {                                      // the dies placed
+            rect(cx - dies * 3 + d * 6 + 1, cy - 2, 4, 4, 0xFFD8844A);
+        }
+        if (stage == 1) {
+            float kb = (progress - 0.3F) / 0.35F;
+            int wires = (int) (perSide * Math.min(1F, kb));
+            for (int i = 0; i < wires; i++) {                                  // gold wires bonded
+                rect(x0 + 2 + i * pitch, cy - 5, 1, 3, 0xFFE8C850);
+                rect(x0 + 2 + i * pitch, cy + 2, 1, 3, 0xFFE8C850);
+            }
+            rect(hx + (int) (3 * Math.sin(t)), cy - 6, 1, 1, 0xFFFFFFFF);      // the bonding spark
+        }
+    }
+
     /** A colour between a and b (k 0..1), opaque. */
     public static int mix(int a, int b, float k) {
         k = Math.max(0F, Math.min(1F, k));
