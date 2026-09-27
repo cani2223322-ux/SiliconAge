@@ -151,6 +151,51 @@ public final class GuiSceneSC {
         rect(cx - 6, my0 + 5, 12, 1, heat > 0.05F ? 0xFFFF8C1E : 0xFF4A3A2A);
     }
 
+    /**
+     * The Czochralski puller: a crucible of melt over heater coils, the seed rod pulling a boule up out
+     * of it (longer as the run goes on, striped as it turns), argon coming down.
+     */
+    public static void puller(int x, int y, int w, int h, float t, boolean running, float progress, float heat) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        boolean hot = heat > 0.05F || running;
+        int cx = x + w / 2;
+        rect(x + 5, y + 3, w - 10, 2, 0xFF6A707A);                            // the pull head
+        rect(x + 5, y + 3, w - 10, 1, 0xFF9AA0AA);
+        int cy0 = y + h - 14, cy1 = y + h - 5;                                 // the crucible
+        rect(cx - 16, cy0, 32, cy1 - cy0, 0xFF8A909A);
+        rect(cx - 15, cy0, 30, cy1 - cy0 - 1, 0xFF2A1810);
+        int[] melt = hot ? new int[]{0xFFFFD050, 0xFFFF9A30, 0xFFC04A10} : new int[]{0xFF8A8A90, 0xFF6A6A72, 0xFF4A4A52};
+        for (int i = 0; i < melt.length; i++) {
+            rect(cx - 15, cy0 + 1 + i * 2, 30, 2, melt[i]);
+        }
+        for (int i = 0; i < 5; i++) {                                          // heater coils
+            rect(cx - 18 + i * 8, cy1 + 1, 5, 2, hot ? 0xFFFF5A3C : 0xFF5A2A20);
+        }
+        int rodTop = y + 5, room = cy0 - (y + 9);
+        int length = Math.round(room * progress), top = cy0 - length;
+        rect(cx - 1, rodTop, 2, top - rodTop, 0xFFB0B8C4);                    // the seed rod
+        if (length > 0) {                                                      // the boule
+            int turn = running ? (int) (t * 0.8F) : 0;
+            for (int yy = top; yy < cy0; yy++) {
+                float k = (float) (yy - top) / Math.max(1, cy0 - top);
+                int half = k < 0.9F ? 2 + Math.round(6 * Math.min(1F, k * 3)) : 2 + Math.round(6 * (1 - (k - 0.9F) * 5));
+                rect(cx - half, yy, 2 * half, 1, (yy + turn) % 4 == 0 ? 0xFF8A94A8 : 0xFF6A7488);
+                rect(cx - half, yy, 1, 1, 0xFFB8C4D8);
+            }
+            if (hot) {
+                rect(cx - 6, cy0 - 1, 12, 1, 0xFFFFE08A);                      // the glowing meniscus
+            }
+        }
+        if (running) {
+            for (int i = 0; i < 6; i++) {                                      // argon flowing down
+                int ax = x + 5 + (i * 7) % Math.max(1, w - 10);
+                int ay = y + 6 + (int) ((t * 0.6F + i * 5) % Math.max(1, cy0 - y - 8));
+                rect(ax, ay, 1, 1, 0xFF8AB0E8);
+            }
+        }
+    }
+
     /** A thermometer beside the furnace: bulb, fill in the zone colour, marks at 0 / 50 / resume / 100. */
     public static void thermometer(int x, int y, int h, float heat, float resume) {
         heat = Math.max(0F, Math.min(1F, heat));

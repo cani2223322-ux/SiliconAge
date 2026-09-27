@@ -57,7 +57,8 @@ public class ContainerMachineSC extends Container {
      * Washer and the Blast Furnace have screens of their own and keep the roomy one.
      */
     public static boolean tightSlots(com.sc.machine.MachineType type) {
-        return usesTanks(type) && type != com.sc.machine.MachineType.ORE_WASHER && type != com.sc.machine.MachineType.BLAST_FURNACE;
+        return usesTanks(type) && type != com.sc.machine.MachineType.ORE_WASHER && type != com.sc.machine.MachineType.BLAST_FURNACE
+                && type != com.sc.machine.MachineType.CZOCHRALSKI_PULLER && type != com.sc.machine.MachineType.CZOCHRALSKI_PULLER_EV;
     }
 
     /** Where slot i of a row sits: 18 apart beside tanks, 22 apart otherwise. */

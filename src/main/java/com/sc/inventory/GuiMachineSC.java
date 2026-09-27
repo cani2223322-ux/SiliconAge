@@ -58,6 +58,8 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean washer;
     /** The Blast Furnace's own screen: the furnace and a thermometer, the zoned heat bar under them, its tank. */
     private final boolean blast;
+    /** The Czochralski Puller's own screen: as the Blast Furnace's, the puller in place of the furnace. */
+    private final boolean puller;
     /** The Chemical Reactor's own screen: its recipe as a formula, tank + tank -> flask -> tank. */
     private final boolean chem;
     private static final int CHEM_X = 76, CHEM_IN2 = 32, CHEM_FLASK = 64, CHEM_OUT = 97, CHEM_FLASK_W = 30, CHEM_FLASK_H = 50;
@@ -81,7 +83,9 @@ public class GuiMachineSC extends GuiContainer {
         }
         withTanks = ContainerMachineSC.tightSlots(machine.getMachineType());
         washer = machine.getMachineType() == com.sc.machine.MachineType.ORE_WASHER;
-        blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE;
+        puller = machine.getMachineType() == com.sc.machine.MachineType.CZOCHRALSKI_PULLER
+                || machine.getMachineType() == com.sc.machine.MachineType.CZOCHRALSKI_PULLER_EV;
+        blast = machine.getMachineType() == com.sc.machine.MachineType.BLAST_FURNACE || puller;
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         ownTanks = chem ? new int[]{0, 1, 2} : cvd ? new int[]{0, 1} : null;
@@ -241,7 +245,12 @@ public class GuiMachineSC extends GuiContainer {
         } else if (blast) {                                                    // the furnace, its thermometer, the zoned heat bar
             float t = mc.theWorld == null ? 0F : mc.theWorld.getTotalWorldTime() + partialTicks;
             float h = (float) machine.getHeat() / TileEntityMachineSC.getHeatCapacity();
-            GuiSceneSC.furnace(x + FURNACE_X, y + FURNACE_Y, FURNACE_W, FURNACE_H, t, machine.getStatus() == MachineStatus.PROCESSING, h);
+            if (puller) {
+                GuiSceneSC.puller(x + FURNACE_X, y + FURNACE_Y, FURNACE_W, FURNACE_H, t, machine.getStatus() == MachineStatus.PROCESSING,
+                        progress, h);
+            } else {
+                GuiSceneSC.furnace(x + FURNACE_X, y + FURNACE_Y, FURNACE_W, FURNACE_H, t, machine.getStatus() == MachineStatus.PROCESSING, h);
+            }
             GuiSceneSC.thermometer(x + THERMO_X, y + FURNACE_Y, FURNACE_H, h, (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
             GuiSceneSC.heatBar(x + HEATBAR_X, y + HEATBAR_Y, HEATBAR_W, HEATBAR_H, h,
                     (float) TileEntityMachineSC.HEAT_RESUME / TileEntityMachineSC.getHeatCapacity());
@@ -416,7 +425,7 @@ public class GuiMachineSC extends GuiContainer {
 
     /** The Blast Furnace: caption, its tank's label, the heat, the 70 / 100 marks, what happens next. */
     private void drawBlastText(int rx) {
-        fit(Lang.tr("sc.gui.holo.smelting"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
+        fit(Lang.tr(puller ? "sc.gui.holo.growing" : "sc.gui.holo.smelting"), rx, CAPTION_Y, WATER_X - rx - 4, GuiHoloSC.CYAN & 0xFFFFFF);
         FluidTank tank = machine.getTank(0);
         String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
         TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
@@ -748,6 +757,17 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
 
+        if (puller && GuiGaugeSC.isOver(FURNACE_X, FURNACE_Y, FURNACE_W, FURNACE_H, mouseX, mouseY)) {
+            com.sc.machine.MachineRecipe r = shownRecipe();
+            lines.add(Lang.tr("sc.gui.puller.title"));
+            if (r != null) {
+                if (r.fluidInputA != null) {
+                    lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
+                }
+                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+            }
+            return lines;
+        }
         if (heat() && (blast ? GuiGaugeSC.isOver(HEATBAR_X - 1, HEATBAR_Y - 10, WATER_X - HEATBAR_X - 4, 30, mouseX, mouseY)
                 || GuiGaugeSC.isOver(THERMO_X, FURNACE_Y, 13, FURNACE_H, mouseX, mouseY)
                 : GuiGaugeSC.isOver(PROGRESS_X - 1, HEAT_Y - 1, barW() + 2, HEAT_H + 2, mouseX, mouseY))) {
