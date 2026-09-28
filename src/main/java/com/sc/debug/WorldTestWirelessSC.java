@@ -56,12 +56,37 @@ public class WorldTestWirelessSC {
                     + " EU, status tx " + tx.getStatus() + " rx " + rx.getStatus() + ", loss " + tx.getLossPct() + "%");
             System.out.println("[SC-WORLDTEST] " + (d ? "PASS" : "FAIL") + " quantum Overworld -> Nether: nether end " + qb.getEnergyStored()
                     + " EU, status " + qa.getStatus() + " / " + qb.getStatus());
+            wrenchTest(over);
             DimensionManager.getWorld(0).setBlockToAir(8, 200, 8);
             DimensionManager.getWorld(0).setBlockToAir(48, 200, 8);
             DimensionManager.getWorld(0).setBlockToAir(8, 202, 8);
             DimensionManager.getWorld(-1).setBlockToAir(8, 100, 8);
             System.out.println("[SC-WORLDTEST] DONE");
         }
+    }
+
+    /** The quantum wrench in Dismantle mode: a wireless block goes whole; a cable + pipe bundle one part per click. */
+    private static void wrenchTest(World w) {
+        net.minecraftforge.common.util.FakePlayer p = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((net.minecraft.world.WorldServer) w);
+        p.capabilities.isCreativeMode = true;
+        net.minecraft.item.ItemStack wrench = new net.minecraft.item.ItemStack(ModItems.WRENCHES.get(ModItems.WRENCHES.size() - 1));
+        wrench.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        wrench.getTagCompound().setInteger("WrenchMode", com.sc.item.ItemWrenchSC.MODE_DISMANTLE);
+        wrench.getItem().onItemUseFirst(wrench, p, w, 48, 200, 8, 1, 0.5F, 0.5F, 0.5F);
+        boolean wl = w.isAirBlock(48, 200, 8);
+        w.setBlock(12, 200, 8, ModBlocks.conduitBundle, 0, 3);
+        com.sc.tileentity.TileEntityConduitBundleSC c = (com.sc.tileentity.TileEntityConduitBundleSC) w.getTileEntity(12, 200, 8);
+        c.addPart(com.sc.conduit.ConduitKind.CABLE, 0);
+        c.addPart(com.sc.conduit.ConduitKind.PIPE, 0);
+        wrench.getItem().onItemUseFirst(wrench, p, w, 12, 200, 8, 1, 0.5F, 0.5F, 0.5F);
+        boolean one = w.getTileEntity(12, 200, 8) instanceof com.sc.tileentity.TileEntityConduitBundleSC
+                && ((com.sc.tileentity.TileEntityConduitBundleSC) w.getTileEntity(12, 200, 8)).has(com.sc.conduit.ConduitKind.PIPE)
+                && !((com.sc.tileentity.TileEntityConduitBundleSC) w.getTileEntity(12, 200, 8)).has(com.sc.conduit.ConduitKind.CABLE);
+        wrench.getItem().onItemUseFirst(wrench, p, w, 12, 200, 8, 1, 0.5F, 0.5F, 0.5F);
+        boolean gone = w.isAirBlock(12, 200, 8);
+        System.out.println("[SC-WORLDTEST] " + (wl && one && gone ? "PASS" : "FAIL") + " wrench dismantle: wireless " + wl
+                + ", bundle one part " + one + ", bundle gone " + gone);
+        w.setBlockToAir(12, 200, 8);
     }
 
     private static TileEntityWirelessSC place(World w, net.minecraft.block.Block b, int meta, int x, int y, int z) {

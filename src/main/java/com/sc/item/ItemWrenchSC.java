@@ -161,7 +161,7 @@ public class ItemWrenchSC extends Item {
             MovingObjectPosition hit = lookedAt(world, player, REMOTE_RANGE);
             if (hit != null && hit.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
                     && dismantlable(world, hit.blockX, hit.blockY, hit.blockZ)) {
-                dismantle(stack, player, world, hit.blockX, hit.blockY, hit.blockZ, 2 * tier.dismantleCost);
+                dismantle(stack, player, world, hit.blockX, hit.blockY, hit.blockZ, 2 * tier.dismantleCost, hit.subHit);
             }
         }
         return stack;
@@ -198,7 +198,7 @@ public class ItemWrenchSC extends Item {
             if (!dismantlable(world, x, y, z)) {
                 return false;
             }
-            dismantle(stack, player, world, x, y, z, tier.dismantleCost);
+            dismantle(stack, player, world, x, y, z, tier.dismantleCost, -1);
             return true;
         }
         if (mode == MODE_COPY) {
@@ -247,7 +247,8 @@ public class ItemWrenchSC extends Item {
         TileEntity te = world.getTileEntity(x, y, z);
         return te instanceof TileEntityMachineSC || te instanceof TileEntityGeneratorSC || te instanceof TileEntityEnergyStorageSC
                 || te instanceof TileEntityTransformerSC || te instanceof TileEntityTankSC || te instanceof TileEntityFieldGeneratorSC
-                || te instanceof com.sc.tileentity.TileEntityQuarrySC;
+                || te instanceof com.sc.tileentity.TileEntityQuarrySC || te instanceof com.sc.tileentity.TileEntityWirelessSC
+                || te instanceof com.sc.tileentity.TileEntityConduitBundleSC;
     }
 
     /**
@@ -256,11 +257,17 @@ public class ItemWrenchSC extends Item {
      * stood, exactly as breaking it would. Protection (a field's private zone, other mods'
      * claims) is asked first, as for any block break.
      */
-    private void dismantle(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int cost) {
+    private void dismantle(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int cost, int subHit) {
         Block block = world.getBlock(x, y, z);
         int meta = world.getBlockMetadata(x, y, z);
         if (player instanceof EntityPlayerMP && net.minecraftforge.common.ForgeHooks.onBlockBreakEvent(world,
                 ((EntityPlayerMP) player).theItemInWorldManager.getGameType(), (EntityPlayerMP) player, x, y, z).isCanceled()) {
+            return;
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof com.sc.tileentity.TileEntityConduitBundleSC) {
+            dismantlePart(stack, player, world, x, y, z, (com.sc.tileentity.TileEntityConduitBundleSC) te, block,
+                    Math.max(1, cost / 10), subHit);
             return;
         }
         if (!spend(player, stack, cost)) {
@@ -272,6 +279,42 @@ public class ItemWrenchSC extends Item {
             if (d != null && !player.inventory.addItemStackToInventory(d)) {
                 player.dropPlayerItemWithRandomChoice(d, false);
             }
+        }
+        player.inventoryContainer.detectAndSendChanges();
+        world.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, block.stepSound.getBreakSound(), 1.0F, 1.2F);
+    }
+
+    /**
+     * A cable / pipe / tube bundle: the part under the cursor (a tenth of the price) goes into the
+     * inventory, as breaking it would drop it (a pipe's fluid is lost, a tube's filters fall out);
+     * the block goes with its last part.
+     */
+    private void dismantlePart(ItemStack stack, EntityPlayer player, World world, int x, int y, int z,
+                               com.sc.tileentity.TileEntityConduitBundleSC te, Block block, int cost, int subHit) {
+        if (subHit < 0 && block instanceof com.sc.block.BlockConduitSC) {
+            MovingObjectPosition hit = ((com.sc.block.BlockConduitSC) block).partUnderCursor(world, x, y, z, player);
+            subHit = hit != null ? hit.subHit : -1;
+        }
+        com.sc.conduit.ConduitKind[] kinds = com.sc.conduit.ConduitKind.values();
+        com.sc.conduit.ConduitKind kind = subHit >= 0 && subHit / 8 < kinds.length ? kinds[subHit / 8] : null;
+        if (kind == null || !te.has(kind)) {
+            kind = null;
+            for (com.sc.conduit.ConduitKind k : kinds) {
+                if (te.has(k)) {
+                    kind = k;
+                    break;
+                }
+            }
+        }
+        if (kind == null || !spend(player, stack, cost)) {
+            return;
+        }
+        ItemStack drop = te.removePart(kind);
+        if (te.isEmpty()) {
+            world.setBlockToAir(x, y, z);
+        }
+        if (drop != null && !player.capabilities.isCreativeMode && !player.inventory.addItemStackToInventory(drop)) {
+            player.dropPlayerItemWithRandomChoice(drop, false);
         }
         player.inventoryContainer.detectAndSendChanges();
         world.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, block.stepSound.getBreakSound(), 1.0F, 1.2F);
