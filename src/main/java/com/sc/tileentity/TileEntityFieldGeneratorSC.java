@@ -191,6 +191,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     public void togglePower() {
         powerOn = !powerOn;
+        com.sc.util.SoundsSC.powerClick(this, powerOn);
         changed();
     }
 

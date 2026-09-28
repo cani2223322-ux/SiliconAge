@@ -96,6 +96,7 @@ public class ContainerMachineSC extends Container {
         }
         if (id == BTN_POWER) {
             machine.setPowerOn(!machine.isPowerOn());
+            com.sc.util.SoundsSC.powerClick(machine, machine.isPowerOn());
             return true;
         }
         if (id == BTN_REDSTONE) {

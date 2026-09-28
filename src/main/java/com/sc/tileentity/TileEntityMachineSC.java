@@ -413,6 +413,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             dissipateHeat();
             return;
         }
+        if (status == MachineStatus.PROCESSING) {
+            com.sc.util.SoundsSC.loop(this, com.sc.util.SoundsSC.of(machineType));
+        }
 
         ItemStack[] inputs = new ItemStack[INPUT_SLOTS];
         System.arraycopy(slots, 0, inputs, 0, INPUT_SLOTS);

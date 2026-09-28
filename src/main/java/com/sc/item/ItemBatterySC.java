@@ -126,6 +126,8 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
                     stack.setTagCompound(new NBTTagCompound());
                 }
                 stack.getTagCompound().setInteger(MODE, mode);
+                world.playSoundAtEntity(player, Reference.ASSETS + ":battery.mode", 0.5F * com.sc.util.ConfigSC.soundVolume,
+                        mode == MODE_OFF ? 0.8F : 1.2F);
                 player.addChatComponentMessage(new ChatComponentTranslation("sc.battery.modeset",
                         new ChatComponentTranslation("sc.battery.mode." + mode)));
             }

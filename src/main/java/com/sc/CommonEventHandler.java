@@ -63,6 +63,7 @@ public class CommonEventHandler {
                 }
             }
             bolt.setDead();
+            com.sc.util.SoundsSC.play(world, bolt.posX, bolt.posY, bolt.posZ, "field.zap", 3F, 0.9F + world.rand.nextFloat() * 0.2F);
         }
     }
 

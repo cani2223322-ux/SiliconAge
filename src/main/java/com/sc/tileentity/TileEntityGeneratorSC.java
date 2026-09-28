@@ -469,6 +469,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (generatorType != GeneratorType.CREATIVE) {
             lastOutput = Math.max(0, getEnergyStored() - before);
         }
+        if (status == GeneratorStatus.GENERATING) {
+            com.sc.util.SoundsSC.loop(this, com.sc.util.SoundsSC.of(generatorType));
+        }
         if (chargeBattery(slots[SLOT_BATTERY]) > 0) {
             markDirty();
         }

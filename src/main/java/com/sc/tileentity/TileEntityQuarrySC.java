@@ -507,6 +507,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             markDirty();
         }
         dig();
+        if (status == Status.RUNNING) {
+            com.sc.util.SoundsSC.loop(this, isExo() ? RIG_SOUND : DRILL_SOUND);
+        }
     }
 
     private void setStatus(Status s) {
@@ -1623,6 +1626,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             A_TANK_PIN = 31, A_TANK_AUTO = 32, A_FVEIN = 33, A_FVEIN_RANGE = 34, A_FVEIN_FLOWING = 35, A_WASH_FEED = 36,
             A_SWITCH = 37, A_BATTERY_MODE = 38;
 
+    private static final com.sc.util.SoundsSC.Loop DRILL_SOUND = new com.sc.util.SoundsSC.Loop("quarry.drill", 0.6F, 1F),
+            RIG_SOUND = new com.sc.util.SoundsSC.Loop("quarry.beam", 0.55F, 1F);
+
     public void action(EntityPlayer p, int action, int value) {
         boolean area = false;
         switch (action) {
@@ -1636,7 +1642,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             case A_RESET: resetCursor(); break;
             case A_REDSTONE: redstone = (redstone + 1) % 3; break;
             case A_POWER: powerMode = (powerMode + 1) % 3; break;
-            case A_SWITCH: powerOn = !powerOn; break;
+            case A_SWITCH:
+                powerOn = !powerOn;
+                com.sc.util.SoundsSC.powerClick(this, powerOn);
+                break;
             case A_BATTERY_MODE: cycleBatteryMode(); break;
             case A_XP:
                 if (xp > 0) {

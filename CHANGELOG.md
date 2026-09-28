@@ -6,10 +6,12 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Звуки.** Работающие машины и генераторы звучат по типу: гул электромоторов, дробление, горн печей, бульканье ванн и реакторов химии, писк литографии и имплантера, свист пил, вращение центрифуги, поршни двигателя внутреннего сгорания, треск топки, свист турбин, плеск водяного колеса, гул реакторов, щелчки счётчика у РИТЭГа (солнечные панели молчат); бур карьера и луч экзо-буровой. Щелчок кнопки питания (вкл / выкл), треск молнии о щит поля, сигнал смены режима аккумулятора. Все звуки синтезированы для мода. В конфиге — раздел sounds: вкл/выкл звуков машин и общая громкость.
 - **Справочник дополнен:** кнопка питания и красный камень, переносные аккумуляторы (таблица уровней), слот аккумулятора у машин и генераторов, модули и слоты накопителей (разрядка, компаратор, поворот выхода ключом), жидкости вёдрами и капсулами, расширенный бак; у генератора поля — цели, режимы беспроводной зарядки, защита от дождя, питание и аккумулятор поля.
 - **Иконка мода** (чип «Si», переход от кремния к экзо): в списке модов и в README.
 
 ### English
+- **Sounds.** Working machines and generators sound by kind: electric motor hum, grinding, furnace roar, bubbling baths and chemistry, lithography and implanter whine, saws, the centrifuge's spin, the combustion engine's pistons, a crackling firebox, turbine whine, the water wheel's splash, reactor drone, an RTG's counter clicks (solar panels are silent); the quarry's drill and the Exo rig's beam. The power switch clicks (on / off), lightning crackles on a field's shield, a battery's mode change beeps. Every sound is synthesised for the mod. The config's "sounds" section: machine sounds on/off and the overall volume.
 - **Handbook extended:** the power switch and redstone, portable batteries (a table of tiers), the battery slot on machines and generators, storage upgrades and slots (discharge, comparator, turning the output with a wrench), fluids by bucket and cell, the tank extension; for the field generator - targets, wireless charging modes, the rain shield, the field's power and battery.
 - **Mod icon** (the "Si" chip, silicon turning into Exo): in the mod list and the README.
 

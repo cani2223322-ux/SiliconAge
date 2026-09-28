@@ -41,6 +41,7 @@ public class ContainerEnergyStorageSC extends Container {
         }
         if (id == BTN_POWER) {
             storage.setPowerOn(!storage.isPowerOn());
+            com.sc.util.SoundsSC.powerClick(storage, storage.isPowerOn());
             return true;
         }
         if (id == BTN_REDSTONE) {

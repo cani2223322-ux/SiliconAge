@@ -16,6 +16,10 @@ public final class ConfigSC {
 
     private static final Map<OreEntry, OreGenSettings> ORE_SETTINGS = new EnumMap<OreEntry, OreGenSettings>(OreEntry.class);
 
+    /** Sounds: working machines / generators / quarries play their loops; the volume of every mod sound (0..1). */
+    public static boolean machineSounds = true;
+    public static float soundVolume = 1F;
+
     private ConfigSC() {
     }
 
@@ -37,6 +41,10 @@ public final class ConfigSC {
                         "Attempted veins per chunk for " + ore.oreName + " (TODO: not specified in design doc, defaulted)");
                 ORE_SETTINGS.put(ore, new OreGenSettings(minY, maxY, veinSize, veinsPerChunk));
             }
+            machineSounds = config.getBoolean("machines", "sounds", true,
+                    "Working machines, generators and quarries make their sound");
+            soundVolume = config.getFloat("volume", "sounds", 1F, 0F, 1F,
+                    "Volume of every Silicon Age sound (0 = silent)");
         } finally {
             if (config.hasChanged()) {
                 config.save();

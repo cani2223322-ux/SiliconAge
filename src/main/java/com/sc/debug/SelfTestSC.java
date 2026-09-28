@@ -57,6 +57,7 @@ public final class SelfTestSC {
             batterySlot();
             generatorBattery();
             audit2Fixes();
+            sounds();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1077,6 +1078,54 @@ public final class SelfTestSC {
                 && pad.chargeItem(ionCutter, 640) == 640
                 && pad.chargeItem(new ItemStack(net.minecraft.init.Items.iron_sword), 640) == 0;
         check(ok, "charge pad MV: Nano armour / blade and LV-MV weapons charge, Quantum / Exo and plain items don't");
+    }
+
+    /** Every sound the code plays is in sounds.json, and every file there is a real Ogg in the jar. */
+    private static void sounds() {
+        String json = "";
+        try {
+            java.io.InputStream in = SelfTestSC.class.getResourceAsStream("/assets/siliconage/sounds.json");
+            java.util.Scanner sc = new java.util.Scanner(in, "UTF-8").useDelimiter("\\A");
+            json = sc.hasNext() ? sc.next() : "";
+            sc.close();
+        } catch (Exception e) {
+            json = "";
+        }
+        java.util.List<String> names = new java.util.ArrayList<String>();
+        for (com.sc.machine.MachineType t : com.sc.machine.MachineType.values()) {
+            names.add(com.sc.util.SoundsSC.of(t).name);
+        }
+        for (com.sc.energy.GeneratorType t : com.sc.energy.GeneratorType.values()) {
+            if (com.sc.util.SoundsSC.of(t) != null) {
+                names.add(com.sc.util.SoundsSC.of(t).name);
+            }
+        }
+        java.util.Collections.addAll(names, "quarry.drill", "quarry.beam", "power.on", "power.off", "field.zap", "battery.mode");
+        String missing = "";
+        for (String n : names) {
+            if (!json.contains("\"" + n + "\"")) {
+                missing += " " + n;
+            }
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"sounds\": \\[\"([^\"]+)\"").matcher(json);
+        int files = 0;
+        while (m.find()) {
+            files++;
+            java.io.InputStream f = SelfTestSC.class.getResourceAsStream("/assets/siliconage/sounds/" + m.group(1) + ".ogg");
+            byte[] head = new byte[4];
+            try {
+                if (f == null || f.read(head) != 4 || !"OggS".equals(new String(head, "US-ASCII"))) {
+                    missing += " file:" + m.group(1);
+                }
+                if (f != null) {
+                    f.close();
+                }
+            } catch (java.io.IOException e) {
+                missing += " file:" + m.group(1);
+            }
+        }
+        check(!json.isEmpty() && files >= 19 && missing.isEmpty(), "sounds: every sound played is in sounds.json, every file an Ogg (" + files + ")"
+                + (missing.isEmpty() ? "" : " missing:" + missing));
     }
 
     /** Fixes of the second bug audit: chat texts only %s (1.7.10's chat throws on %d), comparator, storage automation. */

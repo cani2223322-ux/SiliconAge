@@ -1,0 +1,21 @@
+{
+  "machine.hum": {"category": "block", "sounds": ["machine/hum"]},
+  "machine.grind": {"category": "block", "sounds": ["machine/grind"]},
+  "machine.furnace": {"category": "block", "sounds": ["machine/furnace"]},
+  "machine.fluid": {"category": "block", "sounds": ["machine/fluid"]},
+  "machine.laser": {"category": "block", "sounds": ["machine/laser"]},
+  "machine.saw": {"category": "block", "sounds": ["machine/saw"]},
+  "machine.spin": {"category": "block", "sounds": ["machine/spin"]},
+  "gen.engine": {"category": "block", "sounds": ["gen/engine"]},
+  "gen.fire": {"category": "block", "sounds": ["gen/fire"]},
+  "gen.turbine": {"category": "block", "sounds": ["gen/turbine"]},
+  "gen.water": {"category": "block", "sounds": ["gen/water"]},
+  "gen.reactor": {"category": "block", "sounds": ["gen/reactor"]},
+  "gen.geiger": {"category": "block", "sounds": ["gen/geiger"]},
+  "quarry.drill": {"category": "block", "sounds": ["quarry/drill"]},
+  "quarry.beam": {"category": "block", "sounds": ["quarry/beam"]},
+  "power.on": {"category": "block", "sounds": ["power/on"]},
+  "power.off": {"category": "block", "sounds": ["power/off"]},
+  "field.zap": {"category": "weather", "sounds": ["field/zap"]},
+  "battery.mode": {"category": "player", "sounds": ["battery/mode"]}
+}

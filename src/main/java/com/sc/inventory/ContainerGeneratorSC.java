@@ -118,6 +118,7 @@ public class ContainerGeneratorSC extends Container {
         }
         if (id == BTN_POWER && canInteractWith(player)) {
             generator.setPowerOn(!generator.isPowerOn());
+            com.sc.util.SoundsSC.powerClick(generator, generator.isPowerOn());
             return true;
         }
         if (id == BTN_REDSTONE && canInteractWith(player)) {
