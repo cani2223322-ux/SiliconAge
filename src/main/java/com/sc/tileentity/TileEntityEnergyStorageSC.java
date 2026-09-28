@@ -248,7 +248,12 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
      * charging on its own at the tier's voltage, so a bigger storage charges more at once.
      */
     public int chargeSlots() {
-        switch (getTier()) {
+        return chargeSlotsFor(getTier());
+    }
+
+    /** Charge slots by tier (the handbook lists them): LV / MV 1, HV / EV 2, IV 3, QV / XV 4. */
+    public static int chargeSlotsFor(Tier tier) {
+        switch (tier) {
             case LV:
             case MV: return 1;
             case HV:

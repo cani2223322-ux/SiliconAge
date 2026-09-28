@@ -381,6 +381,13 @@ public final class ManualContent {
                     String.valueOf(com.sc.tileentity.TileEntityEnergyStorageSC.capacityOf(tier)), tier.getVoltage()));
         }
         lines.addAll(paragraph("sc.manual.energy.storage"));
+        StringBuilder slots = new StringBuilder();
+        for (Tier tier : Tier.values()) {
+            slots.append(slots.length() == 0 ? "" : ", ").append(tier.name()).append(" ")
+                    .append(com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotsFor(tier));
+        }
+        lines.add(Lang.tr("sc.manual.energy.chargeslots", slots.toString()));
+        lines.addAll(paragraph("sc.manual.energy.storage2"));
         lines.add("");
         lines.add(HEAD + Lang.tr("sc.manual.energy.padhead"));
         lines.addAll(paragraph("sc.manual.energy.pad"));
@@ -412,6 +419,24 @@ public final class ManualContent {
         lines.add("");
         lines.add(HEAD + new ItemStack(ModBlocks.tubeItemPneumatic).getDisplayName());
         lines.addAll(paragraph("sc.manual.energy.tube"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.energy.powerhead"));
+        lines.addAll(paragraph("sc.manual.energy.power"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.energy.batteryhead"));
+        for (int t = 0; t < com.sc.item.ItemBatterySC.KEYS.length; t++) {
+            String name = new ItemStack(ModItems.battery, 1, t).getDisplayName();
+            lines.add(" " + name + R + DIM + " - " + Lang.tr("sc.manual.energy.batteryline", com.sc.item.ItemBatterySC.TIERS[t].name(),
+                    String.valueOf(com.sc.item.ItemBatterySC.CAPACITY[t]), com.sc.item.ItemBatterySC.RATE[t]));
+        }
+        lines.addAll(paragraph("sc.manual.energy.battery"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.energy.slothead"));
+        lines.addAll(paragraph("sc.manual.energy.slot"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.energy.fluidshead"));
+        lines.add(Lang.tr("sc.manual.energy.buckets", com.sc.item.ItemFluidBucketSC.FLUIDS.length));
+        lines.addAll(paragraph("sc.manual.energy.fluids"));
         return lines;
     }
 
@@ -535,6 +560,21 @@ public final class ManualContent {
         lines.add("");
         lines.add(HEAD + Lang.tr("sc.manual.field.funchead"));
         lines.addAll(paragraph("sc.manual.field.functions"));
+        lines.addAll(paragraph("sc.manual.field.targets"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.field.charginghead"));
+        for (int m = 0; m < TileEntityFieldGeneratorSC.CHARGE_MODES; m++) {
+            lines.add(" - " + Lang.tr("sc.fieldgui.charge.mode." + m));
+        }
+        lines.addAll(paragraph("sc.manual.field.charging"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.field.rainhead"));
+        lines.add(Lang.tr("sc.manual.field.raincost", TileEntityFieldGeneratorSC.RAIN_PCT, TileEntityFieldGeneratorSC.THUNDER_PCT,
+                TileEntityFieldGeneratorSC.LIGHTNING_COST));
+        lines.addAll(paragraph("sc.manual.field.rain"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.field.switchhead"));
+        lines.addAll(paragraph("sc.manual.field.switch"));
         lines.add("");
         lines.add(HEAD + Lang.tr("sc.manual.field.accesshead"));
         lines.addAll(paragraph("sc.manual.field.access"));

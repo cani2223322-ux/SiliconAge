@@ -6,9 +6,11 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Справочник дополнен:** кнопка питания и красный камень, переносные аккумуляторы (таблица уровней), слот аккумулятора у машин и генераторов, модули и слоты накопителей (разрядка, компаратор, поворот выхода ключом), жидкости вёдрами и капсулами, расширенный бак; у генератора поля — цели, режимы беспроводной зарядки, защита от дождя, питание и аккумулятор поля.
 - **Иконка мода** (чип «Si», переход от кремния к экзо): в списке модов и в README.
 
 ### English
+- **Handbook extended:** the power switch and redstone, portable batteries (a table of tiers), the battery slot on machines and generators, storage upgrades and slots (discharge, comparator, turning the output with a wrench), fluids by bucket and cell, the tank extension; for the field generator - targets, wireless charging modes, the rain shield, the field's power and battery.
 - **Mod icon** (the "Si" chip, silicon turning into Exo): in the mod list and the README.
 
 ## 0.1.4-alpha — 2026-09-28
