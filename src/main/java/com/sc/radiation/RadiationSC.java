@@ -127,27 +127,46 @@ public final class RadiationSC {
         return d >= radius ? 0F : (float) (level * (1.0 - d / radius));
     }
 
-    /** Share of the radiation that gets from one point to another: every block on the line in between takes its part. */
+    /**
+     * Share of the radiation that gets from one point to another: every block the line passes
+     * through takes its part (a voxel walk - a diagonal wall has no gaps). The source's own block
+     * and the player's two blocks don't count.
+     */
     public static float through(World w, double x0, double y0, double z0, double x1, double y1, double z1, int sx, int sy, int sz) {
         double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
-        double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        int steps = (int) Math.ceil(len * 3);
-        int lx = sx, ly = sy, lz = sz;
+        int x = MathHelper.floor_double(x0), y = MathHelper.floor_double(y0), z = MathHelper.floor_double(z0);
         int ex = MathHelper.floor_double(x1), ey = MathHelper.floor_double(y1), ez = MathHelper.floor_double(z1);
+        int stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0, stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0, stepZ = dz > 0 ? 1 : dz < 0 ? -1 : 0;
+        double inf = Double.POSITIVE_INFINITY;
+        double tMaxX = stepX == 0 ? inf : (stepX > 0 ? x + 1 - x0 : x0 - x) / Math.abs(dx);
+        double tMaxY = stepY == 0 ? inf : (stepY > 0 ? y + 1 - y0 : y0 - y) / Math.abs(dy);
+        double tMaxZ = stepZ == 0 ? inf : (stepZ > 0 ? z + 1 - z0 : z0 - z) / Math.abs(dz);
+        double dtX = stepX == 0 ? inf : 1.0 / Math.abs(dx), dtY = stepY == 0 ? inf : 1.0 / Math.abs(dy), dtZ = stepZ == 0 ? inf : 1.0 / Math.abs(dz);
         float f = 1F;
-        for (int i = 1; i < steps; i++) {
-            double t = i / (double) steps;
-            int bx = MathHelper.floor_double(x0 + dx * t), by = MathHelper.floor_double(y0 + dy * t), bz = MathHelper.floor_double(z0 + dz * t);
-            if (bx == lx && by == ly && bz == lz) {
-                continue;
+        for (int guard = 0; guard < 256; guard++) {
+            if (tMaxX <= tMaxY && tMaxX <= tMaxZ) {
+                if (tMaxX > 1) {
+                    break;
+                }
+                x += stepX;
+                tMaxX += dtX;
+            } else if (tMaxY <= tMaxZ) {
+                if (tMaxY > 1) {
+                    break;
+                }
+                y += stepY;
+                tMaxY += dtY;
+            } else {
+                if (tMaxZ > 1) {
+                    break;
+                }
+                z += stepZ;
+                tMaxZ += dtZ;
             }
-            lx = bx;
-            ly = by;
-            lz = bz;
-            if (bx == ex && bz == ez && (by == ey || by == ey - 1)) {
+            if (x == ex && z == ez && (y == ey || y == ey - 1)) {
                 break;                                      // the player's own blocks
             }
-            f *= blockPasses(w.getBlock(bx, by, bz));
+            f *= blockPasses(w.getBlock(x, y, z), w.getBlockMetadata(x, y, z));
             if (f < 0.001F) {
                 return 0F;
             }
@@ -157,10 +176,34 @@ public final class RadiationSC {
 
     /** Share one block lets through. */
     public static float blockPasses(Block b) {
+        return blockPasses(b, 0);
+    }
+
+    /** Blocks by id and meta: registered as "blockLead" (this mod's or another mod's block of lead). */
+    private static final Map<Integer, Boolean> LEAD_BLOCKS = new HashMap<Integer, Boolean>();
+
+    private static boolean isLeadBlock(Block b, int meta) {
+        int key = (Block.getIdFromBlock(b) << 4) | (meta & 15);
+        Boolean known = LEAD_BLOCKS.get(key);
+        if (known == null) {
+            known = false;
+            net.minecraft.item.Item item = net.minecraft.item.Item.getItemFromBlock(b);
+            if (item != null) {
+                int lead = net.minecraftforge.oredict.OreDictionary.getOreID("blockLead");
+                for (int id : net.minecraftforge.oredict.OreDictionary.getOreIDs(new ItemStack(item, 1, meta))) {
+                    known |= id == lead;
+                }
+            }
+            LEAD_BLOCKS.put(key, known);
+        }
+        return known;
+    }
+
+    public static float blockPasses(Block b, int meta) {
         if (b == null || b.getMaterial() == net.minecraft.block.material.Material.air) {
             return 1F;
         }
-        if (b == ModBlocks.leadBlock) {
+        if (b == ModBlocks.leadBlock || isLeadBlock(b, meta)) {
             return THROUGH_LEAD;
         }
         if (b == ModBlocks.leadGlass) {
@@ -250,8 +293,7 @@ public final class RadiationSC {
         float left = level;
         int flags = 0;
         if (left > 0.01F) {
-            TileEntityFieldGeneratorSC field = TileEntityFieldGeneratorSC.radiationShieldAt(p.worldObj, p.posX, p.posY + 1.0, p.posZ);
-            if (field != null && field.payRadiation((int) Math.ceil(left * FIELD_EU_PER_LEVEL))) {
+            if (TileEntityFieldGeneratorSC.payRadiationAt(p.worldObj, p.posX, p.posY + 1.0, p.posZ, (int) Math.ceil(left * FIELD_EU_PER_LEVEL))) {
                 left = 0F;
                 flags |= F_FIELD;
             }
@@ -329,8 +371,29 @@ public final class RadiationSC {
         return (tenths / 10) + "." + (tenths % 10);
     }
 
-    /** For tests: forget every source. */
+    /** Server stop (and tests): forget every source. */
     public static void clearSources() {
         SOURCES.clear();
+    }
+
+    /** A dimension unloads: its sources go. */
+    public static void forgetDimension(int dim) {
+        SOURCES.remove(dim);
+    }
+
+    /** The dose keeps up this effect (the suit's cleansing leaves it: radiation sickness isn't a poison). */
+    public static boolean sicknessHolds(EntityPlayer p, int potionId) {
+        float d = doseOf(p);
+        return potionId == Potion.confusion.id && d >= STAGE_NAUSEA
+                || (potionId == Potion.weakness.id || potionId == Potion.hunger.id) && d >= STAGE_WEAK
+                || potionId == Potion.wither.id && d >= STAGE_WITHER;
+    }
+
+    /** A new player entity not from a death (leaving the End): the dose goes with it. */
+    public static void copy(EntityPlayer from, EntityPlayer to) {
+        NBTTagCompound a = from.getEntityData(), b = to.getEntityData();
+        b.setFloat(DOSE, a.getFloat(DOSE));
+        b.setFloat(HEAT_FRAC, a.getFloat(HEAT_FRAC));
+        b.setInteger(NAUSEA, a.getInteger(NAUSEA));
     }
 }

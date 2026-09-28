@@ -73,6 +73,10 @@ public class ItemLinkCardSC extends Item {
             say(player, "sc.chat.wl.notx");
             return true;
         }
+        if (!tx.allowed(player)) {
+            say(player, "sc.chat.wl.notmine", tx.getOwner());
+            return true;
+        }
         if (tx.getWorldObj() != world) {
             say(player, "sc.chat.wl.otherdim");
             return true;

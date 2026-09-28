@@ -1109,6 +1109,18 @@ public final class SelfTestSC {
                 && !q.isItemValidForSlot(com.sc.tileentity.TileEntityWirelessSC.SLOT_CRYSTAL, new ItemStack(ModItems.entangledCrystal))
                 && q.getTier() == com.sc.energy.Tier.XV && q.isEnergySink();
         check(ok, "quantum pair: halves share the pair, wear, only a half fits the slot, the translator is XV and gives by default");
+        com.sc.tileentity.TileEntityWirelessSC off = new com.sc.tileentity.TileEntityWirelessSC();
+        off.setup(com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER, com.sc.energy.Tier.HV);
+        int wantOn = off.demandedEnergy();
+        off.setPowerOn(false);
+        com.sc.tileentity.TileEntityWirelessSC rxOff = new com.sc.tileentity.TileEntityWirelessSC();
+        rxOff.setup(com.sc.tileentity.TileEntityWirelessSC.RECEIVER, com.sc.energy.Tier.HV);
+        rxOff.setEnergyStoredClient(1000);
+        int giveOn = rxOff.offerableEnergy();
+        rxOff.setPowerOn(false);
+        ok = wantOn > 0 && off.demandedEnergy() == 0 && off.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 512, 512, true) == 0
+                && giveOn > 0 && rxOff.offerableEnergy() == 0;
+        check(ok, "wireless: switched off, a transmitter takes nothing from the grid and a receiver gives nothing");
     }
 
     /** Radiation: what blocks let through, sources, the lead casing, the suits' shield, the field's switch, the shower. */
@@ -1175,6 +1187,12 @@ public final class SelfTestSC {
                 && shower.isEnergySink() && shower.drain(net.minecraftforge.common.util.ForgeDirection.UP, 1000, true) == null
                 && shower.isItemValidForSlot(0, new ItemStack(ModItems.battery)) && !shower.isItemValidForSlot(0, new ItemStack(ModItems.dosimeter));
         check(ok, "shower: MV, takes only water (8000 mB), nothing drains out, a battery fits its slot (water " + water + ")");
+        shower.setEnergyStoredClient(5000);
+        net.minecraft.nbt.NBTTagCompound kept = shower.writeToItem();
+        com.sc.tileentity.TileEntityShowerSC placed = new com.sc.tileentity.TileEntityShowerSC();
+        placed.readFromItem(kept);
+        ok = placed.getTank().getFluidAmount() == com.sc.tileentity.TileEntityShowerSC.TANK && placed.getEnergyStored() == 5000;
+        check(ok, "shower: the item keeps its water and energy (" + placed.getTank().getFluidAmount() + " mB, " + placed.getEnergyStored() + " EU)");
     }
 
     /** Every sound the code plays is in sounds.json, and every file there is a real Ogg in the jar. */

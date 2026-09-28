@@ -14,7 +14,9 @@ import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.renderer.texture.IIconRegister;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
@@ -66,6 +68,50 @@ public class BlockShowerSC extends Block {
             player.openGui(SCMod.instance, GuiHandlerSC.SHOWER_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    @Override
+    public void onBlockPlacedBy(World world, int x, int y, int z, EntityLivingBase placer, ItemStack stack) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!world.isRemote && te instanceof TileEntityShowerSC && stack.hasTagCompound()) {
+            ((TileEntityShowerSC) te).readFromItem(stack.getTagCompound());
+        }
+    }
+
+    // ---- the item keeps the energy and the water: drop while the tile entity still exists ----
+
+    @Override
+    public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (willHarvest) {
+            return true;
+        }
+        return super.removedByPlayer(world, player, x, y, z, willHarvest);
+    }
+
+    @Override
+    public void harvestBlock(World world, EntityPlayer player, int x, int y, int z, int meta) {
+        super.harvestBlock(world, player, x, y, z, meta);
+        world.setBlockToAir(x, y, z);
+    }
+
+    @Override
+    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int meta, float chance, int fortune) {
+        super.dropBlockAsItemWithChance(world, x, y, z, meta, 1.0F, fortune);
+    }
+
+    @Override
+    public java.util.ArrayList<ItemStack> getDrops(World world, int x, int y, int z, int meta, int fortune) {
+        java.util.ArrayList<ItemStack> drops = new java.util.ArrayList<ItemStack>();
+        ItemStack stack = new ItemStack(this);
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityShowerSC) {
+            NBTTagCompound nbt = ((TileEntityShowerSC) te).writeToItem();
+            if (!nbt.hasNoTags()) {
+                stack.setTagCompound(nbt);
+            }
+        }
+        drops.add(stack);
+        return drops;
     }
 
     @Override

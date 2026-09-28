@@ -4,14 +4,34 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.world.WorldEvent;
 
-/** Forge-bus events of the lead suit: the lower jump, the slower digging. */
+/**
+ * Forge-bus events: the lead suit's lower jump and slower digging; the dose kept when the player
+ * entity is remade without a death (leaving the End); a world unloading takes its radiation
+ * sources and its wireless tiles out of the registries.
+ */
 public class RadiationEventsSC {
 
     @SubscribeEvent
     public void onJump(LivingEvent.LivingJumpEvent event) {
         if (event.entityLiving instanceof EntityPlayer) {
             LeadSuitSC.jump((EntityPlayer) event.entityLiving);
+        }
+    }
+
+    @SubscribeEvent
+    public void onClone(PlayerEvent.Clone event) {
+        if (!event.wasDeath) {
+            RadiationSC.copy(event.original, event.entityPlayer);
+        }
+    }
+
+    @SubscribeEvent
+    public void onWorldUnload(WorldEvent.Unload event) {
+        if (!event.world.isRemote) {
+            RadiationSC.forgetDimension(event.world.provider.dimensionId);
+            com.sc.tileentity.TileEntityWirelessSC.forgetWorld(event.world);
         }
     }
 

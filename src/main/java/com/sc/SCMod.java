@@ -107,6 +107,13 @@ public class SCMod {
         proxy.postInit();
     }
 
+    /** The server has stopped (single player: back to the title): registries of that server's tiles are emptied. */
+    @Mod.EventHandler
+    public void serverStopped(cpw.mods.fml.common.event.FMLServerStoppedEvent event) {
+        com.sc.tileentity.TileEntityWirelessSC.forgetWorld(null);
+        com.sc.radiation.RadiationSC.clearSources();
+    }
+
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
     @Mod.EventHandler
     public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {

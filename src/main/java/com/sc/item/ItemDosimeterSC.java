@@ -29,7 +29,7 @@ public class ItemDosimeterSC extends Item {
     @Override
     public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
         if (!world.isRemote) {
-            float level = RadiationSC.levelAt(player);
+            float level = com.sc.util.ConfigSC.radiation ? RadiationSC.levelAt(player) : 0F;
             player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.rad.reading", RadiationSC.fmt(level),
                     RadiationSC.fmt(RadiationSC.doseOf(player)), String.valueOf(RadiationSC.lastProtection(player))));
         }

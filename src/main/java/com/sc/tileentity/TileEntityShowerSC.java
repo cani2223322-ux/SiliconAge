@@ -240,6 +240,29 @@ public class TileEntityShowerSC extends TileEntityEnergyBase implements IInvento
         return new FluidTankInfo[]{tank.getInfo()};
     }
 
+    // ---- the item keeps the energy and the water ----
+
+    public NBTTagCompound writeToItem() {
+        NBTTagCompound nbt = new NBTTagCompound();
+        if (getEnergyStored() > 0) {
+            nbt.setInteger("EnergySC", getEnergyStored());
+        }
+        if (tank.getFluidAmount() > 0) {
+            nbt.setInteger("Water", tank.getFluidAmount());
+        }
+        return nbt;
+    }
+
+    public void readFromItem(NBTTagCompound nbt) {
+        if (nbt.hasKey("EnergySC")) {
+            restoreEnergy(nbt.getInteger("EnergySC"));
+        }
+        if (nbt.hasKey("Water")) {
+            tank.setFluid(new FluidStack(FluidRegistry.WATER, Math.min(TANK, nbt.getInteger("Water"))));
+        }
+        markDirty();
+    }
+
     // ---- saving, and what clients see ----
 
     @Override

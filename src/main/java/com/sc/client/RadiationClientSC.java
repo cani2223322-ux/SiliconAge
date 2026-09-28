@@ -44,6 +44,10 @@ public class RadiationClientSC {
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         Minecraft mc = Minecraft.getMinecraft();
+        if (event.phase == TickEvent.Phase.START && mc.thePlayer != null) {
+            noSprint(mc);
+            return;
+        }
         if (event.phase != TickEvent.Phase.END || mc.thePlayer == null || mc.theWorld == null || mc.isGamePaused()
                 || !RadiationStateSC.fresh()) {
             return;
@@ -57,6 +61,26 @@ public class RadiationClientSC {
             EntityPlayer p = mc.thePlayer;
             mc.theWorld.playSound(p.posX, p.posY, p.posZ, "siliconage:rad.click",
                     0.35F * com.sc.util.ConfigSC.soundVolume, 0.85F + mc.theWorld.rand.nextFloat() * 0.4F, false);
+        }
+    }
+
+    /**
+     * The full lead suit: no running. The client sets sprinting again each tick while the key is
+     * held (or after a double tap) before it moves - so the key is let go and the double-tap
+     * timer cleared before the player's update, not after.
+     */
+    private static void noSprint(Minecraft mc) {
+        EntityPlayer p = mc.thePlayer;
+        if (com.sc.radiation.LeadSuitSC.parts(p) < com.sc.radiation.LeadSuitSC.FULL || p.capabilities.isFlying) {
+            return;
+        }
+        net.minecraft.client.settings.KeyBinding.setKeyBindState(mc.gameSettings.keyBindSprint.getKeyCode(), false);
+        p.setSprinting(false);
+        try {
+            cpw.mods.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraft.client.entity.EntityPlayerSP.class,
+                    mc.thePlayer, 0, "sprintToggleTimer", "field_71156_d");
+        } catch (RuntimeException e) {
+            // another mapping: the key is let go all the same
         }
     }
 

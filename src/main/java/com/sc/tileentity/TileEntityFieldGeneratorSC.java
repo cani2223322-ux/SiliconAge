@@ -436,21 +436,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return upkeepPerTick() * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100;
     }
 
-    /** An up field with its radiation shield round this point, or null. */
-    public static TileEntityFieldGeneratorSC radiationShieldAt(World world, double x, double y, double z) {
+    /**
+     * Stops radiation round a point for a second: the first up field with its radiation shield on
+     * round it that can pay takes the EU. false: no such field, or none could pay.
+     */
+    public static boolean payRadiationAt(World world, double x, double y, double z, int eu) {
         for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
-            if (f.has(F_RADIATION) && f.fieldContains(x, y, z)) {
-                return f;
+            if (f.has(F_RADIATION) && f.fieldContains(x, y, z) && f.payRadiation(eu)) {
+                return true;
             }
         }
-        return null;
-    }
-
-    /** EU the radiation shield took in the last second (the screen's summary). */
-    private int radiationPaid, radiationPaidShown;
-
-    public int getRadiationPaid() {
-        return radiationPaidShown;
+        return false;
     }
 
     /** Pays for stopping radiation round a player this second; false (nothing taken) when the buffer can't. */
@@ -462,7 +458,6 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return false;
         }
         removeEnergy(eu);
-        radiationPaid += eu;
         markDirty();
         return true;
     }
@@ -1112,8 +1107,6 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 protectRegion();
             }
             if (worldObj.getTotalWorldTime() % 20 == 0) {
-                radiationPaidShown = radiationPaid;
-                radiationPaid = 0;
                 chargedLastSecond = 0;
                 playersLastSecond = 0;
                 if (has(F_CHARGE) || has(F_HEAL)) {

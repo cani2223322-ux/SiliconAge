@@ -303,7 +303,8 @@ public final class ArmorLogicSC {
         }
         if (active(p, ArmorFeature.CLEANSE)) {
             for (Potion bad : new Potion[]{Potion.poison, Potion.wither, Potion.hunger, Potion.confusion, Potion.blindness}) {
-                if (p.isPotionActive(bad) && pay(p, ArmorFeature.CLEANSE, ArmorFeature.CLEANSE_COST)) {
+                if (p.isPotionActive(bad) && !com.sc.radiation.RadiationSC.sicknessHolds(p, bad.id)
+                        && pay(p, ArmorFeature.CLEANSE, ArmorFeature.CLEANSE_COST)) {
                     p.removePotionEffect(bad.id);
                 }
             }

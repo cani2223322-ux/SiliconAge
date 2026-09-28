@@ -54,6 +54,12 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
     // what the screen shows (synced by ContainerWirelessSC)
     private int status = ST_NO_LINK, flow, flowWindow, lossPct, distance, receivedAt;
     private long wearTicks;
+    /** Last tick the pair worked (not saved); a translator holds its chunk for CHUNK_GRACE after that. */
+    private long linkedAt = -1;
+    /** The next tick a refused chunk ticket may be asked for again. */
+    private long ticketRetryAt;
+    /** A translator keeps its chunk loaded this long without a working link (5 minutes), then lets it go. */
+    public static final long CHUNK_GRACE = 6000;
 
     public TileEntityWirelessSC() {
         super();
@@ -122,6 +128,26 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
         return new ForgeDirection[]{facing};
     }
 
+    /** Switched off (or held by redstone, or a paused translator): nothing taken from the grid or given to it. */
+    private boolean flowing() {
+        return switchedOn() && !(kind == QUANTUM && paused);
+    }
+
+    @Override
+    public int demandedEnergy() {
+        return flowing() ? super.demandedEnergy() : 0;
+    }
+
+    @Override
+    public int offerableEnergy() {
+        return flowing() ? super.offerableEnergy() : 0;
+    }
+
+    @Override
+    public int receiveEnergy(ForgeDirection from, int voltage, int amount, boolean simulate) {
+        return flowing() ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
+    }
+
     /** A transmitter or a giving translator takes energy on every face. */
     @Override
     public boolean acceptsFrom(ForgeDirection side) {
@@ -134,10 +160,41 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
     public void validate() {
         super.validate();
         if (worldObj != null && !worldObj.isRemote) {
-            if (id == 0 || LOADED.containsKey(id) && LOADED.get(id) != this) {
+            TileEntityWirelessSC other = id == 0 ? null : LOADED.get(id);
+            if (id == 0 || other != null && other != this && isLive(other) && !sameSpot(other)) {
                 id = newId();
             }
             LOADED.put(id, this);
+        }
+    }
+
+    /** A registered tile that still stands in a loaded world (not a leftover of an unloaded chunk / world). */
+    private static boolean isLive(TileEntityWirelessSC t) {
+        if (t.isInvalid() || t.worldObj == null) {
+            return false;
+        }
+        net.minecraft.world.World w = net.minecraftforge.common.DimensionManager.getWorld(t.worldObj.provider.dimensionId);
+        return w == t.worldObj && w.getTileEntity(t.xCoord, t.yCoord, t.zCoord) == t;
+    }
+
+    private boolean sameSpot(TileEntityWirelessSC t) {
+        return t.worldObj != null && worldObj != null && t.worldObj.provider.dimensionId == worldObj.provider.dimensionId
+                && t.xCoord == xCoord && t.yCoord == yCoord && t.zCoord == zCoord;
+    }
+
+    /** A world goes (server stop, a dimension unloaded): its tiles leave the registry. null: all of them. */
+    public static void forgetWorld(net.minecraft.world.World w) {
+        for (java.util.Iterator<TileEntityWirelessSC> it = LOADED.values().iterator(); it.hasNext(); ) {
+            TileEntityWirelessSC t = it.next();
+            if (w == null || t.worldObj == w) {
+                it.remove();
+            }
+        }
+    }
+
+    private void unregister() {
+        if (LOADED.get(id) == this) {
+            LOADED.remove(id);
         }
     }
 
@@ -152,7 +209,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
     @Override
     public void invalidate() {
         if (worldObj != null && !worldObj.isRemote) {
-            LOADED.remove(id);
+            unregister();
             holdChunk(false);
         }
         super.invalidate();
@@ -160,7 +217,9 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
 
     @Override
     public void onChunkUnload() {
-        LOADED.remove(id);
+        if (worldObj != null && !worldObj.isRemote) {
+            unregister();
+        }
         super.onChunkUnload();
     }
 
@@ -184,7 +243,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
             return null;
         }
         for (TileEntityWirelessSC t : LOADED.values()) {
-            if (t != this && t.kind == QUANTUM && !t.isInvalid() && ItemEntangledCrystalSC.pairOf(t.slots[SLOT_CRYSTAL]) == pair
+            if (t != this && t.kind == QUANTUM && !t.isInvalid() && t.worldObj != null && !t.worldObj.isRemote && ItemEntangledCrystalSC.pairOf(t.slots[SLOT_CRYSTAL]) == pair
                     && ItemEntangledCrystalSC.halfOf(t.slots[SLOT_CRYSTAL]) != ItemEntangledCrystalSC.halfOf(mine)) {
                 return t;
             }
@@ -365,7 +424,10 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
             holdChunk(false);
             return;
         }
-        holdChunk(true);
+        if (linkedAt < 0 || linkedAt > time) {
+            linkedAt = time;                              // just placed / loaded: a grace to find the other end
+        }
+        holdChunk(time - linkedAt < CHUNK_GRACE);
         if (giving && feedFromBattery(slots[SLOT_BATTERY]) > 0) {
             markDirty();
         }
@@ -379,12 +441,15 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
         partnerZ = p.zCoord;
         partnerDim = p.worldObj == null ? 0 : p.worldObj.provider.dimensionId;
         lossPct = 0;
-        if (p.giving == giving || p.paused || !p.powerOn) {
+        if (p.giving == giving || p.paused || !p.switchedOn()) {
             status = p.giving == giving ? ST_ROLE : ST_PAUSED;
             return;
         }
         if (!giving) {
             status = time - receivedAt < 40 ? ST_OK : ST_IDLE;
+            if (time - receivedAt < 40) {
+                linkedAt = time;
+            }
             return;
         }
         if (getEnergyStored() < QUANTUM_UPKEEP) {
@@ -392,6 +457,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
             return;
         }
         removeEnergy(QUANTUM_UPKEEP);
+        linkedAt = time;
         int room = p.getMaxEnergyStored() - p.getEnergyStored();
         int n = Math.min(Math.min(getEnergyStored(), QUANTUM_RATE), room);
         if (n > 0) {
@@ -415,7 +481,15 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
             return;
         }
         if (want && ticket == null) {
+            long now = worldObj.getTotalWorldTime();
+            if (now < ticketRetryAt) {
+                return;
+            }
             ticket = ForgeChunkManager.requestTicket(SCMod.instance, worldObj, ForgeChunkManager.Type.NORMAL);
+            if (ticket == null) {
+                ticketRetryAt = now + 100;
+                return;
+            }
             if (ticket != null) {
                 NBTTagCompound d = ticket.getModData();
                 d.setInteger("x", xCoord);
@@ -688,8 +762,8 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
         if (nbt.hasKey("EnergySC")) {
             restoreEnergy(nbt.getInteger("EnergySC"));
         }
-        if (nbt.hasKey("WId") && !LOADED.containsKey(nbt.getLong("WId"))) {
-            LOADED.remove(id);
+        if (worldObj != null && !worldObj.isRemote && nbt.hasKey("WId") && !LOADED.containsKey(nbt.getLong("WId"))) {
+            unregister();
             id = nbt.getLong("WId");
             partnerId = nbt.getLong("Partner");
             LOADED.put(id, this);
