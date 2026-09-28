@@ -63,6 +63,23 @@ public final class ModRecipesInfrastructure {
                 new ItemStack[]{halite}, null, null,
                 new ItemStack[0], new FluidStack(ModFluids.hydrogen, 500), new FluidStack(ModFluids.deuterium, 10),
                 300, 0f));
+        // Water electrolysis: hydrogen and oxygen on MV. It costs more than a fuel cell gets back
+        // from the gases (90 EU/t x 800 t = 72 000 EU against 50 000), so no endless loop.
+        RecipeRegistry.register(new MachineRecipe(MachineType.CHLOR_ALKALI_ELECTROLYZER,
+                new ItemStack[0], new FluidStack(FluidRegistry.WATER, 1000), null,
+                new ItemStack[0], new FluidStack(ModFluids.hydrogen, 500), new FluidStack(ModFluids.oxygen, 250),
+                800, 0f));
+        // Deuterium the real way: water enriched in heavy water (a chemical exchange, 1 part in 20
+        // here), the heavy water electrolysed. One reactor and one electrolyser keep a plasma
+        // reactor (1 mB/t) going.
+        RecipeRegistry.register(new MachineRecipe(MachineType.CHEM_REACTOR,
+                new ItemStack[0], new FluidStack(FluidRegistry.WATER, 2000), null,
+                new ItemStack[0], new FluidStack(ModFluids.heavyWater, 100), null,
+                100, 0f));
+        RecipeRegistry.register(new MachineRecipe(MachineType.CHLOR_ALKALI_ELECTROLYZER,
+                new ItemStack[0], new FluidStack(ModFluids.heavyWater, 200), null,
+                new ItemStack[0], new FluidStack(ModFluids.deuterium, 200), new FluidStack(ModFluids.oxygen, 100),
+                200, 0f));
     }
 
     private static void registerAirSeparator() {

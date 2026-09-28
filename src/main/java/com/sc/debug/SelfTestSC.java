@@ -62,6 +62,7 @@ public final class SelfTestSC {
             radiation();
             balanceConfig();
             smelters();
+            electrolysisAndHeavyWater();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1195,6 +1196,27 @@ public final class SelfTestSC {
         placed.readFromItem(kept);
         ok = placed.getTank().getFluidAmount() == com.sc.tileentity.TileEntityShowerSC.TANK && placed.getEnergyStored() == 5000;
         check(ok, "shower: the item keeps its water and energy (" + placed.getTank().getFluidAmount() + " mB, " + placed.getEnergyStored() + " EU)");
+    }
+
+    /** Water electrolysis (H2 + O2) and deuterium through heavy water: the right recipe wins, no energy loop with the fuel cell. */
+    private static void electrolysisAndHeavyWater() {
+        com.sc.machine.MachineType el = com.sc.machine.MachineType.CHLOR_ALKALI_ELECTROLYZER, chem = com.sc.machine.MachineType.CHEM_REACTOR;
+        net.minecraftforge.fluids.FluidStack water = new net.minecraftforge.fluids.FluidStack(net.minecraftforge.fluids.FluidRegistry.WATER, 4000);
+        ItemStack halite = new ItemStack(com.sc.init.ModBlocks.oreSC, 1, com.sc.util.OreEntry.HALITE.meta());
+        com.sc.machine.MachineRecipe w = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[3], water, null);
+        com.sc.machine.MachineRecipe brine = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[]{halite, null, null}, water, null);
+        com.sc.machine.MachineRecipe hw = com.sc.machine.RecipeRegistry.findMatch(chem, new ItemStack[3], water, null);
+        com.sc.machine.MachineRecipe d = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[3],
+                new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.heavyWater, 1000), null);
+        long cost = (long) el.euPerTick * (w == null ? 0 : w.ticks);
+        long back = w == null ? 0 : (long) w.fluidOutputA.amount / 4 * com.sc.energy.GeneratorType.FUEL_CELL.euPerTick;
+        boolean ok = w != null && w.fluidOutputA.getFluid() == com.sc.init.ModFluids.hydrogen && w.fluidOutputB.getFluid() == com.sc.init.ModFluids.oxygen
+                && brine != null && brine.fluidOutputA.getFluid() == com.sc.init.ModFluids.naoh
+                && hw != null && hw.fluidOutputA.getFluid() == com.sc.init.ModFluids.heavyWater
+                && d != null && d.fluidOutputA.getFluid() == com.sc.init.ModFluids.deuterium
+                && cost > back && com.sc.item.ItemFluidDropSC.names().contains("heavywater");
+        check(ok, "electrolysis: water -> H2 + O2 (" + cost + " EU, a fuel cell gets " + back + " back), brine still NaOH + Cl2,"
+                + " water -> heavy water -> deuterium + O2");
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */

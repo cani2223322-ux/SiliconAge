@@ -35,7 +35,7 @@ public class ItemFluidBucketSC extends Item {
     /** Every fluid ModFluids registers, in a fixed order: the metadata. Append only. */
     public static final String[] FLUIDS = {"hcl", "sihcl3", "hydrogen", "oxygen", "nitrogen", "argon", "krypton",
             "fluorine", "photoresist", "developer", "hf", "ph3", "bcl3", "ash3", "naoh", "chlorine", "steam",
-            "crudeoil", "diesel", "liquidhelium", "deuterium", "ticl4"};
+            "crudeoil", "diesel", "liquidhelium", "deuterium", "ticl4", "heavywater"};
 
     /** The metadata of the buckets that got registered (see registerContainers()). */
     private static final List<Integer> REGISTERED = new ArrayList<Integer>();

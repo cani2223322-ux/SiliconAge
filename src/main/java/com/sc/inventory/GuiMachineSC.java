@@ -103,8 +103,8 @@ public class GuiMachineSC extends GuiContainer {
     private static final int REFI_TOWER_X = 112, REFI_TOWER_W = 34, REFI_CAT_X = 148, REFI_CAT_Y = 66, REFI_BADGE_W = 24;
     private static final int[] REFI_COLOURS = {0xFFD8A040, 0xFF5A5A5A, 0xFFE07A30, 0xFFC8D0DC, 0xFFF0F0F0};
     private static final int AIR_BADGE_W = 64;
-    private static final int ELEC_CELL_W = 32, ELEC_BADGE_W = 42;
-    private static final String[] ELEC_BADGES = {"NaOH+Cl2", "F2", "H2+D"};
+    private static final int ELEC_CELL_W = 32, ELEC_BADGE_W = 31;
+    private static final String[] ELEC_BADGES = {"NaOH+Cl2", "F2", "H2", "D2"};
     private static final int CENT_X = 88, CENT_Y = 36, CENT_S = 50, CENT_LIST_X = 142, CENT_BAR_W = 62;
     private static final int PACK_X = 88, PACK_Y = 36, PACK_W = 76, PACK_H = 50, PACK_STAGE_X = 167, PACK_STAGE_W = 39;
     /** The Oxidation Furnace's own screen: its two modes as badges, the tube furnace, the wafers taking colour, its oxygen. */
@@ -411,7 +411,7 @@ public class GuiMachineSC extends GuiContainer {
         } else if (elec) {                                              // the badges, the cell between the tanks
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int mode = elecMode();
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < ELEC_BADGES.length; i++) {
                 int bx = x + CHEM_X + i * (ELEC_BADGE_W + 2), by = y + CAPTION_Y - 1;
                 drawRect(bx, by, bx + ELEC_BADGE_W, by + 9, i == mode ? 0xFF2A6A8A : 0xFF1A2430);
                 drawRect(bx + 1, by + 1, bx + ELEC_BADGE_W - 1, by + 8, i == mode ? 0xFF0E3A50 : 0xFF0A1218);
@@ -1306,13 +1306,14 @@ public class GuiMachineSC extends GuiContainer {
             return -1;
         }
         net.minecraftforge.fluids.Fluid f = r.fluidOutputA.getFluid();
-        return f == com.sc.init.ModFluids.naoh ? 0 : f == com.sc.init.ModFluids.fluorine ? 1 : f == com.sc.init.ModFluids.hydrogen ? 2 : -1;
+        return f == com.sc.init.ModFluids.naoh ? 0 : f == com.sc.init.ModFluids.fluorine ? 1 : f == com.sc.init.ModFluids.hydrogen ? 2
+                : f == com.sc.init.ModFluids.deuterium ? 3 : -1;
     }
 
     /** The Electrolyzer: the badges' names and its three tanks' labels (water in, the two products out). */
     private void drawElecText() {
         int mode = elecMode();
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < ELEC_BADGES.length; i++) {
             int sw = fontRendererObj.getStringWidth(ELEC_BADGES[i]) * 5 / 8;
             small(ELEC_BADGES[i], CHEM_X + i * (ELEC_BADGE_W + 2) + (ELEC_BADGE_W - sw) / 2, CAPTION_Y + 1, i == mode ? 0x96F0FF : 0x465A6E);
         }

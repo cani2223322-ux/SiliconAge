@@ -6,6 +6,8 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Электролиз воды:** электролизёр разлагает воду на водород и кислород (1000 mB -> 500 H2 + 250 O2) - водород и кислород уже на MV. Энергии тратится больше, чем топливный элемент вернёт из этих газов.
+- **Тяжёлая вода и дейтерий:** новая жидкость «тяжёлая вода» - химический реактор выделяет её из обычной (2000 mB -> 100 mB), электролизёр разлагает на дейтерий и кислород (200 -> 200 D2 + 100 O2). Одна пара машин держит плазменный реактор. В меню электролизёра 4 режима: NaOH+Cl2, F2, H2, D2. Ведро тяжёлой воды, текстуры, справочник.
 - **NEI: страницы электропечи и индукционной печи** — все рецепты печи со сценой печи, EU/t, временем и опытом за предмет; открываются по U на блоке печи или на любом переплавляемом предмете, по R на результате и кликом по сцене в меню печи.
 - **Электропечь (LV)** и **индукционная печь (MV).** Плавят всё, что обычная печь (и рецепты печей других модов), без топлива. Электропечь: 4 EU/t, 5 с на предмет. Индукционная: два предмета сразу, разогревается в работе от x1 до x3, кнопка «Подогрев» держит её горячей (8 EU/t). Опыт за плавку копится в печи: кнопка «Забрать опыт», при разрушении высыпается сферами. Свои сцены в меню, модули, слот аккумулятора, звук, раздел в справочнике.
 - **Настройки баланса в конфиге** (раздел balance, всё по умолчанию 1): скорость и расход машин, ёмкость энергохранилищ, аккумуляторов и брони, цена поглощения урона бронёй, расход генератора поля, скорость карьеров и экзо-буровой, дальность и потери беспроводной энергии, поддержание квантовой пары, вкл/выкл загрузку чанков транслятором.
@@ -23,6 +25,8 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - **Иконка мода** (чип «Si», переход от кремния к экзо): в списке модов и в README.
 
 ### English
+- **Water electrolysis:** the electrolyser splits water into hydrogen and oxygen (1000 mB -> 500 H2 + 250 O2) - both on MV. It costs more energy than a fuel cell gets back from the gases.
+- **Heavy water and deuterium:** a new fluid, heavy water - the chemical reactor enriches it out of water (2000 mB -> 100 mB), the electrolyser splits it into deuterium and oxygen (200 -> 200 D2 + 100 O2). One pair of machines keeps a plasma reactor running. The electrolyser's screen shows 4 modes: NaOH+Cl2, F2, H2, D2. A heavy water bucket, textures, handbook.
 - **NEI: Electric and Induction Furnace pages** - every furnace recipe with the furnace's scene, EU/t, time and experience a piece; opened by U on the furnace block or any smeltable item, R on the product, and a click on the scene in the furnace's screen.
 - **Electric Furnace (LV)** and **Induction Furnace (MV).** They smelt everything a furnace smelts (other mods' furnace recipes too), without fuel. Electric: 4 EU/t, 5 s a piece. Induction: two pieces at once, heats up while working from x1 to x3, the Warm button keeps it hot (8 EU/t). Smelting experience stays in the furnace: the Take XP button, spilled as orbs when it's broken. Their own screen scenes, upgrades, battery slot, sound, handbook entries.
 - **Balance settings in the config** (section balance, all 1 by default): machine speed and energy, capacity of storages, batteries and armour, the EU armour pays per point of damage, the field generator's upkeep, quarry and Exo rig speed, wireless range and loss, the quantum pair's upkeep, translators' chunk loading on/off.

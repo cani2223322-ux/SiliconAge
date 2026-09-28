@@ -40,6 +40,8 @@ public final class ModFluids {
     public static Fluid deuterium;
     /** Titanium tetrachloride - the Kroll process intermediate (§4: Ilmenite -> TiCl4 -> Ti). */
     public static Fluid ticl4;
+    /** Heavy water (D2O): enriched out of water in the chemical reactor, electrolysed into deuterium. */
+    public static Fluid heavyWater;
 
     /** Fluids this mod actually registered - only these get our icons (see register()). */
     public static final List<Fluid> OWNED = new ArrayList<Fluid>();
@@ -79,6 +81,7 @@ public final class ModFluids {
         COLORS.put("liquidhelium", 0xFFB0F0FF);
         COLORS.put("deuterium", 0xFFA0A8F0);
         COLORS.put("ticl4", 0xFFE8E4C8);
+        COLORS.put("heavywater", 0xFF3A62C0);
         hcl = register("hcl");
         sihcl3 = register("sihcl3");
         hydrogen = register("hydrogen", true);
@@ -101,6 +104,7 @@ public final class ModFluids {
         liquidHelium = register("liquidhelium");
         deuterium = register("deuterium");
         ticl4 = register("ticl4", false);
+        heavyWater = register("heavywater");
     }
 
     private static Fluid register(String name) {
