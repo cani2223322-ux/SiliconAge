@@ -37,20 +37,25 @@ public final class RadiationSC {
     /** Player data: the dose (0-100) and the radiation shield's heat below one whole unit. */
     public static final String DOSE = "scRadDose", HEAT_FRAC = "scRadHeat", NAUSEA = "scRadNausea", PROT = "scRadProt";
     /** Dose a second for each level that gets through; the fall a second while nothing gets through. */
-    public static final float DOSE_PER_LEVEL = 0.4F, DOSE_DECAY = 0.1F;
+    public static final float DOSE_PER_LEVEL = 1.0F, DOSE_DECAY = 0.1F;
     /**
      * Acute effects, from the radiation getting through right now (not the dose): nausea from this
-     * level, slowness from this, weakness and harm from this. Entering radiation with nothing
-     * stopping it: a warning and a short nausea at once.
+     * level, slowness from this, weakness and hunger from this, harm and wither from this.
+     * Entering radiation with nothing stopping it: a warning and nausea at once.
      */
-    public static final float ACUTE_NAUSEA = 3F, ACUTE_SLOW = 6F, ACUTE_HARM = 9F, ENTER_LEVEL = 0.3F;
+    public static final float ACUTE_NAUSEA = 1F, ACUTE_SLOW = 3F, ACUTE_WEAK = 5F, ACUTE_HARM = 8F, ENTER_LEVEL = 0.3F;
+    /**
+     * Nausea only shows (the screen sways) while more than 3 seconds of it are left, and it builds
+     * up over ~7 seconds - so it's given long and topped up, never in short bursts.
+     */
+    public static final int NAUSEA_TICKS = 200;
     public static final String LEFT = "scRadLeft", INSIDE = "scRadInside";
     /** Dose steps: nausea, weakness and hunger, wither, harm. */
-    public static final float STAGE_NAUSEA = 25F, STAGE_WEAK = 50F, STAGE_WITHER = 75F, STAGE_HARM = 100F;
+    public static final float STAGE_NAUSEA = 10F, STAGE_WEAK = 25F, STAGE_SLOW = 50F, STAGE_WITHER = 75F, STAGE_HARM = 100F;
     /** A field's radiation shield: EU a second for each level it stops round a player. */
     public static final int FIELD_EU_PER_LEVEL = 300;
     /** What one carried item gives: an isotope capsule; a full stack of monazite ore. */
-    public static final float CAPSULE_LEVEL = 0.5F, MONAZITE_STACK_LEVEL = 1F;
+    public static final float CAPSULE_LEVEL = 0.3F, MONAZITE_STACK_LEVEL = 0.25F;
     /** Share of the radiation one block lets through: lead, lead glass, water, any other solid block. */
     public static final float THROUGH_LEAD = 0.02F, THROUGH_LEAD_GLASS = 0.05F, THROUGH_WATER = 0.6F, THROUGH_SOLID = 0.7F;
     /** Nothing reaches past this (a stray sum of many sources is still bounded). */
@@ -359,41 +364,46 @@ public final class RadiationSC {
         boolean inside = left >= ENTER_LEVEL;
         if (inside && !data.getBoolean(INSIDE)) {
             p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.rad.enter", fmt(left)));
-            p.addPotionEffect(new PotionEffect(Potion.confusion.id, 70, 0, true));
+            p.addPotionEffect(new PotionEffect(Potion.confusion.id, NAUSEA_TICKS, 0, true));
         }
         data.setBoolean(INSIDE, inside);
         if (left >= ACUTE_NAUSEA) {
-            p.addPotionEffect(new PotionEffect(Potion.confusion.id, 90, 0, true));
+            p.addPotionEffect(new PotionEffect(Potion.confusion.id, NAUSEA_TICKS, 0, true));
         }
         if (left >= ACUTE_SLOW) {
-            p.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, 45, 0, true));
+            p.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, 45, left >= ACUTE_HARM ? 1 : 0, true));
+        }
+        if (left >= ACUTE_WEAK) {
+            p.addPotionEffect(new PotionEffect(Potion.weakness.id, 45, 0, true));
+            p.addPotionEffect(new PotionEffect(Potion.hunger.id, 45, 1, true));
         }
         if (left >= ACUTE_HARM) {
-            p.addPotionEffect(new PotionEffect(Potion.weakness.id, 45, 0, true));
-            p.attackEntityFrom(DAMAGE, 1.0F);
+            p.addPotionEffect(new PotionEffect(Potion.wither.id, 45, 0, true));
+            p.attackEntityFrom(DAMAGE, 2.0F);
         }
     }
 
     /** What the dose does: nausea now and then, then weakness and hunger, then wither, at the top harm every second. */
     private static void effects(EntityPlayer p, float dose) {
         if (dose >= STAGE_NAUSEA) {
-            NBTTagCompound data = p.getEntityData();
-            int n = data.getInteger(NAUSEA) + 1;
-            if (n >= 30) {
-                n = 0;
-                p.addPotionEffect(new PotionEffect(Potion.confusion.id, 140, 0, true));
+            PotionEffect now = p.getActivePotionEffect(Potion.confusion);
+            if (now == null || now.getDuration() < NAUSEA_TICKS - 60) {
+                p.addPotionEffect(new PotionEffect(Potion.confusion.id, NAUSEA_TICKS, 0, true));
             }
-            data.setInteger(NAUSEA, n);
         }
         if (dose >= STAGE_WEAK) {
             p.addPotionEffect(new PotionEffect(Potion.weakness.id, 45, 0, true));
             p.addPotionEffect(new PotionEffect(Potion.hunger.id, 45, 0, true));
         }
+        if (dose >= STAGE_SLOW) {
+            p.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, 45, 1, true));
+            p.addPotionEffect(new PotionEffect(Potion.digSlowdown.id, 45, 1, true));
+        }
         if (dose >= STAGE_WITHER) {
-            p.addPotionEffect(new PotionEffect(Potion.wither.id, 45, 0, true));
+            p.addPotionEffect(new PotionEffect(Potion.wither.id, 45, 1, true));
         }
         if (dose >= STAGE_HARM) {
-            p.attackEntityFrom(DAMAGE, 1.0F);
+            p.attackEntityFrom(DAMAGE, 2.0F);
         }
     }
 
@@ -417,9 +427,8 @@ public final class RadiationSC {
     public static boolean sicknessHolds(EntityPlayer p, int potionId) {
         float d = doseOf(p), now = p.getEntityData().getFloat(LEFT);
         return potionId == Potion.confusion.id && (d >= STAGE_NAUSEA || now >= ACUTE_NAUSEA)
-                || potionId == Potion.weakness.id && (d >= STAGE_WEAK || now >= ACUTE_HARM)
-                || potionId == Potion.hunger.id && d >= STAGE_WEAK
-                || potionId == Potion.wither.id && d >= STAGE_WITHER;
+                || (potionId == Potion.weakness.id || potionId == Potion.hunger.id) && (d >= STAGE_WEAK || now >= ACUTE_WEAK)
+                || potionId == Potion.wither.id && (d >= STAGE_WITHER || now >= ACUTE_HARM);
     }
 
     /** A new player entity not from a death (leaving the End): the dose goes with it. */
