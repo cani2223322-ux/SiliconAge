@@ -53,6 +53,9 @@ public final class ModItems {
     public static com.sc.item.ItemOreLensSC oreLens;
     /** Portable batteries LV..XV (the tier in the damage). */
     public static com.sc.item.ItemBatterySC battery;
+    /** Wireless energy: the link card (transmitter -> receiver), the entangled crystal and its halves (quantum pair). */
+    public static com.sc.item.ItemLinkCardSC linkCard;
+    public static com.sc.item.ItemEntangledCrystalSC entangledCrystal;
     public static final java.util.List<com.sc.item.ItemWrenchSC> WRENCHES = new java.util.ArrayList<com.sc.item.ItemWrenchSC>();
     public static final java.util.Map<SCToolType, ItemToolSC> TOOLS = new java.util.EnumMap<SCToolType, ItemToolSC>(SCToolType.class);
     public static final java.util.Map<ArmorSuit, ItemArmorSC[]> ARMOR = new java.util.EnumMap<ArmorSuit, ItemArmorSC[]>(ArmorSuit.class);
@@ -214,6 +217,10 @@ public final class ModItems {
         GameRegistry.registerItem(tubeSpeedUpgrade, "tubeSpeedUpgrade");
         battery = new com.sc.item.ItemBatterySC();
         GameRegistry.registerItem(battery, "batterySC");
+        linkCard = new com.sc.item.ItemLinkCardSC();
+        GameRegistry.registerItem(linkCard, "linkCard");
+        entangledCrystal = new com.sc.item.ItemEntangledCrystalSC();
+        GameRegistry.registerItem(entangledCrystal, "entangledCrystal");
 
         // Step 10 (02_guide_book.md).
         manual = new ItemSCManual();

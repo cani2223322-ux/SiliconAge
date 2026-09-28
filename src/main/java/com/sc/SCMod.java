@@ -91,6 +91,7 @@ public class SCMod {
     public void init(FMLInitializationEvent event) {
         // Weight 0, like most ore generators - runs alongside vanilla ore gen each chunk.
         GameRegistry.registerWorldGenerator(new OreGenSC(), 0);
+        net.minecraftforge.common.ForgeChunkManager.setForcedChunkLoadingCallback(instance, new com.sc.energy.ChunkLoaderSC());
         registerRecipes();
         com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
         // WAILA finds its plugin through IMC and loads the class itself - nothing of WAILA's is
@@ -108,5 +109,8 @@ public class SCMod {
     @Mod.EventHandler
     public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {
         event.registerServerCommand(new com.sc.debug.CommandEnergySC());
+        if (Boolean.getBoolean("sc.worldtest")) {
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWirelessSC());
+        }
     }
 }

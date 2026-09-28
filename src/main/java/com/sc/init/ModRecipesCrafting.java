@@ -46,6 +46,7 @@ public final class ModRecipesCrafting {
         armorAndChips();
         weaponsAndField();
         batteries();
+        wireless();
         upgrades();
         tubeParts();
         tanks();
@@ -407,6 +408,38 @@ public final class ModRecipesCrafting {
         GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 5), " C ", "BSB", "HXH",
                 'C', cable(CableType.EXO), 'B', new ItemStack(b, 1, 4), 'S', new ItemStack(Items.nether_star),
                 'H', ingot(Material.HAFNIUM), 'X', silicon(SiliconMaterial.CONTROLLER)));
+    }
+
+    /**
+     * Wireless energy: a transmitter / receiver of each tier round an energy storage of that tier
+     * with the tier's cable (an ender pearl sends, an eye of ender receives); the link card; the
+     * quantum translator round an XV storage; the entangled crystal round a quantum cell.
+     */
+    private static void wireless() {
+        OreRecipes.shapeless(new ItemStack(ModItems.linkCard), new ItemStack(Items.paper), new ItemStack(Items.redstone),
+                silicon(SiliconMaterial.TRANSISTOR), cable(CableType.COPPER_BARE));
+        for (com.sc.energy.Tier t : com.sc.energy.Tier.values()) {
+            CableType wire = CableType.COPPER_INSULATED;
+            for (CableType c : CableType.values()) {
+                if (c.tier == t) {
+                    wire = c;
+                    break;
+                }
+            }
+            ItemStack storage = new ItemStack(ModBlocks.energyStorageSC, 1, t.ordinal());
+            OreRecipes.shaped(new ItemStack(ModBlocks.wirelessTx, 1, t.ordinal()), " E ", "CSC", "IXI",
+                    'E', new ItemStack(Items.ender_pearl), 'C', cable(wire), 'S', storage,
+                    'I', new ItemStack(Items.iron_ingot), 'X', silicon(SiliconMaterial.CONTROLLER));
+            OreRecipes.shaped(new ItemStack(ModBlocks.wirelessRx, 1, t.ordinal()), " E ", "CSC", "IXI",
+                    'E', new ItemStack(Items.ender_eye), 'C', cable(wire), 'S', storage,
+                    'I', new ItemStack(Items.iron_ingot), 'X', silicon(SiliconMaterial.CONTROLLER));
+        }
+        OreRecipes.shaped(new ItemStack(ModBlocks.quantumTranslator), "HCH", "XSX", "HCH",
+                'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', silicon(SiliconMaterial.CONTROLLER),
+                'S', new ItemStack(ModBlocks.energyStorageSC, 1, com.sc.energy.Tier.XV.ordinal()));
+        OreRecipes.shaped(new ItemStack(ModItems.entangledCrystal), "PDP", "EQE", "PMP",
+                'P', new ItemStack(Items.ender_pearl), 'D', new ItemStack(Items.diamond), 'E', new ItemStack(Items.ender_eye),
+                'Q', new ItemStack(ModItems.battery, 1, 4), 'M', silicon(SiliconMaterial.MEMORY_CHIP));
     }
 
     private static void weaponsAndField() {

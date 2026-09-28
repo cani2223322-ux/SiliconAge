@@ -59,6 +59,8 @@ public final class ModBlocks {
     }
     public static BlockFieldGeneratorSC fieldGeneratorSC;
     public static com.sc.block.BlockEnergyStorageSC energyStorageSC;
+    /** Wireless energy: transmitter / receiver LV..XV, the quantum translator (XV). */
+    public static com.sc.block.BlockWirelessSC wirelessTx, wirelessRx, quantumTranslator;
     public static com.sc.block.BlockTransformerSC transformerSC;
     public static com.sc.block.BlockTankSC tankSC;
     public static com.sc.block.BlockChargePadSC chargePadSC;
@@ -123,6 +125,13 @@ public final class ModBlocks {
         GameRegistry.registerTileEntity(TileEntityMachineSC.class, "SiliconAge.machine");
         GameRegistry.registerTileEntity(TileEntityGeneratorSC.class, "SiliconAge.generator");
         GameRegistry.registerTileEntity(TileEntityFieldGeneratorSC.class, "SiliconAge.fieldGenerator");
+        wirelessTx = new com.sc.block.BlockWirelessSC(com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER);
+        GameRegistry.registerBlock(wirelessTx, com.sc.block.ItemBlockWirelessSC.class, "wirelessTx");
+        wirelessRx = new com.sc.block.BlockWirelessSC(com.sc.tileentity.TileEntityWirelessSC.RECEIVER);
+        GameRegistry.registerBlock(wirelessRx, com.sc.block.ItemBlockWirelessSC.class, "wirelessRx");
+        quantumTranslator = new com.sc.block.BlockWirelessSC(com.sc.tileentity.TileEntityWirelessSC.QUANTUM);
+        GameRegistry.registerBlock(quantumTranslator, com.sc.block.ItemBlockWirelessSC.class, "quantumTranslator");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityWirelessSC.class, "SiliconAge.wireless");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityEnergyStorageSC.class, "SiliconAge.energyStorage");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityTransformerSC.class, "SiliconAge.transformer");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityTankSC.class, "SiliconAge.tank");

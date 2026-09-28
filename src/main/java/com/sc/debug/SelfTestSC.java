@@ -58,6 +58,7 @@ public final class SelfTestSC {
             generatorBattery();
             audit2Fixes();
             sounds();
+            wireless();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1078,6 +1079,35 @@ public final class SelfTestSC {
                 && pad.chargeItem(ionCutter, 640) == 640
                 && pad.chargeItem(new ItemStack(net.minecraft.init.Items.iron_sword), 640) == 0;
         check(ok, "charge pad MV: Nano armour / blade and LV-MV weapons charge, Quantum / Exo and plain items don't");
+    }
+
+    /** Wireless energy: range and loss by tier, one sending tick over 57 blocks, the crystal's halves. */
+    private static void wireless() {
+        com.sc.tileentity.TileEntityWirelessSC tx = new com.sc.tileentity.TileEntityWirelessSC();
+        com.sc.tileentity.TileEntityWirelessSC rx = new com.sc.tileentity.TileEntityWirelessSC();
+        tx.setup(com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER, com.sc.energy.Tier.HV);
+        rx.setup(com.sc.tileentity.TileEntityWirelessSC.RECEIVER, com.sc.energy.Tier.HV);
+        tx.setEnergyStoredClient(10000);
+        int took = tx.sendForTest(rx, 57);
+        boolean ok = com.sc.tileentity.TileEntityWirelessSC.range(com.sc.energy.Tier.HV) == 64
+                && com.sc.tileentity.TileEntityWirelessSC.range(com.sc.energy.Tier.XV) == Integer.MAX_VALUE
+                && com.sc.tileentity.TileEntityWirelessSC.lossPct(57, com.sc.energy.Tier.HV) == 7
+                && com.sc.tileentity.TileEntityWirelessSC.lossPct(100000, com.sc.energy.Tier.XV) == 50
+                && took == 512 && rx.getEnergyStored() == 476 && tx.getEnergyStored() == 10000 - 512
+                && tx.isEnergySink() && !tx.isEnergySource() && rx.isEnergySource() && !rx.isEnergySink();
+        check(ok, "wireless: HV reaches 64, 7% lost over 57 blocks (512 sent, 476 arrive), roles right (took " + took + ")");
+        ItemStack a1 = com.sc.item.ItemEntangledCrystalSC.half(ModItems.entangledCrystal, 12345L, 1);
+        ItemStack a2 = com.sc.item.ItemEntangledCrystalSC.half(ModItems.entangledCrystal, 12345L, 2);
+        com.sc.item.ItemEntangledCrystalSC.wear(a1, 1000);
+        com.sc.tileentity.TileEntityWirelessSC q = new com.sc.tileentity.TileEntityWirelessSC();
+        q.setup(com.sc.tileentity.TileEntityWirelessSC.QUANTUM, com.sc.energy.Tier.XV);
+        ok = com.sc.item.ItemEntangledCrystalSC.pairOf(a1) == 12345L && com.sc.item.ItemEntangledCrystalSC.pairOf(a2) == 12345L
+                && com.sc.item.ItemEntangledCrystalSC.halfOf(a1) == 1 && com.sc.item.ItemEntangledCrystalSC.halfOf(a2) == 2
+                && com.sc.item.ItemEntangledCrystalSC.lifeOf(a1) == com.sc.item.ItemEntangledCrystalSC.LIFE_MAX - 1000
+                && q.isItemValidForSlot(com.sc.tileentity.TileEntityWirelessSC.SLOT_CRYSTAL, a1)
+                && !q.isItemValidForSlot(com.sc.tileentity.TileEntityWirelessSC.SLOT_CRYSTAL, new ItemStack(ModItems.entangledCrystal))
+                && q.getTier() == com.sc.energy.Tier.XV && q.isEnergySink();
+        check(ok, "quantum pair: halves share the pair, wear, only a half fits the slot, the translator is XV and gives by default");
     }
 
     /** Every sound the code plays is in sounds.json, and every file there is a real Ogg in the jar. */

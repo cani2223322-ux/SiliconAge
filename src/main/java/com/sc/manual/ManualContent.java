@@ -437,6 +437,18 @@ public final class ManualContent {
         lines.add(HEAD + Lang.tr("sc.manual.energy.fluidshead"));
         lines.add(Lang.tr("sc.manual.energy.buckets", com.sc.item.ItemFluidBucketSC.FLUIDS.length));
         lines.addAll(paragraph("sc.manual.energy.fluids"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.energy.wirelesshead"));
+        for (Tier tier : Tier.values()) {
+            int range = com.sc.tileentity.TileEntityWirelessSC.range(tier);
+            lines.add(" " + Lang.tr("sc.manual.energy.wirelessline", tier.name(),
+                    range == Integer.MAX_VALUE ? Lang.tr("sc.manual.energy.wirelessall") : Lang.tr("sc.manual.energy.wirelessrange", range),
+                    tier.getVoltage(), com.sc.tileentity.TileEntityWirelessSC.blocksPerPercent(tier)));
+        }
+        lines.addAll(paragraph("sc.manual.energy.wireless"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.energy.quantumhead"));
+        lines.addAll(paragraph("sc.manual.energy.quantum"));
         return lines;
     }
 
