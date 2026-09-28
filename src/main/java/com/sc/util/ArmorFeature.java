@@ -36,7 +36,8 @@ public enum ArmorFeature {
     ANNIHILATION(1, ArmorSuit.EXO, 0, 40, true),    // on its key only: every hostile mob within 7 blocks dies; 95% of the suit's energy
     REGENERATION(1, ArmorSuit.NANO, 200, 2, false), // combat mode only: heals every second; the whole suit costs 3x combat meanwhile
     EXPLOSION_PROOF(1, ArmorSuit.EXO, 0, 2, true),  // full Exo set only: explosions neither hurt nor throw (EU per explosion)
-    SET_AURA(1, ArmorSuit.NANO, 0, 0, true);        // full set of one suit: sparks of its light colour around the wearer (looks only)
+    SET_AURA(1, ArmorSuit.NANO, 0, 0, true),        // full set of one suit: sparks of its light colour around the wearer (looks only)
+    RAD_SHIELD(1, ArmorSuit.QUANTUM, 0, 0, true);   // radiation stopped (Quantum 75%, Exo 100%): EU and heat only while irradiated
 
     public final int piece;
     public final ArmorSuit minSuit;
@@ -71,6 +72,15 @@ public enum ArmorFeature {
      * proofing costs a flat amount per explosion.
      */
     public static final int EXO_SHIELD_EU_PER_POINT = 1000, EXPLOSION_PROOF_COST = 5000;
+    /**
+     * Radiation shield: the share of the radiation it stops (Quantum / Exo; Economy mode 25 points
+     * less), the EU a second for each level it stops (x the power mode), the heat a second for each
+     * level stopped - Quantum at level 10 stops 7.5: 150 EU/s and 3 heat/s, under its 4/s cooling
+     * alone but over it with flight on; Exo stops 10: 250 EU/s, 4 heat/s of its 8/s.
+     */
+    public static final int RAD_QUANTUM_PCT = 75, RAD_EXO_PCT = 100, RAD_ECO_PCT_LESS = 25;
+    public static final int RAD_QUANTUM_EU = 20, RAD_EXO_EU = 25;
+    public static final float RAD_HEAT_PER_LEVEL = 0.4F;
 
     /** Fired by its key (once, then off again) instead of switched on and off. */
     public boolean isAction() {

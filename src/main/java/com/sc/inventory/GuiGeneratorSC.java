@@ -443,6 +443,26 @@ public class GuiGeneratorSC extends GuiContainer {
             int tr = GuiBigSC.UPG_TEXT_W;
             fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
         }
+        drawRadiation();
+    }
+
+    /** Under the upgrade count: the radiation it gives off now and how far, or that its lead casing holds it in. */
+    private void drawRadiation() {
+        if (TileEntityGeneratorSC.radiationBase(type) <= 0) {
+            return;
+        }
+        int tr = GuiBigSC.UPG_TEXT_W, y = GuiBigSC.UPG_Y + 10;
+        if (generator.isShielded()) {
+            fit(Lang.tr("sc.gui.gen.rad.shielded"), GuiBigSC.UPG_TEXT_X, y, tr, 0x2E7A3C);
+            return;
+        }
+        float rad = generator.radiationLevel();
+        if (rad <= 0) {
+            fit(Lang.tr("sc.gui.gen.rad.none"), GuiBigSC.UPG_TEXT_X, y, tr, 0x505864);
+        } else {
+            fit(Lang.tr("sc.gui.gen.rad.on", com.sc.radiation.RadiationSC.fmt(rad), TileEntityGeneratorSC.radiationRadius(type)),
+                    GuiBigSC.UPG_TEXT_X, y, tr, 0x9A2A1A);
+        }
     }
 
     // ---- the Steam Turbine ----

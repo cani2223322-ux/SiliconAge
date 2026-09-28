@@ -57,6 +57,8 @@ public class SCMod {
         com.sc.handler.ArmorNetSC.init();
         com.sc.handler.FieldNetSC.init();
         com.sc.handler.QuarryNetSC.init();
+        com.sc.radiation.RadiationNetSC.init();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.sc.radiation.RadiationEventsSC());
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.

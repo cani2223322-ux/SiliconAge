@@ -41,6 +41,10 @@ public final class ModBlocks {
     public static BlockGeneratorSC generatorSC;
     public static BlockGeneratorSC generatorSC2;
     public static Block tokamakCoil;
+    /** Radiation: the lead block and lead glass (shielding), the decontamination shower. */
+    public static com.sc.block.BlockLeadSC.Solid leadBlock;
+    public static com.sc.block.BlockLeadSC.Glass leadGlass;
+    public static com.sc.block.BlockShowerSC shower;
     public static com.sc.block.BlockQuarrySC quarrySC;
 
     /** The item of a generator type (the block and metadata it lives on). */
@@ -104,6 +108,14 @@ public final class ModBlocks {
         GameRegistry.registerBlock(quarrySC, com.sc.block.ItemBlockQuarrySC.class, "quarrySC");
         tokamakCoil = new com.sc.block.BlockTokamakCoilSC();
         GameRegistry.registerBlock(tokamakCoil, "tokamakCoil");
+        leadBlock = new com.sc.block.BlockLeadSC.Solid();
+        GameRegistry.registerBlock(leadBlock, "leadBlock");
+        net.minecraftforge.oredict.OreDictionary.registerOre("blockLead", leadBlock);
+        leadGlass = new com.sc.block.BlockLeadSC.Glass();
+        GameRegistry.registerBlock(leadGlass, "leadGlass");
+        shower = new com.sc.block.BlockShowerSC();
+        GameRegistry.registerBlock(shower, "shower");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityShowerSC.class, "SiliconAge.shower");
 
         fieldGeneratorSC = new BlockFieldGeneratorSC();
         GameRegistry.registerBlock(fieldGeneratorSC, "fieldGeneratorSC");

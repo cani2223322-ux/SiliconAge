@@ -1,0 +1,336 @@
+package com.sc.radiation;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import com.sc.init.ModBlocks;
+import com.sc.init.ModItems;
+import com.sc.item.ArmorLogicSC;
+import com.sc.tileentity.TileEntityFieldGeneratorSC;
+import com.sc.util.ArmorFeature;
+import com.sc.util.ArmorSuit;
+import com.sc.util.ConfigSC;
+
+import net.minecraft.block.Block;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.potion.Potion;
+import net.minecraft.potion.PotionEffect;
+import net.minecraft.util.DamageSource;
+import net.minecraft.util.MathHelper;
+import net.minecraft.world.World;
+
+/**
+ * Radiation. RTGs and running reactors report themselves once a second (level, reach); a player's
+ * level is the sum of what reaches them - weaker with distance, and through every block in the
+ * way (lead almost stops it) - plus what they carry (isotope capsules, monazite ore). A field
+ * with its radiation shield, the lead suit and the Quantum / Exo radiation shield take their share;
+ * what's left builds up a dose (0-100%) that makes the player ill, and it falls again away from
+ * radiation. Server side, once a second per player; the numbers go to the player's client
+ * (RadiationNetSC) for the dosimeter and the warning on screen.
+ */
+public final class RadiationSC {
+
+    /** Player data: the dose (0-100) and the radiation shield's heat below one whole unit. */
+    public static final String DOSE = "scRadDose", HEAT_FRAC = "scRadHeat", NAUSEA = "scRadNausea", PROT = "scRadProt";
+    /** Dose a second for each level that gets through; the fall a second while nothing gets through. */
+    public static final float DOSE_PER_LEVEL = 0.1F, DOSE_DECAY = 0.05F;
+    /** Dose steps: nausea, weakness and hunger, wither, harm. */
+    public static final float STAGE_NAUSEA = 25F, STAGE_WEAK = 50F, STAGE_WITHER = 75F, STAGE_HARM = 100F;
+    /** A field's radiation shield: EU a second for each level it stops round a player. */
+    public static final int FIELD_EU_PER_LEVEL = 300;
+    /** What one carried item gives: an isotope capsule; a full stack of monazite ore. */
+    public static final float CAPSULE_LEVEL = 0.5F, MONAZITE_STACK_LEVEL = 1F;
+    /** Share of the radiation one block lets through: lead, lead glass, water, any other solid block. */
+    public static final float THROUGH_LEAD = 0.02F, THROUGH_LEAD_GLASS = 0.05F, THROUGH_WATER = 0.6F, THROUGH_SOLID = 0.7F;
+    /** Nothing reaches past this (a stray sum of many sources is still bounded). */
+    public static final float MAX_LEVEL = 20F;
+
+    public static final DamageSource DAMAGE = new DamageSource("sc.radiation").setDamageBypassesArmor();
+
+    private static final class Source {
+        final int x, y, z;
+        float level;
+        int radius;
+        long seen;
+
+        Source(int x, int y, int z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    }
+
+    /** dimension -> packed position -> source; a source not reported for two seconds is gone. */
+    private static final Map<Integer, Map<Long, Source>> SOURCES = new HashMap<Integer, Map<Long, Source>>();
+
+    private RadiationSC() {
+    }
+
+    private static long key(int x, int y, int z) {
+        return ((long) (x & 0x3FFFFFF) << 38) | ((long) (z & 0x3FFFFFF) << 12) | (y & 0xFFF);
+    }
+
+    /** A source says it's radiating (once a second). */
+    public static void report(World w, int x, int y, int z, float level, int radius) {
+        if (w == null || w.isRemote || level <= 0 || radius <= 0) {
+            return;
+        }
+        Map<Long, Source> map = SOURCES.get(w.provider.dimensionId);
+        if (map == null) {
+            map = new HashMap<Long, Source>();
+            SOURCES.put(w.provider.dimensionId, map);
+        }
+        long k = key(x, y, z);
+        Source s = map.get(k);
+        if (s == null) {
+            s = new Source(x, y, z);
+            map.put(k, s);
+        }
+        s.level = level;
+        s.radius = radius;
+        s.seen = w.getTotalWorldTime();
+    }
+
+    /** What the sources send to a point (after distance and the blocks in the way). */
+    public static float fromSources(World w, double px, double py, double pz) {
+        Map<Long, Source> map = SOURCES.get(w.provider.dimensionId);
+        if (map == null) {
+            return 0F;
+        }
+        long now = w.getTotalWorldTime();
+        float sum = 0F;
+        for (Iterator<Source> it = map.values().iterator(); it.hasNext(); ) {
+            Source s = it.next();
+            if (now - s.seen > 40 || now < s.seen) {
+                it.remove();
+                continue;
+            }
+            double sx = s.x + 0.5, sy = s.y + 0.5, sz = s.z + 0.5;
+            double d = Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy) + (pz - sz) * (pz - sz));
+            if (d >= s.radius) {
+                continue;
+            }
+            float base = (float) (s.level * (1.0 - d / s.radius));
+            if (base > 0.01F) {
+                sum += base * through(w, sx, sy, sz, px, py, pz, s.x, s.y, s.z);
+            }
+        }
+        return sum;
+    }
+
+    /** Level of one source at a distance, before any blocks (the handbook's and the screen's numbers). */
+    public static float atDistance(float level, int radius, double d) {
+        return d >= radius ? 0F : (float) (level * (1.0 - d / radius));
+    }
+
+    /** Share of the radiation that gets from one point to another: every block on the line in between takes its part. */
+    public static float through(World w, double x0, double y0, double z0, double x1, double y1, double z1, int sx, int sy, int sz) {
+        double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+        double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        int steps = (int) Math.ceil(len * 3);
+        int lx = sx, ly = sy, lz = sz;
+        int ex = MathHelper.floor_double(x1), ey = MathHelper.floor_double(y1), ez = MathHelper.floor_double(z1);
+        float f = 1F;
+        for (int i = 1; i < steps; i++) {
+            double t = i / (double) steps;
+            int bx = MathHelper.floor_double(x0 + dx * t), by = MathHelper.floor_double(y0 + dy * t), bz = MathHelper.floor_double(z0 + dz * t);
+            if (bx == lx && by == ly && bz == lz) {
+                continue;
+            }
+            lx = bx;
+            ly = by;
+            lz = bz;
+            if (bx == ex && bz == ez && (by == ey || by == ey - 1)) {
+                break;                                      // the player's own blocks
+            }
+            f *= blockPasses(w.getBlock(bx, by, bz));
+            if (f < 0.001F) {
+                return 0F;
+            }
+        }
+        return f;
+    }
+
+    /** Share one block lets through. */
+    public static float blockPasses(Block b) {
+        if (b == null || b.getMaterial() == net.minecraft.block.material.Material.air) {
+            return 1F;
+        }
+        if (b == ModBlocks.leadBlock) {
+            return THROUGH_LEAD;
+        }
+        if (b == ModBlocks.leadGlass) {
+            return THROUGH_LEAD_GLASS;
+        }
+        if (b.getMaterial() == net.minecraft.block.material.Material.water) {
+            return THROUGH_WATER;
+        }
+        return b.isOpaqueCube() ? THROUGH_SOLID : 1F;
+    }
+
+    /** What a player carries. */
+    public static float carried(EntityPlayer p) {
+        float sum = 0F;
+        for (ItemStack s : p.inventory.mainInventory) {
+            if (s == null) {
+                continue;
+            }
+            if (s.getItem() == ModItems.isotopeCapsule) {
+                sum += CAPSULE_LEVEL * s.stackSize;
+            } else if (isMonaziteOre(s)) {
+                sum += MONAZITE_STACK_LEVEL * s.stackSize / 64F;
+            }
+        }
+        return sum;
+    }
+
+    private static boolean isMonaziteOre(ItemStack s) {
+        return s.getItem() == net.minecraft.item.Item.getItemFromBlock(ModBlocks.oreSC)
+                && s.getItemDamage() == com.sc.util.OreEntry.MONAZITE.meta();
+    }
+
+    /** The radiation level where a player is (sources and carried things, x the config's multiplier). */
+    public static float levelAt(EntityPlayer p) {
+        float level = fromSources(p.worldObj, p.posX, p.posY + 1.0, p.posZ) + carried(p);
+        return Math.min(MAX_LEVEL, level * ConfigSC.radiationMultiplier);
+    }
+
+    public static float doseOf(EntityPlayer p) {
+        return p.getEntityData().getFloat(DOSE);
+    }
+
+    /** The share of the radiation the protection took last second, %. */
+    public static int lastProtection(EntityPlayer p) {
+        return p.getEntityData().getInteger(PROT);
+    }
+
+    public static void setDose(EntityPlayer p, float dose) {
+        p.getEntityData().setFloat(DOSE, Math.max(0F, Math.min(STAGE_HARM, dose)));
+    }
+
+    /** The lead suit's share (25% a piece). */
+    public static float leadShare(EntityPlayer p) {
+        return LeadSuitSC.parts(p) * 0.25F;
+    }
+
+    /** The radiation shield's share for the worn chestplate and power mode (0 without it). */
+    public static int armorSharePct(EntityPlayer p) {
+        ItemStack chest = ArmorLogicSC.piece(p, 1);
+        if (chest == null) {
+            return 0;
+        }
+        ArmorSuit suit = ArmorLogicSC.suitOf(chest);
+        if (suit == null || suit.ordinal() < ArmorSuit.QUANTUM.ordinal()) {
+            return 0;
+        }
+        int pct = suit == ArmorSuit.EXO ? ArmorFeature.RAD_EXO_PCT : ArmorFeature.RAD_QUANTUM_PCT;
+        return ArmorLogicSC.powerMode(p) == 0 ? pct - ArmorFeature.RAD_ECO_PCT_LESS : pct;
+    }
+
+    /** Result flags sent to the client. */
+    public static final int F_FIELD = 1, F_LEAD = 2, F_ARMOR = 4, F_ARMOR_FAIL = 8;
+
+    /** Once a second, server side. */
+    public static void perSecond(EntityPlayer p) {
+        if (p.worldObj.isRemote) {
+            return;
+        }
+        if (!ConfigSC.radiation) {
+            if (doseOf(p) > 0) {
+                setDose(p, 0F);
+            }
+            send(p, 0F, 0F, 0, 0);
+            return;
+        }
+        float level = levelAt(p);
+        float left = level;
+        int flags = 0;
+        if (left > 0.01F) {
+            TileEntityFieldGeneratorSC field = TileEntityFieldGeneratorSC.radiationShieldAt(p.worldObj, p.posX, p.posY + 1.0, p.posZ);
+            if (field != null && field.payRadiation((int) Math.ceil(left * FIELD_EU_PER_LEVEL))) {
+                left = 0F;
+                flags |= F_FIELD;
+            }
+        }
+        if (left > 0.01F && LeadSuitSC.parts(p) > 0) {
+            left *= 1F - leadShare(p);
+            flags |= F_LEAD;
+        }
+        ItemStack chest = ArmorLogicSC.piece(p, 1);
+        boolean shieldOn = chest != null && com.sc.item.ItemArmorSC.isEnabled(chest, ArmorFeature.RAD_SHIELD) && armorSharePct(p) > 0;
+        if (left > 0.01F && shieldOn) {
+            boolean exo = ArmorLogicSC.suitOf(chest) == ArmorSuit.EXO;
+            float absorbed = left * armorSharePct(p) / 100F;
+            int eu = (int) Math.ceil(absorbed * (exo ? ArmorFeature.RAD_EXO_EU : ArmorFeature.RAD_QUANTUM_EU));
+            if (ArmorLogicSC.active(p, ArmorFeature.RAD_SHIELD) && ArmorLogicSC.pay(p, ArmorFeature.RAD_SHIELD, eu)) {
+                left -= absorbed;
+                flags |= F_ARMOR;
+                NBTTagCompound data = p.getEntityData();
+                float heat = data.getFloat(HEAT_FRAC) + absorbed * ArmorFeature.RAD_HEAT_PER_LEVEL;
+                int whole = (int) heat;
+                data.setFloat(HEAT_FRAC, heat - whole);
+                if (whole > 0) {
+                    ArmorLogicSC.addHeat(p, whole);
+                }
+            } else {
+                flags |= F_ARMOR_FAIL;                      // switched on but overheated or out of charge
+            }
+        }
+        float dose = doseOf(p);
+        if (left > 0.01F && !p.capabilities.isCreativeMode) {
+            dose += left * DOSE_PER_LEVEL;
+        } else {
+            dose -= DOSE_DECAY;
+        }
+        setDose(p, dose);
+        effects(p, doseOf(p));
+        int prot = level <= 0.01F ? 0 : Math.round((1F - left / level) * 100F);
+        p.getEntityData().setInteger(PROT, prot);
+        send(p, level, doseOf(p), prot, flags);
+    }
+
+    private static void send(EntityPlayer p, float level, float dose, int prot, int flags) {
+        if (p instanceof EntityPlayerMP && ((EntityPlayerMP) p).playerNetServerHandler != null
+                && !(p instanceof net.minecraftforge.common.util.FakePlayer)) {
+            RadiationNetSC.send((EntityPlayerMP) p, level, dose, prot, flags);
+        }
+    }
+
+    /** What the dose does: nausea now and then, then weakness and hunger, then wither, at the top harm every second. */
+    private static void effects(EntityPlayer p, float dose) {
+        if (dose >= STAGE_NAUSEA) {
+            NBTTagCompound data = p.getEntityData();
+            int n = data.getInteger(NAUSEA) + 1;
+            if (n >= 30) {
+                n = 0;
+                p.addPotionEffect(new PotionEffect(Potion.confusion.id, 140, 0, true));
+            }
+            data.setInteger(NAUSEA, n);
+        }
+        if (dose >= STAGE_WEAK) {
+            p.addPotionEffect(new PotionEffect(Potion.weakness.id, 45, 0, true));
+            p.addPotionEffect(new PotionEffect(Potion.hunger.id, 45, 0, true));
+        }
+        if (dose >= STAGE_WITHER) {
+            p.addPotionEffect(new PotionEffect(Potion.wither.id, 45, 0, true));
+        }
+        if (dose >= STAGE_HARM) {
+            p.attackEntityFrom(DAMAGE, 1.0F);
+        }
+    }
+
+    /** Level the numbers stand for, one decimal ("4.5"). */
+    public static String fmt(float level) {
+        int tenths = Math.round(level * 10F);
+        return (tenths / 10) + "." + (tenths % 10);
+    }
+
+    /** For tests: forget every source. */
+    public static void clearSources() {
+        SOURCES.clear();
+    }
+}

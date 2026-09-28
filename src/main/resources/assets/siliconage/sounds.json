@@ -17,5 +17,6 @@
   "power.on": {"category": "block", "sounds": ["power/on"]},
   "power.off": {"category": "block", "sounds": ["power/off"]},
   "field.zap": {"category": "weather", "sounds": ["field/zap"]},
-  "battery.mode": {"category": "player", "sounds": ["battery/mode"]}
+  "battery.mode": {"category": "player", "sounds": ["battery/mode"]},
+  "rad.click": {"category": "player", "sounds": ["rad/click"]}
 }

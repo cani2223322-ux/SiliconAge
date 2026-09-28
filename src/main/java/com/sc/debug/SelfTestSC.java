@@ -59,6 +59,7 @@ public final class SelfTestSC {
             audit2Fixes();
             sounds();
             wireless();
+            radiation();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -935,9 +936,9 @@ public final class SelfTestSC {
                 exo += f.availableIn(com.sc.util.ArmorSuit.EXO, type) ? 1 : 0;
             }
         }
-        check(nano == 7 && quantum == 14 && exo == 21 && com.sc.util.ArmorFeature.ANNIHILATION.isAction()
+        check(nano == 7 && quantum == 15 && exo == 22 && com.sc.util.ArmorFeature.ANNIHILATION.isAction()
                         && !com.sc.util.ArmorFeature.ANNIHILATION.availableIn(com.sc.util.ArmorSuit.QUANTUM, 1),
-                "suit functions: Nano 7, Quantum 14 (flight from Quantum), Exo all 21 incl. the annihilation pulse, regeneration, explosion proofing, set aura (" + nano + "/" + quantum + "/" + exo + ")");
+                "suit functions: Nano 7, Quantum 15 (flight, radiation shield from Quantum), Exo all 22 incl. the annihilation pulse, regeneration, explosion proofing, set aura (" + nano + "/" + quantum + "/" + exo + ")");
 
         ItemStack helmet = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[0]);
         ItemStack nanoHelmet = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[0]);
@@ -1110,6 +1111,72 @@ public final class SelfTestSC {
         check(ok, "quantum pair: halves share the pair, wear, only a half fits the slot, the translator is XV and gives by default");
     }
 
+    /** Radiation: what blocks let through, sources, the lead casing, the suits' shield, the field's switch, the shower. */
+    private static void radiation() {
+        boolean ok = com.sc.radiation.RadiationSC.blockPasses(com.sc.init.ModBlocks.leadBlock) == 0.02F
+                && com.sc.radiation.RadiationSC.blockPasses(com.sc.init.ModBlocks.leadGlass) == 0.05F
+                && com.sc.radiation.RadiationSC.blockPasses(net.minecraft.init.Blocks.stone) == 0.7F
+                && com.sc.radiation.RadiationSC.blockPasses(net.minecraft.init.Blocks.water) == 0.6F
+                && com.sc.radiation.RadiationSC.blockPasses(net.minecraft.init.Blocks.air) == 1F
+                && com.sc.radiation.RadiationSC.blockPasses(net.minecraft.init.Blocks.glass) == 1F
+                && Math.abs(com.sc.radiation.RadiationSC.atDistance(6F, 12, 6) - 3F) < 1e-4
+                && com.sc.radiation.RadiationSC.atDistance(10F, 16, 16) == 0F
+                && "4.5".equals(com.sc.radiation.RadiationSC.fmt(4.5F)) && "0.0".equals(com.sc.radiation.RadiationSC.fmt(0F));
+        check(ok, "radiation: lead 2%, lead glass 5%, water 60%, stone 70%, glass and air all; linear fall to the edge; 4.5 printed");
+        com.sc.energy.GeneratorType[] hot = {com.sc.energy.GeneratorType.RTG, com.sc.energy.GeneratorType.FUSION_REACTOR,
+                com.sc.energy.GeneratorType.TOKAMAK, com.sc.energy.GeneratorType.PLASMA_REACTOR, com.sc.energy.GeneratorType.EXO_REACTOR};
+        float[] levels = {1F, 4F, 6F, 8F, 10F};
+        int[] reach = {4, 8, 12, 14, 16};
+        ok = true;
+        for (int i = 0; i < hot.length; i++) {
+            ok &= com.sc.tileentity.TileEntityGeneratorSC.radiationBase(hot[i]) == levels[i]
+                    && com.sc.tileentity.TileEntityGeneratorSC.radiationRadius(hot[i]) == reach[i];
+        }
+        ok &= com.sc.tileentity.TileEntityGeneratorSC.radiationBase(com.sc.energy.GeneratorType.SOLAR_SI) == 0F
+                && com.sc.tileentity.TileEntityGeneratorSC.radiationBase(com.sc.energy.GeneratorType.FUEL_CELL) == 0F;
+        ItemStack casing = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.RAD_SHIELDING);
+        com.sc.tileentity.TileEntityGeneratorSC rtg = new com.sc.tileentity.TileEntityGeneratorSC();
+        rtg.setGeneratorType(com.sc.energy.GeneratorType.RTG);
+        rtg.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.SLOT_FUEL, new ItemStack(ModItems.isotopeCapsule));
+        rtg.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.SLOT_BLANKET, new ItemStack(ModItems.isotopeCapsule));
+        float open = rtg.radiationLevel();
+        boolean fits = rtg.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, casing);
+        rtg.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, casing);
+        com.sc.tileentity.TileEntityGeneratorSC solar = new com.sc.tileentity.TileEntityGeneratorSC();
+        solar.setGeneratorType(com.sc.energy.GeneratorType.SOLAR_SI);
+        com.sc.tileentity.TileEntityGeneratorSC exo = new com.sc.tileentity.TileEntityGeneratorSC();
+        exo.setGeneratorType(com.sc.energy.GeneratorType.EXO_REACTOR);
+        int exoRated = exo.ratedOutput();
+        exo.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, casing.copy());
+        ok &= open == 2F && fits && rtg.isShielded() && rtg.radiationLevel() == 0F
+                && !solar.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, casing)
+                && exo.ratedOutput() == (int) Math.round(exoRated * 0.9)
+                && com.sc.machine.UpgradeType.RAD_SHIELDING.forGenerators() && com.sc.machine.UpgradeType.RAD_SHIELDING.generatorOnly();
+        check(ok, "radiation sources: RTG 1 a capsule (2 here) to 4 bl., reactors 4/6/8/10 to 8-16 bl.; the lead casing fits only them,"
+                + " stops it and takes 10% of the output (open " + open + ")");
+        ok = com.sc.util.ArmorFeature.RAD_SHIELD.availableIn(com.sc.util.ArmorSuit.QUANTUM, 1)
+                && com.sc.util.ArmorFeature.RAD_SHIELD.availableIn(com.sc.util.ArmorSuit.EXO, 1)
+                && !com.sc.util.ArmorFeature.RAD_SHIELD.availableIn(com.sc.util.ArmorSuit.NANO, 1)
+                && com.sc.util.ArmorFeature.RAD_SHIELD.ordinal() < 31
+                && com.sc.util.ArmorFeature.RAD_QUANTUM_PCT * 10 / 100F * com.sc.util.ArmorFeature.RAD_QUANTUM_EU == 150F
+                && com.sc.util.ArmorFeature.RAD_EXO_PCT * 10 / 100F * com.sc.util.ArmorFeature.RAD_EXO_EU == 250F
+                && com.sc.util.ArmorFeature.RAD_QUANTUM_PCT * 10 / 100F * com.sc.util.ArmorFeature.RAD_HEAT_PER_LEVEL < com.sc.util.ArmorSuit.QUANTUM.heatDissipation
+                && com.sc.tileentity.TileEntityFieldGeneratorSC.F_RADIATION == 1 << 16
+                && com.sc.inventory.ContainerFieldGeneratorSC.BTN_FLAG_BASE + com.sc.inventory.ContainerFieldGeneratorSC.FLAG_COUNT
+                        <= com.sc.inventory.ContainerFieldGeneratorSC.BTN_RESERVE_PLUS;
+        check(ok, "radiation shield: Quantum / Exo chestplate only, 150 / 250 EU/s at level 10, Quantum's heat under its cooling;"
+                + " the field's switch is bit 16 and its button id is free");
+        com.sc.tileentity.TileEntityShowerSC shower = new com.sc.tileentity.TileEntityShowerSC();
+        int water = shower.fill(net.minecraftforge.common.util.ForgeDirection.UP,
+                new net.minecraftforge.fluids.FluidStack(net.minecraftforge.fluids.FluidRegistry.WATER, 10000), true);
+        int lava = shower.fill(net.minecraftforge.common.util.ForgeDirection.UP,
+                new net.minecraftforge.fluids.FluidStack(net.minecraftforge.fluids.FluidRegistry.LAVA, 1000), true);
+        ok = water == com.sc.tileentity.TileEntityShowerSC.TANK && lava == 0 && shower.getTier() == com.sc.energy.Tier.MV
+                && shower.isEnergySink() && shower.drain(net.minecraftforge.common.util.ForgeDirection.UP, 1000, true) == null
+                && shower.isItemValidForSlot(0, new ItemStack(ModItems.battery)) && !shower.isItemValidForSlot(0, new ItemStack(ModItems.dosimeter));
+        check(ok, "shower: MV, takes only water (8000 mB), nothing drains out, a battery fits its slot (water " + water + ")");
+    }
+
     /** Every sound the code plays is in sounds.json, and every file there is a real Ogg in the jar. */
     private static void sounds() {
         String json = "";
@@ -1130,7 +1197,7 @@ public final class SelfTestSC {
                 names.add(com.sc.util.SoundsSC.of(t).name);
             }
         }
-        java.util.Collections.addAll(names, "quarry.drill", "quarry.beam", "power.on", "power.off", "field.zap", "battery.mode");
+        java.util.Collections.addAll(names, "quarry.drill", "quarry.beam", "power.on", "power.off", "field.zap", "battery.mode", "rad.click");
         String missing = "";
         for (String n : names) {
             if (!json.contains("\"" + n + "\"")) {

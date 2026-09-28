@@ -17,6 +17,7 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(new FluidTextureHandler());
         com.sc.client.ArmorClientSC.register();
         com.sc.client.RainShieldClientSC.register();
+        com.sc.client.RadiationClientSC.register();
         BlockConduitSC.renderId = RenderingRegistry.getNextAvailableRenderId();
         RenderingRegistry.registerBlockHandler(new ConduitRenderer(BlockConduitSC.renderId));
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(

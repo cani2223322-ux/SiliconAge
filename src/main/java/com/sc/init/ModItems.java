@@ -56,6 +56,10 @@ public final class ModItems {
     /** Wireless energy: the link card (transmitter -> receiver), the entangled crystal and its halves (quantum pair). */
     public static com.sc.item.ItemLinkCardSC linkCard;
     public static com.sc.item.ItemEntangledCrystalSC entangledCrystal;
+    /** Radiation: the lead suit (helmet, jacket, trousers, boots), the dosimeter, the radioprotector. */
+    public static final com.sc.item.ItemLeadSuitSC[] leadSuit = new com.sc.item.ItemLeadSuitSC[4];
+    public static com.sc.item.ItemDosimeterSC dosimeter;
+    public static com.sc.item.ItemRadioprotectorSC radioprotector;
     public static final java.util.List<com.sc.item.ItemWrenchSC> WRENCHES = new java.util.ArrayList<com.sc.item.ItemWrenchSC>();
     public static final java.util.Map<SCToolType, ItemToolSC> TOOLS = new java.util.EnumMap<SCToolType, ItemToolSC>(SCToolType.class);
     public static final java.util.Map<ArmorSuit, ItemArmorSC[]> ARMOR = new java.util.EnumMap<ArmorSuit, ItemArmorSC[]>(ArmorSuit.class);
@@ -221,6 +225,15 @@ public final class ModItems {
         GameRegistry.registerItem(linkCard, "linkCard");
         entangledCrystal = new com.sc.item.ItemEntangledCrystalSC();
         GameRegistry.registerItem(entangledCrystal, "entangledCrystal");
+        String[] lead = {"leadHelmet", "leadChestplate", "leadLeggings", "leadBoots"};
+        for (int i = 0; i < 4; i++) {
+            leadSuit[i] = new com.sc.item.ItemLeadSuitSC(i);
+            GameRegistry.registerItem(leadSuit[i], lead[i]);
+        }
+        dosimeter = new com.sc.item.ItemDosimeterSC();
+        GameRegistry.registerItem(dosimeter, "dosimeter");
+        radioprotector = new com.sc.item.ItemRadioprotectorSC();
+        GameRegistry.registerItem(radioprotector, "radioprotector");
 
         // Step 10 (02_guide_book.md).
         manual = new ItemSCManual();

@@ -19,6 +19,9 @@ public final class ConfigSC {
     /** Sounds: working machines / generators / quarries play their loops; the volume of every mod sound (0..1). */
     public static boolean machineSounds = true;
     public static float soundVolume = 1F;
+    /** Radiation: reactors and RTGs irradiate players nearby (off: no dose, no effects); every level multiplied by this. */
+    public static boolean radiation = true;
+    public static float radiationMultiplier = 1F;
 
     private ConfigSC() {
     }
@@ -45,6 +48,10 @@ public final class ConfigSC {
                     "Working machines, generators and quarries make their sound");
             soundVolume = config.getFloat("volume", "sounds", 1F, 0F, 1F,
                     "Volume of every Silicon Age sound (0 = silent)");
+            radiation = config.getBoolean("enabled", "radiation", true,
+                    "RTGs and reactors irradiate players nearby: a dose builds up and makes them ill (lead, suits and fields protect)");
+            radiationMultiplier = config.getFloat("multiplier", "radiation", 1F, 0F, 10F,
+                    "Every radiation level is multiplied by this (0.5 = half as strong)");
         } finally {
             if (config.hasChanged()) {
                 config.save();

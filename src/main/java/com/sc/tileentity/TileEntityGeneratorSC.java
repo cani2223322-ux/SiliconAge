@@ -348,7 +348,70 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Rated output with the upgrades - what a fuel generator makes each tick while it runs. */
     public int ratedOutput() {
-        return (int) Math.round(generatorType.euPerTick * outputMultiplier());
+        return (int) Math.round(generatorType.euPerTick * outputMultiplier() * shieldingMultiplier());
+    }
+
+    // ---- radiation ----
+
+    /** Output with a lead casing in (x0.9), 1 without. */
+    public double shieldingMultiplier() {
+        return isShielded() ? SHIELDED_OUTPUT : 1.0;
+    }
+
+    public static final double SHIELDED_OUTPUT = 0.9;
+    /** A lead casing's extra running heat in a fusion / exo reactor. */
+    public static final int SHIELDED_HEAT = 150;
+
+    public boolean isShielded() {
+        return radiationBase(generatorType) > 0 && upgradeCount(UpgradeType.RAD_SHIELDING) > 0;
+    }
+
+    /** Radiation of a type at full work (an RTG: a capsule's worth, 1 each), 0 for the clean ones. */
+    public static float radiationBase(GeneratorType type) {
+        switch (type) {
+            case RTG: return 1F;
+            case FUSION_REACTOR: return 4F;
+            case TOKAMAK: return 6F;
+            case PLASMA_REACTOR: return 8F;
+            case EXO_REACTOR: return 10F;
+            default: return 0F;
+        }
+    }
+
+    /** How far a type's radiation reaches, blocks. */
+    public static int radiationRadius(GeneratorType type) {
+        switch (type) {
+            case RTG: return 4;
+            case FUSION_REACTOR: return 8;
+            case TOKAMAK: return 12;
+            case PLASMA_REACTOR: return 14;
+            case EXO_REACTOR: return 16;
+            default: return 0;
+        }
+    }
+
+    /**
+     * What it gives off now: an RTG as long as it holds capsules (they decay, running or not); a
+     * reactor while it's lit and working; nothing with a lead casing.
+     */
+    public float radiationLevel() {
+        float base = radiationBase(generatorType);
+        if (base <= 0 || isShielded()) {
+            return 0F;
+        }
+        if (generatorType == GeneratorType.RTG) {
+            int capsules = 0;
+            for (int i = SLOT_FUEL; i <= SLOT_BLANKET; i++) {
+                capsules += slots[i] != null && slots[i].getItem() == com.sc.init.ModItems.isotopeCapsule ? 1 : 0;
+            }
+            return base * capsules;
+        }
+        boolean working = status == GeneratorStatus.GENERATING || status == GeneratorStatus.BUFFER_FULL
+                || status == GeneratorStatus.NO_COOLANT;
+        if (generatorType.needsIgnition()) {
+            working &= ignited;
+        }
+        return working ? base : 0F;
     }
 
     /**
@@ -442,6 +505,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return;
         }
         syncTankCapacity();
+        if (worldObj.getTotalWorldTime() % 20 == 7) {
+            float rad = radiationLevel();
+            if (rad > 0) {
+                com.sc.radiation.RadiationSC.report(worldObj, xCoord, yCoord, zCoord, rad, radiationRadius(generatorType));
+            }
+        }
         if (worldObj.getTotalWorldTime() % 20 == 0) {                  // the inflow over the last second
             inflowTenths = inflowWindow / 2;
             inflowWindow = 0;
@@ -783,7 +852,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
         }
         infoA = capsules;
-        give(capsules * CAPSULE_EU, GeneratorStatus.NO_CAPSULE);
+        give((int) Math.round(capsules * CAPSULE_EU * shieldingMultiplier()), GeneratorStatus.NO_CAPSULE);
     }
 
     // ---- reactors ----
@@ -831,7 +900,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      * overdriven reactor runs hot, and a full buffer can then tip it over the limit.
      */
     private int runningHeat(int base) {
-        return base + 100 * upgradeCount(UpgradeType.OVERDRIVE);
+        return base + 100 * upgradeCount(UpgradeType.OVERDRIVE) + (isShielded() ? SHIELDED_HEAT : 0);
     }
 
     /** One tick of a lit reactor making energy: ramps up, heat follows the power. */
@@ -1087,7 +1156,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (slot >= FIRST_UPGRADE_SLOT) {
             return hasUpgradeSlots(generatorType) && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
-                    && com.sc.item.ItemUpgradeSC.typeOf(stack).forGenerators();
+                    && com.sc.item.ItemUpgradeSC.typeOf(stack).forGenerators()
+                    && (com.sc.item.ItemUpgradeSC.typeOf(stack) != UpgradeType.RAD_SHIELDING || radiationBase(generatorType) > 0);
         }
         if (!usesSlot(generatorType, slot)) {
             return false;

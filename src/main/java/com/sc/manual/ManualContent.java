@@ -755,6 +755,26 @@ public final class ManualContent {
         lines.add("");
         lines.add(HEAD + Lang.tr("sc.manual.safety.radiationhead"));
         lines.addAll(paragraph("sc.manual.safety.radiation"));
+        lines.add(Lang.tr("sc.manual.safety.radsources"));
+        for (com.sc.energy.GeneratorType type : com.sc.energy.GeneratorType.values()) {
+            float base = com.sc.tileentity.TileEntityGeneratorSC.radiationBase(type);
+            if (base > 0) {
+                lines.add(" " + type.localizedName() + R + DIM + " - " + Lang.tr(type == com.sc.energy.GeneratorType.RTG
+                                ? "sc.manual.safety.radline.rtg" : "sc.manual.safety.radline",
+                        com.sc.radiation.RadiationSC.fmt(base), com.sc.tileentity.TileEntityGeneratorSC.radiationRadius(type)));
+            }
+        }
+        lines.add(" " + Lang.tr("sc.manual.safety.radline.carried", com.sc.radiation.RadiationSC.fmt(com.sc.radiation.RadiationSC.CAPSULE_LEVEL),
+                com.sc.radiation.RadiationSC.fmt(com.sc.radiation.RadiationSC.MONAZITE_STACK_LEVEL)));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.safety.dosehead"));
+        lines.addAll(paragraph("sc.manual.safety.dose"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.safety.radprothead"));
+        lines.addAll(paragraph("sc.manual.safety.radprot"));
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.safety.radcurehead"));
+        lines.addAll(paragraph("sc.manual.safety.radcure"));
         return lines;
     }
 

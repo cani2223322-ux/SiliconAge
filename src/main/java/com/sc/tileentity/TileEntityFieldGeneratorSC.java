@@ -81,7 +81,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             /** With a charge booster in: every item being charged gets the full rate, not a share of it. */
             F_CHARGE_EACH = 16384,
             /** Rain shield: while it rains over the field, upkeep +25% (+50% in a storm); no rain inside, no snow or ice, lightning taken. */
-            F_RAIN = 32768;
+            F_RAIN = 32768,
+            /** Radiation shield: players inside take no radiation; RadiationSC.FIELD_EU_PER_LEVEL a second for each level stopped. */
+            F_RADIATION = 65536;
     /** The rain shield's extra upkeep, % of the field's, in rain and in a thunderstorm; and what a lightning bolt costs. */
     public static final int RAIN_PCT = 25, THUNDER_PCT = 50, LIGHTNING_COST = 2000;
     /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell and charging sparks shown. */
@@ -432,6 +434,37 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return 0;
         }
         return upkeepPerTick() * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100;
+    }
+
+    /** An up field with its radiation shield round this point, or null. */
+    public static TileEntityFieldGeneratorSC radiationShieldAt(World world, double x, double y, double z) {
+        for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
+            if (f.has(F_RADIATION) && f.fieldContains(x, y, z)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /** EU the radiation shield took in the last second (the screen's summary). */
+    private int radiationPaid, radiationPaidShown;
+
+    public int getRadiationPaid() {
+        return radiationPaidShown;
+    }
+
+    /** Pays for stopping radiation round a player this second; false (nothing taken) when the buffer can't. */
+    public boolean payRadiation(int eu) {
+        if (eu <= 0) {
+            return true;
+        }
+        if (getEnergyStored() < eu) {
+            return false;
+        }
+        removeEnergy(eu);
+        radiationPaid += eu;
+        markDirty();
+        return true;
     }
 
     /** A shielded field over this point, or null (lightning, snow placed by players). */
@@ -1079,6 +1112,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 protectRegion();
             }
             if (worldObj.getTotalWorldTime() % 20 == 0) {
+                radiationPaidShown = radiationPaid;
+                radiationPaid = 0;
                 chargedLastSecond = 0;
                 playersLastSecond = 0;
                 if (has(F_CHARGE) || has(F_HEAL)) {

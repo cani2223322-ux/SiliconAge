@@ -89,7 +89,7 @@ public final class ArmorLogicSC {
     }
 
     /** Heat from things that happen between the once-a-second checks (dash, shield), collected per player. */
-    private static void addHeat(EntityPlayer p, int heat) {
+    public static void addHeat(EntityPlayer p, int heat) {
         NBTTagCompound data = p.getEntityData();
         data.setInteger(HEAT_KEY, data.getInteger(HEAT_KEY) + heat);
     }

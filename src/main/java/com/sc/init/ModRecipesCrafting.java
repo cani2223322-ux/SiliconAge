@@ -47,6 +47,7 @@ public final class ModRecipesCrafting {
         weaponsAndField();
         batteries();
         wireless();
+        radiation();
         upgrades();
         tubeParts();
         tanks();
@@ -440,6 +441,33 @@ public final class ModRecipesCrafting {
         OreRecipes.shaped(new ItemStack(ModItems.entangledCrystal), "PDP", "EQE", "PMP",
                 'P', new ItemStack(Items.ender_pearl), 'D', new ItemStack(Items.diamond), 'E', new ItemStack(Items.ender_eye),
                 'Q', new ItemStack(ModItems.battery, 1, 4), 'M', silicon(SiliconMaterial.MEMORY_CHIP));
+    }
+
+    /**
+     * Radiation: the lead block and back, lead glass, the lead suit (lead with a leather lining, the
+     * helmet with a lead-glass window), the dosimeter, the radioprotector (activated carbon), the
+     * lead casing for RTGs and reactors, the decontamination shower.
+     */
+    private static void radiation() {
+        ItemStack lead = ingot(Material.LEAD);
+        OreRecipes.shaped(new ItemStack(ModBlocks.leadBlock), "LLL", "LLL", "LLL", 'L', lead);
+        OreRecipes.shapeless(ingot(Material.LEAD, 9), new ItemStack(ModBlocks.leadBlock));
+        OreRecipes.shaped(new ItemStack(ModBlocks.leadGlass, 5), "GLG", "LGL", "GLG", 'G', new ItemStack(Blocks.glass), 'L', lead);
+        ItemStack leather = new ItemStack(Items.leather), window = new ItemStack(ModBlocks.leadGlass);
+        OreRecipes.shaped(new ItemStack(ModItems.leadSuit[0]), "LKL", "LGL", 'L', lead, 'K', leather, 'G', window);
+        OreRecipes.shaped(new ItemStack(ModItems.leadSuit[1]), "L L", "LKL", "LLL", 'L', lead, 'K', leather);
+        OreRecipes.shaped(new ItemStack(ModItems.leadSuit[2]), "LKL", "L L", "L L", 'L', lead, 'K', leather);
+        OreRecipes.shaped(new ItemStack(ModItems.leadSuit[3]), "K K", "L L", "L L", 'L', lead, 'K', leather);
+        OreRecipes.shaped(new ItemStack(ModItems.dosimeter), "IGI", "RTR", "ILI",
+                'I', new ItemStack(Items.iron_ingot), 'G', new ItemStack(Blocks.glass_pane), 'R', new ItemStack(Items.redstone),
+                'T', silicon(SiliconMaterial.TRANSISTOR), 'L', lead);
+        OreRecipes.shapeless(new ItemStack(ModItems.radioprotector, 2), new ItemStack(Items.glass_bottle), new ItemStack(Items.sugar),
+                new ItemStack(Items.glowstone_dust), dust(Material.CARBON));
+        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.RAD_SHIELDING), "LBL", "ITI", "LBL",
+                'L', lead, 'B', new ItemStack(ModBlocks.leadBlock), 'I', new ItemStack(Items.iron_ingot), 'T', silicon(SiliconMaterial.TRANSISTOR));
+        OreRecipes.shaped(new ItemStack(ModBlocks.shower), "IPI", "GBG", "ICI",
+                'I', new ItemStack(Items.iron_ingot), 'P', pipe(PipeType.COPPER), 'G', window, 'B', new ItemStack(Items.bucket),
+                'C', cable(CableType.SILVER));
     }
 
     private static void weaponsAndField() {

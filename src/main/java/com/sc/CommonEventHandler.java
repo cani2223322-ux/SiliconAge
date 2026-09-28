@@ -80,9 +80,11 @@ public class CommonEventHandler {
         }
         com.sc.item.ArmorLogicSC.tick(event.player);          // both sides: the client moves the player
         com.sc.item.BladeLogicSC.tick(event.player);          // server: the blade's deflect while blocking
+        com.sc.radiation.LeadSuitSC.tick(event.player);       // both sides: the lead suit's weight
         if (event.player.worldObj.isRemote || event.player.ticksExisted % HEAT_INTERVAL_TICKS != 0) {
             return;
         }
+        com.sc.radiation.RadiationSC.perSecond(event.player); // before the suit's second: the shield's heat counts in it
         tickArmorHeat(event.player, com.sc.item.ArmorLogicSC.perSecond(event.player));
     }
 

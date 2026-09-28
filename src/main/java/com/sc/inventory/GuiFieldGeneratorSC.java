@@ -162,11 +162,14 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                     break;
                 }
                 int[] rows = {TileEntityFieldGeneratorSC.F_NO_SPAWN, TileEntityFieldGeneratorSC.F_NO_ENDER, TileEntityFieldGeneratorSC.F_DAMAGE,
-                        -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL, TileEntityFieldGeneratorSC.F_RAIN};
+                        -1, TileEntityFieldGeneratorSC.F_WARN, TileEntityFieldGeneratorSC.F_HEAL};
                 for (int i = 0; i < rows.length; i++) {
                     int id = rows[i] < 0 ? ContainerFieldGeneratorSC.BTN_FILTER : flagId(rows[i]);
                     buttonList.add(new HoloButton(id, x, y + i * 22, CW, 20, ""));
                 }
+                // the last row: the two weather / radiation shields side by side
+                buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_RAIN), x, y + rows.length * 22, 96, 20, ""));
+                buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_RADIATION), x + 100, y + rows.length * 22, 98, 20, ""));
                 break;
             }
             case 2: {

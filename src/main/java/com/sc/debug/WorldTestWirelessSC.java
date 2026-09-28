@@ -46,6 +46,7 @@ public class WorldTestWirelessSC {
             qa.setInventorySlotContents(TileEntityWirelessSC.SLOT_CRYSTAL, ItemEntangledCrystalSC.half(ModItems.entangledCrystal, 777L, 1));
             qb.setInventorySlotContents(TileEntityWirelessSC.SLOT_CRYSTAL, ItemEntangledCrystalSC.half(ModItems.entangledCrystal, 777L, 2));
             qb.toggleRole();                                   // the Nether end takes
+            placeRtg(over);
         }
         if (ticks == 160 && tx != null) {
             boolean a = rx.getEnergyStored() > 0 && tx.getLossPct() == 5
@@ -57,12 +58,60 @@ public class WorldTestWirelessSC {
             System.out.println("[SC-WORLDTEST] " + (d ? "PASS" : "FAIL") + " quantum Overworld -> Nether: nether end " + qb.getEnergyStored()
                     + " EU, status " + qa.getStatus() + " / " + qb.getStatus());
             wrenchTest(over);
+            radiationTest(over);
             DimensionManager.getWorld(0).setBlockToAir(8, 200, 8);
             DimensionManager.getWorld(0).setBlockToAir(48, 200, 8);
             DimensionManager.getWorld(0).setBlockToAir(8, 202, 8);
             DimensionManager.getWorld(-1).setBlockToAir(8, 100, 8);
             System.out.println("[SC-WORLDTEST] DONE");
         }
+    }
+
+    /** An RTG with two capsules at (30, 200, 30), open to the air. */
+    private static void placeRtg(World w) {
+        net.minecraft.item.ItemStack st = ModBlocks.generatorStack(com.sc.energy.GeneratorType.RTG, 1);
+        w.setBlock(30, 200, 30, net.minecraft.block.Block.getBlockFromItem(st.getItem()), st.getItemDamage(), 3);
+        net.minecraft.tileentity.TileEntity te = w.getTileEntity(30, 200, 30);
+        if (te instanceof com.sc.tileentity.TileEntityGeneratorSC) {
+            com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
+            g.setGeneratorType(com.sc.energy.GeneratorType.RTG);
+            g.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.SLOT_FUEL, new net.minecraft.item.ItemStack(ModItems.isotopeCapsule));
+            g.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.SLOT_BLANKET, new net.minecraft.item.ItemStack(ModItems.isotopeCapsule));
+        }
+    }
+
+    /**
+     * A player 2 blocks from the RTG takes radiation and a dose; a lead wall between cuts it to
+     * almost nothing; the full lead suit stops it and the dose falls.
+     */
+    private static void radiationTest(World w) {
+        net.minecraftforge.common.util.FakePlayer p = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((net.minecraft.world.WorldServer) w);
+        p.capabilities.isCreativeMode = false;
+        p.setPosition(30.5, 200, 32.5);
+        com.sc.radiation.RadiationSC.setDose(p, 0F);
+        float open = com.sc.radiation.RadiationSC.levelAt(p);
+        com.sc.radiation.RadiationSC.perSecond(p);
+        float dose = com.sc.radiation.RadiationSC.doseOf(p);
+        w.setBlock(30, 200, 31, ModBlocks.leadBlock);
+        w.setBlock(30, 201, 31, ModBlocks.leadBlock);
+        float walled = com.sc.radiation.RadiationSC.levelAt(p);
+        w.setBlockToAir(30, 200, 31);
+        w.setBlockToAir(30, 201, 31);
+        for (int i = 0; i < 4; i++) {
+            p.inventory.armorInventory[i] = new net.minecraft.item.ItemStack(ModItems.leadSuit[3 - i]);
+        }
+        com.sc.radiation.RadiationSC.perSecond(p);
+        float after = com.sc.radiation.RadiationSC.doseOf(p);
+        int prot = com.sc.radiation.RadiationSC.lastProtection(p);
+        int parts = com.sc.radiation.LeadSuitSC.parts(p);
+        for (int i = 0; i < 4; i++) {
+            p.inventory.armorInventory[i] = null;
+        }
+        boolean ok = open > 0.8F && open < 1.2F && dose > 0.08F && walled < open * 0.05F && parts == 4 && prot == 100 && after < dose;
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " radiation: RTG 2 bl. away " + open + ", dose " + dose
+                + ", behind lead " + walled + ", lead suit (" + parts + " parts) protection " + prot + "%, dose then " + after);
+        com.sc.radiation.RadiationSC.setDose(p, 0F);
+        w.setBlockToAir(30, 200, 30);
     }
 
     /** The quantum wrench in Dismantle mode: a wireless block goes whole; a cable + pipe bundle one part per click. */
