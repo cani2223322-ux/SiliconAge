@@ -296,8 +296,8 @@ public final class ManualContent {
                 if (type.tier != tier) {
                     continue;
                 }
-                StringBuilder stats = new StringBuilder(type.euPerTick + " EU/t, "
-                        + Lang.tr("sc.manual.machines.recipes", RecipeRegistry.recipesFor(type).size()));
+                StringBuilder stats = new StringBuilder(type.euPerTick + " EU/t, " + (type.isSmelter()
+                        ? Lang.tr("sc.manual.machines.smelts") : Lang.tr("sc.manual.machines.recipes", RecipeRegistry.recipesFor(type).size())));
                 if (type.heatCapable) {
                     stats.append(", ").append(Lang.tr("sc.manual.machines.heat"));
                 }

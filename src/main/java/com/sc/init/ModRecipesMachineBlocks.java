@@ -59,6 +59,7 @@ public final class ModRecipesMachineBlocks {
         machine(MachineType.DICING_SAW, i, c, new ItemStack(Items.flint), new ItemStack(Items.diamond));
         machine(MachineType.FLUID_CELL_FILLER, i, c, new ItemStack(Blocks.glass), new ItemStack(Items.bucket));
         machine(MachineType.BOILER_LV, i, c, new ItemStack(Items.bucket), new ItemStack(Blocks.furnace));
+        machine(MachineType.ELECTRIC_FURNACE, i, c, new ItemStack(ModItems.component("copperCoil")), new ItemStack(Blocks.furnace));
 
         // HV by draw, LV by materials - see the class javadoc.
         OreRecipes.shaped(block(MachineType.BLAST_FURNACE), new Object[]{
@@ -78,6 +79,7 @@ public final class ModRecipesMachineBlocks {
         machine(MachineType.PACKAGER, s, c, new ItemStack(Items.iron_ingot), new ItemStack(Blocks.sticky_piston));
         machine(MachineType.PHOTORESIST_COATER, s, c, new ItemStack(Blocks.glass), new ItemStack(Blocks.dispenser));
         machine(MachineType.SPUTTERER, s, c, new ItemStack(Items.gold_ingot), new ItemStack(Blocks.dispenser));
+        machine(MachineType.INDUCTION_FURNACE, s, c, new ItemStack(ModItems.component("copperCoil")), block(MachineType.ELECTRIC_FURNACE));
         machine(MachineType.UPGRADE_STATION_MV, s, c, new ItemStack(Items.redstone), new ItemStack(Blocks.crafting_table));
         machine(MachineType.WIRE_SAW, s, c, new ItemStack(Items.string), new ItemStack(Items.diamond));
         machine(MachineType.BOILER_MV, s, c, new ItemStack(Items.bucket), new ItemStack(Blocks.furnace));

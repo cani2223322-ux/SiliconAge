@@ -44,7 +44,9 @@ public final class SoundsSC {
             case CZOCHRALSKI_PULLER_EV:
             case BOILER_LV:
             case BOILER_MV:
+            case ELECTRIC_FURNACE:
             case REFINERY: return new Loop("machine.furnace", 0.45F, 1F);
+            case INDUCTION_FURNACE: return new Loop("machine.hum", 0.4F, 1.5F);
             case ORE_WASHER:
             case CHEM_REACTOR:
             case ETCHING_BATH:

@@ -61,6 +61,7 @@ public final class SelfTestSC {
             wireless();
             radiation();
             balanceConfig();
+            smelters();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1194,6 +1195,23 @@ public final class SelfTestSC {
         placed.readFromItem(kept);
         ok = placed.getTank().getFluidAmount() == com.sc.tileentity.TileEntityShowerSC.TANK && placed.getEnergyStored() == 5000;
         check(ok, "shower: the item keeps its water and energy (" + placed.getTank().getFluidAmount() + " mB, " + placed.getEnergyStored() + " EU)");
+    }
+
+    /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */
+    private static void smelters() {
+        com.sc.tileentity.TileEntityMachineSC e = new com.sc.tileentity.TileEntityMachineSC();
+        e.setMachineType(com.sc.machine.MachineType.ELECTRIC_FURNACE);
+        com.sc.tileentity.TileEntityMachineSC ind = new com.sc.tileentity.TileEntityMachineSC();
+        ind.setMachineType(com.sc.machine.MachineType.INDUCTION_FURNACE);
+        ItemStack ore = new ItemStack(net.minecraft.init.Blocks.iron_ore), dia = new ItemStack(net.minecraft.init.Items.diamond);
+        boolean ok = e.isItemValidForSlot(0, ore) && !e.isItemValidForSlot(1, ore) && !e.isItemValidForSlot(0, dia)
+                && ind.isItemValidForSlot(0, ore) && ind.isItemValidForSlot(1, ore) && !ind.isItemValidForSlot(2, ore)
+                && com.sc.machine.RecipeRegistry.isValidInput(com.sc.machine.MachineType.ELECTRIC_FURNACE, new ItemStack(net.minecraft.init.Blocks.sand))
+                && e.smeltTicks() == com.sc.tileentity.TileEntityMachineSC.SMELT_TICKS && ind.smeltSpeed() == 1.0
+                && e.getTier() == com.sc.energy.Tier.LV && ind.getTier() == com.sc.energy.Tier.MV
+                && com.sc.machine.MachineType.ELECTRIC_FURNACE.ordinal() < 32 && com.sc.machine.MachineType.INDUCTION_FURNACE.ordinal() < 32
+                && com.sc.machine.MachineType.ELECTRIC_FURNACE.smeltStreams() == 1 && com.sc.machine.MachineType.INDUCTION_FURNACE.smeltStreams() == 2;
+        check(ok, "smelters: take what a furnace smelts (iron ore, sand; no diamond), 1 / 2 streams, 100 ticks cold, LV / MV, fit the 2nd machine block");
     }
 
     /** The config's balance multipliers reach what they name (set for the test, then put back). */

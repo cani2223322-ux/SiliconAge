@@ -28,7 +28,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
             covered.add(handler.getMachineType());
         }
         for (MachineType type : MachineType.values()) {
-            if (!covered.contains(type)) {
+            if (!covered.contains(type) && !type.isSmelter()) {             // smelters: NEI's own furnace pages
                 cpw.mods.fml.common.FMLLog.warning("[Silicon Age] no NEI handler class for %s - add one to MachineHandlersSC", type);
             }
         }

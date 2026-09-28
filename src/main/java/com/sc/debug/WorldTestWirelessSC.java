@@ -47,6 +47,7 @@ public class WorldTestWirelessSC {
             qb.setInventorySlotContents(TileEntityWirelessSC.SLOT_CRYSTAL, ItemEntangledCrystalSC.half(ModItems.entangledCrystal, 777L, 2));
             qb.toggleRole();                                   // the Nether end takes
             placeRtg(over);
+            placeSmelters(over);
         }
         if (ticks == 160 && tx != null) {
             boolean a = rx.getEnergyStored() > 0 && tx.getLossPct() == 5
@@ -59,12 +60,70 @@ public class WorldTestWirelessSC {
                     + " EU, status " + qa.getStatus() + " / " + qb.getStatus());
             wrenchTest(over);
             radiationTest(over);
+            smelterTest(over);
             DimensionManager.getWorld(0).setBlockToAir(8, 200, 8);
             DimensionManager.getWorld(0).setBlockToAir(48, 200, 8);
             DimensionManager.getWorld(0).setBlockToAir(8, 202, 8);
             DimensionManager.getWorld(-1).setBlockToAir(8, 100, 8);
             System.out.println("[SC-WORLDTEST] DONE");
         }
+    }
+
+    private static com.sc.tileentity.TileEntityMachineSC smelter(World w, com.sc.machine.MachineType type, int x) {
+        int ord = type.ordinal();
+        w.setBlockToAir(x, 200, 40);
+        w.setBlock(x, 200, 40, ord < 16 ? ModBlocks.machineSC : ModBlocks.machineSC2, ord % 16, 3);
+        net.minecraft.tileentity.TileEntity te = w.getTileEntity(x, 200, 40);
+        if (!(te instanceof com.sc.tileentity.TileEntityMachineSC)) {
+            return null;
+        }
+        com.sc.tileentity.TileEntityMachineSC m = (com.sc.tileentity.TileEntityMachineSC) te;
+        m.setEnergyStoredClient(m.getMaxEnergyStored());
+        return m;
+    }
+
+    /** An electric furnace with sand, an induction furnace with iron ore and sand, at (20 / 22, 200, 40). */
+    private static void placeSmelters(World w) {
+        com.sc.tileentity.TileEntityMachineSC e = smelter(w, com.sc.machine.MachineType.ELECTRIC_FURNACE, 20);
+        com.sc.tileentity.TileEntityMachineSC ind = smelter(w, com.sc.machine.MachineType.INDUCTION_FURNACE, 22);
+        if (e != null) {
+            e.setInventorySlotContents(0, new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.sand, 4));
+        }
+        if (ind != null) {
+            ind.setInventorySlotContents(0, new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.iron_ore, 4));
+            ind.setInventorySlotContents(1, new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.sand, 4));
+        }
+    }
+
+    /** 120 ticks later: glass and some experience in the electric furnace; the induction one smelted both and warmed up. */
+    private static void smelterTest(World w) {
+        net.minecraft.tileentity.TileEntity a = w.getTileEntity(20, 200, 40), b = w.getTileEntity(22, 200, 40);
+        if (!(a instanceof com.sc.tileentity.TileEntityMachineSC) || !(b instanceof com.sc.tileentity.TileEntityMachineSC)) {
+            System.out.println("[SC-WORLDTEST] FAIL smelters: not placed");
+            return;
+        }
+        com.sc.tileentity.TileEntityMachineSC e = (com.sc.tileentity.TileEntityMachineSC) a, ind = (com.sc.tileentity.TileEntityMachineSC) b;
+        net.minecraft.item.ItemStack eo = e.getStackInSlot(3), io = ind.getStackInSlot(3), go = ind.getStackInSlot(4);
+        boolean ok = eo != null && eo.getItem() == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.glass) && e.getStoredXp() > 0
+                && io != null && io.getItem() == net.minecraft.init.Items.iron_ingot
+                && go != null && go.getItem() == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.glass)
+                && ind.getHeat() > 50;
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " smelters: electric " + eo + " xp " + e.getStoredXp()
+                + " (recipe xp ingot " + net.minecraft.item.crafting.FurnaceRecipes.smelting().func_151398_b(new net.minecraft.item.ItemStack(net.minecraft.init.Items.iron_ingot))
+                + ", glass " + net.minecraft.item.crafting.FurnaceRecipes.smelting().func_151398_b(new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.glass))
+                + ", induction xp " + ind.getStoredXp() + ")"
+                + ", induction " + io + " + " + go + ", heat " + ind.getHeat() + ", status " + e.getStatus() + " / " + ind.getStatus());
+        e.setInventorySlotContents(0, null);
+        ind.setInventorySlotContents(0, null);
+        ind.setInventorySlotContents(1, null);
+        for (int i = 3; i < 6; i++) {
+            e.setInventorySlotContents(i, null);
+            ind.setInventorySlotContents(i, null);
+        }
+        e.setStoredXpClient(0);
+        ind.setStoredXpClient(0);
+        w.setBlockToAir(20, 200, 40);
+        w.setBlockToAir(22, 200, 40);
     }
 
     /** An RTG with two capsules at (30, 200, 30), open to the air. */

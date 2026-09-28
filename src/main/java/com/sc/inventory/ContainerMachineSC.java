@@ -22,11 +22,13 @@ public class ContainerMachineSC extends Container {
         this.machine = machine;
 
         boolean tanks = tightSlots(machine.getMachineType());
-        for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {
-            addSlotToContainer(new SlotRecipeInput(machine, i, slotX(tanks, i), GuiMachineSC.IN_Y));
+        int used = machine.getMachineType().isSmelter() ? machine.getMachineType().smeltStreams() : TileEntityMachineSC.INPUT_SLOTS;
+        for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {             // a smelter's unused slots: off the screen
+            addSlotToContainer(new SlotRecipeInput(machine, i, i < used ? slotX(tanks, i) : -2000, GuiMachineSC.IN_Y));
         }
         for (int i = 0; i < TileEntityMachineSC.OUTPUT_SLOTS; i++) {
-            addSlotToContainer(new SlotOutputOnly(machine, TileEntityMachineSC.INPUT_SLOTS + i, slotX(tanks, i), GuiMachineSC.OUT_Y));
+            addSlotToContainer(new SlotOutputOnly(machine, TileEntityMachineSC.INPUT_SLOTS + i, i < used ? slotX(tanks, i) : -2000,
+                    GuiMachineSC.OUT_Y));
         }
         for (int i = 0; i < TileEntityMachineSC.UPGRADE_SLOTS; i++) {
             addSlotToContainer(new SlotUpgrade(machine, TileEntityMachineSC.FIRST_UPGRADE_SLOT + i,
@@ -84,6 +86,8 @@ public class ContainerMachineSC extends Container {
     public static final int BTN_CLEAR = 0;
     /** The power switch and the redstone mode (cycles always / with a signal / without). */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_BATTERY_MODE = 12;
+    /** Smelters: take the stored experience; the induction furnace: keep warm on / off. */
+    public static final int BTN_XP = 13, BTN_KEEP_WARM = 14;
 
     @Override
     public boolean enchantItem(EntityPlayer player, int id) {
@@ -105,6 +109,14 @@ public class ContainerMachineSC extends Container {
         }
         if (id == BTN_BATTERY_MODE) {
             machine.cycleBatteryMode();
+            return true;
+        }
+        if (id == BTN_XP && machine.getMachineType().isSmelter()) {
+            machine.takeXp(player);
+            return true;
+        }
+        if (id == BTN_KEEP_WARM && machine.getMachineType() == com.sc.machine.MachineType.INDUCTION_FURNACE) {
+            machine.toggleKeepWarm();
             return true;
         }
         return false;
@@ -131,9 +143,21 @@ public class ContainerMachineSC extends Container {
     /** Sync slots from here on carry the four tanks as (fluid id, amount) pairs. */
     private static final int TANK_ID_BASE = 6;
 
-    private final IntSyncSC sync = new IntSyncSC(TANK_ID_BASE + TANK_COUNT * 2);
+    /** After the tanks: a smelter's second stream, its experience (tenths), keep-warm. */
+    private static final int ID_SMELT2 = TANK_ID_BASE + TANK_COUNT * 2, ID_XP = ID_SMELT2 + 1, ID_WARM = ID_SMELT2 + 2;
+
+    private final IntSyncSC sync = new IntSyncSC(ID_WARM + 1);
 
     private int currentValue(int id) {
+        if (id == ID_SMELT2) {
+            return machine.getSmeltProgress(1);
+        }
+        if (id == ID_XP) {
+            return (int) (machine.getStoredXp() * 10);
+        }
+        if (id == ID_WARM) {
+            return machine.isKeepWarm() ? 1 : 0;
+        }
         if (id >= TANK_ID_BASE) {
             FluidStack fluid = machine.getTank((id - TANK_ID_BASE) / 2).getFluid();
             if (fluid == null) {
@@ -168,6 +192,18 @@ public class ContainerMachineSC extends Container {
             return;
         }
         int data = sync.value(id);
+        if (id == ID_SMELT2) {
+            machine.setSmeltProgressClient(1, data);
+            return;
+        }
+        if (id == ID_XP) {
+            machine.setStoredXpClient(data / 10F);
+            return;
+        }
+        if (id == ID_WARM) {
+            machine.setKeepWarmClient(data != 0);
+            return;
+        }
         if (id >= TANK_ID_BASE) {
             int tank = (id - TANK_ID_BASE) / 2;
             if ((id - TANK_ID_BASE) % 2 == 0) {
@@ -186,6 +222,7 @@ public class ContainerMachineSC extends Container {
                 break;
             case ID_PROGRESS:
                 machine.setProgressTicksClient(data);
+                machine.setSmeltProgressClient(0, data);
                 break;
             case ID_RECIPE_TICKS:
                 machine.setCurrentRecipeTicksClient(data);

@@ -409,6 +409,13 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (feedFromBattery(slots[SLOT_BATTERY]) > 0) {
             markDirty();
         }
+        if (machineType.isSmelter()) {
+            updateSmelter();
+            if (status == MachineStatus.PROCESSING) {
+                com.sc.util.SoundsSC.loop(this, com.sc.util.SoundsSC.of(machineType));
+            }
+            return;
+        }
         if (!powerOn || !redstoneAllows()) {
             status = powerOn ? MachineStatus.REDSTONE : MachineStatus.DISABLED;
             dissipateHeat();
@@ -486,6 +493,176 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (progressTicks >= currentRecipeTicks) {
             finishRecipe(recipe, overheatedThisRun);
             overheatedThisRun = false;
+        }
+    }
+
+    // ------------------------------------------------------------------ the electric / induction furnace
+
+    /** Base ticks a piece smelts in (a furnace: 200). */
+    public static final int SMELT_TICKS = 100;
+    /** Induction heat: 0..max, speed 1 + 2 x heat / max; +1 a working (or keeping-warm) tick, -2 an idle one. */
+    public static final int INDUCTION_HEAT_MAX = 1000, KEEP_WARM_EU = 8;
+    /** Experience a smelter holds at most (points). */
+    public static final int MAX_XP = 100000;
+    private final int[] smeltProgress = new int[2];
+    private float storedXp;
+    private boolean keepWarm;
+
+    /** What a furnace makes of this, or null. */
+    public static ItemStack smeltResult(ItemStack in) {
+        return in == null ? null : net.minecraft.item.crafting.FurnaceRecipes.smelting().getSmeltingResult(in);
+    }
+
+    /** The induction furnace's speed from its heat (x1 cold .. x3 hot); 1 for the electric one. */
+    public double smeltSpeed() {
+        return machineType == MachineType.INDUCTION_FURNACE ? 1 + 2.0 * heat / INDUCTION_HEAT_MAX : 1;
+    }
+
+    /** Ticks a piece takes now: overclockers, the config's machine speed, the induction heat. */
+    public int smeltTicks() {
+        return Math.max(1, (int) Math.round(SMELT_TICKS * Math.pow(0.7, upgradeCount(UpgradeType.OVERCLOCKER))
+                / com.sc.util.ConfigSC.machineSpeed / smeltSpeed()));
+    }
+
+    public int getSmeltProgress(int stream) {
+        return smeltProgress[stream];
+    }
+
+    public void setSmeltProgressClient(int stream, int value) {
+        smeltProgress[stream] = value;
+    }
+
+    public float getStoredXp() {
+        return storedXp;
+    }
+
+    public void setStoredXpClient(float xp) {
+        storedXp = xp;
+    }
+
+    public boolean isKeepWarm() {
+        return keepWarm;
+    }
+
+    public void setKeepWarmClient(boolean on) {
+        keepWarm = on;
+    }
+
+    public void toggleKeepWarm() {
+        keepWarm = !keepWarm;
+        markDirty();
+    }
+
+    private static boolean fitsOutput(ItemStack there, ItemStack out, int limit) {
+        return there == null || there.isItemEqual(out) && ItemStack.areItemStackTagsEqual(there, out)
+                && there.stackSize + out.stackSize <= Math.min(limit, there.getMaxStackSize());
+    }
+
+    private void coolInduction() {
+        if (machineType == MachineType.INDUCTION_FURNACE && heat > 0) {
+            heat = Math.max(0, heat - 2);
+        }
+    }
+
+    /**
+     * One tick of a smelter: each stream (input slot i -> output slot i) with something to smelt and
+     * room for it works; the EU/t is shared by the streams at work. The induction furnace heats up
+     * while it works (or keeps warm with nothing in, when switched to), and cools when idle.
+     */
+    private void updateSmelter() {
+        boolean induction = machineType == MachineType.INDUCTION_FURNACE;
+        int streams = machineType.smeltStreams();
+        if (!powerOn || !redstoneAllows()) {
+            status = powerOn ? MachineStatus.REDSTONE : MachineStatus.DISABLED;
+            coolInduction();
+            return;
+        }
+        currentRecipeTicks = smeltTicks();
+        boolean[] run = new boolean[streams];
+        int active = 0;
+        boolean full = false;
+        for (int i = 0; i < streams; i++) {
+            ItemStack out = smeltResult(slots[i]);
+            if (out == null) {
+                smeltProgress[i] = 0;
+                continue;
+            }
+            if (!fitsOutput(slots[INPUT_SLOTS + i], out, getInventoryStackLimit())) {
+                full = true;
+                continue;
+            }
+            run[i] = true;
+            active++;
+        }
+        progressTicks = smeltProgress[0];
+        if (active == 0) {
+            int warm = com.sc.util.ConfigSC.scale(KEEP_WARM_EU, com.sc.util.ConfigSC.machineEnergy, 1);
+            if (induction && keepWarm && getEnergyStored() >= warm) {
+                removeEnergy(warm);
+                heat = Math.min(INDUCTION_HEAT_MAX, heat + 1);
+                status = MachineStatus.HEATING;
+            } else {
+                status = full ? MachineStatus.OUTPUT_FULL : induction && keepWarm ? MachineStatus.NO_POWER : MachineStatus.IDLE;
+                coolInduction();
+            }
+            return;
+        }
+        int cost = (int) Math.ceil(effectiveEuPerTick() * active / (double) streams);
+        if (getEnergyStored() < cost) {
+            status = MachineStatus.NO_POWER;
+            coolInduction();
+            return;
+        }
+        removeEnergy(cost);
+        if (induction) {
+            heat = Math.min(INDUCTION_HEAT_MAX, heat + 1);
+        }
+        status = MachineStatus.PROCESSING;
+        for (int i = 0; i < streams; i++) {
+            if (run[i] && ++smeltProgress[i] >= currentRecipeTicks) {
+                finishSmelt(i);
+            }
+        }
+        progressTicks = smeltProgress[0];
+    }
+
+    private void finishSmelt(int i) {
+        ItemStack out = smeltResult(slots[i]).copy();
+        slots[i].stackSize--;
+        if (slots[i].stackSize <= 0) {
+            slots[i] = null;
+        }
+        int o = INPUT_SLOTS + i;
+        if (slots[o] == null) {
+            slots[o] = out;
+        } else {
+            slots[o].stackSize += out.stackSize;
+        }
+        storedXp = Math.min(MAX_XP, storedXp + net.minecraft.item.crafting.FurnaceRecipes.smelting().func_151398_b(out) * out.stackSize);
+        smeltProgress[i] = 0;
+        markDirty();
+    }
+
+    /** The screen's button: the whole points of experience to the player (the fraction stays). */
+    public void takeXp(EntityPlayer player) {
+        int whole = (int) storedXp;
+        if (whole <= 0) {
+            return;
+        }
+        storedXp -= whole;
+        player.addExperience(whole);
+        worldObj.playSoundAtEntity(player, "random.orb", 0.3F, 0.5F * ((worldObj.rand.nextFloat() - worldObj.rand.nextFloat()) * 0.7F + 1.8F));
+        markDirty();
+    }
+
+    /** The block goes: its experience comes out as orbs. */
+    public void dropXp() {
+        int whole = (int) storedXp;
+        storedXp = 0;
+        while (whole > 0) {
+            int part = net.minecraft.entity.item.EntityXPOrb.getXPSplit(whole);
+            whole -= part;
+            worldObj.spawnEntityInWorld(new net.minecraft.entity.item.EntityXPOrb(worldObj, xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, part));
         }
     }
 
@@ -868,6 +1045,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly();
         }
+        if (machineType.isSmelter()) {
+            return slot < machineType.smeltStreams() && smeltResult(stack) != null;
+        }
         return slot < INPUT_SLOTS && RecipeRegistry.isValidInput(machineType, stack);
     }
 
@@ -881,6 +1061,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
         if (slot == SLOT_BATTERY) {
             return slots[SLOT_BATTERY] == null && com.sc.item.BatteryFeedSC.accepts(stack);   // a full one in
+        }
+        if (machineType.isSmelter()) {
+            return isItemValidForSlot(slot, stack) && (slots[slot] == null || slots[slot].isItemEqual(stack));
         }
         return slot < INPUT_SLOTS && isItemValidForSlot(slot, stack) && fitsSomeRecipe(slot, stack);
     }
@@ -1055,6 +1238,10 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         machineType = types[typeOrdinal >= 0 && typeOrdinal < types.length ? typeOrdinal : 0];
         progressTicks = nbt.getInteger("Progress");
         heat = nbt.getInteger("Heat");
+        smeltProgress[0] = nbt.getInteger("SmeltP0");
+        smeltProgress[1] = nbt.getInteger("SmeltP1");
+        storedXp = nbt.getFloat("StoredXp");
+        keepWarm = nbt.getBoolean("KeepWarm");
         coolingDown = nbt.getBoolean("CoolingDown");
         overheatedThisRun = nbt.getBoolean("OverheatedRun");
         tankA.readFromNBT(nbt.getCompoundTag("TankA"));
@@ -1083,6 +1270,10 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         nbt.setInteger("Facing", facing.ordinal());
         nbt.setInteger("Progress", progressTicks);
         nbt.setInteger("Heat", heat);
+        nbt.setInteger("SmeltP0", smeltProgress[0]);
+        nbt.setInteger("SmeltP1", smeltProgress[1]);
+        nbt.setFloat("StoredXp", storedXp);
+        nbt.setBoolean("KeepWarm", keepWarm);
         nbt.setBoolean("CoolingDown", coolingDown);
         nbt.setBoolean("OverheatedRun", overheatedThisRun);
         nbt.setTag("TankA", tankA.writeToNBT(new NBTTagCompound()));

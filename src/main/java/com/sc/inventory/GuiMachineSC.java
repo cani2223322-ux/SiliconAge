@@ -87,6 +87,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean fill;
     /** The Boilers: the fuel badges (coal, diesel), water + diesel tanks -> the boiler -> steam, a pressure dial. */
     private final boolean boil;
+    /** The electric / induction furnace: its own left column (streams), scene, heat, experience and buttons. */
+    private final boolean smelter;
+    private static final int SM_X = 90, SM_W = 116, SM_SCENE_Y = 36, SM_SCENE_H = 40, SM_BTN_Y = 103;
     private static final int BOIL_X = 140, BOIL_W = 33, BOIL_Y = 36, BOIL_H = 56, BOIL_BADGE_W = 31;
     private static final int FILL_Y = 36, FILL_H = 42, FILL_ROW_Y = 81, FILL_BADGE_W = 40;
     private static final int KILN_X = 88, KILN_Y = 37, KILN_H = 36, KILN_CURVE_Y = 75, KILN_CURVE_H = 18, KILN_BADGE_W = 22;
@@ -165,6 +168,7 @@ public class GuiMachineSC extends GuiContainer {
         kiln = machine.getMachineType() == com.sc.machine.MachineType.KILN;
         fill = machine.getMachineType() == com.sc.machine.MachineType.FLUID_CELL_FILLER;
         boil = machine.getMachineType() == com.sc.machine.MachineType.BOILER_LV || machine.getMachineType() == com.sc.machine.MachineType.BOILER_MV;
+        smelter = machine.getMachineType().isSmelter();
         station = machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_MV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_HV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_EV;
@@ -194,12 +198,32 @@ public class GuiMachineSC extends GuiContainer {
         }
         power.addButtons(buttonList, guiLeft, guiTop);
         battery.addButton(buttonList, guiLeft, guiTop);
+        if (smelter) {
+            boolean induction = machine.getMachineType() == com.sc.machine.MachineType.INDUCTION_FURNACE;
+            buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerMachineSC.BTN_XP, guiLeft + SM_X, guiTop + SM_BTN_Y,
+                    induction ? 56 : SM_W, 10, Lang.tr("sc.gui.smelt.takexp")));
+            if (induction) {
+                buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerMachineSC.BTN_KEEP_WARM, guiLeft + SM_X + 58, guiTop + SM_BTN_Y,
+                        SM_W - 58, 10, ""));
+            }
+        }
     }
 
     /** The Clear buttons sit above the tanks shown (the Ore Washer: above its Water gauge). */
     @Override
     public void updateScreen() {
         super.updateScreen();
+        if (smelter) {
+            for (Object o : buttonList) {
+                net.minecraft.client.gui.GuiButton b = (net.minecraft.client.gui.GuiButton) o;
+                if (b.id == ContainerMachineSC.BTN_XP) {
+                    b.enabled = machine.getStoredXp() >= 1F;
+                } else if (b.id == ContainerMachineSC.BTN_KEEP_WARM) {
+                    b.displayString = (machine.isKeepWarm() ? "\u00a7a" : "\u00a77") + Lang.tr("sc.gui.smelt.warm",
+                            Lang.tr(machine.isKeepWarm() ? "sc.armorgui.on" : "sc.armorgui.off"));
+                }
+            }
+        }
         collectTanks();
         for (Object o : buttonList) {
             if (!(o instanceof GuiBigSC.ClearButton)) {
@@ -305,6 +329,16 @@ public class GuiMachineSC extends GuiContainer {
         GuiBigSC.window(x, y, true, TileEntityMachineSC.UPGRADE_SLOTS);
         collectTanks();
         GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
+        if (smelter) {
+            drawSmelterBackground(x, y, partialTicks);
+            GuiEnergyGaugeSC.draw(x + GuiBigSC.GAUGE_X, y + MG_Y, GuiBigSC.GAUGE_W, MG_H,
+                    (float) machine.getEnergyStored() / Math.max(1, machine.getMaxEnergyStored()));
+            battery.draw(x, y, machine.getStackInSlot(TileEntityMachineSC.SLOT_BATTERY));
+            GuiHoloSC.glint(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
+            GuiGaugeSC.bind(mc, TEXTURE);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+            return;
+        }
         for (int i = 0; i < 3; i++) {
             GuiHoloSC.slot(x + slotX(withTanks, i), y + IN_Y, false);
             GuiHoloSC.slot(x + slotX(withTanks, i), y + OUT_Y, machine.getStackInSlot(TileEntityMachineSC.INPUT_SLOTS + i) != null);
@@ -673,6 +707,11 @@ public class GuiMachineSC extends GuiContainer {
                 GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, machine.getMachineType().tier, GuiBigSC.W - 6, 3);
         GuiBigSC.labels(fontRendererObj, Lang.tr("sc.gui.big.upgrades"), Lang.tr("container.inventory"));
+        if (smelter) {
+            drawSmelterText();
+            drawUpgradeLine();
+            return;
+        }
         MachineStatus status = machine.getStatus();
         int ticks = machine.getCurrentRecipeTicks();
         String pctNow = ticks > 0 ? machine.getProgressTicks() * 100 / ticks + "%" : "";
@@ -832,6 +871,77 @@ public class GuiMachineSC extends GuiContainer {
     }
 
     /** What the upgrades do, beside their row. */
+    // ---- the electric / induction furnace ----
+
+    private float smeltHeat() {
+        return machine.getMachineType() == com.sc.machine.MachineType.INDUCTION_FURNACE
+                ? (float) machine.getHeat() / TileEntityMachineSC.INDUCTION_HEAT_MAX : 0F;
+    }
+
+    /** Each stream a column: input over output, its own progress bar between; the scene, the heat bar, the orb on the right. */
+    private void drawSmelterBackground(int x, int y, float partialTicks) {
+        float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
+        int streams = machine.getMachineType().smeltStreams();
+        int ticks = Math.max(1, machine.getCurrentRecipeTicks());
+        boolean working = machine.getStatus() == MachineStatus.PROCESSING;
+        boolean[] busy = new boolean[streams];
+        for (int i = 0; i < streams; i++) {
+            int sx = x + slotX(false, i);
+            GuiHoloSC.slot(sx, y + IN_Y, machine.getStackInSlot(i) != null);
+            GuiHoloSC.slot(sx, y + OUT_Y, machine.getStackInSlot(TileEntityMachineSC.INPUT_SLOTS + i) != null);
+            float p = Math.min(1F, machine.getSmeltProgress(i) / (float) ticks);
+            busy[i] = working && machine.getStackInSlot(i) != null && machine.getSmeltProgress(i) > 0;
+            int bw = streams == 1 ? PROGRESS_W : 18;
+            GuiHoloSC.bar(sx - 1, y + PROGRESS_Y, bw, PROGRESS_H, p, streams == 1 ? 12 : 4, busy[i] ? 0xFFFF8C1E : 0xFF6E7C8C);
+            int ax = sx + 6;
+            drawRect(ax, y + 52, ax + 4, y + 53, GuiHoloSC.CYAN_DIM);
+            drawRect(ax + 1, y + 53, ax + 3, y + 54, GuiHoloSC.CYAN_DIM);
+        }
+        drawRect(x + SM_X - 4, y + GuiBigSC.SCREEN_Y + 6, x + SM_X - 3, y + GuiBigSC.SCREEN_Y + GuiBigSC.SCREEN_H - 6, 0xFF1E3444);
+        if (machine.getMachineType() == com.sc.machine.MachineType.INDUCTION_FURNACE) {
+            GuiFurnaceSceneSC.crucibles(x + SM_X, y + SM_SCENE_Y, SM_W, SM_SCENE_H, t, smeltHeat(), busy);
+            GuiFurnaceSceneSC.heatBar(x + SM_X, y + 79, SM_W, 5, smeltHeat());
+        } else {
+            GuiFurnaceSceneSC.chamber(x + SM_X, y + SM_SCENE_Y, SM_W, SM_SCENE_H, t, working);
+        }
+        if (machine.getStoredXp() >= 1F) {
+            GuiFurnaceSceneSC.orb(x + SM_X + SM_W - 5, y + 96);
+        }
+    }
+
+    /** Experience points -> the level they'd make from nothing (vanilla's 1.7.10 curve). */
+    private static int xpLevel(int points) {
+        int level = 0;
+        while (true) {
+            int need = level >= 30 ? 62 + (level - 30) * 7 : level >= 15 ? 17 + (level - 15) * 3 : 17;
+            if (points < need) {
+                return level;
+            }
+            points -= need;
+            level++;
+        }
+    }
+
+    private void drawSmelterText() {
+        boolean induction = machine.getMachineType() == com.sc.machine.MachineType.INDUCTION_FURNACE;
+        MachineStatus status = machine.getStatus();
+        fit(status.localized(), PROGRESS_X, STATUS_Y, 70, statusColor(status));
+        small(Lang.tr("sc.gui.holo.in"), slotX(false, 0), IN_Y + 18, 0x4A96BE);
+        small(Lang.tr("sc.gui.holo.out"), slotX(false, 0), OUT_Y + 19, 0x4A96BE);
+        fit(Lang.tr(induction ? "sc.gui.smelt.cap.induction" : "sc.gui.smelt.cap"), SM_X, CAPTION_Y, SM_W, GuiHoloSC.CYAN & 0xFFFFFF);
+        int dim = GuiHoloSC.LABEL, val = GuiHoloSC.VALUE;
+        String secs = String.format(java.util.Locale.ROOT, "%.1f", machine.smeltTicks() / 20.0);
+        if (induction) {
+            int pct = Math.round(smeltHeat() * 100);
+            fit(Lang.tr("sc.gui.smelt.heat", pct, String.format(java.util.Locale.ROOT, "%.1f", machine.smeltSpeed())), SM_X, 84, SM_W,
+                    pct >= 50 ? GuiHoloSC.OK : GuiHoloSC.WARN);
+        } else {
+            fit(Lang.tr("sc.gui.smelt.stats", machine.effectiveEuPerTick(), secs), SM_X, 82, SM_W, dim);
+        }
+        int xp = (int) machine.getStoredXp();
+        fit(Lang.tr("sc.gui.smelt.xp", xp, xpLevel(xp)), SM_X, 93, SM_W - 10, xp > 0 ? 0xB8FF40 : val);
+    }
+
     private void drawUpgradeLine() {
         int oc = machine.upgradeCount(UpgradeType.OVERCLOCKER), q = machine.upgradeCount(UpgradeType.QUALITY);
         double speed = 1 / Math.pow(0.7, oc), energy = Math.pow(1.6, oc) * Math.pow(1.25, q);

@@ -17,7 +17,9 @@ public enum MachineStatus {
     /** The power switch is off: no energy taken, no work. */
     DISABLED,
     /** Held by its redstone mode (a signal wanted, or one there that shouldn't be). */
-    REDSTONE;
+    REDSTONE,
+    /** The induction furnace keeping itself warm with nothing to smelt. */
+    HEATING;
 
     public String localized() {
         return Lang.tr("sc.status.machine." + name().toLowerCase(java.util.Locale.ROOT));

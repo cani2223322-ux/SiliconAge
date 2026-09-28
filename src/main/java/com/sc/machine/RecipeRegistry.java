@@ -91,6 +91,9 @@ public final class RecipeRegistry {
         if (stack == null) {
             return false;
         }
+        if (type.isSmelter()) {
+            return com.sc.tileentity.TileEntityMachineSC.smeltResult(stack) != null;
+        }
         List<MachineRecipe> list = RECIPES.get(type);
         if (list == null) {
             return false;

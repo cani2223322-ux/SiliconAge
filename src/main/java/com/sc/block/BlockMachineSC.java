@@ -288,6 +288,9 @@ public class BlockMachineSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityMachineSC) {
             TileEntityMachineSC machine = (TileEntityMachineSC) te;
+            if (!world.isRemote) {
+                machine.dropXp();                                    // a smelter's stored experience, as orbs
+            }
             for (int i = 0; i < machine.getSizeInventory(); i++) {
                 if (machine.upgradesInItem() && i >= TileEntityMachineSC.FIRST_UPGRADE_SLOT
                         && i < TileEntityMachineSC.FIRST_UPGRADE_SLOT + TileEntityMachineSC.UPGRADE_SLOTS) {

@@ -46,7 +46,11 @@ public enum MachineType {
     KILN("Kiln", Tier.LV, 15, false),
     FLUID_CELL_FILLER("FluidCellFiller", Tier.LV, 10, false),
     BOILER_LV("BoilerLV", Tier.LV, 25, false),
-    BOILER_MV("BoilerMV", Tier.MV, 90, false);
+    BOILER_MV("BoilerMV", Tier.MV, 90, false),
+    /** Smelts what a furnace smelts, one piece at a time, twice as fast as a furnace; keeps the experience. */
+    ELECTRIC_FURNACE("ElectricFurnace", Tier.LV, 4, false),
+    /** Two pieces at once; heats up while it works: x1 cold, x3 hot (EU/t for both streams). */
+    INDUCTION_FURNACE("InductionFurnace", Tier.MV, 24, false);
 
     public final String displayName;
     public final Tier tier;
@@ -68,6 +72,16 @@ public enum MachineType {
      */
     public String localizedName() {
         return com.sc.manual.Lang.trOr("sc.machine." + name().toLowerCase(java.util.Locale.ROOT), displayName);
+    }
+
+    /** Smelts furnace recipes (FurnaceRecipes), not the mod's recipe list. */
+    public boolean isSmelter() {
+        return this == ELECTRIC_FURNACE || this == INDUCTION_FURNACE;
+    }
+
+    /** Pieces a smelter works on at once (input slot i -> output slot i). */
+    public int smeltStreams() {
+        return this == INDUCTION_FURNACE ? 2 : this == ELECTRIC_FURNACE ? 1 : 0;
     }
 
     /** Matches the "machine<Name>Front"/"machineCasing<TIER>" textures pre-generated ahead of this step. */
