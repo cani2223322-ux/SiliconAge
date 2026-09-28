@@ -139,6 +139,7 @@ public class WorldTestWirelessSC {
     }
 
     private static TileEntityWirelessSC place(World w, net.minecraft.block.Block b, int meta, int x, int y, int z) {
+        w.setBlockToAir(x, y, z);                      // a block left by an interrupted run: a fresh one, not the old tile
         w.setBlock(x, y, z, b, meta, 3);
         net.minecraft.tileentity.TileEntity te = w.getTileEntity(x, y, z);
         if (!(te instanceof TileEntityWirelessSC)) {

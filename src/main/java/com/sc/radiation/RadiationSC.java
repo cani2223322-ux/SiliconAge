@@ -37,7 +37,14 @@ public final class RadiationSC {
     /** Player data: the dose (0-100) and the radiation shield's heat below one whole unit. */
     public static final String DOSE = "scRadDose", HEAT_FRAC = "scRadHeat", NAUSEA = "scRadNausea", PROT = "scRadProt";
     /** Dose a second for each level that gets through; the fall a second while nothing gets through. */
-    public static final float DOSE_PER_LEVEL = 0.1F, DOSE_DECAY = 0.05F;
+    public static final float DOSE_PER_LEVEL = 0.4F, DOSE_DECAY = 0.1F;
+    /**
+     * Acute effects, from the radiation getting through right now (not the dose): nausea from this
+     * level, slowness from this, weakness and harm from this. Entering radiation with nothing
+     * stopping it: a warning and a short nausea at once.
+     */
+    public static final float ACUTE_NAUSEA = 3F, ACUTE_SLOW = 6F, ACUTE_HARM = 9F, ENTER_LEVEL = 0.3F;
+    public static final String LEFT = "scRadLeft", INSIDE = "scRadInside";
     /** Dose steps: nausea, weakness and hunger, wither, harm. */
     public static final float STAGE_NAUSEA = 25F, STAGE_WEAK = 50F, STAGE_WITHER = 75F, STAGE_HARM = 100F;
     /** A field's radiation shield: EU a second for each level it stops round a player. */
@@ -329,7 +336,10 @@ public final class RadiationSC {
             dose -= DOSE_DECAY;
         }
         setDose(p, dose);
-        effects(p, doseOf(p));
+        if (!(p instanceof net.minecraftforge.common.util.FakePlayer)) {   // no connection: a potion effect would crash
+            effects(p, doseOf(p));
+            acute(p, p.capabilities.isCreativeMode ? 0F : left);
+        }
         int prot = level <= 0.01F ? 0 : Math.round((1F - left / level) * 100F);
         p.getEntityData().setInteger(PROT, prot);
         send(p, level, doseOf(p), prot, flags);
@@ -339,6 +349,28 @@ public final class RadiationSC {
         if (p instanceof EntityPlayerMP && ((EntityPlayerMP) p).playerNetServerHandler != null
                 && !(p instanceof net.minecraftforge.common.util.FakePlayer)) {
             RadiationNetSC.send((EntityPlayerMP) p, level, dose, prot, flags);
+        }
+    }
+
+    /** What the radiation getting through does at once, and the warning on the way in. */
+    private static void acute(EntityPlayer p, float left) {
+        NBTTagCompound data = p.getEntityData();
+        data.setFloat(LEFT, left);
+        boolean inside = left >= ENTER_LEVEL;
+        if (inside && !data.getBoolean(INSIDE)) {
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.rad.enter", fmt(left)));
+            p.addPotionEffect(new PotionEffect(Potion.confusion.id, 70, 0, true));
+        }
+        data.setBoolean(INSIDE, inside);
+        if (left >= ACUTE_NAUSEA) {
+            p.addPotionEffect(new PotionEffect(Potion.confusion.id, 90, 0, true));
+        }
+        if (left >= ACUTE_SLOW) {
+            p.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, 45, 0, true));
+        }
+        if (left >= ACUTE_HARM) {
+            p.addPotionEffect(new PotionEffect(Potion.weakness.id, 45, 0, true));
+            p.attackEntityFrom(DAMAGE, 1.0F);
         }
     }
 
@@ -383,9 +415,10 @@ public final class RadiationSC {
 
     /** The dose keeps up this effect (the suit's cleansing leaves it: radiation sickness isn't a poison). */
     public static boolean sicknessHolds(EntityPlayer p, int potionId) {
-        float d = doseOf(p);
-        return potionId == Potion.confusion.id && d >= STAGE_NAUSEA
-                || (potionId == Potion.weakness.id || potionId == Potion.hunger.id) && d >= STAGE_WEAK
+        float d = doseOf(p), now = p.getEntityData().getFloat(LEFT);
+        return potionId == Potion.confusion.id && (d >= STAGE_NAUSEA || now >= ACUTE_NAUSEA)
+                || potionId == Potion.weakness.id && (d >= STAGE_WEAK || now >= ACUTE_HARM)
+                || potionId == Potion.hunger.id && d >= STAGE_WEAK
                 || potionId == Potion.wither.id && d >= STAGE_WITHER;
     }
 
