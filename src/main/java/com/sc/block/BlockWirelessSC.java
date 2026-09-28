@@ -103,6 +103,9 @@ public class BlockWirelessSC extends Block {
             }
             return true;
         }
+        if (player.getCurrentEquippedItem() != null && player.getCurrentEquippedItem().getItem() instanceof com.sc.item.ItemLinkCardSC) {
+            return true;                       // the card links (server side), no screen
+        }
         if (!world.isRemote) {
             player.openGui(SCMod.instance, GuiHandlerSC.WIRELESS_GUI_ID, world, x, y, z);
         }

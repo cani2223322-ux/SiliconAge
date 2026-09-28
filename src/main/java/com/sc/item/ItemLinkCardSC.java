@@ -42,7 +42,7 @@ public class ItemLinkCardSC extends Item {
             return false;
         }
         if (world.isRemote) {
-            return true;
+            return false;                      // true here would keep the click from reaching the server
         }
         TileEntityWirelessSC w = (TileEntityWirelessSC) te;
         if (!w.allowed(player)) {
