@@ -56,7 +56,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     }
 
     public static int capacityOf(Tier tier) {
-        return CAPACITY[tier.ordinal()];
+        return com.sc.util.ConfigSC.scale(CAPACITY[tier.ordinal()], com.sc.util.ConfigSC.storageCapacity, 1);
     }
 
     @Override

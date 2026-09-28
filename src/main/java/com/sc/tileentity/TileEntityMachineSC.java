@@ -136,13 +136,14 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
 
     /** Recipe time with overclockers: x0.7 each, at least one tick. */
     public int effectiveTicks(MachineRecipe recipe) {
-        return Math.max(1, (int) Math.round(recipe.ticks * Math.pow(0.7, upgradeCount(UpgradeType.OVERCLOCKER))));
+        return Math.max(1, (int) Math.round(recipe.ticks * Math.pow(0.7, upgradeCount(UpgradeType.OVERCLOCKER))
+                / com.sc.util.ConfigSC.machineSpeed));
     }
 
     /** Energy per working tick: x1.6 per overclocker, x1.25 per quality control. */
     public int effectiveEuPerTick() {
         double eu = machineType.euPerTick * Math.pow(1.6, upgradeCount(UpgradeType.OVERCLOCKER))
-                * Math.pow(1.25, upgradeCount(UpgradeType.QUALITY));
+                * Math.pow(1.25, upgradeCount(UpgradeType.QUALITY)) * com.sc.util.ConfigSC.machineEnergy;
         return (int) Math.min(Integer.MAX_VALUE / 4, Math.ceil(eu));
     }
 

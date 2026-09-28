@@ -268,7 +268,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return 0;
         }
         int speed = active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED) ? moduleCount(ItemQuarryModuleSC.Kind.SPEED) : 0;
-        double bps = head.blocksPerSecond * TIER_SPEED[tierIndex()] * Math.pow(1.4, speed);
+        double bps = head.blocksPerSecond * TIER_SPEED[tierIndex()] * Math.pow(1.4, speed) * com.sc.util.ConfigSC.quarrySpeed;
         if (active(ItemQuarryModuleSC.Kind.DOUBLE, F_DOUBLE)) {
             bps *= 2;
         }
@@ -636,7 +636,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     /** Hauls a second (the speed modules' x1.4 each). */
     public double haulsPerSecond() {
         int speed = active(ItemQuarryModuleSC.Kind.SPEED, F_SPEED) ? moduleCount(ItemQuarryModuleSC.Kind.SPEED) : 0;
-        double rate = EXO_RATE * Math.pow(1.4, speed);
+        double rate = EXO_RATE * Math.pow(1.4, speed) * com.sc.util.ConfigSC.quarrySpeed;
         return active(ItemQuarryModuleSC.Kind.ECONOMY, F_ECONOMY) ? rate * 0.8 : rate;
     }
 

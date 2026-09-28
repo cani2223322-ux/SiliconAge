@@ -113,7 +113,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     }
 
     public static int capacityOf(ItemStack stack) {
-        return stack != null && stack.getItem() instanceof ItemArmorSC ? ((ItemArmorSC) stack.getItem()).suit.maxCharge : 0;
+        return stack != null && stack.getItem() instanceof ItemArmorSC ? ((ItemArmorSC) stack.getItem()).cap() : 0;
     }
 
     public static void setCharge(ItemStack stack, int charge) {
@@ -207,7 +207,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
 
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        list.add(Lang.tr("sc.tooltip.armor.charge", chargeOf(stack), suit.maxCharge));
+        list.add(Lang.tr("sc.tooltip.armor.charge", chargeOf(stack), cap()));
         if (!powered(stack)) {
             list.add(Lang.tr("sc.tooltip.armor.empty"));
         }
@@ -244,7 +244,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
 
     @Override
     public double getDurabilityForDisplay(ItemStack stack) {
-        return 1.0 - (double) chargeOf(stack) / suit.maxCharge;
+        return 1.0 - (double) chargeOf(stack) / cap();
     }
 
     /** Creative tab: an empty and a fully charged piece, like IC2. */
@@ -252,7 +252,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     public void getSubItems(Item item, CreativeTabs tab, List list) {
         list.add(new ItemStack(item));
         ItemStack full = new ItemStack(item);
-        setCharge(full, suit.maxCharge);
+        setCharge(full, cap());
         list.add(full);
     }
 
@@ -299,18 +299,28 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             return false;
         }
         if (!world.isRemote) {
-            int moved = ((TileEntityEnergyBase) te).extractForItemCharging(suit.maxCharge - chargeOf(stack));
+            int moved = ((TileEntityEnergyBase) te).extractForItemCharging(cap() - chargeOf(stack));
             charge(stack, moved);
             player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.weapon.charged",
-                    moved, chargeOf(stack), suit.maxCharge));
+                    moved, chargeOf(stack), cap()));
         }
         return true;
+    }
+
+    /** A piece's capacity (x the config's armorCapacity). */
+    public int cap() {
+        return com.sc.util.ConfigSC.scale(suit.maxCharge, com.sc.util.ConfigSC.armorCapacity, 1);
+    }
+
+    /** EU a point of absorbed damage costs (x the config's armorDamageCost). */
+    private double damageCost() {
+        return Math.max(1.0, suit.euPerDamage * (double) com.sc.util.ConfigSC.armorDamageCost);
     }
 
     // ---- ISpecialArmor: protection paid in EU ----
 
     private boolean powered(ItemStack stack) {
-        return chargeOf(stack) >= suit.euPerDamage;
+        return chargeOf(stack) >= damageCost();
     }
 
     @Override
@@ -319,7 +329,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             return new ArmorProperties(0, 0, 0);
         }
         // Forge works in 1/25ths of a damage point here, so the EU left buys 25 x charge / cost.
-        int absorbMax = (int) Math.min(Integer.MAX_VALUE, 25.0 * chargeOf(armor) / suit.euPerDamage);
+        int absorbMax = (int) Math.min(Integer.MAX_VALUE, 25.0 * chargeOf(armor) / damageCost());
         return new ArmorProperties(0, damageReduceAmount / 25.0, absorbMax);
     }
 
@@ -332,7 +342,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     @Override
     public void damageArmor(EntityLivingBase entity, ItemStack stack, DamageSource source, int damage, int slot) {
         float mul = entity instanceof EntityPlayer ? com.sc.item.ArmorLogicSC.absorbCostMul((EntityPlayer) entity) : 1F;
-        discharge(stack, (int) Math.ceil(damage * suit.euPerDamage * mul));
+        discharge(stack, (int) Math.ceil(damage * damageCost() * mul));
     }
 
     // ---- IC2: charged by batboxes / MFE / MFSU / charge pads through our own manager ----
@@ -354,7 +364,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
 
     @Override
     public double getMaxCharge(ItemStack stack) {
-        return suit.maxCharge;
+        return cap();
     }
 
     @Override

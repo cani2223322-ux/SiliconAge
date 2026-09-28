@@ -40,7 +40,7 @@ public class ItemBlockWirelessSC extends ItemBlock {
     @SuppressWarnings("unchecked")
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         if (kind() == TileEntityWirelessSC.QUANTUM) {
-            list.add("§7" + Lang.tr("sc.wl.tooltip.quantum", TileEntityWirelessSC.QUANTUM_RATE, TileEntityWirelessSC.QUANTUM_UPKEEP));
+            list.add("§7" + Lang.tr("sc.wl.tooltip.quantum", TileEntityWirelessSC.QUANTUM_RATE, TileEntityWirelessSC.quantumUpkeep()));
             list.add("§7" + Lang.tr("sc.wl.tooltip.quantum2"));
             return;
         }

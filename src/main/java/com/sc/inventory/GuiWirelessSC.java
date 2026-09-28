@@ -325,7 +325,7 @@ public class GuiWirelessSC extends GuiContainer {
         }
         small(Lang.tr("sc.wl.noloss"), 14, 76, 86, dim);
         int life = crystal == null ? -1 : (int) Math.ceil(ItemEntangledCrystalSC.lifeOf(crystal) * 100.0 / ItemEntangledCrystalSC.LIFE_MAX);
-        String[][] cols = {{"sc.wl.upkeep", te.isGiving() ? TileEntityWirelessSC.QUANTUM_UPKEEP + " EU/t" : "-"},
+        String[][] cols = {{"sc.wl.upkeep", te.isGiving() ? TileEntityWirelessSC.quantumUpkeep() + " EU/t" : "-"},
                 {"sc.wl.chunk", pair == 0 || st == TileEntityWirelessSC.ST_PAUSED || st == TileEntityWirelessSC.ST_OFF ? "-" : Lang.tr("sc.wl.chunk.held")},
                 {"sc.wl.crystal", life < 0 ? "-" : life + "%"}};
         int[] colors = {GuiHoloSC.WARN, c, life >= 0 && life <= 20 ? GuiHoloSC.BAD : GuiHoloSC.CYAN & 0xFFFFFF};

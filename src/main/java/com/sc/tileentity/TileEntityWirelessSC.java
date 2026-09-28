@@ -40,6 +40,11 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
     /** The quantum pair: its upkeep (EU/t, paid by the giving end), its rate, how often the crystal wears a step. */
     public static final int QUANTUM_UPKEEP = 2048, QUANTUM_RATE = 32768, WEAR_EVERY = 72;
 
+    /** The pair's upkeep, EU/t (x the config's quantumUpkeep). */
+    public static int quantumUpkeep() {
+        return com.sc.util.ConfigSC.scale(QUANTUM_UPKEEP, com.sc.util.ConfigSC.quantumUpkeep, 0);
+    }
+
     /** Loaded wireless tiles on the server, by id. */
     private static final Map<Long, TileEntityWirelessSC> LOADED = new HashMap<Long, TileEntityWirelessSC>();
 
@@ -78,6 +83,11 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
 
     /** How far a link of this tier reaches (blocks); XV: the whole dimension. */
     public static int range(Tier t) {
+        int r = baseRange(t);
+        return r == Integer.MAX_VALUE ? r : com.sc.util.ConfigSC.scale(r, com.sc.util.ConfigSC.wirelessRange, 1);
+    }
+
+    private static int baseRange(Tier t) {
         switch (t) {
             case LV: return 16;
             case MV: return 32;
@@ -91,6 +101,11 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
 
     /** Blocks per 1% lost, by tier: the higher, the cleaner the link. */
     public static int blocksPerPercent(Tier t) {
+        float loss = com.sc.util.ConfigSC.wirelessLoss;
+        return loss <= 0 ? Integer.MAX_VALUE / 4 : Math.max(1, Math.round(baseBlocksPerPercent(t) / loss));
+    }
+
+    private static int baseBlocksPerPercent(Tier t) {
         switch (t) {
             case LV:
             case MV:
@@ -427,7 +442,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
         if (linkedAt < 0 || linkedAt > time) {
             linkedAt = time;                              // just placed / loaded: a grace to find the other end
         }
-        holdChunk(time - linkedAt < CHUNK_GRACE);
+        holdChunk(com.sc.util.ConfigSC.quantumChunkLoading && time - linkedAt < CHUNK_GRACE);
         if (giving && feedFromBattery(slots[SLOT_BATTERY]) > 0) {
             markDirty();
         }
@@ -452,11 +467,11 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
             }
             return;
         }
-        if (getEnergyStored() < QUANTUM_UPKEEP) {
+        if (getEnergyStored() < quantumUpkeep()) {
             status = ST_NO_ENERGY;
             return;
         }
-        removeEnergy(QUANTUM_UPKEEP);
+        removeEnergy(quantumUpkeep());
         linkedAt = time;
         int room = p.getMaxEnergyStored() - p.getEnergyStored();
         int n = Math.min(Math.min(getEnergyStored(), QUANTUM_RATE), room);

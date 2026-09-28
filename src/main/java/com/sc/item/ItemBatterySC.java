@@ -70,7 +70,12 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
     }
 
     public static long capacityOf(ItemStack s) {
-        return CAPACITY[tierIndex(s)];
+        return capacity(tierIndex(s));
+    }
+
+    /** A tier's capacity (x the config's batteryCapacity). */
+    public static long capacity(int tier) {
+        return com.sc.util.ConfigSC.scale(CAPACITY[tier], com.sc.util.ConfigSC.batteryCapacity);
     }
 
     public static int rateOf(ItemStack s) {
@@ -259,7 +264,7 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
         for (int t = 0; t < KEYS.length; t++) {
             list.add(new ItemStack(item, 1, t));
             ItemStack full = new ItemStack(item, 1, t);
-            setCharge(full, CAPACITY[t]);
+            setCharge(full, capacity(t));
             list.add(full);
         }
     }

@@ -107,6 +107,23 @@ public class WailaSC implements IWailaDataProvider {
                 tip.add(Lang.tr("sc.waila.fluid", inPipe.getLocalizedName(), inPipe.amount, t.getInteger("scFluidCap")));
             }
         }
+        if (t.hasKey("scWlKind")) {
+            wireless(t, tip);
+        }
+        if (t.hasKey("scShowerSt")) {
+            tip.add(Lang.tr("sc.shower.status." + t.getInteger("scShowerSt")));
+            tip.add(Lang.tr("sc.waila.shower", t.getInteger("scShowerWater"), com.sc.tileentity.TileEntityShowerSC.TANK,
+                    t.getInteger("scShowerPlayers")));
+        }
+        if (t.hasKey("scRad")) {
+            float rad = t.getFloat("scRad");
+            tip.add(t.getBoolean("scRadShield") ? Lang.tr("sc.waila.rad.shielded")
+                    : rad > 0 ? Lang.tr("sc.waila.rad", com.sc.radiation.RadiationSC.fmt(rad), t.getInteger("scRadR"))
+                    : Lang.tr("sc.waila.rad.none"));
+        }
+        if (t.hasKey("scOff")) {
+            tip.add(Lang.tr("sc.waila.off"));
+        }
         if (t.hasKey("scTankCap")) {
             net.minecraftforge.fluids.Fluid tf = t.hasKey("scTankFluid") ? FluidRegistry.getFluid(t.getString("scTankFluid")) : null;
             if (tf == null) {
@@ -178,6 +195,45 @@ public class WailaSC implements IWailaDataProvider {
                 tag.setInteger("scFluidCap", b.getFluidCapacity());
             }
         }
+        if (te instanceof TileEntityEnergyBase && !(te instanceof com.sc.tileentity.TileEntityFieldGeneratorSC)
+                && !((TileEntityEnergyBase) te).isPowerOn()) {
+            tag.setBoolean("scOff", true);
+        }
+        if (te instanceof com.sc.tileentity.TileEntityGeneratorSC
+                && com.sc.tileentity.TileEntityGeneratorSC.radiationBase(((com.sc.tileentity.TileEntityGeneratorSC) te).getGeneratorType()) > 0) {
+            com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
+            tag.setFloat("scRad", g.radiationLevel());
+            tag.setInteger("scRadR", com.sc.tileentity.TileEntityGeneratorSC.radiationRadius(g.getGeneratorType()));
+            tag.setBoolean("scRadShield", g.isShielded());
+        }
+        if (te instanceof com.sc.tileentity.TileEntityShowerSC) {
+            com.sc.tileentity.TileEntityShowerSC sh = (com.sc.tileentity.TileEntityShowerSC) te;
+            tag.setInteger("scShowerSt", sh.getStatus());
+            tag.setInteger("scShowerWater", sh.getTank().getFluidAmount());
+            tag.setInteger("scShowerPlayers", sh.getPlayers());
+        }
+        if (te instanceof com.sc.tileentity.TileEntityWirelessSC) {
+            com.sc.tileentity.TileEntityWirelessSC w = (com.sc.tileentity.TileEntityWirelessSC) te;
+            int[] p = w.partnerPos();
+            tag.setInteger("scWlKind", w.getKind());
+            tag.setInteger("scWlSt", w.getStatus());
+            tag.setBoolean("scWlLinked", w.hasLink());
+            tag.setInteger("scWlX", p[0]);
+            tag.setInteger("scWlY", p[1]);
+            tag.setInteger("scWlZ", p[2]);
+            tag.setInteger("scWlDim", p[3]);
+            tag.setInteger("scWlDist", w.getDistance());
+            tag.setInteger("scWlLoss", w.getLossPct());
+            tag.setInteger("scWlFlow", w.getFlow());
+            tag.setBoolean("scWlGiving", w.isGiving());
+            ItemStack crystal = w.getStackInSlot(com.sc.tileentity.TileEntityWirelessSC.SLOT_CRYSTAL);
+            long pair = com.sc.item.ItemEntangledCrystalSC.pairOf(crystal);
+            if (pair != 0) {
+                tag.setString("scWlPair", com.sc.item.ItemEntangledCrystalSC.pairName(pair));
+                tag.setInteger("scWlLife", (int) Math.ceil(com.sc.item.ItemEntangledCrystalSC.lifeOf(crystal) * 100.0
+                        / com.sc.item.ItemEntangledCrystalSC.LIFE_MAX));
+            }
+        }
         if (te instanceof com.sc.tileentity.TileEntityTankSC) {
             com.sc.tileentity.TileEntityTankSC tank = (com.sc.tileentity.TileEntityTankSC) te;
             tag.setInteger("scTankCap", tank.getTank().getCapacity());
@@ -189,6 +245,32 @@ public class WailaSC implements IWailaDataProvider {
             }
         }
         return tag;
+    }
+
+    /** A transmitter / receiver: status, the other end, distance and loss; a translator: pair, role, the other end, crystal. */
+    private static void wireless(NBTTagCompound t, List<String> tip) {
+        int kind = t.getInteger("scWlKind"), st = t.getInteger("scWlSt");
+        tip.add(Lang.tr("sc.wl.status." + st));
+        if (kind == com.sc.tileentity.TileEntityWirelessSC.QUANTUM) {
+            if (t.hasKey("scWlPair")) {
+                tip.add(Lang.tr("sc.waila.wl.pair", t.getString("scWlPair"), Lang.tr(t.getBoolean("scWlGiving") ? "sc.wl.btn.give" : "sc.wl.btn.take"),
+                        t.getInteger("scWlLife")));
+            }
+            if (st == com.sc.tileentity.TileEntityWirelessSC.ST_OK || st == com.sc.tileentity.TileEntityWirelessSC.ST_FULL
+                    || st == com.sc.tileentity.TileEntityWirelessSC.ST_IDLE) {
+                tip.add(Lang.tr("sc.waila.wl.other", Lang.trOr("sc.wl.dim." + t.getInteger("scWlDim"), String.valueOf(t.getInteger("scWlDim"))),
+                        t.getInteger("scWlX"), t.getInteger("scWlY"), t.getInteger("scWlZ")));
+            }
+        } else if (t.getBoolean("scWlLinked")) {
+            tip.add(Lang.tr(kind == com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER ? "sc.waila.wl.to" : "sc.waila.wl.from",
+                    t.getInteger("scWlX"), t.getInteger("scWlY"), t.getInteger("scWlZ")));
+            if (t.getInteger("scWlDist") > 0) {
+                tip.add(Lang.tr("sc.waila.wl.dist", t.getInteger("scWlDist"), t.getInteger("scWlLoss")));
+            }
+        }
+        if (t.getInteger("scWlFlow") > 0) {
+            tip.add(Lang.tr("sc.waila.wl.flow", t.getInteger("scWlFlow")));
+        }
     }
 
     private static Tier tier(int ordinal) {

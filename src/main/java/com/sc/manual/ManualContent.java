@@ -427,7 +427,7 @@ public final class ManualContent {
         for (int t = 0; t < com.sc.item.ItemBatterySC.KEYS.length; t++) {
             String name = new ItemStack(ModItems.battery, 1, t).getDisplayName();
             lines.add(" " + name + R + DIM + " - " + Lang.tr("sc.manual.energy.batteryline", com.sc.item.ItemBatterySC.TIERS[t].name(),
-                    String.valueOf(com.sc.item.ItemBatterySC.CAPACITY[t]), com.sc.item.ItemBatterySC.RATE[t]));
+                    String.valueOf(com.sc.item.ItemBatterySC.capacity(t)), com.sc.item.ItemBatterySC.RATE[t]));
         }
         lines.addAll(paragraph("sc.manual.energy.battery"));
         lines.add("");

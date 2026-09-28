@@ -783,7 +783,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * (BASE x 6 x nodes + RANGE_EU_PER_BLOCK x range) x multiplier. Also shown in the GUI.
      */
     public int upkeepPerTick() {
-        return upkeepFor(getNodeCount(), range, height, mode) + extrasPerTick();
+        return upkeepFor(getNodeCount(), range, height, mode) + com.sc.util.ConfigSC.scale(extrasPerTick(), com.sc.util.ConfigSC.fieldUpkeep, 0);
     }
 
     /** What the switched-on protections add to the upkeep (charging and healing are paid as used). */
@@ -799,7 +799,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** With a height of its own the reach costs by (2 x range + height) / 3 - the same as before when height = range. */
     public static int upkeepFor(int nodes, int range, int height, FieldMode mode) {
         double reach = (2.0 * range + FieldShapeSC.heightOf(range, height)) / 3.0;
-        return (int) Math.round((BASE_EU_PER_FACE * 6 * nodes + RANGE_EU_PER_BLOCK * reach) * mode.costMultiplier);
+        return (int) Math.round((BASE_EU_PER_FACE * 6 * nodes + RANGE_EU_PER_BLOCK * reach) * mode.costMultiplier
+                * com.sc.util.ConfigSC.fieldUpkeep);
     }
 
     // ---- client copies for the GUI, written by ContainerFieldGeneratorSC (nothing else syncs

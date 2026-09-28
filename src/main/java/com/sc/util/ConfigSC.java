@@ -23,6 +23,27 @@ public final class ConfigSC {
     public static boolean radiation = true;
     public static float radiationMultiplier = 1F;
 
+    /** Balance (section "balance"), all 1 = as designed. Machines: work speed, EU a tick. */
+    public static float machineSpeed = 1F, machineEnergy = 1F;
+    /** Buffers: energy storages, portable batteries, suit pieces. */
+    public static float storageCapacity = 1F, batteryCapacity = 1F, armorCapacity = 1F;
+    /** EU a suit spends on each point of damage it absorbs. */
+    public static float armorDamageCost = 1F;
+    /** The field generator's upkeep; quarries' and the Exo rig's speed. */
+    public static float fieldUpkeep = 1F, quarrySpeed = 1F;
+    /** Wireless: transmitter range (XV stays unlimited), the loss over distance, the quantum pair's upkeep; translators load chunks. */
+    public static float wirelessRange = 1F, wirelessLoss = 1F, quantumUpkeep = 1F;
+    public static boolean quantumChunkLoading = true;
+
+    /** A whole number scaled by a multiplier, at least `min`, capped to an int. */
+    public static int scale(int base, float mul, int min) {
+        return (int) Math.max(min, Math.min(Integer.MAX_VALUE, Math.round((double) base * mul)));
+    }
+
+    public static long scale(long base, float mul) {
+        return Math.max(1L, Math.round(base * (double) mul));
+    }
+
     private ConfigSC() {
     }
 
@@ -52,6 +73,23 @@ public final class ConfigSC {
                     "RTGs and reactors irradiate players nearby: a dose builds up and makes them ill (lead, suits and fields protect)");
             radiationMultiplier = config.getFloat("multiplier", "radiation", 1F, 0F, 10F,
                     "Every radiation level is multiplied by this (0.5 = half as strong)");
+            String b = "balance";
+            config.setCategoryComment(b, "Multipliers on the mod's balance (1 = as designed). On a server, give the clients the same file"
+                    + " so their screens and tooltips show the same numbers.");
+            machineSpeed = config.getFloat("machineSpeed", b, 1F, 0.1F, 10F, "Machines work this many times faster (2 = recipes take half the time)");
+            machineEnergy = config.getFloat("machineEnergy", b, 1F, 0.1F, 10F, "Machines use this many times the EU a tick");
+            storageCapacity = config.getFloat("storageCapacity", b, 1F, 0.1F, 10F, "Energy storages hold this many times the EU");
+            batteryCapacity = config.getFloat("batteryCapacity", b, 1F, 0.1F, 10F, "Portable batteries hold this many times the EU");
+            armorCapacity = config.getFloat("armorCapacity", b, 1F, 0.1F, 10F, "Suit pieces (Nano, Quantum, Exo) hold this many times the EU");
+            armorDamageCost = config.getFloat("armorDamageCost", b, 1F, 0.1F, 10F,
+                    "EU a suit spends on each point of damage it stops, times this (lower = stronger armour)");
+            fieldUpkeep = config.getFloat("fieldUpkeep", b, 1F, 0.1F, 10F, "The field generator's upkeep, times this");
+            quarrySpeed = config.getFloat("quarrySpeed", b, 1F, 0.1F, 10F, "Quarries and the Exo Drilling Rig dig this many times faster");
+            wirelessRange = config.getFloat("wirelessRange", b, 1F, 0.1F, 10F, "Wireless transmitters reach this many times as far (XV stays unlimited)");
+            wirelessLoss = config.getFloat("wirelessLoss", b, 1F, 0F, 10F, "Wireless loss over distance, times this (0 = no loss)");
+            quantumUpkeep = config.getFloat("quantumUpkeep", b, 1F, 0F, 10F, "The quantum translator pair's upkeep, times this");
+            quantumChunkLoading = config.getBoolean("quantumChunkLoading", b, true,
+                    "Quantum translators keep their chunks loaded (off: both ends must be loaded by players)");
         } finally {
             if (config.hasChanged()) {
                 config.save();

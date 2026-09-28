@@ -60,6 +60,7 @@ public final class SelfTestSC {
             sounds();
             wireless();
             radiation();
+            balanceConfig();
             drills();
             fieldExtras();
         } catch (Throwable t) {
@@ -1193,6 +1194,50 @@ public final class SelfTestSC {
         placed.readFromItem(kept);
         ok = placed.getTank().getFluidAmount() == com.sc.tileentity.TileEntityShowerSC.TANK && placed.getEnergyStored() == 5000;
         check(ok, "shower: the item keeps its water and energy (" + placed.getTank().getFluidAmount() + " mB, " + placed.getEnergyStored() + " EU)");
+    }
+
+    /** The config's balance multipliers reach what they name (set for the test, then put back). */
+    private static void balanceConfig() {
+        float ms = com.sc.util.ConfigSC.machineSpeed, st = com.sc.util.ConfigSC.storageCapacity, bc = com.sc.util.ConfigSC.batteryCapacity,
+                ac = com.sc.util.ConfigSC.armorCapacity, wr = com.sc.util.ConfigSC.wirelessRange, wl = com.sc.util.ConfigSC.wirelessLoss,
+                qu = com.sc.util.ConfigSC.quantumUpkeep, fu = com.sc.util.ConfigSC.fieldUpkeep;
+        int base = com.sc.tileentity.TileEntityEnergyStorageSC.capacityOf(com.sc.energy.Tier.LV);
+        long bat = com.sc.item.ItemBatterySC.capacity(0);
+        int field = com.sc.tileentity.TileEntityFieldGeneratorSC.upkeepFor(1, 8, com.sc.energy.FieldMode.UNION);
+        try {
+            com.sc.util.ConfigSC.storageCapacity = 2F;
+            com.sc.util.ConfigSC.batteryCapacity = 0.5F;
+            com.sc.util.ConfigSC.armorCapacity = 3F;
+            com.sc.util.ConfigSC.wirelessRange = 2F;
+            com.sc.util.ConfigSC.wirelessLoss = 0F;
+            com.sc.util.ConfigSC.quantumUpkeep = 0.5F;
+            com.sc.util.ConfigSC.fieldUpkeep = 2F;
+            ItemStack chest = null;
+            for (Object o : net.minecraft.item.Item.itemRegistry) {
+                if (o instanceof com.sc.item.ItemArmorSC && ((com.sc.item.ItemArmorSC) o).getSuit() == com.sc.util.ArmorSuit.NANO) {
+                    chest = new ItemStack((net.minecraft.item.Item) o);
+                    break;
+                }
+            }
+            boolean ok = com.sc.tileentity.TileEntityEnergyStorageSC.capacityOf(com.sc.energy.Tier.LV) == base * 2
+                    && com.sc.item.ItemBatterySC.capacity(0) == bat / 2
+                    && chest != null && com.sc.item.ItemArmorSC.capacityOf(chest) == com.sc.util.ArmorSuit.NANO.maxCharge * 3
+                    && com.sc.tileentity.TileEntityWirelessSC.range(com.sc.energy.Tier.HV) == 128
+                    && com.sc.tileentity.TileEntityWirelessSC.range(com.sc.energy.Tier.XV) == Integer.MAX_VALUE
+                    && com.sc.tileentity.TileEntityWirelessSC.lossPct(500, com.sc.energy.Tier.LV) == 0
+                    && com.sc.tileentity.TileEntityWirelessSC.quantumUpkeep() == 1024
+                    && Math.abs(com.sc.tileentity.TileEntityFieldGeneratorSC.upkeepFor(1, 8, com.sc.energy.FieldMode.UNION) - field * 2) <= 1;
+            check(ok, "config balance: storage x2, battery x0.5, armour x3, wireless range x2 (XV unlimited), no loss, quantum upkeep x0.5, field x2");
+        } finally {
+            com.sc.util.ConfigSC.machineSpeed = ms;
+            com.sc.util.ConfigSC.storageCapacity = st;
+            com.sc.util.ConfigSC.batteryCapacity = bc;
+            com.sc.util.ConfigSC.armorCapacity = ac;
+            com.sc.util.ConfigSC.wirelessRange = wr;
+            com.sc.util.ConfigSC.wirelessLoss = wl;
+            com.sc.util.ConfigSC.quantumUpkeep = qu;
+            com.sc.util.ConfigSC.fieldUpkeep = fu;
+        }
     }
 
     /** Every sound the code plays is in sounds.json, and every file there is a real Ogg in the jar. */
