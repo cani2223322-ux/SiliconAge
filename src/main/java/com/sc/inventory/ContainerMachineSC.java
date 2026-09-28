@@ -256,6 +256,11 @@ public class ContainerMachineSC extends Container {
             if (!mergeItemStack(original, machineSlots, playerEnd, true)) {
                 return null;
             }
+            if (slot instanceof SlotOutputOnly) {                    // shift-click out of a smelter counts too
+                ItemStack moved = result.copy();
+                moved.stackSize = result.stackSize - original.stackSize;
+                ((SlotOutputOnly) slot).smelted(player, moved);
+            }
         } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
             if (!SlotMergeSC.mergeValid(inventorySlots, original, battery, battery + 1)) {
                 return null;
@@ -306,7 +311,7 @@ public class ContainerMachineSC extends Container {
         }
     }
 
-    /** Upgrade slots take only machine upgrades. */
+    /** Upgrade slots take only the upgrades this machine uses (TileEntityMachineSC.isItemValidForSlot). */
     private static class SlotUpgrade extends Slot {
         SlotUpgrade(net.minecraft.inventory.IInventory inv, int index, int x, int y) {
             super(inv, index, x, y);
@@ -314,9 +319,7 @@ public class ContainerMachineSC extends Container {
 
         @Override
         public boolean isItemValid(ItemStack stack) {
-            return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
-                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
-                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly();
+            return inventory.isItemValidForSlot(getSlotIndex(), stack);
         }
     }
 
@@ -329,6 +332,32 @@ public class ContainerMachineSC extends Container {
         @Override
         public boolean isItemValid(ItemStack stack) {
             return false;
+        }
+
+        @Override
+        public void onPickupFromSlot(EntityPlayer player, ItemStack stack) {
+            smelted(player, stack);
+            super.onPickupFromSlot(player, stack);
+        }
+
+        /**
+         * A smelter's product taken by a player: what a furnace's output slot does (the item's own
+         * onCrafting, the smelting event other mods listen to, the iron / fish achievements) - the
+         * experience stays in the machine for its button.
+         */
+        void smelted(EntityPlayer player, ItemStack stack) {
+            if (stack == null || player.worldObj.isRemote || !(inventory instanceof TileEntityMachineSC)
+                    || !((TileEntityMachineSC) inventory).getMachineType().isSmelter()) {
+                return;
+            }
+            stack.onCrafting(player.worldObj, player, stack.stackSize);
+            cpw.mods.fml.common.FMLCommonHandler.instance().firePlayerSmeltedEvent(player, stack);
+            if (stack.getItem() == net.minecraft.init.Items.iron_ingot) {
+                player.addStat(net.minecraft.stats.AchievementList.acquireIron, 1);
+            }
+            if (stack.getItem() == net.minecraft.init.Items.cooked_fished) {
+                player.addStat(net.minecraft.stats.AchievementList.cookFish, 1);
+            }
         }
     }
 }

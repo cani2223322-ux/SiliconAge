@@ -196,13 +196,14 @@ public class WailaSC implements IWailaDataProvider {
             }
         }
         if (te instanceof TileEntityEnergyBase && !(te instanceof com.sc.tileentity.TileEntityFieldGeneratorSC)
-                && !((TileEntityEnergyBase) te).isPowerOn()) {
+                && !(te instanceof com.sc.tileentity.TileEntityShowerSC) && !(te instanceof com.sc.tileentity.TileEntityWirelessSC)
+                && !((TileEntityEnergyBase) te).isPowerOn()) {                // (the shower and wireless say so in their status)
             tag.setBoolean("scOff", true);
         }
         if (te instanceof com.sc.tileentity.TileEntityGeneratorSC
                 && com.sc.tileentity.TileEntityGeneratorSC.radiationBase(((com.sc.tileentity.TileEntityGeneratorSC) te).getGeneratorType()) > 0) {
             com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
-            tag.setFloat("scRad", g.radiationLevel());
+            tag.setFloat("scRad", com.sc.util.ConfigSC.radiation ? g.radiationLevel() * com.sc.util.ConfigSC.radiationMultiplier : 0F);
             tag.setInteger("scRadR", com.sc.tileentity.TileEntityGeneratorSC.radiationRadius(g.getGeneratorType()));
             tag.setBoolean("scRadShield", g.isShielded());
         }
@@ -258,7 +259,7 @@ public class WailaSC implements IWailaDataProvider {
             }
             if (st == com.sc.tileentity.TileEntityWirelessSC.ST_OK || st == com.sc.tileentity.TileEntityWirelessSC.ST_FULL
                     || st == com.sc.tileentity.TileEntityWirelessSC.ST_IDLE) {
-                tip.add(Lang.tr("sc.waila.wl.other", Lang.trOr("sc.wl.dim." + t.getInteger("scWlDim"), String.valueOf(t.getInteger("scWlDim"))),
+                tip.add(Lang.tr("sc.waila.wl.other", Lang.trOr("sc.wl.dim." + t.getInteger("scWlDim"), Lang.tr("sc.wl.dim.other", t.getInteger("scWlDim"))),
                         t.getInteger("scWlX"), t.getInteger("scWlY"), t.getInteger("scWlZ")));
             }
         } else if (t.getBoolean("scWlLinked")) {

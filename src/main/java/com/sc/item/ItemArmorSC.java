@@ -109,7 +109,8 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     // ---- charge ----
 
     public static int chargeOf(ItemStack stack) {
-        return stack != null && stack.hasTagCompound() ? stack.getTagCompound().getInteger(CHARGE) : 0;
+        // clipped: after the config lowered the capacity a piece may hold more than it can
+        return stack != null && stack.hasTagCompound() ? Math.min(stack.getTagCompound().getInteger(CHARGE), capacityOf(stack)) : 0;
     }
 
     public static int capacityOf(ItemStack stack) {

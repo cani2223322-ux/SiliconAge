@@ -49,7 +49,10 @@ public final class RadiationSC {
      * up over ~7 seconds - so it's given long and topped up, never in short bursts.
      */
     public static final int NAUSEA_TICKS = 200;
-    public static final String LEFT = "scRadLeft", INSIDE = "scRadInside";
+    public static final String LEFT = "scRadLeft", INSIDE = "scRadInside", WARNED = "scRadWarned";
+    /** "Inside" ends only well below the entering level; the warning comes at most once in this many ticks. */
+    public static final float LEAVE_LEVEL = 0.1F;
+    public static final int WARN_COOLDOWN = 600;
     /** Dose steps: nausea, weakness and hunger, wither, harm. */
     public static final float STAGE_NAUSEA = 10F, STAGE_WEAK = 25F, STAGE_SLOW = 50F, STAGE_WITHER = 75F, STAGE_HARM = 100F;
     /** A field's radiation shield: EU a second for each level it stops round a player. */
@@ -341,9 +344,12 @@ public final class RadiationSC {
             dose -= DOSE_DECAY;
         }
         setDose(p, dose);
-        if (!(p instanceof net.minecraftforge.common.util.FakePlayer)) {   // no connection: a potion effect would crash
-            effects(p, doseOf(p));
-            acute(p, p.capabilities.isCreativeMode ? 0F : left);
+        if (!(p instanceof net.minecraftforge.common.util.FakePlayer) && !p.capabilities.isCreativeMode) {
+            // (no connection: a potion effect on a fake player would crash; creative: no sickness)
+            float harm = effects(p, doseOf(p)) + acute(p, left);
+            if (harm > 0) {
+                p.attackEntityFrom(DAMAGE, harm);                           // one blow: a second would fall in the hurt pause
+            }
         }
         int prot = level <= 0.01F ? 0 : Math.round((1F - left / level) * 100F);
         p.getEntityData().setInteger(PROT, prot);
@@ -358,11 +364,15 @@ public final class RadiationSC {
     }
 
     /** What the radiation getting through does at once, and the warning on the way in. */
-    private static void acute(EntityPlayer p, float left) {
+    /** @return the harm it does this second */
+    private static float acute(EntityPlayer p, float left) {
         NBTTagCompound data = p.getEntityData();
         data.setFloat(LEFT, left);
-        boolean inside = left >= ENTER_LEVEL;
-        if (inside && !data.getBoolean(INSIDE)) {
+        boolean was = data.getBoolean(INSIDE);
+        boolean inside = was ? left >= LEAVE_LEVEL : left >= ENTER_LEVEL;
+        long now = p.worldObj.getTotalWorldTime();
+        if (inside && !was && now - data.getLong(WARNED) > WARN_COOLDOWN) {
+            data.setLong(WARNED, now);
             p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.rad.enter", fmt(left)));
             p.addPotionEffect(new PotionEffect(Potion.confusion.id, NAUSEA_TICKS, 0, true));
         }
@@ -379,12 +389,14 @@ public final class RadiationSC {
         }
         if (left >= ACUTE_HARM) {
             p.addPotionEffect(new PotionEffect(Potion.wither.id, 45, 0, true));
-            p.attackEntityFrom(DAMAGE, 2.0F);
+            return 2.0F;
         }
+        return 0F;
     }
 
     /** What the dose does: nausea now and then, then weakness and hunger, then wither, at the top harm every second. */
-    private static void effects(EntityPlayer p, float dose) {
+    /** @return the harm it does this second */
+    private static float effects(EntityPlayer p, float dose) {
         if (dose >= STAGE_NAUSEA) {
             PotionEffect now = p.getActivePotionEffect(Potion.confusion);
             if (now == null || now.getDuration() < NAUSEA_TICKS - 60) {
@@ -402,9 +414,7 @@ public final class RadiationSC {
         if (dose >= STAGE_WITHER) {
             p.addPotionEffect(new PotionEffect(Potion.wither.id, 45, 1, true));
         }
-        if (dose >= STAGE_HARM) {
-            p.attackEntityFrom(DAMAGE, 2.0F);
-        }
+        return dose >= STAGE_HARM ? 2.0F : 0F;
     }
 
     /** Level the numbers stand for, one decimal ("4.5"). */

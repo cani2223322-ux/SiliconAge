@@ -127,7 +127,9 @@ public abstract class SmelterRecipeHandlerSC extends TemplateRecipeHandler {
         }
         for (Map.Entry<ItemStack, ItemStack> e : smelting().entrySet()) {
             if (NEIServerUtils.areStacksSameTypeCrafting(e.getKey(), ingredient)) {
-                arecipes.add(new CachedSmelt(e.getKey(), e.getValue()));
+                CachedSmelt r = new CachedSmelt(e.getKey(), e.getValue());
+                r.setIngredientPermutation(java.util.Collections.singletonList(r.in), ingredient);   // show what was asked, not every subtype
+                arecipes.add(r);
             }
         }
     }

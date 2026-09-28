@@ -853,7 +853,7 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             volume = FieldShapeSC.volume(mode, nodes, draft[D_RANGE], draft[D_HEIGHT]);
         }
         int upkeep = TileEntityFieldGeneratorSC.upkeepFor(field.getNodeCount(), draft[D_RANGE], draft[D_HEIGHT], mode)
-                + field.extrasPerTick();
+                + com.sc.util.ConfigSC.scale(field.extrasPerTick(), com.sc.util.ConfigSC.fieldUpkeep, 0);
         String info = Lang.tr("sc.fieldzone.info", thousands(volume), upkeep);
         boolean pending = previewMode && differs();
         if (pending) {

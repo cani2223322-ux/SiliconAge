@@ -1203,9 +1203,13 @@ public final class SelfTestSC {
         com.sc.machine.MachineType el = com.sc.machine.MachineType.CHLOR_ALKALI_ELECTROLYZER, chem = com.sc.machine.MachineType.CHEM_REACTOR;
         net.minecraftforge.fluids.FluidStack water = new net.minecraftforge.fluids.FluidStack(net.minecraftforge.fluids.FluidRegistry.WATER, 4000);
         ItemStack halite = new ItemStack(com.sc.init.ModBlocks.oreSC, 1, com.sc.util.OreEntry.HALITE.meta());
-        com.sc.machine.MachineRecipe w = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[3], water, null);
+        net.minecraftforge.fluids.FluidStack lye = new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.naoh, 100);
+        net.minecraftforge.fluids.FluidStack h2 = new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.hydrogen, 100);
+        com.sc.machine.MachineRecipe w = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[3], water, lye);
+        com.sc.machine.MachineRecipe plain = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[3], water, null);
+        com.sc.machine.MachineRecipe chemPlain = com.sc.machine.RecipeRegistry.findMatch(chem, new ItemStack[3], water, null);
         com.sc.machine.MachineRecipe brine = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[]{halite, null, null}, water, null);
-        com.sc.machine.MachineRecipe hw = com.sc.machine.RecipeRegistry.findMatch(chem, new ItemStack[3], water, null);
+        com.sc.machine.MachineRecipe hw = com.sc.machine.RecipeRegistry.findMatch(chem, new ItemStack[3], water, h2);
         com.sc.machine.MachineRecipe d = com.sc.machine.RecipeRegistry.findMatch(el, new ItemStack[3],
                 new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.heavyWater, 1000), null);
         long cost = (long) el.euPerTick * (w == null ? 0 : w.ticks);
@@ -1214,8 +1218,8 @@ public final class SelfTestSC {
                 && brine != null && brine.fluidOutputA.getFluid() == com.sc.init.ModFluids.naoh
                 && hw != null && hw.fluidOutputA.getFluid() == com.sc.init.ModFluids.heavyWater
                 && d != null && d.fluidOutputA.getFluid() == com.sc.init.ModFluids.deuterium
-                && cost > back && com.sc.item.ItemFluidDropSC.names().contains("heavywater");
-        check(ok, "electrolysis: water -> H2 + O2 (" + cost + " EU, a fuel cell gets " + back + " back), brine still NaOH + Cl2,"
+                && cost > back && com.sc.item.ItemFluidDropSC.names().contains("heavywater") && plain == null && chemPlain == null;
+        check(ok, "electrolysis: water + lye -> H2 + O2, plain water starts nothing (" + cost + " EU, a fuel cell gets " + back + " back), brine still NaOH + Cl2,"
                 + " water -> heavy water -> deuterium + O2");
     }
 

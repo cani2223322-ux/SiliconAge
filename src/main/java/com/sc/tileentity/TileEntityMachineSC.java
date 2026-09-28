@@ -143,7 +143,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     /** Energy per working tick: x1.6 per overclocker, x1.25 per quality control. */
     public int effectiveEuPerTick() {
         double eu = machineType.euPerTick * Math.pow(1.6, upgradeCount(UpgradeType.OVERCLOCKER))
-                * Math.pow(1.25, upgradeCount(UpgradeType.QUALITY)) * com.sc.util.ConfigSC.machineEnergy;
+                * Math.pow(1.25, upgradeCount(UpgradeType.QUALITY)) * com.sc.util.ConfigSC.machineEnergy
+                * com.sc.util.ConfigSC.machineSpeed;                     // faster, not cheaper: EU an operation stays
         return (int) Math.min(Integer.MAX_VALUE / 4, Math.ceil(eu));
     }
 
@@ -505,13 +506,26 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     /** Experience a smelter holds at most (points). */
     public static final int MAX_XP = 100000;
     private final int[] smeltProgress = new int[2];
-    private float storedXp;
+    private double storedXp;
     private boolean keepWarm;
 
     /** What a furnace makes of this, or null. */
     public static ItemStack smeltResult(ItemStack in) {
-        return in == null ? null : net.minecraft.item.crafting.FurnaceRecipes.smelting().getSmeltingResult(in);
+        if (in == null || in.getItem() == null) {
+            return null;
+        }
+        // FurnaceRecipes walks its whole list on every call; a smelter asks every tick for every
+        // stream, a puller for every neighbouring slot - so the answers are kept by item and damage
+        long key = ((long) net.minecraft.item.Item.getIdFromItem(in.getItem()) << 32) | (in.getItemDamage() & 0xFFFFFFFFL);
+        ItemStack[] known = SMELT_CACHE.get(key);
+        if (known == null) {
+            known = new ItemStack[]{net.minecraft.item.crafting.FurnaceRecipes.smelting().getSmeltingResult(in)};
+            SMELT_CACHE.put(key, known);
+        }
+        return known[0];
     }
+
+    private static final java.util.Map<Long, ItemStack[]> SMELT_CACHE = new java.util.HashMap<Long, ItemStack[]>();
 
     /** The induction furnace's speed from its heat (x1 cold .. x3 hot); 1 for the electric one. */
     public double smeltSpeed() {
@@ -533,7 +547,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     }
 
     public float getStoredXp() {
-        return storedXp;
+        return (float) storedXp;
     }
 
     public void setStoredXpClient(float xp) {
@@ -594,25 +608,38 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             run[i] = true;
             active++;
         }
-        progressTicks = smeltProgress[0];
+        progressTicks = Math.max(smeltProgress[0], smeltProgress[1]);
         if (active == 0) {
             int warm = com.sc.util.ConfigSC.scale(KEEP_WARM_EU, com.sc.util.ConfigSC.machineEnergy, 1);
-            if (induction && keepWarm && getEnergyStored() >= warm) {
+            if (full) {
+                status = MachineStatus.OUTPUT_FULL;              // said first: warm or not, the output wants emptying
+                coolInduction();
+            } else if (induction && keepWarm && getEnergyStored() >= warm) {
                 removeEnergy(warm);
                 heat = Math.min(INDUCTION_HEAT_MAX, heat + 1);
                 status = MachineStatus.HEATING;
             } else {
-                status = full ? MachineStatus.OUTPUT_FULL : induction && keepWarm ? MachineStatus.NO_POWER : MachineStatus.IDLE;
+                status = induction && keepWarm ? MachineStatus.NO_POWER : MachineStatus.IDLE;
                 coolInduction();
             }
             return;
         }
-        int cost = (int) Math.ceil(effectiveEuPerTick() * active / (double) streams);
-        if (getEnergyStored() < cost) {
+        int perStream = (int) Math.ceil(effectiveEuPerTick() / (double) streams);
+        while (active > 0 && getEnergyStored() < perStream * active) {   // short of energy: fewer streams, the last first
+            for (int i = streams - 1; i >= 0; i--) {
+                if (run[i]) {
+                    run[i] = false;
+                    break;
+                }
+            }
+            active--;
+        }
+        if (active == 0) {
             status = MachineStatus.NO_POWER;
             coolInduction();
             return;
         }
+        int cost = perStream * active;
         removeEnergy(cost);
         if (induction) {
             heat = Math.min(INDUCTION_HEAT_MAX, heat + 1);
@@ -623,7 +650,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 finishSmelt(i);
             }
         }
-        progressTicks = smeltProgress[0];
+        progressTicks = Math.max(smeltProgress[0], smeltProgress[1]);
     }
 
     private void finishSmelt(int i) {
@@ -1043,7 +1070,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (slot >= FIRST_UPGRADE_SLOT) {
             return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
-                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly();
+                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly()
+                    && !(machineType.isSmelter() && (com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.QUALITY
+                            || com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK));   // nothing to improve there
         }
         if (machineType.isSmelter()) {
             return slot < machineType.smeltStreams() && smeltResult(stack) != null;
@@ -1240,7 +1269,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         heat = nbt.getInteger("Heat");
         smeltProgress[0] = nbt.getInteger("SmeltP0");
         smeltProgress[1] = nbt.getInteger("SmeltP1");
-        storedXp = nbt.getFloat("StoredXp");
+        storedXp = nbt.getDouble("StoredXp");                 // (an older float tag reads as well)
         keepWarm = nbt.getBoolean("KeepWarm");
         coolingDown = nbt.getBoolean("CoolingDown");
         overheatedThisRun = nbt.getBoolean("OverheatedRun");
@@ -1272,7 +1301,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         nbt.setInteger("Heat", heat);
         nbt.setInteger("SmeltP0", smeltProgress[0]);
         nbt.setInteger("SmeltP1", smeltProgress[1]);
-        nbt.setFloat("StoredXp", storedXp);
+        nbt.setDouble("StoredXp", storedXp);
         nbt.setBoolean("KeepWarm", keepWarm);
         nbt.setBoolean("CoolingDown", coolingDown);
         nbt.setBoolean("OverheatedRun", overheatedThisRun);

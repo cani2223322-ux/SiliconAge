@@ -76,8 +76,10 @@ public final class ConfigSC {
             String b = "balance";
             config.setCategoryComment(b, "Multipliers on the mod's balance (1 = as designed). On a server, give the clients the same file"
                     + " so their screens and tooltips show the same numbers.");
-            machineSpeed = config.getFloat("machineSpeed", b, 1F, 0.1F, 10F, "Machines work this many times faster (2 = recipes take half the time)");
-            machineEnergy = config.getFloat("machineEnergy", b, 1F, 0.1F, 10F, "Machines use this many times the EU a tick");
+            machineSpeed = config.getFloat("machineSpeed", b, 1F, 0.1F, 10F,
+                    "Machines work this many times faster (2 = recipes take half the time, at twice the EU a tick - the same EU an operation)");
+            machineEnergy = config.getFloat("machineEnergy", b, 1F, 0.1F, 10F,
+                    "Machines use this many times the EU (below ~0.7 water electrolysis + a fuel cell starts to give free energy)");
             storageCapacity = config.getFloat("storageCapacity", b, 1F, 0.1F, 10F, "Energy storages hold this many times the EU");
             batteryCapacity = config.getFloat("batteryCapacity", b, 1F, 0.1F, 10F, "Portable batteries hold this many times the EU");
             armorCapacity = config.getFloat("armorCapacity", b, 1F, 0.1F, 10F, "Suit pieces (Nano, Quantum, Exo) hold this many times the EU");
