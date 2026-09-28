@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" width="160" alt="Silicon Age"></p>
+
 # Silicon Age: From Wafer to ExoTech
 
 ![Minecraft 1.7.10](https://img.shields.io/badge/Minecraft-1.7.10-green) ![Forge 10.13.4.1614](https://img.shields.io/badge/Forge-10.13.4.1614-orange) ![Status: alpha](https://img.shields.io/badge/status-alpha-red)

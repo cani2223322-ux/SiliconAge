@@ -5,6 +5,12 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 
 ## Не выпущено / Unreleased
 
+### Русский
+- **Иконка мода** (чип «Si», переход от кремния к экзо): в списке модов и в README.
+
+### English
+- **Mod icon** (the "Si" chip, silicon turning into Exo): in the mod list and the README.
+
 ## 0.1.4-alpha — 2026-09-28
 
 ### Русский

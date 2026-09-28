@@ -9,7 +9,7 @@
     "updateUrl": "",
     "authorList": ["Aleksandr"],
     "credits": "Design document authored with Claude",
-    "logoFile": "",
+    "logoFile": "/logo.png",
     "screenshots": [],
     "dependencies": []
 }
