@@ -73,10 +73,11 @@ public class ContainerGeneratorSC extends Container {
      * the power buttons and the battery, the cell and blanket slots on the screen, the upgrade row
      * left of the inventory. Plain constants - safe on the server.
      */
-    public static final int XV_W = 400, XV_H = 264, XV_SCREEN_X = 7, XV_SCREEN_Y = 21, XV_SCREEN_W = 356, XV_SCREEN_H = 144;
-    public static final int XV_GAUGE_X = 367, XV_BUTTONS_Y = 21, XV_GAUGE_Y = 33, XV_GAUGE_H = 104;
-    public static final int XV_FUEL_X = 12, XV_BLANKET_X = 58, XV_SLOT_Y = 122;
-    public static final int XV_UPG_X = 12, XV_UPG_Y = 188, XV_INV_X = 119, XV_INV_Y = 186, XV_HOTBAR_Y = 244, XV_SEPARATOR_Y = 171;
+    public static final int XV_W = 420, XV_H = 280, XV_SCREEN_X = 7, XV_SCREEN_Y = 21, XV_SCREEN_W = 376, XV_SCREEN_H = 166;
+    public static final int XV_GAUGE_X = 388, XV_BUTTONS_Y = 21, XV_GAUGE_Y = 34, XV_GAUGE_H = 130;
+    public static final int XV_FUEL_X = 12, XV_BLANKET_X = 64, XV_SLOT_Y = 144;
+    /** The upgrade slots sit on the screen, in the status row. */
+    public static final int XV_UPG_X = 309, XV_UPG_Y = 169, XV_INV_X = 129, XV_INV_Y = 201, XV_HOTBAR_Y = 259, XV_SEPARATOR_Y = 196;
 
     /** The Tokamak XV: put the plasma out safely / allow lighting again. */
     public static final int BTN_SOFT_STOP = 20;

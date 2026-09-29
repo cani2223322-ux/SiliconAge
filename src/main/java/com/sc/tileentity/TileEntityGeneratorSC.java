@@ -386,6 +386,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private final int[] portLabels = new int[3];
     /** The port storages: charge % and tier of the first two, the total (per mille). */
     private int storeInfo;
+    /** The port storages' charge and room, thousands of EU. */
+    private int storeHaveK, storeRoomK;
     /** Cap and floor cells present (7x7, bit (dz + 3) * 7 + dx + 3). */
     private long capTop, capBottom;
     /** Stability a second over the last minute (255 - not lit), a ring. */
@@ -449,7 +451,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     /** The screen's numbers: BIG_SYNC ints - see setBigClient for the layout. */
-    public static final int BIG_SYNC = 37;
+    public static final int BIG_SYNC = 39;
 
     public int[] bigSync() {
         int[] v = new int[BIG_SYNC];
@@ -472,6 +474,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         v[34] = (int) (capTop >>> 25);
         v[35] = (int) (capBottom & 0x1FFFFFF);
         v[36] = (int) (capBottom >>> 25);
+        v[37] = storeHaveK;
+        v[38] = storeRoomK;
         return v;
     }
 
@@ -519,6 +523,17 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         stabHead = v[32];
         capTop = (v[33] & 0x1FFFFFFL) | (long) v[34] << 25;
         capBottom = (v[35] & 0x1FFFFFFL) | (long) v[36] << 25;
+        storeHaveK = v[37];
+        storeRoomK = v[38];
+    }
+
+    /** The port storages' charge and room, EU. */
+    public long getStoresHave() {
+        return storeHaveK * 1000L;
+    }
+
+    public long getStoresRoom() {
+        return storeRoomK * 1000L;
     }
 
     /** Port tanks' capacity for gas i (0 He, 1 H2, 2 Ar, 3 D) and how many; tanks never filled. */
@@ -718,6 +733,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
         }
         storeInfo = info | (int) (room <= 0 ? 0 : Math.min(1000, have * 1000 / room)) << 22;
+        storeHaveK = (int) Math.min(Integer.MAX_VALUE, have / 1000);
+        storeRoomK = (int) Math.min(Integer.MAX_VALUE, room / 1000);
         coilMask = coils;
         wallMask = walls;
         portMask = ports;

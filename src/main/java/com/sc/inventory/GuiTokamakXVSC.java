@@ -12,6 +12,7 @@ import com.sc.machine.UpgradeType;
 import com.sc.manual.Lang;
 import com.sc.tileentity.TileEntityGeneratorSC;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -22,12 +23,13 @@ import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
 
 /**
- * The Tokamak XV's own window (400 x 264): one wide screen in three columns - the plasma (torus,
+ * The Tokamak XV's own window (420 x 280): one wide screen in three columns - the plasma (torus,
  * thermometer, stability / heat / power, the last minute's stability) or, before lighting, a
  * readiness checklist; the build (the 7x7 by layer, ports labelled by what they hold); the port
- * tanks (the mod's tank gauges, sized by the tanks in the wall, a cross where a gas has none) and
- * the port storages - with up to three status lines under them. The energy gauge beside it shows
- * the port storages' charge (the reactor itself keeps nothing).
+ * tanks (the mod's tank gauges, sized by the tanks in the wall, a cross where a gas has none,
+ * filling / draining arrows) and the port storages - with three status lines and the upgrade
+ * slots under them. Below: a summary left of the inventory. The energy gauge beside the screen
+ * shows the port storages' charge (the reactor itself keeps nothing).
  */
 public class GuiTokamakXVSC extends GuiContainer {
 
@@ -36,11 +38,13 @@ public class GuiTokamakXVSC extends GuiContainer {
             SW = ContainerGeneratorSC.XV_SCREEN_W, SH = ContainerGeneratorSC.XV_SCREEN_H;
     private static final int GX = ContainerGeneratorSC.XV_GAUGE_X, GY = ContainerGeneratorSC.XV_GAUGE_Y, GH = ContainerGeneratorSC.XV_GAUGE_H;
     /** Columns: the plasma, the build, the ports. */
-    private static final int C1 = 11, C2 = 115, C3 = 227, COL_Y = 35;
-    private static final int TORUS_Y = 41, TORUS_W = 80, TORUS_H = 32, THERMO_X = 96, THERMO_Y = 35, THERMO_H = 82;
-    private static final int GRAPH_Y = 111, GRAPH_H = 9;
-    private static final int CELL = 9, SCHEME_Y = 42, LAYER_X = 182;
-    private static final int TANK_Y = 48, TANK_STEP = 34, STATUS_Y = 145;
+    private static final int C1 = 11, C2 = 131, C3 = 251, COL_Y = 37;
+    private static final int TORUS_Y = 45, TORUS_W = 90, TORUS_H = 32, THERMO_X = 106, THERMO_Y = 37, THERMO_H = 92;
+    private static final int ROW_Y = 80, GRAPH_Y = 124, GRAPH_H = 13;
+    private static final int CELL = 11, SCHEME_Y = 45, LAYER_X = 212;
+    private static final int TANK_Y = 52, TANK_STEP = 33, STATUS_Y = 170, SUM_Y = ContainerGeneratorSC.XV_INV_Y;
+    /** Liquid helium left for less than this (s): a warning. */
+    private static final int HE_WARN_SECONDS = 300;
     private static final int LAYER_ID = 900;
     private static final String[] GAS = {"liquidhelium", "hydrogen", "argon", "deuterium"};
     private static final String[] GAS_SHORT = {"He", "H2", "Ar", "D"};
@@ -52,6 +56,10 @@ public class GuiTokamakXVSC extends GuiContainer {
     private GuiBatterySlotSC battery;
     /** The layer the scheme shows: 0 the floor, 1 the middle, 2 the cap. */
     private int layer = 1;
+    /** Once a second: the port gases and the storages' charge a second ago - the arrows and "full in". */
+    private final int[] gasBefore = new int[4], gasRate = new int[4];
+    private long storesBefore = -1, storesRate;
+    private int tick;
 
     public GuiTokamakXVSC(InventoryPlayer inv, TileEntityGeneratorSC gen) {
         super(new ContainerGeneratorSC(inv, gen));
@@ -70,10 +78,10 @@ public class GuiTokamakXVSC extends GuiContainer {
         power.addButtons(buttonList, guiLeft, guiTop);
         battery = new GuiBatterySlotSC(gen, ContainerGeneratorSC.BTN_BATTERY_MODE, GX, GY + GH, true);
         battery.addButton(buttonList, guiLeft, guiTop);
-        buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerGeneratorSC.BTN_SOFT_STOP, guiLeft + C2, guiTop + 127, 106, 11, ""));
+        buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerGeneratorSC.BTN_SOFT_STOP, guiLeft + C2, guiTop + 150, 115, 13, ""));
         String[] names = {Lang.tr("sc.gui.xv.layer.0"), Lang.tr("sc.gui.xv.layer.1"), Lang.tr("sc.gui.xv.layer.2")};
         for (int i = 0; i < 3; i++) {                    // top to bottom: the cap, the middle, the floor
-            buttonList.add(new GuiFieldGeneratorSC.HoloButton(LAYER_ID + 2 - i, guiLeft + LAYER_X, guiTop + SCHEME_Y + i * 12, 38, 10, names[2 - i]));
+            buttonList.add(new LayerButton(LAYER_ID + 2 - i, guiLeft + LAYER_X, guiTop + SCHEME_Y + i * 15, 34, 12, names[2 - i]));
         }
         refreshButtons();
     }
@@ -86,8 +94,6 @@ public class GuiTokamakXVSC extends GuiContainer {
                 b.enabled = gen.isIgnited() || latched;
                 b.displayString = Lang.tr(latched ? "sc.gui.big.btn.allow" : gen.isIgnited() ? "sc.gui.big.btn.stop"
                         : ready() ? "sc.gui.xv.btn.auto" : "sc.gui.xv.btn.cant");
-            } else if (b.id >= LAYER_ID && b.id < LAYER_ID + 3) {
-                b.enabled = b.id - LAYER_ID != layer;
             }
         }
     }
@@ -96,19 +102,50 @@ public class GuiTokamakXVSC extends GuiContainer {
     public void updateScreen() {
         super.updateScreen();
         refreshButtons();
+        if (++tick % 20 == 0) {                          // the rates, a second at a time
+            for (int i = 0; i < 4; i++) {
+                int now = gen.getPortFluid(i);
+                gasRate[i] = tick > 20 ? now - gasBefore[i] : 0;
+                gasBefore[i] = now;
+            }
+            long s = gen.getStoresHave();
+            storesRate = storesBefore >= 0 ? s - storesBefore : 0;
+            storesBefore = s;
+        }
     }
 
     @Override
     protected void actionPerformed(GuiButton button) {
         if (button.id >= LAYER_ID && button.id < LAYER_ID + 3) {      // screen-side only
             layer = button.id - LAYER_ID;
-            refreshButtons();
             return;
         }
         if (!power.allowClick(button)) {
             return;
         }
         mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
+    }
+
+    /** A layer tab: the chosen one lit cyan (not greyed out as if disabled). */
+    private class LayerButton extends GuiButton {
+        LayerButton(int id, int x, int y, int w, int h, String text) {
+            super(id, x, y, w, h, text);
+        }
+
+        @Override
+        public void drawButton(Minecraft m, int mouseX, int mouseY) {
+            boolean sel = id - LAYER_ID == layer;
+            boolean over = mouseX >= xPosition && mouseY >= yPosition && mouseX < xPosition + width && mouseY < yPosition + height;
+            rect(xPosition, yPosition, width, height, sel ? 0xFF96F0FF : over ? 0xFF6EB4DC : 0xFF2A6A8A);
+            rect(xPosition + 1, yPosition + 1, width - 2, height - 2, sel ? 0xFF28A0C8 : 0xFF0E3A50);
+            float k = Math.min(0.75F, (width - 4) / (float) Math.max(1, m.fontRenderer.getStringWidth(displayString)));
+            GL11.glPushMatrix();
+            GL11.glTranslatef(xPosition + (width - m.fontRenderer.getStringWidth(displayString) * k) / 2F, yPosition + (height - 8 * k) / 2F + 0.5F, 0F);
+            GL11.glScalef(k, k, 1F);
+            m.fontRenderer.drawString(displayString, 0, 0, sel ? 0x08141E : 0xE6F0FA);
+            GL11.glPopMatrix();
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+        }
     }
 
     // ------------------------------------------------------------------ the state
@@ -159,6 +196,12 @@ public class GuiTokamakXVSC extends GuiContainer {
         }
     }
 
+    /** Stability's change over the last second (-1 a second: falling). */
+    private int stabilityTrend() {
+        int now = gen.stabilityAgo(0), before = gen.stabilityAgo(1);
+        return now < 0 || before < 0 ? 0 : now - before;
+    }
+
     private static String time(double s) {
         long t = (long) Math.ceil(s);
         if (t >= 3600) {
@@ -172,6 +215,9 @@ public class GuiTokamakXVSC extends GuiContainer {
     }
 
     private static String eu(long v) {
+        if (v >= 1000000000L) {
+            return Lang.tr("sc.gui.xv.bln", String.format(java.util.Locale.ROOT, "%.1f", v / 1e9).replace('.', ','));
+        }
         if (v >= 1000000) {
             double m = v / 1000000.0;
             return Lang.tr("sc.gui.fus.mln", m == Math.floor(m) ? String.valueOf((long) m)
@@ -265,39 +311,45 @@ public class GuiTokamakXVSC extends GuiContainer {
         for (int s = 0; s < 2; s++) {
             GuiHoloSC.slot(x + ContainerGeneratorSC.slotX(GeneratorType.TOKAMAK_XV, s), y + ContainerGeneratorSC.XV_SLOT_Y, false);
         }
+        for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
+            GuiHoloSC.slot(x + ContainerGeneratorSC.XV_UPG_X + i * 18, y + ContainerGeneratorSC.XV_UPG_Y, false);
+        }
         float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
         if (gen.isIgnited()) {
             GuiSceneSC.fusionTorus(x + C1, y + TORUS_Y, TORUS_W, TORUS_H, t, (float) gen.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT, true);
             thermometer(x + THERMO_X, y + THERMO_Y);
             float st = gen.getStability() / 100F;
-            GuiHoloSC.bar(x + C1, y + 82, TORUS_W, 3, st, 16, st > 0.4F ? 0xFF5AE66E : st > 0.2F ? 0xFFFF9628 : 0xFFE63C3C);
-            GuiHoloSC.bar(x + C1, y + 94, TORUS_W, 3, (float) gen.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT, 16,
+            GuiHoloSC.bar(x + C1, y + ROW_Y + 7, TORUS_W, 3, st, 20, st > 0.4F ? 0xFF5AE66E : st > 0.2F ? 0xFFFF9628 : 0xFFE63C3C);
+            GuiHoloSC.bar(x + C1, y + ROW_Y + 19, TORUS_W, 3, (float) gen.getHeat() / TileEntityGeneratorSC.HEAT_LIMIT, 20,
                     gen.getHeat() > normHeat() ? 0xFFFF9628 : 0xFFB070F0);
-            GuiHoloSC.bar(x + C1, y + 106, TORUS_W, 3, (float) gen.getRamp() / TileEntityGeneratorSC.RAMP_FULL, 16, GuiHoloSC.CYAN);
+            GuiHoloSC.bar(x + C1, y + ROW_Y + 31, TORUS_W, 3, (float) gen.getRamp() / TileEntityGeneratorSC.RAMP_FULL, 20, GuiHoloSC.CYAN);
             graph(x + C1, y + GRAPH_Y);
         } else {
             checklistIcons(x, y);
             float charge = Math.min(1F, (float) gen.getIgnitionEU() / Math.max(1L, gen.ignitionNeed()));
-            GuiHoloSC.bar(x + C1 + 7, y + 104, 90, 3, charge, 18, GuiHoloSC.CYAN);
+            GuiHoloSC.bar(x + C1 + 7, y + 113, 100, 3, charge, 20, GuiHoloSC.CYAN);
         }
         slotBars(x, y);
         scheme(x + C2, y + SCHEME_Y);
         for (int i = 0; i < 4; i++) {
             tank(x + C3 + i * TANK_STEP, y + TANK_Y, i);
         }
-        for (int i = 0; i < Math.min(2, scan()[5]); i++) {
-            int bx = x + C3 + i * 67, by = y + 137;
-            Gui.drawRect(bx, by, bx + 63, by + 2, 0xFF04080C);
-            Gui.drawRect(bx, by, bx + 63 * gen.getStorePct(i) / 100, by + 2, 0xFFE6C850);
+        int stores = scan()[5];
+        if (stores > 0) {
+            int bx = x + C3, by = y + 149;
+            rect(bx, by, 128, 2, 0xFF04080C);
+            rect(bx, by, Math.round(128 * gen.getStoresLevel()), 2, 0xFFE6C850);
         }
-        Gui.drawRect(x + SX + 3, y + STATUS_Y - 3, x + SX + SW - 3, y + STATUS_Y - 2, 0xFF1E3444);
+        rect(x + SX + 3, y + STATUS_Y - 3, SW - 6, 1, 0xFF1E3444);
+        // the summary under the screen, a small holo screen of its own
+        GuiHoloSC.screen(x + SX, y + SUM_Y, 104, H - SUM_Y - 6);
         GuiEnergyGaugeSC.draw(x + GX, y + GY, GuiBatterySlotSC.COLUMN_W, GH, gen.getStoresLevel());
         battery.draw(x, y, gen.getStackInSlot(TileEntityGeneratorSC.SLOT_BATTERY));
         GuiHoloSC.glint(x + SX, y + SY, SW, SH);
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
-    /** The panel, its title bar, the divider and the pockets (GuiBigSC's look, this window's size). */
+    /** The panel, its title bar, the divider and the inventory's pockets (GuiBigSC's look, this window's size). */
     private void window(int x, int y) {
         rect(x, y, W, H, 0xFF1E2024);
         rect(x + 1, y + 1, W - 2, H - 2, PANEL);
@@ -319,9 +371,6 @@ public class GuiTokamakXVSC extends GuiContainer {
         }
         for (int c = 0; c < 9; c++) {
             GuiBigSC.pocket(x + ContainerGeneratorSC.XV_INV_X + c * 18, y + ContainerGeneratorSC.XV_HOTBAR_Y);
-        }
-        for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
-            GuiBigSC.pocket(x + ContainerGeneratorSC.XV_UPG_X + i * 18, y + ContainerGeneratorSC.XV_UPG_Y);
         }
     }
 
@@ -367,7 +416,7 @@ public class GuiTokamakXVSC extends GuiContainer {
     private void checklistIcons(int x, int y) {
         int[] st = checklistStates();
         for (int i = 0; i < st.length; i++) {
-            int ix = x + C1, iy = y + COL_Y + 8 + i * 9;
+            int ix = x + C1, iy = y + COL_Y + 9 + i * 10;
             if (st[i] == 1) {                                  // a tick
                 rect(ix, iy + 2, 1, 2, 0xFF5AE66E);
                 rect(ix + 1, iy + 3, 1, 2, 0xFF5AE66E);
@@ -402,13 +451,12 @@ public class GuiTokamakXVSC extends GuiContainer {
             cellF = 1F;
         }
         float blankF = gen.isIgnited() ? (float) gen.getModuleLife() / TileEntityGeneratorSC.MODULE_LIFE_TICKS : hasBlanket() ? 1F : 0F;
-        int by = y + ContainerGeneratorSC.XV_SLOT_Y + 13;
+        int by = y + ContainerGeneratorSC.XV_SLOT_Y + 14;
         int[] xs = {x + ContainerGeneratorSC.XV_FUEL_X + 19, x + ContainerGeneratorSC.XV_BLANKET_X + 19};
         float[] f = {cellF, blankF};
         for (int s = 0; s < 2; s++) {
-            int w = s == 0 ? 24 : 30;
-            rect(xs[s], by, w, 3, 0xFF04080C);
-            rect(xs[s] + 1, by + 1, Math.round((w - 2) * f[s]), 1, s == 0 ? 0xFF9AD8FF : 0xFFC8D87A);
+            rect(xs[s], by, 30, 3, 0xFF04080C);
+            rect(xs[s] + 1, by + 1, Math.round(28 * f[s]), 1, s == 0 ? 0xFF9AD8FF : 0xFFC8D87A);
         }
     }
 
@@ -481,20 +529,19 @@ public class GuiTokamakXVSC extends GuiContainer {
         buildText();
         portsText();
         statusText();
-        fontRendererObj.drawString(Lang.tr("sc.gui.big.upgrades"), ContainerGeneratorSC.XV_UPG_X, ContainerGeneratorSC.XV_UPG_Y - 11, 0x404040);
-        fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerGeneratorSC.XV_INV_X, ContainerGeneratorSC.XV_INV_Y - 10, 0x404040);
+        summary();
         int used = 0;
         for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
             used += gen.getStackInSlot(TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
         }
-        small(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), ContainerGeneratorSC.XV_UPG_X,
-                ContainerGeneratorSC.XV_UPG_Y + 21, 100, 0x505864);
+        small(Lang.tr("sc.gui.xv.upgrades"), 284, STATUS_Y + 1, 24, GuiHoloSC.LABEL);
+        small(Lang.tr("sc.gui.xv.upgrades.n", used, TileEntityGeneratorSC.UPGRADE_SLOTS), 284, STATUS_Y + 8, 24, GuiHoloSC.IDLE);
         power.drawGaugeOff(fontRendererObj);
     }
 
     private void header() {
-        int y = 24;
-        fit(Lang.tr("sc.gui.big.title"), C1, y, 70, GuiHoloSC.CYAN & 0xFFFFFF);
+        int y = 25;
+        fit(Lang.tr("sc.gui.big.title"), C1, y - 1, 72, GuiHoloSC.CYAN & 0xFFFFFF);
         String chip;
         int col;
         GeneratorStatus s = gen.getStatus();
@@ -516,38 +563,42 @@ public class GuiTokamakXVSC extends GuiContainer {
         }
         String text = Lang.tr("sc.gui.xv.state." + chip);
         int tw = (int) (fontRendererObj.getStringWidth(text) * 0.625F) + 6;
-        int cx = 84;
+        int cx = 90;
         rect(cx, y - 1, tw, 8, 0xFF000000 | col);
         rect(cx + 1, y, tw - 2, 6, 0xFF06101A);
         small(text, cx + 3, y + 1, tw - 4, col);
-        small(gen.isIgnited() ? Lang.tr("sc.gui.xv.out", gen.getLastOutput()) : Lang.tr("sc.gui.xv.notlit"), cx + tw + 5, y + 1, 90,
+        small(gen.isIgnited() ? Lang.tr("sc.gui.xv.out", gen.getLastOutput()) : Lang.tr("sc.gui.xv.notlit"), cx + tw + 6, y + 1, 90,
                 gen.isIgnited() ? GuiHoloSC.OK : GuiHoloSC.IDLE);
         float rad = gen.radiationLevel();
         String r = rad > 0 ? Lang.tr("sc.gui.big.rad", com.sc.radiation.RadiationSC.fmt(rad), gen.radiationRadiusNow())
                 : Lang.tr("sc.gui.xv.norad");
         int rw = (int) (fontRendererObj.getStringWidth(r) * 0.625F);
-        small(r, SX + SW - 4 - Math.min(110, rw), y + 1, 110, rad > 0 ? GuiHoloSC.WARN : GuiHoloSC.IDLE);
+        small(r, SX + SW - 5 - Math.min(110, rw), y + 1, 110, rad > 0 ? GuiHoloSC.WARN : GuiHoloSC.IDLE);
     }
 
     private void plasmaText() {
         small(Lang.tr("sc.gui.xv.plasma"), C1, COL_Y, 80, GuiHoloSC.LABEL);
         int temp = gen.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT;
         int hy = THERMO_Y + THERMO_H - 2 - Math.round((THERMO_H - 4) * Math.min(1F, gen.getHeat() / (float) TileEntityGeneratorSC.HEAT_LIMIT));
-        tiny(String.valueOf(temp), THERMO_X + 10, hy - 2, 12, gen.getHeat() > normHeat() ? GuiHoloSC.WARN : GuiHoloSC.VALUE);
+        small(String.valueOf(temp), THERMO_X + 11, hy - 2, 12, gen.getHeat() > normHeat() ? GuiHoloSC.WARN : GuiHoloSC.VALUE);
         float st = gen.getStability();
-        row(Lang.tr("sc.gui.xv.stab"), Math.round(st) + "%", 76, st > 40 ? GuiHoloSC.OK : st > 20 ? GuiHoloSC.WARN : GuiHoloSC.BAD);
-        row(Lang.tr("sc.gui.xv.heat"), Lang.tr("sc.gui.xv.mk", temp), 88, gen.getHeat() > normHeat() ? GuiHoloSC.WARN : GuiHoloSC.VALUE);
-        row(Lang.tr("sc.gui.fus.power"), gen.getRamp() / 10 + "%", 100, GuiHoloSC.VALUE);
+        int trend = stabilityTrend();
+        String sv = Math.round(st) + "%" + (trend != 0 ? "  " + (trend > 0 ? "+" : "") + trend + Lang.tr("sc.gui.xv.persec") : "");
+        row(Lang.tr("sc.gui.xv.stab"), sv, ROW_Y, st > 40 ? GuiHoloSC.OK : st > 20 ? GuiHoloSC.WARN : GuiHoloSC.BAD);
+        row(Lang.tr("sc.gui.xv.heat"), Lang.tr("sc.gui.xv.mk", temp), ROW_Y + 12, gen.getHeat() > normHeat() ? GuiHoloSC.WARN : GuiHoloSC.VALUE);
+        row(Lang.tr("sc.gui.fus.power"), gen.getRamp() / 10 + "%", ROW_Y + 24, GuiHoloSC.VALUE);
+        tiny(Lang.tr("sc.gui.xv.graph"), C1, GRAPH_Y - 6, 70, GuiHoloSC.LABEL);
+        tiny("40%", C1 + TORUS_W - 12, GRAPH_Y - 6, 14, GuiHoloSC.WARN);
     }
 
     private void row(String name, String value, int y, int col) {
-        small(name, C1, y, 48, GuiHoloSC.LABEL);
+        small(name, C1, y, 50, GuiHoloSC.LABEL);
         int vw = (int) (fontRendererObj.getStringWidth(value) * 0.625F);
-        small(value, C1 + TORUS_W - Math.min(32, vw), y, 32, col);
+        small(value, C1 + TORUS_W - Math.min(44, vw), y, 44, col);
     }
 
     private void checklistText() {
-        small(Lang.tr("sc.gui.xv.check"), C1, COL_Y, 96, GuiHoloSC.LABEL);
+        small(Lang.tr("sc.gui.xv.check"), C1, COL_Y, 110, GuiHoloSC.LABEL);
         int[] s = scan(), st = checklistStates();
         int[] miss = missingCoil();
         String[] lines = {
@@ -559,14 +610,14 @@ public class GuiTokamakXVSC extends GuiContainer {
             st[5] == 1 ? Lang.tr("sc.gui.xv.c.d", k(gen.getPortFluid(3)), cells()) : Lang.tr("sc.gui.xv.c.d.no"),
             Lang.tr("sc.gui.xv.c.charge", eu(gen.getIgnitionEU()), eu(gen.ignitionNeed()))};
         for (int i = 0; i < lines.length; i++) {
-            small(lines[i], C1 + 7, COL_Y + 8 + i * 9, 94, st[i] == 0 ? GuiHoloSC.BAD : st[i] == 2 ? GuiHoloSC.CYAN & 0xFFFFFF : GuiHoloSC.VALUE);
+            small(lines[i], C1 + 7, COL_Y + 9 + i * 10, 106, st[i] == 0 ? GuiHoloSC.BAD : st[i] == 2 ? GuiHoloSC.CYAN & 0xFFFFFF : GuiHoloSC.VALUE);
         }
         boolean h2 = gen.getPortFluid(1) >= TileEntityGeneratorSC.BIG_H2_START;
-        tiny(Lang.tr(h2 ? "sc.gui.xv.h2.yes" : "sc.gui.xv.h2.no", TileEntityGeneratorSC.BIG_H2_START), C1 + 7, 109, 96,
+        tiny(Lang.tr(h2 ? "sc.gui.xv.h2.yes" : "sc.gui.xv.h2.no", TileEntityGeneratorSC.BIG_H2_START), C1 + 7, 120, 106,
                 h2 ? GuiHoloSC.OK : GuiHoloSC.LABEL);
         long need = gen.ignitionNeed() - gen.getIgnitionEU();
         if (need > 0 && gen.isBigReady()) {
-            tiny(Lang.tr("sc.gui.xv.fromstores", time(need / (double) TileEntityGeneratorSC.PORT_CHARGE_PER_TICK / 20.0)), C1 + 7, 114, 96,
+            tiny(Lang.tr("sc.gui.xv.fromstores", time(need / (double) TileEntityGeneratorSC.PORT_CHARGE_PER_TICK / 20.0)), C1 + 7, 126, 106,
                     GuiHoloSC.LABEL);
         }
     }
@@ -574,53 +625,56 @@ public class GuiTokamakXVSC extends GuiContainer {
     private void slotText() {
         int y = ContainerGeneratorSC.XV_SLOT_Y + 1, cx = ContainerGeneratorSC.XV_FUEL_X + 19, bx = ContainerGeneratorSC.XV_BLANKET_X + 19;
         int n = cells();
-        tiny(Lang.tr("sc.gui.xv.cells", n), cx, y, 26, n > 0 ? GuiHoloSC.VALUE : GuiHoloSC.IDLE);
         boolean tankD = gen.getPortFluid(3) > 0;
-        tiny(Lang.tr(tankD ? "sc.gui.xv.cells.spare" : n > 0 ? "sc.gui.xv.cells.used" : "sc.gui.xv.cells.none"), cx, y + 6, 26,
-                tankD ? GuiHoloSC.IDLE : n > 0 ? GuiHoloSC.WARN : GuiHoloSC.IDLE);
-        tiny(Lang.tr("sc.gui.xv.blanket"), bx, y, 32, GuiHoloSC.LABEL);
+        small(Lang.tr("sc.gui.xv.cellsh"), cx, y, 30, GuiHoloSC.LABEL);
+        small(tankD ? Lang.tr("sc.gui.xv.cells.tank") : n > 0 ? String.valueOf(n) : Lang.tr("sc.gui.xv.cells.none"), cx, y + 6, 30,
+                tankD ? GuiHoloSC.IDLE : n > 0 ? GuiHoloSC.WARN : GuiHoloSC.BAD);
+        small(Lang.tr("sc.gui.xv.blanket"), bx, y, 30, GuiHoloSC.LABEL);
         String life = gen.isIgnited() ? time(gen.getModuleLife() / 20.0 / TileEntityGeneratorSC.BIG_BLANKET_WEAR)
                 : Lang.tr(hasBlanket() ? "sc.gui.xv.blanket.in" : "sc.gui.xv.blanket.need");
-        tiny(life, bx, y + 6, 32, hasBlanket() || gen.isIgnited() ? GuiHoloSC.VALUE : GuiHoloSC.BAD);
+        small(life, bx, y + 6, 30, hasBlanket() || gen.isIgnited() ? GuiHoloSC.VALUE : GuiHoloSC.BAD);
     }
 
     private void buildText() {
-        small(Lang.tr("sc.gui.xv.build"), C2, COL_Y, 66, GuiHoloSC.LABEL);
+        small(Lang.tr("sc.gui.xv.build"), C2, COL_Y, 76, GuiHoloSC.LABEL);
         for (int dz = -3; dz <= 3; dz++) {
             for (int dx = -3; dx <= 3; dx++) {
                 if (cellKind(dx, dz) == 4) {
                     String l = LABEL_SHORT[gen.getPortLabel(wallIndex(dx, dz))];
                     int lw = (int) (fontRendererObj.getStringWidth(l) * 0.5F);
-                    tiny(l, C2 + (dx + 3) * CELL + (CELL - 1 - lw) / 2, SCHEME_Y + (dz + 3) * CELL + 2, CELL, GuiHoloSC.VALUE);
+                    tiny(l, C2 + (dx + 3) * CELL + (CELL - 1 - lw) / 2, SCHEME_Y + (dz + 3) * CELL + 3, CELL, GuiHoloSC.VALUE);
                 }
             }
         }
         int c = coils(), w = walls(), top = capCount(true), bottom = capCount(false);
-        tiny(Lang.tr("sc.gui.xv.count1", c, w), C2, 109, 106, c == 24 && w == 24 ? GuiHoloSC.OK : GuiHoloSC.WARN);
-        tiny(Lang.tr("sc.gui.xv.count2", top, bottom), C2, 115, 106, top == 49 && bottom == 49 ? GuiHoloSC.OK : GuiHoloSC.WARN);
+        small(Lang.tr("sc.gui.xv.count1", c, w), C2, 125, 115, c == 24 && w == 24 ? GuiHoloSC.OK : GuiHoloSC.WARN);
+        small(Lang.tr("sc.gui.xv.count2", top, bottom), C2, 132, 115, top == 49 && bottom == 49 ? GuiHoloSC.OK : GuiHoloSC.WARN);
         int[] cols = {0xD08040, 0x8A909A, 0x287874, 0xE63C3C};
         String[] names = {"sc.gui.xv.lg.coil", "sc.gui.xv.lg.lead", "sc.gui.xv.lg.port", "sc.gui.xv.lg.miss"};
         for (int i = 0; i < 4; i++) {
-            int lx = C2 + i * 27;
-            rect(lx, 121, 3, 3, 0xFF000000 | cols[i]);
-            tiny(Lang.tr(names[i]), lx + 5, 121, 21, GuiHoloSC.LABEL);
+            int lx = C2 + i * 29;
+            rect(lx, 141, 4, 4, 0xFF000000 | cols[i]);
+            tiny(Lang.tr(names[i]), lx + 6, 141, 22, GuiHoloSC.LABEL);
         }
     }
 
     private void portsText() {
         small(Lang.tr("sc.gui.xv.ports"), C3, COL_Y, 70, GuiHoloSC.LABEL);
         if (gen.getFreeTanks() > 0) {
-            tiny(Lang.tr("sc.gui.xv.free", gen.getFreeTanks()), C3 + 72, COL_Y + 1, 60, GuiHoloSC.LABEL);
+            tiny(Lang.tr("sc.gui.xv.free", gen.getFreeTanks()), C3 + 70, COL_Y + 1, 60, GuiHoloSC.LABEL);
         }
         for (int i = 0; i < 4; i++) {
             int gx = C3 + i * TANK_STEP, cap = gen.getPortCap(i), mb = gen.getPortFluid(i);
-            int nw = (int) (fontRendererObj.getStringWidth(GAS_SHORT[i]) * 0.625F);
-            small(GAS_SHORT[i], gx + 12 - nw / 2, 42, 20, GuiHoloSC.VALUE);
+            int nw = (int) (fontRendererObj.getStringWidth(GAS_SHORT[i]) * 0.75F);
+            scaled(GAS_SHORT[i], gx + 12 - nw / 2, 45, 22, GuiHoloSC.VALUE, 0.75F);
             if (cap <= 0) {
-                tiny(Lang.tr("sc.gui.xv.notank"), gx, 119, 31, i == 0 ? GuiHoloSC.BAD : GuiHoloSC.IDLE);
+                small(Lang.tr("sc.gui.xv.notank"), gx, 123, 31, i == 0 ? GuiHoloSC.BAD : GuiHoloSC.IDLE);
                 continue;
             }
-            tiny(k(mb) + "/" + k(cap), gx, 119, 31, GuiHoloSC.VALUE);
+            small(k(mb) + "/" + k(cap), gx, 123, 31, GuiHoloSC.VALUE);
+            int rate = gasRate[i];
+            String arrow = rate > 0 ? "▲ " + k(Math.max(1, rate / 20)) + "/t" : rate < 0 ? "▼ " + rateText(-rate) + "/t" : "— 0";
+            small(arrow, gx, 129, 31, rate > 0 ? GuiHoloSC.OK : rate < 0 ? GuiHoloSC.WARN : GuiHoloSC.IDLE);
             String left;
             int col = GuiHoloSC.LABEL;
             if (mb <= 0) {
@@ -628,20 +682,67 @@ public class GuiTokamakXVSC extends GuiContainer {
                 col = GuiHoloSC.BAD;
             } else if (i == 2) {
                 left = Lang.tr("sc.gui.xv.stops", (int) lasts(2));
+            } else if (rate > 0) {
+                left = Lang.tr("sc.gui.xv.rising");
+                col = GuiHoloSC.OK;
             } else {
                 double s = lasts(i);
                 left = "~" + time(s);
-                col = i == 0 && s < 60 ? GuiHoloSC.WARN : GuiHoloSC.LABEL;
+                col = i == 0 && s < HE_WARN_SECONDS ? GuiHoloSC.WARN : GuiHoloSC.LABEL;
             }
-            tiny(left, gx, 125, 31, col);
+            small(left, gx, 135, 31, col);
         }
         int stores = scan()[5];
         if (stores == 0) {
-            tiny(Lang.tr("sc.gui.xv.nostore"), C3, 131, 130, GuiHoloSC.BAD);
+            small(Lang.tr("sc.gui.xv.nostore"), C3, 143, 128, GuiHoloSC.BAD);
+            return;
         }
-        for (int i = 0; i < Math.min(2, stores); i++) {
-            tiny(Lang.tr("sc.gui.xv.store", i + 1, Tier.values()[Math.min(Tier.values().length - 1, gen.getStoreTier(i))].name(),
-                    gen.getStorePct(i)), C3 + i * 67, 131, 63, GuiHoloSC.VALUE);
+        String names = Tier.values()[Math.min(Tier.values().length - 1, gen.getStoreTier(0))].name();
+        if (stores > 1) {
+            names += " + " + Tier.values()[Math.min(Tier.values().length - 1, gen.getStoreTier(1))].name();
+        }
+        small(Lang.tr("sc.gui.xv.storeline", names, Math.round(gen.getStoresLevel() * 100), eu(gen.getStoresHave())), C3, 143, 128, GuiHoloSC.VALUE);
+        small(fullIn(), C3, 152, 128, GuiHoloSC.IDLE);
+        if (stores < 2) {
+            small(Lang.tr("sc.gui.xv.slot2"), C3, 158, 128, GuiHoloSC.IDLE);
+        }
+    }
+
+    /** "0,5" for a drain under 1 mB a tick (deuterium). */
+    private static String rateText(int perSecond) {
+        return perSecond >= 20 ? k(perSecond / 20) : String.format(java.util.Locale.ROOT, "%.1f", perSecond / 20.0).replace('.', ',');
+    }
+
+    /** When the port storages fill at the last second's rate. */
+    private String fullIn() {
+        long room = gen.getStoresRoom() - gen.getStoresHave();
+        if (room <= 0) {
+            return Lang.tr("sc.gui.xv.full");
+        }
+        if (storesRate <= 0) {
+            return Lang.tr("sc.gui.xv.notfilling");
+        }
+        return Lang.tr("sc.gui.xv.fullin", time(room / (double) storesRate));
+    }
+
+    /** The summary under the screen. */
+    private void summary() {
+        int x = SX + 4, y = SUM_Y + 4;
+        small(Lang.tr("sc.gui.xv.summary"), x, y, 90, GuiHoloSC.LABEL);
+        boolean lit = gen.isIgnited();
+        String[][] rows = {
+            {lit ? Lang.tr("sc.gui.xv.out", gen.getLastOutput()) : Lang.tr("sc.gui.xv.notlit"), lit ? "ok" : "idle"},
+            {Lang.tr("sc.gui.xv.perminute", eu((long) gen.getLastOutput() * 1200)), "val"},
+            {Lang.tr("sc.gui.xv.instores", eu(gen.getStoresHave())), "val"},
+            {fullIn(), "idle"},
+            {Lang.tr("sc.gui.xv.blanketleft", lit ? time(gen.getModuleLife() / 20.0 / TileEntityGeneratorSC.BIG_BLANKET_WEAR)
+                    : Lang.tr(hasBlanket() ? "sc.gui.xv.blanket.in" : "sc.gui.xv.blanket.need")), "val"},
+            {gen.getPortCap(0) > 0 ? Lang.tr("sc.gui.xv.helasts", "~" + time(lasts(0))) : Lang.tr("sc.gui.xv.notank") + " He",
+                    gen.getPortCap(0) <= 0 || lasts(0) < HE_WARN_SECONDS ? "warn" : "val"}};
+        for (int i = 0; i < rows.length; i++) {
+            String kind = rows[i][1];
+            int col = "ok".equals(kind) ? GuiHoloSC.OK : "warn".equals(kind) ? GuiHoloSC.WARN : "idle".equals(kind) ? GuiHoloSC.IDLE : GuiHoloSC.VALUE;
+            small(rows[i][0], x, y + 10 + i * 10, 96, col);
         }
     }
 
@@ -657,7 +758,7 @@ public class GuiTokamakXVSC extends GuiContainer {
                     : GuiHoloSC.IDLE;
             String mark = kind == 0 ? "OK" : kind == 1 ? " !" : kind == 2 ? "!!" : kind == 3 ? " >" : " -";
             small(mark, SX + 5, STATUS_Y + i * 6, 12, col);
-            small(lines.get(i), SX + 17, STATUS_Y + i * 6, SW - 24, col);
+            small(lines.get(i), SX + 17, STATUS_Y + i * 6, 255, col);
         }
     }
 
@@ -723,11 +824,15 @@ public class GuiTokamakXVSC extends GuiContainer {
         if (s == GeneratorStatus.BUFFER_FULL) {
             add(k, l, 1, Lang.tr("sc.gui.big.st.full"));
         }
+        if (!gen.isHeliumShort() && lasts(0) < HE_WARN_SECONDS && gasRate[0] <= 0) {
+            add(k, l, 1, Lang.tr("sc.gui.xv.st.he.soon", time(lasts(0)), HE_WARN_SECONDS / 60));
+        }
+        int trend = stabilityTrend();
+        if (trend < 0) {
+            add(k, l, 1, Lang.tr("sc.gui.xv.st.falling", Math.round(gen.getStability()), trend));
+        }
         if (gen.isHydrogenShort()) {
             add(k, l, 1, Lang.tr("sc.gui.big.st.noh2", gen.getLastOutput()));
-        }
-        if (!gen.isHeliumShort() && lasts(0) < 60) {
-            add(k, l, 1, Lang.tr("sc.gui.xv.st.he.soon", time(lasts(0))));
         }
         if (gen.getPortCap(2) <= 0) {
             add(k, l, 1, Lang.tr("sc.gui.xv.st.noar"));
@@ -773,34 +878,35 @@ public class GuiTokamakXVSC extends GuiContainer {
         if (GuiGaugeSC.isOver(GX, GY, GuiBatterySlotSC.COLUMN_W, GH, mx, my)) {
             t.add(Lang.tr("sc.gui.xv.tip.energy"));
             t.add(Lang.tr("sc.gui.xv.tip.energy.1", scan()[5], Math.round(gen.getStoresLevel() * 100)));
+            t.add(eu(gen.getStoresHave()) + " / " + eu(gen.getStoresRoom()) + " EU");
             t.add("§7" + Lang.tr("sc.gui.xv.tip.energy.2"));
             return t;
         }
-        if (gen.isIgnited() && GuiGaugeSC.isOver(THERMO_X - 2, THERMO_Y, 16, THERMO_H, mx, my)) {
+        if (gen.isIgnited() && GuiGaugeSC.isOver(THERMO_X - 2, THERMO_Y, 20, THERMO_H, mx, my)) {
             t.add(Lang.tr("sc.gui.xv.tip.thermo", gen.getHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT));
             t.add("§a" + Lang.tr("sc.gui.xv.tip.norm", normHeat() * 150 / TileEntityGeneratorSC.HEAT_LIMIT));
             t.add("§c" + Lang.tr("sc.gui.xv.tip.limit", 150));
             return t;
         }
-        if (gen.isIgnited() && GuiGaugeSC.isOver(C1, GRAPH_Y, TORUS_W, GRAPH_H, mx, my)) {
+        if (gen.isIgnited() && GuiGaugeSC.isOver(C1, GRAPH_Y - 6, TORUS_W, GRAPH_H + 6, mx, my)) {
             t.add(Lang.tr("sc.gui.xv.tip.graph"));
             t.add("§7" + Lang.tr("sc.gui.xv.tip.graph.1"));
             return t;
         }
-        if (gen.isIgnited() && GuiGaugeSC.isOver(C1, 76, TORUS_W, 34, mx, my)) {
+        if (gen.isIgnited() && GuiGaugeSC.isOver(C1, ROW_Y, TORUS_W, 36, mx, my)) {
             t.add(Lang.tr("sc.gui.big.tip.stab") + ": " + Math.round(gen.getStability()) + "%");
             t.add("§7" + Lang.tr("sc.gui.xv.tip.stab.1"));
             t.add(Lang.tr("sc.gui.gen.ramp", gen.getRamp() / 10));
             return t;
         }
-        if (!gen.isIgnited() && GuiGaugeSC.isOver(C1, 100, 100, 10, mx, my)) {
+        if (!gen.isIgnited() && GuiGaugeSC.isOver(C1, 108, 110, 10, mx, my)) {
             t.add(Lang.tr("sc.gui.ignition"));
             t.add(gen.getIgnitionEU() + " / " + gen.ignitionNeed() + " EU");
             t.add("§7" + Lang.tr("sc.gui.big.tip.charge"));
             return t;
         }
         for (int i = 0; i < 4; i++) {
-            if (GuiGaugeSC.isOver(C3 + i * TANK_STEP, TANK_Y, 31, 70, mx, my)) {
+            if (GuiGaugeSC.isOver(C3 + i * TANK_STEP, TANK_Y, 31, 88, mx, my)) {
                 return tankTip(i);
             }
         }
@@ -823,6 +929,9 @@ public class GuiTokamakXVSC extends GuiContainer {
         }
         t.add(name + " §7- " + Lang.tr("sc.gui.xv.tip.role." + gas));
         t.add(Lang.tr("sc.gui.xv.tip.amount", mb, cap, gen.getPortTankCount(gas)));
+        if (gasRate[gas] != 0) {
+            t.add((gasRate[gas] > 0 ? "§a" : "§e") + Lang.tr("sc.gui.xv.tip.flow", (gasRate[gas] > 0 ? "+" : "") + gasRate[gas]));
+        }
         if (gas == 2) {
             t.add(Lang.tr("sc.gui.xv.tip.ar", TileEntityGeneratorSC.BIG_ARGON_STOP, (int) lasts(2)));
         } else if (mb > 0) {
