@@ -3,7 +3,6 @@ package com.sc.proxy;
 import com.sc.block.BlockConduitSC;
 import com.sc.client.ConduitRenderer;
 import com.sc.client.FluidTextureHandler;
-import com.sc.manual.GuiManual;
 
 import cpw.mods.fml.client.registry.RenderingRegistry;
 import net.minecraft.client.Minecraft;
@@ -18,6 +17,7 @@ public class ClientProxy extends CommonProxy {
         com.sc.client.ArmorClientSC.register();
         com.sc.client.RainShieldClientSC.register();
         com.sc.client.RadiationClientSC.register();
+        com.sc.client.BookKeySC.register();
         BlockConduitSC.renderId = RenderingRegistry.getNextAvailableRenderId();
         RenderingRegistry.registerBlockHandler(new ConduitRenderer(BlockConduitSC.renderId));
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
@@ -30,7 +30,7 @@ public class ClientProxy extends CommonProxy {
 
     @Override
     public void openManual() {
-        Minecraft.getMinecraft().displayGuiScreen(new GuiManual());
+        Minecraft.getMinecraft().displayGuiScreen(new com.sc.manual.GuiBook());
     }
 
     /** World time of the last sneak + right-click with a blade - a held button repeats every 4 ticks. */

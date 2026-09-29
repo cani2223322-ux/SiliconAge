@@ -40,6 +40,7 @@ public final class SelfTestSC {
             outputCheckDoesNotDoubleBookSlots();
             guiSyncCarriesFullInts();
             handbookPagesBuild();
+            bookBuilds();
             fieldShapes();
             fluidDrops();
             energyStorage();
@@ -197,6 +198,46 @@ public final class SelfTestSC {
         List<String> search = com.sc.manual.ManualContent.linesFor(com.sc.manual.ManualTab.RECIPES, "wafer");
         check(search.size() > 5, "handbook search 'wafer' finds recipes (" + search.size() + " lines)");
         check(bad.length() == 0, "handbook: all 9 tabs build, " + total + " lines, no raw keys" + (bad.length() == 0 ? "" : " -> " + bad));
+    }
+
+    /** The illustrated handbook: every chapter has articles, no raw key leaks, items find their page, the recipe search works. */
+    private static void bookBuilds() {
+        StringBuilder bad = new StringBuilder();
+        java.util.List<com.sc.manual.BookEntry> all = com.sc.manual.BookContent.all();
+        for (com.sc.manual.BookChapter ch : com.sc.manual.BookChapter.values()) {
+            if (com.sc.manual.BookContent.chapter(ch).isEmpty()) {
+                bad.append(ch).append(" empty; ");
+            }
+            if (ch.title().startsWith("sc.")) {
+                bad.append(ch).append(" title; ");
+            }
+        }
+        java.util.Set<String> ids = new java.util.HashSet<String>();
+        for (com.sc.manual.BookEntry e : all) {
+            if (!ids.add(e.id)) {
+                bad.append("dup ").append(e.id).append("; ");
+            }
+            if (e.els.isEmpty() || e.title.startsWith("sc.")) {
+                bad.append(e.id).append(" empty/untitled; ");
+            }
+            String t = e.searchText();
+            if (t.contains("sc.book.") || t.contains("sc.manual.") || t.contains("%d") || t.contains("%s")) {
+                bad.append(e.id).append(" raw key; ");
+            }
+            for (com.sc.manual.BookEl el : e.els) {
+                if (el.kind == com.sc.manual.BookEl.Kind.LINK && com.sc.manual.BookContent.byId(el.target) == null) {
+                    bad.append(e.id).append(" -> ").append(el.target).append("; ");
+                }
+            }
+        }
+        com.sc.manual.BookEntry crusher = com.sc.manual.BookContent.entryFor(com.sc.manual.BookContent.machineStack(com.sc.machine.MachineType.CRUSHER));
+        com.sc.manual.BookEntry xv = com.sc.manual.BookContent.entryFor(com.sc.init.ModBlocks.generatorStack(com.sc.energy.GeneratorType.TOKAMAK_XV, 1));
+        com.sc.manual.BookEntry wafer = com.sc.manual.BookContent.entryFor(ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.SI_WAFER));
+        boolean found = crusher != null && crusher.id.equals("machine.crusher") && xv != null && wafer != null && wafer.id.equals("silicon");
+        int recipes = com.sc.manual.BookContent.recipes("wafer", 40).size();
+        check(bad.length() == 0 && found && recipes > 3 && all.size() > 80,
+                "book: " + all.size() + " articles in " + com.sc.manual.BookChapter.values().length + " chapters, items find their page " + found
+                        + ", 'wafer' -> " + recipes + (bad.length() == 0 ? "" : " -> " + bad));
     }
 
     /** Field Generator shapes: a square of 4 nodes 10 blocks apart, at y 64. */
