@@ -123,6 +123,14 @@ public final class ManualContent {
             lines.add("  " + Lang.tr("sc.manual.ores.tool", Lang.tr("sc.manual.ores.tool." + ore.tool.name().toLowerCase(Locale.ROOT))));
             lines.addAll(processing(block));
         }
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.ores.blockshead"));
+        lines.addAll(paragraph("sc.manual.ores.blocks"));
+        StringBuilder names = new StringBuilder();
+        for (com.sc.util.Material m : com.sc.block.BlockMetalSC.METALS) {
+            names.append(names.length() > 0 ? ", " : "").append(com.sc.block.BlockMetalSC.stackOf(m, 1).getDisplayName());
+        }
+        lines.add(" " + names);
         return lines;
     }
 

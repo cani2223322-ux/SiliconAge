@@ -45,6 +45,8 @@ public final class ModBlocks {
     public static com.sc.block.BlockLeadSC.Solid leadBlock;
     public static com.sc.block.BlockLeadSC.Glass leadGlass;
     public static com.sc.block.BlockShowerSC shower;
+    /** Blocks of the mod's metals (BlockMetalSC.METALS over two blocks). */
+    public static com.sc.block.BlockMetalSC metalBlock, metalBlock2;
     public static com.sc.block.BlockQuarrySC quarrySC;
 
     /** The item of a generator type (the block and metadata it lives on). */
@@ -113,6 +115,16 @@ public final class ModBlocks {
         net.minecraftforge.oredict.OreDictionary.registerOre("blockLead", leadBlock);
         leadGlass = new com.sc.block.BlockLeadSC.Glass();
         GameRegistry.registerBlock(leadGlass, "leadGlass");
+        metalBlock = new com.sc.block.BlockMetalSC(0);
+        GameRegistry.registerBlock(metalBlock, com.sc.block.BlockMetalSC.ItemMetalBlock.class, "metalBlock");
+        metalBlock2 = new com.sc.block.BlockMetalSC(16);
+        GameRegistry.registerBlock(metalBlock2, com.sc.block.BlockMetalSC.ItemMetalBlock.class, "metalBlock2");
+        for (com.sc.util.Material m : com.sc.block.BlockMetalSC.METALS) {
+            net.minecraftforge.oredict.OreDictionary.registerOre("block" + m.oreDictName, com.sc.block.BlockMetalSC.stackOf(m, 1));
+            if (m == com.sc.util.Material.ALUMINIUM) {
+                net.minecraftforge.oredict.OreDictionary.registerOre("blockAluminum", com.sc.block.BlockMetalSC.stackOf(m, 1));
+            }
+        }
         shower = new com.sc.block.BlockShowerSC();
         GameRegistry.registerBlock(shower, "shower");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityShowerSC.class, "SiliconAge.shower");

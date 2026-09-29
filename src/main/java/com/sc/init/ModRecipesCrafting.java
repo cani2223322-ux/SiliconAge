@@ -48,6 +48,7 @@ public final class ModRecipesCrafting {
         batteries();
         wireless();
         radiation();
+        metalBlocks();
         upgrades();
         tubeParts();
         tanks();
@@ -468,6 +469,33 @@ public final class ModRecipesCrafting {
         OreRecipes.shaped(new ItemStack(ModBlocks.shower), "IPI", "GBG", "ICI",
                 'I', new ItemStack(Items.iron_ingot), 'P', pipe(PipeType.COPPER), 'G', window, 'B', new ItemStack(Items.bucket),
                 'C', cable(CableType.SILVER));
+    }
+
+    /**
+     * Blocks of metal as a block of iron: 9 ingots into a block and back. The ingots go by the ore
+     * dictionary (other mods' copper makes our block too) - unless another mod already has its own
+     * block of that metal: then that mod's recipe keeps the 9 ingots (two recipes on one grid
+     * clash) and ours only turns back into ingots.
+     */
+    private static void metalBlocks() {
+        for (Material m : com.sc.block.BlockMetalSC.METALS) {
+            ItemStack block = com.sc.block.BlockMetalSC.stackOf(m, 1);
+            OreRecipes.shapeless(ingot(m, 9), block);
+            if (!anotherModsBlock(m, block)) {
+                ItemStack in = ingot(m);
+                OreRecipes.shaped(block, "III", "III", "III", 'I', in);
+            }
+        }
+    }
+
+    /** Another mod has registered a block of this metal. */
+    static boolean anotherModsBlock(Material m, ItemStack ours) {
+        for (ItemStack s : net.minecraftforge.oredict.OreDictionary.getOres("block" + m.oreDictName)) {
+            if (s.getItem() != ours.getItem()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void weaponsAndField() {

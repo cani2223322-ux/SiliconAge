@@ -62,6 +62,7 @@ public final class SelfTestSC {
             radiation();
             balanceConfig();
             smelters();
+            metalBlocks();
             electrolysisAndHeavyWater();
             drills();
             fieldExtras();
@@ -1221,6 +1222,31 @@ public final class SelfTestSC {
                 && cost > back && com.sc.item.ItemFluidDropSC.names().contains("heavywater") && plain == null && chemPlain == null;
         check(ok, "electrolysis: water + lye -> H2 + O2, plain water starts nothing (" + cost + " EU, a fuel cell gets " + back + " back), brine still NaOH + Cl2,"
                 + " water -> heavy water -> deuterium + O2");
+    }
+
+    /** Blocks of metal: 22, each in the ore dictionary as its metal's block, turning back into 9 ingots. */
+    private static void metalBlocks() {
+        int ok = 0;
+        for (com.sc.util.Material m : com.sc.block.BlockMetalSC.METALS) {
+            ItemStack b = com.sc.block.BlockMetalSC.stackOf(m, 1);
+            boolean dict = false;
+            for (int id : net.minecraftforge.oredict.OreDictionary.getOreIDs(b)) {
+                dict |= net.minecraftforge.oredict.OreDictionary.getOreName(id).equals("block" + m.oreDictName);
+            }
+            boolean back = false;
+            for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+                net.minecraft.item.crafting.IRecipe r = (net.minecraft.item.crafting.IRecipe) o;
+                ItemStack out = r.getRecipeOutput();
+                if (out != null && out.stackSize == 9 && out.getItem() == ModItems.ingot && r.getRecipeSize() == 1
+                        && out.getItemDamage() == ModItems.ingot.stackOf(m).getItemDamage()) {
+                    back = true;
+                }
+            }
+            ok += dict && back && m.hasIngot && b.getItem() != null ? 1 : 0;
+        }
+        boolean lead = com.sc.block.BlockMetalSC.stackOf(com.sc.util.Material.LEAD, 1) == null;
+        check(ok == 22 && com.sc.block.BlockMetalSC.METALS.length == 22 && lead,
+                "metal blocks: 22 (lead has its own), each blockX in the ore dictionary and back into 9 ingots (" + ok + ")");
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */
