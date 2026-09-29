@@ -43,8 +43,8 @@ public class WorldTestTokamakSC {
             build(w, AX, true);
             build(w, BX, false);
         }
-        if (ticks == 100) {
-            gen(w, AX).setIgnitionForTest();
+        if (ticks == 70) {                                          // the charge: into the port storage, the tokamak draws it
+            ((TileEntityEnergyStorageSC) w.getTileEntity(AX, Y, Z + 3)).setEnergyStoredClient(5000000);
             gen(w, BX).setIgnitionForTest();
         }
         if (ticks == 220) {

@@ -42,6 +42,13 @@ public final class BlockLeadSC {
         public IIcon getIcon(int side, int meta) {
             return icon;
         }
+
+        /** Part of a big tokamak's wall: the tokamak's screen (empty hand). */
+        @Override
+        public boolean onBlockActivated(net.minecraft.world.World w, int x, int y, int z, net.minecraft.entity.player.EntityPlayer p,
+                                        int side, float hx, float hy, float hz) {
+            return com.sc.tileentity.TileEntityGeneratorSC.openFromBuild(w, x, y, z, p);
+        }
     }
 
     public static class Glass extends BlockGlass {
@@ -58,6 +65,13 @@ public final class BlockLeadSC {
         @Override
         public int quantityDropped(Random random) {
             return 1;
+        }
+
+        /** A window in a big tokamak's wall: the tokamak's screen (empty hand). */
+        @Override
+        public boolean onBlockActivated(net.minecraft.world.World w, int x, int y, int z, net.minecraft.entity.player.EntityPlayer p,
+                                        int side, float hx, float hy, float hz) {
+            return com.sc.tileentity.TileEntityGeneratorSC.openFromBuild(w, x, y, z, p);
         }
     }
 }

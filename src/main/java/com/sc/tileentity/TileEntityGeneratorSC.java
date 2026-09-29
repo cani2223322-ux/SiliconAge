@@ -733,6 +733,58 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         shutDown(GeneratorStatus.DISRUPTED);
     }
 
+    /** EU a tick the ignition charge draws from the port storages (5 million in about 40 s). */
+    public static final int PORT_CHARGE_PER_TICK = 131072;
+
+    /** The ignition charge taken out of the port storages (the tokamak can't be reached by a cable any more). */
+    private void chargeFromPorts() {
+        long need = ignitionNeed() - ignitionEU;
+        for (int[] p : storePorts) {
+            if (need <= 0) {
+                return;
+            }
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            if (te instanceof TileEntityEnergyStorageSC) {
+                int took = ((TileEntityEnergyStorageSC) te).extractForItemCharging((int) Math.min(need, PORT_CHARGE_PER_TICK));
+                if (took > 0) {
+                    ignitionEU += took;
+                    need -= took;
+                    te.markDirty();
+                }
+            }
+        }
+    }
+
+    /** The tokamak whose 7x7x3 this block is part of, or null (a click on the wall opens its screen). */
+    public static TileEntityGeneratorSC bigTokamakAround(net.minecraft.world.World w, int x, int y, int z) {
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int dx = -3; dx <= 3; dx++) {
+                    net.minecraft.tileentity.TileEntity te = w.getTileEntity(x + dx, y + dy, z + dz);
+                    if (te instanceof TileEntityGeneratorSC && ((TileEntityGeneratorSC) te).generatorType == GeneratorType.TOKAMAK) {
+                        return (TileEntityGeneratorSC) te;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** A click with an empty hand on the build's lead, glass or coils: the tokamak's screen. */
+    public static boolean openFromBuild(net.minecraft.world.World w, int x, int y, int z, net.minecraft.entity.player.EntityPlayer p) {
+        if (p.getCurrentEquippedItem() != null || p.isSneaking()) {
+            return false;                                     // building: blocks go on the wall as usual
+        }
+        TileEntityGeneratorSC t = bigTokamakAround(w, x, y, z);
+        if (t == null) {
+            return false;
+        }
+        if (!w.isRemote) {
+            p.openGui(com.sc.SCMod.instance, com.sc.handler.GuiHandlerSC.GENERATOR_GUI_ID, w, t.xCoord, t.yCoord, t.zCoord);
+        }
+        return true;
+    }
+
     /** The big mode's output goes into the port storages (the tokamak itself is walled in). */
     private void pushToPorts() {
         for (int[] p : storePorts) {
@@ -932,6 +984,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             if (bigRunning && (!bigAllowed || !ignited)) {
                 bigRunning = false;                            // switched to the normal mode: no penalty, the normal output
+                markDirty();
+            } else if (!bigRunning && ignited && bigAllowed && bigReady) {
+                bigRunning = true;                             // lit first, the build closed afterwards (or back to the auto mode)
+                stability = 100F;
+                warnedAt = 100;
+                bigEvent = 0;
                 markDirty();
             }
         }
@@ -1388,6 +1446,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             if (status == GeneratorStatus.OVERHEATED && heat > 0) {
                 return;                 // cools down before it can be lit again
+            }
+            if (generatorType == GeneratorType.TOKAMAK && bigAllowed && bigReady) {
+                chargeFromPorts();      // walled in: the charge comes out of the port storages
             }
             ignite();
             return;

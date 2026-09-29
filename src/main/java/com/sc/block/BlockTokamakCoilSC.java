@@ -18,4 +18,11 @@ public class BlockTokamakCoilSC extends Block {
         setResistance(12.0F);
         setStepSound(soundTypeMetal);
     }
+
+    /** A coil round a tokamak: its screen (empty hand). */
+    @Override
+    public boolean onBlockActivated(net.minecraft.world.World w, int x, int y, int z, net.minecraft.entity.player.EntityPlayer p,
+                                    int side, float hx, float hy, float hz) {
+        return com.sc.tileentity.TileEntityGeneratorSC.openFromBuild(w, x, y, z, p);
+    }
 }
