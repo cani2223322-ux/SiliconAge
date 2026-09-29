@@ -159,6 +159,12 @@ public class GuiGeneratorSC extends GuiContainer {
         if (type == GeneratorType.CREATIVE) {
             buttonList.add(new TextFitSC.Button(ContainerGeneratorSC.BTN_CREATIVE_TIER, guiLeft + LEFT_X, guiTop + 28, LEFT_W, 16, ""));
         }
+        if (tok) {                                            // the big tokamak's page and its buttons
+            buttonList.add(new GuiFieldGeneratorSC.HoloButton(BIG_PAGE_ID, guiLeft + 150, guiTop + 22, 56, 10, ""));
+            buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerGeneratorSC.BTN_SOFT_STOP, guiLeft + 110, guiTop + 74, 96, 10, ""));
+            buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerGeneratorSC.BTN_BIG_MODE, guiLeft + 110, guiTop + 86, 96, 10, ""));
+            refreshBigButtons();
+        }
         for (int i = 0; i < tankCount(); i++) {
             GuiBigSC.ClearButton b = new GuiBigSC.ClearButton(ContainerGeneratorSC.BTN_CLEAR + i);
             b.visible = true;
@@ -168,9 +174,32 @@ public class GuiGeneratorSC extends GuiContainer {
         }
     }
 
+    private static final int BIG_PAGE_ID = 900;
+    /** The tokamak's second page: the big build, its ports, stability and buttons. */
+    private boolean bigPage;
+
+    private void refreshBigButtons() {
+        for (Object o : buttonList) {
+            GuiButton b = (GuiButton) o;
+            if (b.id == BIG_PAGE_ID) {
+                b.displayString = Lang.tr(bigPage ? "sc.gui.big.page.reactor" : "sc.gui.big.page.big");
+            } else if (b.id == ContainerGeneratorSC.BTN_SOFT_STOP) {
+                b.visible = bigPage;
+                b.enabled = generator.isIgnited();
+                b.displayString = Lang.tr("sc.gui.big.btn.stop");
+            } else if (b.id == ContainerGeneratorSC.BTN_BIG_MODE) {
+                b.visible = bigPage;
+                b.displayString = Lang.tr(generator.isBigAllowed() ? "sc.gui.big.btn.auto" : "sc.gui.big.btn.normal");
+            }
+        }
+    }
+
     @Override
     public void updateScreen() {
         super.updateScreen();
+        if (tok) {
+            refreshBigButtons();
+        }
         if (gaas && ++flowTicks >= 20) {
             // energy leaves when the buffer grew by less than the panel made this second
             int stored = generator.getEnergyStored();
@@ -195,6 +224,11 @@ public class GuiGeneratorSC extends GuiContainer {
 
     @Override
     protected void actionPerformed(GuiButton button) {
+        if (button.id == BIG_PAGE_ID) {                       // screen-side only: which page
+            bigPage = !bigPage;
+            refreshBigButtons();
+            return;
+        }
         if (!power.allowClick(button)) {
             return;
         }
@@ -257,6 +291,8 @@ public class GuiGeneratorSC extends GuiContainer {
             drawCombBackground(x, y, partialTicks);
         } else if (turb) {
             drawTurbBackground(x, y, partialTicks);
+        } else if (fus && bigPage) {
+            drawBigBackground(x, y, partialTicks);
         } else if (fus) {
             drawFusBackground(x, y, partialTicks);
         } else if (solid) {
@@ -319,6 +355,11 @@ public class GuiGeneratorSC extends GuiContainer {
         }
         if (turb) {
             drawTurbText();
+            drawUpgradeCount();
+            return;
+        }
+        if (fus && bigPage) {
+            drawBigText();
             drawUpgradeCount();
             return;
         }
@@ -650,7 +691,7 @@ public class GuiGeneratorSC extends GuiContainer {
         if (generator.isIgnited()) {
             return generator.getRamp() < TileEntityGeneratorSC.RAMP_FULL && generator.getStatus() != GeneratorStatus.BUFFER_FULL ? 3 : 4;
         }
-        if (generator.getIgnitionEU() < type.ignitionThreshold()) {
+        if (generator.getIgnitionEU() < generator.ignitionNeed()) {
             return 0;
         }
         return generator.getStatus() == GeneratorStatus.NO_BLANKET ? 1 : 2;
@@ -686,7 +727,7 @@ public class GuiGeneratorSC extends GuiContainer {
         if (tokRingOpen()) {
             // the right column is text only while the ring is open
         } else if (!lit) {                                                            // the ignition charge
-            float charge = (float) generator.getIgnitionEU() / type.ignitionThreshold();
+            float charge = (float) generator.getIgnitionEU() / generator.ignitionNeed();
             drawRect(cx, y + 56, cx + 78, y + 62, 0xFF04080C);
             for (int i = 0; i < 19; i++) {
                 drawRect(cx + 1 + i * 4, y + 57, cx + 4 + i * 4, y + 61, (i + 0.5F) / 19 < charge ? 0xFF6EE6FF : 0xFF2A3038);
@@ -717,6 +758,124 @@ public class GuiGeneratorSC extends GuiContainer {
             drawRect(bx, by, bx + 48, by + 4, 0xFF04080C);
             drawRect(bx + 1, by + 1, bx + 1 + (int) (46 * f), by + 3, s == 0 ? 0xFF9AD8FF : 0xFFC8D87A);
         }
+    }
+
+    // ---- the big tokamak page ----
+
+    private static final int[] BIG_FLUID_COLOURS = {0xFFB0F0FF, 0xFFD8E8FF, 0xFFB890F0, 0xFFA0A8F0};
+    private static final String[] BIG_FLUID_KEYS = {"sc.gui.big.he", "sc.gui.big.h2", "sc.gui.big.ar", "sc.gui.big.d"};
+    private static final int BIG_GAUGE_MB = 16000, BIG_SCHEME_X = 110, BIG_SCHEME_Y = 34, BIG_CELL = 5;
+
+    /** Stability, the four port fluids, the 7x7 scheme (lead grey, ports teal, coils copper, the core purple, missing red). */
+    private void drawBigBackground(int x, int y, float partialTicks) {
+        float st = generator.getStability() / 100F;
+        int stCol = st > 0.4F ? 0xFF5AE66E : st > 0.2F ? 0xFFFF9628 : 0xFFE63C3C;
+        GuiHoloSC.bar(x + 14, y + 36, 86, 4, generator.isBigRunning() ? st : 0F, 16, stCol);
+        for (int i = 0; i < 4; i++) {
+            int gx = x + 14 + i * 18, gy = y + 50, h = 26;
+            drawRect(gx, gy, gx + 10, gy + h, 0xFF1E3444);
+            drawRect(gx + 1, gy + 1, gx + 9, gy + h - 1, 0xFF0A1218);
+            int n = (int) ((h - 2) * Math.min(1F, generator.getPortFluid(i) / (float) BIG_GAUGE_MB));
+            drawRect(gx + 1, gy + h - 1 - n, gx + 9, gy + h - 1, BIG_FLUID_COLOURS[i]);
+        }
+        int[] scan = generator.bigScan();
+        int ci = 0;
+        for (int dz = -3; dz <= 3; dz++) {
+            for (int dx = -3; dx <= 3; dx++) {
+                int col;
+                if (dx == 0 && dz == 0) {
+                    col = generator.isIgnited() ? 0xFFE060F8 : 0xFF9050C8;
+                } else if (Math.abs(dx) < 3 && Math.abs(dz) < 3) {
+                    col = (scan[0] >> ci++ & 1) != 0 ? 0xFFD08040 : 0xFFE63C3C;
+                } else {
+                    int w = bigWall(dx, dz);
+                    col = (scan[2] >> w & 1) != 0 ? 0xFF3CD2C8 : (scan[1] >> w & 1) != 0 ? 0xFF8A909A : 0xFFE63C3C;
+                }
+                int cx = x + BIG_SCHEME_X + (dx + 3) * BIG_CELL, cy = y + BIG_SCHEME_Y + (dz + 3) * BIG_CELL;
+                drawRect(cx, cy, cx + BIG_CELL - 1, cy + BIG_CELL - 1, col);
+            }
+        }
+    }
+
+    private static int bigWall(int dx, int dz) {
+        int k = 0;
+        for (int z = -3; z <= 3; z++) {
+            for (int x = -3; x <= 3; x++) {
+                if (Math.abs(x) == 3 || Math.abs(z) == 3) {
+                    if (x == dx && z == dz) {
+                        return k;
+                    }
+                    k++;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private void drawBigText() {
+        fit(Lang.tr("sc.gui.big.title"), 14, CAPTION_Y, 132, GuiHoloSC.CYAN & 0xFFFFFF);
+        int dim = GuiHoloSC.LABEL, val = GuiHoloSC.VALUE;
+        boolean run = generator.isBigRunning();
+        smallFit(Lang.tr("sc.gui.big.stability", run ? Math.round(generator.getStability()) + "%" : "-"), 14, 42, 86,
+                !run ? dim : generator.getStability() > 40 ? GuiHoloSC.OK : generator.getStability() > 20 ? GuiHoloSC.WARN : GuiHoloSC.BAD);
+        for (int i = 0; i < 4; i++) {
+            int gx = 14 + i * 18;
+            smallFit(Lang.tr(BIG_FLUID_KEYS[i]), gx, 78, 16, dim);
+            int mb = generator.getPortFluid(i);
+            smallFit(mb >= 1000 ? mb / 1000 + "k" : String.valueOf(mb), gx, 83, 16, mb > 0 ? val : 0x465A6E);
+        }
+        int[] scan = generator.bigScan();
+        int coils = Integer.bitCount(scan[0]), walls = Integer.bitCount(scan[1]);
+        int tx = BIG_SCHEME_X + 7 * BIG_CELL + 3, tw = 206 - tx;
+        smallFit(Lang.tr("sc.gui.big.coils", coils), tx, 34, tw, coils == 24 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit(Lang.tr("sc.gui.big.walls", walls), tx, 40, tw, walls == 24 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit(scan[3] == 0 ? Lang.tr("sc.gui.big.caps.ok") : Lang.tr("sc.gui.big.caps", scan[3]), tx, 46, tw,
+                scan[3] == 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit(Lang.tr("sc.gui.big.tanks", scan[4], TileEntityGeneratorSC.PORT_TANKS_MAX), tx, 52, tw, val);
+        smallFit(Lang.tr("sc.gui.big.stores", scan[5]), tx, 58, tw, scan[5] > 0 && scan[6] == 0 ? GuiHoloSC.OK : GuiHoloSC.BAD);
+        smallFit(Lang.tr("sc.gui.big.rad", com.sc.radiation.RadiationSC.fmt(generator.radiationLevel()), generator.radiationRadiusNow()),
+                tx, 64, tw, generator.radiationLevel() > 0 ? GuiHoloSC.WARN : dim);
+        String line;
+        int col;
+        GeneratorStatus status = generator.getStatus();
+        if (generator.getBigEvent() == TileEntityGeneratorSC.EVENT_BROKE && !generator.isIgnited()) {
+            line = Lang.tr("sc.gui.big.st.disrupted");
+            col = GuiHoloSC.BAD;
+        } else if (generator.getBigEvent() == TileEntityGeneratorSC.EVENT_SOFT && !generator.isIgnited()) {
+            line = Lang.tr("sc.gui.big.st.softstop");
+            col = GuiHoloSC.IDLE;
+        } else if (!generator.isBigAllowed()) {
+            line = Lang.tr("sc.gui.big.st.normalonly");
+            col = GuiHoloSC.IDLE;
+        } else if (run && !generator.isBigReady()) {
+            line = Lang.tr("sc.gui.big.st.broken");
+            col = GuiHoloSC.BAD;
+        } else if (run && generator.isHeliumShort()) {
+            line = Lang.tr("sc.gui.big.st.nohe");
+            col = GuiHoloSC.BAD;
+        } else if (run && generator.isHydrogenShort()) {
+            line = Lang.tr("sc.gui.big.st.noh2", generator.getLastOutput());
+            col = GuiHoloSC.WARN;
+        } else if (run) {
+            line = Lang.tr("sc.gui.big.st.run", generator.getLastOutput());
+            col = GuiHoloSC.OK;
+        } else if (generator.isBigReady()) {
+            line = Lang.tr("sc.gui.big.st.ready", fusEu(generator.getIgnitionEU()) + " / " + fusEu(generator.ignitionNeed()));
+            col = GuiHoloSC.CYAN & 0xFFFFFF;
+        } else if (coils < 24) {
+            line = Lang.tr("sc.gui.big.st.needcoils", 24 - coils);
+            col = GuiHoloSC.WARN;
+        } else if (walls < 24 || scan[3] > 0) {
+            line = Lang.tr("sc.gui.big.st.needshell", 24 - walls + scan[3]);
+            col = GuiHoloSC.WARN;
+        } else if (scan[5] == 0) {
+            line = Lang.tr("sc.gui.big.st.needstore");
+            col = GuiHoloSC.WARN;
+        } else {
+            line = Lang.tr("sc.gui.big.st.weakstore");
+            col = GuiHoloSC.WARN;
+        }
+        smallFit(line, 14, FU_STATUS_Y, 190, col);
     }
 
     /** "340к" / "1 млн" - the ignition charge, short. */
@@ -756,7 +915,7 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.tok.hint.2"), 84, 72, 120, GuiHoloSC.LABEL);
             smallFit(Lang.tr("sc.gui.tok.hint.3"), 84, 78, 120, GuiHoloSC.LABEL);
         } else if (!lit) {
-            long eu = generator.getIgnitionEU(), need = type.ignitionThreshold();
+            long eu = generator.getIgnitionEU(), need = generator.ignitionNeed();
             smallFit(Lang.tr("sc.gui.fus.charge"), FU_COL_X, 49, 78, GuiHoloSC.LABEL);
             smallFit(fusEu(eu) + " / " + fusEu(need) + " EU", FU_COL_X, 65, 78, GuiHoloSC.VALUE);
             String hint = "sc.gui.fus.hint." + (status == GeneratorStatus.OVERHEATED ? "cool" : String.valueOf(Math.min(2, stage)));
@@ -815,7 +974,7 @@ public class GuiGeneratorSC extends GuiContainer {
                 line = Lang.tr("sc.gui.fus.st.noblanket");
                 col = GuiHoloSC.WARN;
             } else {
-                int pct = (int) (100 * generator.getIgnitionEU() / Math.max(1, type.ignitionThreshold()));
+                int pct = (int) (100 * generator.getIgnitionEU() / Math.max(1, generator.ignitionNeed()));
                 line = Lang.tr("sc.gui.fus.st.charge", pct,
                         Lang.tr(fusHasBlanket() ? "sc.gui.fus.yes.blanket" : "sc.gui.fus.no.blanket"),
                         Lang.tr(count > 0 ? "sc.gui.fus.yes.cell" : "sc.gui.fus.no.cell"));

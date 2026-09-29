@@ -65,6 +65,8 @@ public class ContainerGeneratorSC extends Container {
     public static final int BTN_CLEAR = 1;
     /** The power switch and the redstone mode (GuiPowerSC). */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_BATTERY_MODE = 12;
+    /** The big tokamak: put the plasma out safely; the mode (big when built / normal only). */
+    public static final int BTN_SOFT_STOP = 20, BTN_BIG_MODE = 21;
 
     private final TileEntityGeneratorSC generator;
 
@@ -125,6 +127,14 @@ public class ContainerGeneratorSC extends Container {
             generator.setRedstoneMode((generator.getRedstoneMode() + 1) % 3);
             return true;
         }
+        if (id == BTN_SOFT_STOP && canInteractWith(player) && generator.getGeneratorType() == GeneratorType.TOKAMAK) {
+            generator.softStop();
+            return true;
+        }
+        if (id == BTN_BIG_MODE && canInteractWith(player) && generator.getGeneratorType() == GeneratorType.TOKAMAK) {
+            generator.toggleBigAllowed();
+            return true;
+        }
         if (id == BTN_BATTERY_MODE && canInteractWith(player)) {
             generator.cycleBatteryMode();
             return true;
@@ -141,7 +151,9 @@ public class ContainerGeneratorSC extends Container {
     private static final int ID_ENERGY = 0, ID_F1 = 1, ID_F1_AMT = 2, ID_F2 = 3, ID_F2_AMT = 4, ID_OUT = 5, ID_OUT_AMT = 6,
             ID_IGNITION = 7, ID_IGNITED = 8, ID_STATUS = 9, ID_OUTPUT = 10, ID_HEAT = 11, ID_RAMP = 12, ID_INFO_A = 13,
             ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, ID_CELL = 18,
-            ID_LIFE = 19, ID_SOLID = 20, ID_SOLID_TOTAL = 21, ID_SOLID_ITEM = 22, ID_SIDES = 23, COUNT = 24;
+            ID_LIFE = 19, ID_SOLID = 20, ID_SOLID_TOTAL = 21, ID_SOLID_ITEM = 22, ID_SIDES = 23,
+            /** The big tokamak's eight numbers (TileEntityGeneratorSC.bigSync). */
+            ID_BIG = 24, COUNT = 32;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
@@ -150,7 +162,12 @@ public class ContainerGeneratorSC extends Container {
         return f == null ? 0 : f.getFluidID();
     }
 
+    private int[] bigNow;
+
     private int currentValue(int id) {
+        if (id >= ID_BIG) {
+            return bigNow[id - ID_BIG];
+        }
         switch (id) {
             case ID_ENERGY: return generator.getEnergyStored();
             case ID_F1: return fluidId(generator.getFuelTank());
@@ -183,6 +200,7 @@ public class ContainerGeneratorSC extends Container {
     public void detectAndSendChanges() {
         super.detectAndSendChanges();
         int[] values = new int[COUNT];
+        bigNow = generator.bigSync();
         for (int id = 0; id < COUNT; id++) {
             values[id] = currentValue(id);
         }
@@ -193,6 +211,14 @@ public class ContainerGeneratorSC extends Container {
     public void updateProgressBar(int property, int half) {
         int id = sync.receive(property, half);
         if (id < 0) {
+            return;
+        }
+        if (id >= ID_BIG) {
+            int[] v = new int[COUNT - ID_BIG];
+            for (int i = 0; i < v.length; i++) {
+                v[i] = sync.value(ID_BIG + i);
+            }
+            generator.setBigClient(v);
             return;
         }
         switch (id) {

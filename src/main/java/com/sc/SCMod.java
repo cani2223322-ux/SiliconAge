@@ -120,6 +120,7 @@ public class SCMod {
         event.registerServerCommand(new com.sc.debug.CommandEnergySC());
         if (Boolean.getBoolean("sc.worldtest")) {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWirelessSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestTokamakSC());
         }
     }
 }

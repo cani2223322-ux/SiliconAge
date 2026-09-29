@@ -352,6 +352,9 @@ public final class ManualContent {
             lines.add(" " + type.localizedName() + R + DIM + " - " + type.tier + ", " + type.euPerTick + " EU/t, " + fuel);
             lines.add("   " + Lang.tr("sc.manual.generator." + type.name().toLowerCase(Locale.ROOT)));
         }
+        lines.add("");
+        lines.add(HEAD + Lang.tr("sc.manual.generator.bighead"));
+        lines.addAll(paragraph("sc.manual.generator.big"));
         return lines;
     }
 

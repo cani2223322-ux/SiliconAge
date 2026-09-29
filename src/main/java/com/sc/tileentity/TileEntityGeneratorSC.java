@@ -348,7 +348,416 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Rated output with the upgrades - what a fuel generator makes each tick while it runs. */
     public int ratedOutput() {
-        return (int) Math.round(generatorType.euPerTick * outputMultiplier() * shieldingMultiplier());
+        return (int) Math.round(generatorType.euPerTick * outputMultiplier() * shieldingMultiplier() * bigOutputMultiplier());
+    }
+
+    // ---- the big tokamak: the tokamak inside a 7x7x3 build ----
+
+    /**
+     * The big tokamak: output x4 (x0.7 more without hydrogen heating); deuterium from a port tank
+     * (mB a tick) or cells burnt this many times faster; helium a tick; hydrogen a tick for the
+     * heating and at the start; the blanket's wear; argon for a soft stop; the radiation and its
+     * reach; a breakdown's burst and its length; how many coils it throws.
+     */
+    public static final int BIG_OUTPUT_MUL = 4;
+    public static final double BIG_D_PER_TICK = 0.5, BIG_HE_PER_TICK = 3, BIG_H2_PER_TICK = 1;
+    public static final int BIG_CELL_MUL = 12, BIG_H2_START = 50, BIG_BLANKET_WEAR = 2, BIG_ARGON_STOP = 1000;
+    public static final float BIG_NO_H2_OUTPUT = 0.7F;
+    public static final float BIG_RADIATION = 12F, BURST_RADIATION = 25F;
+    public static final int BIG_RADIUS = 20, BURST_RADIUS = 24, BURST_TICKS = 1200;
+    /** Stability a second: helium short, the build broken, an overdrive, too hot; the recovery. */
+    public static final float STAB_NO_HE = 5F, STAB_BROKEN = 10F, STAB_OVERDRIVE = 0.5F, STAB_HOT = 2F, STAB_RECOVER = 1F;
+    public static final float STAB_ARGON = 10F;
+    public static final int PORT_TANKS_MAX = 4, PORT_STORES_MAX = 2;
+
+    private boolean bigAllowed = true, bigReady, bigRunning, heShort, h2Short;
+    /** What ended the last run, kept until the next lighting (the screen): 0 nothing, 1 put out safely, 2 broke down. */
+    private int bigEvent;
+    public static final int EVENT_SOFT = 1, EVENT_BROKE = 2;
+
+    public int getBigEvent() {
+        return bigEvent;
+    }
+    private float stability = 100F;
+    private int burstTicks, warnedAt = 100;
+    private double heDebt, h2Debt, dDebt;
+    /** The last scan: coils (24 bits), walls fine (24), walls that are ports (24); caps missing, tanks, storages, weak storages. */
+    private int coilMask, wallMask, portMask, capMissing, portTanks, portStores, weakStores;
+    /** What the port tanks hold, mB: helium, hydrogen, argon, deuterium (the screen's gauges). */
+    private final int[] portFluid = new int[4];
+    private static final String[] PORT_FLUIDS = {"liquidhelium", "hydrogen", "argon", "deuterium"};
+    private final java.util.List<int[]> tankPorts = new java.util.ArrayList<int[]>(), storePorts = new java.util.ArrayList<int[]>();
+
+    public boolean isBigAllowed() {
+        return bigAllowed;
+    }
+
+    public boolean isBigReady() {
+        return bigReady;
+    }
+
+    public boolean isBigRunning() {
+        return bigRunning;
+    }
+
+    public float getStability() {
+        return stability;
+    }
+
+    public int getBurstTicks() {
+        return burstTicks;
+    }
+
+    public boolean isHeliumShort() {
+        return heShort;
+    }
+
+    public boolean isHydrogenShort() {
+        return h2Short;
+    }
+
+    public int getPortFluid(int i) {
+        return portFluid[i];
+    }
+
+    public int[] bigScan() {
+        return new int[]{coilMask, wallMask, portMask, capMissing, portTanks, portStores, weakStores};
+    }
+
+    /** The screen's numbers: four packed ints and the four port fluids. */
+    public int[] bigSync() {
+        int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (bigAllowed ? 4 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
+                | bigEvent << 5;
+        return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
+                capMissing | Math.round(stability * 10) << 8, portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
+    }
+
+    public void setBigClient(int[] v) {
+        coilMask = v[0] & 0xFFFFFF;
+        int flags = v[0] >>> 24;
+        bigReady = (flags & 1) != 0;
+        bigRunning = (flags & 2) != 0;
+        bigAllowed = (flags & 4) != 0;
+        heShort = (flags & 8) != 0;
+        h2Short = (flags & 16) != 0;
+        bigEvent = flags >> 5 & 3;
+        wallMask = v[1];
+        portMask = v[2] & 0xFFFFFF;
+        portTanks = v[2] >>> 24 & 7;
+        portStores = v[2] >>> 27 & 3;
+        weakStores = v[2] >>> 29 & 3;
+        capMissing = v[3] & 0xFF;
+        stability = (v[3] >>> 8) / 10F;
+        for (int i = 0; i < 4; i++) {
+            portFluid[i] = v[4 + i];
+        }
+    }
+
+    public void toggleBigAllowed() {
+        bigAllowed = !bigAllowed;
+        markDirty();
+    }
+
+    /** The screen's button: the plasma put out safely. */
+    public void softStop() {
+        if (ignited) {
+            bigEvent = bigRunning ? EVENT_SOFT : bigEvent;
+            shutDown(GeneratorStatus.SOFT_STOP);
+        }
+    }
+
+    /** The charge the tokamak needs to light: half, inside the big build with 50 mB of hydrogen for the breakdown. */
+    public long ignitionNeed() {
+        long base = generatorType.ignitionThreshold();
+        return generatorType == GeneratorType.TOKAMAK && bigAllowed && bigReady && portFluid[1] >= BIG_H2_START ? base / 2 : base;
+    }
+
+    private double bigOutputMultiplier() {
+        if (!bigRunning || !bigReady) {
+            return 1.0;
+        }
+        return BIG_OUTPUT_MUL * (h2Short ? BIG_NO_H2_OUTPUT : 1F);
+    }
+
+    public int radiationRadiusNow() {
+        if (generatorType == GeneratorType.TOKAMAK && burstTicks > 0) {
+            return BURST_RADIUS;
+        }
+        return bigRunning ? BIG_RADIUS : radiationRadius(generatorType);
+    }
+
+    /** Index of a wall cell (|dx| or |dz| = 3), or -1. */
+    private static int wallIndex(int dx, int dz) {
+        int k = 0;
+        for (int z = -3; z <= 3; z++) {
+            for (int x = -3; x <= 3; x++) {
+                if (Math.abs(x) == 3 || Math.abs(z) == 3) {
+                    if (x == dx && z == dz) {
+                        return k;
+                    }
+                    k++;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static boolean isShell(net.minecraft.block.Block b) {
+        return b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.leadGlass;
+    }
+
+    /** Once a second: the 7x7x3 round the tokamak - coils, walls (lead, lead glass, port tanks and storages), cap and floor. */
+    private void scanBig() {
+        int x0 = xCoord, y0 = yCoord, z0 = zCoord;
+        if (!worldObj.checkChunksExist(x0 - 3, y0 - 1, z0 - 3, x0 + 3, y0 + 1, z0 + 3)) {
+            return;                                           // part of it isn't loaded: keep what was seen
+        }
+        int coils = 0, walls = 0, ports = 0, caps = 0, tanks = 0, stores = 0, weak = 0, ci = 0;
+        tankPorts.clear();
+        storePorts.clear();
+        for (int dz = -3; dz <= 3; dz++) {
+            for (int dx = -3; dx <= 3; dx++) {
+                for (int dy = -1; dy <= 1; dy += 2) {                 // cap and floor
+                    if (!isShell(worldObj.getBlock(x0 + dx, y0 + dy, z0 + dz))) {
+                        caps++;
+                    }
+                }
+                if (dx == 0 && dz == 0) {
+                    continue;
+                }
+                int x = x0 + dx, z = z0 + dz;
+                if (Math.abs(dx) < 3 && Math.abs(dz) < 3) {
+                    if (worldObj.getBlock(x, y0, z) == com.sc.init.ModBlocks.tokamakCoil) {
+                        coils |= 1 << ci;
+                    }
+                    ci++;
+                    continue;
+                }
+                int w = wallIndex(dx, dz);
+                net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y0, z);
+                if (isShell(worldObj.getBlock(x, y0, z))) {
+                    walls |= 1 << w;
+                } else if (te instanceof TileEntityTankSC && tanks < PORT_TANKS_MAX) {
+                    walls |= 1 << w;
+                    ports |= 1 << w;
+                    tanks++;
+                    tankPorts.add(new int[]{x, y0, z});
+                } else if (te instanceof TileEntityEnergyStorageSC && !(te instanceof TileEntityChargePadSC) && stores < PORT_STORES_MAX) {
+                    walls |= 1 << w;
+                    ports |= 1 << w;
+                    stores++;
+                    if (((TileEntityEnergyStorageSC) te).getTier().ordinal() < Tier.IV.ordinal()) {
+                        weak++;
+                    }
+                    storePorts.add(new int[]{x, y0, z});
+                }
+            }
+        }
+        coilMask = coils;
+        wallMask = walls;
+        portMask = ports;
+        capMissing = caps;
+        portTanks = tanks;
+        portStores = stores;
+        weakStores = weak;
+        bigReady = coils == 0xFFFFFF && walls == 0xFFFFFF && caps == 0 && stores > 0 && weak == 0;
+        for (int i = 0; i < 4; i++) {
+            portFluid[i] = portAmount(PORT_FLUIDS[i]);
+        }
+    }
+
+    private int portAmount(String fluid) {
+        int sum = 0;
+        for (int[] p : tankPorts) {
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            if (te instanceof TileEntityTankSC) {
+                FluidStack f = ((TileEntityTankSC) te).getTank().getFluid();
+                if (f != null && f.getFluid() != null && f.getFluid().getName().equals(fluid)) {
+                    sum += f.amount;
+                }
+            }
+        }
+        return sum;
+    }
+
+    /** Takes `mb` of a fluid out of the port tanks - all of it or (allOrNothing) nothing. @return mB taken */
+    private int drainPorts(String fluid, int mb, boolean allOrNothing) {
+        if (mb <= 0) {
+            return 0;
+        }
+        if (allOrNothing && portAmount(fluid) < mb) {
+            return 0;
+        }
+        int left = mb;
+        for (int[] p : tankPorts) {
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            if (left > 0 && te instanceof TileEntityTankSC) {
+                FluidTank t = ((TileEntityTankSC) te).getTank();
+                FluidStack f = t.getFluid();
+                if (f != null && f.getFluid() != null && f.getFluid().getName().equals(fluid)) {
+                    FluidStack got = t.drain(left, true);
+                    if (got != null) {
+                        left -= got.amount;
+                        te.markDirty();
+                    }
+                }
+            }
+        }
+        return mb - left;
+    }
+
+    /** A tick of the big mode's supplies and, once a second, its stability. @return false: it went out */
+    private boolean bigTick() {
+        double fm = Math.max(0.01, fuelMultiplier());
+        boolean fluidD = portFluid[3] > 0;                     // deuterium in a port tank: that first
+        if (fluidD) {
+            dDebt += BIG_D_PER_TICK * fm;
+            int dmb = (int) dDebt;
+            if (dmb > 0) {
+                int got = drainPorts("deuterium", dmb, false);
+                dDebt -= got;
+                if (got < dmb) {
+                    dDebt = 0;
+                    fluidD = false;
+                }
+            }
+        }
+        if (!fluidD) {                                          // otherwise the cells, burnt faster
+            if (cellBurnRemaining <= 0) {
+                ItemStack cell = slots[SLOT_FUEL];
+                if (cell == null || cell.getItem() != com.sc.init.ModItems.deuteriumCell) {
+                    heat = Math.max(0, heat - 2);
+                    ramp = Math.max(0, ramp - 2);
+                    status = GeneratorStatus.NO_DEUTERIUM;
+                    return false;
+                }
+                cell.stackSize--;
+                if (cell.stackSize <= 0) {
+                    slots[SLOT_FUEL] = null;
+                }
+                cellBurnRemaining += CELL_BURN_TICKS;
+                markDirty();
+            }
+            cellBurnRemaining -= fm * BIG_CELL_MUL;
+        }
+        heDebt += BIG_HE_PER_TICK;
+        int he = (int) heDebt;
+        if (he > 0) {
+            int got = drainPorts("liquidhelium", he, false);
+            heDebt -= got;
+            heShort = got < he;
+            if (heShort) {
+                heDebt = 0;
+            }
+        }
+        h2Debt += BIG_H2_PER_TICK;
+        int h2 = (int) h2Debt;
+        if (h2 > 0) {
+            int got = drainPorts("hydrogen", h2, false);
+            h2Debt -= got;
+            h2Short = got < h2;
+            if (h2Short) {
+                h2Debt = 0;
+            }
+        }
+        if (worldObj.getTotalWorldTime() % 20 == 0) {
+            float delta = 0F;
+            if (heShort) {
+                delta -= STAB_NO_HE;
+            }
+            if (!bigReady) {
+                delta -= STAB_BROKEN;
+            }
+            delta -= STAB_OVERDRIVE * upgradeCount(UpgradeType.OVERDRIVE);
+            if (heat > HEAT_LIMIT * 9 / 10) {
+                delta -= STAB_HOT;
+            }
+            stability = Math.max(0F, Math.min(100F, stability + (delta == 0F ? STAB_RECOVER : delta)));
+            warnAt(40, "sc.chat.tok.warn40");
+            warnAt(20, "sc.chat.tok.warn20");
+            if (stability > 45) {
+                warnedAt = 100;
+            }
+            if (stability < STAB_ARGON && drainPorts("argon", BIG_ARGON_STOP, true) == BIG_ARGON_STOP) {
+                tellNear("sc.chat.tok.argon");
+                bigEvent = EVENT_SOFT;
+                shutDown(GeneratorStatus.SOFT_STOP);
+                return false;
+            }
+            if (stability <= 0F) {
+                disrupt();
+                return false;
+            }
+            markDirty();
+        }
+        return true;
+    }
+
+    private void warnAt(int level, String key) {
+        if (stability < level && warnedAt > level) {
+            warnedAt = level;
+            tellNear(key);
+        }
+    }
+
+    private void tellNear(String key) {
+        for (Object o : worldObj.playerEntities) {
+            net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
+            if (p.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) < 48 * 48) {
+                p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key, xCoord, yCoord, zCoord));
+            }
+        }
+    }
+
+    /** The plasma breaks down: a burst of radiation, 3-5 coils thrown out as items, the reactor out. */
+    private void disrupt() {
+        tellNear("sc.chat.tok.disrupt");
+        burstTicks = BURST_TICKS;
+        java.util.List<int[]> coils = new java.util.ArrayList<int[]>();
+        for (int dz = -2; dz <= 2; dz++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                if ((dx != 0 || dz != 0) && worldObj.getBlock(xCoord + dx, yCoord, zCoord + dz) == com.sc.init.ModBlocks.tokamakCoil) {
+                    coils.add(new int[]{xCoord + dx, yCoord, zCoord + dz});
+                }
+            }
+        }
+        java.util.Collections.shuffle(coils, worldObj.rand);
+        int n = 3 + worldObj.rand.nextInt(3);
+        for (int i = 0; i < n && i < coils.size(); i++) {
+            int[] c = coils.get(i);
+            worldObj.func_147480_a(c[0], c[1], c[2], true);         // broken, dropped as an item
+        }
+        worldObj.playSoundEffect(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, "random.explode", 1.5F, 0.6F);
+        stability = 100F;
+        bigEvent = EVENT_BROKE;
+        shutDown(GeneratorStatus.DISRUPTED);
+    }
+
+    /** The big mode's output goes into the port storages (the tokamak itself is walled in). */
+    private void pushToPorts() {
+        for (int[] p : storePorts) {
+            if (getEnergyStored() <= 0) {
+                return;
+            }
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            if (te instanceof TileEntityEnergyStorageSC) {
+                TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
+                int took = s.receiveEnergy(ForgeDirection.UNKNOWN, s.inputTier().getVoltage(), getEnergyStored(), false);
+                if (took > 0) {
+                    removeEnergy(took);
+                    s.markDirty();
+                }
+            }
+        }
+    }
+
+    /** Tests: the big mode's state straight. */
+    public void setStabilityForTest(float s) {
+        stability = s;
+    }
+
+    public void setIgnitionForTest() {
+        ignitionEU = ignitionNeed();
     }
 
     // ---- radiation ----
@@ -399,6 +808,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (base <= 0 || isShielded()) {
             return 0F;
         }
+        if (generatorType == GeneratorType.TOKAMAK && burstTicks > 0) {            // a breakdown's burst, fading
+            return Math.max(BIG_RADIATION, BURST_RADIATION * burstTicks / (float) BURST_TICKS);
+        }
+        if (bigRunning) {
+            base = BIG_RADIATION;
+        }
         if (generatorType == GeneratorType.RTG) {
             int capsules = 0;
             for (int i = SLOT_FUEL; i <= SLOT_BLANKET; i++) {
@@ -443,6 +858,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return getCreativeTier();
         }
         Tier[] tiers = Tier.values();
+        if (bigRunning) {
+            return Tier.XV;                                   // the big tokamak's two XV packets a tick
+        }
         return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
     }
 
@@ -476,7 +894,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     @Override
     public int demandedEnergy() {
         if (isEnergySink() && powerOn) {
-            return (int) Math.min(Integer.MAX_VALUE, generatorType.ignitionThreshold() - ignitionEU);
+            return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, ignitionNeed() - ignitionEU));
         }
         return 0;
     }
@@ -486,7 +904,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (!isEnergySink() || !powerOn) {
             return 0; // every other generator, and an already-lit reactor, never accepts energy
         }
-        int room = (int) Math.min(Integer.MAX_VALUE, generatorType.ignitionThreshold() - ignitionEU);
+        int room = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, ignitionNeed() - ignitionEU));
         int accepted = Math.max(0, Math.min(room, amount));
         if (!simulate) {
             ignitionEU += accepted;
@@ -505,10 +923,22 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return;
         }
         syncTankCapacity();
+        if (generatorType == GeneratorType.TOKAMAK) {
+            if (burstTicks > 0) {
+                burstTicks--;
+            }
+            if (worldObj.getTotalWorldTime() % 20 == 3) {
+                scanBig();
+            }
+            if (bigRunning && (!bigAllowed || !ignited)) {
+                bigRunning = false;                            // switched to the normal mode: no penalty, the normal output
+                markDirty();
+            }
+        }
         if (worldObj.getTotalWorldTime() % 20 == 7) {
             float rad = radiationLevel();
             if (rad > 0) {
-                com.sc.radiation.RadiationSC.report(worldObj, xCoord, yCoord, zCoord, rad, radiationRadius(generatorType));
+                com.sc.radiation.RadiationSC.report(worldObj, xCoord, yCoord, zCoord, rad, radiationRadiusNow());
             }
         }
         if (worldObj.getTotalWorldTime() % 20 == 0) {                  // the inflow over the last second
@@ -537,6 +967,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (generatorType != GeneratorType.CREATIVE) {
             lastOutput = Math.max(0, getEnergyStored() - before);
+        }
+        if (bigRunning) {
+            pushToPorts();                                   // after the count: the screen shows what it made
         }
         if (status == GeneratorStatus.GENERATING) {
             com.sc.util.SoundsSC.loop(this, com.sc.util.SoundsSC.of(generatorType));
@@ -859,7 +1292,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Lights a FUSION / EXO generator once its charge is in (and, for FUSION, a blanket module is there). */
     private boolean ignite() {
-        if (ignitionEU < generatorType.ignitionThreshold()) {
+        if (ignitionEU < ignitionNeed()) {
             status = GeneratorStatus.IGNITING;
             return false;
         }
@@ -877,6 +1310,15 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             moduleLifeRemaining = MODULE_LIFE_TICKS;
         }
+        if (generatorType == GeneratorType.TOKAMAK && bigAllowed && bigReady) {    // lit inside the big build: the big mode
+            if (ignitionNeed() < generatorType.ignitionThreshold()) {
+                drainPorts("hydrogen", BIG_H2_START, true);                     // the hydrogen breakdown that halved the charge
+            }
+            bigRunning = true;
+            stability = 100F;
+            warnedAt = 100;
+            bigEvent = 0;
+        }
         ignitionEU = 0;
         ignited = true;
         ramp = RAMP_FULL / 10;
@@ -888,6 +1330,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** At the heat limit the reactor goes out - no blast; it has to be lit again. */
     private void shutDown(GeneratorStatus why) {
+        bigRunning = false;
         ignited = false;
         ramp = 0;
         status = why;
@@ -959,6 +1402,19 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return;
         }
         if (overheating()) {
+            return;
+        }
+        if (bigRunning) {
+            if (!bigTick()) {
+                return;
+            }
+            moduleLifeRemaining -= BIG_BLANKET_WEAR - 1;           // the big mode wears the blanket twice as fast
+            if (moduleLifeRemaining <= 0) {
+                shutDown(GeneratorStatus.BLANKET_DEPLETED);
+                return;
+            }
+            moduleLifeRemaining--;
+            burnPlasma(600);
             return;
         }
         if (cellBurnRemaining <= 0) {
@@ -1352,6 +1808,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         outTank.readFromNBT(nbt.getCompoundTag("OutTank"));
         ignitionEU = nbt.getLong("IgnitionEU");
         ignited = nbt.getBoolean("Ignited");
+        bigAllowed = !nbt.getBoolean("BigOff");
+        bigRunning = nbt.getBoolean("BigRunning");
+        stability = nbt.hasKey("Stability") ? nbt.getFloat("Stability") : 100F;
+        burstTicks = nbt.getInteger("Burst");
+        bigEvent = nbt.getInteger("BigEvent");
         moduleLifeRemaining = nbt.getInteger("ModuleLife");
         cellBurnRemaining = nbt.hasKey("CellBurnD") ? nbt.getDouble("CellBurnD") : nbt.getInteger("CellBurn");
         solidBurnTicks = nbt.hasKey("SolidBurnD") ? nbt.getDouble("SolidBurnD") : nbt.getInteger("SolidBurn");
@@ -1388,6 +1849,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         nbt.setTag("OutTank", outTank.writeToNBT(new NBTTagCompound()));
         nbt.setLong("IgnitionEU", ignitionEU);
         nbt.setBoolean("Ignited", ignited);
+        nbt.setBoolean("BigOff", !bigAllowed);
+        nbt.setBoolean("BigRunning", bigRunning);
+        nbt.setFloat("Stability", stability);
+        nbt.setInteger("Burst", burstTicks);
+        nbt.setInteger("BigEvent", bigEvent);
         nbt.setInteger("ModuleLife", moduleLifeRemaining);
         nbt.setInteger("CellBurn", (int) cellBurnRemaining);
         nbt.setDouble("CellBurnD", cellBurnRemaining);

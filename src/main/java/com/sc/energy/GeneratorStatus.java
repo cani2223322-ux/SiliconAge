@@ -27,7 +27,11 @@ public enum GeneratorStatus {
     /** The power switch is off: nothing made, nothing given out. */
     DISABLED,
     /** Held by its redstone mode. */
-    REDSTONE;
+    REDSTONE,
+    /** The big tokamak's plasma put out safely (the button, or argon when it was about to break down). */
+    SOFT_STOP,
+    /** The big tokamak's plasma broke down: a burst of radiation, coils thrown out. */
+    DISRUPTED;
 
     public String localized() {
         return Lang.tr("sc.status.generator." + name().toLowerCase(java.util.Locale.ROOT));

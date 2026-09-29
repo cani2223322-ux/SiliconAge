@@ -115,6 +115,10 @@ public class WailaSC implements IWailaDataProvider {
             tip.add(Lang.tr("sc.waila.shower", t.getInteger("scShowerWater"), com.sc.tileentity.TileEntityShowerSC.TANK,
                     t.getInteger("scShowerPlayers")));
         }
+        if (t.hasKey("scBig")) {
+            tip.add(t.getInteger("scBig") == 2 ? Lang.tr("sc.waila.tok.big", String.valueOf(t.getInteger("scStab")))
+                    : Lang.tr("sc.waila.tok.ready"));
+        }
         if (t.hasKey("scRad")) {
             float rad = t.getFloat("scRad");
             tip.add(t.getBoolean("scRadShield") ? Lang.tr("sc.waila.rad.shielded")
@@ -206,6 +210,16 @@ public class WailaSC implements IWailaDataProvider {
             tag.setFloat("scRad", com.sc.util.ConfigSC.radiation ? g.radiationLevel() * com.sc.util.ConfigSC.radiationMultiplier : 0F);
             tag.setInteger("scRadR", com.sc.tileentity.TileEntityGeneratorSC.radiationRadius(g.getGeneratorType()));
             tag.setBoolean("scRadShield", g.isShielded());
+        }
+        if (te instanceof com.sc.tileentity.TileEntityGeneratorSC
+                && ((com.sc.tileentity.TileEntityGeneratorSC) te).getGeneratorType() == com.sc.energy.GeneratorType.TOKAMAK) {
+            com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
+            if (g.isBigRunning()) {
+                tag.setInteger("scBig", 2);
+                tag.setInteger("scStab", Math.round(g.getStability()));
+            } else if (g.isBigReady() && g.isBigAllowed()) {
+                tag.setInteger("scBig", 1);
+            }
         }
         if (te instanceof com.sc.tileentity.TileEntityShowerSC) {
             com.sc.tileentity.TileEntityShowerSC sh = (com.sc.tileentity.TileEntityShowerSC) te;
