@@ -484,6 +484,12 @@ public final class ModRecipesCrafting {
             if (!anotherModsBlock(m, block)) {
                 ItemStack in = ingot(m);
                 OreRecipes.shaped(block, "III", "III", "III", 'I', in);
+            } else {
+                // the other mod's block is what 9 ingots make: two of those, one on the other, become two of ours
+                // (a two-block shape - no clash with anyone's one-block "back into ingots")
+                ItemStack two = block.copy();
+                two.stackSize = 2;
+                GameRegistry.addRecipe(new net.minecraftforge.oredict.ShapedOreRecipe(two, "B", "B", 'B', "block" + m.oreDictName));
             }
         }
     }

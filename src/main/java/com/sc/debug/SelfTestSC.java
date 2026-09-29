@@ -1242,11 +1242,16 @@ public final class SelfTestSC {
                     back = true;
                 }
             }
-            ok += dict && back && m.hasIngot && b.getItem() != null ? 1 : 0;
+            boolean made = false;                            // 9 ingots, or (another mod's block) two of its blocks
+            for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+                ItemStack out = ((net.minecraft.item.crafting.IRecipe) o).getRecipeOutput();
+                made |= out != null && out.getItem() == b.getItem() && out.getItemDamage() == b.getItemDamage();
+            }
+            ok += dict && back && made && m.hasIngot && b.getItem() != null ? 1 : 0;
         }
         boolean lead = com.sc.block.BlockMetalSC.stackOf(com.sc.util.Material.LEAD, 1) == null;
         check(ok == 22 && com.sc.block.BlockMetalSC.METALS.length == 22 && lead,
-                "metal blocks: 22 (lead has its own), each blockX in the ore dictionary and back into 9 ingots (" + ok + ")");
+                "metal blocks: 22 (lead has its own), each blockX in the ore dictionary, craftable, back into 9 ingots (" + ok + ")");
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */
