@@ -59,6 +59,7 @@ public class WorldTestWirelessSC {
             System.out.println("[SC-WORLDTEST] " + (d ? "PASS" : "FAIL") + " quantum Overworld -> Nether: nether end " + qb.getEnergyStored()
                     + " EU, status " + qa.getStatus() + " / " + qb.getStatus());
             wrenchTest(over);
+            metalRecipeTest();
             radiationTest(over);
             smelterTest(over);
             DimensionManager.getWorld(0).setBlockToAir(8, 200, 8);
@@ -124,6 +125,46 @@ public class WorldTestWirelessSC {
         ind.setStoredXpClient(0);
         w.setBlockToAir(20, 200, 40);
         w.setBlockToAir(22, 200, 40);
+    }
+
+    /**
+     * With every mod loaded (postInit done): each of the 22 metal blocks can be crafted (9 ingots, or
+     * two of another mod's blocks), and 9 of our ingots fit exactly one recipe.
+     */
+    private static void metalRecipeTest() {
+        net.minecraft.inventory.Container none = new net.minecraft.inventory.Container() {
+            @Override
+            public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer p) {
+                return true;
+            }
+        };
+        int craftable = 0, clash = 0, converts = 0;
+        for (com.sc.util.Material m : com.sc.block.BlockMetalSC.METALS) {
+            net.minecraft.item.ItemStack b = com.sc.block.BlockMetalSC.stackOf(m, 1), ing = ModItems.ingot.stackOf(m);
+            net.minecraft.inventory.InventoryCrafting nine = new net.minecraft.inventory.InventoryCrafting(none, 3, 3);
+            for (int i = 0; i < 9; i++) {
+                nine.setInventorySlotContents(i, ing.copy());
+            }
+            int match = 0;
+            boolean made = false;
+            for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+                net.minecraft.item.crafting.IRecipe r = (net.minecraft.item.crafting.IRecipe) o;
+                try {
+                    match += r.matches(nine, null) ? 1 : 0;
+                } catch (Throwable t) {
+                    // needs a world
+                }
+                net.minecraft.item.ItemStack out = r.getRecipeOutput();
+                if (out != null && out.getItem() == b.getItem() && out.getItemDamage() == b.getItemDamage()) {
+                    made = true;
+                    converts += out.stackSize == 2 ? 1 : 0;
+                }
+            }
+            craftable += made ? 1 : 0;
+            clash += match > 1 ? 1 : 0;
+        }
+        System.out.println("[SC-WORLDTEST] " + (craftable == 22 && clash == 0 ? "PASS" : "FAIL") + " metal blocks: craftable "
+                + craftable + "/22 (" + converts + " from another mod's blocks), 9-ingot clashes " + clash);
     }
 
     /** An RTG with two capsules at (30, 200, 30), open to the air. */

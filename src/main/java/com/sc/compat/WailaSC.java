@@ -208,7 +208,7 @@ public class WailaSC implements IWailaDataProvider {
                 && com.sc.tileentity.TileEntityGeneratorSC.radiationBase(((com.sc.tileentity.TileEntityGeneratorSC) te).getGeneratorType()) > 0) {
             com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
             tag.setFloat("scRad", com.sc.util.ConfigSC.radiation ? g.radiationLevel() * com.sc.util.ConfigSC.radiationMultiplier : 0F);
-            tag.setInteger("scRadR", com.sc.tileentity.TileEntityGeneratorSC.radiationRadius(g.getGeneratorType()));
+            tag.setInteger("scRadR", g.radiationRadiusNow());
             tag.setBoolean("scRadShield", g.isShielded());
         }
         if (te instanceof com.sc.tileentity.TileEntityGeneratorSC

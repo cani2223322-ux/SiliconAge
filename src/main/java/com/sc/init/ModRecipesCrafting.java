@@ -48,7 +48,6 @@ public final class ModRecipesCrafting {
         batteries();
         wireless();
         radiation();
-        metalBlocks();
         upgrades();
         tubeParts();
         tanks();
@@ -477,31 +476,107 @@ public final class ModRecipesCrafting {
      * block of that metal: then that mod's recipe keeps the 9 ingots (two recipes on one grid
      * clash) and ours only turns back into ingots.
      */
-    private static void metalBlocks() {
+    private static boolean metalDone;
+
+    /**
+     * Blocks of metal - postInit (SCMod), once every mod has put its blocks in the ore dictionary
+     * and its recipes in: our block into 9 ingots always; 9 ingots into our block only while no
+     * other mod has a block of that metal (two recipes on one grid clash). Otherwise two of the
+     * other mod's blocks - only those truly worth 9 ingots (made of 9, or coming apart into 9) -
+     * one on the other, make two of ours.
+     */
+    public static void metalBlocksLate() {
+        if (metalDone) {
+            return;
+        }
+        metalDone = true;
         for (Material m : com.sc.block.BlockMetalSC.METALS) {
             ItemStack block = com.sc.block.BlockMetalSC.stackOf(m, 1);
             OreRecipes.shapeless(ingot(m, 9), block);
-            if (!anotherModsBlock(m, block)) {
-                ItemStack in = ingot(m);
-                OreRecipes.shaped(block, "III", "III", "III", 'I', in);
-            } else {
-                // the other mod's block is what 9 ingots make: two of those, one on the other, become two of ours
-                // (a two-block shape - no clash with anyone's one-block "back into ingots")
-                ItemStack two = block.copy();
-                two.stackSize = 2;
-                GameRegistry.addRecipe(new net.minecraftforge.oredict.ShapedOreRecipe(two, "B", "B", 'B', "block" + m.oreDictName));
+            java.util.List<ItemStack> others = otherBlocks(m, block);
+            if (others.isEmpty()) {
+                OreRecipes.shaped(block, "III", "III", "III", 'I', ingot(m));
+                continue;
+            }
+            ItemStack two = block.copy();
+            two.stackSize = 2;
+            for (ItemStack theirs : others) {
+                if (theirs.getItemDamage() != net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE && worthNine(m, theirs)) {
+                    ItemStack one = theirs.copy();
+                    one.stackSize = 1;
+                    GameRegistry.addRecipe(new net.minecraftforge.oredict.ShapedOreRecipe(two, "B", "B", 'B', one));
+                }
             }
         }
     }
 
-    /** Another mod has registered a block of this metal. */
-    static boolean anotherModsBlock(Material m, ItemStack ours) {
-        for (ItemStack s : net.minecraftforge.oredict.OreDictionary.getOres("block" + m.oreDictName)) {
-            if (s.getItem() != ours.getItem()) {
-                return true;
+    /** The ore-dictionary names of a metal's block and ingot (aluminium has the American spelling too). */
+    private static String[] names(Material m, String prefix) {
+        return m == Material.ALUMINIUM ? new String[]{prefix + "Aluminium", prefix + "Aluminum"} : new String[]{prefix + m.oreDictName};
+    }
+
+    /** Other mods' blocks of this metal (ours left out). */
+    public static java.util.List<ItemStack> otherBlocks(Material m, ItemStack ours) {
+        java.util.List<ItemStack> list = new java.util.ArrayList<ItemStack>();
+        for (String name : names(m, "block")) {
+            for (ItemStack s : net.minecraftforge.oredict.OreDictionary.getOres(name)) {
+                if (s.getItem() != ours.getItem()) {
+                    list.add(s);
+                }
+            }
+        }
+        return list;
+    }
+
+    private static final net.minecraft.inventory.Container NO_CONTAINER = new net.minecraft.inventory.Container() {
+        @Override
+        public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer p) {
+            return true;
+        }
+    };
+
+    /** What a crafting grid holding these stacks (slot order) makes, or null. */
+    public static ItemStack craft(ItemStack... grid) {
+        net.minecraft.inventory.InventoryCrafting inv = new net.minecraft.inventory.InventoryCrafting(NO_CONTAINER, 3, 3);
+        for (int i = 0; i < grid.length; i++) {
+            inv.setInventorySlotContents(i, grid[i] == null ? null : grid[i].copy());
+        }
+        for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+            net.minecraft.item.crafting.IRecipe r = (net.minecraft.item.crafting.IRecipe) o;
+            try {
+                if (r.matches(inv, null)) {
+                    return r.getCraftingResult(inv);
+                }
+            } catch (Throwable t) {
+                // a recipe that wants a real world: not ours to judge
+            }
+        }
+        return null;
+    }
+
+    private static boolean isIngotOf(ItemStack s, Material m) {
+        if (s == null) {
+            return false;
+        }
+        for (int id : net.minecraftforge.oredict.OreDictionary.getOreIDs(s)) {
+            for (String name : names(m, "ingot")) {
+                if (net.minecraftforge.oredict.OreDictionary.getOreName(id).equals(name)) {
+                    return true;
+                }
             }
         }
         return false;
+    }
+
+    /** Another mod's block is worth 9 ingots: it comes apart into 9, or 9 of our ingots make it. */
+    public static boolean worthNine(Material m, ItemStack theirs) {
+        ItemStack apart = craft(theirs);
+        if (apart != null && apart.stackSize == 9 && isIngotOf(apart, m)) {
+            return true;
+        }
+        ItemStack in = ingot(m);
+        ItemStack made = craft(in, in, in, in, in, in, in, in, in);
+        return made != null && made.stackSize == 1 && made.getItem() == theirs.getItem() && made.getItemDamage() == theirs.getItemDamage();
     }
 
     private static void weaponsAndField() {

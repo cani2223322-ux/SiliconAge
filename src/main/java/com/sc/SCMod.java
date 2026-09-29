@@ -104,6 +104,7 @@ public class SCMod {
 
     @Mod.EventHandler
     public void postInit(FMLPostInitializationEvent event) {
+        ModRecipesCrafting.metalBlocksLate();            // after every mod's ore dictionary and recipes
         proxy.postInit();
     }
 

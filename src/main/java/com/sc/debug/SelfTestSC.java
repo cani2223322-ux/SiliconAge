@@ -1224,34 +1224,21 @@ public final class SelfTestSC {
                 + " water -> heavy water -> deuterium + O2");
     }
 
-    /** Blocks of metal: 22, each in the ore dictionary as its metal's block, turning back into 9 ingots. */
+    /**
+     * Blocks of metal: 22 (lead has its own), each its metal's block in the ore dictionary, unused metas clamped.
+     * The recipes are made in postInit (they depend on other mods' blocks) - the world test checks them.
+     */
     private static void metalBlocks() {
         int ok = 0;
         for (com.sc.util.Material m : com.sc.block.BlockMetalSC.METALS) {
             ItemStack b = com.sc.block.BlockMetalSC.stackOf(m, 1);
-            boolean dict = false;
             for (int id : net.minecraftforge.oredict.OreDictionary.getOreIDs(b)) {
-                dict |= net.minecraftforge.oredict.OreDictionary.getOreName(id).equals("block" + m.oreDictName);
+                ok += net.minecraftforge.oredict.OreDictionary.getOreName(id).equals("block" + m.oreDictName) ? 1 : 0;
             }
-            boolean back = false;
-            for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
-                net.minecraft.item.crafting.IRecipe r = (net.minecraft.item.crafting.IRecipe) o;
-                ItemStack out = r.getRecipeOutput();
-                if (out != null && out.stackSize == 9 && out.getItem() == ModItems.ingot && r.getRecipeSize() == 1
-                        && out.getItemDamage() == ModItems.ingot.stackOf(m).getItemDamage()) {
-                    back = true;
-                }
-            }
-            boolean made = false;                            // 9 ingots, or (another mod's block) two of its blocks
-            for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
-                ItemStack out = ((net.minecraft.item.crafting.IRecipe) o).getRecipeOutput();
-                made |= out != null && out.getItem() == b.getItem() && out.getItemDamage() == b.getItemDamage();
-            }
-            ok += dict && back && made && m.hasIngot && b.getItem() != null ? 1 : 0;
         }
-        boolean lead = com.sc.block.BlockMetalSC.stackOf(com.sc.util.Material.LEAD, 1) == null;
-        check(ok == 22 && com.sc.block.BlockMetalSC.METALS.length == 22 && lead,
-                "metal blocks: 22 (lead has its own), each blockX in the ore dictionary, craftable, back into 9 ingots (" + ok + ")");
+        boolean clamp = com.sc.init.ModBlocks.metalBlock2.damageDropped(9) == 0 && com.sc.init.ModBlocks.metalBlock2.count() == 6;
+        check(ok == 22 && com.sc.block.BlockMetalSC.stackOf(com.sc.util.Material.LEAD, 1) == null && clamp,
+                "metal blocks: 22 in the ore dictionary as their blocks, lead apart, unused metas clamped (" + ok + ")");
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */

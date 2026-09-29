@@ -185,8 +185,9 @@ public class GuiGeneratorSC extends GuiContainer {
                 b.displayString = Lang.tr(bigPage ? "sc.gui.big.page.reactor" : "sc.gui.big.page.big");
             } else if (b.id == ContainerGeneratorSC.BTN_SOFT_STOP) {
                 b.visible = bigPage;
-                b.enabled = generator.isIgnited();
-                b.displayString = Lang.tr("sc.gui.big.btn.stop");
+                boolean latched = !generator.isIgnited() && generator.getBigEvent() != 0;
+                b.enabled = generator.isIgnited() || latched;
+                b.displayString = Lang.tr(latched ? "sc.gui.big.btn.allow" : "sc.gui.big.btn.stop");
             } else if (b.id == ContainerGeneratorSC.BTN_BIG_MODE) {
                 b.visible = bigPage;
                 b.displayString = Lang.tr(generator.isBigAllowed() ? "sc.gui.big.btn.auto" : "sc.gui.big.btn.normal");
@@ -501,7 +502,7 @@ public class GuiGeneratorSC extends GuiContainer {
         if (rad <= 0) {
             fit(Lang.tr("sc.gui.gen.rad.none"), GuiBigSC.UPG_TEXT_X, y, tr, 0x505864);
         } else {
-            fit(Lang.tr("sc.gui.gen.rad.on", com.sc.radiation.RadiationSC.fmt(rad), TileEntityGeneratorSC.radiationRadius(type)),
+            fit(Lang.tr("sc.gui.gen.rad.on", com.sc.radiation.RadiationSC.fmt(rad), generator.radiationRadiusNow()),
                     GuiBigSC.UPG_TEXT_X, y, tr, 0x9A2A1A);
         }
     }

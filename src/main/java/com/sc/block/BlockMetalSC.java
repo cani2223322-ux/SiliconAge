@@ -96,7 +96,7 @@ public class BlockMetalSC extends Block {
 
     @Override
     public int damageDropped(int meta) {
-        return meta;
+        return meta >= 0 && meta < count ? meta : 0;             // an unused meta (a /setblock) drops the first metal
     }
 
     @Override
@@ -131,7 +131,7 @@ public class BlockMetalSC extends Block {
 
         @Override
         public int getMetadata(int damage) {
-            return damage;
+            return damage >= 0 && damage < ((BlockMetalSC) field_150939_a).count() ? damage : 0;
         }
 
         @Override
