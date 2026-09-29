@@ -45,7 +45,7 @@ public class ItemOreLensSC extends Item {
     @Override
     @SideOnly(Side.CLIENT)
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        list.add(Lang.tr("sc.orelens.tooltip", ExoOreTableSC.LENS_BOOST + 1));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.orelens.tooltip", ExoOreTableSC.LENS_BOOST + 1));
     }
 
     @Override

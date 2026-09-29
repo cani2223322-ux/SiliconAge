@@ -32,6 +32,6 @@ public class ItemWearPartSC extends Item {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         int left = stack.getMaxDamage() - stack.getItemDamage();
         list.add(Lang.tr("sc.wear.left", left * 100 / Math.max(1, stack.getMaxDamage()), left / 3600, left / 60 % 60));
-        list.add("§7" + Lang.tr("sc.wear." + name));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.wear." + name));
     }
 }

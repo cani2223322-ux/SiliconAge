@@ -116,9 +116,9 @@ public class ItemLinkCardSC extends Item {
             NBTTagCompound n = stack.getTagCompound();
             list.add("§b" + Lang.tr("sc.linkcard.tooltip.tx", Tier.values()[Math.max(0, Math.min(Tier.values().length - 1,
                     n.getInteger("TxTier")))].name(), n.getInteger("TxX"), n.getInteger("TxY"), n.getInteger("TxZ")));
-            list.add("§7" + Lang.tr("sc.linkcard.tooltip.next"));
+            com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.linkcard.tooltip.next"));
         } else {
-            list.add("§7" + Lang.tr("sc.linkcard.tooltip.empty"));
+            com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.linkcard.tooltip.empty"));
         }
     }
 }

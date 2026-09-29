@@ -1140,9 +1140,10 @@ public final class SelfTestSC {
                 && "4.5".equals(com.sc.radiation.RadiationSC.fmt(4.5F)) && "0.0".equals(com.sc.radiation.RadiationSC.fmt(0F));
         check(ok, "radiation: lead 2%, lead glass 5%, water 60%, stone 70%, glass and air all; linear fall to the edge; 4.5 printed");
         com.sc.energy.GeneratorType[] hot = {com.sc.energy.GeneratorType.RTG, com.sc.energy.GeneratorType.FUSION_REACTOR,
-                com.sc.energy.GeneratorType.TOKAMAK, com.sc.energy.GeneratorType.PLASMA_REACTOR, com.sc.energy.GeneratorType.EXO_REACTOR};
-        float[] levels = {1F, 4F, 6F, 8F, 10F};
-        int[] reach = {4, 8, 12, 14, 16};
+                com.sc.energy.GeneratorType.TOKAMAK, com.sc.energy.GeneratorType.PLASMA_REACTOR, com.sc.energy.GeneratorType.EXO_REACTOR,
+                com.sc.energy.GeneratorType.TOKAMAK_XV};
+        float[] levels = {1F, 4F, 6F, 8F, 10F, 12F};
+        int[] reach = {4, 8, 12, 14, 16, 20};
         ok = true;
         for (int i = 0; i < hot.length; i++) {
             ok &= com.sc.tileentity.TileEntityGeneratorSC.radiationBase(hot[i]) == levels[i]

@@ -85,6 +85,6 @@ public class ItemAreaCardSC extends Item {
         } else {
             list.add(Lang.tr("sc.areacard.empty"));
         }
-        list.add("§7" + Lang.tr("sc.areacard.hint"));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.areacard.hint"));
     }
 }

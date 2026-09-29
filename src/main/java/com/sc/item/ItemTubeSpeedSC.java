@@ -25,6 +25,6 @@ public class ItemTubeSpeedSC extends Item {
 
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        list.add(Lang.tr("sc.tubespeed.tooltip"));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.tubespeed.tooltip"));
     }
 }

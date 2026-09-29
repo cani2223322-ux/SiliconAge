@@ -113,15 +113,15 @@ public class ItemQuarryModuleSC extends Item {
     @Override
     @SideOnly(Side.CLIENT)
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        list.add(Lang.tr("sc.quarrymodule.tooltip." + kindOf(stack).name().toLowerCase(java.util.Locale.ROOT)));
         Kind k = kindOf(stack);
-        list.add("§7" + Lang.tr("sc.quarrymodule.tooltip.slot", k.max));
         if (k.minTier > 0) {
-            list.add("§7" + Lang.tr("sc.quarrymodule.tooltip.tier", com.sc.energy.Tier.values()[k.minTier].name()));
+            list.add("§e" + Lang.tr("sc.quarrymodule.tooltip.tier", com.sc.energy.Tier.values()[k.minTier].name()));
         }
         if (k.scope != BOTH) {
-            list.add("§7" + Lang.tr(k.scope == EXO ? "sc.quarrymodule.tooltip.exoonly" : "sc.quarrymodule.tooltip.quarryonly"));
+            list.add("§e" + Lang.tr(k.scope == EXO ? "sc.quarrymodule.tooltip.exoonly" : "sc.quarrymodule.tooltip.quarryonly"));
         }
+        com.sc.util.TooltipSC.more(list, Lang.tr("sc.quarrymodule.tooltip." + k.name().toLowerCase(java.util.Locale.ROOT)),
+                Lang.tr("sc.quarrymodule.tooltip.slot", k.max));
     }
 
     @Override

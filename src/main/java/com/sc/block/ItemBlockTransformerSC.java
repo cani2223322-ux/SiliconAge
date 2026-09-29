@@ -33,6 +33,6 @@ public class ItemBlockTransformerSC extends ItemBlock {
         Tier low = BlockTransformerSC.lowTierFor(stack.getItemDamage());
         Tier high = BlockTransformerSC.highTierFor(stack.getItemDamage());
         list.add(Lang.tr("sc.transformer.tooltip.faces", high.name(), high.getVoltage(), low.name(), low.getVoltage()));
-        list.add(Lang.tr("sc.transformer.tooltip.use"));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.transformer.tooltip.use"));
     }
 }

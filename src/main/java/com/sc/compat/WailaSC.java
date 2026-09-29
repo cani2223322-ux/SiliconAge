@@ -212,12 +212,12 @@ public class WailaSC implements IWailaDataProvider {
             tag.setBoolean("scRadShield", g.isShielded());
         }
         if (te instanceof com.sc.tileentity.TileEntityGeneratorSC
-                && ((com.sc.tileentity.TileEntityGeneratorSC) te).getGeneratorType() == com.sc.energy.GeneratorType.TOKAMAK) {
+                && ((com.sc.tileentity.TileEntityGeneratorSC) te).getGeneratorType() == com.sc.energy.GeneratorType.TOKAMAK_XV) {
             com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
             if (g.isBigRunning()) {
                 tag.setInteger("scBig", 2);
                 tag.setInteger("scStab", Math.round(g.getStability()));
-            } else if (g.isBigReady() && g.isBigAllowed()) {
+            } else if (g.isBigReady()) {
                 tag.setInteger("scBig", 1);
             }
         }

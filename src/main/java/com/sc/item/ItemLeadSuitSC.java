@@ -51,6 +51,6 @@ public class ItemLeadSuitSC extends ItemArmor {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add("§a" + Lang.tr("sc.leadsuit.tooltip.prot", 25));
         list.add("§c" + Lang.tr("sc.leadsuit.tooltip.weight", (int) Math.round(LeadSuitSC.SPEED_PER_PART * 100)));
-        list.add("§7" + Lang.tr("sc.leadsuit.tooltip.full"));
+        com.sc.util.TooltipSC.more(list, Lang.tr("sc.leadsuit.tooltip.full"), null);
     }
 }

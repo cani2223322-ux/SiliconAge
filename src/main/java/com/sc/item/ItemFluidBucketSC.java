@@ -90,7 +90,7 @@ public class ItemFluidBucketSC extends Item {
 
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        list.add(Lang.tr("sc.bucket.tooltip"));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.bucket.tooltip"));
     }
 
     @Override

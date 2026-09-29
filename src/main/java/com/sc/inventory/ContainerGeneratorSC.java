@@ -48,14 +48,14 @@ public class ContainerGeneratorSC extends Container {
         if (type == GeneratorType.RTG) {
             return slot == 0 ? RTG_SLOT_X0 : RTG_SLOT_X1;
         }
-        if (type == GeneratorType.FUSION_REACTOR || type == GeneratorType.TOKAMAK) {
+        if (type.kind == GeneratorType.Kind.FUSION) {
             return slot == 0 ? FUS_FUEL_X : FUS_BLANKET_X;
         }
         return slot == 0 ? SLOT_FUEL_X : SLOT_BLANKET_X;
     }
 
     public static int slotY(GeneratorType type) {
-        return type == GeneratorType.FUSION_REACTOR || type == GeneratorType.TOKAMAK ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
+        return type.kind == GeneratorType.Kind.FUSION ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
                 : type == GeneratorType.WIND_TURBINE ? WD_SLOT_Y : type == GeneratorType.GEOTHERMAL ? GEO_SLOT_Y
                 : type == GeneratorType.RTG ? RTG_SLOT_Y : SLOT_Y;
     }
@@ -65,8 +65,8 @@ public class ContainerGeneratorSC extends Container {
     public static final int BTN_CLEAR = 1;
     /** The power switch and the redstone mode (GuiPowerSC). */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_BATTERY_MODE = 12;
-    /** The big tokamak: put the plasma out safely; the mode (big when built / normal only). */
-    public static final int BTN_SOFT_STOP = 20, BTN_BIG_MODE = 21;
+    /** The Tokamak XV: put the plasma out safely / allow lighting again. */
+    public static final int BTN_SOFT_STOP = 20;
 
     private final TileEntityGeneratorSC generator;
 
@@ -127,12 +127,8 @@ public class ContainerGeneratorSC extends Container {
             generator.setRedstoneMode((generator.getRedstoneMode() + 1) % 3);
             return true;
         }
-        if (id == BTN_SOFT_STOP && canInteractWith(player) && generator.getGeneratorType() == GeneratorType.TOKAMAK) {
+        if (id == BTN_SOFT_STOP && canInteractWith(player) && generator.getGeneratorType() == GeneratorType.TOKAMAK_XV) {
             generator.softStop();
-            return true;
-        }
-        if (id == BTN_BIG_MODE && canInteractWith(player) && generator.getGeneratorType() == GeneratorType.TOKAMAK) {
-            generator.toggleBigAllowed();
             return true;
         }
         if (id == BTN_BATTERY_MODE && canInteractWith(player)) {

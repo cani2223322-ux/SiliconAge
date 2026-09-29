@@ -125,14 +125,13 @@ public class ItemEntangledCrystalSC extends Item {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         long pair = pairOf(stack);
         if (pair == 0) {
-            list.add("§7" + Lang.tr("sc.crystal.tooltip.whole"));
-            list.add("§7" + Lang.tr("sc.crystal.tooltip.whole2"));
+            com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.crystal.tooltip.whole") + " " + Lang.tr("sc.crystal.tooltip.whole2"));
             return;
         }
         list.add("§d" + Lang.tr("sc.crystal.tooltip.pair", pairName(pair), halfOf(stack)));
         int pct = (int) Math.ceil(lifeOf(stack) * 100.0 / LIFE_MAX);
         list.add((pct > 20 ? "§a" : pct > 0 ? "§e" : "§c") + Lang.tr("sc.crystal.tooltip.life", pct));
-        list.add("§7" + Lang.tr("sc.crystal.tooltip.half"));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.crystal.tooltip.half"));
     }
 
     @Override

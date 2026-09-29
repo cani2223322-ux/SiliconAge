@@ -50,7 +50,12 @@ public enum GeneratorType {
     /** Lit once by a huge charge, then runs on liquid helium cooling alone. */
     EXO_REACTOR("ExoReactor", Tier.XV, 32768, Kind.EXO, "liquidhelium", 1),
     /** Creative only: endless energy at the tier chosen on its screen. */
-    CREATIVE("CreativeGenerator", Tier.XV, 32768, Kind.CREATIVE, null, 0);
+    CREATIVE("CreativeGenerator", Tier.XV, 32768, Kind.CREATIVE, null, 0),
+    /**
+     * The tokamak inside its 7x7x3 build (24 coils, a lead shell, port tanks and storages) - lit
+     * only with the build whole; see TileEntityGeneratorSC's "Tokamak XV" section.
+     */
+    TOKAMAK_XV("TokamakXV", Tier.XV, 65536, Kind.FUSION, null, 0);
 
     public enum Kind { PASSIVE, FLUID_FUEL, FUSION, SOLID, WIND, WATER, THERMO, DUAL_FLUID, RTG, EXO, CREATIVE }
 
@@ -99,7 +104,8 @@ public enum GeneratorType {
     public long ignitionThreshold() {
         switch (this) {
             case FUSION_REACTOR: return 1000000L;
-            case TOKAMAK: return 10000000L;
+            case TOKAMAK:
+            case TOKAMAK_XV: return 10000000L;
             case EXO_REACTOR: return 100000000L;
             default: return 0;
         }

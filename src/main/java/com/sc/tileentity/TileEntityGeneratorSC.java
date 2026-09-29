@@ -351,15 +351,19 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return (int) Math.round(generatorType.euPerTick * outputMultiplier() * shieldingMultiplier() * bigOutputMultiplier());
     }
 
-    // ---- the big tokamak: the tokamak inside a 7x7x3 build ----
+    // ---- the Tokamak XV: a tokamak inside its 7x7x3 build ----
+
+    /** This is the Tokamak XV. */
+    private boolean xv() {
+        return generatorType == GeneratorType.TOKAMAK_XV;
+    }
 
     /**
-     * The big tokamak: output x4 (x0.7 more without hydrogen heating); deuterium from a port tank
+     * The Tokamak XV: output x0.7 without hydrogen heating; deuterium from a port tank
      * (mB a tick) or cells burnt this many times faster; helium a tick; hydrogen a tick for the
      * heating and at the start; the blanket's wear; argon for a soft stop; the radiation and its
      * reach; a breakdown's burst and its length; how many coils it throws.
      */
-    public static final int BIG_OUTPUT_MUL = 4;
     public static final double BIG_D_PER_TICK = 0.5, BIG_HE_PER_TICK = 3, BIG_H2_PER_TICK = 1;
     public static final int BIG_CELL_MUL = 12, BIG_H2_START = 50, BIG_BLANKET_WEAR = 2, BIG_ARGON_STOP = 1000;
     public static final float BIG_NO_H2_OUTPUT = 0.7F;
@@ -370,7 +374,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     public static final float STAB_ARGON = 10F;
     public static final int PORT_TANKS_MAX = 4, PORT_STORES_MAX = 2;
 
-    private boolean bigAllowed = true, bigReady, bigRunning, heShort, h2Short;
+    private boolean bigReady, bigRunning, heShort, h2Short;
     /** Not saved: the build scanned since the load; part of the build in an unloaded chunk (the big mode waits). */
     private boolean scannedOnce, bigFrozen;
     /** What ended the last run, kept until the next lighting (the screen): 0 nothing, 1 put out safely, 2 broke down. */
@@ -389,10 +393,6 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private final int[] portFluid = new int[4];
     private static final String[] PORT_FLUIDS = {"liquidhelium", "hydrogen", "argon", "deuterium"};
     private final java.util.List<int[]> tankPorts = new java.util.ArrayList<int[]>(), storePorts = new java.util.ArrayList<int[]>();
-
-    public boolean isBigAllowed() {
-        return bigAllowed;
-    }
 
     public boolean isBigReady() {
         return bigReady;
@@ -428,7 +428,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** The screen's numbers: four packed ints and the four port fluids. */
     public int[] bigSync() {
-        int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (bigAllowed ? 4 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
+        int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
                 | bigEvent << 5;
         return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
                 capMissing | Math.round(stability * 10) << 8, portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
@@ -439,7 +439,6 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int flags = v[0] >>> 24;
         bigReady = (flags & 1) != 0;
         bigRunning = (flags & 2) != 0;
-        bigAllowed = (flags & 4) != 0;
         heShort = (flags & 8) != 0;
         h2Short = (flags & 16) != 0;
         bigEvent = flags >> 5 & 3;
@@ -455,11 +454,6 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
     }
 
-    public void toggleBigAllowed() {
-        bigAllowed = !bigAllowed;
-        markDirty();
-    }
-
     /** The screen's button: the plasma put out safely. */
     public void softStop() {
         if (!ignited && bigEvent != 0) {
@@ -473,24 +467,21 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
     }
 
-    /** The charge the tokamak needs to light: half, inside the big build with 50 mB of hydrogen for the breakdown. */
+    /** The charge a reactor needs to light: the Tokamak XV half with 50 mB of hydrogen in a port tank for the breakdown. */
     public long ignitionNeed() {
         long base = generatorType.ignitionThreshold();
-        return generatorType == GeneratorType.TOKAMAK && bigAllowed && bigReady && portFluid[1] >= BIG_H2_START ? base / 2 : base;
+        return xv() && bigReady && portFluid[1] >= BIG_H2_START ? base / 2 : base;
     }
 
     private double bigOutputMultiplier() {
-        if (!bigRunning || !bigReady) {
-            return 1.0;
-        }
-        return BIG_OUTPUT_MUL * (h2Short ? BIG_NO_H2_OUTPUT : 1F);
+        return bigRunning && h2Short ? BIG_NO_H2_OUTPUT : 1.0;
     }
 
     public int radiationRadiusNow() {
-        if (generatorType == GeneratorType.TOKAMAK && burstTicks > 0) {
+        if (xv() && burstTicks > 0) {
             return BURST_RADIUS;
         }
-        return bigRunning ? BIG_RADIUS : radiationRadius(generatorType);
+        return radiationRadius(generatorType);
     }
 
     /** Index of a wall cell (|dx| or |dz| = 3), or -1. */
@@ -770,7 +761,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             for (int dz = -3; dz <= 3; dz++) {
                 for (int dx = -3; dx <= 3; dx++) {
                     net.minecraft.tileentity.TileEntity te = w.getTileEntity(x + dx, y + dy, z + dz);
-                    if (te instanceof TileEntityGeneratorSC && ((TileEntityGeneratorSC) te).generatorType == GeneratorType.TOKAMAK) {
+                    if (te instanceof TileEntityGeneratorSC && ((TileEntityGeneratorSC) te).generatorType == GeneratorType.TOKAMAK_XV) {
                         return (TileEntityGeneratorSC) te;
                     }
                 }
@@ -842,6 +833,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             case RTG: return 1F;
             case FUSION_REACTOR: return 4F;
             case TOKAMAK: return 6F;
+            case TOKAMAK_XV: return BIG_RADIATION;
             case PLASMA_REACTOR: return 8F;
             case EXO_REACTOR: return 10F;
             default: return 0F;
@@ -854,6 +846,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             case RTG: return 4;
             case FUSION_REACTOR: return 8;
             case TOKAMAK: return 12;
+            case TOKAMAK_XV: return BIG_RADIUS;
             case PLASMA_REACTOR: return 14;
             case EXO_REACTOR: return 16;
             default: return 0;
@@ -869,11 +862,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (base <= 0 || isShielded()) {
             return 0F;
         }
-        if (generatorType == GeneratorType.TOKAMAK && burstTicks > 0) {            // a breakdown's burst, fading
+        if (xv() && burstTicks > 0) {            // a breakdown's burst, fading
             return Math.max(BIG_RADIATION, BURST_RADIATION * burstTicks / (float) BURST_TICKS);
-        }
-        if (bigRunning) {
-            base = BIG_RADIATION;
         }
         if (generatorType == GeneratorType.RTG) {
             int capsules = 0;
@@ -919,9 +909,6 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return getCreativeTier();
         }
         Tier[] tiers = Tier.values();
-        if (bigRunning && bigReady) {
-            return Tier.XV;                                   // the big tokamak's two XV packets a tick
-        }
         return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
     }
 
@@ -984,7 +971,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return;
         }
         syncTankCapacity();
-        if (generatorType == GeneratorType.TOKAMAK) {
+        if (xv()) {
             if (burstTicks > 0) {
                 burstTicks--;
             }
@@ -992,13 +979,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 scannedOnce = true;
                 scanBig();
             }
-            if (bigRunning && (!bigAllowed || !ignited)) {
-                bigRunning = false;                            // switched to the normal mode: no penalty, the normal output
-                markDirty();
-            } else if (!bigRunning && ignited && bigAllowed && bigReady) {
-                bigRunning = true;                             // lit first, the build closed afterwards (or back to the auto mode)
-                markDirty();                                   // (the stability as it was: switching modes resets nothing)
-            }
+        }
+        if (bigRunning != (xv() && ignited)) {
+            bigRunning = xv() && ignited;                      // (a tokamak saved by an older version in its old big mode)
+            markDirty();
         }
         if (worldObj.getTotalWorldTime() % 20 == 7) {
             float rad = radiationLevel();
@@ -1033,8 +1017,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (generatorType != GeneratorType.CREATIVE) {
             lastOutput = Math.max(0, getEnergyStored() - before);
         }
-        if (generatorType == GeneratorType.TOKAMAK && !storePorts.isEmpty() && !bigFrozen) {
-            pushToPorts();                                   // after the count: the screen shows what it made (in any mode)
+        if (xv() && !storePorts.isEmpty() && !bigFrozen) {
+            pushToPorts();                                   // after the count: the screen shows what it made
         }
         if (status == GeneratorStatus.GENERATING) {
             com.sc.util.SoundsSC.loop(this, com.sc.util.SoundsSC.of(generatorType));
@@ -1357,14 +1341,14 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Lights a FUSION / EXO generator once its charge is in (and, for FUSION, a blanket module is there). */
     private boolean ignite() {
-        if (generatorType == GeneratorType.TOKAMAK && bigEvent != 0) {
+        if (xv() && bigEvent != 0) {
             return false;               // put out / broken down: lit again only once the player allows it (the screen's button)
         }
         if (ignitionEU < ignitionNeed()) {
             status = GeneratorStatus.IGNITING;
             return false;
         }
-        if (generatorType == GeneratorType.TOKAMAK && bigAllowed && bigReady && ignitionNeed() < generatorType.ignitionThreshold()
+        if (xv() && ignitionNeed() < generatorType.ignitionThreshold()
                 && portAmount("hydrogen") < BIG_H2_START) {
             status = GeneratorStatus.IGNITING;                          // the hydrogen went: the full charge then
             return false;
@@ -1383,7 +1367,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             moduleLifeRemaining = MODULE_LIFE_TICKS;
         }
-        if (generatorType == GeneratorType.TOKAMAK && bigAllowed && bigReady) {    // lit inside the big build: the big mode
+        if (xv()) {                                     // lit inside its build (never without it)
             if (ignitionNeed() < generatorType.ignitionThreshold()) {
                 drainPorts("hydrogen", BIG_H2_START, true);                     // the hydrogen breakdown that halved the charge
             }
@@ -1455,20 +1439,20 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (!ignited) {
             heat = Math.max(0, heat - 5);
-            if (generatorType == GeneratorType.TOKAMAK && !structureOk) {
-                status = GeneratorStatus.NO_STRUCTURE;
+            if (generatorType == GeneratorType.TOKAMAK && !structureOk || xv() && !bigReady) {
+                status = GeneratorStatus.NO_STRUCTURE;          // the XV: the screen says what's missing
                 return;
             }
             if (status == GeneratorStatus.OVERHEATED && heat > 0) {
                 return;                 // cools down before it can be lit again
             }
-            if (generatorType == GeneratorType.TOKAMAK && bigAllowed && bigReady && bigEvent == 0) {
+            if (xv() && bigEvent == 0) {
                 chargeFromPorts();      // walled in: the charge comes out of the port storages
             }
             ignite();
             return;
         }
-        if (generatorType == GeneratorType.TOKAMAK && !structureOk && !bigRunning) {
+        if (generatorType == GeneratorType.TOKAMAK && !structureOk) {
             heat = Math.max(0, heat - 2);
             status = GeneratorStatus.NO_STRUCTURE;
             return;
@@ -1649,7 +1633,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     @Override
     public boolean isUseableByPlayer(EntityPlayer player) {
         return worldObj != null && worldObj.getTileEntity(xCoord, yCoord, zCoord) == this
-                && player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= (generatorType == GeneratorType.TOKAMAK ? 144 : 64);
+                && player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= (xv() ? 144 : 64);
     }
 
     @Override
@@ -1671,6 +1655,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             case RTG:
             case FUSION_REACTOR:
             case TOKAMAK:
+            case TOKAMAK_XV:
                 return slot == SLOT_FUEL || slot == SLOT_BLANKET;
             default:
                 return false;
@@ -1708,7 +1693,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 return item == com.sc.init.ModItems.windRotor;
             case RTG:
                 return item == com.sc.init.ModItems.isotopeCapsule;
-            default:                    // FUSION_REACTOR, TOKAMAK
+            default:                    // FUSION_REACTOR, TOKAMAK, TOKAMAK_XV
                 return slot == SLOT_BLANKET ? item == com.sc.init.ModItems.component("liBlanketModule")
                         : item == com.sc.init.ModItems.deuteriumCell;
         }
@@ -1887,7 +1872,6 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         outTank.readFromNBT(nbt.getCompoundTag("OutTank"));
         ignitionEU = nbt.getLong("IgnitionEU");
         ignited = nbt.getBoolean("Ignited");
-        bigAllowed = !nbt.getBoolean("BigOff");
         bigRunning = nbt.getBoolean("BigRunning");
         stability = nbt.hasKey("Stability") ? nbt.getFloat("Stability") : 100F;
         burstTicks = nbt.getInteger("Burst");
@@ -1928,7 +1912,6 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         nbt.setTag("OutTank", outTank.writeToNBT(new NBTTagCompound()));
         nbt.setLong("IgnitionEU", ignitionEU);
         nbt.setBoolean("Ignited", ignited);
-        nbt.setBoolean("BigOff", !bigAllowed);
         nbt.setBoolean("BigRunning", bigRunning);
         nbt.setFloat("Stability", stability);
         nbt.setInteger("Burst", burstTicks);

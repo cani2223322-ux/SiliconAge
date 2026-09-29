@@ -277,7 +277,7 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
         list.add("§7" + Lang.tr("sc.battery.tier", tierOf(stack).name(), RATE[tierIndex(stack)]));
         int mode = modeOf(stack);
         list.add((mode == MODE_OFF ? "§7" : "§a") + Lang.tr("sc.battery.mode", Lang.tr("sc.battery.mode." + mode)));
-        list.add("§8" + Lang.tr("sc.battery.hint"));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.battery.hint"));
     }
 
     /** 1 234 567 with spaces. */

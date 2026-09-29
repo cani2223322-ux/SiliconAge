@@ -247,6 +247,9 @@ public final class ModRecipesCrafting {
                 'N', comp("nb3SnCoil"), 'C', cable(CableType.QUANTUM), 'X', controller, 'F', generator(GeneratorType.FUSION_REACTOR));
         OreRecipes.shaped(new ItemStack(ModBlocks.tokamakCoil), "NTN", "CHC", "NTN",
                 'N', comp("nb3SnCoil"), 'T', comp("tiCasing"), 'C', cable(CableType.NIOBIUM_TITANIUM), 'H', new ItemStack(ModItems.liquidHeCell));
+        // XV: the Tokamak XV - a tokamak with Nb3Sn coils, Exo cable and two fusion cores
+        OreRecipes.shaped(generator(GeneratorType.TOKAMAK_XV), "NCN", "FTF", "NCN",
+                'N', comp("nb3SnCoil"), 'C', cable(CableType.EXO), 'F', comp("fusionCore"), 'T', generator(GeneratorType.TOKAMAK));
         // XV: a tokamak with a second fusion core, hafnium and Exo cable
         OreRecipes.shaped(generator(GeneratorType.EXO_REACTOR), "HCH", "XTX", "HFH",
                 'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', controller, 'T', generator(GeneratorType.TOKAMAK),

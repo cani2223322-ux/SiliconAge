@@ -27,7 +27,7 @@ import net.minecraftforge.fluids.FluidStack;
 public class WorldTestTokamakSC {
 
     private int ticks;
-    private static final int AX = 70, BX = 90, Y = 200, Z = 70;
+    private static final int AX = 70, BX = 90, CX = 110, Y = 200, Z = 70;
 
     @SubscribeEvent
     public void onTick(TickEvent.ServerTickEvent e) {
@@ -42,6 +42,16 @@ public class WorldTestTokamakSC {
         if (ticks == 60) {
             build(w, AX, true);
             build(w, BX, false);
+            build(w, CX, true);
+            w.setBlockToAir(CX + 1, Y, Z + 1);                       // C: a coil short - it mustn't light
+            gen(w, CX).setIgnitionForTest();
+        }
+        if (ticks == 200) {
+            TileEntityGeneratorSC c = gen(w, CX);
+            boolean ok = !c.isIgnited() && !c.isBigReady() && c.getStatus() == GeneratorStatus.NO_STRUCTURE;
+            System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " tokamak XV unbuilt: lit " + c.isIgnited() + ", ready "
+                    + c.isBigReady() + ", status " + c.getStatus());
+            clear(w, CX);
         }
         if (ticks == 70) {                                          // the charge: into the port storage, the tokamak draws it
             ((TileEntityEnergyStorageSC) w.getTileEntity(AX, Y, Z + 3)).setEnergyStoredClient(5000000);
@@ -110,10 +120,10 @@ public class WorldTestTokamakSC {
                 }
             }
         }
-        ItemStack st = ModBlocks.generatorStack(GeneratorType.TOKAMAK, 1);
+        ItemStack st = ModBlocks.generatorStack(GeneratorType.TOKAMAK_XV, 1);
         w.setBlock(x0, Y, Z, net.minecraft.block.Block.getBlockFromItem(st.getItem()), st.getItemDamage(), 3);
         TileEntityGeneratorSC g = gen(w, x0);
-        g.setGeneratorType(GeneratorType.TOKAMAK);
+        g.setGeneratorType(GeneratorType.TOKAMAK_XV);
         g.setInventorySlotContents(TileEntityGeneratorSC.SLOT_BLANKET, new ItemStack(ModItems.component("liBlanketModule")));
         g.setInventorySlotContents(TileEntityGeneratorSC.SLOT_FUEL, new ItemStack(ModItems.deuteriumCell, 8));
         fill(w, x0 - 3, Z, ModFluids.liquidHelium, 8000);

@@ -39,7 +39,6 @@ public class ItemDosimeterSC extends Item {
     @Override
     @SuppressWarnings("unchecked")
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        list.add("§7" + Lang.tr("sc.dosimeter.tooltip.1"));
-        list.add("§7" + Lang.tr("sc.dosimeter.tooltip.2"));
+        com.sc.util.TooltipSC.more(list, Lang.tr("sc.dosimeter.tooltip.1"), Lang.tr("sc.dosimeter.tooltip.2"));
     }
 }

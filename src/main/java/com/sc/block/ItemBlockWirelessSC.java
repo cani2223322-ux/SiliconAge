@@ -41,7 +41,7 @@ public class ItemBlockWirelessSC extends ItemBlock {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         if (kind() == TileEntityWirelessSC.QUANTUM) {
             list.add("§7" + Lang.tr("sc.wl.tooltip.quantum", TileEntityWirelessSC.QUANTUM_RATE, TileEntityWirelessSC.quantumUpkeep()));
-            list.add("§7" + Lang.tr("sc.wl.tooltip.quantum2"));
+            com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.wl.tooltip.quantum2"));
             return;
         }
         Tier t = BlockWirelessSC.tierFor(stack.getItemDamage());
@@ -52,6 +52,6 @@ public class ItemBlockWirelessSC extends ItemBlock {
         if (stack.hasTagCompound() && stack.getTagCompound().hasKey("Partner")) {
             list.add("§b" + Lang.tr("sc.wl.tooltip.linked"));
         }
-        list.add("§8" + Lang.tr("sc.wl.tooltip.card"));
+        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.wl.tooltip.card"));
     }
 }

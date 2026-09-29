@@ -40,6 +40,37 @@ public final class TooltipSC {
         list.add(Lang.tr("sc.tooltip.hold.ctrl"));
     }
 
+    /** "Hold Ctrl - how to use" (items with nothing to charge). */
+    public static void hintUse(List list) {
+        list.add(Lang.tr("sc.tooltip.hold.use"));
+    }
+
+    /**
+     * The standard tail of a tooltip: `details` (what it does) under Shift, `howto` (how to use it)
+     * under Ctrl, a hint for each one not held. Either may be null; "\n" starts a new wrapped line.
+     */
+    public static void more(List list, String details, String howto) {
+        boolean s = shift(), c = ctrl();
+        if (details != null && s) {
+            wrapAll(list, details);
+        }
+        if (howto != null && c) {
+            wrapAll(list, howto);
+        }
+        if (details != null && !s) {
+            hintShift(list);
+        }
+        if (howto != null && !c) {
+            hintUse(list);
+        }
+    }
+
+    private static void wrapAll(List list, String text) {
+        for (String part : text.split("\n")) {
+            wrap(list, part, "\u00a77");
+        }
+    }
+
     /** Adds `text` wrapped at WIDTH visible characters (colour codes don't count), every line in `color`. */
     public static void wrap(List list, String text, String color) {
         StringBuilder line = new StringBuilder();
