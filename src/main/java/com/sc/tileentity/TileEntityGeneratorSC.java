@@ -373,6 +373,28 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     public static final float STAB_NO_HE = 5F, STAB_BROKEN = 10F, STAB_OVERDRIVE = 0.5F, STAB_HOT = 2F, STAB_RECOVER = 1F;
     public static final float STAB_ARGON = 10F;
     public static final int PORT_TANKS_MAX = 4, PORT_STORES_MAX = 2;
+    /** Liquid helium the XV must have in its port tanks to light (a few seconds of cooling). */
+    public static final int BIG_HE_START = 1000;
+    /** A wall cell's label for the screen: nothing / the gas of its tank (1-4) / a storage / a tank never filled / another fluid. */
+    public static final int LABEL_NONE = 0, LABEL_STORE = 5, LABEL_FREE = 6, LABEL_OTHER = 7;
+
+    /** Per wall cell: the gas its port tank last held - kept while the tank is empty (the gauge stays that gas's). */
+    private final String[] portMem = new String[24];
+    /** Per gas: the port tanks' total capacity; tanks per gas (3 bits each) and never-filled ones (<< 12); the wall labels (3 bits a cell). */
+    private final int[] portCap = new int[4];
+    private int portCounts;
+    private final int[] portLabels = new int[3];
+    /** The port storages: charge % and tier of the first two, the total (per mille). */
+    private int storeInfo;
+    /** Cap and floor cells present (7x7, bit (dz + 3) * 7 + dx + 3). */
+    private long capTop, capBottom;
+    /** Stability a second over the last minute (255 - not lit), a ring. */
+    private final byte[] stabHist = new byte[60];
+    private int stabHead;
+
+    {
+        java.util.Arrays.fill(stabHist, (byte) 255);
+    }
 
     private boolean bigReady, bigRunning, heShort, h2Short;
     /** Not saved: the build scanned since the load; part of the build in an unloaded chunk (the big mode waits). */
@@ -426,8 +448,34 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return new int[]{coilMask, wallMask, portMask, capMissing, portTanks, portStores, weakStores};
     }
 
-    /** The screen's numbers: four packed ints and the four port fluids. */
+    /** The screen's numbers: BIG_SYNC ints - see setBigClient for the layout. */
+    public static final int BIG_SYNC = 37;
+
     public int[] bigSync() {
+        int[] v = new int[BIG_SYNC];
+        int[] head = bigSyncHead();
+        System.arraycopy(head, 0, v, 0, 8);
+        for (int i = 0; i < 4; i++) {
+            v[8 + i] = portCap[i];
+        }
+        v[12] = portLabels[0];
+        v[13] = portLabels[1];
+        v[14] = portLabels[2];
+        v[15] = portCounts;
+        v[16] = storeInfo;
+        for (int i = 0; i < 15; i++) {
+            v[17 + i] = (stabHist[i * 4] & 255) | (stabHist[i * 4 + 1] & 255) << 8 | (stabHist[i * 4 + 2] & 255) << 16
+                    | (stabHist[i * 4 + 3] & 255) << 24;
+        }
+        v[32] = stabHead;
+        v[33] = (int) (capTop & 0x1FFFFFF);
+        v[34] = (int) (capTop >>> 25);
+        v[35] = (int) (capBottom & 0x1FFFFFF);
+        v[36] = (int) (capBottom >>> 25);
+        return v;
+    }
+
+    private int[] bigSyncHead() {
         int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
                 | bigEvent << 5;
         return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
@@ -452,6 +500,67 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         for (int i = 0; i < 4; i++) {
             portFluid[i] = v[4 + i];
         }
+        if (v.length < BIG_SYNC) {
+            return;
+        }
+        for (int i = 0; i < 4; i++) {
+            portCap[i] = v[8 + i];
+        }
+        portLabels[0] = v[12];
+        portLabels[1] = v[13];
+        portLabels[2] = v[14];
+        portCounts = v[15];
+        storeInfo = v[16];
+        for (int i = 0; i < 15; i++) {
+            for (int k = 0; k < 4; k++) {
+                stabHist[i * 4 + k] = (byte) (v[17 + i] >>> (k * 8));
+            }
+        }
+        stabHead = v[32];
+        capTop = (v[33] & 0x1FFFFFFL) | (long) v[34] << 25;
+        capBottom = (v[35] & 0x1FFFFFFL) | (long) v[36] << 25;
+    }
+
+    /** Port tanks' capacity for gas i (0 He, 1 H2, 2 Ar, 3 D) and how many; tanks never filled. */
+    public int getPortCap(int i) {
+        return portCap[i];
+    }
+
+    public int getPortTankCount(int i) {
+        return portCounts >> (i * 3) & 7;
+    }
+
+    public int getFreeTanks() {
+        return portCounts >> 12 & 7;
+    }
+
+    /** Wall cell w's label (LABEL_*, 1-4 a gas). */
+    public int getPortLabel(int w) {
+        return portLabels[w / 8] >> ((w % 8) * 3) & 7;
+    }
+
+    /** Port storage i (0, 1): charge % and tier ordinal; the storages' total charge, 0..1. */
+    public int getStorePct(int i) {
+        return storeInfo >> (i * 11) & 127;
+    }
+
+    public int getStoreTier(int i) {
+        return storeInfo >> (i * 11 + 7) & 15;
+    }
+
+    public float getStoresLevel() {
+        return (storeInfo >>> 22) / 1000F;
+    }
+
+    /** The cap (top) or the floor: a lead block at (dx, dz), -3..3. */
+    public boolean capAt(boolean topLayer, int dx, int dz) {
+        return ((topLayer ? capTop : capBottom) >> ((dz + 3) * 7 + dx + 3) & 1) != 0;
+    }
+
+    /** Stability k seconds ago (0 - the latest), -1 not lit then. */
+    public int stabilityAgo(int k) {
+        int v = stabHist[((stabHead - 1 - k) % 60 + 60) % 60] & 255;
+        return v == 255 ? -1 : v;
     }
 
     /** The screen's button: the plasma put out safely. */
@@ -513,6 +622,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         bigFrozen = false;
         int coils = 0, walls = 0, ports = 0, caps = 0, tanks = 0, stores = 0, weak = 0, ci = 0;
+        int[] labels = new int[24], caps4 = new int[4], counts = new int[4];
+        int free = 0;
+        long top = 0, bottomMask = 0;
         tankPorts.clear();
         storePorts.clear();
         for (int dz = -3; dz <= 3; dz++) {
@@ -520,6 +632,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 for (int dy = -1; dy <= 1; dy += 2) {                 // cap and floor
                     if (!isShell(worldObj.getBlock(x0 + dx, y0 + dy, z0 + dz))) {
                         caps++;
+                    } else if (dy > 0) {
+                        top |= 1L << ((dz + 3) * 7 + dx + 3);
+                    } else {
+                        bottomMask |= 1L << ((dz + 3) * 7 + dx + 3);
                     }
                 }
                 if (dx == 0 && dz == 0) {
@@ -537,22 +653,71 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y0, z);
                 if (isShell(worldObj.getBlock(x, y0, z))) {
                     walls |= 1 << w;
+                    portMem[w] = null;
                 } else if (te instanceof TileEntityTankSC && tanks < PORT_TANKS_MAX) {
                     walls |= 1 << w;
                     ports |= 1 << w;
                     tanks++;
                     tankPorts.add(new int[]{x, y0, z});
+                    FluidTank t = ((TileEntityTankSC) te).getTank();
+                    FluidStack f = t.getFluid();
+                    if (f != null && f.amount > 0 && f.getFluid() != null) {
+                        portMem[w] = f.getFluid().getName();       // remembered: the gauge stays this gas's when it empties
+                    }
+                    int g = portMem[w] == null ? -1 : java.util.Arrays.asList(PORT_FLUIDS).indexOf(portMem[w]);
+                    if (g >= 0) {
+                        caps4[g] += t.getCapacity();
+                        counts[g]++;
+                        labels[w] = g + 1;
+                    } else if (portMem[w] == null) {
+                        free++;
+                        labels[w] = LABEL_FREE;
+                    } else {
+                        labels[w] = LABEL_OTHER;
+                    }
                 } else if (te instanceof TileEntityEnergyStorageSC && !(te instanceof TileEntityChargePadSC) && stores < PORT_STORES_MAX) {
                     walls |= 1 << w;
                     ports |= 1 << w;
+                    portMem[w] = null;
+                    labels[w] = LABEL_STORE;
                     stores++;
                     if (((TileEntityEnergyStorageSC) te).getTier().ordinal() < Tier.IV.ordinal()) {
                         weak++;
                     }
                     storePorts.add(new int[]{x, y0, z});
+                } else {
+                    portMem[w] = null;
                 }
             }
         }
+        for (int i = 0; i < 4; i++) {
+            portCap[i] = caps4[i];
+        }
+        portCounts = Math.min(7, counts[0]) | Math.min(7, counts[1]) << 3 | Math.min(7, counts[2]) << 6 | Math.min(7, counts[3]) << 9
+                | Math.min(7, free) << 12;
+        for (int i = 0; i < 3; i++) {
+            int v = 0;
+            for (int k = 0; k < 8; k++) {
+                v |= labels[i * 8 + k] << (k * 3);
+            }
+            portLabels[i] = v;
+        }
+        capTop = top;
+        capBottom = bottomMask;
+        long have = 0, room = 0;
+        int info = 0;
+        for (int i = 0; i < storePorts.size(); i++) {
+            int[] p = storePorts.get(i);
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            if (te instanceof TileEntityEnergyStorageSC) {
+                TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
+                have += s.getEnergyStored();
+                room += s.getMaxEnergyStored();
+                int pct = (int) Math.min(100, (long) s.getEnergyStored() * 100 / Math.max(1, s.getMaxEnergyStored()));
+                info |= (pct | s.getTier().ordinal() << 7) << (i * 11);
+            }
+        }
+        storeInfo = info | (int) (room <= 0 ? 0 : Math.min(1000, have * 1000 / room)) << 22;
         coilMask = coils;
         wallMask = walls;
         portMask = ports;
@@ -975,6 +1140,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (burstTicks > 0) {
                 burstTicks--;
             }
+            if (worldObj.getTotalWorldTime() % 20 == 5) {
+                stabHist[stabHead] = (byte) (ignited ? Math.round(stability) : 255);
+                stabHead = (stabHead + 1) % 60;
+            }
             if (!scannedOnce || worldObj.getTotalWorldTime() % 20 == 3) {
                 scannedOnce = true;
                 scanBig();
@@ -1343,6 +1512,14 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private boolean ignite() {
         if (xv() && bigEvent != 0) {
             return false;               // put out / broken down: lit again only once the player allows it (the screen's button)
+        }
+        if (xv() && portFluid[0] < BIG_HE_START) {
+            status = GeneratorStatus.NO_COOLANT;                  // the coils can't be cooled: not lit
+            return false;
+        }
+        if (xv() && portFluid[3] <= 0 && (slots[SLOT_FUEL] == null || slots[SLOT_FUEL].getItem() != com.sc.init.ModItems.deuteriumCell)) {
+            status = GeneratorStatus.NO_DEUTERIUM;
+            return false;
         }
         if (ignitionEU < ignitionNeed()) {
             status = GeneratorStatus.IGNITING;
@@ -1876,6 +2053,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         stability = nbt.hasKey("Stability") ? nbt.getFloat("Stability") : 100F;
         burstTicks = nbt.getInteger("Burst");
         bigEvent = nbt.getInteger("BigEvent");
+        NBTTagCompound mem = nbt.getCompoundTag("PortMem");
+        for (int i = 0; i < portMem.length; i++) {
+            portMem[i] = mem.hasKey("w" + i) ? mem.getString("w" + i) : null;
+        }
         moduleLifeRemaining = nbt.getInteger("ModuleLife");
         cellBurnRemaining = nbt.hasKey("CellBurnD") ? nbt.getDouble("CellBurnD") : nbt.getInteger("CellBurn");
         solidBurnTicks = nbt.hasKey("SolidBurnD") ? nbt.getDouble("SolidBurnD") : nbt.getInteger("SolidBurn");
@@ -1916,6 +2097,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         nbt.setFloat("Stability", stability);
         nbt.setInteger("Burst", burstTicks);
         nbt.setInteger("BigEvent", bigEvent);
+        NBTTagCompound mem = new NBTTagCompound();
+        for (int i = 0; i < portMem.length; i++) {
+            if (portMem[i] != null) {
+                mem.setString("w" + i, portMem[i]);
+            }
+        }
+        nbt.setTag("PortMem", mem);
         nbt.setInteger("ModuleLife", moduleLifeRemaining);
         nbt.setInteger("CellBurn", (int) cellBurnRemaining);
         nbt.setDouble("CellBurnD", cellBurnRemaining);

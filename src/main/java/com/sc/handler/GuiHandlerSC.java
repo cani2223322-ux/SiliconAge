@@ -89,6 +89,9 @@ public class GuiHandlerSC implements IGuiHandler {
             return new GuiMachineSC(player.inventory, (TileEntityMachineSC) te);
         }
         if (id == GENERATOR_GUI_ID && te instanceof TileEntityGeneratorSC) {
+            if (((TileEntityGeneratorSC) te).getGeneratorType() == com.sc.energy.GeneratorType.TOKAMAK_XV) {
+                return new com.sc.inventory.GuiTokamakXVSC(player.inventory, (TileEntityGeneratorSC) te);
+            }
             return new GuiGeneratorSC(player.inventory, (TileEntityGeneratorSC) te);
         }
         if (id == FIELD_GENERATOR_GUI_ID && te instanceof TileEntityFieldGeneratorSC) {

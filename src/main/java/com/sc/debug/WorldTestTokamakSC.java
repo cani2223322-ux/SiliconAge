@@ -52,6 +52,13 @@ public class WorldTestTokamakSC {
             System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " tokamak XV unbuilt: lit " + c.isIgnited() + ", ready "
                     + c.isBigReady() + ", status " + c.getStatus());
             clear(w, CX);
+            TileEntityGeneratorSC a = gen(w, AX), b = gen(w, BX);
+            boolean ports = a.getPortCap(0) > 0 && a.getPortCap(2) > 0 && b.getPortCap(2) == 0 && a.getPortTankCount(0) == 1
+                    && a.getPortLabel(wallIndexOf(-3, 0)) == 1 && a.getPortLabel(wallIndexOf(0, 3)) == TileEntityGeneratorSC.LABEL_STORE
+                    && a.getStoresLevel() >= 0F;
+            System.out.println("[SC-WORLDTEST] " + (ports ? "PASS" : "FAIL") + " tokamak XV ports: He cap " + a.getPortCap(0) + ", Ar cap "
+                    + a.getPortCap(2) + " / B " + b.getPortCap(2) + ", labels " + a.getPortLabel(wallIndexOf(-3, 0)) + " "
+                    + a.getPortLabel(wallIndexOf(0, 3)));
         }
         if (ticks == 70) {                                          // the charge: into the port storage, the tokamak draws it
             ((TileEntityEnergyStorageSC) w.getTileEntity(AX, Y, Z + 3)).setEnergyStoredClient(5000000);
@@ -91,6 +98,21 @@ public class WorldTestTokamakSC {
             clear(w, AX);
             clear(w, BX);
         }
+    }
+
+    private static int wallIndexOf(int dx, int dz) {
+        int k = 0;
+        for (int z = -3; z <= 3; z++) {
+            for (int x = -3; x <= 3; x++) {
+                if (Math.abs(x) == 3 || Math.abs(z) == 3) {
+                    if (x == dx && z == dz) {
+                        return k;
+                    }
+                    k++;
+                }
+            }
+        }
+        return -1;
     }
 
     private static TileEntityGeneratorSC gen(World w, int x) {

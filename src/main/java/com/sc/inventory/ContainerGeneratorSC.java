@@ -48,6 +48,9 @@ public class ContainerGeneratorSC extends Container {
         if (type == GeneratorType.RTG) {
             return slot == 0 ? RTG_SLOT_X0 : RTG_SLOT_X1;
         }
+        if (type == GeneratorType.TOKAMAK_XV) {
+            return slot == 0 ? XV_FUEL_X : XV_BLANKET_X;
+        }
         if (type.kind == GeneratorType.Kind.FUSION) {
             return slot == 0 ? FUS_FUEL_X : FUS_BLANKET_X;
         }
@@ -55,7 +58,7 @@ public class ContainerGeneratorSC extends Container {
     }
 
     public static int slotY(GeneratorType type) {
-        return type.kind == GeneratorType.Kind.FUSION ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
+        return type == GeneratorType.TOKAMAK_XV ? XV_SLOT_Y : type.kind == GeneratorType.Kind.FUSION ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
                 : type == GeneratorType.WIND_TURBINE ? WD_SLOT_Y : type == GeneratorType.GEOTHERMAL ? GEO_SLOT_Y
                 : type == GeneratorType.RTG ? RTG_SLOT_Y : SLOT_Y;
     }
@@ -65,6 +68,16 @@ public class ContainerGeneratorSC extends Container {
     public static final int BTN_CLEAR = 1;
     /** The power switch and the redstone mode (GuiPowerSC). */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_BATTERY_MODE = 12;
+    /**
+     * The Tokamak XV's own, larger window (GuiTokamakXVSC): the screen, the energy gauge column with
+     * the power buttons and the battery, the cell and blanket slots on the screen, the upgrade row
+     * left of the inventory. Plain constants - safe on the server.
+     */
+    public static final int XV_W = 400, XV_H = 264, XV_SCREEN_X = 7, XV_SCREEN_Y = 21, XV_SCREEN_W = 356, XV_SCREEN_H = 144;
+    public static final int XV_GAUGE_X = 367, XV_BUTTONS_Y = 21, XV_GAUGE_Y = 33, XV_GAUGE_H = 104;
+    public static final int XV_FUEL_X = 12, XV_BLANKET_X = 58, XV_SLOT_Y = 122;
+    public static final int XV_UPG_X = 12, XV_UPG_Y = 188, XV_INV_X = 119, XV_INV_Y = 186, XV_HOTBAR_Y = 244, XV_SEPARATOR_Y = 171;
+
     /** The Tokamak XV: put the plasma out safely / allow lighting again. */
     public static final int BTN_SOFT_STOP = 20;
 
@@ -75,8 +88,10 @@ public class ContainerGeneratorSC extends Container {
         GeneratorType type = generator.getGeneratorType();
         addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_FUEL, slotX(type, 0), slotY(type)));
         addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_BLANKET, slotX(type, 1), slotY(type)));
+        boolean xv = type == GeneratorType.TOKAMAK_XV;
         for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
-            addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y));
+            addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i,
+                    (xv ? XV_UPG_X : GuiBigSC.UPG_X) + i * 18, xv ? XV_UPG_Y : GuiBigSC.UPG_Y));
         }
         for (int slot = 0; slot < TileEntityGeneratorSC.FIRST_UPGRADE_SLOT; slot++) {
             if (!TileEntityGeneratorSC.usesSlot(type, slot)) {
@@ -89,17 +104,19 @@ public class ContainerGeneratorSC extends Container {
             }
         }
 
+        int invX = xv ? XV_INV_X : GuiBigSC.INV_X, invY = xv ? XV_INV_Y : GuiBigSC.INV_Y, hotY = xv ? XV_HOTBAR_Y : GuiBigSC.HOTBAR_Y;
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, GuiBigSC.INV_X + col * 18, GuiBigSC.INV_Y + row * 18));
+                addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, invX + col * 18, invY + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlotToContainer(new Slot(playerInv, col, GuiBigSC.INV_X + col * 18, GuiBigSC.HOTBAR_Y));
+            addSlotToContainer(new Slot(playerInv, col, invX + col * 18, hotY));
         }
         // the battery slot under the gauge - last, so the player's slots keep their indices
         addSlotToContainer(new SlotBatterySC(generator, TileEntityGeneratorSC.SLOT_BATTERY,
-                SlotBatterySC.itemX(GuiBigSC.GAUGE_X), SlotBatterySC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
+                SlotBatterySC.itemX(xv ? XV_GAUGE_X : GuiBigSC.GAUGE_X),
+                SlotBatterySC.itemY(xv ? XV_GAUGE_Y + XV_GAUGE_H : GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
     }
 
     public TileEntityGeneratorSC getGenerator() {
@@ -148,8 +165,8 @@ public class ContainerGeneratorSC extends Container {
             ID_IGNITION = 7, ID_IGNITED = 8, ID_STATUS = 9, ID_OUTPUT = 10, ID_HEAT = 11, ID_RAMP = 12, ID_INFO_A = 13,
             ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, ID_CELL = 18,
             ID_LIFE = 19, ID_SOLID = 20, ID_SOLID_TOTAL = 21, ID_SOLID_ITEM = 22, ID_SIDES = 23,
-            /** The big tokamak's eight numbers (TileEntityGeneratorSC.bigSync). */
-            ID_BIG = 24, COUNT = 32;
+            /** The Tokamak XV's numbers (TileEntityGeneratorSC.bigSync). */
+            ID_BIG = 24, COUNT = ID_BIG + TileEntityGeneratorSC.BIG_SYNC;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
