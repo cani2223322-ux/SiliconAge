@@ -38,6 +38,27 @@ public class BookKeySC {
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new BookKeySC());
     }
 
+    /** A text field of the screen (any field of its classes) has the keyboard. */
+    private static boolean focusedTextField(Object gui) {
+        for (Class<?> c = gui.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (!net.minecraft.client.gui.GuiTextField.class.isAssignableFrom(f.getType())) {
+                    continue;
+                }
+                try {
+                    f.setAccessible(true);
+                    Object v = f.get(gui);
+                    if (v != null && ((net.minecraft.client.gui.GuiTextField) v).isFocused()) {
+                        return true;
+                    }
+                } catch (Throwable t) {
+                    // unreadable: ignore
+                }
+            }
+        }
+        return false;
+    }
+
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         Minecraft mc = Minecraft.getMinecraft();
@@ -69,6 +90,7 @@ public class BookKeySC {
             ItemStack s = slot == null ? null : slot.getStack();
             BookEntry e = s == null ? null : BookContent.entryFor(s);
             if (e != null) {
+                mc.thePlayer.closeScreen();                  // tells the server - its container mustn't stay open
                 mc.displayGuiScreen(new GuiBook(e));
             }
         } catch (Throwable t) {
@@ -77,7 +99,7 @@ public class BookKeySC {
     }
 
     private static boolean typing(Object gui) {
-        if (gui instanceof GuiRepair) {
+        if (gui instanceof GuiRepair || focusedTextField(gui)) {
             return true;
         }
         if (gui instanceof GuiContainerCreative && ((GuiContainerCreative) gui).func_147056_g() == CreativeTabs.tabAllSearch.getTabIndex()) {

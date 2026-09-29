@@ -97,6 +97,9 @@ public class ItemWeaponSC extends Item {
         }
         if (!world.isRemote) {
             int room = type.tier.getBuffer() - getCharge(stack);
+            if (!((TileEntityEnergyBase) te).canItemCharge(player)) {
+                return true;
+            }
             int moved = ((TileEntityEnergyBase) te).extractForItemCharging(room);
             setCharge(stack, getCharge(stack) + moved);
             player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.weapon.charged",

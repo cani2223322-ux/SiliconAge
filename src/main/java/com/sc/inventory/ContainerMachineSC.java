@@ -167,7 +167,7 @@ public class ContainerMachineSC extends Container {
         }
         switch (id) {
             case ID_ENERGY: return machine.getEnergyStored();
-            case ID_PROGRESS: return machine.getProgressTicks();
+            case ID_PROGRESS: return machine.getMachineType().isSmelter() ? machine.getSmeltProgress(0) : machine.getProgressTicks();
             case ID_RECIPE_TICKS: return machine.getCurrentRecipeTicks();
             case ID_HEAT: return machine.getHeat();
             case ID_POWER: return machine.powerFlags();

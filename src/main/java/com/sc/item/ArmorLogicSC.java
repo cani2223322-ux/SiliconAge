@@ -499,7 +499,11 @@ public final class ArmorLogicSC {
         if (now - data.getLong("scAnnihilated") < 20) {
             return;
         }
-        for (int t = 0; t < 4; t++) {                               // all four pieces worn, each 95%+ full
+        if (fullSet(p) != ArmorSuit.EXO) {
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.armor.annihilate.low"));
+            return;
+        }
+        for (int t = 0; t < 4; t++) {                               // all four Exo pieces worn, each 95%+ full
             ItemStack s = piece(p, t);
             if (s == null || ItemArmorSC.chargeOf(s) < ItemArmorSC.capacityOf(s) * ArmorFeature.ANNIHILATION_MIN_CHARGE) {
                 p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.armor.annihilate.low"));
@@ -554,8 +558,11 @@ public final class ArmorLogicSC {
      */
     public static boolean exoStops(EntityPlayer p, net.minecraft.util.DamageSource src, float amount) {
         if (p.worldObj.isRemote || src == net.minecraft.util.DamageSource.outOfWorld || amount <= 0
-                || fullSet(p) != ArmorSuit.EXO) {
+                || fullSet(p) != ArmorSuit.EXO || p.capabilities.disableDamage || p.isEntityInvulnerable()) {
             return false;
+        }
+        if (src == com.sc.radiation.RadiationSC.DAMAGE || src == net.minecraft.util.DamageSource.wither) {
+            return false;                                  // radiation is the radiation shield's job, not the energy shield's
         }
         if (src.isExplosion() && active(p, ArmorFeature.EXPLOSION_PROOF)
                 && pay(p, ArmorFeature.EXPLOSION_PROOF, ArmorFeature.EXPLOSION_PROOF_COST)) {
@@ -593,11 +600,20 @@ public final class ArmorLogicSC {
         return true;
     }
 
+    /** Ticks between two dashes. */
+    public static final int DASH_COOLDOWN = 10;
+
     /** Exo leggings: a burst forward. */
     public static void dash(EntityPlayerMP p) {
+        NBTTagCompound data = p.getEntityData();
+        long now = p.worldObj.getTotalWorldTime();
+        if (now - data.getLong("scDashAt") < DASH_COOLDOWN && data.hasKey("scDashAt")) {
+            return;                                        // two keys on one press, or a client sending it every tick
+        }
         if (!active(p, ArmorFeature.DASH) || !pay(p, ArmorFeature.DASH, ArmorFeature.DASH_COST)) {
             return;
         }
+        data.setLong("scDashAt", now);
         Vec3 look = p.getLookVec();
         double len = Math.sqrt(look.xCoord * look.xCoord + look.zCoord * look.zCoord);
         if (len < 0.01) {

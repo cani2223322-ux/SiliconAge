@@ -55,6 +55,20 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         setTier(tier);
     }
 
+    /** A storage item's capacity: its tier and the Energy Storage upgrades it carries (getDrops' "UpgradesSC"). */
+    public static int capacityOf(Tier tier, net.minecraft.nbt.NBTTagCompound ups) {
+        int n = 0;
+        net.minecraft.nbt.NBTTagList list = ups == null ? null : ups.getTagList("Items", 10);
+        for (int k = 0; list != null && k < list.tagCount(); k++) {
+            ItemStack s = ItemStack.loadItemStackFromNBT(list.getCompoundTagAt(k));
+            if (s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == UpgradeType.ENERGY_STORAGE) {
+                n += s.stackSize;
+            }
+        }
+        long cap = capacityOf(tier) * (100L + (long) CAPACITY_PERCENT_PER_UPGRADE * Math.min(n, UpgradeType.MAX_EFFECTIVE)) / 100L;
+        return (int) Math.min(Integer.MAX_VALUE, cap);
+    }
+
     public static int capacityOf(Tier tier) {
         return com.sc.util.ConfigSC.scale(CAPACITY[tier.ordinal()], com.sc.util.ConfigSC.storageCapacity, 1);
     }
@@ -227,6 +241,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (switchedOn()) {                                          // off: no charging or emptying items either
             chargeRound();
             dischargeRound();
+        } else {
+            switchedOff();
         }
         if (worldObj.getTotalWorldTime() % 10 == 0) {
             int level = comparatorLevel();
@@ -274,6 +290,10 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     }
 
     /** One tick's charging: each open slot's item, at most one packet of the tier's voltage each. */
+    /** Called each tick while switched off (the charge pad puts its lit top out). */
+    protected void switchedOff() {
+    }
+
     protected void chargeRound() {
         boolean any = false;
         for (int k = 0; k < chargeSlots(); k++) {

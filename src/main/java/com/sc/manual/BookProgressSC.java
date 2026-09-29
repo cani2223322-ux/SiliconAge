@@ -118,8 +118,9 @@ public final class BookProgressSC {
     /** Every 2 s: a step's item in the inventory ticks the step. */
     public static void tick() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.thePlayer == null || ++ticks % 40 != 0) {
-            return;
+        if (mc.thePlayer == null || mc.theWorld == null || ++ticks % 40 != 0
+                || mc.isSingleplayer() && mc.getIntegratedServer() == null) {
+            return;                                   // loading / leaving: the world's key isn't known
         }
         load();
         String w = world();

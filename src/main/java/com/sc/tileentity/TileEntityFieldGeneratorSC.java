@@ -440,9 +440,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * Stops radiation round a point for a second: the first up field with its radiation shield on
      * round it that can pay takes the EU. false: no such field, or none could pay.
      */
-    public static boolean payRadiationAt(World world, double x, double y, double z, int eu) {
+    public static boolean payRadiationAt(World world, EntityPlayer p, double x, double y, double z, int eu) {
         for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
-            if (f.has(F_RADIATION) && f.fieldContains(x, y, z) && f.payRadiation(eu)) {
+            if (f.has(F_RADIATION) && f.allowed(p) && f.fieldContains(x, y, z) && f.payRadiation(eu)) {
                 return true;
             }
         }
@@ -557,6 +557,15 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
 
     public boolean isOwner(EntityPlayer p) {
         return !owner.isEmpty() && owner.equalsIgnoreCase(p.getCommandSenderName());
+    }
+
+    @Override
+    public boolean canItemCharge(EntityPlayer p) {
+        if (!allowed(p)) {
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.private", getOwner()));
+            return false;
+        }
+        return super.canItemCharge(p);
     }
 
     /** The owner, anyone on the access list - and everyone while the field has no owner. */
@@ -885,11 +894,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 member.nodePositions.clear();
                 member.active = false;
                 member.copySettings(masterTe);          // 6: an orphan later re-elected keeps the cluster's owner, not its own old one
+                // A member's own buffer is dead weight (only the master pays upkeep) - hand it over, taken
+                // out first: its storage upgrades held it, and moving them clamps the member's buffer.
+                int carried = member.removeEnergy(member.getEnergyStored());
                 member.handUpgradesTo(masterTe);        // a member has no screen - its upgrades move to the master
-                // A member's own buffer is dead weight (only the master pays upkeep) - hand it over.
-                // Only what fits: addEnergy caps at the buffer, so moving everything threw the rest away.
                 int room = masterTe.getMaxEnergyStored() - masterTe.getEnergyStored();
-                masterTe.addEnergy(member.removeEnergy(Math.min(room, member.getEnergyStored())));
+                masterTe.addEnergy(Math.min(room, carried));
                 member.changed();
             }
         }

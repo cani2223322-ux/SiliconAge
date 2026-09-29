@@ -30,7 +30,7 @@ import net.minecraftforge.common.util.ForgeDirection;
  *   one pays an upkeep, both keep their chunk loaded, and the crystal wears (~1% an hour).
  * The linked ends find each other through a registry of the loaded ones, by id.
  */
-public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInventory {
+public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.minecraft.inventory.ISidedInventory {
 
     public static final int TRANSMITTER = 0, RECEIVER = 1, QUANTUM = 2;
     public static final int SLOT_CRYSTAL = 0, SLOT_BATTERY = 1, SLOTS = 2;
@@ -57,7 +57,8 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
     private final ItemStack[] slots = new ItemStack[SLOTS];
     private ForgeChunkManager.Ticket ticket;
     // what the screen shows (synced by ContainerWirelessSC)
-    private int status = ST_NO_LINK, flow, flowWindow, lossPct, distance, receivedAt;
+    private int status = ST_NO_LINK, flow, flowWindow, lossPct, distance;
+    private long receivedAt;
     private long wearTicks;
     /** Last tick the pair worked (not saved); a translator holds its chunk for CHUNK_GRACE after that. */
     private long linkedAt = -1;
@@ -398,7 +399,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
         addEnergy(eu);
         flowWindow += eu;
         if (worldObj != null) {
-            receivedAt = (int) worldObj.getTotalWorldTime();
+            receivedAt = worldObj.getTotalWorldTime();
         }
         markDirty();
     }
@@ -701,6 +702,21 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements IInven
 
     @Override
     public void closeInventory() {
+    }
+
+    @Override
+    public int[] getAccessibleSlotsFromSide(int side) {
+        return kind == RECEIVER ? new int[0] : new int[]{SLOT_BATTERY};
+    }
+
+    @Override
+    public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        return slot == SLOT_BATTERY && slots[SLOT_BATTERY] == null && isItemValidForSlot(slot, stack);
+    }
+
+    @Override
+    public boolean canExtractItem(int slot, ItemStack stack, int side) {
+        return slot == SLOT_BATTERY && com.sc.item.BatteryFeedSC.chargeOf(stack) <= 0;       // an empty one out; never the crystal
     }
 
     @Override

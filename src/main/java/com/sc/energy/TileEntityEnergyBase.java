@@ -318,6 +318,14 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     }
 
     /** Sneak-click charging of a handheld item (ItemWeaponSC) straight out of this buffer. @return EU taken */
+    /**
+     * May this player charge an item from this block (sneak + right-click)? Not inside someone
+     * else's private field (the chat says whose); a field generator also checks its own access.
+     */
+    public boolean canItemCharge(net.minecraft.entity.player.EntityPlayer p) {
+        return !com.sc.ShieldEventHandler.privateFor(worldObj, p, xCoord, yCoord, zCoord);
+    }
+
     public int extractForItemCharging(int max) {
         return max <= 0 ? 0 : removeEnergy(max);
     }

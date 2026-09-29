@@ -2864,6 +2864,7 @@ sc.gui.xv.blanketleft=blanket: %s
 sc.gui.xv.helasts=helium lasts: %s
 sc.gui.xv.st.falling=Stability %d%% and falling: %d/s
 sc.gui.xv.tip.flow=Flow: %s mB/s
+sc.generator.tooltip.lit=The reactor is lit
 sc.gui.holo.washing=WASHING
 sc.gui.washer.per=A wash
 sc.gui.washer.left=Enough

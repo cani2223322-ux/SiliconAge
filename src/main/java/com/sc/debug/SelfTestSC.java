@@ -235,6 +235,7 @@ public final class SelfTestSC {
         com.sc.manual.BookEntry wafer = com.sc.manual.BookContent.entryFor(ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.SI_WAFER));
         boolean found = crusher != null && crusher.id.equals("machine.crusher") && xv != null && wafer != null && wafer.id.equals("silicon");
         int recipes = com.sc.manual.BookContent.recipes("wafer", 40).size();
+        com.sc.manual.BookContent.invalidate();
         check(bad.length() == 0 && found && recipes > 3 && all.size() > 80,
                 "book: " + all.size() + " articles in " + com.sc.manual.BookChapter.values().length + " chapters, items find their page " + found
                         + ", 'wafer' -> " + recipes + (bad.length() == 0 ? "" : " -> " + bad));

@@ -33,7 +33,8 @@ public class ItemBlockEnergyStorageSC extends ItemBlock {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         Tier tier = BlockEnergyStorageSC.tierFor(stack.getItemDamage());
         int stored = stack.hasTagCompound() ? stack.getTagCompound().getInteger("EnergySC") : 0;
-        list.add(Lang.tr("sc.storage.tooltip.charge", String.valueOf(stored), String.valueOf(TileEntityEnergyStorageSC.capacityOf(tier))));
+        list.add(Lang.tr("sc.storage.tooltip.charge", String.valueOf(stored), String.valueOf(TileEntityEnergyStorageSC.capacityOf(tier,
+                stack.hasTagCompound() ? stack.getTagCompound().getCompoundTag("UpgradesSC") : null))));
         if (stack.hasTagCompound() && stack.getTagCompound().hasKey("UpgradesSC")) {
             list.add(Lang.tr("sc.storage.tooltip.upgrades"));
         }

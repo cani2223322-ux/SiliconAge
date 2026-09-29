@@ -1105,8 +1105,8 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             return;
         }
         int ic2Tier = ic2.api.energy.EnergyNet.instance.getTierFromPower(stats.getVoltage());
-        if (ic2Tier > 0) {
-            ExplosionLogic.burnCableIfOvervolted(this, cable.tier, com.sc.energy.Tier.fromIc2Tier(ic2Tier));
+        if (ic2Tier > 0 && ic2Tier > cable.tier.toIc2Tier()) {
+            ExplosionLogic.burnCable(this);
         }
     }
 

@@ -141,7 +141,11 @@ public class ShieldEventHandler {
         if (f == null || f.allowed(p)) {
             return false;
         }
-        p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.private", f.getOwner()));
+        long now = w.getTotalWorldTime();
+        if (now - p.getEntityData().getLong("scPrivateMsg") >= 20 || now < p.getEntityData().getLong("scPrivateMsg")) {
+            p.getEntityData().setLong("scPrivateMsg", now);
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.private", f.getOwner()));
+        }
         return true;
     }
 

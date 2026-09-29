@@ -308,7 +308,7 @@ public final class RadiationSC {
         float left = level;
         int flags = 0;
         if (left > 0.01F) {
-            if (TileEntityFieldGeneratorSC.payRadiationAt(p.worldObj, p.posX, p.posY + 1.0, p.posZ, (int) Math.ceil(left * FIELD_EU_PER_LEVEL))) {
+            if (TileEntityFieldGeneratorSC.payRadiationAt(p.worldObj, p, p.posX, p.posY + 1.0, p.posZ, (int) Math.ceil(left * FIELD_EU_PER_LEVEL))) {
                 left = 0F;
                 flags |= F_FIELD;
             }

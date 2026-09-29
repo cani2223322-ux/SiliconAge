@@ -201,7 +201,7 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
                 : isEnabled(stack, DrillFeature.AREA_5X5) ? "5x5" : isEnabled(stack, DrillFeature.AREA_3X3) ? "3x3" : "1x1";
         if (isEnabled(stack, DrillFeature.SILK)) {
             mode += ", " + Lang.tr("sc.drillfn.silk");
-        } else if (isEnabled(stack, DrillFeature.FORTUNE)) {
+        } else if (isEnabled(stack, DrillFeature.FORTUNE) && type.fortune > 0) {
             mode += ", " + Lang.tr("sc.drillfn.fortune") + " " + Lang.tr("enchantment.level." + type.fortune);
         }
         list.add(Lang.tr(overheated(stack) ? "sc.tooltip.drill.statehot" : "sc.tooltip.drill.state", mode, heatPercent(stack)));
@@ -289,6 +289,9 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         if (player.isSneaking()) {
             if (te instanceof TileEntityEnergyBase) {
                 if (!world.isRemote) {
+                    if (!((TileEntityEnergyBase) te).canItemCharge(player)) {
+                        return true;
+                    }
                     int moved = ((TileEntityEnergyBase) te).extractForItemCharging(type.maxCharge - chargeOf(stack));
                     charge(stack, moved);
                     player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.weapon.charged", moved, chargeOf(stack), type.maxCharge));

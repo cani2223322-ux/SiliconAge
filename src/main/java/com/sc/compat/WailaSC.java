@@ -166,7 +166,7 @@ public class WailaSC implements IWailaDataProvider {
             tag.setInteger("scGen", g.getLastOutput());                  // what it makes right now - not its tier's voltage
             if (g.getGeneratorType().needsIgnition() && !g.isIgnited()) {
                 tag.setLong("scIgnition", g.getIgnitionEU());
-                tag.setLong("scIgnitionMax", g.getGeneratorType().ignitionThreshold());
+                tag.setLong("scIgnitionMax", g.ignitionNeed());
             }
         }
         if (te instanceof TileEntityTransformerSC) {

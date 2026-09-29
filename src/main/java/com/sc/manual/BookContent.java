@@ -60,7 +60,7 @@ public final class BookContent {
 
     /** Every article, in chapter order (built once per language). */
     public static synchronized List<BookEntry> all() {
-        String lang = Lang.tr("sc.book.lang");
+        String lang = Lang.tr("language.code") + "|" + Lang.tr("sc.book.lang");
         if (cache == null || !lang.equals(cacheLang)) {
             List<BookEntry> list = new ArrayList<BookEntry>();
             intro(list);
@@ -89,6 +89,11 @@ public final class BookContent {
             cacheLang = lang;
         }
         return cache;
+    }
+
+    /** Built again on the next use (the self-test builds it before other mods' recipes exist). */
+    public static synchronized void invalidate() {
+        cache = null;
     }
 
     public static List<BookEntry> chapter(BookChapter ch) {

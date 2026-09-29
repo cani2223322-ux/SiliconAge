@@ -283,6 +283,9 @@ public final class EnergyNetSC {
                         continue;
                     }
                     Integer oi = index.get(other);
+                    if (oi == null && seen.contains(other)) {
+                        continue;                     // another network's (one cut off at the size cap)
+                    }
                     if (oi == null) {
                         oi = net.cables.size();
                         index.put(other, oi);

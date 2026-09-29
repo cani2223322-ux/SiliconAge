@@ -80,7 +80,13 @@ public final class ArmorKeyBindsSC {
         }
         try {
             String[] p = v.split(":");
-            return new int[]{Integer.parseInt(p[0].trim()), Integer.parseInt(p[1].trim())};
+            int[] r = {Integer.parseInt(p[0].trim()), Integer.parseInt(p[1].trim())};
+            for (int k : r) {
+                if (k != 0 && !(k > 0 && k < 256) && !(k >= -100 && k < -84)) {
+                    return null;                           // no such key: Keyboard.isKeyDown would throw every tick
+                }
+            }
+            return r;
         } catch (NumberFormatException e) {
             return null;
         }

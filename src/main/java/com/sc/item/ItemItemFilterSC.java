@@ -66,7 +66,7 @@ public class ItemItemFilterSC extends Item {
         if (com.sc.util.TooltipSC.ctrl()) {
             com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.filter.howto"), "\u00a77");
         } else {
-            com.sc.util.TooltipSC.hintCtrl(list);
+            com.sc.util.TooltipSC.hintUse(list);
         }
     }
 

@@ -273,7 +273,7 @@ public final class DrillLogicSC {
         Block b = w.getBlock(x, y, z);
         int meta = w.getBlockMetadata(x, y, z);
         return !b.isAir(w, x, y, z) && !b.getMaterial().isLiquid() && b.getBlockHardness(w, x, y, z) >= 0
-                && w.getTileEntity(x, y, z) == null && ItemDrillSC.suits(b, meta);
+                && w.getTileEntity(x, y, z) == null && ItemDrillSC.suits(b, meta) && b.canHarvestBlock(p, meta);
     }
 
     /** The face of the block the player is looking at (for the area's plane). */

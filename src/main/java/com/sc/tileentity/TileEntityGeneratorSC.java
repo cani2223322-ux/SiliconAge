@@ -90,6 +90,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private double solidBurnTicks;
     /** The piece burning now: the ticks it gave, and what it was (item id << 16 | damage) - for the screen. */
     private int solidBurnTotal, solidBurnItem;
+    /** Went out overheated: not lit again before the heat is gone (saved - switching off mustn't skip it). */
+    private boolean coolingDown;
     private double fuelDebt, fuel2Debt;
     private int heat, ramp;
     /** Wind / thermo output worked out once a second; wind height and freedom, thermo pairs and dT - for the screen. */
@@ -451,7 +453,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     /** The screen's numbers: BIG_SYNC ints - see setBigClient for the layout. */
-    public static final int BIG_SYNC = 39;
+    public static final int BIG_SYNC = 40;
 
     public int[] bigSync() {
         int[] v = new int[BIG_SYNC];
@@ -476,6 +478,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         v[36] = (int) (capBottom >>> 25);
         v[37] = storeHaveK;
         v[38] = storeRoomK;
+        v[39] = burstTicks;
         return v;
     }
 
@@ -525,6 +528,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         capBottom = (v[35] & 0x1FFFFFFL) | (long) v[36] << 25;
         storeHaveK = v[37];
         storeRoomK = v[38];
+        burstTicks = v[39];
     }
 
     /** The port storages' charge and room, EU. */
@@ -1123,7 +1127,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     @Override
     public int demandedEnergy() {
-        if (isEnergySink() && powerOn) {
+        if (isEnergySink() && switchedOn()) {
             return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, ignitionNeed() - ignitionEU));
         }
         return 0;
@@ -1131,7 +1135,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     @Override
     public int receiveEnergy(ForgeDirection from, int voltage, int amount, boolean simulate) {
-        if (!isEnergySink() || !powerOn) {
+        if (!isEnergySink() || !switchedOn()) {
             return 0; // every other generator, and an already-lit reactor, never accepts energy
         }
         int room = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, ignitionNeed() - ignitionEU));
@@ -1165,6 +1169,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 scannedOnce = true;
                 scanBig();
             }
+        }
+        if (generatorType == GeneratorType.TOKAMAK && (!scannedOnce || worldObj.getTotalWorldTime() % 20 == 0)) {
+            scannedOnce = true;
+            sideInfo = tokamakMask();
+            structureOk = sideInfo == 0xFF;
         }
         if (bigRunning != (xv() && ignited)) {
             bigRunning = xv() && ignited;                      // (a tokamak saved by an older version in its old big mode)
@@ -1561,6 +1570,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             moduleLifeRemaining = MODULE_LIFE_TICKS;
         }
+        long ignitionNeedAtLighting = ignitionNeed();       // before the hydrogen that halved it is used up
         if (xv()) {                                     // lit inside its build (never without it)
             if (ignitionNeed() < generatorType.ignitionThreshold()) {
                 drainPorts("hydrogen", BIG_H2_START, true);                     // the hydrogen breakdown that halved the charge
@@ -1570,7 +1580,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             warnedAt = 100;
             bigEvent = 0;
         }
-        ignitionEU = 0;
+        ignitionEU = Math.max(0L, ignitionEU - ignitionNeedAtLighting);
         ignited = true;
         ramp = RAMP_FULL / 10;
         status = GeneratorStatus.GENERATING;
@@ -1581,6 +1591,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** At the heat limit the reactor goes out - no blast; it has to be lit again. */
     private void shutDown(GeneratorStatus why) {
+        coolingDown |= why == GeneratorStatus.OVERHEATED;
         bigRunning = false;
         ignited = false;
         ramp = 0;
@@ -1627,19 +1638,19 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     private void updateFusion() {
-        if (generatorType == GeneratorType.TOKAMAK && worldObj.getTotalWorldTime() % 20 == 0) {
-            sideInfo = tokamakMask();
-            structureOk = sideInfo == 0xFF;
-        }
         if (!ignited) {
             heat = Math.max(0, heat - 5);
+            if (xv() && bigFrozen) {
+                return;                                        // part of the build unloaded: wait
+            }
             if (generatorType == GeneratorType.TOKAMAK && !structureOk || xv() && !bigReady) {
                 status = GeneratorStatus.NO_STRUCTURE;          // the XV: the screen says what's missing
                 return;
             }
-            if (status == GeneratorStatus.OVERHEATED && heat > 0) {
-                return;                 // cools down before it can be lit again
+            if (coolingDown && heat > 0) {
+                return;                 // cools down before it can be lit again (switching off and on doesn't skip it)
             }
+            coolingDown = false;
             if (xv() && bigEvent == 0) {
                 chargeFromPorts();      // walled in: the charge comes out of the port storages
             }
@@ -1655,14 +1666,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             shutDown(GeneratorStatus.BLANKET_DEPLETED); // Li-Blanket Module spent (§18.2) - needs replacement, re-ignition required
             return;
         }
-        if (overheating()) {
-            return;
-        }
         if (bigRunning) {
             if (bigFrozen) {
                 return;                                        // part of the build unloaded: held as it is
             }
-            if (!bigTick()) {
+            if (!bigTick()) {                                  // helium, hydrogen, stability - full buffer or not
                 return;
             }
             moduleLifeRemaining -= BIG_BLANKET_WEAR - 1;           // the big mode wears the blanket twice as fast
@@ -1671,7 +1679,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 return;
             }
             moduleLifeRemaining--;
-            burnPlasma(600);
+            if (!overheating()) {
+                burnPlasma(600);
+            }
+            return;
+        }
+        if (overheating()) {
             return;
         }
         if (cellBurnRemaining <= 0) {
@@ -1736,9 +1749,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private void updateExo() {
         if (!ignited) {
             heat = Math.max(0, heat - 5);
-            if (status == GeneratorStatus.OVERHEATED && heat > 0) {
+            if (coolingDown && heat > 0) {
                 return;
             }
+            coolingDown = false;
             ignite();
             return;
         }
@@ -2020,6 +2034,23 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 nbt.setInteger("CellBurn", (int) cellBurnRemaining);
                 nbt.setInteger("Ramp", ramp);
             }
+            if (heat > 0) {
+                nbt.setInteger("Heat", heat);
+            }
+            if (coolingDown) {
+                nbt.setBoolean("CoolingDown", true);
+            }
+            if (xv()) {
+                if (stability < 100F) {
+                    nbt.setFloat("Stability", stability);
+                }
+                if (bigEvent != 0) {
+                    nbt.setInteger("BigEvent", bigEvent);
+                }
+                if (burstTicks > 0) {
+                    nbt.setInteger("Burst", burstTicks);
+                }
+            }
         }
         return nbt.hasNoTags() ? null : nbt;
     }
@@ -2044,6 +2075,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 moduleLifeRemaining = Math.max(0, Math.min(MODULE_LIFE_TICKS, nbt.getInteger("ModuleLife")));
                 cellBurnRemaining = Math.max(0, Math.min(CELL_BURN_TICKS, nbt.getInteger("CellBurn")));
                 ramp = Math.max(0, Math.min(RAMP_FULL, nbt.getInteger("Ramp")));
+            }
+            heat = Math.max(0, Math.min(HEAT_LIMIT, nbt.getInteger("Heat")));
+            coolingDown = nbt.getBoolean("CoolingDown");
+            if (xv()) {
+                stability = nbt.hasKey("Stability") ? Math.max(0F, Math.min(100F, nbt.getFloat("Stability"))) : 100F;
+                bigEvent = nbt.getInteger("BigEvent");
+                burstTicks = Math.max(0, Math.min(BURST_TICKS, nbt.getInteger("Burst")));
             }
             if (ignited != was) {
                 refreshEnergyNet();
@@ -2080,9 +2118,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         fuelDebt = nbt.getDouble("FuelDebt");
         fuel2Debt = nbt.getDouble("FuelDebt2");
         heat = nbt.getInteger("Heat");
+        solidBurnTotal = nbt.getInteger("SolidBurnTotal");
+        solidBurnItem = nbt.getInteger("SolidBurnItem");
         ramp = nbt.hasKey("Ramp") ? nbt.getInteger("Ramp") : ignited ? RAMP_FULL : 0;
         creativeTier = nbt.hasKey("CreativeTier") ? nbt.getInteger("CreativeTier") : Tier.values().length - 1;
         status = GeneratorStatus.byOrdinal(nbt.getInteger("Status"));
+        coolingDown = nbt.hasKey("CoolingDown") ? nbt.getBoolean("CoolingDown") : status == GeneratorStatus.OVERHEATED;
         for (int i = 0; i < SLOT_COUNT; i++) {
             slots[i] = null;
         }
@@ -2128,6 +2169,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         nbt.setDouble("FuelDebt", fuelDebt);
         nbt.setDouble("FuelDebt2", fuel2Debt);
         nbt.setInteger("Heat", heat);
+        nbt.setBoolean("CoolingDown", coolingDown);
+        nbt.setInteger("SolidBurnTotal", solidBurnTotal);
+        nbt.setInteger("SolidBurnItem", solidBurnItem);
         nbt.setInteger("Ramp", ramp);
         nbt.setInteger("CreativeTier", creativeTier);
         nbt.setInteger("Status", status.ordinal());

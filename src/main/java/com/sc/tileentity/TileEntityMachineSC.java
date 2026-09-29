@@ -508,6 +508,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     private final int[] smeltProgress = new int[2];
     private double storedXp;
     private boolean keepWarm;
+    /** What each stream was smelting last tick (-1: not seen since the load). */
+    private final long[] smeltKey = {-1, -1};
 
     /** What a furnace makes of this, or null. */
     public static ItemStack smeltResult(ItemStack in) {
@@ -525,7 +527,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         return known[0];
     }
 
-    private static final java.util.Map<Long, ItemStack[]> SMELT_CACHE = new java.util.HashMap<Long, ItemStack[]>();
+    private static final java.util.Map<Long, ItemStack[]> SMELT_CACHE = new java.util.concurrent.ConcurrentHashMap<Long, ItemStack[]>();
 
     /** The induction furnace's speed from its heat (x1 cold .. x3 hot); 1 for the electric one. */
     public double smeltSpeed() {
@@ -597,6 +599,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         boolean full = false;
         for (int i = 0; i < streams; i++) {
             ItemStack out = smeltResult(slots[i]);
+            long key = slots[i] == null ? 0 : ((long) net.minecraft.item.Item.getIdFromItem(slots[i].getItem()) << 32) | (slots[i].getItemDamage() & 0xFFFFFFFFL);
+            if (smeltKey[i] != -1 && smeltKey[i] != key) {
+                smeltProgress[i] = 0;                         // another item swapped in: it starts over
+            }
+            smeltKey[i] = key;
             if (out == null) {
                 smeltProgress[i] = 0;
                 continue;
@@ -1161,18 +1168,45 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             return 0;
         }
         if (tankA.getFluid() != null && tankA.getFluid().isFluidEqual(resource)) {
-            return tankA.fill(resource, doFill);
+            return safeFill(tankA, resource, doFill);
         }
         if (tankB.getFluid() != null && tankB.getFluid().isFluidEqual(resource)) {
-            return tankB.fill(resource, doFill);
+            return safeFill(tankB, resource, doFill);
         }
-        if (tankA.getFluid() == null) {
-            return tankA.fill(resource, doFill);
+        if (tankA.getFluid() == null && goesWith(resource, tankB.getFluid())) {
+            return safeFill(tankA, resource, doFill);
         }
-        if (tankB.getFluid() == null) {
-            return tankB.fill(resource, doFill);
+        if (tankB.getFluid() == null && goesWith(resource, tankA.getFluid())) {
+            return safeFill(tankB, resource, doFill);
         }
         return 0;
+    }
+
+    /**
+     * FluidTank.fill on a tank holding more than its capacity (Tank Extensions taken out) sets it
+     * down to the capacity - the rest just vanished. Such a tank takes nothing until used down.
+     */
+    public static int safeFill(FluidTank tank, FluidStack resource, boolean doFill) {
+        return tank.getFluidAmount() >= tank.getCapacity() ? 0 : tank.fill(resource, doFill);
+    }
+
+    /**
+     * A fluid for the empty input tank: only if some recipe takes it together with what the other
+     * tank holds - otherwise a pipe could park HCl beside Cl2 and jam the machine for good (the
+     * items have the same check, fitsSomeRecipe).
+     */
+    private boolean goesWith(FluidStack incoming, FluidStack other) {
+        if (other == null || other.getFluid() == null) {
+            return true;
+        }
+        for (MachineRecipe r : RecipeRegistry.recipesFor(machineType)) {
+            if (r.fluidInputA != null && r.fluidInputB != null
+                    && (r.fluidInputA.isFluidEqual(incoming) && r.fluidInputB.isFluidEqual(other)
+                    || r.fluidInputB.isFluidEqual(incoming) && r.fluidInputA.isFluidEqual(other))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

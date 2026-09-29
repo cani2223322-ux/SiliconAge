@@ -355,6 +355,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     /** Settings changed: start the area over. */
+    /** The area the cursor was walking (not saved: after a load the saved cursor is trusted). */
+    private int[] areaSeen;
+    /** A whole water body / lake was pumped this tick - one a tick (hundreds of block changes each). */
+    private boolean bodyPumped;
+
     private void resetCursor() {
         int[] a = area();
         layerY = a == null ? -1 : a[4];
@@ -564,13 +569,18 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return;
         }
         int[] a = area();
+        if (areaSeen != null && !java.util.Arrays.equals(a, areaSeen)) {
+            resetCursor();                                   // the area changed: the cursor meant another cell
+        }
+        areaSeen = a.clone();
         if (layerY < 0 || layerY > a[4]) {
             layerY = a[4];
             cursor = 0;
         }
         progress = Math.min(progress + blocksPerSecond() / 20.0, 16);
         int checks = 0, dug = 0;
-        while (progress >= 1 && checks < 512 && dug < 16) {
+        bodyPumped = false;
+        while (progress >= 1 && checks < 512 && dug < 16 && !bodyPumped) {
             if (layerY < a[5]) {
                 done = true;
                 running = false;
@@ -586,8 +596,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             int x = c[0], z = c[1], y = layerY;
             if (!worldObj.blockExists(x, y, z)) {
-                advance(a);
-                continue;
+                return;                                      // not loaded: wait for it rather than skip it for good
             }
             int verdict = judge(x, y, z);
             if (verdict == 1) {
@@ -910,6 +919,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
      * full tank: the Tank full setting (leave it / pause / destroy / make ice or obsidian).
      */
     private int pumpBody(int x0, int y0, int z0, Fluid fluid, boolean vein) {
+        bodyPumped = true;
         int[] a = area();
         int r = vein ? fluidVeinReach() : 0;
         java.util.ArrayDeque<int[]> open = new java.util.ArrayDeque<int[]>();
@@ -1994,7 +2004,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     @Override
     public int fill(ForgeDirection from, FluidStack resource, boolean doFill) {
-        return resource != null && resource.getFluid() == FluidRegistry.WATER ? water.fill(resource, doFill) : 0;
+        return resource != null && resource.getFluid() == FluidRegistry.WATER ? TileEntityMachineSC.safeFill(water, resource, doFill) : 0;
     }
 
     @Override

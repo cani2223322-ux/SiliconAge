@@ -35,6 +35,12 @@ import net.minecraftforge.fluids.IFluidContainerItem;
  */
 public class BlockTankSC extends Block {
 
+    /** An explosion's drop chance (1 / size) would lose the tank and all its fluid: always dropped. */
+    @Override
+    public void dropBlockAsItemWithChance(net.minecraft.world.World world, int x, int y, int z, int meta, float chance, int fortune) {
+        super.dropBlockAsItemWithChance(world, x, y, z, meta, 1.0F, fortune);
+    }
+
     public static final String[] TIER_NAMES = {"steel", "titanium", "tungsten", "superconductor"};
 
     private IIcon[] sides;

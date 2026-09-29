@@ -352,6 +352,9 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
             return false;
         }
         if (!world.isRemote) {
+            if (!((TileEntityEnergyBase) te).canItemCharge(player)) {
+                return true;
+            }
             int moved = ((TileEntityEnergyBase) te).extractForItemCharging(type.maxCharge - chargeOf(stack));
             charge(stack, moved);
             player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.weapon.charged", moved, chargeOf(stack), type.maxCharge));

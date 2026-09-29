@@ -29,6 +29,7 @@ public final class RecipeRegistry {
             RECIPES.put(recipe.type, list);
         }
         list.add(recipe);
+        INPUT_FLUIDS.remove(recipe.type);
     }
 
     /**
@@ -54,7 +55,10 @@ public final class RecipeRegistry {
                 // alumina in a Kiln, "rubber + 1 dust" (heat-resistant rubber) has to beat
                 // "4 dust" (ceramic package) - on total count alone it never ran again once
                 // automation had stocked 4+ dust.
-                int specificity = ingredientKinds(recipe) * 1000000 + totalRequiredCount(recipe);
+                // With both tanks full, "water + H2" (2050 mB) outranked "arsenic + H2" on the total -
+                // the solid ingredients present decide first, the total only between equals.
+                int specificity = ingredientKinds(recipe) * 1000000 + recipe.inputs.length * 100000
+                        + Math.min(99999, totalRequiredCount(recipe));
                 if (specificity > bestSpecificity) {
                     bestSpecificity = specificity;
                     best = recipe;
@@ -132,7 +136,15 @@ public final class RecipeRegistry {
         return fluid != null && inputFluids(type).contains(fluid.getName());
     }
 
+    private static final java.util.Map<MachineType, java.util.Set<String>> INPUT_FLUIDS =
+            new java.util.concurrent.ConcurrentHashMap<MachineType, java.util.Set<String>>();
+
+    /** Pipes ask every tick for every face - the set is built once per machine type (and again after a recipe is added). */
     private static java.util.Set<String> inputFluids(MachineType type) {
+        java.util.Set<String> known = INPUT_FLUIDS.get(type);
+        if (known != null) {
+            return known;
+        }
         java.util.Set<String> names = new java.util.HashSet<String>();
         for (MachineRecipe recipe : recipesFor(type)) {
             if (recipe.fluidInputA != null && recipe.fluidInputA.getFluid() != null) {
@@ -142,6 +154,7 @@ public final class RecipeRegistry {
                 names.add(recipe.fluidInputB.getFluid().getName());
             }
         }
+        INPUT_FLUIDS.put(type, names);
         return names;
     }
 

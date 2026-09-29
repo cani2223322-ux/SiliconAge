@@ -157,7 +157,8 @@ public class ItemWrenchSC extends Item {
             }
             return stack;
         }
-        if (!world.isRemote && tier == Tier.QUANTUM && modeOf(stack) == MODE_DISMANTLE) {
+        if (!world.isRemote && tier == Tier.QUANTUM && modeOf(stack) == MODE_DISMANTLE
+                && player.getEntityData().getLong("scWrenchAt") != world.getTotalWorldTime()) {   // not the click just used on a block
             MovingObjectPosition hit = lookedAt(world, player, REMOTE_RANGE);
             if (hit != null && hit.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
                     && dismantlable(world, hit.blockX, hit.blockY, hit.blockZ)) {
@@ -199,6 +200,7 @@ public class ItemWrenchSC extends Item {
                 return false;
             }
             dismantle(stack, player, world, x, y, z, tier.dismantleCost, -1);
+            player.getEntityData().setLong("scWrenchAt", world.getTotalWorldTime());
             return true;
         }
         if (mode == MODE_COPY) {

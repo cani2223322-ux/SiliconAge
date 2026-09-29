@@ -77,6 +77,9 @@ public final class ArmorNetSC {
         @Override
         public IMessage onMessage(Message msg, MessageContext ctx) {
             EntityPlayerMP p = ctx.getServerHandler().playerEntity;
+            if (p == null || p.isDead || p.getHealth() <= 0) {
+                return null;                               // on the death screen: nothing to act with
+            }
             switch (msg.action) {
                 case TOGGLE: {
                     ArmorFeature f = ArmorFeature.of(msg.feature);

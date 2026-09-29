@@ -49,7 +49,9 @@ public class ItemBlockGeneratorSC extends ItemBlock {
                 list.add(Lang.tr("sc.waila.fluid", fuel.getLocalizedName(), fuel.amount, TileEntityGeneratorSC.TANK_CAPACITY));
             }
         }
-        if (nbt.getBoolean("Ignited")) {
+        if (nbt.getBoolean("Ignited") && type.kind != GeneratorType.Kind.FUSION) {
+            list.add(Lang.tr("sc.generator.tooltip.lit"));                 // the Exo reactor has no blanket
+        } else if (nbt.getBoolean("Ignited")) {
             list.add(Lang.tr("sc.generator.tooltip.ignited",
                     (int) ((long) nbt.getInteger("ModuleLife") * 100 / TileEntityGeneratorSC.MODULE_LIFE_TICKS)));
         } else if (nbt.getLong("IgnitionEU") > 0) {

@@ -31,6 +31,14 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
         return "container.siliconage.chargePad";
     }
 
+    @Override
+    protected void switchedOff() {
+        if (active) {
+            active = false;
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
+    }
+
     /** Every EVERY ticks: one budget of voltage x EVERY for the slot first, then the players on top. */
     @Override
     protected void chargeRound() {

@@ -138,6 +138,9 @@ public class GuiBook extends GuiScreen {
     private void back() {
         if (!history.isEmpty()) {
             restore(history.pop());
+            if (searching()) {
+                listed = results(query);
+            }
             scrollListTo();
         }
     }
@@ -147,7 +150,7 @@ public class GuiBook extends GuiScreen {
             listScroll = 0;
             return;
         }
-        int i = BookContent.chapter(entry.chapter).indexOf(entry);
+        int i = (searching() ? listed : BookContent.chapter(entry.chapter)).indexOf(entry);
         int rows = Math.max(1, (bh - HEADER - 2 * PAD) / ROW);
         if (i >= 0 && (i < listScroll || i >= listScroll + rows)) {
             listScroll = Math.max(0, i - rows / 2);
@@ -173,12 +176,17 @@ public class GuiBook extends GuiScreen {
         bh = Math.min(height - 8, 280);
         bx = (width - bw) / 2;
         by = (height - bh) / 2;
-        search = new GuiTextField(fontRendererObj, bx + bw - 118, by + 4, 110, 11);
+        search = new GuiTextField(fontRendererObj, bx + bw - 120, by + 3, 115, 13);
         search.setMaxStringLength(32);
         search.setText(query);
         search.setEnableBackgroundDrawing(false);
         search.setTextColor(0xE6F0FA);
+        scrollListTo();
+        openedAt = System.currentTimeMillis();
     }
+
+    /** When the screen opened: the book key held a moment longer mustn't close it again or type into search. */
+    private long openedAt;
 
     @Override
     public void onGuiClosed() {
@@ -205,6 +213,14 @@ public class GuiBook extends GuiScreen {
             mc.displayGuiScreen(null);
             return;
         }
+        int bookKey = com.sc.client.BookKeySC.KEY_BOOK.getKeyCode();
+        if (key == bookKey && (Keyboard.isRepeatEvent() || System.currentTimeMillis() - openedAt < 400)) {
+            return;                                                   // the key that opened the book, still held
+        }
+        if (key == bookKey && !search.isFocused()) {
+            mc.displayGuiScreen(null);
+            return;
+        }
         if (!search.isFocused() && key == Keyboard.KEY_BACK) {
             back();
             return;
@@ -222,6 +238,12 @@ public class GuiBook extends GuiScreen {
             listScroll = 0;
             if (searching()) {
                 listed = results(query);
+                if (!listed.isEmpty() && (entry == null || !listed.contains(entry))) {
+                    show(listed.get(0));                              // 4: a search from the first page opens its best hit
+                }
+            }
+            if (query.isEmpty()) {
+                search.setFocused(false);                             // Backspace goes back again
             }
         }
     }
@@ -257,19 +279,28 @@ public class GuiBook extends GuiScreen {
     }
 
     private void act(Object a, int button) {
-        mc.getSoundHandler().playSound(net.minecraft.client.audio.PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.4F));
+        String before = state();
         if (a instanceof ItemStack) {
             if (button == 1 && cpw.mods.fml.common.Loader.isModLoaded("NotEnoughItems")) {
+                click();
                 com.sc.nei.NeiBookSC.recipes((ItemStack) a);
             } else {
                 openStack((ItemStack) a);
+                if (!state().equals(before)) {
+                    click();
+                }
             }
-        } else if (a instanceof BookChapter) {
+            return;
+        }
+        click();
+        if (a instanceof BookChapter) {
             go("c:" + ((BookChapter) a).name());
         } else if (a instanceof BookEntry) {
             BookEntry e = (BookEntry) a;
             if (searching()) {
-                history.push(state());
+                if (!state().equals("e:" + e.id)) {
+                    history.push(state());
+                }
                 show(e);
             } else {
                 go("e:" + e.id);
@@ -285,7 +316,22 @@ public class GuiBook extends GuiScreen {
         }
     }
 
+    private void click() {
+        mc.getSoundHandler().playSound(net.minecraft.client.audio.PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.4F));
+    }
+
+    /** While the page draws, its boxes are cut to the visible page (a half-scrolled row mustn't catch clicks on the header). */
+    private boolean drawingPage;
+
     private void click(int x, int y, int w, int h, Object action) {
+        if (drawingPage) {
+            int top = Math.max(y, ptop), bottom = Math.min(y + h, ptop + ph);
+            if (bottom <= top) {
+                return;
+            }
+            y = top;
+            h = bottom - top;
+        }
         clickBoxes.add(new int[]{x, y, w, h});
         clickActions.add(action);
     }
@@ -374,20 +420,25 @@ public class GuiBook extends GuiScreen {
         int top = by + HEADER + PAD, left = bx + PAD, w = bw - 2 * PAD;
         drawRect(left, top, left + w, by + bh - PAD, PAPER);
         BookChapter[] chs = BookChapter.values();
-        int cols = Math.max(1, Math.min(5, (w - 8) / 86)), tw = (w - 8 - (cols - 1) * 6) / cols, th = 52;
+        int cols = Math.max(1, Math.min(5, (w - 8) / 86)), tw = (w - 8 - (cols - 1) * 6) / cols;
+        int tileRows = (chs.length + cols - 1) / cols;
+        int th = Math.max(30, Math.min(52, (bh - HEADER - 2 * PAD - 52) / tileRows - 6));
+        boolean big = th >= 48;
         for (int i = 0; i < chs.length; i++) {
             int tx = left + 4 + (i % cols) * (tw + 6), ty = top + 6 + (i / cols) * (th + 6);
             boolean over = mx >= tx && my >= ty && mx < tx + tw && my < ty + th;
             drawRect(tx, ty, tx + tw, ty + th, over ? 0xFFE8D9B0 : 0xFFEADFC3);
             frame(tx, ty, tw, th, over ? 0xFF8A6A2A : PAPER_EDGE);
             GL11.glPushMatrix();
-            GL11.glTranslatef(tx + tw / 2F - 16, ty + 4, 0F);
-            GL11.glScalef(2F, 2F, 1F);
+            GL11.glTranslatef(tx + tw / 2F - (big ? 16 : 8), ty + 3, 0F);
+            if (big) {
+                GL11.glScalef(2F, 2F, 1F);
+            }
             item(BookContent.chapterIcon(chs[i]), 0, 0, false);
             GL11.glPopMatrix();
             String title = chs[i].title();
             float k = Math.min(1F, (tw - 4) / (float) fontRendererObj.getStringWidth(title));
-            fit(title, tx + (int) (tw - fontRendererObj.getStringWidth(title) * k) / 2, ty + 40, tw - 4, INK_HEAD, 1F);
+            fit(title, tx + (int) (tw - fontRendererObj.getStringWidth(title) * k) / 2, ty + th - 11, tw - 4, INK_HEAD, 1F);
             click(tx, ty, tw, th, chs[i]);
             if (over) {
                 hoverLines = lines(chs[i].title(), "§7" + chs[i].description(),
@@ -474,6 +525,7 @@ public class GuiBook extends GuiScreen {
         pageMax = Math.max(0, total - ph + 2 * PAD);
         pageScroll = Math.max(0, Math.min(pageMax, pageScroll));
         scissor(px + 1, ptop + 1, pw - 2, ph - 2);
+        drawingPage = true;
         int y = ptop + PAD - pageScroll;
         for (BookEl e : els) {
             int h = height(e, cw);
@@ -483,6 +535,7 @@ public class GuiBook extends GuiScreen {
             y += h;
         }
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        drawingPage = false;
         if (pageMax > 0) {
             int th = Math.max(10, ph * ph / (total + 2 * PAD));
             int ty = ptop + (ph - th) * pageScroll / pageMax;
@@ -564,7 +617,7 @@ public class GuiBook extends GuiScreen {
             int need = i == 0 ? 18 : 44;
             if (x + need > w && x > 0) {
                 rows++;
-                x = 18;
+                x = 18 + 44;
             } else {
                 x += need;
             }
@@ -976,7 +1029,7 @@ public class GuiBook extends GuiScreen {
         if (hover && (chapter == null && !searching() ? mx >= x && my >= y && mx < x + 16 && my < y + 16 : inPage(x, y, 16, 16))) {
             hoverStack = s;
         }
-        if (hover && chapter != null) {
+        if (hover && (chapter != null || searching())) {
             click(x, y, 16, 16, s);
         }
     }

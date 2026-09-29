@@ -82,7 +82,7 @@ public final class EnergySplitSC {
             }
             // the few EU the division left over, one each
             for (int i = 0; i < n && remaining > 0; i++) {
-                if (active[i] && out[i] < demand[i]) {
+                if (active[i] && out[i] > 0 && out[i] < demand[i]) {
                     out[i]++;
                     remaining--;
                 }

@@ -300,6 +300,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             return false;
         }
         if (!world.isRemote) {
+            if (!((TileEntityEnergyBase) te).canItemCharge(player)) {
+                return true;
+            }
             int moved = ((TileEntityEnergyBase) te).extractForItemCharging(cap() - chargeOf(stack));
             charge(stack, moved);
             player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.weapon.charged",

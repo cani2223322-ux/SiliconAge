@@ -56,7 +56,7 @@ public class ItemBlockTankSC extends ItemBlock {
         if (com.sc.util.TooltipSC.ctrl()) {
             com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tank.tooltip.howto"), "\u00a77");
         } else {
-            com.sc.util.TooltipSC.hintCtrl(list);
+            com.sc.util.TooltipSC.hintUse(list);
         }
     }
 }

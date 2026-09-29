@@ -659,7 +659,8 @@ public class GuiGeneratorSC extends GuiContainer {
 
     /** The plasma's heat at full power: 600, and 100 more for each Overdrive. */
     private int fusNormHeat() {
-        return 600 + 100 * generator.upgradeCount(com.sc.machine.UpgradeType.OVERDRIVE);
+        return 600 + 100 * generator.upgradeCount(com.sc.machine.UpgradeType.OVERDRIVE)
+                + (generator.isShielded() ? TileEntityGeneratorSC.SHIELDED_HEAT : 0);
     }
 
     private boolean fusHasBlanket() {

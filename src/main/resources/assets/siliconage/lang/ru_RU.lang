@@ -2864,6 +2864,7 @@ sc.gui.xv.blanketleft=бланкет: %s
 sc.gui.xv.helasts=гелия хватит: %s
 sc.gui.xv.st.falling=Стабильность %d%% и падает: %d/с
 sc.gui.xv.tip.flow=Поток: %s mB/с
+sc.generator.tooltip.lit=Реактор горит
 sc.gui.holo.washing=ПРОМЫВКА
 sc.gui.washer.per=За раз
 sc.gui.washer.left=Хватит

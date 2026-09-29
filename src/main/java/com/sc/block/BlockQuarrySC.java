@@ -116,8 +116,8 @@ public class BlockQuarrySC extends Block {
             if (stack.hasTagCompound()) {
                 q.readFromItem(stack.getTagCompound());
             }
-            if (placer instanceof EntityPlayer && q.getOwner().isEmpty()) {
-                q.setOwner(placer.getCommandSenderName());
+            if (placer instanceof EntityPlayer) {
+                q.setOwner(placer.getCommandSenderName());     // the placer owns it - not whoever the item came from
             }
         }
         world.markBlockForUpdate(x, y, z);
