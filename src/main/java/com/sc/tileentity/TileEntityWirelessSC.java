@@ -335,8 +335,9 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             tickTransmitter(time);
         } else if (kind == RECEIVER) {
             TileEntityWirelessSC p = partner();
-            status = p == null ? (partnerId == 0 ? ST_NO_LINK : ST_UNLOADED) : time - receivedAt < 40 ? ST_OK : ST_IDLE;
-            if (p != null) {
+            status = p == null ? (partnerId == 0 ? ST_NO_LINK : ST_UNLOADED)
+                    : p.worldObj != worldObj ? ST_OTHER_DIM : time - receivedAt < 40 ? ST_OK : ST_IDLE;
+            if (p != null && p.worldObj == worldObj) {       // no distance to a transmitter in another dimension
                 distance = (int) Math.sqrt(p.getDistanceFrom(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5));
                 lossPct = lossPct(distance, lower(getTier(), p.getTier()));
             }

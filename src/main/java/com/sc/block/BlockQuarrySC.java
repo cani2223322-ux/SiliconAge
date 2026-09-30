@@ -157,6 +157,15 @@ public class BlockQuarrySC extends Block {
         world.setBlockToAir(x, y, z);
     }
 
+    /**
+     * An explosion drops the block whole: its settings, charge, tanks and stored XP ride in the
+     * item, and the explosion's usual 1-in-size chance would have lost them with it.
+     */
+    @Override
+    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int meta, float chance, int fortune) {
+        super.dropBlockAsItemWithChance(world, x, y, z, meta, 1.0F, fortune);
+    }
+
     @Override
     public ArrayList<ItemStack> getDrops(World world, int x, int y, int z, int meta, int fortune) {
         ArrayList<ItemStack> drops = new ArrayList<ItemStack>();

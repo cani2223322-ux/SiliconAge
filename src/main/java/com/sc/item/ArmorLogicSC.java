@@ -610,15 +610,15 @@ public final class ArmorLogicSC {
         if (now - data.getLong("scDashAt") < DASH_COOLDOWN && data.hasKey("scDashAt")) {
             return;                                        // two keys on one press, or a client sending it every tick
         }
+        Vec3 look = p.getLookVec();
+        double len = Math.sqrt(look.xCoord * look.xCoord + look.zCoord * look.zCoord);
+        if (len < 0.01) {
+            return;                                        // straight up / down: no direction - nothing paid (it used to be)
+        }
         if (!active(p, ArmorFeature.DASH) || !pay(p, ArmorFeature.DASH, ArmorFeature.DASH_COST)) {
             return;
         }
         data.setLong("scDashAt", now);
-        Vec3 look = p.getLookVec();
-        double len = Math.sqrt(look.xCoord * look.xCoord + look.zCoord * look.zCoord);
-        if (len < 0.01) {
-            return;
-        }
         p.motionX = look.xCoord / len * 1.8;
         p.motionZ = look.zCoord / len * 1.8;
         p.motionY = Math.max(p.motionY, 0.35);

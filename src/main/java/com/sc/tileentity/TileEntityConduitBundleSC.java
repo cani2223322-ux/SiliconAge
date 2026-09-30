@@ -486,7 +486,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         }
         if (cable != null && Loader.isModLoaded(Reference.IC2_MODID)) {
             boolean powered = worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
-            if (lastPowered != null && lastPowered != powered) {
+            if (lastPowered == null || lastPowered != powered) {   // null: not known since loading - IC2 may hold the old state
                 for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
                     if (redstoneMode(ConduitKind.CABLE, dir) != RedstoneMode.ALWAYS) {
                         reregisterEnergy();      // a redstone-controlled side has switched

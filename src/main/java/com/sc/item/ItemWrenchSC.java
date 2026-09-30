@@ -262,6 +262,9 @@ public class ItemWrenchSC extends Item {
     private void dismantle(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int cost, int subHit) {
         Block block = world.getBlock(x, y, z);
         int meta = world.getBlockMetadata(x, y, z);
+        if (!world.canMineBlock(player, x, y, z)) {
+            return;                                       // spawn protection (the remote dismantle's click never met it)
+        }
         if (player instanceof EntityPlayerMP && net.minecraftforge.common.ForgeHooks.onBlockBreakEvent(world,
                 ((EntityPlayerMP) player).theItemInWorldManager.getGameType(), (EntityPlayerMP) player, x, y, z).isCanceled()) {
             return;

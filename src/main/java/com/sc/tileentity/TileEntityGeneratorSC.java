@@ -1073,6 +1073,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      */
     @Override
     public int packetsPerTick() {
+        if (generatorType == GeneratorType.CREATIVE) {
+            return 1;                    // one packet of the chosen tier a tick (its screen and lastOutput say so)
+        }
         int v = outputTier().getVoltage();
         return Math.max(1, Math.min(64, (ratedOutput() + v - 1) / v));
     }

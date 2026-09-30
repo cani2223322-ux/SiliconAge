@@ -474,7 +474,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (s == null) {
             return null;
         }
-        ItemStack out = s.splitStack(amount);
+        ItemStack out = s.splitStack(Math.min(amount, s.stackSize));   // never more than the slot holds
         if (s.stackSize <= 0) {
             setInventorySlotContents(slot, null);
         }

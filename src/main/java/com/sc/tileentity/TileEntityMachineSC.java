@@ -1299,6 +1299,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         MachineType[] types = MachineType.values();
         int typeOrdinal = nbt.getInteger("MachineType");
         machineType = types[typeOrdinal >= 0 && typeOrdinal < types.length ? typeOrdinal : 0];
+        // The tier always follows the type (as in setMachineType): super read "TierSC", which a
+        // machine saved without it (older worlds) had as 0 - an HV/EV machine came back LV.
+        setTier(machineType.tier);
         progressTicks = nbt.getInteger("Progress");
         heat = nbt.getInteger("Heat");
         smeltProgress[0] = nbt.getInteger("SmeltP0");

@@ -185,7 +185,8 @@ public final class DrillLogicSC {
             return out;                                           // sneaking, or a torch / log / grass clicked: just that one
         }
         World w = p.worldObj;
-        if (ItemDrillSC.isEnabled(drill, DrillFeature.VEIN) && isOre(norm(center), meta)) {
+        // an ore the drill can't harvest: just that one (the vein used to go too - broken with no drops)
+        if (ItemDrillSC.isEnabled(drill, DrillFeature.VEIN) && isOre(norm(center), meta) && center.canHarvestBlock(p, meta)) {
             Set<Long> seen = new LinkedHashSet<Long>();
             List<int[]> queue = new ArrayList<int[]>();
             queue.add(new int[]{x, y, z});
@@ -327,10 +328,18 @@ public final class DrillLogicSC {
                 return true;
             }
             if (!first) {                                         // the clicked block's event vanilla has fired already
+                // paid for and not spawn-protected first: the event already tells the client the block is gone,
+                // and a block then left standing stayed a ghost (air) on the client
+                if (!canPay(p, drill, eu)) {
+                    return false;
+                }
+                if (!w.canMineBlock(p, x, y, z)) {
+                    return true;                                  // spawn protection - skip it, go on
+                }
                 net.minecraftforge.event.world.BlockEvent.BreakEvent ev = net.minecraftforge.common.ForgeHooks.onBlockBreakEvent(
                         w, p.theItemInWorldManager.getGameType(), p, x, y, z);
-                if (ev.isCanceled() || !w.canMineBlock(p, x, y, z)) {
-                    return true;                                  // protected (a mod's claim, spawn) - skip it, go on
+                if (ev.isCanceled()) {
+                    return true;                                  // protected (a mod's claim) - skip it, go on
                 }
             }
             if (!pay(p, drill, eu)) {

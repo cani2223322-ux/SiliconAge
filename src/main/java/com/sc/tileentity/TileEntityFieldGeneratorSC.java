@@ -608,7 +608,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
         if (e instanceof net.minecraft.entity.IEntityOwnable) {
             String tamer = ((net.minecraft.entity.IEntityOwnable) e).func_152113_b();
-            if (tamer != null && !tamer.isEmpty() && allowedName(tamer)) {
+            // 1.7.10 keeps the tamer's UUID here, not the name - look the name up (the access list holds names)
+            if (tamer != null && !tamer.isEmpty() && (allowedName(tamer) || allowedName(tamerName(tamer)))) {
                 return false;                       // our own side's pet
             }
         }
@@ -616,6 +617,20 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return e instanceof IMob;
         }
         return true;
+    }
+
+    /** A pet owner's name from the server's profile cache by the UUID the pet keeps, or null. */
+    private static String tamerName(String uuid) {
+        net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
+        if (server == null) {
+            return null;
+        }
+        try {
+            com.mojang.authlib.GameProfile g = server.func_152358_ax().func_152652_a(java.util.UUID.fromString(uuid));
+            return g == null ? null : g.getName();
+        } catch (IllegalArgumentException e) {
+            return null;                            // an old save's name, not a UUID
+        }
     }
 
     /** A player the field pushes out: a stranger to a private field set to push them (the Access tab). */
@@ -899,7 +914,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 int carried = member.removeEnergy(member.getEnergyStored());
                 member.handUpgradesTo(masterTe);        // a member has no screen - its upgrades move to the master
                 int room = masterTe.getMaxEnergyStored() - masterTe.getEnergyStored();
-                masterTe.addEnergy(Math.min(room, carried));
+                int given = Math.max(0, Math.min(room, carried));
+                masterTe.addEnergy(given);
+                member.addEnergy(carried - given);      // what the master can't take stays in the node (was lost)
                 member.changed();
             }
         }

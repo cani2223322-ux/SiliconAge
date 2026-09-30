@@ -624,10 +624,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                     advance(a);
                     continue;
                 }
+                removeEnergy(cost);
             } else {
+                removeEnergy(cost);                          // paid first: the vein and the fluid guard spend after it
                 dug += mine(x, y, z, block);
             }
-            removeEnergy(cost);
             lastCost = cost;
             progress -= 1;
             dug++;
@@ -1251,9 +1252,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         int meta = worldObj.getBlockMetadata(x, y, z);
         List<ItemStack> drops = new ArrayList<ItemStack>();
         net.minecraftforge.common.util.FakePlayer fake = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((WorldServer) worldObj);
-        if (silk() && block.canSilkHarvest(worldObj, fake, x, y, z, meta) && Item.getItemFromBlock(block) != null) {
-            Item item = Item.getItemFromBlock(block);
-            drops.add(new ItemStack(item, 1, item.getHasSubtypes() ? meta : 0));
+        ItemStack silked = silk() && block.canSilkHarvest(worldObj, fake, x, y, z, meta) ? silkStack(block, meta) : null;
+        if (silked != null) {
+            drops.add(silked);
         } else {
             drops.addAll(block.getDrops(worldObj, x, y, z, meta, fortune()));
         }
@@ -1291,6 +1292,25 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         markDirty();
+    }
+
+    private static java.lang.reflect.Method stackedBlock;
+
+    /**
+     * What silk touch gives, as a player's pickaxe would (Block.createStackedBlock): a sideways log
+     * is a plain log, a top slab a slab, lit redstone ore the ore - not the raw metadata. null: none.
+     */
+    private static ItemStack silkStack(Block block, int meta) {
+        try {
+            if (stackedBlock == null) {
+                stackedBlock = cpw.mods.fml.relauncher.ReflectionHelper.<Block>findMethod(Block.class, null,
+                        new String[]{"createStackedBlock", "func_149644_j"}, int.class);
+            }
+            return (ItemStack) stackedBlock.invoke(block, meta);
+        } catch (Exception e) {
+            Item item = Item.getItemFromBlock(block);
+            return item == null ? null : new ItemStack(item, 1, item.getHasSubtypes() ? meta : 0);
+        }
     }
 
     /** Crushing, washing, then the centrifuge - the machines' own recipes, one item at a time. */
@@ -1406,6 +1426,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             if (outSide >= 0 && d.ordinal() != outSide) {
                 continue;
             }
+            if (!worldObj.blockExists(xCoord + d.offsetX, yCoord + d.offsetY, zCoord + d.offsetZ)) {
+                continue;                                  // don't load the neighbour's chunk every tick
+            }
             TileEntity te = worldObj.getTileEntity(xCoord + d.offsetX, yCoord + d.offsetY, zCoord + d.offsetZ);
             if (!(te instanceof IInventory) || te instanceof TileEntityQuarrySC) {
                 continue;
@@ -1420,8 +1443,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                             slots[i].stackSize = left;
                         }
                         markDirty();
+                        break;                             // one stack a tick; one it won't take doesn't block the rest
                     }
-                    break;
                 }
             }
         }
@@ -1898,8 +1921,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
             }
         }
-        if (slot == SLOT_SCANNER) {
-            clearScan();
+        if (slot == SLOT_SCANNER && worldObj != null && !worldObj.isRemote) {
+            clearScan();                                   // not on the client: the screen's slot sync would wipe the counts it was sent
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
         }
     }
 
