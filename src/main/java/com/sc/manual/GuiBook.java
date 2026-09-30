@@ -214,6 +214,9 @@ public class GuiBook extends GuiScreen {
             return;
         }
         int bookKey = com.sc.client.BookKeySC.KEY_BOOK.getKeyCode();
+        if (bookKey == Keyboard.KEY_NONE) {
+            bookKey = Integer.MIN_VALUE;                              // unbound: a letter with no key code must not close the book
+        }
         if (key == bookKey && (Keyboard.isRepeatEvent() || System.currentTimeMillis() - openedAt < 400)) {
             return;                                                   // the key that opened the book, still held
         }

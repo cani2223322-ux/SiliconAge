@@ -926,7 +926,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         java.util.ArrayDeque<int[]> open = new java.util.ArrayDeque<int[]>();
         java.util.Set<Long> seen = new java.util.HashSet<Long>();
         open.add(new int[]{x0, y0, z0});
-        seen.add(((long) x0 << 36) ^ ((long) y0 << 24) ^ z0);
+        seen.add(posKey(x0, y0, z0));
         int taken = 0, visits = 0;
         while (!open.isEmpty() && taken < WATER_BODY_MAX && visits < WATER_BODY_MAX * 8) {
             int[] c = open.poll();
@@ -977,7 +977,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                         || ny > a[4] + r || ny < Math.max(1, a[5] - r))) {
                     continue;
                 }
-                if (!worldObj.blockExists(nx, ny, nz) || !seen.add(((long) nx << 36) ^ ((long) ny << 24) ^ nz)) {
+                if (!worldObj.blockExists(nx, ny, nz) || !seen.add(posKey(nx, ny, nz))) {
                     continue;
                 }
                 open.add(new int[]{nx, ny, nz});
@@ -1200,7 +1200,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 for (int dy = -1; dy <= 1; dy++) {
                     for (int dz = -1; dz <= 1; dz++) {
                         int x = c[0] + dx, y = c[1] + dy, z = c[2] + dz;
-                        if (y < 1 || y > 255 || Math.abs(x - x0) > 32 || Math.abs(z - z0) > 32 || !seen.add(((long) x << 36) ^ ((long) y << 24) ^ z)) {
+                        if (y < 1 || y > 255 || Math.abs(x - x0) > 32 || Math.abs(z - z0) > 32 || !seen.add(posKey(x, y, z))) {
                             continue;
                         }
                         if (!worldObj.blockExists(x, y, z) || worldObj.getBlock(x, y, z) != ore || worldObj.getBlockMetadata(x, y, z) != meta) {
@@ -1292,6 +1292,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         markDirty();
+    }
+
+    /** A block position packed into a long (26 bits x, 12 y, 26 z: the whole +-30M world without clashes). */
+    private static long posKey(int x, int y, int z) {
+        return ((long) (x & 0x3FFFFFF) << 38) | ((long) (y & 0xFFF) << 26) | (z & 0x3FFFFFF);
     }
 
     private static java.lang.reflect.Method stackedBlock;

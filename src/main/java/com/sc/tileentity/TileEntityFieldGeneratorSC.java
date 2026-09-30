@@ -914,7 +914,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 masterTe.nodePositions.add(pos);
             }
             TileEntityFieldGeneratorSC member = fieldGeneratorAt(world, pos);
-            if (member != null) {
+            if (member != null && member != masterTe) {  // a stale list naming the master itself: it stays master
                 member.master = false;
                 member.masterPos = masterCoord.clone();
                 member.nodePositions.clear();
@@ -1122,14 +1122,15 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         int upkeep = upkeepPerTick();
         boolean wasActive = active;
         // down, it restarts only with a second's upkeep in hand - else a trickle of power flicked it on and off
-        if (!rsOff && getEnergyStored() >= (active ? upkeep : upkeep * 20)) {
+        // (never more than the buffer holds - a big field under a high fieldUpkeep could never come up again)
+        if (!rsOff && getEnergyStored() >= (active ? upkeep : (int) Math.min(upkeep * 20L, getMaxEnergyStored()))) {
             removeEnergy(upkeep);
             active = true;
             // the rain shield: paid on top, and the first thing to go when the energy runs short
             int rainEu = has(F_RAIN) && rainOverField()
                     ? upkeep * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100 : 0;
             // back on only with a second's worth in hand - else a trickle flicked it every few ticks
-            boolean shield = rainEu > 0 && getEnergyStored() >= (rainShield ? rainEu : rainEu * 20);
+            boolean shield = rainEu > 0 && getEnergyStored() >= (rainShield ? rainEu : (int) Math.min(rainEu * 20L, getMaxEnergyStored()));
             if (shield) {
                 removeEnergy(rainEu);
             }

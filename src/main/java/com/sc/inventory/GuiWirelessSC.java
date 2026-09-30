@@ -76,6 +76,9 @@ public class GuiWirelessSC extends GuiContainer {
             } else if (b.id == ContainerWirelessSC.BTN_ROLE) {
                 b.displayString = Lang.tr(te.isGiving() ? "sc.wl.btn.give" : "sc.wl.btn.take");
                 b.enabled = may;
+            } else if (b.id == ContainerWirelessSC.BTN_POWER || b.id == ContainerWirelessSC.BTN_REDSTONE
+                    || b.id == ContainerWirelessSC.BTN_BATTERY_MODE) {
+                b.enabled = may;                                     // as the quarry's and the field's: the server refuses a stranger anyway
             }
         }
     }
