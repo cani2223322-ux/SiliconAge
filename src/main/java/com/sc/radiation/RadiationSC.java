@@ -426,6 +426,7 @@ public final class RadiationSC {
     /** Server stop (and tests): forget every source. */
     public static void clearSources() {
         SOURCES.clear();
+        LEAD_BLOCKS.clear();          // keyed by block id - the next world may number its blocks differently
     }
 
     /** A dimension unloads: its sources go. */

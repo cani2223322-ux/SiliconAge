@@ -103,7 +103,7 @@ public final class DrillLogicSC {
             p.getEntityData().setLong(DIG_AT, p.worldObj.getTotalWorldTime());
         }
         if (ItemDrillSC.overheated(drill) || !canPay(p, drill, t.euPerBlock)) {
-            return 0.5F;
+            return Math.min(speed, 0.5F);
         }
         if (ItemDrillSC.isEnabled(drill, DrillFeature.ECO)) {
             speed /= 2;

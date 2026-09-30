@@ -37,7 +37,7 @@ public class BatteryElectricManagerSC implements IElectricItemManager {
             return 0;
         }
         double limit = ignoreTransferLimit ? amount : Math.min(amount, ItemBatterySC.rateOf(stack));
-        long moved = (long) Math.max(0, Math.min(ItemBatterySC.chargeOf(stack), Math.ceil(limit)));
+        long moved = (long) Math.max(0, Math.min(ItemBatterySC.chargeOf(stack), Math.floor(limit)));   // never more than asked
         if (!simulate && moved > 0) {
             ItemBatterySC.setCharge(stack, ItemBatterySC.chargeOf(stack) - moved);
         }

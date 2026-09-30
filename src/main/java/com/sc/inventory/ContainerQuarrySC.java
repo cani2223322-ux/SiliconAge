@@ -64,7 +64,13 @@ public class ContainerQuarrySC extends Container {
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + TOP + 58));
         }
-        addSlotToContainer(new SlotBatterySC(quarry, TileEntityQuarrySC.SLOT_BATTERY, BATTERY_X, BATTERY_Y + TOP));   // last: every tab
+        final TileEntityQuarrySC q = quarry;
+        addSlotToContainer(new SlotBatterySC(quarry, TileEntityQuarrySC.SLOT_BATTERY, BATTERY_X, BATTERY_Y + TOP) {   // last: every tab
+            @Override
+            public boolean canTakeStack(EntityPlayer player) {
+                return q.allowed(player);           // a stranger's double-click (mode 6) doesn't gather it either
+            }
+        });
         shownX = new int[inventorySlots.size()];
         group = new int[inventorySlots.size()];
         for (int i = 0; i < shownX.length; i++) {
@@ -283,6 +289,20 @@ public class ContainerQuarrySC extends Container {
         @Override
         public boolean canTakeStack(EntityPlayer player) {
             return quarry.allowed(player);
+        }
+
+        /**
+         * A module topped up in place (a click onto the stack, SlotMergeSC's shift-click) only grows
+         * stackSize - route it through the quarry so the frame / zone reach the other players too.
+         */
+        @Override
+        public void onSlotChanged() {
+            int i = getSlotIndex();
+            if (i >= TileEntityQuarrySC.FIRST_UPGRADE && i < TileEntityQuarrySC.FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES) {
+                quarry.setInventorySlotContents(i, getStack());
+            } else {
+                super.onSlotChanged();
+            }
         }
     }
 }

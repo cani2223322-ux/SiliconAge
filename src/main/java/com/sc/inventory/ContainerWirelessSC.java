@@ -36,11 +36,21 @@ public class ContainerWirelessSC extends Container {
                 public int getSlotStackLimit() {
                     return 1;
                 }
+
+                @Override
+                public boolean canTakeStack(EntityPlayer player) {
+                    return te.allowed(player);
+                }
             });
         }
         if (te.getKind() != TileEntityWirelessSC.RECEIVER) {
             addSlotToContainer(new SlotBatterySC(te, TileEntityWirelessSC.SLOT_BATTERY,
-                    SlotBatterySC.itemX(GuiBigSC.GAUGE_X), SlotBatterySC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)));
+                    SlotBatterySC.itemX(GuiBigSC.GAUGE_X), SlotBatterySC.itemY(GuiBigSC.GAUGE_Y + GuiBigSC.GAUGE_H)) {
+                @Override
+                public boolean canTakeStack(EntityPlayer player) {
+                    return te.allowed(player);      // a stranger's double-click (mode 6) doesn't gather it either
+                }
+            });
         }
         tileSlots = inventorySlots.size();
         for (int row = 0; row < 3; row++) {

@@ -285,8 +285,9 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         }
         int room = Math.max(0, getMaxEnergyStored() - energyStored);
         int accepted = Math.max(0, Math.min(room, amount));
-        if (!simulate) {
+        if (!simulate && accepted > 0) {
             energyStored += accepted;
+            energyChanged();
         }
         return accepted;
     }
@@ -307,14 +308,39 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     }
 
     protected void addEnergy(int amount) {
+        int before = energyStored;
         energyStored = (int) Math.max(0L, Math.min(getMaxEnergyStored(), (long) energyStored + amount));
+        if (energyStored != before) {
+            energyChanged();
+        }
     }
 
     /** For subclasses (consuming machines) spending their own buffer on an operation. */
     protected int removeEnergy(int amount) {
         int removed = Math.min(energyStored, amount);
         energyStored -= removed;
+        if (removed != 0) {
+            energyChanged();
+        }
         return removed;
+    }
+
+    /** World tick the chunk was last told it has something to save (energyChanged). */
+    private long lastChunkMark = -1;
+
+    /**
+     * The buffer changes without markDirty(): tell the chunk it has something to save (once a tick
+     * at most) - else a chunk with no entity in it isn't written on server stop / autosave and the
+     * buffer comes back as it was at the last save.
+     */
+    private void energyChanged() {
+        if (worldObj != null && !worldObj.isRemote) {
+            long now = worldObj.getTotalWorldTime();
+            if (now != lastChunkMark) {
+                lastChunkMark = now;
+                worldObj.markTileEntityChunkModified(xCoord, yCoord, zCoord, this);
+            }
+        }
     }
 
     /** Sneak-click charging of a handheld item (ItemWeaponSC) straight out of this buffer. @return EU taken */

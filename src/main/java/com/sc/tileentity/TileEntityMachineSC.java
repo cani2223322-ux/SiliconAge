@@ -289,6 +289,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     public static final String ITEM_UPGRADES_KEY = "UpgradesSC";
     /** Set once the upgrades went into the dropped item, so breakBlock doesn't drop them loose too. */
     private boolean upgradesInItem;
+    /** World tick upgradesForItem() ran in: a getDrops() from another tick (another mod asking) mustn't stick. */
+    private long upgradesInItemTick = -1;
 
     /**
      * The upgrade slots as an item NBT compound (null when empty): a machine placed on a live line
@@ -305,6 +307,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             }
         }
         upgradesInItem = list.tagCount() > 0;
+        upgradesInItemTick = worldObj != null ? worldObj.getTotalWorldTime() : -1;
         if (!upgradesInItem) {
             return null;
         }
@@ -315,7 +318,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
 
     /** Whether breakBlock should leave the upgrade slots alone (they're in the dropped item). */
     public boolean upgradesInItem() {
-        return upgradesInItem;
+        return upgradesInItem && (worldObj == null || upgradesInItemTick == worldObj.getTotalWorldTime());
     }
 
     /** Puts back what upgradesForItem() saved (on placement, before the first energy tick). */

@@ -28,6 +28,11 @@ public final class Ic2LoadQueueSC {
         PENDING.add(te);
     }
 
+    /** Server stopped: drop tiles of the old world (they would keep it in memory until the next server ticks). */
+    public static void clear() {
+        PENDING.clear();
+    }
+
     public static void cancel(TileEntity te) {
         PENDING.remove(te);
     }

@@ -568,6 +568,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return super.canItemCharge(p);
     }
 
+    /** Sneak-click charging keeps what wireless charging keeps: two seconds of upkeep and the set reserve. */
+    @Override
+    public int extractForItemCharging(int max) {
+        if (!master) {
+            return super.extractForItemCharging(max);     // a member's buffer is dead weight (only the master pays upkeep)
+        }
+        int spare = Math.min(getEnergyStored() - upkeepPerTick() * 40,
+                getEnergyStored() - (int) ((long) getMaxEnergyStored() * chargeReserve / 100));
+        return super.extractForItemCharging(Math.min(max, spare));
+    }
+
     /** The owner, anyone on the access list - and everyone while the field has no owner. */
     public boolean allowed(EntityPlayer p) {
         return owner.isEmpty() || isOwner(p) || access.contains(p.getCommandSenderName().toLowerCase(java.util.Locale.ROOT));

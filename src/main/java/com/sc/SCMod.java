@@ -113,6 +113,7 @@ public class SCMod {
     public void serverStopped(cpw.mods.fml.common.event.FMLServerStoppedEvent event) {
         com.sc.tileentity.TileEntityWirelessSC.forgetWorld(null);
         com.sc.radiation.RadiationSC.clearSources();
+        com.sc.energy.Ic2LoadQueueSC.clear();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */

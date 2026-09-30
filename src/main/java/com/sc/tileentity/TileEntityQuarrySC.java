@@ -1306,7 +1306,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 stackedBlock = cpw.mods.fml.relauncher.ReflectionHelper.<Block>findMethod(Block.class, null,
                         new String[]{"createStackedBlock", "func_149644_j"}, int.class);
             }
-            return (ItemStack) stackedBlock.invoke(block, meta);
+            ItemStack s = (ItemStack) stackedBlock.invoke(block, meta);
+            return s == null || s.getItem() == null ? null : s;   // a block with no item: fall back to getDrops
         } catch (Exception e) {
             Item item = Item.getItemFromBlock(block);
             return item == null ? null : new ItemStack(item, 1, item.getHasSubtypes() ? meta : 0);

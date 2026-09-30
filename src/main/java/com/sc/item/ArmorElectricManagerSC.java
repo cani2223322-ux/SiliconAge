@@ -73,7 +73,7 @@ public class ArmorElectricManagerSC implements IElectricItemManager {
             return 0;
         }
         double limit = ignoreTransferLimit ? amount : Math.min(amount, item.getTransferLimit(stack));
-        int moved = (int) Math.max(0, Math.min(stored(stack), Math.ceil(limit)));
+        int moved = (int) Math.max(0, Math.min(stored(stack), Math.floor(limit)));   // never more than asked
         if (!simulate && moved > 0) {
             take(stack, moved);
         }

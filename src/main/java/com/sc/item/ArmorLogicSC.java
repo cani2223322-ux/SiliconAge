@@ -198,13 +198,14 @@ public final class ArmorLogicSC {
             if (!p.capabilities.isCreativeMode) {
                 p.capabilities.allowFlying = false;
                 p.capabilities.isFlying = false;
-                setFlySpeed(p, VANILLA_FLY_SPEED);
-                p.sendPlayerAbilities();
             }
+            // in creative too: the Quantum's half speed is saved with the player and stayed for good
+            setFlySpeed(p, VANILLA_FLY_SPEED);
+            p.sendPlayerAbilities();
         }
-        if (can && !p.capabilities.isCreativeMode) {
-            // the Quantum chestplate flies at half the speed, the Exo one as in creative
-            float speed = suitOf(piece(p, 1)) == ArmorSuit.EXO ? VANILLA_FLY_SPEED : QUANTUM_FLY_SPEED;
+        if (can) {
+            // the Quantum chestplate flies at half the speed, the Exo one (and creative) as in creative
+            float speed = p.capabilities.isCreativeMode || suitOf(piece(p, 1)) == ArmorSuit.EXO ? VANILLA_FLY_SPEED : QUANTUM_FLY_SPEED;
             if (Math.abs(p.capabilities.getFlySpeed() - speed) > 1e-4) {
                 setFlySpeed(p, speed);
                 p.sendPlayerAbilities();          // the client takes its fly speed from this packet
@@ -289,7 +290,11 @@ public final class ArmorLogicSC {
             heat += ArmorFeature.NIGHT_VISION.heat;
         } else {
             PotionEffect nv = p.getActivePotionEffect(Potion.nightVision);
-            if (nv != null && nv.getIsAmbient() && nv.getDuration() <= 260) {
+            ItemStack chest = piece(p, 1);
+            boolean sensorChip = chest != null && chest.hasTagCompound() && !overheated(p)
+                    && chest.getTagCompound().getCompoundTag("ChipsSC").hasKey(com.sc.util.ChipType.SENSOR.name());
+            // (a running Sensor chip gives the same effect right after - it was taken off and put back every second)
+            if (nv != null && nv.getIsAmbient() && nv.getDuration() <= 260 && !sensorChip) {
                 p.removePotionEffect(Potion.nightVision.id);      // ours - switched off or out of charge
             }
         }

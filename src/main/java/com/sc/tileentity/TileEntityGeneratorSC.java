@@ -755,7 +755,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private int portAmount(String fluid) {
         int sum = 0;
         for (int[] p : tankPorts) {
-            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            net.minecraft.tileentity.TileEntity te = worldObj.blockExists(p[0], p[1], p[2]) ? worldObj.getTileEntity(p[0], p[1], p[2]) : null;
             if (te instanceof TileEntityTankSC) {
                 FluidStack f = ((TileEntityTankSC) te).getTank().getFluid();
                 if (f != null && f.getFluid() != null && f.getFluid().getName().equals(fluid)) {
@@ -776,7 +776,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         int left = mb;
         for (int[] p : tankPorts) {
-            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            net.minecraft.tileentity.TileEntity te = worldObj.blockExists(p[0], p[1], p[2]) ? worldObj.getTileEntity(p[0], p[1], p[2]) : null;
             if (left > 0 && te instanceof TileEntityTankSC) {
                 FluidTank t = ((TileEntityTankSC) te).getTank();
                 FluidStack f = t.getFluid();
@@ -929,6 +929,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (need <= 0) {
                 return;
             }
+            if (!worldObj.blockExists(p[0], p[1], p[2])) {
+                continue;                                     // unloaded since the last scan: not loaded for this
+            }
             net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
             if (te instanceof TileEntityEnergyStorageSC && ((TileEntityEnergyStorageSC) te).isPowerOn()) {
                 int took = ((TileEntityEnergyStorageSC) te).extractForItemCharging((int) Math.min(need, PORT_CHARGE_PER_TICK));
@@ -976,6 +979,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         for (int[] p : storePorts) {
             if (getEnergyStored() <= 0) {
                 return;
+            }
+            if (!worldObj.blockExists(p[0], p[1], p[2])) {
+                continue;                                     // unloaded since the last scan: not loaded for this
             }
             net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
             if (te instanceof TileEntityEnergyStorageSC) {
@@ -2102,6 +2108,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         GeneratorType[] types = GeneratorType.values();
         int ordinal = nbt.getInteger("GeneratorType");
         generatorType = types[ordinal >= 0 && ordinal < types.length ? ordinal : 0];
+        setTier(generatorType.tier);         // follows the type (as in setGeneratorType), not a missing "TierSC" (LV)
         fuelTank.readFromNBT(nbt.getCompoundTag("FuelTank"));
         fuelTank2.readFromNBT(nbt.getCompoundTag("FuelTank2"));
         outTank.readFromNBT(nbt.getCompoundTag("OutTank"));

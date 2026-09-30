@@ -41,6 +41,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     private final ItemStack[] upgradeSlots = new ItemStack[UPGRADE_SLOTS];
     /** Set once the upgrades went into the dropped item, so breakBlock doesn't drop them loose too. */
     private boolean upgradesInItem;
+    /** World tick upgradesForItem() ran in: a getDrops() from another tick (another mod asking) mustn't stick. */
+    private long upgradesInItemTick = -1;
     /** The comparator level last announced to the neighbours. */
     private int lastComparator = -1;
     /** EU gained (+) or lost (-) per tick, averaged over the last second - shown on the screen. */
@@ -134,6 +136,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             }
         }
         upgradesInItem = list.tagCount() > 0;
+        upgradesInItemTick = worldObj != null ? worldObj.getTotalWorldTime() : -1;
         if (!upgradesInItem) {
             return null;
         }
@@ -143,7 +146,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     }
 
     public boolean upgradesInItem() {
-        return upgradesInItem;
+        return upgradesInItem && (worldObj == null || upgradesInItemTick == worldObj.getTotalWorldTime());
     }
 
     /** Puts back what upgradesForItem() saved (on placement, before the charge is loaded). */
