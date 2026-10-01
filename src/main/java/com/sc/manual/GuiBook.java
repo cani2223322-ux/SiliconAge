@@ -124,6 +124,10 @@ public class GuiBook extends GuiScreen {
                 && !(parent instanceof net.minecraft.client.gui.inventory.GuiContainerCreative)
                 && !parent.getClass().getName().startsWith("codechicken.nei.recipe.")
                 && ((net.minecraft.client.gui.inventory.GuiContainer) parent).inventorySlots != mc.thePlayer.inventoryContainer) {
+            // close it on the server too: else it keeps the container open and the inventory clicks stop matching
+            mc.thePlayer.sendQueue.addToSendQueue(new net.minecraft.network.play.client.C0DPacketCloseWindow(
+                    ((net.minecraft.client.gui.inventory.GuiContainer) parent).inventorySlots.windowId));
+            mc.thePlayer.openContainer = mc.thePlayer.inventoryContainer;
             parent = null;
         }
     }

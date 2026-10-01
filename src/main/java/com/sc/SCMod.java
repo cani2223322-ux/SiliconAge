@@ -115,6 +115,7 @@ public class SCMod {
         com.sc.tileentity.TileEntityWirelessSC.forgetWorld(null);
         com.sc.radiation.RadiationSC.clearSources();
         com.sc.energy.Ic2LoadQueueSC.clear();
+        com.sc.tileentity.TileEntityGeneratorSC.forgetPorts(null);
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */

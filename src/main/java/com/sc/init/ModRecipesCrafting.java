@@ -319,6 +319,7 @@ public final class ModRecipesCrafting {
                 {com.sc.item.ItemQuarryModuleSC.Kind.DEEP_SCAN, comp("hfo2Die"), new ItemStack(ModItems.oreScanner)},
                 {com.sc.item.ItemQuarryModuleSC.Kind.TANK, comp("steelCasing"), new ItemStack(ModBlocks.tankSC, 1, 0)},
                 {com.sc.item.ItemQuarryModuleSC.Kind.FLUID_VEIN, comp("sensor"), m.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.PUMP)},
+                {com.sc.item.ItemQuarryModuleSC.Kind.CHUNK_LOADER, new ItemStack(Items.ender_eye), new ItemStack(Blocks.obsidian)},
         };
         for (Object[] r : modules) {
             OreRecipes.shaped(m.stackOf((com.sc.item.ItemQuarryModuleSC.Kind) r[0]), " A ", "WMW", " T ",

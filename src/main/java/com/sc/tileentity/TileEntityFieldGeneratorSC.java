@@ -1204,6 +1204,19 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return m == null ? 0 : m.receiveEnergy(from, voltage, amount, simulate);
     }
 
+    /** Energy written into the dropped item by getDrops, this tick: breaking a master hands the cluster only the rest. */
+    private int energyDropped;
+    private long energyDroppedAt = Long.MIN_VALUE;
+
+    public void markEnergyDropped(int eu) {
+        energyDropped = Math.max(0, eu);
+        energyDroppedAt = worldObj != null ? worldObj.getTotalWorldTime() : Long.MIN_VALUE;
+    }
+
+    private int droppedNow() {
+        return worldObj != null && energyDroppedAt == worldObj.getTotalWorldTime() ? energyDropped : 0;
+    }
+
     /**
      * Called by BlockFieldGeneratorSC.breakBlock before the TE is removed - without this, breaking
      * the master leaves every surviving member's masterPos pointing at a now-empty block forever
@@ -1256,7 +1269,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         newMaster.range = self.range;
         newMaster.copySettings(self);             // and its switches, owner and access list
         int room = newMaster.getMaxEnergyStored() - newMaster.getEnergyStored();
-        newMaster.addEnergy(self.removeEnergy(Math.min(room, self.getEnergyStored())));   // and its charge
+        int give = Math.max(0, self.getEnergyStored() - self.droppedNow());           // what didn't go into the item
+        newMaster.addEnergy(self.removeEnergy(Math.min(room, give)));   // and its charge
         newMaster.masterPos = null;
         newMaster.nodePositions.clear();
         newMaster.nodePositions.addAll(remaining);

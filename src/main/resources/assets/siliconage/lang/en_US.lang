@@ -2938,3 +2938,7 @@ sc.field.tooltip.details=Up to 8 generators in one field (Field Link Module). Sh
 sc.field.tooltip.details2=Broken with a pickaxe or dismantled with a wrench, it keeps its charge and settings with the access list; upgrades and the battery drop. Placed alone, owned by whoever placed it.
 sc.field.tooltip.howto=Feed it energy (HV) and right-click: zone, functions, access, upgrades. Sneak + right-click with an empty hand - next shape. The zone can't reach into a stranger's field.
 sc.status.machine.output_tank_busy=An output tank holds another fluid - empty it with the small x above the tank
+item.siliconage.quarryModule.chunk_loader.name=Quarry Module: Chunk Keeping
+sc.quarrymodule.tooltip.chunk_loader=While the quarry digs, keeps its own chunk and the chunk being dug loaded (2 at most): it works with no player near. Paused, out of power, with a full buffer or when done, the chunks are let go. The drilling rig keeps only its own chunk.
+sc.quarrygui.chunks=Chunks kept loaded: %d
+sc.gui.xv.st.porttaken=Port taken by another tokamak - give this one its own tank or storage

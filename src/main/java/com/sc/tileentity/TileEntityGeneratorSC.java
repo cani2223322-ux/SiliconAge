@@ -407,6 +407,17 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private boolean bigReady, bigRunning, heShort, h2Short;
     /** Not saved: the build scanned since the load; part of the build in an unloaded chunk (the big mode waits). */
     private boolean scannedOnce, bigFrozen;
+    /** The last scan found a port held by another Tokamak XV (the screen says so). */
+    private boolean portTaken;
+    /** The port cells this tokamak holds in PORT_OWNERS (position keys, its dimension). */
+    private final java.util.Set<Long> heldPorts = new java.util.HashSet<Long>();
+    /**
+     * Server side: port cell (dimension, then position) -> the Tokamak XV holding it. Two builds
+     * side by side share no port: the first one to take a tank or storage keeps it while it stands
+     * loaded. Left on invalidate / chunk unload / a rescan without it, and a world's unload.
+     */
+    private static final java.util.Map<Integer, java.util.Map<Long, TileEntityGeneratorSC>> PORT_OWNERS =
+            new java.util.HashMap<Integer, java.util.Map<Long, TileEntityGeneratorSC>>();
     /** What ended the last run, kept until the next lighting (the screen): 0 nothing, 1 put out safely, 2 broke down. */
     private int bigEvent;
     public static final int EVENT_SOFT = 1, EVENT_BROKE = 2;
@@ -448,6 +459,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return h2Short;
     }
 
+    /** A port in the wall belongs to another Tokamak XV (this build isn't complete without it). */
+    public boolean isPortTaken() {
+        return portTaken;
+    }
+
     public int getPortFluid(int i) {
         return portFluid[i];
     }
@@ -487,7 +503,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     private int[] bigSyncHead() {
-        int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
+        int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (portTaken ? 4 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
                 | bigEvent << 5;
         return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
                 capMissing | Math.round(stability * 10) << 8, portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
@@ -498,6 +514,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int flags = v[0] >>> 24;
         bigReady = (flags & 1) != 0;
         bigRunning = (flags & 2) != 0;
+        portTaken = (flags & 4) != 0;
         heShort = (flags & 8) != 0;
         h2Short = (flags & 16) != 0;
         bigEvent = flags >> 5 & 3;
@@ -647,6 +664,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int coils = 0, walls = 0, ports = 0, caps = 0, tanks = 0, stores = 0, weak = 0, ci = 0;
         int[] labels = new int[24], caps4 = new int[4], counts = new int[4];
         int free = 0;
+        boolean taken = false;
         long top = 0, bottomMask = 0;
         tankPorts.clear();
         storePorts.clear();
@@ -676,6 +694,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y0, z);
                 if (isShell(worldObj.getBlock(x, y0, z))) {
                     walls |= 1 << w;
+                    portMem[w] = null;
+                } else if ((te instanceof TileEntityTankSC || te instanceof TileEntityEnergyStorageSC && !(te instanceof TileEntityChargePadSC))
+                        && portHeldByOther(x, y0, z)) {
+                    taken = true;                                   // another XV's port: a gap in this wall
                     portMem[w] = null;
                 } else if (te instanceof TileEntityTankSC && tanks < PORT_TANKS_MAX) {
                     walls |= 1 << w;
@@ -750,10 +772,128 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         portTanks = tanks;
         portStores = stores;
         weakStores = weak;
+        portTaken = taken;
+        holdPorts();
         bigReady = coils == 0xFFFFFF && walls == 0xFFFFFF && caps == 0 && stores > 0 && weak == 0;
         for (int i = 0; i < 4; i++) {
             portFluid[i] = portAmount(PORT_FLUIDS[i]);
         }
+    }
+
+    // ---- ports held by one Tokamak XV only (two builds side by side) ----
+
+    private static long portKey(int x, int y, int z) {
+        return ((long) (x & 0x3FFFFFF) << 38) | ((long) (z & 0x3FFFFFF) << 12) | (y & 0xFFF);
+    }
+
+    private java.util.Map<Long, TileEntityGeneratorSC> portOwners(boolean make) {
+        int dim = worldObj.provider.dimensionId;
+        java.util.Map<Long, TileEntityGeneratorSC> m = PORT_OWNERS.get(dim);
+        if (m == null && make) {
+            m = new java.util.HashMap<Long, TileEntityGeneratorSC>();
+            PORT_OWNERS.put(dim, m);
+        }
+        return m;
+    }
+
+    /** A holder that still stands: valid, its world loaded, its chunk loaded, and it still holds the port. */
+    private static boolean holds(TileEntityGeneratorSC t, long key) {
+        if (t == null || t.isInvalid() || t.worldObj == null || !t.xv() || !t.heldPorts.contains(key)) {
+            return false;
+        }
+        net.minecraft.world.World w = net.minecraftforge.common.DimensionManager.getWorld(t.worldObj.provider.dimensionId);
+        return w == t.worldObj && w.blockExists(t.xCoord, t.yCoord, t.zCoord) && w.getTileEntity(t.xCoord, t.yCoord, t.zCoord) == t;
+    }
+
+    /**
+     * The port at x y z is held by another standing Tokamak XV. A lit one takes it over from an
+     * unlit holder (after a load the scans go in any order - a running reactor doesn't lose its port).
+     */
+    private boolean portHeldByOther(int x, int y, int z) {
+        java.util.Map<Long, TileEntityGeneratorSC> m = portOwners(false);
+        long key = portKey(x, y, z);
+        TileEntityGeneratorSC o = m == null ? null : m.get(key);
+        if (o == null || o == this || !holds(o, key)) {
+            return false;
+        }
+        return !(ignited && !o.ignited);
+    }
+
+    /** After a scan: the ports in use are held, the others let go. */
+    private void holdPorts() {
+        java.util.Set<Long> now = new java.util.HashSet<Long>();
+        for (int[] p : tankPorts) {
+            now.add(portKey(p[0], p[1], p[2]));
+        }
+        for (int[] p : storePorts) {
+            now.add(portKey(p[0], p[1], p[2]));
+        }
+        releasePorts();
+        if (now.isEmpty()) {
+            return;
+        }
+        java.util.Map<Long, TileEntityGeneratorSC> m = portOwners(true);
+        for (Long k : now) {
+            TileEntityGeneratorSC o = m.get(k);
+            if (o != null && o != this) {
+                o.heldPorts.remove(k);                       // taken over (a lit tokamak from an unlit one)
+            }
+            m.put(k, this);
+        }
+        heldPorts.addAll(now);
+    }
+
+    /** Lets go of every port this tokamak holds. */
+    private void releasePorts() {
+        if (heldPorts.isEmpty() || worldObj == null) {
+            heldPorts.clear();
+            return;
+        }
+        java.util.Map<Long, TileEntityGeneratorSC> m = portOwners(false);
+        if (m != null) {
+            for (Long k : heldPorts) {
+                if (m.get(k) == this) {
+                    m.remove(k);
+                }
+            }
+            if (m.isEmpty()) {
+                PORT_OWNERS.remove(worldObj.provider.dimensionId);
+            }
+        }
+        heldPorts.clear();
+    }
+
+    /** A world goes (a dimension unloaded, the server stopping): its ports leave the registry. null: all of them. */
+    public static void forgetPorts(net.minecraft.world.World w) {
+        if (w == null) {
+            PORT_OWNERS.clear();
+        } else {
+            PORT_OWNERS.remove(w.provider.dimensionId);
+        }
+    }
+
+    /** The Tokamak XV holding the port at x y z (server side), or null. */
+    public static TileEntityGeneratorSC portHolder(net.minecraft.world.World w, int x, int y, int z) {
+        java.util.Map<Long, TileEntityGeneratorSC> m = w == null || w.isRemote ? null : PORT_OWNERS.get(w.provider.dimensionId);
+        long key = portKey(x, y, z);
+        TileEntityGeneratorSC o = m == null ? null : m.get(key);
+        return o != null && o.worldObj == w && holds(o, key) ? o : null;
+    }
+
+    @Override
+    public void invalidate() {
+        if (worldObj != null && !worldObj.isRemote) {
+            releasePorts();
+        }
+        super.invalidate();
+    }
+
+    @Override
+    public void onChunkUnload() {
+        if (worldObj != null && !worldObj.isRemote) {
+            releasePorts();
+        }
+        super.onChunkUnload();
     }
 
     private int portAmount(String fluid) {
@@ -953,6 +1093,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** The tokamak whose 7x7x3 this block is part of, or null (a click on the wall opens its screen). */
     public static TileEntityGeneratorSC bigTokamakAround(net.minecraft.world.World w, int x, int y, int z) {
+        TileEntityGeneratorSC holder = portHolder(w, x, y, z);
+        if (holder != null) {
+            return holder;                                    // a port: the tokamak that holds it
+        }
         for (int dy = -1; dy <= 1; dy++) {
             for (int dz = -3; dz <= 3; dz++) {
                 for (int dx = -3; dx <= 3; dx++) {
@@ -1054,15 +1198,16 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /**
      * What it gives off now: an RTG as long as it holds capsules (they decay, running or not); a
-     * reactor while it's lit and working; nothing with a lead casing.
+     * reactor while it's lit and working; nothing with a lead casing - but a Tokamak XV's
+     * breakdown burst goes through the casing.
      */
     public float radiationLevel() {
+        if (xv() && burstTicks > 0) {            // a breakdown's burst, fading - the casing doesn't stop it
+            return Math.max(BIG_RADIATION, BURST_RADIATION * burstTicks / (float) BURST_TICKS);
+        }
         float base = radiationBase(generatorType);
         if (base <= 0 || isShielded()) {
             return 0F;
-        }
-        if (xv() && burstTicks > 0) {            // a breakdown's burst, fading
-            return Math.max(BIG_RADIATION, BURST_RADIATION * burstTicks / (float) BURST_TICKS);
         }
         if (generatorType == GeneratorType.RTG) {
             int capsules = 0;

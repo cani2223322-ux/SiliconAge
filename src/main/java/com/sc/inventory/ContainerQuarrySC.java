@@ -175,10 +175,13 @@ public class ContainerQuarrySC extends Container {
     // ---- live numbers ----
 
     /** 0..12 as before (8 / 9: the first compartment), 13..18: the other compartments' fluid and amount. */
-    private static final int COUNT = 22;             // 19, 20: the fluid vein's counters; 21: blocks a private field kept
+    private static final int COUNT = 23;             // 19, 20: the fluid vein's counters; 21: blocks a private field kept; 22: chunks held
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
     private int value(int id) {
+        if (id == 22) {
+            return quarry.getChunksHeld();
+        }
         if (id == 21) {
             return quarry.getSkippedPrivate();
         }
@@ -232,6 +235,8 @@ public class ContainerQuarrySC extends Container {
         }
         if (id == 0) {
             quarry.setEnergyStoredClient(sync.value(0));
+        } else if (id == 22) {
+            quarry.setChunksHeldClient(sync.value(22));
         } else if (id == 21) {
             quarry.setSkippedPrivateClient(sync.value(21));
         } else if (id == 8 || id == 9) {

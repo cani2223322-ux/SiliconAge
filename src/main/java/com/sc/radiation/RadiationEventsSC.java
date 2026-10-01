@@ -9,7 +9,7 @@ import net.minecraftforge.event.world.WorldEvent;
 /**
  * Forge-bus events: the lead suit's lower jump and slower digging; the dose kept when the player
  * entity is remade (leaving the End - all of it; after a death - up to the weakness step); a world unloading takes its radiation
- * sources and its wireless tiles out of the registries.
+ * sources, its wireless tiles and its Tokamak XV ports out of the registries.
  */
 public class RadiationEventsSC {
 
@@ -34,6 +34,7 @@ public class RadiationEventsSC {
         if (!event.world.isRemote) {
             RadiationSC.forgetDimension(event.world.provider.dimensionId);
             com.sc.tileentity.TileEntityWirelessSC.forgetWorld(event.world);
+            com.sc.tileentity.TileEntityGeneratorSC.forgetPorts(event.world);
         }
     }
 

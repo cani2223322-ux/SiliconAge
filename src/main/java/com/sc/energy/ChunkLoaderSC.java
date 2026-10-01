@@ -2,6 +2,7 @@ package com.sc.energy;
 
 import java.util.List;
 
+import com.sc.tileentity.TileEntityQuarrySC;
 import com.sc.tileentity.TileEntityWirelessSC;
 
 import net.minecraft.tileentity.TileEntity;
@@ -10,7 +11,8 @@ import net.minecraftforge.common.ForgeChunkManager;
 
 /**
  * Forge's chunk-loading callback: after a world loads, each quantum translator gets its ticket
- * back (its chunk stays loaded while the pair is up); a ticket whose block is gone is released.
+ * back (its chunk stays loaded while the pair is up), and so does each quarry with the chunk-keeping
+ * module (its "Kind" mod data is "quarry"); a ticket whose block is gone is released.
  */
 public class ChunkLoaderSC implements ForgeChunkManager.LoadingCallback {
 
@@ -19,7 +21,13 @@ public class ChunkLoaderSC implements ForgeChunkManager.LoadingCallback {
         for (ForgeChunkManager.Ticket t : tickets) {
             int x = t.getModData().getInteger("x"), y = t.getModData().getInteger("y"), z = t.getModData().getInteger("z");
             TileEntity te = world.getTileEntity(x, y, z);
-            if (te instanceof TileEntityWirelessSC && ((TileEntityWirelessSC) te).getKind() == TileEntityWirelessSC.QUANTUM) {
+            if ("quarry".equals(t.getModData().getString("Kind"))) {
+                if (te instanceof TileEntityQuarrySC) {
+                    ((TileEntityQuarrySC) te).adoptTicket(t);
+                } else {
+                    ForgeChunkManager.releaseTicket(t);
+                }
+            } else if (te instanceof TileEntityWirelessSC && ((TileEntityWirelessSC) te).getKind() == TileEntityWirelessSC.QUANTUM) {
                 ((TileEntityWirelessSC) te).adoptTicket(t);
             } else {
                 ForgeChunkManager.releaseTicket(t);

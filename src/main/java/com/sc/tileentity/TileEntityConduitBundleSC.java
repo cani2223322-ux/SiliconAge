@@ -62,7 +62,6 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
     private static final int CORROSION_TICKS = 200;
     private static final int ITEMS_PER_TICK = 4;
     private static final int MAX_TUBE_NODES = 1024;
-    private static final int IC2_CHECK_INTERVAL = 20;
 
     /** Bumped whenever any tube / pipe network may have changed shape; each rebuilds its route list then. */
     private static int tubeVersion;
@@ -528,9 +527,8 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         if (tube) {
             moveItems();
         }
-        if (cable != null && registeredEnergy && Loader.isModLoaded(Reference.IC2_MODID)
-                && (worldObj.getTotalWorldTime() + xCoord * 31L + zCoord * 17L + yCoord) % IC2_CHECK_INTERVAL == 0) {
-            checkIc2Overvoltage();
+        if (cable != null && registeredEnergy && Loader.isModLoaded(Reference.IC2_MODID)) {
+            checkIc2Overvoltage();   // every tick: the cable burns on the first packet above its tier
         }
     }
 
@@ -1092,9 +1090,12 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         MinecraftForge.EVENT_BUS.post(new EnergyTileUnloadEvent(this));
     }
 
-    // IC2 only ever burns its OWN cables, so an EV reactor could run through our bare copper
-    // forever with IC2 installed. Once a second each cable reads the voltage IC2 reports through
-    // it and applies §9.3 itself.
+    // IC2 2.2.828's energy net never burns a conductor: it stores getConductorBreakdownEnergy()
+    // but never reads it, and never calls removeConductor() / removeInsulation() (only its own
+    // TileEntityCable does). So an EV reactor could run through our bare copper forever with IC2
+    // installed. Every tick each cable reads the voltage IC2 left on it after its last calculation
+    // (an instant value, not an average - non-zero only while a source pushes energy through) and
+    // applies §9.3 itself: the first packet above the cable's tier burns it.
     @Optional.Method(modid = Reference.IC2_MODID)
     private void checkIc2Overvoltage() {
         if (ic2.api.energy.EnergyNet.instance == null) {
@@ -1136,6 +1137,8 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         return cable == null ? 0 : cable.maxThroughput() * 4;
     }
 
+    // IC2 2.2.828 never calls these two (see checkIc2Overvoltage); kept for IC2 builds that do -
+    // they burn only the cable, the bundle's pipe and tube stay.
     @Override
     @Optional.Method(modid = Reference.IC2_MODID)
     public void removeInsulation() {

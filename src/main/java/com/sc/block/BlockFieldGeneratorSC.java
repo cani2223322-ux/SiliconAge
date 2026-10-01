@@ -110,6 +110,7 @@ public class BlockFieldGeneratorSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityFieldGeneratorSC) {
             net.minecraft.nbt.NBTTagCompound nbt = ((TileEntityFieldGeneratorSC) te).writeToItem();
+            ((TileEntityFieldGeneratorSC) te).markEnergyDropped(nbt.getInteger("EnergySC"));   // the cluster won't get it too
             if (!nbt.hasNoTags()) {
                 stack.setTagCompound(nbt);
             }

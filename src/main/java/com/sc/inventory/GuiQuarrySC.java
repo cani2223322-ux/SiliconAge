@@ -977,6 +977,7 @@ public class GuiQuarrySC extends GuiContainer {
         if (quarry.getSkippedPrivate() > 0) {
             small(Lang.tr("sc.quarrygui.skippedprivate", quarry.getSkippedPrivate()), 14, 120, 88, GuiHoloSC.WARN);
         }
+        chunksLine(128);
         headCard();
         caption("sc.quarrygui.cap.pump", 14, 186);
         int used = 0;
@@ -1013,10 +1014,18 @@ public class GuiQuarrySC extends GuiContainer {
         cardText(3, Lang.tr("sc.quarrygui.card.lifted"), String.valueOf(quarry.getMined()));
         small(Lang.tr("sc.quarrygui.rig.line1"), 14, 96, 88, DIM);
         small(Lang.tr("sc.quarrygui.rig.line2"), 14, 104, 88, DIM);
+        chunksLine(112);
         headCard();
         caption("sc.quarrygui.cap.wash", 14, 186);
         small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 208, 188, DIM);
         owner();
+    }
+
+    /** The chunk-keeping module at work: how many chunks it holds. */
+    private void chunksLine(int y) {
+        if (quarry.getChunksHeld() > 0) {
+            small(Lang.tr("sc.quarrygui.chunks", quarry.getChunksHeld()), 14, y, 88, GuiHoloSC.OK);
+        }
     }
 
     /** The head card beside the power mode button: which head, how worn. */

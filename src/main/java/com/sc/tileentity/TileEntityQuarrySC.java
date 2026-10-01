@@ -30,7 +30,9 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.common.util.ForgeDirection;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
@@ -492,7 +494,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return true;
         }
         if (worldObj instanceof WorldServer) {
-            net.minecraftforge.common.util.FakePlayer fake = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((WorldServer) worldObj);
+            com.mojang.authlib.GameProfile op = ownerProfile();
+            net.minecraftforge.common.util.FakePlayer fake = op == null
+                    ? net.minecraftforge.common.util.FakePlayerFactory.getMinecraft((WorldServer) worldObj)   // no owner (an old quarry): as before
+                    : net.minecraftforge.common.util.FakePlayerFactory.get((WorldServer) worldObj, op);
+            if (op != null && fake.worldObj != worldObj) {
+                fake.setWorld(worldObj);                // Forge caches it by profile only: a quarry in another dimension
+            }
             net.minecraftforge.event.world.BlockEvent.BreakEvent ev = new net.minecraftforge.event.world.BlockEvent.BreakEvent(
                     x, y, z, worldObj, worldObj.getBlock(x, y, z), worldObj.getBlockMetadata(x, y, z), fake);
             net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
@@ -541,6 +549,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             markDirty();
         }
         dig();
+        holdChunks();
         if (status == Status.RUNNING) {
             com.sc.util.SoundsSC.loop(this, isExo() ? RIG_SOUND : DRILL_SOUND);
         }
@@ -1630,6 +1639,122 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return oreCounts;
     }
 
+    // ------------------------------------------------------------------ chunk loading (the chunk-keeping module)
+
+    /**
+     * The chunk-keeping module's Forge ticket. It holds two chunks at most: the quarry's own (so it
+     * ticks with no player near) and the one the cursor digs in now - not the whole area: a 64 x 64
+     * area is up to 25 chunks, Forge's default cap for a ticket (maximumChunksPerTicket), and every
+     * forced chunk costs the server a loaded, ticking chunk. The quarry digs one cell at a time, so
+     * the chunk under the cursor is all it needs; the next one is forced when the cursor crosses into
+     * it (one tick of WAITING_CHUNK). The vein / fluid vein past that chunk still stop at unloaded ones.
+     */
+    private ForgeChunkManager.Ticket ticket;
+    private long ticketRetryAt;
+    /** The cursor's chunk this ticket holds (null: none yet) - the own chunk is held from the ticket's start. */
+    private ChunkCoordIntPair heldDig;
+    /** Chunks held now (the client's copy through ContainerQuarrySC). */
+    private int chunksHeld;
+
+    /** Held while it works: running, switched on, the module in, and digging (or waiting for the chunk it digs in). */
+    private boolean wantChunks() {
+        if (!running || !powerOn || moduleCount(ItemQuarryModuleSC.Kind.CHUNK_LOADER) <= 0) {
+            return false;
+        }
+        return status == Status.RUNNING || status == Status.WAITING_CHUNK || status == Status.BLOCKED_BY_FIELD
+                || status == Status.REPAIRING;
+    }
+
+    /** The chunk of the cell the cursor is on (the rig: none - it digs nothing). */
+    private ChunkCoordIntPair cursorChunk() {
+        int[] a = area();
+        if (a == null || layerY < a[5]) {
+            return null;
+        }
+        int[] c = cell(a, cursor);
+        return c == null ? heldDig : new ChunkCoordIntPair(c[0] >> 4, c[1] >> 4);   // a cell the shape leaves out: keep the last
+    }
+
+    private void holdChunks() {
+        if (!wantChunks()) {
+            releaseChunks();
+            return;
+        }
+        if (ticket == null) {
+            long now = worldObj.getTotalWorldTime();
+            if (now < ticketRetryAt) {
+                return;
+            }
+            ticket = ForgeChunkManager.requestTicket(com.sc.SCMod.instance, worldObj, ForgeChunkManager.Type.NORMAL);
+            if (ticket == null) {
+                ticketRetryAt = now + 100;              // Forge's ticket limit for the mod: try again later
+                return;
+            }
+            NBTTagCompound d = ticket.getModData();
+            d.setString("Kind", "quarry");
+            d.setInteger("x", xCoord);
+            d.setInteger("y", yCoord);
+            d.setInteger("z", zCoord);
+            ForgeChunkManager.forceChunk(ticket, new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4));
+            heldDig = null;
+        }
+        ChunkCoordIntPair own = new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4);
+        ChunkCoordIntPair dig = cursorChunk();
+        if (dig == null ? heldDig != null : !dig.equals(heldDig)) {
+            if (heldDig != null && !heldDig.equals(own)) {
+                ForgeChunkManager.unforceChunk(ticket, heldDig);
+            }
+            heldDig = dig;
+            if (dig != null && !dig.equals(own) && ticket.getChunkList().size() < ticket.getMaxChunkListDepth()) {
+                ForgeChunkManager.forceChunk(ticket, dig);
+                worldObj.getChunkFromChunkCoords(dig.chunkXPos, dig.chunkZPos);   // loaded now, not on the next pass
+            }
+        }
+        chunksHeld = ticket.getChunkList().size();
+    }
+
+    private void releaseChunks() {
+        if (ticket != null) {
+            ForgeChunkManager.releaseTicket(ticket);
+            ticket = null;
+        }
+        heldDig = null;
+        chunksHeld = 0;
+    }
+
+    /** After a world load (ChunkLoaderSC): this quarry's ticket, kept - its own chunk again; the cursor's on the next tick. */
+    public void adoptTicket(ForgeChunkManager.Ticket t) {
+        if (ticket != null && ticket != t) {
+            ForgeChunkManager.releaseTicket(ticket);
+        }
+        ticket = t;
+        ChunkCoordIntPair own = new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4);
+        for (ChunkCoordIntPair c : new ArrayList<ChunkCoordIntPair>(t.getChunkList())) {
+            if (!c.equals(own)) {
+                ForgeChunkManager.unforceChunk(t, c);
+            }
+        }
+        ForgeChunkManager.forceChunk(t, own);
+        heldDig = null;
+        chunksHeld = t.getChunkList().size();
+    }
+
+    @Override
+    public void invalidate() {
+        if (worldObj != null && !worldObj.isRemote) {
+            releaseChunks();                            // broken / replaced: its chunks go
+        }
+        super.invalidate();
+    }
+
+    public int getChunksHeld() {
+        return chunksHeld;
+    }
+
+    public void setChunksHeldClient(int n) {
+        chunksHeld = n;
+    }
+
     // ------------------------------------------------------------------ owner and warnings
 
     public int getFacing() {
@@ -1657,7 +1782,61 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     public void setOwner(String name) {
         owner = name == null ? "" : name;
+        ownerId = "";
+        ownerProfile = null;
+        if (worldObj != null && !worldObj.isRemote && !owner.isEmpty()) {
+            EntityPlayerMP p = net.minecraft.server.MinecraftServer.getServer().getConfigurationManager().func_152612_a(owner);
+            if (p != null) {
+                ownerId = p.getUniqueID().toString();          // the placer is here: their UUID, no lookup needed
+            }
+        }
         markDirty();
+    }
+
+    /** The owner's UUID once known for sure (saved; "" until then - an old quarry, or not looked up yet). */
+    private String ownerId = "";
+    /** The owner's profile for the protection check (not saved), and the name it was made for. */
+    private com.mojang.authlib.GameProfile ownerProfile;
+    private String ownerProfileFor;
+
+    /**
+     * The owner as a GameProfile, for the fake player of the protection check (BreakEvent): other mods'
+     * claims see who the quarry digs for. Null without an owner. The UUID: the saved one, else the
+     * player online, else the offline UUID of the name (not saved: the real one is taken once the owner
+     * is online).
+     */
+    private com.mojang.authlib.GameProfile ownerProfile() {
+        if (owner.isEmpty()) {
+            return null;
+        }
+        if (ownerProfile != null && owner.equals(ownerProfileFor)) {
+            return ownerProfile;
+        }
+        java.util.UUID id = null;
+        if (!ownerId.isEmpty()) {
+            try {
+                id = java.util.UUID.fromString(ownerId);
+            } catch (IllegalArgumentException e) {
+                ownerId = "";
+            }
+        }
+        net.minecraft.server.MinecraftServer srv = net.minecraft.server.MinecraftServer.getServer();
+        if (id == null && srv != null) {
+            EntityPlayerMP p = srv.getConfigurationManager().func_152612_a(owner);
+            com.mojang.authlib.GameProfile g = p != null ? p.getGameProfile() : null;   // no profile-cache lookup: it may ask Mojang's server and stall the tick
+            if (g != null && g.getId() != null) {
+                id = g.getId();
+                ownerId = id.toString();
+                markDirty();
+            }
+        }
+        if (id == null) {
+            id = EntityPlayer.func_146094_a(new com.mojang.authlib.GameProfile(null, owner));   // what an offline server gives the name
+            return new com.mojang.authlib.GameProfile(id, owner);   // not kept: the real UUID is taken once the owner is online
+        }
+        ownerProfile = new com.mojang.authlib.GameProfile(id, owner);
+        ownerProfileFor = owner;
+        return ownerProfile;
     }
 
     public boolean allowed(EntityPlayer p) {
@@ -2332,6 +2511,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         autoStopped = nbt.getBoolean("AutoStopped");
         skippedPrivate = nbt.getInteger("SkippedPrivate");
+        ownerId = nbt.getString("OwnerId");
+        ownerProfile = null;
         clearScan();                                   // an old save's "OreList" is just left unread
         NBTTagList hl = nbt.getTagList("HaulLog", 10);
         for (int i = 0; i < hl.tagCount(); i++) {
@@ -2353,6 +2534,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setInteger("Status", status.ordinal());
         nbt.setBoolean("AutoStopped", autoStopped);
         nbt.setInteger("SkippedPrivate", skippedPrivate);
+        nbt.setString("OwnerId", ownerId);
         writeTanks(nbt);
         nbt.setTag("Water", water.writeToNBT(new NBTTagCompound()));
         NBTTagList list = new NBTTagList();

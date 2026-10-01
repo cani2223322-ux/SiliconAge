@@ -786,6 +786,9 @@ public class GuiTokamakXVSC extends GuiContainer {
             if (miss != null) {
                 add(k, l, 2, Lang.tr("sc.gui.xv.st.coil", 24 - coils(), miss[0], miss[1], miss[2]));
             }
+            if (gen.isPortTaken()) {
+                add(k, l, 2, Lang.tr("sc.gui.xv.st.porttaken"));
+            }
             if (walls() < 24 || sc[3] > 0) {
                 add(k, l, 2, Lang.tr("sc.gui.big.st.needshell", 24 - walls() + sc[3]));
             }
@@ -815,6 +818,9 @@ public class GuiTokamakXVSC extends GuiContainer {
         }
         if (!gen.isBigReady()) {
             add(k, l, 2, Lang.tr("sc.gui.big.st.broken"));
+        }
+        if (gen.isPortTaken()) {
+            add(k, l, 2, Lang.tr("sc.gui.xv.st.porttaken"));
         }
         if (gen.isHeliumShort()) {
             add(k, l, 2, Lang.tr("sc.gui.big.st.nohe"));

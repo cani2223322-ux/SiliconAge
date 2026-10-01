@@ -152,6 +152,10 @@ public class BookKeySC {
         if (mc.thePlayer.inventory.getItemStack() != null) {
             return false;
         }
+        if (!(gc.inventorySlots instanceof ContainerPlayer) && !(gc instanceof net.minecraft.client.gui.inventory.GuiContainerCreative)
+                && !gc.inventorySlots.getClass().getName().startsWith("com.sc.")) {
+            return false;                              // another mod's container may act on its client-side close (a chest lid shuts)
+        }
         if (gc.inventorySlots instanceof ContainerPlayer) {
             ContainerPlayer cp = (ContainerPlayer) gc.inventorySlots;
             for (int i = 0; i < cp.craftMatrix.getSizeInventory(); i++) {
