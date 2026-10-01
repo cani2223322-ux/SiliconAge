@@ -32,6 +32,10 @@ public class ItemBlockMachineSC extends ItemBlock {
     /** A machine broken with fluid inside keeps it (BlockMachineSC.getDrops) - show what it holds. */
     @Override
     public void addInformation(ItemStack stack, net.minecraft.entity.player.EntityPlayer player, java.util.List list, boolean advanced) {
+        int charge = stack.hasTagCompound() ? stack.getTagCompound().getInteger(com.sc.tileentity.TileEntityMachineSC.ITEM_ENERGY_KEY) : 0;
+        if (charge > 0) {                                                       // the buffer's charge (BlockMachineSC.getDrops)
+            list.add(com.sc.manual.Lang.tr("sc.machine.tooltip.energy", String.valueOf(charge)));
+        }
         if (stack.hasTagCompound() && stack.getTagCompound().hasKey(com.sc.tileentity.TileEntityMachineSC.ITEM_UPGRADES_KEY)) {
             for (ItemStack up : com.sc.tileentity.TileEntityMachineSC.upgradesOf(
                     stack.getTagCompound().getCompoundTag(com.sc.tileentity.TileEntityMachineSC.ITEM_UPGRADES_KEY))) {

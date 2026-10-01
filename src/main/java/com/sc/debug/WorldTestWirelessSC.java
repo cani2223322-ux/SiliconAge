@@ -207,7 +207,8 @@ public class WorldTestWirelessSC {
         for (int i = 0; i < 4; i++) {
             p.inventory.armorInventory[i] = null;
         }
-        boolean ok = open > 0.8F && open < 1.2F && dose > 0.08F && walled < open * 0.05F && parts == 4 && prot == 100 && after < dose;
+        boolean ok = open > 0.8F && open < 1.2F && dose > 0.08F && walled < open * 0.05F && parts == 4 && prot == 4 * com.sc.util.ConfigSC.leadSuitPartProtection
+                && after - dose < open * 0.2F;   // the suit lets through 12% by default (88% protection)
         System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " radiation: RTG 2 bl. away " + open + ", dose " + dose
                 + ", behind lead " + walled + ", lead suit (" + parts + " parts) protection " + prot + "%, dose then " + after);
         com.sc.radiation.RadiationSC.setDose(p, 0F);

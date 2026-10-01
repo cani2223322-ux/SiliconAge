@@ -155,10 +155,13 @@ public abstract class SmelterRecipeHandlerSC extends TemplateRecipeHandler {
     @Override
     public void drawExtras(int recipe) {
         CachedSmelt r = (CachedSmelt) arecipes.get(recipe);
-        String fast = String.format(java.util.Locale.ROOT, "%.1f", TileEntityMachineSC.SMELT_TICKS / 20F);
+        // the config's machineSpeed / machineEnergy, as the machine itself (TileEntityMachineSC.smeltTicks / effectiveEuPerTick)
+        int eu = TileEntityMachineSC.configEuPerTick(type);
+        String fast = String.format(java.util.Locale.ROOT, "%.1f", TileEntityMachineSC.configTicks(TileEntityMachineSC.SMELT_TICKS) / 20F);
+        int hot = Math.max(1, (int) Math.round(TileEntityMachineSC.SMELT_TICKS / (double) com.sc.util.ConfigSC.machineSpeed / 3.0));
         String line = type == MachineType.INDUCTION_FURNACE
-                ? Lang.tr("sc.nei.smelt.induction", type.euPerTick, fast, String.format(java.util.Locale.ROOT, "%.1f", TileEntityMachineSC.SMELT_TICKS / 60F))
-                : Lang.tr("sc.nei.smelt", type.euPerTick, fast);
+                ? Lang.tr("sc.nei.smelt.induction", eu, fast, String.format(java.util.Locale.ROOT, "%.1f", hot / 20F))
+                : Lang.tr("sc.nei.smelt", eu, fast);
         GuiDraw.drawString(line, 22, 45, com.sc.inventory.GuiHoloSC.VALUE, false);
         float xp = FurnaceRecipes.smelting().func_151398_b(r.out.item);
         if (xp > 0) {

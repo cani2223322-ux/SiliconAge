@@ -76,6 +76,12 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     private static final int HEAT_DISSIPATION_PER_TICK = 2;
     /** Once overheated, the operation stays paused until the machine has cooled back to this. */
     public static final int HEAT_RESUME = 70;
+    /**
+     * Heat sinks also carry heat away while the machine works: -1 heat per sink every this many
+     * working ticks (on top of the slower heating, 1 / (n+1)). Net per tick: 1 sink +1/3 (a stall
+     * after ~300 ticks instead of 100), 2 sinks 0, 3+ below 0 - a 1200-tick Czochralski run needs 2.
+     */
+    public static final int HEAT_SINK_INTERVAL = 6;
 
     private static final Random RANDOM = new Random();
 
@@ -146,6 +152,17 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 * Math.pow(1.25, upgradeCount(UpgradeType.QUALITY)) * com.sc.util.ConfigSC.machineEnergy
                 * com.sc.util.ConfigSC.machineSpeed;                     // faster, not cheaper: EU an operation stays
         return (int) Math.min(Integer.MAX_VALUE / 4, Math.ceil(eu));
+    }
+
+    /** A type's EU/t with no upgrades, after the config's machineEnergy / machineSpeed (for NEI - as effectiveEuPerTick). */
+    public static int configEuPerTick(MachineType type) {
+        double eu = type.euPerTick * (double) com.sc.util.ConfigSC.machineEnergy * com.sc.util.ConfigSC.machineSpeed;
+        return (int) Math.min(Integer.MAX_VALUE / 4, Math.ceil(eu));
+    }
+
+    /** Ticks with no upgrades, after the config's machineSpeed (for NEI - as effectiveTicks / smeltTicks). */
+    public static int configTicks(int ticks) {
+        return Math.max(1, (int) Math.round(ticks / (double) com.sc.util.ConfigSC.machineSpeed));
     }
 
     /**
@@ -270,6 +287,18 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             }
         }
         return tag;
+    }
+
+    /** NBT key the machine's item carries its buffer's charge under (as an energy storage's item). */
+    public static final String ITEM_ENERGY_KEY = "EnergySC";
+
+    /**
+     * The charge a placed item brings back (BlockMachineSC, after the upgrades: a storage upgrade
+     * makes the room for it) - capped at the buffer as it is then.
+     */
+    public void loadEnergyFromItem(int eu) {
+        addEnergy(Math.max(0, eu));
+        markDirty();
     }
 
     /** A placed machine starts switched off (BlockMachineSC) - upgrades in first, then on. */
@@ -484,6 +513,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
 
         removeEnergy(cost);
         int heatSinks = upgradeCount(UpgradeType.HEAT_SINK);
+        if (machineType.heatCapable && heatSinks > 0 && heat > 0 && worldObj.getTotalWorldTime() % HEAT_SINK_INTERVAL == 0) {
+            heat = Math.max(0, heat - heatSinks);           // the sinks carry heat away while it works, too
+        }
         if (machineType.heatCapable && (heatSinks == 0 || worldObj.getTotalWorldTime() % (heatSinks + 1) == 0)) {
             heat += HEAT_GAIN_PER_TICK;
             if (heat >= HEAT_OVERFLOW) {                 // safety net - unreachable through the pause above
@@ -866,22 +898,56 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
      * Sneak + empty-hand right-click (BlockMachineSC): dumps both input tanks. Nothing else can
      * drain them, so a leftover fluid in a multi-fluid machine (300 mB HCl in a Chem Reactor that
      * now needs Cl2 + H2) otherwise blocked a tank until the block was broken.
-     * @return mB vented
+     * It costs what the screen's Clear buttons cost (clearCost per tank: 1 EU / 10 mB), and only
+     * if the buffer can pay it all.
+     * @return mB vented, or VENT_NO_POWER (nothing poured out) when the buffer can't pay
      */
     public int ventInputTanks() {
-        int vented = tankA.getFluidAmount() + tankB.getFluidAmount();
-        if (vented > 0) {
-            tankA.setFluid(null);
-            tankB.setFluid(null);
-        } else {
-            // Inputs already empty: the second click clears the output tanks, so a product nothing
-            // takes away (no pipe on that face) can't block the machine for good.
-            vented = outputTankA.getFluidAmount() + outputTankB.getFluidAmount();
-            outputTankA.setFluid(null);
-            outputTankB.setFluid(null);
+        boolean inputs = tankA.getFluidAmount() + tankB.getFluidAmount() > 0;
+        // Inputs already empty: the second click clears the output tanks, so a product nothing
+        // takes away (no pipe on that face) can't block the machine for good.
+        int first = inputs ? 0 : 2;
+        int vented = getTank(first).getFluidAmount() + getTank(first + 1).getFluidAmount();
+        int cost = clearCost(first) + clearCost(first + 1);
+        if (vented <= 0) {
+            return 0;
         }
+        if (getEnergyStored() < cost) {
+            return VENT_NO_POWER;
+        }
+        removeEnergy(cost);
+        getTank(first).setFluid(null);
+        getTank(first + 1).setFluid(null);
         markDirty();
         return vented;
+    }
+
+    /** ventInputTanks(): the buffer couldn't pay for it, nothing was poured out. */
+    public static final int VENT_NO_POWER = -1;
+    /** Shift + right-click vents only when repeated within this many ticks (the first one warns). */
+    public static final int VENT_CONFIRM_TICKS = 20;
+    /** A held right button repeats every 4 ticks: clicks that close together only re-arm, so holding never vents. */
+    public static final int VENT_HOLD_TICKS = 8;
+    /** Server only, not saved: when and by whom the last venting click armed it. */
+    private long ventArmedAt = Long.MIN_VALUE;
+    private String ventArmedBy;
+
+    /**
+     * Shift + right-click's confirmation, as the power switch's double click: the first click only
+     * arms it (false - "click again"), a second one by the same player within VENT_CONFIRM_TICKS
+     * goes through (true) and disarms it.
+     */
+    public boolean confirmVent(EntityPlayer player) {
+        long now = worldObj != null ? worldObj.getTotalWorldTime() : 0;
+        String who = player == null ? "" : player.getCommandSenderName();
+        if (who.equals(ventArmedBy) && now - ventArmedAt > VENT_HOLD_TICKS && now - ventArmedAt <= VENT_CONFIRM_TICKS) {
+            ventArmedAt = Long.MIN_VALUE;
+            ventArmedBy = null;
+            return true;
+        }
+        ventArmedAt = now;
+        ventArmedBy = who;
+        return false;
     }
 
     /** Drains a recipe's fluid from whichever input tank holds it (see MachineRecipe.matches). */
@@ -968,7 +1034,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     simSlots[i] = stack;
                     remaining[i] = stack.getMaxStackSize() - place;
                     left -= place;
-                } else if (simSlots[i].getItem() == stack.getItem() && simSlots[i].getItemDamage() == stack.getItemDamage() && remaining[i] > 0) {
+                } else if (simSlots[i].getItem() == stack.getItem() && simSlots[i].getItemDamage() == stack.getItemDamage()
+                        && ItemStack.areItemStackTagsEqual(simSlots[i], stack) && remaining[i] > 0) {
                     int place = Math.min(left, remaining[i]);
                     left -= place;
                     remaining[i] -= place;
@@ -987,7 +1054,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             if (slots[slot] == null) {
                 int place = Math.min(stack.stackSize, stack.getMaxStackSize());
                 slots[slot] = stack.splitStack(place);
-            } else if (slots[slot].getItem() == stack.getItem() && slots[slot].getItemDamage() == stack.getItemDamage()) {
+            } else if (slots[slot].getItem() == stack.getItem() && slots[slot].getItemDamage() == stack.getItemDamage()
+                    && ItemStack.areItemStackTagsEqual(slots[slot], stack)) {   // a suit piece's chips / charge mustn't merge away
                 int room = slots[slot].getMaxStackSize() - slots[slot].stackSize;
                 int place = Math.min(stack.stackSize, room);
                 slots[slot].stackSize += place;
@@ -1082,12 +1150,26 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly()
                     && !(machineType.isSmelter() && (com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.QUALITY
-                            || com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK));   // nothing to improve there
+                            || com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK))    // nothing to improve there
+                    // a heat sink only where there's heat, a tank extension only where there are tanks
+                    // (only new ones are refused - what an older world already has in the slots stays)
+                    && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK && !machineType.heatCapable)
+                    && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.TANK_EXTENSION && !usesAnyTank(machineType));
         }
         if (machineType.isSmelter()) {
             return slot < machineType.smeltStreams() && smeltResult(stack) != null;
         }
         return slot < INPUT_SLOTS && RecipeRegistry.isValidInput(machineType, stack);
+    }
+
+    /** Whether any recipe of this type uses any of the four tanks (as ContainerMachineSC.usesTanks). */
+    private static boolean usesAnyTank(MachineType type) {
+        for (int i = 0; i < 4; i++) {
+            if (RecipeRegistry.usesTank(type, i)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Every side: inputs go in, products come out (the upgrade slots are the player's only). */

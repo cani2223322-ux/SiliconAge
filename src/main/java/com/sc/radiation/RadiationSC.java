@@ -270,9 +270,9 @@ public final class RadiationSC {
         p.getEntityData().setFloat(DOSE, Math.max(0F, Math.min(STAGE_HARM, dose)));
     }
 
-    /** The lead suit's share (25% a piece). */
+    /** The lead suit's share (ConfigSC.leadSuitPartProtection a piece, 22% by default). */
     public static float leadShare(EntityPlayer p) {
-        return LeadSuitSC.parts(p) * 0.25F;
+        return LeadSuitSC.parts(p) * Math.max(0, Math.min(25, ConfigSC.leadSuitPartProtection)) / 100F;
     }
 
     /** The radiation shield's share for the worn chestplate and power mode (0 without it). */
@@ -448,5 +448,10 @@ public final class RadiationSC {
         b.setFloat(DOSE, a.getFloat(DOSE));
         b.setFloat(HEAT_FRAC, a.getFloat(HEAT_FRAC));
         b.setInteger(NAUSEA, a.getInteger(NAUSEA));
+    }
+
+    /** Respawned after a death: the dose goes with the player, but no higher than the weakness step. */
+    public static void copyAfterDeath(EntityPlayer from, EntityPlayer to) {
+        setDose(to, Math.min(doseOf(from), STAGE_WEAK - 0.1F));
     }
 }

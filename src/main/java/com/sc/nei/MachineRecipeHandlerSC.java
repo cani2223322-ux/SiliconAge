@@ -245,13 +245,33 @@ public abstract class MachineRecipeHandlerSC extends TemplateRecipeHandler {
             GuiGaugeSC.drawBlended(gui, x, TANK_Y, GuiGaugeSC.SPR_GLASS_U, GuiGaugeSC.SPR_GLASS_V, TANK_W, TANK_H);
         }
 
-        String time = String.format(java.util.Locale.ROOT, "%.1f", r.recipe.ticks / 20f);
-        GuiDraw.drawString(Lang.tr("sc.nei.cost", type.euPerTick, time), 22, 45, com.sc.inventory.GuiHoloSC.VALUE, false);
-        if (r.recipe.defectChance > 0) {
-            GuiDraw.drawString(Lang.tr("sc.nei.defect", Math.round(r.recipe.defectChance * 100)), 22, 54, 0xFF7A5A, false);
+        // what the machine really takes: the config's machineSpeed / machineEnergy, as TileEntityMachineSC
+        String time = String.format(java.util.Locale.ROOT, "%.1f", com.sc.tileentity.TileEntityMachineSC.configTicks(r.recipe.ticks) / 20f);
+        GuiDraw.drawString(Lang.tr("sc.nei.cost", com.sc.tileentity.TileEntityMachineSC.configEuPerTick(type), time), 22, 45,
+                com.sc.inventory.GuiHoloSC.VALUE, false);
+        int defect = Math.round(r.recipe.defectChance * 100);
+        String last = type.heatCapable ? (r.recipe.defectChance > 0 ? Lang.tr("sc.nei.defect.heat", defect) : Lang.tr("sc.nei.heat"))
+                : r.recipe.defectChance > 0 ? Lang.tr("sc.nei.defect", defect) : null;
+        if (last != null) {
+            drawFit(last, 22, 54, 166 - 22 - 2, 0xFF7A5A);
         }
         com.sc.inventory.GuiHoloSC.glint(0, 0, 166, 63);
         GL11.glColor4f(1f, 1f, 1f, 1f);
+    }
+
+    /** A line that is scaled down (never up) to fit maxW. */
+    private static void drawFit(String s, int x, int y, int maxW, int color) {
+        int w = Minecraft.getMinecraft().fontRenderer.getStringWidth(s);
+        if (w <= maxW) {
+            GuiDraw.drawString(s, x, y, color, false);
+            return;
+        }
+        float k = maxW / (float) w;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(x, y + 4F * (1F - k), 0F);
+        GL11.glScalef(k, k, 1F);
+        GuiDraw.drawString(s, 0, 0, color, false);
+        GL11.glPopMatrix();
     }
 
     private static int tankX(int i) {

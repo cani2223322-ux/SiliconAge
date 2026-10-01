@@ -179,4 +179,12 @@ public class ContainerConduitSC extends Container {
                 && bundle.getWorldObj().getTileEntity(bundle.xCoord, bundle.yCoord, bundle.zCoord) == bundle
                 && player.getDistanceSq(bundle.xCoord + 0.5, bundle.yCoord + 0.5, bundle.zCoord + 0.5) <= 64;
     }
+
+    @Override
+    public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
+            return null;                                   // a hotbar key can't put more than the slot takes
+        }
+        return super.slotClick(slotId, button, mode, player);
+    }
 }

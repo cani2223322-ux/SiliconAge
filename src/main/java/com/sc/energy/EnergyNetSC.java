@@ -34,7 +34,8 @@ import net.minecraftforge.event.world.WorldEvent;
  * Each tick: the suppliers feed the consumers, any surplus charges the buffers, any shortfall is
  * drawn from the buffers. Consumers share evenly (EnergySplitSC); the whole network moves at
  * most the cable's rating (volts x amps, §9.1) per tick, line loss included; line loss is
- * lossPerBlock for every cable between the nearest supplier and the consumer. A supplier above
+ * lossPerBlock for every cable between the nearest supplier (for what the buffers give: the
+ * nearest buffer) and the consumer. A supplier above
  * the cable's tier blows the cable next to it up (§9.3), a network above a consumer's input tier
  * blows the consumer up (receiveEnergy).
  *
@@ -321,6 +322,8 @@ public final class EnergyNetSC {
         final List<Integer> cablesAt = new ArrayList<Integer>();
         /** Cables between this tile and the nearest supplier (for its line loss). */
         int distance;
+        /** Cables between this tile and the nearest buffer (line loss of what the buffers give it). */
+        int bufferDistance;
 
         Endpoint(TileEntityEnergyBase tile) {
             this.tile = tile;
@@ -382,13 +385,33 @@ public final class EnergyNetSC {
             this.type = type;
         }
 
-        /** Every endpoint's cable distance to the nearest supplier-capable tile (multi-source BFS). */
+        /**
+         * Every endpoint's cable distance to the nearest supplier and, apart, to the nearest buffer
+         * (two multi-source BFS): what a storage gives a machine is charged for the cables from that
+         * storage, not from a generator that may be far away (or a storage's own 1 block when a
+         * generator charges it).
+         */
         void measure() {
+            int[] fromSuppliers = distances(false);
+            int[] fromBuffers = distances(true);
+            for (Endpoint ep : endpoints) {
+                int best = Integer.MAX_VALUE, bestBuf = Integer.MAX_VALUE;
+                for (int c : ep.cablesAt) {
+                    best = Math.min(best, fromSuppliers[c]);
+                    bestBuf = Math.min(bestBuf, fromBuffers[c]);
+                }
+                ep.distance = best == Integer.MAX_VALUE ? 0 : best;
+                ep.bufferDistance = bestBuf == Integer.MAX_VALUE ? 0 : bestBuf;
+            }
+        }
+
+        /** Cable distances (1 = the cable at the tile) from the suppliers, or from the buffers. */
+        private int[] distances(boolean buffers) {
             int[] dist = new int[cables.size()];
             java.util.Arrays.fill(dist, Integer.MAX_VALUE);
             ArrayDeque<Integer> queue = new ArrayDeque<Integer>();
             for (Endpoint ep : endpoints) {
-                if (ep.outFace() != null) {
+                if (ep.outFace() != null && (ep.inFace() != null) == buffers) {
                     for (int c : ep.cablesAt) {
                         if (dist[c] != 1) {
                             dist[c] = 1;
@@ -406,13 +429,7 @@ public final class EnergyNetSC {
                     }
                 }
             }
-            for (Endpoint ep : endpoints) {
-                int best = Integer.MAX_VALUE;
-                for (int c : ep.cablesAt) {
-                    best = Math.min(best, dist[c]);
-                }
-                ep.distance = best == Integer.MAX_VALUE ? 0 : best;
-            }
+            return dist;
         }
 
         /** @return false when something exploded (the caller rebuilds). */
@@ -447,13 +464,13 @@ public final class EnergyNetSC {
             }
             int capacity = type.maxThroughput();
             int[] used = {0};
-            if (!move(suppliers, consumers, capacity, used, sent)) {
+            if (!move(suppliers, consumers, capacity, used, sent, false)) {
                 return false;
             }
-            if (!move(suppliers, buffers, capacity, used, sent)) {   // surplus charges the buffers
+            if (!move(suppliers, buffers, capacity, used, sent, false)) {   // surplus charges the buffers
                 return false;
             }
-            return move(buffers, consumers, capacity, used, sent);   // shortfall is drawn from them
+            return move(buffers, consumers, capacity, used, sent, true);   // shortfall is drawn from them
         }
 
         /** What a tile can still give this tick: its packets of the output voltage in all, whatever it touches. */
@@ -468,9 +485,9 @@ public final class EnergyNetSC {
             return Math.max(0, Math.min(offer, room));
         }
 
-        /** One supply -> demand pass within what's left of the network's rating. */
+        /** One supply -> demand pass within what's left of the network's rating (line loss from the nearest buffer when `fromBuffers`). */
         private boolean move(List<Endpoint> from, List<Endpoint> to, int capacity, int[] used,
-                             Map<TileEntityEnergyBase, Integer> sent) {
+                             Map<TileEntityEnergyBase, Integer> sent, boolean fromBuffers) {
             if (from.isEmpty() || to.isEmpty() || used[0] >= capacity) {
                 return true;
             }
@@ -492,7 +509,7 @@ public final class EnergyNetSC {
             int[] loss = new int[to.size()];
             for (int i = 0; i < demand.length; i++) {
                 demand[i] = Math.max(0, to.get(i).tile.demandedEnergy());
-                loss[i] = type.lossPerBlock * to.get(i).distance;
+                loss[i] = type.lossPerBlock * (fromBuffers ? to.get(i).bufferDistance : to.get(i).distance);
             }
             int[] give = EnergySplitSC.split(budget, demand, loss);
             int spent = 0;

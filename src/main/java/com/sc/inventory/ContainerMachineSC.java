@@ -266,7 +266,11 @@ public class ContainerMachineSC extends Container {
                 return null;
             }
         } else if (original.getItem() instanceof com.sc.item.ItemUpgradeSC) {
-            if (!SlotMergeSC.mergeValid(inventorySlots, original, TileEntityMachineSC.FIRST_UPGRADE_SLOT, machineSlots)
+            // an upgrade this machine also takes as an ingredient (an Upgrade Station's recipe) goes
+            // to the inputs first, then the upgrade slots
+            boolean ingredient = machine.isItemValidForSlot(0, original);
+            if (!(ingredient && SlotMergeSC.mergeValid(inventorySlots, original, 0, TileEntityMachineSC.INPUT_SLOTS))
+                    && !SlotMergeSC.mergeValid(inventorySlots, original, TileEntityMachineSC.FIRST_UPGRADE_SLOT, machineSlots)
                     && !shuffleInPlayerInventory(original, slotIndex, machineSlots)) {
                 return null;
             }
@@ -359,5 +363,13 @@ public class ContainerMachineSC extends Container {
                 player.addStat(net.minecraft.stats.AchievementList.cookFish, 1);
             }
         }
+    }
+
+    @Override
+    public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
+            return null;                                   // a hotbar key can't put more than the slot takes
+        }
+        return super.slotClick(slotId, button, mode, player);
     }
 }

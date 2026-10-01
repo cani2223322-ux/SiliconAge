@@ -136,6 +136,12 @@ public class GuiMachineSC extends GuiContainer {
     /** The Etching Bath's own screen, laid out as the CVD Chamber's: tank -> two baths <- tank. */
     private final boolean etch;
     private static final int CVD_BELL_X = CHEM_X + 33, CVD_BELL_W = 64, CVD_BELL_H = 50, CVD_TANK2_X = CHEM_X + 99;
+    /**
+     * The Electrolyzer's four tanks (two inputs - water and lye / heavy water - and two products):
+     * the inputs 31 apart, the cell squeezed to a slim column between them and the products.
+     */
+    private static final int ELEC_TANK2_X = CHEM_X + 31, ELEC_SLIM_X = CHEM_X + 62, ELEC_SLIM_W = 7, ELEC_SLIM_H = 62,
+            ELEC_OUT_X = ELEC_SLIM_X + ELEC_SLIM_W;
     /** Screens with tanks of their own (Chemical Reactor, CVD Chamber): which tanks, and where; null for the others. */
     private final int[] ownTanks, ownTankX;
     private static final int FURNACE_X = 90, FURNACE_Y = 36, FURNACE_W = 64, FURNACE_H = 44, THERMO_X = 158,
@@ -182,9 +188,11 @@ public class GuiMachineSC extends GuiContainer {
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
         cvd = machine.getMachineType() == com.sc.machine.MachineType.CVD_CHAMBER;
         etch = machine.getMachineType() == com.sc.machine.MachineType.ETCHING_BATH;
-        ownTanks = chem || boil ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : elec || air ? new int[]{0, 2, 3} : refi ? new int[]{0, 2} : null;
+        ownTanks = chem || boil ? new int[]{0, 1, 2} : cvd || etch ? new int[]{0, 1} : elec ? new int[]{0, 1, 2, 3} : air ? new int[]{0, 2, 3}
+                : refi ? new int[]{0, 2} : null;
         ownTankX = chem ? new int[]{CHEM_X, CHEM_X + CHEM_IN2, CHEM_X + CHEM_OUT} : boil ? new int[]{CHEM_X, CHEM_X + 32, WATER_X} : cvd || etch ? new int[]{CHEM_X, CVD_TANK2_X}
-                : elec || air ? new int[]{CHEM_X, WATER_X - 33, WATER_X} : refi ? new int[]{CHEM_X, WATER_X} : null;
+                : elec ? new int[]{CHEM_X, ELEC_TANK2_X, ELEC_OUT_X, ELEC_OUT_X + 31}
+                : air ? new int[]{CHEM_X, WATER_X - 33, WATER_X} : refi ? new int[]{CHEM_X, WATER_X} : null;
         xSize = GuiBigSC.W;
         ySize = GuiBigSC.H;
     }
@@ -408,7 +416,7 @@ public class GuiMachineSC extends GuiContainer {
                 drawRect(bx + 1, by + 1, bx + AIR_BADGE_W - 1, by + 8, i == mode ? 0xFF0E3A50 : 0xFF0A1218);
             }
             GuiSceneSC.airColumn(x + CHEM_X + 33, y + TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress);
-        } else if (elec) {                                              // the badges, the cell between the tanks
+        } else if (elec) {                                              // the badges, the slim cell between inputs and products
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int mode = elecMode();
             for (int i = 0; i < ELEC_BADGES.length; i++) {
@@ -418,7 +426,7 @@ public class GuiMachineSC extends GuiContainer {
             }
             com.sc.machine.MachineRecipe r = shownRecipe();
             net.minecraftforge.fluids.FluidStack oa = r == null ? null : r.fluidOutputA, ob = r == null ? null : r.fluidOutputB;
-            GuiSceneSC.electrolysisCell(x + CHEM_X + 33, y + TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, t, machine.getStatus() == MachineStatus.PROCESSING,
+            GuiSceneSC.electrolysisCellSlim(x + ELEC_SLIM_X, y + TANK_Y, ELEC_SLIM_W, ELEC_SLIM_H, t, machine.getStatus() == MachineStatus.PROCESSING,
                     colourOf(machine.getTank(ob != null ? 3 : 2).getFluid(), ob != null ? ob : oa), colourOf(machine.getTank(2).getFluid(), oa));
         } else if (etch) {                                              // the two baths between the two tanks
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
@@ -1310,7 +1318,7 @@ public class GuiMachineSC extends GuiContainer {
                 : f == com.sc.init.ModFluids.deuterium ? 3 : -1;
     }
 
-    /** The Electrolyzer: the badges' names and its three tanks' labels (water in, the two products out). */
+    /** The Electrolyzer: the badges' names and its four tanks' labels (the two inputs, the two products out). */
     private void drawElecText() {
         int mode = elecMode();
         for (int i = 0; i < ELEC_BADGES.length; i++) {
@@ -1318,8 +1326,8 @@ public class GuiMachineSC extends GuiContainer {
             small(ELEC_BADGES[i], CHEM_X + i * (ELEC_BADGE_W + 2) + (ELEC_BADGE_W - sw) / 2, CAPTION_Y + 1, i == mode ? 0x96F0FF : 0x465A6E);
         }
         com.sc.machine.MachineRecipe r = shownRecipe();
-        net.minecraftforge.fluids.FluidStack[] want = {r == null ? null : r.fluidInputA, r == null ? null : r.fluidOutputA,
-                r == null ? null : r.fluidOutputB};
+        net.minecraftforge.fluids.FluidStack[] want = {r == null ? null : r.fluidInputA, r == null ? null : r.fluidInputB,
+                r == null ? null : r.fluidOutputA, r == null ? null : r.fluidOutputB};
         for (int k = 0; k < ownTanks.length; k++) {
             TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
                     GuiHoloSC.LABEL, false, guiLeft, guiTop);
@@ -2053,13 +2061,14 @@ public class GuiMachineSC extends GuiContainer {
             lines.add(Lang.tr("sc.gui.air.hint"));
             return lines;
         }
-        if (elec && GuiGaugeSC.isOver(CHEM_X, CAPTION_Y - 1, 3 * (ELEC_BADGE_W + 2), 10, mouseX, mouseY)
-                || elec && GuiGaugeSC.isOver(CHEM_X + 33, TANK_Y, ELEC_CELL_W, CHEM_FLASK_H, mouseX, mouseY)) {
+        if (elec && GuiGaugeSC.isOver(CHEM_X, CAPTION_Y - 1, ELEC_BADGES.length * (ELEC_BADGE_W + 2), 10, mouseX, mouseY)
+                || elec && GuiGaugeSC.isOver(ELEC_SLIM_X, TANK_Y, ELEC_SLIM_W, ELEC_SLIM_H, mouseX, mouseY)) {
             com.sc.machine.MachineRecipe r = shownRecipe();
             lines.add(Lang.tr("sc.gui.elec.title"));
             if (r != null) {
                 lines.add(formulaOf(r));
-                String in = r.fluidInputA != null ? String.valueOf(r.fluidInputA.amount) : "0";
+                String in = (r.fluidInputA != null ? String.valueOf(r.fluidInputA.amount) : "0")
+                        + (r.fluidInputB != null ? " + " + r.fluidInputB.amount : "");
                 String out = (r.fluidOutputA != null ? String.valueOf(r.fluidOutputA.amount) : "0")
                         + (r.fluidOutputB != null ? " + " + r.fluidOutputB.amount : "");
                 lines.add(Lang.tr("sc.gui.elec.run", in, out, Math.max(1, machine.effectiveTicks(r) / 20)));

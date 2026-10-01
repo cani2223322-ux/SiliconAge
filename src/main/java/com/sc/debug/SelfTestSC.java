@@ -337,6 +337,7 @@ public final class SelfTestSC {
                         && emptyLevel == 0 && lv.comparatorLevel() == 1 + 14 * 30000 / 60000
                         && lv.isItemValidForSlot(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 3,
                                 ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE))
+                                == com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks()   // IC2 without IU: no overdrive
                         && !lv.isItemValidForSlot(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 3,
                                 ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER)),
                 "storage upgrades: 2x capacity +50% = 60000, transformer LV->MV, overdrive 2 packets, comparator " + lv.comparatorLevel());

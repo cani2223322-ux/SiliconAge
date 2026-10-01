@@ -96,6 +96,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private int heat, ramp;
     /** Wind / thermo output worked out once a second; wind height and freedom, thermo pairs and dT - for the screen. */
     private int cachedOutput, infoA, infoB;
+    /** Not saved: cachedOutput worked out since the load (else the first second after loading gave nothing). */
+    private boolean outputWorkedOut;
     private boolean structureOk;
     private int creativeTier = Tier.values().length - 1;
     /** EU made last tick - for the screen and WAILA. */
@@ -377,6 +379,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     public static final int PORT_TANKS_MAX = 4, PORT_STORES_MAX = 2;
     /** Liquid helium the XV must have in its port tanks to light (a few seconds of cooling). */
     public static final int BIG_HE_START = 1000;
+    /** Liquid helium the Exo Reactor must have in its tank to light (~50 s of cooling at 1 mB/t). */
+    public static final int EXO_HE_START = 1000;
     /** A wall cell's label for the screen: nothing / the gas of its tank (1-4) / a storage / a tank never filled / another fluid. */
     public static final int LABEL_NONE = 0, LABEL_STORE = 5, LABEL_FREE = 6, LABEL_OTHER = 7;
 
@@ -795,9 +799,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     /** A tick of the big mode's supplies and, once a second, its stability. @return false: it went out */
     private boolean bigTick() {
         double fm = Math.max(0.01, fuelMultiplier());
+        // deuterium and hydrogen follow the power really given (throttled down when the buffer and
+        // the storages are full); the helium cools the coils whatever the power - always in full
+        double load = Math.max(0, Math.min(RAMP_FULL, ramp)) / (double) RAMP_FULL;
         boolean fluidD = portFluid[3] > 0;                     // deuterium in a port tank: that first
         if (fluidD) {
-            dDebt += BIG_D_PER_TICK * fm;
+            dDebt += BIG_D_PER_TICK * fm * load;
             int dmb = (int) dDebt;
             if (dmb > 0) {
                 int got = drainPorts("deuterium", dmb, false);
@@ -824,7 +831,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 cellBurnRemaining += CELL_BURN_TICKS;
                 markDirty();
             }
-            cellBurnRemaining -= fm * BIG_CELL_MUL;
+            cellBurnRemaining -= fm * BIG_CELL_MUL * load;
         }
         heDebt += BIG_HE_PER_TICK;
         int he = (int) heDebt;
@@ -836,7 +843,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 heDebt = 0;
             }
         }
-        h2Debt += BIG_H2_PER_TICK;
+        h2Debt += BIG_H2_PER_TICK * load;
         int h2 = (int) h2Debt;
         if (h2 > 0) {
             int got = drainPorts("hydrogen", h2, false);
@@ -1068,8 +1075,19 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 || status == GeneratorStatus.NO_COOLANT;
         if (generatorType.needsIgnition()) {
             working &= ignited;
+        } else if (status == GeneratorStatus.BUFFER_FULL) {
+            working = hasFuelIn();                       // a full buffer stops it before the fuel check: empty, it's cold
         }
         return working ? base : 0F;
+    }
+
+    /** Fuel in for a generator without ignition (the Plasma Reactor: both gases) - a full buffer with none isn't work. */
+    private boolean hasFuelIn() {
+        switch (generatorType.kind) {
+            case DUAL_FLUID: return fuelTank.getFluidAmount() > 0 && fuelTank2.getFluidAmount() > 0;
+            case FLUID_FUEL: return fuelTank.getFluidAmount() > 0;
+            default: return true;
+        }
     }
 
     /**
@@ -1197,6 +1215,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (worldObj.getTotalWorldTime() % 20 == 0) {                  // the inflow over the last second
             inflowTenths = inflowWindow / 2;
             inflowWindow = 0;
+        }
+        if (generatorType == GeneratorType.RTG && worldObj.getTotalWorldTime() % 20 == 0) {
+            decayCapsules();                                 // the isotopes decay switched on or off
         }
         if (!switchedOn()) {
             status = powerOn ? GeneratorStatus.REDSTONE : GeneratorStatus.DISABLED;
@@ -1390,7 +1411,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             status = GeneratorStatus.NO_ROTOR;
             return;
         }
-        if (worldObj.getTotalWorldTime() % 20 == 0) {
+        if (!outputWorkedOut || worldObj.getTotalWorldTime() % 20 == 0) {
+            outputWorkedOut = true;                          // the first tick after loading too, not a second later
             int height = yCoord - 64;
             int blocked = 0;
             for (int dx = -2; dx <= 2; dx++) {
@@ -1460,7 +1482,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      * Peltier pair; output = pairs x (mean hot - mean cold) / 8, at most the rated 384 EU/t.
      */
     private void updateThermo() {
-        if (worldObj.getTotalWorldTime() % 20 == 0) {
+        if (!outputWorkedOut || worldObj.getTotalWorldTime() % 20 == 0) {
+            outputWorkedOut = true;                          // the first tick after loading too, not a second later
             int hot = 0, cold = 0, hotSum = 0, coldSum = 0, sides = 0;
             for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
                 int t = temperatureAt(xCoord + d.offsetX, yCoord + d.offsetY, zCoord + d.offsetZ);
@@ -1519,22 +1542,28 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return 0;
     }
 
-    /** Each capsule gives 32 EU/t and decays one step a second whether the energy is used or not. */
-    private void updateRtg() {
-        int capsules = 0;
-        boolean tick = worldObj.getTotalWorldTime() % 20 == 0;
+    /** Each capsule decays one step a second whether the energy is used or not, the generator switched off too. */
+    private void decayCapsules() {
         for (int i = SLOT_FUEL; i <= SLOT_BLANKET; i++) {
             ItemStack s = slots[i];
             if (s == null || s.getItem() != com.sc.init.ModItems.isotopeCapsule) {
                 continue;
             }
-            capsules++;
-            if (tick) {
-                s.setItemDamage(s.getItemDamage() + 1);
-                if (s.getItemDamage() >= s.getMaxDamage()) {
-                    slots[i] = null;
-                }
-                markDirty();
+            s.setItemDamage(s.getItemDamage() + 1);
+            if (s.getItemDamage() >= s.getMaxDamage()) {
+                slots[i] = null;
+            }
+            markDirty();
+        }
+    }
+
+    /** Each capsule gives 32 EU/t (its decay - decayCapsules(), every second, running or not). */
+    private void updateRtg() {
+        int capsules = 0;
+        for (int i = SLOT_FUEL; i <= SLOT_BLANKET; i++) {
+            ItemStack s = slots[i];
+            if (s != null && s.getItem() == com.sc.init.ModItems.isotopeCapsule) {
+                capsules++;
             }
         }
         infoA = capsules;
@@ -1543,10 +1572,26 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     // ---- reactors ----
 
-    /** Lights a FUSION / EXO generator once its charge is in (and, for FUSION, a blanket module is there). */
+    private boolean hasBlanket() {
+        ItemStack b = slots[SLOT_BLANKET];
+        return b != null && b.getItem() == com.sc.init.ModItems.component("liBlanketModule");
+    }
+
+    private boolean hasDeuteriumCell() {
+        ItemStack c = slots[SLOT_FUEL];
+        return c != null && c.getItem() == com.sc.init.ModItems.deuteriumCell;
+    }
+
+    /**
+     * Lights a FUSION / EXO generator once its charge is in: FUSION needs a blanket module (a new one
+     * only when the last is spent) and deuterium, EXO enough liquid helium. Not lit - the charge stays.
+     */
     private boolean ignite() {
         if (xv() && bigEvent != 0) {
             return false;               // put out / broken down: lit again only once the player allows it (the screen's button)
+        }
+        if (status == GeneratorStatus.BLANKET_DEPLETED && moduleLifeRemaining <= 0 && !hasBlanket()) {
+            return false;               // "blanket spent" stays on the screen until a new one is in (the charge still comes in)
         }
         if (xv() && portFluid[0] < BIG_HE_START) {
             status = GeneratorStatus.NO_COOLANT;                  // the coils can't be cooled: not lit
@@ -1565,19 +1610,30 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             status = GeneratorStatus.IGNITING;                          // the hydrogen went: the full charge then
             return false;
         }
+        if (generatorType == GeneratorType.EXO_REACTOR && fuelTank.getFluidAmount() < EXO_HE_START) {
+            status = GeneratorStatus.NO_COOLANT;                  // no helium to cool the core: not lit, the charge kept
+            return false;
+        }
         if (generatorType.kind == GeneratorType.Kind.FUSION) {
-            ItemStack blanket = slots[SLOT_BLANKET];
-            if (blanket == null || blanket.getItem() != com.sc.init.ModItems.component("liBlanketModule")) {
+            boolean oldBlanket = moduleLifeRemaining > 0;          // put out with life left in it: that one goes on
+            if (!oldBlanket && !hasBlanket()) {
                 status = GeneratorStatus.NO_BLANKET;
                 return false;
             }
-            // §18.2: ignition is a one-off expensive event, and the blanket module is what the
-            // reaction breeds tritium in - both are spent here.
-            blanket.stackSize--;
-            if (blanket.stackSize <= 0) {
-                slots[SLOT_BLANKET] = null;
+            if (!xv() && cellBurnRemaining <= 0 && !hasDeuteriumCell()) {
+                status = GeneratorStatus.NO_DEUTERIUM;             // nothing to burn: not lit, the charge kept
+                return false;
             }
-            moduleLifeRemaining = MODULE_LIFE_TICKS;
+            if (!oldBlanket) {
+                // §18.2: ignition is a one-off expensive event, and the blanket module is what the
+                // reaction breeds tritium in - both are spent here.
+                ItemStack blanket = slots[SLOT_BLANKET];
+                blanket.stackSize--;
+                if (blanket.stackSize <= 0) {
+                    slots[SLOT_BLANKET] = null;
+                }
+                moduleLifeRemaining = MODULE_LIFE_TICKS;
+            }
         }
         long ignitionNeedAtLighting = ignitionNeed();       // before the hydrogen that halved it is used up
         if (xv()) {                                     // lit inside its build (never without it)
@@ -2039,9 +2095,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             if (ignited) {
                 nbt.setBoolean("Ignited", true);
-                nbt.setInteger("ModuleLife", moduleLifeRemaining);
-                nbt.setInteger("CellBurn", (int) cellBurnRemaining);
                 nbt.setInteger("Ramp", ramp);
+            }
+            if (ignited || moduleLifeRemaining > 0) {           // put out with life left: the next lighting goes on with it
+                nbt.setInteger("ModuleLife", moduleLifeRemaining);
+            }
+            if (ignited || cellBurnRemaining > 0) {
+                nbt.setInteger("CellBurn", (int) cellBurnRemaining);
             }
             if (heat > 0) {
                 nbt.setInteger("Heat", heat);
@@ -2080,9 +2140,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             ignitionEU = Math.max(0L, Math.min(generatorType.ignitionThreshold(), nbt.getLong("IgnitionEU")));
             boolean was = ignited;
             ignited = nbt.getBoolean("Ignited");
+            moduleLifeRemaining = Math.max(0, Math.min(MODULE_LIFE_TICKS, nbt.getInteger("ModuleLife")));
+            cellBurnRemaining = Math.max(0, Math.min(CELL_BURN_TICKS, nbt.getInteger("CellBurn")));
             if (ignited) {
-                moduleLifeRemaining = Math.max(0, Math.min(MODULE_LIFE_TICKS, nbt.getInteger("ModuleLife")));
-                cellBurnRemaining = Math.max(0, Math.min(CELL_BURN_TICKS, nbt.getInteger("CellBurn")));
                 ramp = Math.max(0, Math.min(RAMP_FULL, nbt.getInteger("Ramp")));
             }
             heat = Math.max(0, Math.min(HEAT_LIMIT, nbt.getInteger("Heat")));

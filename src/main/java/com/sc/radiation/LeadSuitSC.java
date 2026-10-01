@@ -13,8 +13,8 @@ import net.minecraft.item.ItemStack;
 /**
  * The lead suit's weight: each piece worn takes 15% of the walking speed (the full suit 60%), with
  * the full suit there's no running, the jump is lower and the wearer sinks in water; from three
- * pieces digging is slower; it tires (hunger) faster. Its protection - 25% of the
- * radiation a piece - is in RadiationSC.
+ * pieces digging is slower; it tires (hunger) faster. Its protection - ConfigSC.leadSuitPartProtection
+ * % of the radiation a piece (22 by default, at most 25) - is in RadiationSC.
  */
 public final class LeadSuitSC {
 

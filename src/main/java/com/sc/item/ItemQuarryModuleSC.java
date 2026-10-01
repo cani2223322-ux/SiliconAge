@@ -122,6 +122,10 @@ public class ItemQuarryModuleSC extends Item {
         }
         com.sc.util.TooltipSC.more(list, Lang.tr("sc.quarrymodule.tooltip." + k.name().toLowerCase(java.util.Locale.ROOT)),
                 Lang.tr("sc.quarrymodule.tooltip.slot", k.max));
+        String working = com.sc.inventory.GuiQuarrySC.moduleWorkingLine(stack);   // tooltips are client-only; NEI draws them too
+        if (working != null) {
+            list.add(working);
+        }
     }
 
     @Override

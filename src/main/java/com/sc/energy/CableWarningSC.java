@@ -66,6 +66,30 @@ public final class CableWarningSC {
         }
     }
 
+    /**
+     * A placed source's output went up (a Transformer upgrade put into a storage): warns the player
+     * if a cable at an output face now carries less than it gives.
+     */
+    public static void outputRaised(TileEntityEnergyBase src, EntityPlayer player) {
+        World world = src.getWorldObj();
+        if (world == null || world.isRemote || player == null || !src.isEnergySource()) {
+            return;
+        }
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+            if (!src.isOutputFace(d)) {
+                continue;
+            }
+            TileEntity n = world.getTileEntity(src.xCoord + d.offsetX, src.yCoord + d.offsetY, src.zCoord + d.offsetZ);
+            if (n instanceof TileEntityConduitBundleSC && ((TileEntityConduitBundleSC) n).getCable() != null) {
+                Tier cable = ((TileEntityConduitBundleSC) n).getCable().tier;
+                if (cable.excessTiersOf(src.outputTier()) > 0) {
+                    player.addChatComponentMessage(new ChatComponentTranslation("sc.cable.warn.raised", src.outputTier().name(), cable.name()));
+                    return;
+                }
+            }
+        }
+    }
+
     private static void warn(EntityPlayer p, Tier source, Tier cable) {
         p.addChatComponentMessage(new ChatComponentTranslation("sc.cable.warn",
                 source.name(), source.getVoltage(), cable.name(), cable.getVoltage()));

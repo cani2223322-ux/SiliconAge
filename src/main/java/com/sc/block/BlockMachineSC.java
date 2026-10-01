@@ -177,6 +177,11 @@ public class BlockMachineSC extends Block {
             ((TileEntityMachineSC) te).loadTanksFromItem(stack.getTagCompound().getCompoundTag(TileEntityMachineSC.ITEM_TANKS_KEY));
             world.markBlockForUpdate(x, y, z);
         }
+        // the charge last: the upgrades above set how much the buffer holds
+        if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
+                && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_ENERGY_KEY)) {
+            ((TileEntityMachineSC) te).loadEnergyFromItem(stack.getTagCompound().getInteger(TileEntityMachineSC.ITEM_ENERGY_KEY));
+        }
     }
 
     @Override
@@ -210,10 +215,14 @@ public class BlockMachineSC extends Block {
         net.minecraft.nbt.NBTTagCompound tanks = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).tanksForItem() : null;
         net.minecraft.nbt.NBTTagCompound ups = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).upgradesForItem() : null;
         int redstone = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getRedstoneMode() : 0;
-        if (tanks != null || ups != null || redstone != 0) {
+        int energy = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getEnergyStored() : 0;
+        if (tanks != null || ups != null || redstone != 0 || energy > 0) {
             net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
             if (redstone != 0) {
                 nbt.setInteger(TileEntityMachineSC.ITEM_REDSTONE_KEY, redstone);
+            }
+            if (energy > 0) {                                        // the buffer's charge rides along, as a storage's
+                nbt.setInteger(TileEntityMachineSC.ITEM_ENERGY_KEY, energy);
             }
             if (tanks != null) {
                 nbt.setTag(TileEntityMachineSC.ITEM_TANKS_KEY, tanks);
@@ -254,8 +263,20 @@ public class BlockMachineSC extends Block {
         if (player.isSneaking() && player.getCurrentEquippedItem() == null) {
             TileEntity te = world.getTileEntity(x, y, z);
             if (!world.isRemote && te instanceof TileEntityMachineSC) {
-                int vented = ((TileEntityMachineSC) te).ventInputTanks();
-                player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.machine.vented", vented));
+                TileEntityMachineSC machine = (TileEntityMachineSC) te;
+                boolean inputs = machine.getTank(0).getFluidAmount() + machine.getTank(1).getFluidAmount() > 0;
+                boolean any = inputs || machine.getTank(2).getFluidAmount() + machine.getTank(3).getFluidAmount() > 0;
+                if (any && !machine.confirmVent(player)) {           // the first click only warns, as the power switch's
+                    player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.machine.vent.confirm"));
+                    return true;
+                }
+                int vented = machine.ventInputTanks();
+                if (vented == TileEntityMachineSC.VENT_NO_POWER) {
+                    player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.machine.vent.nopower"));
+                } else {
+                    player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(
+                            inputs || vented == 0 ? "sc.chat.machine.vented" : "sc.chat.machine.vented.out", vented));
+                }
             }
             return true;
         }

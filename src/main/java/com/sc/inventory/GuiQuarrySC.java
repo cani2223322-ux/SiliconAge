@@ -73,7 +73,7 @@ public class GuiQuarrySC extends GuiContainer {
     // ------------------------------------------------------------------ layout
 
     private static final int B_RUN = 1, B_RESET = 2, B_XP = 3, B_REDSTONE = 4, B_POWER = 5, B_SWITCH = 6, B_BATTERY = 7, B_SHAPE = 10, B_REPLACE = 11,
-            B_SHOW = 20, B_DASH = 21, B_PLANE = 22, B_ORES = 23, B_BRIGHT = 24, B_TARGET = 25, B_SWATCH = 30, B_SLIDER = 40,
+            B_SHOW = 20, B_DASH = 21, B_PLANE = 22, B_BRIGHT = 24, B_TARGET = 25, B_SWATCH = 30, B_SLIDER = 40,
             B_SCAN = 50, B_FILTER = 60, B_OUTSIDE = 61, B_PAGE = 62, B_OUTPAGE = 63, B_FF_MODE = 64,
             B_FF_REMOVE = 65, B_TANK_FULL = 66, B_FF_HAND = 67, B_FF_CLEAR = 68, B_TANK_SIDE = 70, B_TANK_CLEAR = 74,
             B_TANK_FILTER = 78, B_FF_DEL = 82, B_TANK_PIN = 88, B_TANK_AUTO = 92, B_WASH_CLEAR = 96, B_FVEIN = 97, B_FVEIN_RANGE = 98, B_FVEIN_FLOWING = 99, B_WASH_FEED = 69,
@@ -289,8 +289,6 @@ public class GuiQuarrySC extends GuiContainer {
             } else if (id == B_PLANE) {
                 boolean on = (quarry.getVflags() & TileEntityQuarrySC.V_PLANE) != 0;
                 b.displayString = (on ? "§a" : "§7") + Lang.tr(quarry.isExo() ? "sc.quarrygui.exo.plane" : "sc.quarrygui.plane", onOff(on));
-            } else if (id == B_ORES) {
-                b.displayString = Lang.tr("sc.quarrygui.ores", onOff((quarry.getVflags() & TileEntityQuarrySC.V_ORES) != 0));
             } else if (id == B_BRIGHT) {
                 b.displayString = Lang.tr("sc.quarrygui.bright", quarry.getBrightness() * 25);
             } else if (id == B_TARGET) {
@@ -479,7 +477,6 @@ public class GuiQuarrySC extends GuiContainer {
             case B_SHOW: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_SHOW, 0); break;
             case B_DASH: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_VFLAG, TileEntityQuarrySC.V_DASH); break;
             case B_PLANE: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_VFLAG, TileEntityQuarrySC.V_PLANE); break;
-            case B_ORES: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_VFLAG, TileEntityQuarrySC.V_ORES); break;
             case B_BRIGHT: QuarryNetSC.send(quarry, TileEntityQuarrySC.A_BRIGHT, 0); break;
             case B_TARGET:
                 sendSliders();
@@ -886,7 +883,8 @@ public class GuiQuarrySC extends GuiContainer {
             case PAUSED:
             case DISABLED: return GuiHoloSC.IDLE;
             case REDSTONE:
-            case REPAIRING: return GuiHoloSC.WARN;
+            case REPAIRING:
+            case WAITING_CHUNK: return GuiHoloSC.WARN;
             default: return GuiHoloSC.BAD;
         }
     }
@@ -976,6 +974,9 @@ public class GuiQuarrySC extends GuiContainer {
             small(Lang.tr("sc.quarrygui.area2", a[2] - a[0] + 1, a[3] - a[1] + 1, quarry.maxSize(), a[4] - a[5] + 1), 14, 104, 88, DIM);
         }
         small(Lang.tr("sc.quarrygui.mined", String.valueOf(quarry.getMined())), 14, 112, 88, DIM);
+        if (quarry.getSkippedPrivate() > 0) {
+            small(Lang.tr("sc.quarrygui.skippedprivate", quarry.getSkippedPrivate()), 14, 120, 88, GuiHoloSC.WARN);
+        }
         headCard();
         caption("sc.quarrygui.cap.pump", 14, 186);
         int used = 0;
@@ -1219,6 +1220,38 @@ public class GuiQuarrySC extends GuiContainer {
         }
     }
 
+    /**
+     * A module in a module slot: when there are more of its kind than work (an old world's stack past
+     * the slot's limit, or the same module in two slots), the tooltip says how many do.
+     */
+    /** ItemQuarryModuleSC's tooltip line "N of M work" for a module stack in this screen's upgrade slots (null when not over the limit). */
+    public static String moduleWorkingLine(ItemStack stack) {
+        net.minecraft.client.gui.GuiScreen screen = net.minecraft.client.Minecraft.getMinecraft().currentScreen;
+        if (!(screen instanceof GuiQuarrySC) || stack == null || !(stack.getItem() instanceof ItemQuarryModuleSC)) {
+            return null;
+        }
+        GuiQuarrySC g = (GuiQuarrySC) screen;
+        if (g.tab != 5) {
+            return null;
+        }
+        boolean inSlot = false;
+        for (int i = ContainerQuarrySC.FIRST_UPGRADE; i < ContainerQuarrySC.FIRST_TOOLS; i++) {
+            if (((net.minecraft.inventory.Slot) g.container.inventorySlots.get(i)).getStack() == stack) {
+                inSlot = true;
+                break;
+            }
+        }
+        ItemQuarryModuleSC.Kind k = ItemQuarryModuleSC.kindOf(stack);
+        int total = 0;
+        for (int i = TileEntityQuarrySC.FIRST_UPGRADE; i < TileEntityQuarrySC.FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES; i++) {
+            ItemStack s = g.quarry.getStackInSlot(i);
+            if (s != null && s.getItem() instanceof ItemQuarryModuleSC && ItemQuarryModuleSC.kindOf(s) == k) {
+                total += s.stackSize;
+            }
+        }
+        return inSlot && total > k.max ? "§e" + Lang.tr("sc.quarrygui.module.working", k.max, total) : null;
+    }
+
     /** A gauge's tooltip: the fluid and amount, its side, the pin, auto output (i = TANKS: the washing water). */
     private List<String> tankTip(int i) {
         List<String> lines = new ArrayList<String>();
@@ -1319,6 +1352,9 @@ public class GuiQuarrySC extends GuiContainer {
                     lines.add(i == 24
                             ? Lang.tr("sc.quarrygui.flag.24.hint", TileEntityQuarrySC.REPAIR_PER_TICK, TileEntityQuarrySC.REPAIR_COST)
                             : Lang.tr("sc.quarrygui.flag." + i + ".hint"));
+                    if ((1 << i) == TileEntityQuarrySC.F_SKIP_TILES) {
+                        lines.add("§e" + Lang.tr("sc.quarrygui.flag.13.warn"));   // off: other mods' blocks may lose what they hold
+                    }
                     ItemQuarryModuleSC.Kind k = moduleOf(i);
                     if (quarry.isExo() && notForRig(i)) {
                         lines.add("§c" + Lang.tr("sc.quarrygui.exo.notused"));

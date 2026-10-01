@@ -162,8 +162,9 @@ public class GuiTokamakXVSC extends GuiContainer {
         return Integer.bitCount(scan()[1]);
     }
 
+    /** A blanket in the slot, or the last one put out with life left in it (the next lighting goes on with that). */
     private boolean hasBlanket() {
-        return gen.getStackInSlot(TileEntityGeneratorSC.SLOT_BLANKET) != null;
+        return gen.getStackInSlot(TileEntityGeneratorSC.SLOT_BLANKET) != null || gen.getModuleLife() > 0;
     }
 
     private int cells() {
@@ -450,7 +451,7 @@ public class GuiTokamakXVSC extends GuiContainer {
         if (cellF <= 0 && cells() > 0) {
             cellF = 1F;
         }
-        float blankF = gen.isIgnited() ? (float) gen.getModuleLife() / TileEntityGeneratorSC.MODULE_LIFE_TICKS : hasBlanket() ? 1F : 0F;
+        float blankF = gen.isIgnited() || gen.getModuleLife() > 0 ? (float) gen.getModuleLife() / TileEntityGeneratorSC.MODULE_LIFE_TICKS : hasBlanket() ? 1F : 0F;
         int by = y + ContainerGeneratorSC.XV_SLOT_Y + 14;
         int[] xs = {x + ContainerGeneratorSC.XV_FUEL_X + 19, x + ContainerGeneratorSC.XV_BLANKET_X + 19};
         float[] f = {cellF, blankF};
@@ -630,7 +631,7 @@ public class GuiTokamakXVSC extends GuiContainer {
         small(tankD ? Lang.tr("sc.gui.xv.cells.tank") : n > 0 ? String.valueOf(n) : Lang.tr("sc.gui.xv.cells.none"), cx, y + 6, 30,
                 tankD ? GuiHoloSC.IDLE : n > 0 ? GuiHoloSC.WARN : GuiHoloSC.BAD);
         small(Lang.tr("sc.gui.xv.blanket"), bx, y, 30, GuiHoloSC.LABEL);
-        String life = gen.isIgnited() ? time(gen.getModuleLife() / 20.0 / TileEntityGeneratorSC.BIG_BLANKET_WEAR)
+        String life = gen.isIgnited() || gen.getModuleLife() > 0 ? time(gen.getModuleLife() / 20.0 / TileEntityGeneratorSC.BIG_BLANKET_WEAR)
                 : Lang.tr(hasBlanket() ? "sc.gui.xv.blanket.in" : "sc.gui.xv.blanket.need");
         small(life, bx, y + 6, 30, hasBlanket() || gen.isIgnited() ? GuiHoloSC.VALUE : GuiHoloSC.BAD);
     }
@@ -735,7 +736,7 @@ public class GuiTokamakXVSC extends GuiContainer {
             {Lang.tr("sc.gui.xv.perminute", eu((long) gen.getLastOutput() * 1200)), "val"},
             {Lang.tr("sc.gui.xv.instores", eu(gen.getStoresHave())), "val"},
             {fullIn(), "idle"},
-            {Lang.tr("sc.gui.xv.blanketleft", lit ? time(gen.getModuleLife() / 20.0 / TileEntityGeneratorSC.BIG_BLANKET_WEAR)
+            {Lang.tr("sc.gui.xv.blanketleft", lit || gen.getModuleLife() > 0 ? time(gen.getModuleLife() / 20.0 / TileEntityGeneratorSC.BIG_BLANKET_WEAR)
                     : Lang.tr(hasBlanket() ? "sc.gui.xv.blanket.in" : "sc.gui.xv.blanket.need")), "val"},
             {gen.getPortCap(0) > 0 ? Lang.tr("sc.gui.xv.helasts", "~" + time(lasts(0))) : Lang.tr("sc.gui.xv.notank") + " He",
                     gen.getPortCap(0) <= 0 || lasts(0) < HE_WARN_SECONDS ? "warn" : "val"}};

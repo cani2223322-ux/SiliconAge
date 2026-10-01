@@ -8,7 +8,7 @@ import net.minecraftforge.event.world.WorldEvent;
 
 /**
  * Forge-bus events: the lead suit's lower jump and slower digging; the dose kept when the player
- * entity is remade without a death (leaving the End); a world unloading takes its radiation
+ * entity is remade (leaving the End - all of it; after a death - up to the weakness step); a world unloading takes its radiation
  * sources and its wireless tiles out of the registries.
  */
 public class RadiationEventsSC {
@@ -24,6 +24,8 @@ public class RadiationEventsSC {
     public void onClone(PlayerEvent.Clone event) {
         if (!event.wasDeath) {
             RadiationSC.copy(event.original, event.entityPlayer);
+        } else {
+            RadiationSC.copyAfterDeath(event.original, event.entityPlayer);
         }
     }
 

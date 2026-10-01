@@ -41,6 +41,11 @@ public class ItemAreaCardSC extends Item {
                 Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])};
     }
 
+    /** Does the card's area lie in that dimension? A card written before "Dim" was kept: any. */
+    public static boolean inDimension(ItemStack s, int dim) {
+        return s == null || !s.hasTagCompound() || !s.getTagCompound().hasKey("Dim") || s.getTagCompound().getInteger("Dim") == dim;
+    }
+
     @Override
     public boolean onItemUse(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int side,
                              float hx, float hy, float hz) {
@@ -51,12 +56,15 @@ public class ItemAreaCardSC extends Item {
             stack.setTagCompound(new NBTTagCompound());
         }
         NBTTagCompound nbt = stack.getTagCompound();
-        if (!nbt.hasKey("A") || nbt.hasKey("B")) {
-            nbt.setIntArray("A", new int[]{x, y, z});
+        int dim = world.provider.dimensionId;
+        if (!nbt.hasKey("A") || nbt.hasKey("B") || nbt.hasKey("Dim") && nbt.getInteger("Dim") != dim) {
+            nbt.setIntArray("A", new int[]{x, y, z});      // a corner in another dimension starts the box over
             nbt.removeTag("B");
+            nbt.setInteger("Dim", dim);
             player.addChatComponentMessage(new ChatComponentTranslation("sc.areacard.first", x, y, z));
         } else {
             nbt.setIntArray("B", new int[]{x, y, z});
+            nbt.setInteger("Dim", dim);
             int[] a = area(stack);
             player.addChatComponentMessage(new ChatComponentTranslation("sc.areacard.second", x, y, z,
                     a[3] - a[0] + 1, a[5] - a[2] + 1, a[4] - a[1] + 1));
@@ -80,6 +88,12 @@ public class ItemAreaCardSC extends Item {
         if (a != null) {
             list.add(Lang.tr("sc.areacard.area", a[3] - a[0] + 1, a[5] - a[2] + 1, a[4] - a[1] + 1));
             list.add("§7" + a[0] + " " + a[1] + " " + a[2] + "  ->  " + a[3] + " " + a[4] + " " + a[5]);
+            if (stack.getTagCompound().hasKey("Dim")) {
+                int dim = stack.getTagCompound().getInteger("Dim");
+                boolean here = player != null && player.worldObj != null && player.worldObj.provider.dimensionId == dim;
+                String name = here ? player.worldObj.provider.getDimensionName() + " (" + dim + ")" : String.valueOf(dim);
+                list.add("§7" + Lang.tr("sc.areacard.dim", name));
+            }
         } else if (stack.hasTagCompound() && stack.getTagCompound().hasKey("A")) {
             list.add(Lang.tr("sc.areacard.half"));
         } else {

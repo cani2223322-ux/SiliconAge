@@ -123,8 +123,19 @@ public class ContainerQuarrySC extends Container {
         if ((slotId >= 0 && slotId < FIRST_PLAYER || slotId == inventorySlots.size() - 1) && !quarry.allowed(player)) {
             return null;                            // only the owner takes the output or changes the modules
         }
-        return super.slotClick(slotId, button, mode, player);
+        if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
+            return null;                            // a hotbar key would put a whole stack past the slot's limit
+        }
+        clicking = player.inventory.getItemStack();
+        try {
+            return super.slotClick(slotId, button, mode, player);
+        } finally {
+            clicking = null;
+        }
     }
+
+    /** The cursor's stack during a click: an empty module / lens slot's limit is that item's (SlotValid). */
+    private ItemStack clicking;
 
     @Override
     public ItemStack transferStackInSlot(EntityPlayer player, int index) {
@@ -165,10 +176,13 @@ public class ContainerQuarrySC extends Container {
     // ---- live numbers ----
 
     /** 0..12 as before (8 / 9: the first compartment), 13..18: the other compartments' fluid and amount. */
-    private static final int COUNT = 21;             // 19, 20: the fluid vein's counters
+    private static final int COUNT = 22;             // 19, 20: the fluid vein's counters; 21: blocks a private field kept
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
     private int value(int id) {
+        if (id == 21) {
+            return quarry.getSkippedPrivate();
+        }
         if (id == 19) {
             return quarry.getFluidVeinLast();
         }
@@ -219,6 +233,8 @@ public class ContainerQuarrySC extends Container {
         }
         if (id == 0) {
             quarry.setEnergyStoredClient(sync.value(0));
+        } else if (id == 21) {
+            quarry.setSkippedPrivateClient(sync.value(21));
         } else if (id == 8 || id == 9) {
             com.sc.tileentity.TileEntityGeneratorSC.setTankClient(quarry.getTank(0), sync.value(8), sync.value(9));
         } else if (id == 19 || id == 20) {
@@ -273,7 +289,7 @@ public class ContainerQuarrySC extends Container {
         }
     }
 
-    private static class SlotValid extends Slot {
+    private class SlotValid extends Slot implements SlotMergeSC.Limited {
         private final TileEntityQuarrySC quarry;
 
         SlotValid(TileEntityQuarrySC q, int index, int x, int y) {
@@ -284,6 +300,26 @@ public class ContainerQuarrySC extends Container {
         @Override
         public boolean isItemValid(ItemStack stack) {
             return quarry.isItemValidForSlot(getSlotIndex(), stack);
+        }
+
+        /** One lens a slot; a module slot holds as many of a module as work (its kind's max). */
+        @Override
+        public int limitFor(ItemStack s) {
+            int i = getSlotIndex();
+            if (i >= TileEntityQuarrySC.FIRST_LENS && i < TileEntityQuarrySC.FIRST_LENS + TileEntityQuarrySC.LENSES) {
+                return 1;
+            }
+            if (s != null && s.getItem() instanceof com.sc.item.ItemQuarryModuleSC
+                    && i >= TileEntityQuarrySC.FIRST_UPGRADE && i < TileEntityQuarrySC.FIRST_UPGRADE + TileEntityQuarrySC.UPGRADES) {
+                return com.sc.item.ItemQuarryModuleSC.kindOf(s).max;
+            }
+            return super.getSlotStackLimit();
+        }
+
+        /** Vanilla's clicks ask without a stack: the one on the cursor (going in), else the one in the slot. */
+        @Override
+        public int getSlotStackLimit() {
+            return limitFor(clicking != null ? clicking : getStack());
         }
 
         @Override

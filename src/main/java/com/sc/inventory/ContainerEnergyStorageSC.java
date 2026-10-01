@@ -79,10 +79,29 @@ public class ContainerEnergyStorageSC extends Container {
             }
         });
         for (int i = 0; i < TileEntityEnergyStorageSC.UPGRADE_SLOTS; i++) {
-            addSlotToContainer(new Slot(storage, TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + i, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y) {
+            final int upgSlot = TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + i;
+            addSlotToContainer(new Slot(storage, upgSlot, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y) {
                 @Override
                 public boolean isItemValid(ItemStack stack) {
                     return TileEntityEnergyStorageSC.acceptsUpgrade(stack);
+                }
+
+                /** A capacity upgrade stays while the charge wouldn't fit without it. */
+                @Override
+                public boolean canTakeStack(EntityPlayer player) {
+                    TileEntityEnergyStorageSC st = ContainerEnergyStorageSC.this.storage;
+                    ItemStack cur = player.inventory.getItemStack(), in = getStack();
+                    if (cur != null && in != null && cur.isItemEqual(in) && ItemStack.areItemStackTagsEqual(cur, in)) {
+                        return true;                       // putting more of it in, not taking it out
+                    }
+                    if (st.canRemoveUpgrade(upgSlot)) {
+                        return true;
+                    }
+                    if (!player.worldObj.isRemote && cur == null) {   // not on a double click's sweep
+                        player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(
+                                "sc.storage.upgrade.discharge", st.capacityWithout(upgSlot)));
+                    }
+                    return false;
                 }
             });
         }
@@ -106,7 +125,19 @@ public class ContainerEnergyStorageSC extends Container {
     public void detectAndSendChanges() {
         super.detectAndSendChanges();
         sync.send(this, crafters, new int[]{storage.getEnergyStored(), storage.getFlowPerTick(), storage.powerFlags()});
+        com.sc.energy.Tier out = storage.outputTier();
+        if (lastOutput != null && out.ordinal() > lastOutput.ordinal()) {   // a Transformer upgrade went in
+            for (Object o : crafters) {
+                if (o instanceof EntityPlayer) {
+                    com.sc.energy.CableWarningSC.outputRaised(storage, (EntityPlayer) o);
+                }
+            }
+        }
+        lastOutput = out;
     }
+
+    /** The output tier last seen (server side): a rise warns about a weaker cable at the front. */
+    private com.sc.energy.Tier lastOutput;
 
     @Override
     public void updateProgressBar(int property, int half) {
@@ -147,5 +178,13 @@ public class ContainerEnergyStorageSC extends Container {
             slot.onSlotChanged();
         }
         return result;
+    }
+
+    @Override
+    public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
+            return null;                                   // a hotbar key can't put more than the slot takes
+        }
+        return super.slotClick(slotId, button, mode, player);
     }
 }

@@ -184,6 +184,9 @@ public class ContainerFieldGeneratorSC extends Container {
 
     @Override
     public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
+            return null;                                   // a hotbar key can't put more than the slot takes
+        }
         if (slotId >= 0 && slotId < TileEntityFieldGeneratorSC.UPGRADE_SLOTS && !field.allowed(player)) {
             return null;
         }

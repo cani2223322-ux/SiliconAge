@@ -16,7 +16,7 @@ import net.minecraftforge.oredict.OreDictionary;
 
 /**
  * The lead suit: helmet with a lead-glass window, jacket, trousers and boots. Only against
- * radiation (25% a piece, the full suit stops it all); against blows about as good as leather;
+ * radiation (ConfigSC.leadSuitPartProtection a piece, 22% by default: the full suit stops 88%); against blows about as good as leather;
  * and heavy (LeadSuitSC). Mended with lead ingots on an anvil.
  */
 public class ItemLeadSuitSC extends ItemArmor {
@@ -49,7 +49,7 @@ public class ItemLeadSuitSC extends ItemArmor {
     @Override
     @SuppressWarnings("unchecked")
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        list.add("§a" + Lang.tr("sc.leadsuit.tooltip.prot", 25));
+        list.add("§a" + Lang.tr("sc.leadsuit.tooltip.prot", com.sc.util.ConfigSC.leadSuitPartProtection));
         list.add("§c" + Lang.tr("sc.leadsuit.tooltip.weight", (int) Math.round(LeadSuitSC.SPEED_PER_PART * 100)));
         com.sc.util.TooltipSC.more(list, Lang.tr("sc.leadsuit.tooltip.full"), null);
     }

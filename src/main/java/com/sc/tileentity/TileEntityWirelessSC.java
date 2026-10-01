@@ -331,6 +331,12 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             flow = flowWindow / 20;
             flowWindow = 0;
         }
+        if (kind != QUANTUM && partnerId != 0) {
+            TileEntityWirelessSC other = LOADED.get(partnerId);
+            if (other != null && other != this && !other.isInvalid() && other.partnerId != id) {
+                unlinkHere();                                     // the other end was linked to someone else
+            }
+        }
         if (kind == TRANSMITTER) {
             tickTransmitter(time);
         } else if (kind == RECEIVER) {
@@ -464,9 +470,15 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         }
         if (!giving) {
             status = time - receivedAt < 40 ? ST_OK : ST_IDLE;
-            if (time - receivedAt < 40) {
+            if (time - receivedAt < 40 || getEnergyStored() >= getMaxEnergyStored()) {   // full: the link stays up, idle
                 linkedAt = time;
             }
+            return;
+        }
+        int room = p.getMaxEnergyStored() - p.getEnergyStored();
+        if (room <= 0) {                                          // nowhere to put it: no upkeep, no wear, link and chunk kept
+            linkedAt = time;
+            status = ST_FULL;
             return;
         }
         if (getEnergyStored() < quantumUpkeep()) {
@@ -475,7 +487,6 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         }
         removeEnergy(quantumUpkeep());
         linkedAt = time;
-        int room = p.getMaxEnergyStored() - p.getEnergyStored();
         int n = Math.min(Math.min(getEnergyStored(), QUANTUM_RATE), room);
         if (n > 0) {
             removeEnergy(n);

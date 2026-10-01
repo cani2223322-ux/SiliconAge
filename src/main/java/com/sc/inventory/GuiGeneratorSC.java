@@ -663,9 +663,10 @@ public class GuiGeneratorSC extends GuiContainer {
                 + (generator.isShielded() ? TileEntityGeneratorSC.SHIELDED_HEAT : 0);
     }
 
+    /** A blanket in the slot, or the last one put out with life left in it (the next lighting goes on with that). */
     private boolean fusHasBlanket() {
         net.minecraft.item.ItemStack b = generator.getStackInSlot(TileEntityGeneratorSC.SLOT_BLANKET);
-        return b != null;
+        return b != null || generator.getModuleLife() > 0;
     }
 
     private void drawFusBackground(int x, int y, float partialTicks) {
@@ -715,7 +716,7 @@ public class GuiGeneratorSC extends GuiContainer {
         if (cellF <= 0 && cells != null) {
             cellF = 1F;
         }
-        float blankF = lit ? (float) generator.getModuleLife() / TileEntityGeneratorSC.MODULE_LIFE_TICKS : fusHasBlanket() ? 1F : 0F;
+        float blankF = lit || generator.getModuleLife() > 0 ? (float) generator.getModuleLife() / TileEntityGeneratorSC.MODULE_LIFE_TICKS : fusHasBlanket() ? 1F : 0F;
         int by = y + ContainerGeneratorSC.FUS_SLOT_Y + 6;
         for (int s = 0; s < 2; s++) {
             int bx = x + (s == 0 ? ContainerGeneratorSC.FUS_FUEL_X : ContainerGeneratorSC.FUS_BLANKET_X) + 19;
@@ -803,6 +804,9 @@ public class GuiGeneratorSC extends GuiContainer {
             } else if (stage == 1) {
                 line = Lang.tr("sc.gui.fus.st.noblanket");
                 col = GuiHoloSC.WARN;
+            } else if (status == GeneratorStatus.NO_DEUTERIUM) {
+                line = Lang.tr("sc.gui.fus.st.nodeut");
+                col = GuiHoloSC.WARN;
             } else {
                 int pct = (int) (100 * generator.getIgnitionEU() / Math.max(1, generator.ignitionNeed()));
                 line = Lang.tr("sc.gui.fus.st.charge", pct,
@@ -839,7 +843,7 @@ public class GuiGeneratorSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.fus.cell", fusTime(secs), count), tx, ty, 58, GuiHoloSC.LABEL);
         }
         int bx = ContainerGeneratorSC.FUS_BLANKET_X + 19;
-        if (lit) {
+        if (lit || generator.getModuleLife() > 0) {
             smallFit(Lang.tr("sc.gui.fus.blanket.life", fusTime(generator.getModuleLife() / 20.0)), bx, ty, 58, GuiHoloSC.LABEL);
         } else {
             smallFit(Lang.tr(fusHasBlanket() ? "sc.gui.fus.blanket.in" : "sc.gui.fus.blanket.need"), bx, ty, 58,
@@ -982,6 +986,15 @@ public class GuiGeneratorSC extends GuiContainer {
         return generator.getIgnitionEU() < type.ignitionThreshold() ? 0 : 1;
     }
 
+    /** mB a tick of a fluid at its base rate with the Overdrive / Economizer upgrades in ("1,75"), as the generator burns it. */
+    private String rateNow(int base) {
+        double r = base * Math.max(0.01, generator.fuelMultiplier());
+        if (Math.abs(r - Math.rint(r)) < 0.005) {
+            return String.valueOf((long) Math.rint(r));
+        }
+        return String.format(java.util.Locale.ROOT, "%.2f", r).replaceAll("0+$", "").replaceAll("\\.$", "").replace('.', ',');
+    }
+
     /** Seconds the helium in the tank lasts at 1 mB/t (with the upgrades). */
     private double exoHeliumSecs() {
         return generator.getFuelTank().getFluidAmount() / (type.fuelRatePerTick * Math.max(0.01, generator.fuelMultiplier())) / 20.0;
@@ -1049,8 +1062,12 @@ public class GuiGeneratorSC extends GuiContainer {
             } else if (status == GeneratorStatus.DISABLED || status == GeneratorStatus.REDSTONE) {
                 line = status.localized();
                 col = GuiHoloSC.IDLE;
+            } else if (noHe) {
+                line = Lang.tr("sc.gui.ex.st.nohe.ign", TileEntityGeneratorSC.EXO_HE_START);
+                col = GuiHoloSC.BAD;
             } else {
-                line = Lang.tr(heSecs > 0 ? "sc.gui.ex.st.charge.he" : "sc.gui.ex.st.charge.nohe");
+                line = Lang.tr(generator.getFuelTank().getFluidAmount() >= TileEntityGeneratorSC.EXO_HE_START
+                        ? "sc.gui.ex.st.charge.he" : "sc.gui.ex.st.charge.nohe");
                 col = GuiHoloSC.CYAN & 0xFFFFFF;
             }
             smallFit(line, 14, 104, 190, col);
@@ -1838,13 +1855,13 @@ public class GuiGeneratorSC extends GuiContainer {
                 lines.add(GuiGaugeSC.fluidLabel(t.getFluid(), t.getCapacity()));
                 lines.add(GuiTankGaugeSC.percentLine(t.getFluid(), t.getCapacity()));
                 if (i == 0 && type.kind == GeneratorType.Kind.DUAL_FLUID || i == 0 && type.kind == GeneratorType.Kind.EXO) {
-                    lines.add(Lang.tr("sc.gui.gen.needs", fluidName(type.fuelFluidName), type.fuelRatePerTick));
+                    lines.add(Lang.tr("sc.gui.gen.needs.now", fluidName(type.fuelFluidName), rateNow(type.fuelRatePerTick)));
                 } else if (i == 1) {
-                    lines.add(Lang.tr("sc.gui.gen.needs", fluidName(type.fuel2FluidName), type.fuel2RatePerTick));
+                    lines.add(Lang.tr("sc.gui.gen.needs.now", fluidName(type.fuel2FluidName), rateNow(type.fuel2RatePerTick)));
                 } else if (i == 0 && type == GeneratorType.COMBUSTION) {
                     lines.add(Lang.tr("sc.gui.gen.fuels"));
                 } else if (i == 0) {
-                    lines.add(Lang.tr("sc.gui.fuel.rate", type.fuelRatePerTick));
+                    lines.add(Lang.tr("sc.gui.fuel.rate.now", rateNow(type.fuelRatePerTick)));
                 }
                 return lines;
             }

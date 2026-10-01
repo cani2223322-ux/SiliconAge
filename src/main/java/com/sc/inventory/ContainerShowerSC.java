@@ -97,4 +97,12 @@ public class ContainerShowerSC extends Container {
         }
         return result;
     }
+
+    @Override
+    public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
+            return null;                                   // a hotbar key can't put more than the slot takes
+        }
+        return super.slotClick(slotId, button, mode, player);
+    }
 }

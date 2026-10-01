@@ -75,6 +75,9 @@ public class ContainerWirelessSC extends Container {
     /** Strangers look but don't take the crystal or the battery. */
     @Override
     public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
+        if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
+            return null;                                   // a hotbar key can't put more than the slot takes
+        }
         if (slotId >= 0 && slotId < tileSlots && !te.allowed(player)) {
             return null;
         }

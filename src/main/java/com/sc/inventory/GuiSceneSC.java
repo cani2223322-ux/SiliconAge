@@ -661,6 +661,38 @@ public final class GuiSceneSC {
     }
 
     /**
+     * The electrolysis cell squeezed to a slim column (the Electrolyzer with all four tanks shown):
+     * the leads on top, anode | membrane | cathode in the brine, each side bubbling its own gas.
+     * Meant for w >= 7 (narrower: just the frame).
+     */
+    public static void electrolysisCellSlim(int x, int y, int w, int h, float t, boolean running, int colA, int colB) {
+        frame(x, y, w, h);
+        if (w < 7 || h < 16) {
+            return;
+        }
+        int bx0 = x + 1, bx1 = x + w - 1, by0 = y + 7, by1 = y + h - 2, mx = x + w / 2;
+        rect(bx0, by0, bx1 - bx0, by1 - by0, 0xFF2A4A6A);                     // the brine
+        rect(bx0, by0, bx1 - bx0, 1, 0xFF5A8AB0);
+        for (int yy = by0 + 1; yy < by1; yy += 2) {
+            rect(mx, yy, 1, 1, 0xFF8A94A8);                                    // the membrane
+        }
+        rect(bx0, y + 3, 1, by1 - y - 5, 0xFF6A707A);                         // the anode
+        rect(bx1 - 1, y + 3, 1, by1 - y - 5, 0xFFB08A6A);                     // the cathode
+        rect(bx0, y + 2, bx1 - bx0, 1, 0xFFE8C850);                           // the leads
+        if (!running) {
+            return;
+        }
+        int a = colA != 0 ? colA : 0xFFB8D84A, b = colB != 0 ? colB : 0xFFF0F8FF;
+        int span = Math.max(1, by1 - by0 - 3);
+        for (int i = 0; i < 4; i++) {
+            int yy = by1 - 2 - (int) ((t * 0.8F + i * span / 4F) % span);
+            rect(bx0 + 1, yy, 1, 1, a);
+            rect(bx1 - 2, (yy + span / 8) < by1 - 1 ? yy + span / 8 : yy, 1, 1, b);
+        }
+        rect(bx0 + (int) (t * 0.5F) % Math.max(1, bx1 - bx0), y + 2, 1, 1, 0xFFFFFFFF);   // the current
+    }
+
+    /**
      * The air separator's cryogenic column: the intake fan bottom left blowing air in, the column
      * with its trays frosting over from the bottom with the progress, the draw-offs (oxygen low,
      * argon in the middle), nitrogen vented at the top.

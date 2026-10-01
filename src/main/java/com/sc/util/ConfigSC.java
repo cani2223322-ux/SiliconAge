@@ -29,6 +29,8 @@ public final class ConfigSC {
     public static float storageCapacity = 1F, batteryCapacity = 1F, armorCapacity = 1F;
     /** EU a suit spends on each point of damage it absorbs. */
     public static float armorDamageCost = 1F;
+    /** The lead suit: % of the radiation each piece stops (Защита свинцового костюма за одну часть, %). */
+    public static int leadSuitPartProtection = 22;
     /** The field generator's upkeep; quarries' and the Exo rig's speed. */
     public static float fieldUpkeep = 1F, quarrySpeed = 1F;
     /** Wireless: transmitter range (XV stays unlimited), the loss over distance, the quantum pair's upkeep; translators load chunks. */
@@ -85,6 +87,8 @@ public final class ConfigSC {
             armorCapacity = config.getFloat("armorCapacity", b, 1F, 0.1F, 10F, "Suit pieces (Nano, Quantum, Exo) hold this many times the EU");
             armorDamageCost = config.getFloat("armorDamageCost", b, 1F, 0.1F, 10F,
                     "EU a suit spends on each point of damage it stops, times this (lower = stronger armour)");
+            leadSuitPartProtection = config.getInt("leadSuitPartProtection", b, 22, 0, 25,
+                    "Radiation each lead suit piece stops, % (4 pieces at 25 = all of it) / Защита от радиации за каждую часть свинцового костюма, %");
             fieldUpkeep = config.getFloat("fieldUpkeep", b, 1F, 0.1F, 10F, "The field generator's upkeep, times this");
             quarrySpeed = config.getFloat("quarrySpeed", b, 1F, 0.1F, 10F, "Quarries and the Exo Drilling Rig dig this many times faster");
             wirelessRange = config.getFloat("wirelessRange", b, 1F, 0.1F, 10F, "Wireless transmitters reach this many times as far (XV stays unlimited)");

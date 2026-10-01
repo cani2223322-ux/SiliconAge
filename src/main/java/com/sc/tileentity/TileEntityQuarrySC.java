@@ -80,7 +80,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     /** Head repair: points mended a tick, EU a point. Trash: EU an item. Fluid guard: EU a block turned to stone. */
     public static final int REPAIR_PER_TICK = 20, REPAIR_COST = 25, TRASH_COST = 1, GUARD_COST = 10, VEIN_MAX = 64;
     // ---- look of the area (the Area tab) ----
-    public static final int V_DASH = 1, V_PLANE = 2, V_ORES = 4;
+    /** Bit 4 was the ore outlines (removed): kept free, old saves may still have it set. */
+    public static final int V_DASH = 1, V_PLANE = 2;
     public static final int SHOW_ALWAYS = 0, SHOW_WRENCH = 1, SHOW_MENU = 2, SHOW_NEVER = 3;
     public static final int[] PALETTE = {0xFFB020, 0x9CF03A, 0x40D8FF, 0xFF4040, 0xB070FF, 0xFFFFFF, 0xFF70C0, 0xFF8A20};
     public static final int SHAPE_SQUARE = 0, SHAPE_CIRCLE = 1, SHAPE_SHAFT = 2;
@@ -89,7 +90,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public static final int POWER_FULL = 0, POWER_ECO = 1, POWER_MIN = 2;
     public static final int REDSTONE_ALWAYS = 0, REDSTONE_ON = 1, REDSTONE_OFF = 2;
 
-    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD, REPAIRING, TANK_FULL, DISABLED }
+    /** Saved and synced by ordinal: new ones go at the end. */
+    public enum Status { PAUSED, RUNNING, NO_POWER, NO_HEAD, BUFFER_FULL, DONE, NO_AREA, REDSTONE, BLOCKED_BY_FIELD, REPAIRING, TANK_FULL, DISABLED,
+        WAITING_CHUNK }
 
     // ---- the pump's tank: compartments, each its own fluid ----
     public static final int TANKS = 4, TANK_BASE = 16000, TANK_PER_MODULE = 32000, FLUID_FILTER_MAX = 6;
@@ -119,13 +122,17 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     // settings
     private int sizeX = 8, sizeZ = 8, offX, offZ, bottomY = 1, shape, replace, flags = DEFAULT_FLAGS, fortuneLevel = 5,
-            powerMode, redstone, outSide = -1, filterMode, show, vflags = V_DASH | V_PLANE | V_ORES, brightness = 3,
+            powerMode, redstone, outSide = -1, filterMode, show, vflags = V_DASH | V_PLANE, brightness = 3,
             colorFrame = PALETTE[0], colorPlane = PALETTE[2];
     private String owner = "";
     /** The side the front faces (2-5), turned to the placer. */
     private int facing = 3;
     // state
     private boolean running, done;
+    /** Stopped by the auto-stop module on a full buffer (not by the player): starts again when there's room. */
+    private boolean autoStopped;
+    /** Blocks left because a private field or another mod's protection forbids them - since the last start / new area. */
+    private int skippedPrivate;
     private int layerY = -1, cursor;
     private long mined;
     private int xp;
@@ -140,7 +147,6 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     private long scanned, scanTotal;
     /** EU the scanner spends per block it looks at - it is no free X-ray. */
     public static final int SCAN_COST = 8;
-    private final List<int[]> ores = new ArrayList<int[]>();
     private final Map<String, Integer> oreCounts = new LinkedHashMap<String, Integer>();
 
     public TileEntityQuarrySC() {
@@ -311,7 +317,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     /**
-     * {x0, z0, x1, z1, yTop, yBottom} (inclusive), or null if the card's box is too big or too far.
+     * {x0, z0, x1, z1, yTop, yBottom} (inclusive), or null if the card's box is too big, too far or
+     * in another dimension.
      * Without a card: centred on the quarry plus the offset, from its own level down to bottomY.
      */
     public int[] area() {
@@ -321,6 +328,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         int max = maxSize();
         int[] card = ItemAreaCardSC.area(slots[SLOT_CARD]);
         if (card != null) {
+            if (worldObj != null && !ItemAreaCardSC.inDimension(slots[SLOT_CARD], worldObj.provider.dimensionId)) {
+                return null;                                 // the card's box is in another dimension
+            }
             if (card[3] - card[0] + 1 > max || card[5] - card[2] + 1 > max
                     || Math.abs((card[0] + card[3]) / 2 - xCoord) > 64 + max || Math.abs((card[2] + card[5]) / 2 - zCoord) > 64 + max) {
                 return null;
@@ -368,6 +378,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         progress = 0;
         clearScan();
         warned = 0;
+        skippedPrivate = 0;
     }
 
     // ------------------------------------------------------------------ what gets dug
@@ -498,15 +509,17 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             autoOutput();
             feedWash();
         }
-        pushOut();
+        if (time % 5 == 0) {
+            pushOut();
+        }
         if (powerOn && (scanDirty || scanY > 0)) {                 // switched off: no scan, no magnet
             scanStep();
         }
         if (powerOn && time % 20 == 0) {
             magnet();
         }
-        if (time % 40 == 0 && running) {
-            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the renderer's layer line
+        if (time % 40 == 0 && running && layerY != layerSent) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the renderer's layer line - only when it moved
         }
         if (feedFromBattery(slots[SLOT_BATTERY]) > 0) {
             markDirty();
@@ -527,8 +540,17 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     private void dig() {
+        if (!running && autoStopped) {
+            flushOverflow();
+            if (overflow.isEmpty() && freeSlots() >= AUTOSTOP_RESUME) {
+                running = true;                            // the auto-stop's buffer has room again: carry on
+                autoStopped = false;
+                markDirty();
+                worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the renderer's running look
+            }
+        }
         if (!running) {
-            setStatus(done ? Status.DONE : Status.PAUSED);
+            setStatus(autoStopped ? Status.BUFFER_FULL : done ? Status.DONE : Status.PAUSED);
             return;
         }
         if (!powerOn) {
@@ -559,7 +581,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 setStatus(Status.BUFFER_FULL);
                 if (active(ItemQuarryModuleSC.Kind.AUTOSTOP, F_AUTOSTOP)) {
                     running = false;
+                    autoStopped = true;                      // goes on by itself once the buffer has room
                     markDirty();
+                    worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
                 }
                 return;
             }
@@ -596,6 +620,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             int x = c[0], z = c[1], y = layerY;
             if (!worldObj.blockExists(x, y, z)) {
+                setStatus(Status.WAITING_CHUNK);
                 return;                                      // not loaded: wait for it rather than skip it for good
             }
             int verdict = judge(x, y, z);
@@ -604,6 +629,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 continue;
             }
             if (forbidden(x, y, z)) {
+                skippedPrivate++;
                 setStatus(Status.BLOCKED_BY_FIELD);
                 advance(a);
                 continue;
@@ -677,7 +703,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         for (int i = FIRST_LENS; i < FIRST_LENS + unlockedLenses(); i++) {
             ItemStack s = slots[i];
             if (s != null && s.getItem() instanceof com.sc.item.ItemOreLensSC && com.sc.item.ItemOreLensSC.oreOf(s) == ore) {
-                n += s.stackSize;
+                n++;                                        // one lens a slot (an old stack counts as one)
             }
         }
         return n;
@@ -1257,6 +1283,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             drops.add(silked);
         } else {
             drops.addAll(block.getDrops(worldObj, x, y, z, meta, fortune()));
+            if (active(ItemQuarryModuleSC.Kind.MAGNET, F_MAG_XP)) {
+                xp += Math.max(0, block.getExpDrop(worldObj, meta, fortune()));   // as a player's pickaxe: none with silk touch
+            }
         }
         boolean ore = isOre(block, meta);
         if (!has(F_SILENT) || moduleCount(ItemQuarryModuleSC.Kind.SILENT) == 0) {
@@ -1265,7 +1294,6 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         replaceAfter(x, y, z);
         guardFluids(x, y, z);
         if (ore) {
-            removeOre(x, y, z);
             String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(block)) + "@" + block.damageDropped(meta);
             Integer n = oreCounts.get(key);
             if (n != null) {
@@ -1376,6 +1404,19 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     // ------------------------------------------------------------------ the buffer
 
+    /** Free buffer slots an auto-stopped quarry waits for (a row: it doesn't flicker on and off a slot at a time). */
+    public static final int AUTOSTOP_RESUME = 9;
+
+    private int freeSlots() {
+        int n = 0;
+        for (int i = 0; i < BUFFER; i++) {
+            if (slots[i] == null) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     private int firstEmpty() {
         for (int i = 0; i < BUFFER; i++) {
             if (slots[i] == null) {
@@ -1426,7 +1467,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
     }
 
-    /** One stack a tick into each neighbouring inventory (or only the chosen side). */
+    /** One stack every 5 ticks into each neighbouring inventory (or only the chosen side). */
     private void pushOut() {
         for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
             if (outSide >= 0 && d.ordinal() != outSide) {
@@ -1439,6 +1480,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             if (!(te instanceof IInventory) || te instanceof TileEntityQuarrySC) {
                 continue;
             }
+            int moved = 0;
             for (int i = 0; i < BUFFER; i++) {
                 if (slots[i] != null) {
                     int left = com.sc.util.InvUtilSC.insert((IInventory) te, d, slots[i]);
@@ -1449,7 +1491,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                             slots[i].stackSize = left;
                         }
                         markDirty();
-                        break;                             // one stack a tick; one it won't take doesn't block the rest
+                        if (++moved >= 5) {                // runs every 5 ticks: up to 5 stacks a side, as fast as before;
+                            break;                         // one it won't take doesn't block the rest
+                        }
                     }
                 }
             }
@@ -1498,14 +1542,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         int[] a = area();
         if (!hasScanner() || a == null) {
-            ores.clear();
             oreCounts.clear();
             scanDirty = false;
             scanY = 0;
             return;
         }
         if (scanDirty) {
-            ores.clear();
             oreCounts.clear();
             scanY = a[4];
             scanIndex = 0;
@@ -1525,9 +1567,6 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 Block b = worldObj.getBlock(c[0], scanY, c[1]);
                 int meta = worldObj.getBlockMetadata(c[0], scanY, c[1]);
                 if (!b.isAir(worldObj, c[0], scanY, c[1]) && isOre(b, meta)) {
-                    if (ores.size() < 1024) {
-                        ores.add(new int[]{c[0], scanY, c[1], oreColor(b, meta)});
-                    }
                     String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(b)) + "@" + b.damageDropped(meta);
                     Integer n = oreCounts.get(key);
                     oreCounts.put(key, n == null ? 1 : n + 1);
@@ -1554,7 +1593,6 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Old counts go (a new area, the scanner taken out, a reload); nothing is scanned until asked. */
     private void clearScan() {
-        ores.clear();
         oreCounts.clear();
         scanDirty = false;
         scanY = 0;
@@ -1570,35 +1608,6 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     public void setScanPercentClient(int p) {
         scanPercentClient = p;
-    }
-
-    private void removeOre(int x, int y, int z) {
-        for (int i = 0; i < ores.size(); i++) {
-            int[] o = ores.get(i);
-            if (o[0] == x && o[1] == y && o[2] == z) {
-                ores.remove(i);
-                return;
-            }
-        }
-    }
-
-    /** A colour to outline an ore with: the vanilla ores by name, the rest by a hash of their name. */
-    public static int oreColor(Block b, int meta) {
-        if (b == Blocks.coal_ore) return 0x303030;
-        if (b == Blocks.iron_ore) return 0xD8A880;
-        if (b == Blocks.gold_ore) return 0xFFD840;
-        if (b == Blocks.diamond_ore) return 0x50F0E8;
-        if (b == Blocks.emerald_ore) return 0x40E060;
-        if (b == Blocks.redstone_ore || b == Blocks.lit_redstone_ore) return 0xFF2020;
-        if (b == Blocks.lapis_ore) return 0x3050E0;
-        if (b == Blocks.quartz_ore) return 0xF0F0F0;
-        int h = (String.valueOf(Block.blockRegistry.getNameForObject(b)) + meta).hashCode();
-        java.awt.Color c = java.awt.Color.getHSBColor((h & 0xFF) / 255F, 0.7F, 1F);
-        return c.getRGB() & 0xFFFFFF;
-    }
-
-    public List<int[]> getOres() {
-        return ores;
     }
 
     public Map<String, Integer> getOreCounts() {
@@ -1673,8 +1682,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         switch (action) {
             case A_RUN:
                 running = !running;
+                autoStopped = false;                 // the player's own start / stop: no auto-resume
                 if (running && done) {
                     resetCursor();
+                }
+                if (running) {
+                    skippedPrivate = 0;
                 }
                 warned = 0;
                 break;
@@ -1716,7 +1729,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             case A_FILTER_MODE: filterMode = (filterMode + 1) % 4; break;
             case A_OUT_SIDE: outSide = outSide >= 5 ? -1 : outSide + 1; break;
             case A_SHOW: show = (show + 1) % 4; break;
-            case A_VFLAG: vflags ^= value & 7; break;
+            case A_VFLAG: vflags ^= value & (V_DASH | V_PLANE); break;
             case A_BRIGHT: brightness = brightness % 4 + 1; break;
             case A_COLOR_FRAME: colorFrame = value & 0xFFFFFF; break;
             case A_COLOR_PLANE: colorPlane = value & 0xFFFFFF; break;
@@ -1839,6 +1852,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public int getXp() { return xp; }
     public Status getStatus() { return status; }
     public int getLastCost() { return lastCost; }
+    public boolean isAutoStopped() { return autoStopped; }
+    public int getSkippedPrivate() { return skippedPrivate; }
+
+    /** Client: the private-field count from the screen's sync. */
+    public void setSkippedPrivateClient(int n) {
+        skippedPrivate = n;
+    }
     /** All the pump's fluid, for the summary line. */
     public int pumpedTotal() {
         int n = 0;
@@ -2090,14 +2110,15 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     // ------------------------------------------------------------------ the item keeps it all (wrench / breaking)
 
-    /** Settings, progress and energy for the dropped item (the buffer drops as items). */
+    /**
+     * Settings, energy, tanks, the mined count and stored XP for the dropped item (the buffer drops
+     * as items). Not the digging position: placed again, it starts its area over (readFromItem).
+     */
     public NBTTagCompound writeToItem() {
         NBTTagCompound nbt = new NBTTagCompound();
         writeSettings(nbt);
         nbt.setInteger("EnergySC", getEnergyStored());
         nbt.setBoolean("Running", running);
-        nbt.setInteger("LayerY", layerY);
-        nbt.setInteger("Cursor", cursor);
         nbt.setLong("Mined", mined);
         nbt.setInteger("Xp", xp);
         nbt.setBoolean("PowerOff", !powerOn);
@@ -2292,20 +2313,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 overflow.add(s);
             }
         }
-        // the client's copy of the ore list and counts (description packet)
-        if (nbt.hasKey("OreList")) {
-            ores.clear();
-            int[] o = nbt.getIntArray("OreList");
-            for (int i = 0; i + 3 < o.length; i += 4) {
-                ores.add(new int[]{o[i], o[i + 1], o[i + 2], o[i + 3]});
-            }
-            oreCounts.clear();
-            NBTTagList c = nbt.getTagList("OreCounts", 10);
-            for (int i = 0; i < c.tagCount(); i++) {
-                oreCounts.put(c.getCompoundTagAt(i).getString("K"), c.getCompoundTagAt(i).getInteger("N"));
-            }
-        }
-        clearScan();
+        autoStopped = nbt.getBoolean("AutoStopped");
+        skippedPrivate = nbt.getInteger("SkippedPrivate");
+        clearScan();                                   // an old save's "OreList" is just left unread
         NBTTagList hl = nbt.getTagList("HaulLog", 10);
         for (int i = 0; i < hl.tagCount(); i++) {
             oreCounts.put(hl.getCompoundTagAt(i).getString("K"), hl.getCompoundTagAt(i).getInteger("N"));
@@ -2324,6 +2334,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setInteger("Xp", xp);
         nbt.setDouble("Progress", progress);
         nbt.setInteger("Status", status.ordinal());
+        nbt.setBoolean("AutoStopped", autoStopped);
+        nbt.setInteger("SkippedPrivate", skippedPrivate);
         writeTanks(nbt);
         nbt.setTag("Water", water.writeToNBT(new NBTTagCompound()));
         NBTTagList list = new NBTTagList();
@@ -2354,9 +2366,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
     }
 
-    /** Settings, the digging layer and the scanned ore reach the client with the block. */
+    /** The layer the last description packet carried (updateEntity re-sends only when it changes). */
+    private int layerSent = Integer.MIN_VALUE;
+
+    /** Settings, the digging layer and the scanned ore counts reach the client with the block. */
     @Override
     public net.minecraft.network.Packet getDescriptionPacket() {
+        layerSent = layerY;
         NBTTagCompound nbt = new NBTTagCompound();
         writeSettings(nbt);
         nbt.setInteger("TierSC", getTier().ordinal());
@@ -2419,11 +2435,6 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             if (slot < SLOTS) {
                 slots[slot] = ItemStack.loadItemStackFromNBT(t);
             }
-        }
-        ores.clear();
-        int[] o = nbt.getIntArray("OreList");
-        for (int i = 0; i + 3 < o.length; i += 4) {
-            ores.add(new int[]{o[i], o[i + 1], o[i + 2], o[i + 3]});
         }
         oreCounts.clear();
         NBTTagList c = nbt.getTagList("OreCounts", 10);

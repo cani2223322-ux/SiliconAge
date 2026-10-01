@@ -29,7 +29,8 @@ import net.minecraft.world.World;
 /**
  * Silicon Quarry LV / MV / HV / EV (metadata = tier). The front (the tier's drill panel) turns to
  * the placer, the top shows the drill shaft, the other sides the tier's casing. The placer owns
- * it. Broken or dismantled, it keeps its settings, energy and progress in the item.
+ * it. Broken or dismantled, it keeps its settings, energy, tanks and stored XP in the item (the
+ * digging starts its area over when placed again).
  */
 public class BlockQuarrySC extends Block {
 
@@ -141,7 +142,7 @@ public class BlockQuarrySC extends Block {
         return true;
     }
 
-    // ---- keep settings, energy and progress in the dropped item ----
+    // ---- keep settings, energy, tanks and XP in the dropped item ----
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
@@ -193,6 +194,18 @@ public class BlockQuarrySC extends Block {
             q.dropOverflow();
         }
         super.breakBlock(world, x, y, z, block, meta);
+    }
+
+    /** With a universal transformer upgrade inside, no blast breaks the quarry (as a machine). */
+    @Override
+    public float getExplosionResistance(net.minecraft.entity.Entity exploder, World world, int x, int y, int z,
+                                        double explosionX, double explosionY, double explosionZ) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityQuarrySC
+                && ((TileEntityQuarrySC) te).upgradeCount(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
+            return 6000000.0F;
+        }
+        return super.getExplosionResistance(exploder, world, x, y, z, explosionX, explosionY, explosionZ);
     }
 
     @Override

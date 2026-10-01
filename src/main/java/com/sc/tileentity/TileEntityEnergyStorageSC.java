@@ -88,7 +88,45 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             return false;
         }
         UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
-        return t == UpgradeType.TRANSFORMER || t == UpgradeType.ENERGY_STORAGE || t == UpgradeType.OVERDRIVE;
+        return t == UpgradeType.TRANSFORMER || t == UpgradeType.ENERGY_STORAGE || (t == UpgradeType.OVERDRIVE && overdriveWorks());
+    }
+
+    /**
+     * Overdrive's extra packets reach IC2's net only through Industrial Upgrade's IMultiEnergySource:
+     * under IC2 without it the module would do nothing, so a storage doesn't take it (ones already
+     * in stay put). Without IC2 the mod's own net honours it.
+     */
+    public static boolean overdriveWorks() {
+        return !cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)
+                || cpw.mods.fml.common.Loader.isModLoaded(IU_MODID);
+    }
+
+    /** Industrial Upgrade's modid (as in the @Optional.Interface above). */
+    public static final String IU_MODID = "industrialupgrade";
+
+    /** The capacity with the Energy Storage upgrades of upgrade slot `slot` taken out. */
+    public int capacityWithout(int slot) {
+        ItemStack out = getStackInSlot(slot);
+        int n = 0;
+        for (ItemStack s : upgradeSlots) {
+            if (s != null && s != out && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == UpgradeType.ENERGY_STORAGE) {
+                n += s.stackSize;
+            }
+        }
+        long cap = capacityOf(getTier()) * (100L + (long) CAPACITY_PERCENT_PER_UPGRADE * Math.min(n, UpgradeType.MAX_EFFECTIVE)) / 100L;
+        return (int) Math.min(Integer.MAX_VALUE, cap);
+    }
+
+    /**
+     * May the upgrade in `slot` come out? Not an Energy Storage one while the charge wouldn't fit
+     * the capacity left without it (the energy would just vanish).
+     */
+    public boolean canRemoveUpgrade(int slot) {
+        ItemStack s = getStackInSlot(slot);
+        if (s == null || !(s.getItem() instanceof com.sc.item.ItemUpgradeSC) || com.sc.item.ItemUpgradeSC.typeOf(s) != UpgradeType.ENERGY_STORAGE) {
+            return true;
+        }
+        return getEnergyStored() <= capacityWithout(slot);
     }
 
     public int upgradeCount(UpgradeType type) {
@@ -229,6 +267,12 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     @Override
     public int receiveEnergy(ForgeDirection from, int voltage, int amount, boolean simulate) {
         return powerOn ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
+    }
+
+    /** Switched off, it gives nothing to sneak-click charging either. */
+    @Override
+    public int extractForItemCharging(int max) {
+        return switchedOn() ? super.extractForItemCharging(max) : 0;
     }
 
     @Override
@@ -474,7 +518,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     @Override
     public ItemStack decrStackSize(int slot, int amount) {
         ItemStack s = getStackInSlot(slot);
-        if (s == null) {
+        if (s == null || !canRemoveUpgrade(slot)) {        // a capacity upgrade holding energy stays
             return null;
         }
         ItemStack out = s.splitStack(Math.min(amount, s.stackSize));   // never more than the slot holds
@@ -570,9 +614,24 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         return (slot < FIRST_UPGRADE_SLOT || slot >= FIRST_EXTRA_CHARGE) && getStackInSlot(slot) == null && isItemValidForSlot(slot, stack);
     }
 
+    /**
+     * Automation takes out of a charge slot only an item that is full (or can't be charged here),
+     * out of the discharge slot only one that is empty (or gives nothing) - tried on a copy with
+     * the same charge / discharge calls the ticks use.
+     */
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
-        return slot < FIRST_UPGRADE_SLOT || slot >= FIRST_EXTRA_CHARGE;
+        if (slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE) {
+            return false;
+        }
+        if (stack == null) {
+            return true;
+        }
+        int probe = getTier().getVoltage();
+        if (slot == SLOT_DISCHARGE) {
+            return dischargeItem(stack.copy(), probe) <= 0;
+        }
+        return chargeItem(stack.copy(), probe) <= 0;
     }
 
     /** Weapons and armor pieces go in the charge slot (isItemValidForSlot adds the tier rule). */
