@@ -174,30 +174,44 @@ public final class SelfTestSC {
         check(ok, "GUI sync round-trips values above 32767");
     }
 
-    /** Every handbook tab builds, has content, and no untranslated key or "%" leaks through. */
+    /** Every handbook chapter builds with enough text, and no untranslated key or "%" leaks through (the old tab check, on the illustrated book). */
     private static void handbookPagesBuild() {
         StringBuilder bad = new StringBuilder();
-        int total = 0;
-        for (com.sc.manual.ManualTab tab : com.sc.manual.ManualTab.values()) {
-            List<String> lines = com.sc.manual.ManualContent.linesFor(tab, tab == com.sc.manual.ManualTab.RECIPES ? "" : null);
-            total += lines.size();
-            if (lines.size() < 5) {
-                bad.append(tab).append(" too short; ");
+        int total = 0, hits = 0;
+        for (com.sc.manual.BookChapter ch : com.sc.manual.BookChapter.values()) {
+            StringBuilder text = new StringBuilder();
+            for (com.sc.manual.BookEntry e : com.sc.manual.BookContent.chapter(ch)) {
+                text.append(e.searchText());
+                if (ch != com.sc.manual.BookChapter.RECIPES && e.searchText().contains("wafer")) {
+                    hits++;
+                }
+            }
+            int recipeCards = 0;
+            if (ch == com.sc.manual.BookChapter.RECIPES) {
+                for (com.sc.manual.BookEl el : com.sc.manual.BookContent.recipes("wafer", 40)) {
+                    el.collectText(text);
+                    recipeCards++;
+                }
+            }
+            String[] lines = text.toString().split("\n");
+            total += lines.length;
+            if (ch == com.sc.manual.BookChapter.RECIPES ? recipeCards < 3 : lines.length < 5) {   // recipes are cards, not lines
+                bad.append(ch).append(" too short; ");
             }
             for (String l : lines) {
-                if (l.contains("sc.manual.") || l.contains("sc.biome.") || l.contains("sc.suit.") || l.contains("%d") || l.contains("%s")) {
-                    bad.append(tab).append(": ").append(l).append("; ");
+                if (l.contains("sc.manual.") || l.contains("sc.book.") || l.contains("sc.biome.") || l.contains("sc.suit.") || l.contains("%d") || l.contains("%s")) {
+                    bad.append(ch).append(": ").append(l).append("; ");
                 }
             }
             if (Boolean.getBoolean("sc.selftest.print")) {
                 for (String l : lines) {
-                    System.out.println("[SC-PAGE] " + tab + " | " + l.replaceAll("\u00a7.", ""));
+                    System.out.println("[SC-PAGE] " + ch + " | " + l);
                 }
             }
         }
-        List<String> search = com.sc.manual.ManualContent.linesFor(com.sc.manual.ManualTab.RECIPES, "wafer");
-        check(search.size() > 5, "handbook search 'wafer' finds recipes (" + search.size() + " lines)");
-        check(bad.length() == 0, "handbook: all 9 tabs build, " + total + " lines, no raw keys" + (bad.length() == 0 ? "" : " -> " + bad));
+        check(hits > 0, "handbook search 'wafer' finds articles (" + hits + ")");
+        check(bad.length() == 0, "handbook: all " + com.sc.manual.BookChapter.values().length + " chapters build, " + total + " lines, no raw keys"
+                + (bad.length() == 0 ? "" : " -> " + bad));
     }
 
     /** The illustrated handbook: every chapter has articles, no raw key leaks, items find their page, the recipe search works. */

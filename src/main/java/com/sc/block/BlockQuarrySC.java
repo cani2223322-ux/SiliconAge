@@ -46,6 +46,14 @@ public class BlockQuarrySC extends Block {
         setHardness(4.0F);
         setResistance(10.0F);
         setStepSound(soundTypeMetal);
+        setHarvestLevel("pickaxe", 0);
+    }
+
+    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    @Override
+    public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world,
+                                                int x, int y, int z) {
+        return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
     }
 
     /** The next horizontal side clockwise: north -> east -> south -> west. */
@@ -140,6 +148,25 @@ public class BlockQuarrySC extends Block {
             player.openGui(SCMod.instance, GuiHandlerSC.QUARRY_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    /** Other mods' wrenches (BuildCraft, Thermal, Ender IO...): a quarter turn round the vertical axis. */
+    @Override
+    public boolean rotateBlock(World world, int x, int y, int z, net.minecraftforge.common.util.ForgeDirection axis) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityQuarrySC)) {
+            return false;
+        }
+        TileEntityQuarrySC q = (TileEntityQuarrySC) te;
+        q.setFacing(clockwise(q.getFacing()));
+        world.markBlockForUpdate(x, y, z);
+        return true;
+    }
+
+    @Override
+    public net.minecraftforge.common.util.ForgeDirection[] getValidRotations(World world, int x, int y, int z) {
+        return new net.minecraftforge.common.util.ForgeDirection[]{net.minecraftforge.common.util.ForgeDirection.UP,
+                net.minecraftforge.common.util.ForgeDirection.DOWN};
     }
 
     // ---- keep settings, energy, tanks and XP in the dropped item ----

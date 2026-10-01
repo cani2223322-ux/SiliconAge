@@ -1483,7 +1483,7 @@ public class GuiMachineSC extends GuiContainer {
             smallFit(s, ST_X + i * (ST_STEP_W + 4) + 11, CAPTION_Y + 2, ST_STEP_W - 13,
                     now ? 0x96F0FF : done ? 0x5AE66E : lock ? 0x3A4658 : 0x6A7A8A);
             if (i < 2) {
-                small("›", ST_X + i * (ST_STEP_W + 4) + ST_STEP_W + 1, CAPTION_Y + 2, 0x6AA8C8);
+                small(">", ST_X + i * (ST_STEP_W + 4) + ST_STEP_W + 1, CAPTION_Y + 2, 0x6AA8C8);
             }
         }
         net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
@@ -1962,7 +1962,8 @@ public class GuiMachineSC extends GuiContainer {
     private static int statusColor(MachineStatus status) {
         switch (status) {
             case PROCESSING: return GuiHoloSC.OK;
-            case OUTPUT_FULL: return GuiHoloSC.WARN;
+            case OUTPUT_FULL:
+            case OUTPUT_TANK_BUSY: return GuiHoloSC.WARN;
             case NO_POWER:
             case OVERHEATED: return GuiHoloSC.BAD;
             default: return GuiHoloSC.IDLE;

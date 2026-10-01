@@ -13,6 +13,7 @@ import com.sc.tileentity.TileEntityMachineSC;
 import com.sc.tileentity.TileEntityTankSC;
 import com.sc.tileentity.TileEntityTransformerSC;
 
+import cpw.mods.fml.common.Optional;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.block.Block;
@@ -43,7 +44,8 @@ import net.minecraftforge.common.util.ForgeDirection;
  * Sneak + right-click in the air switches the mode. The name has "wrench" in it, so every
  * wrench check of the mod's blocks (BlockConduitSC.isWrench) takes it too.
  */
-public class ItemWrenchSC extends Item {
+@Optional.Interface(iface = "ic2.api.item.ISpecialElectricItem", modid = Reference.IC2_MODID)
+public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricItem {
 
     public enum Tier {
         BASIC("wrench", 0, 0, com.sc.energy.Tier.LV),
@@ -74,6 +76,7 @@ public class ItemWrenchSC extends Item {
 
     public final Tier tier;
     private IIcon icon;
+    private Object ic2Manager;
 
     public ItemWrenchSC(Tier tier) {
         this.tier = tier;
@@ -114,6 +117,15 @@ public class ItemWrenchSC extends Item {
             tag(s).setInteger(CHARGE, chargeOf(s) + taken);
         }
         return taken;
+    }
+
+    /** Spends up to `amount` EU (IC2's manager). @return EU actually spent */
+    public static int discharge(ItemStack s, int amount) {
+        int spent = isElectric(s) ? Math.max(0, Math.min(chargeOf(s), amount)) : 0;
+        if (spent > 0) {
+            tag(s).setInteger(CHARGE, chargeOf(s) - spent);
+        }
+        return spent;
     }
 
     private static boolean spend(EntityPlayer p, ItemStack s, int eu) {
@@ -498,6 +510,9 @@ public class ItemWrenchSC extends Item {
             }
             case 2:
                 com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.howto." + tier.name().toLowerCase(java.util.Locale.ROOT)), "§7");
+                if (tier.maxCharge > 0) {
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.charging", tier.chargeTier.name()), "§7");
+                }
                 break;
             default:
                 com.sc.util.TooltipSC.hintShift(list);
@@ -514,5 +529,47 @@ public class ItemWrenchSC extends Item {
             tag(full).setInteger(CHARGE, tier.maxCharge);
             list.add(full);
         }
+    }
+
+    // ------------------------------------------------------------------ IC2: charged by batboxes / batteries (electric tiers)
+
+    @Override
+    public boolean canProvideEnergy(ItemStack stack) {
+        return false;
+    }
+
+    @Override
+    public Item getChargedItem(ItemStack stack) {
+        return this;
+    }
+
+    @Override
+    public Item getEmptyItem(ItemStack stack) {
+        return this;
+    }
+
+    /** 0 for the plain wrench: the manager (ArmorElectricManagerSC) takes no charge into it. */
+    @Override
+    public double getMaxCharge(ItemStack stack) {
+        return tier.maxCharge;
+    }
+
+    @Override
+    public int getTier(ItemStack stack) {
+        return tier.chargeTier.toIc2Tier();
+    }
+
+    @Override
+    public double getTransferLimit(ItemStack stack) {
+        return tier.maxCharge > 0 ? tier.chargeTier.getVoltage() : 0;
+    }
+
+    @Override
+    @Optional.Method(modid = Reference.IC2_MODID)
+    public ic2.api.item.IElectricItemManager getManager(ItemStack stack) {
+        if (ic2Manager == null) {
+            ic2Manager = new ArmorElectricManagerSC();
+        }
+        return (ic2.api.item.IElectricItemManager) ic2Manager;
     }
 }

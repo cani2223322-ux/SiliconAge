@@ -81,6 +81,11 @@ public final class QuarryNetSC {
             if (!q.isUseableByPlayer(p)) {
                 return null;
             }
+            // every message comes from the screen: the player must have this very quarry's screen open
+            if (!(p.openContainer instanceof com.sc.inventory.ContainerQuarrySC)
+                    || ((com.sc.inventory.ContainerQuarrySC) p.openContainer).getQuarry() != q) {
+                return null;
+            }
             if (!q.allowed(p)) {
                 p.addChatComponentMessage(new ChatComponentTranslation("sc.quarry.owneronly", q.getOwner()));
                 return null;

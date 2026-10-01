@@ -8,6 +8,7 @@ import java.util.Set;
 import com.sc.util.ArmorSuit;
 import com.sc.util.DrillFeature;
 import com.sc.util.DrillType;
+import com.sc.util.InvUtilSC;
 
 import net.minecraft.block.Block;
 import net.minecraft.entity.item.EntityItem;
@@ -16,16 +17,19 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
 import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.InventoryLargeChest;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
+import net.minecraftforge.common.util.ForgeDirection;
 import net.minecraftforge.oredict.OreDictionary;
 
 /**
@@ -55,9 +59,19 @@ public final class DrillLogicSC {
         return ArmorLogicSC.fullSet(p) == type.suit;
     }
 
-    /** Worn energy armour feeding the drill: the chestplate, any suit. */
+    /** Worn energy armour feeding the drill: the chestplate, any suit - not while it's overheated. */
     private static ItemStack feeder(EntityPlayer p) {
-        return ArmorLogicSC.piece(p, 1);
+        ItemStack chest = ArmorLogicSC.piece(p, 1);
+        return chest == null || ArmorLogicSC.overheated(p) ? null : chest;
+    }
+
+    /** EU the chestplate may give the drill: what it holds above the reserve (ConfigSC.drillArmorReserve, % of its capacity). */
+    static int spare(ItemStack chest) {
+        if (chest == null) {
+            return 0;
+        }
+        long reserve = (long) ItemArmorSC.capacityOf(chest) * com.sc.util.ConfigSC.drillArmorReserve / 100;
+        return (int) Math.max(0, ItemArmorSC.chargeOf(chest) - reserve);
     }
 
     /** EU for one block: economy halves it, the Nano set takes a quarter off (Nano drill). */
@@ -73,7 +87,7 @@ public final class DrillLogicSC {
     public static boolean canPay(EntityPlayer p, ItemStack drill, int eu) {
         int need = cost(p, drill, eu);
         ItemStack chest = feeder(p);
-        return ItemDrillSC.chargeOf(drill) + (chest == null ? 0 : ItemArmorSC.chargeOf(chest)) >= need;
+        return ItemDrillSC.chargeOf(drill) + spare(chest) >= need;
     }
 
     /** All or nothing: the drill's own charge first, then the worn chestplate's. */
@@ -429,32 +443,38 @@ public final class DrillLogicSC {
             return null;
         }
         TileEntity te = p.worldObj.getTileEntity(l[0], l[1], l[2]);
+        if (te instanceof TileEntityChest) {
+            // a double chest: both halves, in vanilla's order (as BlockChest opens it)
+            TileEntityChest c = (TileEntityChest) te;
+            c.checkForAdjacentChests();
+            if (c.adjacentChestXNeg != null) {
+                return new InventoryLargeChest("container.chestDouble", c.adjacentChestXNeg, c);
+            }
+            if (c.adjacentChestXPos != null) {
+                return new InventoryLargeChest("container.chestDouble", c, c.adjacentChestXPos);
+            }
+            if (c.adjacentChestZNeg != null) {
+                return new InventoryLargeChest("container.chestDouble", c.adjacentChestZNeg, c);
+            }
+            if (c.adjacentChestZPos != null) {
+                return new InventoryLargeChest("container.chestDouble", c, c.adjacentChestZPos);
+            }
+        }
         return te instanceof IInventory ? (IInventory) te : null;
     }
 
-    /** Puts as much as fits into the inventory. @return what's left, or null */
+    /**
+     * Puts as much as fits into the inventory, as a hopper above it would: through its top face
+     * (ISidedInventory's slots for side 1 and canInsertItem). @return what's left, or null
+     */
     private static ItemStack insert(IInventory inv, ItemStack s) {
-        ItemStack left = s.copy();
-        for (int i = 0; i < inv.getSizeInventory() && left.stackSize > 0; i++) {
-            if (!inv.isItemValidForSlot(i, left)) {
-                continue;
-            }
-            ItemStack in = inv.getStackInSlot(i);
-            int limit = Math.min(inv.getInventoryStackLimit(), left.getMaxStackSize());
-            if (in == null) {
-                ItemStack put = left.copy();
-                put.stackSize = Math.min(limit, left.stackSize);
-                inv.setInventorySlotContents(i, put);
-                left.stackSize -= put.stackSize;
-            } else if (in.isItemEqual(left) && ItemStack.areItemStackTagsEqual(in, left) && in.stackSize < limit) {
-                int move = Math.min(limit - in.stackSize, left.stackSize);
-                ItemStack grown = in.copy();
-                grown.stackSize += move;
-                inv.setInventorySlotContents(i, grown);
-                left.stackSize -= move;
-            }
+        int left = InvUtilSC.insert(inv, ForgeDirection.DOWN, s);       // moving down into it = its UP face
+        if (left <= 0) {
+            return null;
         }
-        return left.stackSize > 0 ? left : null;
+        ItemStack rest = s.copy();
+        rest.stackSize = left;
+        return rest;
     }
 
     // ------------------------------------------------------------------ torch, laser

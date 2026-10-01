@@ -205,7 +205,8 @@ public class GuiArmorSC extends GuiScreen {
                 continue;
             } else if (b.id >= BIND_BASE) {
                 Enum<?> f = featureOf(b.id);
-                b.displayString = f == capturing ? "§e> ... <" : ArmorKeyBindsSC.describe(ArmorKeyBindsSC.get(f));
+                b.displayString = f == capturing ? "§e> ... <"
+                        : (ArmorKeyBindsSC.conflicts(f).isEmpty() ? "" : "§c") + ArmorKeyBindsSC.describe(ArmorKeyBindsSC.get(f));   // red: the key is taken
             } else if (featureOf(b.id) instanceof PowerModeKey) {
                 PowerModeKey k = (PowerModeKey) featureOf(b.id);
                 int mode = ArmorLogicSC.powerMode(mc.thePlayer);
@@ -416,6 +417,14 @@ public class GuiArmorSC extends GuiScreen {
             if (b.id >= BIND_BASE) {
                 tip.add(Lang.tr(action ? "sc.armorgui.bind.tip.action" : "sc.armorgui.bind.tip"));
                 tip.add("§7" + Lang.tr("sc.armorgui.bind.tip2"));
+                List<String> taken = ArmorKeyBindsSC.conflicts(f);
+                if (!taken.isEmpty()) {
+                    StringBuilder names = new StringBuilder();
+                    for (String n : taken) {
+                        names.append(names.length() > 0 ? ", " : "").append(n);
+                    }
+                    tip.add("§c" + Lang.tr("sc.armorgui.bind.conflict", names));
+                }
             } else if (f instanceof PowerModeKey) {
                 tip.add(Lang.tr("sc.modegui." + ((PowerModeKey) f).key() + ".desc"));
             } else if (f instanceof DrillFeature) {

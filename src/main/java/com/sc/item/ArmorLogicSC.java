@@ -40,6 +40,8 @@ public final class ArmorLogicSC {
 
     private static final UUID KNOCKBACK_ID = UUID.fromString("5c1d7c64-8b0e-4c4a-9d57-3a0f1e3c5a11");
     private static final String STEP_FLAG = "scArmorStep", FLIGHT_FLAG = "scArmorFlight", HEAT_KEY = "scArmorHeat";
+    /** Set while the night vision is ours (the helmet or the Sensor chip gave it): only then is it taken off. */
+    private static final String NIGHT_VISION_FLAG = "SCNightVision";
 
     private ArmorLogicSC() {
     }
@@ -69,7 +71,8 @@ public final class ArmorLogicSC {
         return suit;
     }
 
-    private static boolean overheated(EntityPlayer p) {
+    /** The suit's chips (and functions) are shut down by heat. */
+    static boolean overheated(EntityPlayer p) {
         ItemStack chest = piece(p, 1);
         return chest != null && chest.hasTagCompound() && chest.getTagCompound().getBoolean("ChipsOffSC");
     }
@@ -285,20 +288,28 @@ public final class ArmorLogicSC {
     public static int perSecond(EntityPlayer p) {
         int heat = 0;
         int mode = powerMode(p);
+        NBTTagCompound data = p.getEntityData();
         if (active(p, ArmorFeature.NIGHT_VISION) && pay(p, ArmorFeature.NIGHT_VISION, ArmorFeature.NIGHT_VISION.euPerSecond)) {
             p.addPotionEffect(new PotionEffect(Potion.nightVision.id, 260, 0, true));
+            data.setBoolean(NIGHT_VISION_FLAG, true);
             heat += ArmorFeature.NIGHT_VISION.heat;
         } else {
-            PotionEffect nv = p.getActivePotionEffect(Potion.nightVision);
             ItemStack chest = piece(p, 1);
             boolean sensorChip = chest != null && chest.hasTagCompound() && !overheated(p)
                     && chest.getTagCompound().getCompoundTag("ChipsSC").hasKey(com.sc.util.ChipType.SENSOR.name());
-            // (a running Sensor chip gives the same effect right after - it was taken off and put back every second)
-            if (nv != null && nv.getIsAmbient() && nv.getDuration() <= 260 && !sensorChip) {
-                p.removePotionEffect(Potion.nightVision.id);      // ours - switched off or out of charge
+            if (sensorChip) {
+                // a running Sensor chip gives the same effect (CommonEventHandler) - it's ours too, left on
+                data.setBoolean(NIGHT_VISION_FLAG, true);
+            } else if (data.getBoolean(NIGHT_VISION_FLAG)) {
+                // switched off or out of charge: only our own effect goes - a potion's / another mod's
+                // (not ambient, or longer than ours) is left alone
+                PotionEffect nv = p.getActivePotionEffect(Potion.nightVision);
+                if (nv != null && nv.getIsAmbient() && nv.getDuration() <= 260) {
+                    p.removePotionEffect(Potion.nightVision.id);
+                }
+                data.removeTag(NIGHT_VISION_FLAG);
             }
         }
-        NBTTagCompound data = p.getEntityData();
         heat += data.getInteger(HEAT_KEY);
         data.removeTag(HEAT_KEY);
         if (active(p, ArmorFeature.AIR) && p.isInsideOfMaterial(Material.water) && p.getAir() < 300
@@ -434,7 +445,8 @@ public final class ArmorLogicSC {
             } else if (s.getItem() instanceof ItemBladeSC && !(p.isUsingItem() && s == p.getCurrentEquippedItem())) {
                 took = ItemBladeSC.charge(s, offer);                  // the energy blades too (not mid-block: it would drop the block)
             } else if (s.getItem() instanceof ItemDrillSC && !DrillLogicSC.digging(p, s)) {
-                took = ItemDrillSC.charge(s, offer);                  // and the drills (not mid-dig: it would restart the block)
+                // and the drills (not mid-dig: it would restart the block), never below the chestplate's reserve
+                took = ItemDrillSC.charge(s, Math.min(offer, DrillLogicSC.spare(chest)));
             } else {
                 continue;
             }

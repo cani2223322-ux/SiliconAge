@@ -136,6 +136,48 @@ public final class FieldShapeSC {
     }
 
     /**
+     * Whether two shapes share space (a new field over a stranger's): their bounds must meet; then
+     * each one's anchors are tried in the other, and a grid of up to 25 points a side over the
+     * common bounds in both. A sliver thinner than the grid step can slip through.
+     */
+    public static boolean overlaps(FieldMode ma, List<int[]> na, int ra, int ha, FieldMode mb, List<int[]> nb, int rb, int hb) {
+        if (na.isEmpty() || nb.isEmpty()) {
+            return false;
+        }
+        AxisAlignedBB a = bounds(ma, na, ra, ha), b = bounds(mb, nb, rb, hb);
+        if (!a.intersectsWith(b)) {
+            return false;
+        }
+        for (int[] n : na) {
+            if (contains(mb, nb, rb, hb, n[0] + 0.5, n[1] + 0.5, n[2] + 0.5)) {
+                return true;
+            }
+        }
+        for (int[] n : nb) {
+            if (contains(ma, na, ra, ha, n[0] + 0.5, n[1] + 0.5, n[2] + 0.5)) {
+                return true;
+            }
+        }
+        double x0 = Math.max(a.minX, b.minX), x1 = Math.min(a.maxX, b.maxX);
+        double y0 = Math.max(a.minY, b.minY), y1 = Math.min(a.maxY, b.maxY);
+        double z0 = Math.max(a.minZ, b.minZ), z1 = Math.min(a.maxZ, b.maxZ);
+        int steps = 24;
+        for (int i = 0; i <= steps; i++) {
+            double x = x0 + (x1 - x0) * i / steps;
+            for (int j = 0; j <= steps; j++) {
+                double y = y0 + (y1 - y0) * j / steps;
+                for (int k = 0; k <= steps; k++) {
+                    double z = z0 + (z1 - z0) * k / steps;
+                    if (contains(ma, na, ra, ha, x, y, z) && contains(mb, nb, rb, hb, x, y, z)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Roughly how many blocks the shape holds (overlaps counted once): a fixed-seed sample of its
      * bounds - for the Zone tab's readout, client side.
      */

@@ -86,7 +86,8 @@ public class ContainerFieldGeneratorSC extends Container {
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + 58));
         }
-        // the battery slot under the gauge - last, on every tab; only the owner / access list takes it out
+        // the battery slot under the gauge - last, on every tab; only the owner / access list puts it in
+        // or takes it out (slotClick refuses a stranger's every click on it, transferStackInSlot never fills it for them)
         final TileEntityFieldGeneratorSC f = field;
         addSlotToContainer(new SlotBatterySC(field, TileEntityFieldGeneratorSC.SLOT_BATTERY, BATTERY_X, BATTERY_Y) {
             @Override
@@ -115,7 +116,10 @@ public class ContainerFieldGeneratorSC extends Container {
         }
     }
 
-    /** Shift-click: upgrades into the upgrade slots, back out into the inventory, main grid <-> hotbar. */
+    /**
+     * Shift-click: upgrades into the upgrade slots, back out into the inventory, main grid <-> hotbar.
+     * A stranger only moves things within their own inventory (the field's slots are the owner's).
+     */
     @Override
     public ItemStack transferStackInSlot(EntityPlayer player, int index) {
         Slot slot = (Slot) inventorySlots.get(index);
@@ -125,28 +129,29 @@ public class ContainerFieldGeneratorSC extends Container {
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
         int n = TileEntityFieldGeneratorSC.UPGRADE_SLOTS, hotbar = n + 27, battery = inventorySlots.size() - 1, end = battery;
+        boolean may = field.allowed(player);
         if (index == battery) {
-            if (!field.allowed(player) || !mergeItemStack(original, n, end, true)) {
+            if (!may || !mergeItemStack(original, n, end, true)) {
                 return null;
             }
             slot.putStack(original.stackSize == 0 ? null : original);
             return result;
         }
-        if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
+        if (index < n && !may) {
+            return null;
+        }
+        if (may && com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
             if (!SlotMergeSC.mergeValid(inventorySlots, original, battery, battery + 1)) {
                 return null;
             }
             slot.putStack(original.stackSize == 0 ? null : original);
             return result;
         }
-        if (index >= n && field.isItemValidForSlot(0, original) && !field.allowed(player)) {
-            return null;                            // strangers don't put upgrades in either
-        }
         if (index < n) {
             if (!mergeItemStack(original, n, end, true)) {
                 return null;
             }
-        } else if (field.isItemValidForSlot(0, original)) {
+        } else if (may && field.isItemValidForSlot(0, original)) {
             if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, n)
                     && !mergeItemStack(original, index < hotbar ? hotbar : n, index < hotbar ? end : hotbar, false)) {
                 return null;
@@ -187,10 +192,31 @@ public class ContainerFieldGeneratorSC extends Container {
         if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
             return null;                                   // a hotbar key can't put more than the slot takes
         }
-        if (slotId >= 0 && slotId < TileEntityFieldGeneratorSC.UPGRADE_SLOTS && !field.allowed(player)) {
+        // a stranger: no click of any kind (put, take, hotbar key, drag, drop) on the field's own slots -
+        // the battery's slot as much as the upgrades'; their own inventory stays theirs to sort
+        boolean fieldSlot = slotId >= 0 && slotId < TileEntityFieldGeneratorSC.UPGRADE_SLOTS || slotId == inventorySlots.size() - 1;
+        if (fieldSlot && !field.allowed(player)) {
             return null;
         }
         return super.slotClick(slotId, button, mode, player);
+    }
+
+    /** What the access list looked like when last sent to the screen's viewers (null: not yet). */
+    private String accessSent;
+
+    /** The screen's first sync: the access list to this player too (only an allowed one sees it). */
+    @Override
+    public void addCraftingToCrafters(net.minecraft.inventory.ICrafting crafter) {
+        super.addCraftingToCrafters(crafter);
+        sendAccess(crafter);
+    }
+
+    /** The access list rides only here, to the screen's viewers - the block's description packet leaves it out. */
+    private void sendAccess(Object crafter) {
+        if (crafter instanceof net.minecraft.entity.player.EntityPlayerMP) {
+            net.minecraft.entity.player.EntityPlayerMP p = (net.minecraft.entity.player.EntityPlayerMP) crafter;
+            p.playerNetServerHandler.sendPacket(field.accessPacket(field.allowed(p)));
+        }
     }
 
     public TileEntityFieldGeneratorSC getField() {
@@ -205,6 +231,13 @@ public class ContainerFieldGeneratorSC extends Container {
     @Override
     public void detectAndSendChanges() {
         super.detectAndSendChanges();
+        String now = field.getOwner() + "|" + field.getAccess();
+        if (!now.equals(accessSent)) {
+            accessSent = now;
+            for (Object crafter : crafters) {
+                sendAccess(crafter);
+            }
+        }
         sync.send(this, crafters, new int[]{field.getEnergyStored(), field.getMode().ordinal(),
                 field.getNodeCount(), field.isActive() ? 1 : 0, field.getRange(), field.getChargedLastSecond(), field.getPlayersLastSecond()});
     }

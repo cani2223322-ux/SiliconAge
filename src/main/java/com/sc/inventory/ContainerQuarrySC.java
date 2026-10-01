@@ -147,21 +147,20 @@ public class ContainerQuarrySC extends Container {
         if (slot == null || !slot.getHasStack()) {
             return null;
         }
-        if (!quarry.allowed(player)) {
-            return null;
-        }
+        // the quarry's slots only for the owner / access list; anyone may move their own items main <-> hotbar
+        boolean allowed = quarry.allowed(player);
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
         int battery = inventorySlots.size() - 1, end = battery, hotbar = FIRST_PLAYER + 27;
         if (index < FIRST_PLAYER || index == battery) {
-            if (!mergeItemStack(original, FIRST_PLAYER, end, true)) {
+            if (!allowed || !mergeItemStack(original, FIRST_PLAYER, end, true)) {
                 return null;
             }
-        } else if (com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
+        } else if (allowed && com.sc.item.BatteryFeedSC.accepts(original) && !((Slot) inventorySlots.get(battery)).getHasStack()) {
             if (!SlotMergeSC.mergeValid(inventorySlots, original, battery, battery + 1)) {
                 return null;
             }
-        } else if (!SlotMergeSC.mergeValid(inventorySlots, original, FIRST_UPGRADE, FIRST_PLAYER)
+        } else if (!(allowed && SlotMergeSC.mergeValid(inventorySlots, original, FIRST_UPGRADE, FIRST_PLAYER))
                 && !mergeItemStack(original, index < hotbar ? hotbar : FIRST_PLAYER, index < hotbar ? end : hotbar, false)) {
             return null;
         }

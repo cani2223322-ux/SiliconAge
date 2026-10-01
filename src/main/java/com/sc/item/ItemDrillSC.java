@@ -220,6 +220,9 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.pairs(list, names, on);
                 list.add("\u00a77" + Lang.tr("sc.tooltip.drill.stats", type.euPerBlock, type.harvestLevel));
+                if (DrillFeature.AUTOSMELT.availableIn(type)) {
+                    list.add("\u00a77" + Lang.tr("sc.tooltip.drill.smeltnoxp"));   // a furnace's XP isn't given
+                }
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;
             }

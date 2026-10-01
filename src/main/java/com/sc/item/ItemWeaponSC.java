@@ -8,6 +8,7 @@ import com.sc.init.ModCreativeTab;
 import com.sc.manual.Lang;
 import com.sc.util.WeaponType;
 
+import cpw.mods.fml.common.Optional;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
@@ -34,17 +35,20 @@ import net.minecraft.world.World;
  * "hitscan": the look ray from the eyes is tested against every living entity's hitbox (grown
  * by AIM_MARGIN) within range, and the nearest one hit in line of sight takes the shot.
  */
-public class ItemWeaponSC extends Item {
+@Optional.Interface(iface = "ic2.api.item.ISpecialElectricItem", modid = Reference.IC2_MODID)
+public class ItemWeaponSC extends Item implements ic2.api.item.ISpecialElectricItem {
 
     /** Hitbox slack for the aim ray, in blocks - small mobs are still hittable without pixel aiming. */
     private static final double AIM_MARGIN = 0.3;
 
     private final WeaponType type;
     private IIcon icon;
+    private Object ic2Manager;
 
     public ItemWeaponSC(WeaponType type) {
         this.type = type;
         setMaxStackSize(1);
+        setMaxDamage(0);
         setCreativeTab(ModCreativeTab.TAB);
         setUnlocalizedName(Reference.ASSETS + "." + type.name().toLowerCase(java.util.Locale.ROOT));
     }
@@ -74,13 +78,63 @@ public class ItemWeaponSC extends Item {
         stack.getTagCompound().setInteger("ChargeSC", charge);
     }
 
+    /** The weapon's charge (ArmorElectricManagerSC, IC2), 0 for anything else. */
+    public static int chargeOf(ItemStack stack) {
+        return stack != null && stack.getItem() instanceof ItemWeaponSC ? getCharge(stack) : 0;
+    }
+
+    public static int capacityOf(ItemStack stack) {
+        return stack != null && stack.getItem() instanceof ItemWeaponSC ? ((ItemWeaponSC) stack.getItem()).type.tier.getBuffer() : 0;
+    }
+
+    /** Charges up to `max` EU (the type from the stack). @return EU actually taken. */
+    public static int charge(ItemStack stack, int max) {
+        return stack != null && stack.getItem() instanceof ItemWeaponSC ? charge(stack, ((ItemWeaponSC) stack.getItem()).type, max) : 0;
+    }
+
+    /** Spends up to `amount` EU. @return EU actually spent. */
+    public static int discharge(ItemStack stack, int amount) {
+        int spent = Math.max(0, Math.min(chargeOf(stack), amount));
+        if (spent > 0) {
+            setCharge(stack, getCharge(stack) - spent);
+        }
+        return spent;
+    }
+
+    @Override
+    public boolean showDurabilityBar(ItemStack stack) {
+        return true;
+    }
+
+    @Override
+    public double getDurabilityForDisplay(ItemStack stack) {
+        return 1.0 - Math.min(1.0, (double) getCharge(stack) / type.tier.getBuffer());
+    }
+
+    /** Creative tab: an empty and a fully charged weapon, like the drills. */
+    @Override
+    public void getSubItems(Item item, net.minecraft.creativetab.CreativeTabs tab, List list) {
+        list.add(new ItemStack(item));
+        ItemStack full = new ItemStack(item);
+        setCharge(full, type.tier.getBuffer());
+        list.add(full);
+    }
+
+    /** Like the drills and blades: the charge, the numbers on Shift, how to use and charge it on Ctrl. */
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add(Lang.tr("sc.tooltip.weapon.charge", getCharge(stack), type.tier.getBuffer()));
-        if (com.sc.util.TooltipSC.ctrl()) {
-            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.weapon.howto"), "\u00a77");
-        } else {
-            com.sc.util.TooltipSC.hintCtrl(list);
+        switch (com.sc.util.TooltipSC.page()) {
+            case 1:
+                list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.stats", type.damagePerHit, type.shotsPerUse, type.range));
+                list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.shots", type.euPerShot, getCharge(stack) / type.euPerShot, type.tier.name()));
+                com.sc.util.TooltipSC.hintCtrl(list);
+                break;
+            case 2:
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.weapon.use", type.tier.name()), "\u00a77");
+                break;
+            default:
+                com.sc.util.TooltipSC.hintShift(list);
         }
     }
 
@@ -203,5 +257,46 @@ public class ItemWeaponSC extends Item {
 
     public static void addCharge(ItemStack stack, WeaponType type, int amount) {
         setCharge(stack, Math.min(type.tier.getBuffer(), getCharge(stack) + amount));
+    }
+
+    // ---- IC2: charged by batboxes / MFE / MFSU and batteries through the suits' manager ----
+
+    @Override
+    public boolean canProvideEnergy(ItemStack stack) {
+        return false;
+    }
+
+    @Override
+    public Item getChargedItem(ItemStack stack) {
+        return this;
+    }
+
+    @Override
+    public Item getEmptyItem(ItemStack stack) {
+        return this;
+    }
+
+    @Override
+    public double getMaxCharge(ItemStack stack) {
+        return type.tier.getBuffer();
+    }
+
+    @Override
+    public int getTier(ItemStack stack) {
+        return type.tier.toIc2Tier();
+    }
+
+    @Override
+    public double getTransferLimit(ItemStack stack) {
+        return type.tier.getVoltage();
+    }
+
+    @Override
+    @Optional.Method(modid = Reference.IC2_MODID)
+    public ic2.api.item.IElectricItemManager getManager(ItemStack stack) {
+        if (ic2Manager == null) {
+            ic2Manager = new ArmorElectricManagerSC();
+        }
+        return (ic2.api.item.IElectricItemManager) ic2Manager;
     }
 }

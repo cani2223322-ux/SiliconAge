@@ -79,7 +79,7 @@ public final class ModBlocks {
         GameRegistry.registerBlock(oreSC, ItemBlockOreSC.class, "oreSC");
 
         limestoneSC = new BlockLimestoneSC();
-        GameRegistry.registerBlock(limestoneSC, "limestoneSC");
+        GameRegistry.registerBlock(limestoneSC, com.sc.block.ItemBlockLimestoneSC.class, "limestoneSC");
 
         cableSC = new BlockCableSC();
         GameRegistry.registerBlock(cableSC, ItemBlockCableSC.class, "cableSC");
@@ -109,12 +109,12 @@ public final class ModBlocks {
         quarrySC = new com.sc.block.BlockQuarrySC();
         GameRegistry.registerBlock(quarrySC, com.sc.block.ItemBlockQuarrySC.class, "quarrySC");
         tokamakCoil = new com.sc.block.BlockTokamakCoilSC();
-        GameRegistry.registerBlock(tokamakCoil, "tokamakCoil");
+        GameRegistry.registerBlock(tokamakCoil, com.sc.block.ItemBlockTokamakCoilSC.class, "tokamakCoil");
         leadBlock = new com.sc.block.BlockLeadSC.Solid();
-        GameRegistry.registerBlock(leadBlock, "leadBlock");
+        GameRegistry.registerBlock(leadBlock, com.sc.block.ItemBlockLeadSC.class, "leadBlock");
         net.minecraftforge.oredict.OreDictionary.registerOre("blockLead", leadBlock);
         leadGlass = new com.sc.block.BlockLeadSC.Glass();
-        GameRegistry.registerBlock(leadGlass, "leadGlass");
+        GameRegistry.registerBlock(leadGlass, com.sc.block.ItemBlockLeadSC.class, "leadGlass");
         metalBlock = new com.sc.block.BlockMetalSC(0);
         GameRegistry.registerBlock(metalBlock, com.sc.block.BlockMetalSC.ItemMetalBlock.class, "metalBlock");
         metalBlock2 = new com.sc.block.BlockMetalSC(16);
@@ -126,7 +126,7 @@ public final class ModBlocks {
             }
         }
         shower = new com.sc.block.BlockShowerSC();
-        GameRegistry.registerBlock(shower, "shower");
+        GameRegistry.registerBlock(shower, com.sc.block.ItemBlockShowerSC.class, "shower");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityShowerSC.class, "SiliconAge.shower");
 
         fieldGeneratorSC = new BlockFieldGeneratorSC();

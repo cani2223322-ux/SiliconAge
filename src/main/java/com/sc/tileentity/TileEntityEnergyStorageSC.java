@@ -57,6 +57,19 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         setTier(tier);
     }
 
+    /** Saved before the tier went into the NBT ("TierSC"): the tier comes from the block's metadata on the first tick. */
+    private boolean tierFromMeta;
+
+    private void fixTierFromMeta() {
+        tierFromMeta = false;
+        if (getBlockType() instanceof com.sc.block.BlockEnergyStorageSC) {
+            setTier(com.sc.block.BlockEnergyStorageSC.tierFor(getBlockMetadata()));
+            refreshEnergyNet();
+            markDirty();
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
+    }
+
     /** A storage item's capacity: its tier and the Energy Storage upgrades it carries (getDrops' "UpgradesSC"). */
     public static int capacityOf(Tier tier, net.minecraft.nbt.NBTTagCompound ups) {
         int n = 0;
@@ -284,6 +297,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     public void updateEntity() {
         if (worldObj == null || worldObj.isRemote) {
             return;
+        }
+        if (tierFromMeta) {
+            fixTierFromMeta();
         }
         if (switchedOn()) {                                          // off: no charging or emptying items either
             chargeRound();
@@ -646,6 +662,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
+        tierFromMeta = !nbt.hasKey("TierSC");
         facing = ForgeDirection.getOrientation(nbt.getInteger("Facing"));
         if (facing == ForgeDirection.UNKNOWN) {
             facing = ForgeDirection.SOUTH;

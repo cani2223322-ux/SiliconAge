@@ -53,6 +53,14 @@ public class BlockGeneratorSC extends Block {
         setHardness(3.5F);
         setResistance(8.0F);
         setStepSound(soundTypeMetal);
+        setHarvestLevel("pickaxe", 0);
+    }
+
+    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    @Override
+    public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world,
+                                                int x, int y, int z) {
+        return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
     }
 
     @Override
@@ -202,6 +210,25 @@ public class BlockGeneratorSC extends Block {
             player.openGui(SCMod.instance, GuiHandlerSC.GENERATOR_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    /** Other mods' wrenches (BuildCraft, Thermal, Ender IO...): a quarter turn round the vertical axis. */
+    @Override
+    public boolean rotateBlock(World world, int x, int y, int z, ForgeDirection axis) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityGeneratorSC)) {
+            return false;
+        }
+        TileEntityGeneratorSC generator = (TileEntityGeneratorSC) te;
+        generator.setFacing(generator.getFacing().getRotation(ForgeDirection.UP));
+        generator.markDirty();
+        world.markBlockForUpdate(x, y, z);
+        return true;
+    }
+
+    @Override
+    public ForgeDirection[] getValidRotations(World world, int x, int y, int z) {
+        return new ForgeDirection[]{ForgeDirection.UP, ForgeDirection.DOWN};
     }
 
     @Override

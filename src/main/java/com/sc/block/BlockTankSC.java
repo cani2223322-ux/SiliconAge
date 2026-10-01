@@ -53,6 +53,14 @@ public class BlockTankSC extends Block {
         setHardness(3.0F);
         setResistance(10.0F);
         setStepSound(soundTypeGlass);
+        setHarvestLevel("pickaxe", 0);
+    }
+
+    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    @Override
+    public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world,
+                                                int x, int y, int z) {
+        return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
     }
 
     static int tierOf(int meta) {

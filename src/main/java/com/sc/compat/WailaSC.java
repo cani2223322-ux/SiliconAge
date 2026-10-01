@@ -233,10 +233,13 @@ public class WailaSC implements IWailaDataProvider {
             tag.setInteger("scWlKind", w.getKind());
             tag.setInteger("scWlSt", w.getStatus());
             tag.setBoolean("scWlLinked", w.hasLink());
-            tag.setInteger("scWlX", p[0]);
-            tag.setInteger("scWlY", p[1]);
-            tag.setInteger("scWlZ", p[2]);
-            tag.setInteger("scWlDim", p[3]);
+            if (player != null && w.allowed(player)) {              // where the other end is: only for those with access
+                tag.setBoolean("scWlCoords", true);
+                tag.setInteger("scWlX", p[0]);
+                tag.setInteger("scWlY", p[1]);
+                tag.setInteger("scWlZ", p[2]);
+                tag.setInteger("scWlDim", p[3]);
+            }
             tag.setInteger("scWlDist", w.getDistance());
             tag.setInteger("scWlLoss", w.getLossPct());
             tag.setInteger("scWlFlow", w.getFlow());
@@ -271,14 +274,18 @@ public class WailaSC implements IWailaDataProvider {
                 tip.add(Lang.tr("sc.waila.wl.pair", t.getString("scWlPair"), Lang.tr(t.getBoolean("scWlGiving") ? "sc.wl.btn.give" : "sc.wl.btn.take"),
                         t.getInteger("scWlLife")));
             }
-            if (st == com.sc.tileentity.TileEntityWirelessSC.ST_OK || st == com.sc.tileentity.TileEntityWirelessSC.ST_FULL
-                    || st == com.sc.tileentity.TileEntityWirelessSC.ST_IDLE) {
+            if (t.getBoolean("scWlCoords") && (st == com.sc.tileentity.TileEntityWirelessSC.ST_OK
+                    || st == com.sc.tileentity.TileEntityWirelessSC.ST_FULL || st == com.sc.tileentity.TileEntityWirelessSC.ST_IDLE)) {
                 tip.add(Lang.tr("sc.waila.wl.other", Lang.trOr("sc.wl.dim." + t.getInteger("scWlDim"), Lang.tr("sc.wl.dim.other", t.getInteger("scWlDim"))),
                         t.getInteger("scWlX"), t.getInteger("scWlY"), t.getInteger("scWlZ")));
             }
         } else if (t.getBoolean("scWlLinked")) {
-            tip.add(Lang.tr(kind == com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER ? "sc.waila.wl.to" : "sc.waila.wl.from",
-                    t.getInteger("scWlX"), t.getInteger("scWlY"), t.getInteger("scWlZ")));
+            boolean tx = kind == com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER;
+            if (t.getBoolean("scWlCoords")) {
+                tip.add(Lang.tr(tx ? "sc.waila.wl.to" : "sc.waila.wl.from", t.getInteger("scWlX"), t.getInteger("scWlY"), t.getInteger("scWlZ")));
+            } else {
+                tip.add(Lang.tr(tx ? "sc.waila.wl.to.hidden" : "sc.waila.wl.from.hidden"));
+            }
             if (t.getInteger("scWlDist") > 0) {
                 tip.add(Lang.tr("sc.waila.wl.dist", t.getInteger("scWlDist"), t.getInteger("scWlLoss")));
             }

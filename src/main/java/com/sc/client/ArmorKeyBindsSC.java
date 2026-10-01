@@ -157,6 +157,49 @@ public final class ArmorKeyBindsSC {
         return key && modifiersDown() == b[1];
     }
 
+    /** A function's name for the armour screen, with its tab ("Blade: Sweep", "Mode: Combat"). */
+    public static String nameOf(Enum<?> f) {
+        if (f instanceof BladeFeature) {
+            return Lang.tr("sc.bladegui.tab") + ": " + Lang.tr("sc.bladefn." + ((BladeFeature) f).key());
+        }
+        if (f instanceof com.sc.util.DrillFeature) {
+            return Lang.tr("sc.drillgui.tab") + ": " + Lang.tr("sc.drillfn." + ((com.sc.util.DrillFeature) f).key());
+        }
+        if (f instanceof PowerModeKey) {
+            PowerModeKey k = (PowerModeKey) f;
+            return Lang.tr("sc.modegui.tab") + ": " + (k == PowerModeKey.CYCLE ? Lang.tr("sc.modegui.cycle.name") : Lang.tr("sc.armorgui.mode." + k.mode()));
+        }
+        ArmorFeature a = (ArmorFeature) f;
+        return Lang.tr("sc.armorhud.piece." + a.piece) + ": " + Lang.tr("sc.armorfn." + a.name().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /**
+     * What else the function's key is taken by: another suit / blade / drill / mode function with the
+     * same key and modifiers, or a vanilla (or another mod's) KeyBinding on the same key - those
+     * ignore Ctrl / Shift / Alt, so they fire together whatever the modifiers. Empty when none or unbound.
+     */
+    public static java.util.List<String> conflicts(Enum<?> f) {
+        java.util.List<String> out = new java.util.ArrayList<String>();
+        int[] b = BINDS.get(f);
+        if (b == null || b[0] == 0) {
+            return out;
+        }
+        for (Map.Entry<Enum<?>, int[]> e : BINDS.entrySet()) {
+            if (e.getKey() != f && e.getValue()[0] == b[0] && e.getValue()[1] == b[1]) {
+                out.add(nameOf(e.getKey()));
+            }
+        }
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null && mc.gameSettings != null && mc.gameSettings.keyBindings != null) {
+            for (net.minecraft.client.settings.KeyBinding kb : mc.gameSettings.keyBindings) {
+                if (kb != null && kb.getKeyCode() == b[0]) {
+                    out.add(net.minecraft.client.resources.I18n.format(kb.getKeyDescription()));
+                }
+            }
+        }
+        return out;
+    }
+
     /** Client tick while playing (no screen open): fire every binding that has just been pressed. */
     public static void tick(Minecraft mc) {
         for (Map.Entry<Enum<?>, int[]> e : BINDS.entrySet()) {

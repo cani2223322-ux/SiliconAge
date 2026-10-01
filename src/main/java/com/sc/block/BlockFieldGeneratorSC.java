@@ -28,6 +28,13 @@ public class BlockFieldGeneratorSC extends Block {
         setHardness(4.0F);
         setResistance(10.0F);
         setStepSound(soundTypeMetal);
+        setHarvestLevel("pickaxe", 0);
+    }
+
+    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    @Override
+    public float getPlayerRelativeBlockHardness(EntityPlayer player, World world, int x, int y, int z) {
+        return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
     }
 
     @Override
@@ -50,13 +57,65 @@ public class BlockFieldGeneratorSC extends Block {
         return icon;
     }
 
-    /** Whoever places a generator owns it (private field, access list, warnings). */
+    /**
+     * Whoever places a generator owns it (private field, access list, warnings) - also one carrying
+     * another owner's settings: those and the access list come along, the owner doesn't. Placed
+     * alone (no links). A zone over a stranger's field is placed switched off.
+     */
     @Override
     public void onBlockPlacedBy(World world, int x, int y, int z, net.minecraft.entity.EntityLivingBase placer, ItemStack stack) {
         TileEntity te = world.getTileEntity(x, y, z);
-        if (!world.isRemote && te instanceof TileEntityFieldGeneratorSC && placer instanceof EntityPlayer) {
-            ((TileEntityFieldGeneratorSC) te).setOwner(placer.getCommandSenderName());
+        if (world.isRemote || !(te instanceof TileEntityFieldGeneratorSC)) {
+            return;
         }
+        TileEntityFieldGeneratorSC field = (TileEntityFieldGeneratorSC) te;
+        if (stack.hasTagCompound()) {
+            field.readFromItem(stack.getTagCompound());
+        }
+        if (placer instanceof EntityPlayer) {
+            field.setPlacer(placer.getCommandSenderName());
+        }
+        String stranger = field.placedNearForeign();
+        if (stranger != null && placer instanceof EntityPlayer) {
+            ((EntityPlayer) placer).addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", stranger));
+        }
+    }
+
+    // ---- keep the charge and the settings in the dropped item (the upgrades and battery drop as items) ----
+
+    @Override
+    public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (willHarvest) {
+            return true;                            // harvestBlock drops it while the tile entity still exists
+        }
+        return super.removedByPlayer(world, player, x, y, z, willHarvest);
+    }
+
+    @Override
+    public void harvestBlock(World world, EntityPlayer player, int x, int y, int z, int meta) {
+        super.harvestBlock(world, player, x, y, z, meta);
+        world.setBlockToAir(x, y, z);
+    }
+
+    /** An explosion drops the block whole: its settings and charge ride in the item. */
+    @Override
+    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int meta, float chance, int fortune) {
+        super.dropBlockAsItemWithChance(world, x, y, z, meta, 1.0F, fortune);
+    }
+
+    @Override
+    public java.util.ArrayList<ItemStack> getDrops(World world, int x, int y, int z, int meta, int fortune) {
+        java.util.ArrayList<ItemStack> drops = new java.util.ArrayList<ItemStack>();
+        ItemStack stack = new ItemStack(this);
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityFieldGeneratorSC) {
+            net.minecraft.nbt.NBTTagCompound nbt = ((TileEntityFieldGeneratorSC) te).writeToItem();
+            if (!nbt.hasNoTags()) {
+                stack.setTagCompound(nbt);
+            }
+        }
+        drops.add(stack);
+        return drops;
     }
 
     /** With a universal transformer upgrade inside, no blast breaks the generator. */

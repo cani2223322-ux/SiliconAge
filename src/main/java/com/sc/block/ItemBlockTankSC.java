@@ -53,6 +53,7 @@ public class ItemBlockTankSC extends ItemBlock {
         if (stack.hasTagCompound() && stack.getTagCompound().getBoolean("AutoOutput")) {
             list.add("\u00a77" + Lang.tr("sc.tank.output.on"));
         }
+        PickaxeOnlySC.tooltip(list);
         if (com.sc.util.TooltipSC.ctrl()) {
             com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tank.tooltip.howto"), "\u00a77");
         } else {

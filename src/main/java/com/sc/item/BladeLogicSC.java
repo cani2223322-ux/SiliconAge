@@ -165,6 +165,7 @@ public final class BladeLogicSC {
         p.setLastAttacker(living);
         if (living.isEntityAlive() && ItemBladeSC.isEnabled(blade, BladeFeature.EXECUTE)
                 && !(living instanceof net.minecraft.entity.boss.IBossDisplayData)       // no finishing off the dragon / wither
+                && (com.sc.util.ConfigSC.bladeExecutePlayers || !(living instanceof EntityPlayer))   // players: only if the config allows
                 && living.getHealth() <= living.getMaxHealth() * BladeFeature.EXECUTE_SHARE) {
             DamageSource finish = DamageSource.causePlayerDamage(p).setDamageBypassesArmor().setDamageIsAbsolute();
             living.hurtResistantTime = 0;

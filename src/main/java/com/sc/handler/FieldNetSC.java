@@ -100,6 +100,11 @@ public final class FieldNetSC {
             if (!f.isMaster() || !f.isUseableByPlayer(p)) {
                 return null;
             }
+            // every message comes from the screen: the player must have this very field's screen open
+            if (!(p.openContainer instanceof com.sc.inventory.ContainerFieldGeneratorSC)
+                    || ((com.sc.inventory.ContainerFieldGeneratorSC) p.openContainer).getField() != f) {
+                return null;
+            }
             if (msg.action == ZONE || msg.action == RGB) {
                 if (!f.allowed(p)) {
                     p.addChatComponentMessage(new ChatComponentTranslation("sc.field.noaccess", f.getOwner()));

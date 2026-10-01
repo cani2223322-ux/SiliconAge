@@ -483,7 +483,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         activeRecipe = recipe;
 
         if (!hasRoomForOutput(recipe)) {
-            status = MachineStatus.OUTPUT_FULL;
+            status = tankHoldsOther(outputTankA, recipe.fluidOutputA) || tankHoldsOther(outputTankB, recipe.fluidOutputB)
+                    ? MachineStatus.OUTPUT_TANK_BUSY : MachineStatus.OUTPUT_FULL;
             dissipateHeat();
             return;
         }
@@ -1004,6 +1005,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         System.arraycopy(recipe.byproducts, 0, withByproducts, recipe.outputs.length, recipe.byproducts.length);
         boolean itemsFit = canInsertAll(withByproducts) && scrapFits;
         return itemsFit && tankHasRoom(outputTankA, recipe.fluidOutputA) && tankHasRoom(outputTankB, recipe.fluidOutputB);
+    }
+
+    /** The tank is taken by a different fluid than the recipe would put in it. */
+    private static boolean tankHoldsOther(FluidTank tank, FluidStack output) {
+        return output != null && tank.getFluid() != null && !tank.getFluid().isFluidEqual(output);
     }
 
     private static boolean tankHasRoom(FluidTank tank, FluidStack output) {

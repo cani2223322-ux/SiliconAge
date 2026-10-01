@@ -6,33 +6,45 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemStack;
 
 /**
- * IC2's view of the charge of the suits and the energy blades (only loaded with IC2 - see
- * ItemArmorSC / ItemBladeSC.getManager). Keeps the mod's own "ChargeSC" NBT instead of IC2's
+ * IC2's view of the charge of the suits, the energy blades, drills, weapons and electric wrenches
+ * (only loaded with IC2 - see ItemArmorSC / ItemBladeSC.getManager). Keeps the mod's own "ChargeSC" NBT instead of IC2's
  * "charge", so the charge is the same with or without IC2. Follows IC2's rules: a charger below
  * the item's tier gives nothing, one call moves at most the transfer limit, and the items never
  * give energy away.
  */
 public class ArmorElectricManagerSC implements IElectricItemManager {
 
-    /** The suit piece or blade as IC2 sees it, or null for anything else (or a stack of several). */
+    /**
+     * The suit piece, blade, drill, weapon or electric wrench as IC2 sees it, or null for anything
+     * else (a stack of several, the plain wrench with no battery).
+     */
     private static ic2.api.item.ISpecialElectricItem item(ItemStack stack) {
         return stack != null && stack.stackSize == 1
-                && (stack.getItem() instanceof ItemArmorSC || stack.getItem() instanceof ItemBladeSC || stack.getItem() instanceof ItemDrillSC)
+                && (stack.getItem() instanceof ItemArmorSC || stack.getItem() instanceof ItemBladeSC || stack.getItem() instanceof ItemDrillSC
+                    || stack.getItem() instanceof ItemWeaponSC || ItemWrenchSC.isElectric(stack))
                 ? (ic2.api.item.ISpecialElectricItem) stack.getItem() : null;
     }
 
     private static int stored(ItemStack stack) {
         return stack.getItem() instanceof ItemBladeSC ? ItemBladeSC.chargeOf(stack)
-                : stack.getItem() instanceof ItemDrillSC ? ItemDrillSC.chargeOf(stack) : ItemArmorSC.chargeOf(stack);
+                : stack.getItem() instanceof ItemDrillSC ? ItemDrillSC.chargeOf(stack)
+                : stack.getItem() instanceof ItemWeaponSC ? ItemWeaponSC.chargeOf(stack)
+                : stack.getItem() instanceof ItemWrenchSC ? ItemWrenchSC.chargeOf(stack) : ItemArmorSC.chargeOf(stack);
     }
 
     private static int capacity(ItemStack stack) {
         return stack.getItem() instanceof ItemBladeSC ? ItemBladeSC.capacityOf(stack)
-                : stack.getItem() instanceof ItemDrillSC ? ItemDrillSC.capacityOf(stack) : ItemArmorSC.capacityOf(stack);
+                : stack.getItem() instanceof ItemDrillSC ? ItemDrillSC.capacityOf(stack)
+                : stack.getItem() instanceof ItemWeaponSC ? ItemWeaponSC.capacityOf(stack)
+                : stack.getItem() instanceof ItemWrenchSC ? ItemWrenchSC.tierOf(stack).maxCharge : ItemArmorSC.capacityOf(stack);
     }
 
     private static void add(ItemStack stack, int eu) {
-        if (stack.getItem() instanceof ItemDrillSC) {
+        if (stack.getItem() instanceof ItemWeaponSC) {
+            ItemWeaponSC.charge(stack, eu);
+        } else if (stack.getItem() instanceof ItemWrenchSC) {
+            ItemWrenchSC.charge(stack, eu);
+        } else if (stack.getItem() instanceof ItemDrillSC) {
             ItemDrillSC.charge(stack, eu);
         } else if (stack.getItem() instanceof ItemBladeSC) {
             ItemBladeSC.charge(stack, eu);
@@ -42,7 +54,11 @@ public class ArmorElectricManagerSC implements IElectricItemManager {
     }
 
     private static void take(ItemStack stack, int eu) {
-        if (stack.getItem() instanceof ItemDrillSC) {
+        if (stack.getItem() instanceof ItemWeaponSC) {
+            ItemWeaponSC.discharge(stack, eu);
+        } else if (stack.getItem() instanceof ItemWrenchSC) {
+            ItemWrenchSC.discharge(stack, eu);
+        } else if (stack.getItem() instanceof ItemDrillSC) {
             ItemDrillSC.discharge(stack, eu);
         } else if (stack.getItem() instanceof ItemBladeSC) {
             ItemBladeSC.discharge(stack, eu);
@@ -109,6 +125,7 @@ public class ArmorElectricManagerSC implements IElectricItemManager {
 
     @Override
     public String getToolTip(ItemStack stack) {
-        return item(stack) == null ? "" : stored(stack) + " / " + capacity(stack) + " EU";
+        // null (not "") for anything else: IC2 / NEI add no line then (the plain wrench is an IC2 item too)
+        return item(stack) == null ? null : stored(stack) + " / " + capacity(stack) + " EU";
     }
 }

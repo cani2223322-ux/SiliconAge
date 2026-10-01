@@ -38,6 +38,7 @@ public class ItemBlockEnergyStorageSC extends ItemBlock {
         if (stack.hasTagCompound() && stack.getTagCompound().hasKey("UpgradesSC")) {
             list.add(Lang.tr("sc.storage.tooltip.upgrades"));
         }
+        PickaxeOnlySC.tooltip(list);
         if (com.sc.util.TooltipSC.shift()) {
             com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.storage.tooltip.io", tier.getVoltage()), "\u00a77");
             if (field_150939_a instanceof BlockChargePadSC) {

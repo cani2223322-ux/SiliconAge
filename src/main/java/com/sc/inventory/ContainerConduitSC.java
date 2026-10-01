@@ -102,7 +102,11 @@ public class ContainerConduitSC extends Container {
                 return null;
             }
         } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, CONNECTOR_SLOTS)) {
-            return null;
+            // nothing for the connector: main inventory <-> hotbar, as in the other screens
+            int end = inventorySlots.size(), hotbar = CONNECTOR_SLOTS + 27;
+            if (!mergeItemStack(original, index < hotbar ? hotbar : CONNECTOR_SLOTS, index < hotbar ? end : hotbar, false)) {
+                return null;
+            }
         }
         if (original.stackSize == 0) {
             slot.putStack(null);

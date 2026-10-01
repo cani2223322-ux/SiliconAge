@@ -80,6 +80,20 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         return kind;
     }
 
+    /** Saved before the tier went into the NBT ("TierSC"): the tier comes from the block (kind) and its metadata on the first tick. */
+    private boolean tierFromMeta;
+
+    private void fixTierFromMeta() {
+        tierFromMeta = false;
+        if (getBlockType() instanceof com.sc.block.BlockWirelessSC) {
+            setTier(((com.sc.block.BlockWirelessSC) getBlockType()).getKind() == QUANTUM ? Tier.XV
+                    : com.sc.block.BlockWirelessSC.tierFor(getBlockMetadata()));
+            refreshEnergyNet();
+            markDirty();
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
+    }
+
     // ------------------------------------------------------------------ range and loss
 
     /** How far a link of this tier reaches (blocks); XV: the whole dimension. */
@@ -325,6 +339,9 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
     public void updateEntity() {
         if (worldObj == null || worldObj.isRemote) {
             return;
+        }
+        if (tierFromMeta) {
+            fixTierFromMeta();
         }
         long time = worldObj.getTotalWorldTime();
         if (time % 20 == 0) {
@@ -744,6 +761,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
+        tierFromMeta = !nbt.hasKey("TierSC");
         kind = nbt.getInteger("Kind");
         id = nbt.getLong("WId");
         partnerId = nbt.getLong("Partner");

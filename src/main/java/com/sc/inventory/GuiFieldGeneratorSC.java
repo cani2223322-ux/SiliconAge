@@ -718,10 +718,12 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         switch (tab) {
             case 0: {
                 fit(Lang.tr(captions[0]), 12, 15, 40, GuiHoloSC.CYAN & 0xFFFFFF);
-                String status = !field.isPowerOn() ? Lang.tr("sc.fieldgui.state.disabled")
+                boolean foreign = !field.isActive() && field.isForeignNear();      // power-on / zone refused: a stranger's field
+                String status = foreign ? Lang.tr("sc.fieldgui.state.foreign")
+                        : !field.isPowerOn() ? Lang.tr("sc.fieldgui.state.disabled")
                         : field.isRedstoneOff() ? Lang.tr("sc.fieldgui.state.redstone")
                         : Lang.tr(field.isActive() ? "sc.fieldgui.state.on" : "sc.fieldgui.state.off");
-                fit(status, 54, 16, 48, field.isActive() ? GuiHoloSC.OK
+                fit(status, 54, 16, 48, field.isActive() ? GuiHoloSC.OK : foreign ? GuiHoloSC.BAD
                         : !field.isPowerOn() ? GuiHoloSC.IDLE : field.isRedstoneOff() ? GuiHoloSC.WARN : GuiHoloSC.BAD);
                 String[] lab = {Lang.tr("sc.fieldgui.card.mode"), Lang.tr("sc.fieldgui.card.nodes"), Lang.tr("sc.fieldgui.card.range"),
                         Lang.tr("sc.fieldgui.card.upkeep")};

@@ -131,17 +131,19 @@ public class ContainerWirelessSC extends Container {
     @Override
     public ItemStack transferStackInSlot(EntityPlayer player, int index) {
         Slot slot = (Slot) inventorySlots.get(index);
-        if (slot == null || !slot.getHasStack() || !te.allowed(player)) {
+        if (slot == null || !slot.getHasStack()) {
             return null;
         }
+        // the block's slots only for the owner; anyone may move their own items main <-> hotbar
+        boolean allowed = te.allowed(player);
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
         int end = inventorySlots.size(), hotbar = tileSlots + 27;
         if (index < tileSlots) {
-            if (!mergeItemStack(original, tileSlots, end, true)) {
+            if (!allowed || !mergeItemStack(original, tileSlots, end, true)) {
                 return null;
             }
-        } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, tileSlots)
+        } else if (!(allowed && SlotMergeSC.mergeValid(inventorySlots, original, 0, tileSlots))
                 && !mergeItemStack(original, index < hotbar ? hotbar : tileSlots, index < hotbar ? end : hotbar, false)) {
             return null;
         }

@@ -57,6 +57,7 @@ public class SCMod {
         com.sc.handler.ArmorNetSC.init();
         com.sc.handler.FieldNetSC.init();
         com.sc.handler.QuarryNetSC.init();
+        com.sc.handler.ConfigSyncSC.init();             // the server's config to joining clients
         com.sc.radiation.RadiationNetSC.init();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.sc.radiation.RadiationEventsSC());
         proxy.preInit();

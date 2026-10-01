@@ -24,4 +24,9 @@ public class CommonProxy {
     /** Sneak + right-click with an energy blade: switch it like its key does. Client only. */
     public void toggleBlade() {
     }
+
+    /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
+    public boolean playsOnRemoteServer() {
+        return false;
+    }
 }

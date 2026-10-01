@@ -49,6 +49,14 @@ public class BlockWirelessSC extends Block {
         setHardness(3.5F);
         setResistance(10.0F);
         setStepSound(soundTypeMetal);
+        setHarvestLevel("pickaxe", 0);
+    }
+
+    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    @Override
+    public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world,
+                                                int x, int y, int z) {
+        return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
     }
 
     public int getKind() {
@@ -110,6 +118,28 @@ public class BlockWirelessSC extends Block {
             player.openGui(SCMod.instance, GuiHandlerSC.WIRELESS_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    /**
+     * Other mods' wrenches (BuildCraft, Thermal, Ender IO...): a quarter turn round the vertical
+     * axis; a front our wrench turned up or down comes back to north.
+     */
+    @Override
+    public boolean rotateBlock(World world, int x, int y, int z, ForgeDirection axis) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityWirelessSC)) {
+            return false;
+        }
+        TileEntityWirelessSC w = (TileEntityWirelessSC) te;
+        ForgeDirection f = w.getFacing();
+        w.setFacing(f == null || f.offsetY != 0 || f == ForgeDirection.UNKNOWN ? ForgeDirection.NORTH : f.getRotation(ForgeDirection.UP));
+        world.markBlockForUpdate(x, y, z);
+        return true;
+    }
+
+    @Override
+    public ForgeDirection[] getValidRotations(World world, int x, int y, int z) {
+        return new ForgeDirection[]{ForgeDirection.UP, ForgeDirection.DOWN};
     }
 
     // ---- the item keeps the energy and the link: drop while the tile entity still exists ----

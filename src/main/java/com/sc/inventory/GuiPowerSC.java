@@ -31,6 +31,8 @@ public final class GuiPowerSC {
     /** Where the buttons sit (screen-local), the gauge column's width, the gauge under them. */
     private final int bx, by, gw, gy, gh, rsX, rsW;
     private long armedAt;
+    /** The buttons (a screen disables them for a stranger: dimmed, "owner only" in the tooltip). */
+    private GuiButton powerButton, redstoneButton;
 
     public GuiPowerSC(TileEntityEnergyBase te, int powerId, int redstoneId) {
         this(te, powerId, redstoneId, X, Y, GuiBigSC.GAUGE_W, GAUGE_Y, GAUGE_H);
@@ -52,8 +54,10 @@ public final class GuiPowerSC {
 
     @SuppressWarnings("unchecked")
     public void addButtons(List buttonList, int guiLeft, int guiTop) {
-        buttonList.add(new PowerButton(guiLeft + bx, guiTop + by));
-        buttonList.add(new RedstoneButton(guiLeft + rsX, guiTop + by));
+        powerButton = new PowerButton(guiLeft + bx, guiTop + by);
+        redstoneButton = new RedstoneButton(guiLeft + rsX, guiTop + by);
+        buttonList.add(powerButton);
+        buttonList.add(redstoneButton);
     }
 
     /** False for the first click on a dangerous switch-on (it only arms it). */
@@ -84,14 +88,29 @@ public final class GuiPowerSC {
                 lines.add(Lang.tr("sc.gui.power.danger", te.lineTier().name(), te.inputTier().name()));
                 lines.add(Lang.tr(armed() ? "sc.gui.power.armed" : "sc.gui.power.double"));
             }
+            ownerOnly(powerButton, lines);
             return lines;
         }
         if (GuiGaugeSC.isOver(rsX, by, rsW, H, mx, my)) {
             lines.add(Lang.tr("sc.gui.redstone." + te.getRedstoneMode()));
             lines.add(Lang.tr("sc.gui.redstone.hint"));
+            ownerOnly(redstoneButton, lines);
             return lines;
         }
         return null;
+    }
+
+    private static void ownerOnly(GuiButton button, List<String> lines) {
+        if (button != null && !button.enabled) {
+            lines.add("§c" + Lang.tr("sc.gui.power.owneronly"));
+        }
+    }
+
+    /** A disabled button (a stranger at the screen): dimmed, as the battery slot's mode button. */
+    private static void dim(GuiButton b) {
+        if (!b.enabled) {
+            Gui.drawRect(b.xPosition, b.yPosition, b.xPosition + b.width, b.yPosition + b.height, 0xA0101418);
+        }
     }
 
     /** Foreground: switched off, the gauge dimmed with OFF on it. */
@@ -142,7 +161,7 @@ public final class GuiPowerSC {
         @Override
         public void drawButton(Minecraft mc, int mx, int my) {
             boolean on = te.isPowerOn(), danger = !on && te.lineTooStrong();
-            boolean over = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+            boolean over = enabled && mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
             int edge = on ? 0xFF2A8A3A : danger ? 0xFFB03030 : 0xFF4A505A;
             int fill = on ? 0xFF123A1A : danger ? (armed() ? 0xFF6A1818 : 0xFF3A1010) : 0xFF1A1E24;
             drawRect(xPosition, yPosition, xPosition + width, yPosition + height, 0xFF0A0C10);
@@ -158,6 +177,7 @@ public final class GuiPowerSC {
             drawRect(sx + 5, sy + 5, sx + 6, sy + 6, c);
             drawRect(sx + 2, sy + 6, sx + 5, sy + 7, c);
             drawRect(sx + 3, sy - 1, sx + 4, sy + 3, c);
+            dim(this);
             GL11.glColor4f(1F, 1F, 1F, 1F);
         }
     }
@@ -170,7 +190,7 @@ public final class GuiPowerSC {
 
         @Override
         public void drawButton(Minecraft mc, int mx, int my) {
-            boolean over = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+            boolean over = enabled && mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
             drawRect(xPosition, yPosition, xPosition + width, yPosition + height, 0xFF0A0C10);
             drawRect(xPosition + 1, yPosition + 1, xPosition + width - 1, yPosition + height - 1, over ? 0xFF6A707A : 0xFF4A505A);
             drawRect(xPosition + 2, yPosition + 2, xPosition + width - 2, yPosition + height - 2, 0xFF1A1E24);
@@ -181,6 +201,7 @@ public final class GuiPowerSC {
                 drawRect(cx - 1, yPosition + 5, cx + 1, yPosition + 9, 0xFF6A4020);
                 drawRect(cx - 1, yPosition + 3, cx + 1, yPosition + 5, mode == 1 ? 0xFFFF3A2A : 0xFF4A1A14);
             }
+            dim(this);
             GL11.glColor4f(1F, 1F, 1F, 1F);
         }
     }

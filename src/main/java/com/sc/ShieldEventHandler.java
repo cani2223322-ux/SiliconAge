@@ -229,4 +229,19 @@ public class ShieldEventHandler {
         }
         return false;
     }
+
+    /** A private field zone: strangers can't hit or use frames, paintings, animals, carts and boats in it. */
+    @SubscribeEvent
+    public void onAttackEntity(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
+        if (com.sc.tileentity.TileEntityFieldGeneratorSC.guardsEntity(event.entityPlayer, event.target)) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public void onInteractEntity(net.minecraftforge.event.entity.player.EntityInteractEvent event) {
+        if (com.sc.tileentity.TileEntityFieldGeneratorSC.guardsEntity(event.entityPlayer, event.target)) {
+            event.setCanceled(true);
+        }
+    }
 }

@@ -159,6 +159,19 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         sizeX = sizeZ = BASE_SIZE[t];
     }
 
+    /** Saved before the tier went into the NBT ("TierSC"): the tier comes from the block's metadata on the first tick. */
+    private boolean tierFromMeta;
+
+    private void fixTierFromMeta() {
+        tierFromMeta = false;
+        if (getBlockType() instanceof com.sc.block.BlockQuarrySC) {
+            setTier(com.sc.block.BlockQuarrySC.tierFor(getBlockMetadata()));
+            refreshEnergyNet();
+            markDirty();
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
+    }
+
     private int tierIndex() {
         return Math.min(3, getTier().ordinal());
     }
@@ -499,6 +512,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public void updateEntity() {
         if (worldObj == null || worldObj.isRemote) {
             return;
+        }
+        if (tierFromMeta) {
+            fixTierFromMeta();
         }
         long time = worldObj.getTotalWorldTime();
         if (applyTankCapacityLater || time % 20 == 0) {
@@ -2279,6 +2295,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
+        tierFromMeta = !nbt.hasKey("TierSC");
         readSettings(nbt);
         running = nbt.getBoolean("Running");
         done = nbt.getBoolean("Done");

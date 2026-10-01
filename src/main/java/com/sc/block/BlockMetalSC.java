@@ -139,5 +139,18 @@ public class BlockMetalSC extends Block {
             return "tile." + Reference.ASSETS + ".metalBlock." + ((BlockMetalSC) field_150939_a).metalOf(stack.getItemDamage()).name()
                     .toLowerCase(java.util.Locale.ROOT);
         }
+
+        /** Nine ingots, a beacon's base; the pickaxe it needs (and the hard metals' blast resistance). */
+        @Override
+        @SuppressWarnings("unchecked")
+        public void addInformation(ItemStack stack, net.minecraft.entity.player.EntityPlayer player, List list, boolean advanced) {
+            Material m = ((BlockMetalSC) field_150939_a).metalOf(stack.getItemDamage());
+            list.add("§7" + com.sc.manual.Lang.tr("sc.metal.tooltip"));
+            list.add("§8" + com.sc.manual.Lang.tr("sc.manual.ores.tool",
+                    com.sc.manual.Lang.tr(hard(m) ? "sc.manual.ores.tool.iron" : "sc.manual.ores.tool.stone")));
+            if (hard(m)) {
+                list.add("§8" + com.sc.manual.Lang.tr("sc.metal.tooltip.hard"));
+            }
+        }
     }
 }

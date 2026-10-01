@@ -19,7 +19,9 @@ public enum MachineStatus {
     /** Held by its redstone mode (a signal wanted, or one there that shouldn't be). */
     REDSTONE,
     /** The induction furnace keeping itself warm with nothing to smelt. */
-    HEATING;
+    HEATING,
+    /** An output tank holds another fluid than this recipe makes: empty it (the small cross). Added last: ordinals ride the sync. */
+    OUTPUT_TANK_BUSY;
 
     public String localized() {
         return Lang.tr("sc.status.machine." + name().toLowerCase(java.util.Locale.ROOT));

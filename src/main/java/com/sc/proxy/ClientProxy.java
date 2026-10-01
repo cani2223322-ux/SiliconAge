@@ -33,6 +33,11 @@ public class ClientProxy extends CommonProxy {
         Minecraft.getMinecraft().displayGuiScreen(new com.sc.manual.GuiBook());
     }
 
+    @Override
+    public boolean playsOnRemoteServer() {
+        return !Minecraft.getMinecraft().isSingleplayer();
+    }
+
     /** World time of the last sneak + right-click with a blade - a held button repeats every 4 ticks. */
     private long lastBladeClick = -100;
 

@@ -36,6 +36,10 @@ public final class ConfigSC {
     /** Wireless: transmitter range (XV stays unlimited), the loss over distance, the quantum pair's upkeep; translators load chunks. */
     public static float wirelessRange = 1F, wirelessLoss = 1F, quantumUpkeep = 1F;
     public static boolean quantumChunkLoading = true;
+    /** The Exo blade's execute finishes off players too (off: a player takes the plain blow). */
+    public static boolean bladeExecutePlayers = false;
+    /** A drill stops drawing on the chestplate once its charge is below this %; an overheated chestplate never feeds it. */
+    public static int drillArmorReserve = 15;
 
     /** A whole number scaled by a multiplier, at least `min`, capped to an int. */
     public static int scale(int base, float mul, int min) {
@@ -96,6 +100,12 @@ public final class ConfigSC {
             quantumUpkeep = config.getFloat("quantumUpkeep", b, 1F, 0F, 10F, "The quantum translator pair's upkeep, times this");
             quantumChunkLoading = config.getBoolean("quantumChunkLoading", b, true,
                     "Quantum translators keep their chunks loaded (off: both ends must be loaded by players)");
+            bladeExecutePlayers = config.getBoolean("bladeExecutePlayers", b, false,
+                    "The Exo blade's execute (absolute blow below 20% health) works on players too (off: players take the plain blow)"
+                    + " / Казнь клинка Экзо действует и на игроков (выкл.: по игроку обычный удар)");
+            drillArmorReserve = config.getInt("drillArmorReserve", b, 15, 0, 90,
+                    "A drill stops taking energy from the chestplate below this % of its charge (an overheated chestplate never feeds it)"
+                    + " / Бур не берёт энергию с нагрудника, если его заряд ниже этого % (перегретый нагрудник не питает)");
         } finally {
             if (config.hasChanged()) {
                 config.save();

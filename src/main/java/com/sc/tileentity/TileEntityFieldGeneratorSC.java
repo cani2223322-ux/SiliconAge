@@ -156,6 +156,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     private boolean redstoneOff;
     /** The rain shield is up: raining over the field, switched on and paid for (clients hide the rain inside). */
     private boolean rainShield;
+    /** The last power-on / new zone was refused: it would overlap a stranger's field (the screen says so). */
+    private boolean foreignNear;
     /** Snow and ice: columns of the zone seen clear, so snow or ice there now is the weather's, not the player's. */
     private java.util.BitSet clearCols, seenCols, waterCols;
     /** Each column's precipitation height when it was seen clear: another height now is a player's build. */
@@ -192,6 +194,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public void togglePower() {
+        if (!powerOn && refuseForeign(true)) {
+            return;                                 // a stranger's field in the way: stays off
+        }
         powerOn = !powerOn;
         com.sc.util.SoundsSC.powerClick(this, powerOn);
         changed();
@@ -278,6 +283,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      */
     public boolean setZone(int newRange, int newHeight, int ox, int oy, int oz, int newAnchor, int modeOrdinal, int px, int py, int pz) {
         boolean ok = true;
+        int[] before = saveShape();
+        int[] point = anchorPoint;
         range = FieldShapeSC.clampRange(newRange);
         height = newHeight <= 0 ? 0 : FieldShapeSC.clampRange(newHeight);
         offX = clampOffset(ox);
@@ -297,12 +304,106 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         } else {
             anchor = a;
         }
+        keepShape(before, point);                   // over a stranger's field: the old zone stays (they're told)
         changed();
         return ok;
     }
 
     private static int clampOffset(int v) {
         return Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, v));
+    }
+
+    // ---- no field over a stranger's: checked on power-on and on a new zone (fields already up stay up) ----
+
+    public boolean isForeignNear() {
+        return foreignNear;
+    }
+
+    /** Shape, range, height, offsets and anchor (the anchor point apart) - to put back a refused zone. */
+    private int[] saveShape() {
+        return new int[]{mode.ordinal(), range, height, offX, offY, offZ, anchor};
+    }
+
+    private void restoreShape(int[] s, int[] point) {
+        mode = FieldMode.values()[s[0]];
+        range = s[1];
+        height = s[2];
+        offX = s[3];
+        offY = s[4];
+        offZ = s[5];
+        anchor = s[6];
+        anchorPoint = point;
+        zoneCache = null;
+    }
+
+    /** After a change of shape: back to the saved one if the new zone overlaps a stranger's field. @return true if kept */
+    private boolean keepShape(int[] before, int[] point) {
+        zoneCache = null;
+        if (refuseForeign(true)) {
+            restoreShape(before, point);
+            changed();
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * A loaded, up field of someone else (another owner whose access list doesn't have this field's
+     * owner) that this zone would overlap, or null. Server side.
+     */
+    public TileEntityFieldGeneratorSC foreignOverlap() {
+        if (worldObj == null || worldObj.isRemote || !master) {
+            return null;
+        }
+        for (TileEntityFieldGeneratorSC f : activeFieldsIn(worldObj)) {
+            if (f == this || f.owner.isEmpty() || f.allowedName(owner)) {
+                continue;
+            }
+            if (FieldShapeSC.overlaps(mode, zoneNodes(), range, height, f.mode, f.zoneNodes(), f.range, f.height)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Sets the "stranger's field near" status from foreignOverlap(); with `tell`, the players with
+     * this field's screen open hear why. @return true if there is such a field (the caller refuses)
+     */
+    private boolean refuseForeign(boolean tell) {
+        if (worldObj == null || worldObj.isRemote) {
+            return false;                           // the server decides (a client copy keeps the synced status)
+        }
+        TileEntityFieldGeneratorSC f = foreignOverlap();
+        boolean was = foreignNear;
+        foreignNear = f != null;
+        if (f != null && tell) {
+            for (Object o : worldObj.playerEntities) {
+                EntityPlayer p = (EntityPlayer) o;
+                if (p.openContainer instanceof com.sc.inventory.ContainerFieldGeneratorSC
+                        && ((com.sc.inventory.ContainerFieldGeneratorSC) p.openContainer).getField() == this) {
+                    p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", f.getOwner()));
+                }
+            }
+        }
+        if (was != foreignNear) {
+            changed();
+        }
+        return f != null;
+    }
+
+    /**
+     * Just placed (BlockFieldGeneratorSC.onBlockPlacedBy): a zone over a stranger's field is placed
+     * switched off. @return the stranger's field's owner, or null if all is well
+     */
+    public String placedNearForeign() {
+        TileEntityFieldGeneratorSC f = foreignOverlap();
+        foreignNear = f != null;
+        if (f != null) {
+            powerOn = false;
+        }
+        changed();
+        return f == null ? null : f.getOwner();
     }
 
     /** The points the shape is built round: the anchors, shifted by the offset. */
@@ -419,13 +520,33 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return rainShield;
     }
 
-    /** Rain (or snow) is falling on the master's spot - from the world's weather, not the client's faded copy. */
+    /**
+     * Rain (or snow) is falling somewhere on the zone - from the world's weather, not the client's
+     * faded copy. Five spots are asked: the zone's middle and the middles of its four sides (a
+     * field reaching from a desert into plains gets wet too); any wet biome among them counts.
+     */
     public boolean rainOverField() {
         if (worldObj == null || !worldObj.getWorldInfo().isRaining()) {
             return false;
         }
-        net.minecraft.world.biome.BiomeGenBase b = worldObj.getBiomeGenForCoords(xCoord, zCoord);
-        return b.canSpawnLightningBolt() || b.getEnableSnow();
+        int cx = xCoord, cz = zCoord, x0 = xCoord, x1 = xCoord, z0 = zCoord, z1 = zCoord;
+        if (master && !nodePositions.isEmpty()) {
+            AxisAlignedBB b = zoneBounds();
+            x0 = net.minecraft.util.MathHelper.floor_double(b.minX);
+            x1 = net.minecraft.util.MathHelper.floor_double(b.maxX);
+            z0 = net.minecraft.util.MathHelper.floor_double(b.minZ);
+            z1 = net.minecraft.util.MathHelper.floor_double(b.maxZ);
+            cx = (x0 + x1) >> 1;
+            cz = (z0 + z1) >> 1;
+        }
+        int[][] spots = {{cx, cz}, {x0, cz}, {x1, cz}, {cx, z0}, {cx, z1}};
+        for (int[] s : spots) {
+            net.minecraft.world.biome.BiomeGenBase b = worldObj.getBiomeGenForCoords(s[0], s[1]);
+            if (b != null && (b.canSpawnLightningBolt() || b.getEnableSnow())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** What the rain shield adds to the upkeep right now (0 when it's off or dry). */
@@ -735,8 +856,16 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         writeZone(nbt);
     }
 
-    /** The Quantum Wrench's paste (the caller checked allowed()). */
+    /** The Quantum Wrench's paste (the caller checked allowed()); a zone over a stranger's field isn't taken. */
     public void importSettings(NBTTagCompound nbt) {
+        int[] before = saveShape();
+        int[] point = anchorPoint;
+        applySettings(nbt);
+        keepShape(before, point);
+        changed();
+    }
+
+    private void applySettings(NBTTagCompound nbt) {
         mode = FieldMode.values()[Math.min(FieldMode.values().length - 1, Math.max(0, nbt.getInteger("Mode")))];
         range = FieldShapeSC.clampRange(nbt.getInteger("Range"));
         flags = nbt.getInteger("Flags");
@@ -755,6 +884,82 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             anchorPoint = null;
         }
         changed();
+    }
+
+    // ---- the item keeps the charge and the settings (broken / dismantled) ----
+
+    /**
+     * The charge (up to the bare buffer: the upgrades drop as items, so what they held has nowhere
+     * to go) and - a master's - the settings, the power switch, the battery mode and the access
+     * list. Not the cluster's links: placed again it starts alone. Not the upgrades or the battery
+     * (they drop from breakBlock - never both).
+     */
+    public NBTTagCompound writeToItem() {
+        NBTTagCompound nbt = new NBTTagCompound();
+        int e = Math.min(getEnergyStored(), getTier().getBuffer());
+        if (e > 0) {
+            nbt.setInteger("EnergySC", e);
+        }
+        if (master) {
+            NBTTagCompound s = new NBTTagCompound();
+            exportSettings(s);
+            s.setBoolean("PowerOff", !powerOn);
+            s.setInteger("BatteryMode", batteryMode);
+            NBTTagList names = new NBTTagList();
+            for (String n : access) {
+                names.appendTag(new net.minecraft.nbt.NBTTagString(n));
+            }
+            s.setTag("Access", names);
+            nbt.setTag("FieldSC", s);
+        }
+        return nbt;
+    }
+
+    /** Placed from an item with writeToItem()'s data (the block then makes the placer the owner). */
+    public void readFromItem(NBTTagCompound nbt) {
+        restoreEnergy(Math.min(nbt.getInteger("EnergySC"), getTier().getBuffer()));
+        if (nbt.hasKey("FieldSC")) {
+            NBTTagCompound s = nbt.getCompoundTag("FieldSC");
+            applySettings(s);
+            powerOn = !s.getBoolean("PowerOff");
+            batteryMode = Math.max(0, Math.min(com.sc.item.BatteryFeedSC.MODES - 1, s.getInteger("BatteryMode")));
+            access.clear();
+            NBTTagList names = s.getTagList("Access", 8);
+            for (int i = 0; i < names.tagCount() && access.size() < MAX_ACCESS; i++) {
+                String n = names.getStringTagAt(i).toLowerCase(java.util.Locale.ROOT);
+                if (!n.isEmpty() && !access.contains(n)) {
+                    access.add(n);
+                }
+            }
+        }
+        changed();
+    }
+
+    /** The new owner from placing: off their own access list (the owner never is on it). */
+    public void setPlacer(String name) {
+        setOwner(name);
+        access.remove(name == null ? "" : name.toLowerCase(java.util.Locale.ROOT));
+        changed();
+    }
+
+    /**
+     * A private field keeps strangers' hands off what lives or hangs inside it: hitting
+     * (AttackEntityEvent - item frames and paintings break that way too) or right-clicking
+     * (EntityInteractEvent) an animal or villager, a golem, a cart or boat, a frame or a painting.
+     * Players and hostile mobs aren't covered. Server side; the stranger is told (as with blocks).
+     * @return true if the event must be cancelled
+     */
+    public static boolean guardsEntity(EntityPlayer p, Entity target) {
+        if (p == null || target == null || target.worldObj == null || target.worldObj.isRemote) {
+            return false;
+        }
+        if (!(target instanceof net.minecraft.entity.EntityHanging || target instanceof net.minecraft.entity.EntityAgeable
+                || target instanceof net.minecraft.entity.monster.EntityGolem || target instanceof net.minecraft.entity.item.EntityMinecart
+                || target instanceof net.minecraft.entity.item.EntityBoat)) {
+            return false;
+        }
+        return com.sc.ShieldEventHandler.privateFor(target.worldObj, p, net.minecraft.util.MathHelper.floor_double(target.posX),
+                net.minecraft.util.MathHelper.floor_double(target.posY + target.height / 2), net.minecraft.util.MathHelper.floor_double(target.posZ));
     }
 
     /** The first active field in the world with that switch on that covers the point, or null. */
@@ -779,13 +984,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public void adjustRange(int delta) {
         int next = FieldShapeSC.clampRange(range + delta);
         if (next != range) {
+            int[] before = saveShape();
             range = next;
+            keepShape(before, anchorPoint);
             changed();
         }
     }
 
     public void cycleMode() {
+        int[] before = saveShape();
         mode = mode.next();
+        keepShape(before, anchorPoint);
         changed();
     }
 
@@ -1126,15 +1335,18 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (!rsOff && getEnergyStored() >= (active ? upkeep : (int) Math.min(upkeep * 20L, getMaxEnergyStored()))) {
             removeEnergy(upkeep);
             active = true;
+            if (!wasActive) {
+                foreignNear = false;                // up again: an old refusal is past (changed() below sends it)
+            }
             // the rain shield: paid on top, and the first thing to go when the energy runs short
-            int rainEu = has(F_RAIN) && rainOverField()
-                    ? upkeep * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100 : 0;
+                boolean wet = has(F_RAIN) && rainOverField();
+            int rainEu = wet ? upkeep * (worldObj.getWorldInfo().isThundering() ? THUNDER_PCT : RAIN_PCT) / 100 : 0;
             // back on only with a second's worth in hand - else a trickle flicked it every few ticks
             boolean shield = rainEu > 0 && getEnergyStored() >= (rainShield ? rainEu : (int) Math.min(rainEu * 20L, getMaxEnergyStored()));
             if (shield) {
                 removeEnergy(rainEu);
             }
-            if (shield || has(F_RAIN) && !rainOverField()) {
+            if (shield || has(F_RAIN) && !wet) {
                 keepSnowOff();                      // water freezes in dry cold weather too
             }
             if (shield != rainShield) {
@@ -1858,16 +2070,52 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
     }
 
+    /**
+     * What every client near the block gets: the shape, looks, switches and state - not the access
+     * list, the upgrades or the battery ("Desc": readFromNBT leaves the client's copies alone). The
+     * screen's container syncs the slots itself and sends the access list to those on it (accessPacket).
+     */
     @Override
     public net.minecraft.network.Packet getDescriptionPacket() {
         NBTTagCompound nbt = new NBTTagCompound();
         writeToNBT(nbt);
+        nbt.removeTag("Access");
+        nbt.removeTag("Upgrades");
+        nbt.removeTag("Battery");
+        nbt.setBoolean("Desc", true);
+        return new net.minecraft.network.play.server.S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
+    }
+
+    /** The access list for one player's screen (ContainerFieldGeneratorSC): the list itself, or an empty one for a stranger. */
+    public net.minecraft.network.Packet accessPacket(boolean show) {
+        NBTTagCompound nbt = new NBTTagCompound();
+        NBTTagList names = new NBTTagList();
+        if (show) {
+            for (String n : access) {
+                names.appendTag(new net.minecraft.nbt.NBTTagString(n));
+            }
+        }
+        nbt.setTag("Access", names);
+        nbt.setBoolean("AccessOnly", true);
         return new net.minecraft.network.play.server.S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
     }
 
     @Override
     public void onDataPacket(net.minecraft.network.NetworkManager net, net.minecraft.network.play.server.S35PacketUpdateTileEntity pkt) {
-        readFromNBT(pkt.func_148857_g());
+        NBTTagCompound nbt = pkt.func_148857_g();
+        if (nbt.getBoolean("AccessOnly")) {
+            readAccess(nbt);
+            return;
+        }
+        readFromNBT(nbt);
+    }
+
+    private void readAccess(NBTTagCompound nbt) {
+        access.clear();
+        NBTTagList names = nbt.getTagList("Access", 8);
+        for (int i = 0; i < names.tagCount(); i++) {
+            access.add(names.getStringTagAt(i));
+        }
     }
 
     /** Client copy of the node list, for the renderer. */
@@ -1944,6 +2192,10 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         owner = nbt.getString("Owner");
         redstoneOff = nbt.getBoolean("RedstoneOff");
         rainShield = nbt.getBoolean("RainShield");
+        foreignNear = nbt.getBoolean("ForeignNear");
+        if (nbt.getBoolean("Desc")) {
+            return;                                 // a client's copy: the slots and the list come from the screen
+        }
         battery = nbt.hasKey("Battery") ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag("Battery")) : null;
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
             upgrades[i] = null;
@@ -1956,11 +2208,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 upgrades[slot] = ItemStack.loadItemStackFromNBT(u);
             }
         }
-        access.clear();
-        NBTTagList names = nbt.getTagList("Access", 8);
-        for (int i = 0; i < names.tagCount(); i++) {
-            access.add(names.getStringTagAt(i));
-        }
+        readAccess(nbt);
     }
 
     @Override
@@ -1994,6 +2242,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nbt.setString("Owner", owner);
         nbt.setBoolean("RedstoneOff", redstoneOff);
         nbt.setBoolean("RainShield", rainShield);
+        nbt.setBoolean("ForeignNear", foreignNear);
         NBTTagList names = new NBTTagList();
         for (String n : access) {
             names.appendTag(new net.minecraft.nbt.NBTTagString(n));

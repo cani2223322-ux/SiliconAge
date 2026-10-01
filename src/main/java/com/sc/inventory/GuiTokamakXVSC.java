@@ -674,7 +674,7 @@ public class GuiTokamakXVSC extends GuiContainer {
             }
             small(k(mb) + "/" + k(cap), gx, 123, 31, GuiHoloSC.VALUE);
             int rate = gasRate[i];
-            String arrow = rate > 0 ? "▲ " + k(Math.max(1, rate / 20)) + "/t" : rate < 0 ? "▼ " + rateText(-rate) + "/t" : "— 0";
+            String arrow = rate > 0 ? "+ " + k(Math.max(1, rate / 20)) + "/t" : rate < 0 ? "- " + rateText(-rate) + "/t" : "= 0";
             small(arrow, gx, 129, 31, rate > 0 ? GuiHoloSC.OK : rate < 0 ? GuiHoloSC.WARN : GuiHoloSC.IDLE);
             String left;
             int col = GuiHoloSC.LABEL;

@@ -32,6 +32,19 @@ public class ItemBlockMachineSC extends ItemBlock {
     /** A machine broken with fluid inside keeps it (BlockMachineSC.getDrops) - show what it holds. */
     @Override
     public void addInformation(ItemStack stack, net.minecraft.entity.player.EntityPlayer player, java.util.List list, boolean advanced) {
+        MachineType[] values = MachineType.values();
+        int index = typeOffset + stack.getItemDamage();
+        MachineType type = values[index >= 0 && index < values.length ? index : 0];
+        list.add("§7" + com.sc.manual.Lang.tr("sc.machine.tooltip.info", type.tier.name(), type.tier.getVoltage(),
+                com.sc.tileentity.TileEntityMachineSC.configEuPerTick(type)));
+        contents(stack, list);
+        PickaxeOnlySC.tooltip(list);
+        com.sc.util.TooltipSC.more(list, com.sc.manual.Lang.trOr("sc.manual.machine." + type.name().toLowerCase(java.util.Locale.ROOT), null),
+                com.sc.manual.Lang.tr("sc.machine.tooltip.howto"));
+    }
+
+    /** What a broken machine kept: charge, upgrades, tank contents. */
+    private static void contents(ItemStack stack, java.util.List list) {
         int charge = stack.hasTagCompound() ? stack.getTagCompound().getInteger(com.sc.tileentity.TileEntityMachineSC.ITEM_ENERGY_KEY) : 0;
         if (charge > 0) {                                                       // the buffer's charge (BlockMachineSC.getDrops)
             list.add(com.sc.manual.Lang.tr("sc.machine.tooltip.energy", String.valueOf(charge)));

@@ -39,7 +39,7 @@ import net.minecraftforge.oredict.ShapelessOreRecipe;
  * tooltip, click: its page or, with NEI, its recipe), crafting grids, machine recipes, ore
  * routes, ore cards, tables, multiblocks layer by layer, pictures, the first steps' ticks.
  * The search box looks through every article (in the Recipes chapter: every recipe). Back,
- * Home and a bookmark star in the header; Backspace goes back, Esc closes.
+ * Home and a bookmark star in the header; Backspace goes back, Esc (or E) closes back to where it was opened from.
  */
 @SideOnly(Side.CLIENT)
 public class GuiBook extends GuiScreen {
@@ -68,8 +68,11 @@ public class GuiBook extends GuiScreen {
     private final List<int[]> clickBoxes = new ArrayList<int[]>();
     private final List<Object> clickActions = new ArrayList<Object>();
 
+    /** The screen the book was opened from (Esc, E and the book key go back there); null: the world. */
+    private GuiScreen parent;
+
     public GuiBook() {
-        this(null);
+        this((BookEntry) null);
     }
 
     /** Open at an article (the G key on an item), or where the book was left. */
@@ -78,6 +81,58 @@ public class GuiBook extends GuiScreen {
             show(at);
         } else {
             restore(lastState);
+        }
+    }
+
+    /** Open on the search for `q` (the G key on an item with no article of its own); no hits: an empty result. */
+    public static GuiBook search(String q) {
+        GuiBook b = new GuiBook((BookEntry) null);
+        b.entry = null;
+        b.chapter = null;
+        b.pageScroll = 0;
+        b.recipeEls = null;
+        String n = q == null ? "" : net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(q).trim();
+        b.query = n.length() > 32 ? n.substring(0, 32) : n;
+        if (b.searching()) {
+            b.listed = results(b.query);
+            if (!b.listed.isEmpty()) {
+                b.show(b.listed.get(0));
+            }
+        }
+        return b;
+    }
+
+    /** Remember the screen the book was opened from. */
+    public GuiBook from(GuiScreen p) {
+        parent = p;
+        return this;
+    }
+
+    /** Close: back to the screen it was opened from, or the world. */
+    private void close() {
+        GuiScreen p = parent;
+        parent = null;
+        mc.displayGuiScreen(p);
+    }
+
+    /**
+     * Back from NEI's recipes: NEI's close may have shut the server's container, so a container screen
+     * (other than the player's own inventory) can't be gone back to any more - then Esc goes to the world.
+     */
+    public void afterNei() {
+        if (parent instanceof net.minecraft.client.gui.inventory.GuiContainer && mc != null && mc.thePlayer != null
+                && !(parent instanceof net.minecraft.client.gui.inventory.GuiContainerCreative)
+                && !parent.getClass().getName().startsWith("codechicken.nei.recipe.")
+                && ((net.minecraft.client.gui.inventory.GuiContainer) parent).inventorySlots != mc.thePlayer.inventoryContainer) {
+            parent = null;
+        }
+    }
+
+    /** NEI's recipes for an item; when NEI's screen is closed the book opens again on this page. */
+    private void nei(ItemStack s) {
+        com.sc.nei.NeiBookSC.recipes(s);
+        if (mc.currentScreen != this && mc.currentScreen != null) {
+            com.sc.client.BookKeySC.returnAfterNei(this);
         }
     }
 
@@ -163,7 +218,7 @@ public class GuiBook extends GuiScreen {
         if (e != null && e != entry) {
             go("e:" + e.id);
         } else if (e == null && cpw.mods.fml.common.Loader.isModLoaded("NotEnoughItems")) {
-            com.sc.nei.NeiBookSC.recipes(s);
+            nei(s);
         }
     }
 
@@ -210,7 +265,7 @@ public class GuiBook extends GuiScreen {
     @Override
     protected void keyTyped(char c, int key) {
         if (key == Keyboard.KEY_ESCAPE) {
-            mc.displayGuiScreen(null);
+            close();
             return;
         }
         int bookKey = com.sc.client.BookKeySC.KEY_BOOK.getKeyCode();
@@ -221,7 +276,12 @@ public class GuiBook extends GuiScreen {
             return;                                                   // the key that opened the book, still held
         }
         if (key == bookKey && !search.isFocused()) {
-            mc.displayGuiScreen(null);
+            close();
+            return;
+        }
+        int invKey = mc.gameSettings.keyBindInventory.getKeyCode();
+        if (key == invKey && invKey != Keyboard.KEY_NONE && !search.isFocused()) {
+            close();                                                  // the inventory key closes the book like Esc
             return;
         }
         if (!search.isFocused() && key == Keyboard.KEY_BACK) {
@@ -286,7 +346,7 @@ public class GuiBook extends GuiScreen {
         if (a instanceof ItemStack) {
             if (button == 1 && cpw.mods.fml.common.Loader.isModLoaded("NotEnoughItems")) {
                 click();
-                com.sc.nei.NeiBookSC.recipes((ItemStack) a);
+                nei((ItemStack) a);
             } else {
                 openStack((ItemStack) a);
                 if (!state().equals(before)) {
@@ -385,14 +445,14 @@ public class GuiBook extends GuiScreen {
 
     private void header() {
         int x = bx + PAD, y = by + 4;
-        x += headButton(x, y, "⌂", "home", Lang.tr("sc.book.home"));
-        x += headButton(x, y, "«", "back", Lang.tr("sc.book.back"));
+        x += headButton(x, y, "<<", "home", Lang.tr("sc.book.home"));
+        x += headButton(x, y, "<", "back", Lang.tr("sc.book.back"));
         if (entry != null && chapter != null) {
             boolean m = BookProgressSC.isMarked(entry.id);
-            x += headButton(x, y, m ? "★" : "☆", "mark", Lang.tr(m ? "sc.book.unmark" : "sc.book.mark"));
+            x += headButton(x, y, m ? "*" : "o", "mark", Lang.tr(m ? "sc.book.unmark" : "sc.book.mark"));
         }
         String t = chapter == null ? Lang.tr("sc.book.title") : entry != null && !searching()
-                ? chapter.title() + " › " + entry.title : chapter.title();
+                ? chapter.title() + " > " + entry.title : chapter.title();
         if (searching()) {
             t = Lang.tr("sc.book.results", listed.size());
         }
@@ -709,9 +769,9 @@ public class GuiBook extends GuiScreen {
                 break;
             }
             case LINK: {
-                boolean over = inPage(x, y, fontRendererObj.getStringWidth("→ " + e.text), 10);
-                fontRendererObj.drawString((over ? "§n" : "") + "→ " + e.text, x, y + 1, LINK);
-                click(x, y, fontRendererObj.getStringWidth("→ " + e.text), 10, "e:" + e.target);
+                boolean over = inPage(x, y, fontRendererObj.getStringWidth("-> " + e.text), 10);
+                fontRendererObj.drawString((over ? "§n" : "") + "-> " + e.text, x, y + 1, LINK);
+                click(x, y, fontRendererObj.getStringWidth("-> " + e.text), 10, "e:" + e.target);
                 break;
             }
             default:
@@ -864,7 +924,7 @@ public class GuiBook extends GuiScreen {
                 if (cx + 44 > x + w && cx > x) {
                     cx = x;
                     cy += 30;
-                    small("↳", cx + 4, cy + 12, INK_DIM);
+                    small("->", cx + 4, cy + 12, INK_DIM);
                     cx += 18;
                 }
                 arrow(cx + 2, cy + 17, 22);
