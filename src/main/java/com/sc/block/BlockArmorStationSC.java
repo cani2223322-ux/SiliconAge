@@ -27,8 +27,8 @@ import net.minecraftforge.common.util.ForgeDirection;
 /**
  * The Armour Service Station (MV): four armour slots, gases from the tanks beside it, EU from the
  * line; stand on it and the worn suit is filled and charged. The front (its screen) turns to the
- * placer; the top lights up while it works. Broken only with a pickaxe; the item keeps the energy
- * and the settings, the pieces in the slots drop.
+ * placer; the top lights up while it works. Broken only with a pickaxe; the item keeps the energy,
+ * the settings and the modules, the pieces in the slots drop.
  */
 public class BlockArmorStationSC extends Block {
 
@@ -85,6 +85,7 @@ public class BlockArmorStationSC extends Block {
         if (!world.isRemote && stack.hasTagCompound()) {
             st.readFromItem(stack.getTagCompound());
         }
+        st.setPowerOn(false);                             // placed off, as a machine: on once the line's checked
         world.markBlockForUpdate(x, y, z);
     }
 
@@ -128,13 +129,9 @@ public class BlockArmorStationSC extends Block {
     public void breakBlock(World world, int x, int y, int z, Block block, int meta) {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityArmorStationSC) {
-            TileEntityArmorStationSC st = (TileEntityArmorStationSC) te;
-            for (int i = 0; i < st.getSizeInventory(); i++) {
-                ItemStack in = st.getStackInSlot(i);
-                if (in != null) {
-                    world.spawnEntityInWorld(new EntityItem(world, x + 0.5, y + 0.5, z + 0.5, in));
-                    st.setInventorySlotContents(i, null);
-                }
+            // the armour pieces drop; the modules too - unless getDrops just put them into the item
+            for (ItemStack in : ((TileEntityArmorStationSC) te).takeLooseContents()) {
+                world.spawnEntityInWorld(new EntityItem(world, x + 0.5, y + 0.5, z + 0.5, in));
             }
         }
         super.breakBlock(world, x, y, z, block, meta);

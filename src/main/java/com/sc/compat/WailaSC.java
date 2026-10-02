@@ -119,6 +119,9 @@ public class WailaSC implements IWailaDataProvider {
         if (t.hasKey("scStationSt")) {                               // the Armour Service Station
             tip.add(Lang.tr("sc.armorStation.status." + t.getInteger("scStationSt")));
             tip.add(Lang.tr("sc.waila.armorStation", t.getInteger("scStationGas"), t.getInteger("scStationCap"), t.getInteger("scStationPieces")));
+            if (t.getInteger("scStationModules") > 0) {             // the input tier is the line above (scIn)
+                tip.add(Lang.tr("sc.waila.upgrades", t.getInteger("scStationModules")));
+            }
         }
         if (t.hasKey("scShowerSt")) {
             tip.add(Lang.tr("sc.shower.status." + t.getInteger("scShowerSt")));
@@ -269,9 +272,15 @@ public class WailaSC implements IWailaDataProvider {
                 cap += st.shownCapacity(g);
             }
             int pieces = 0;
-            for (int i = 0; i < st.getSizeInventory(); i++) {
+            for (int i = 0; i < com.sc.tileentity.TileEntityArmorStationSC.SLOTS; i++) {     // the armour slots, not the modules
                 pieces += st.getStackInSlot(i) != null ? 1 : 0;
             }
+            int modules = 0;
+            for (int i = com.sc.tileentity.TileEntityArmorStationSC.FIRST_UPGRADE_SLOT; i < st.getSizeInventory(); i++) {
+                ItemStack s = st.getStackInSlot(i);
+                modules += s == null ? 0 : s.stackSize;
+            }
+            tag.setInteger("scStationModules", modules);
             tag.setInteger("scStationSt", st.getStatus());
             tag.setInteger("scStationGas", (int) Math.min(Integer.MAX_VALUE, gas));
             tag.setInteger("scStationCap", (int) Math.min(Integer.MAX_VALUE, cap));

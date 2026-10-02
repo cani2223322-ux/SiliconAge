@@ -14,7 +14,7 @@ import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.IIcon;
 
-/** The Armour Service Station's screen: the four armour slots, the player's inventory, the numbers synced. */
+/** The Armour Service Station's screen: the four armour slots, the four module slots, the player's inventory, the numbers synced. */
 public class ContainerArmorStationSC extends Container {
 
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_FILL = 12, BTN_HELIUM = 13, BTN_GAS = 20;
@@ -30,6 +30,9 @@ public class ContainerArmorStationSC extends Container {
         this.te = te;
         for (int i = 0; i < TileEntityArmorStationSC.SLOTS; i++) {
             addSlotToContainer(new SlotPiece(te, i, PIECE_X, PIECE_Y + i * PIECE_STEP));
+        }
+        for (int i = 0; i < TileEntityArmorStationSC.UPGRADE_SLOTS; i++) {     // the module row under the screen, as a machine's
+            addSlotToContainer(new SlotModule(te, TileEntityArmorStationSC.FIRST_UPGRADE_SLOT + i, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y));
         }
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
@@ -64,6 +67,18 @@ public class ContainerArmorStationSC extends Container {
         @SideOnly(Side.CLIENT)
         public IIcon getBackgroundIconIndex() {
             return ItemArmor.func_94602_b(type);
+        }
+    }
+
+    /** A module slot: only the modules the station takes (TileEntityArmorStationSC.acceptsModule). */
+    public static class SlotModule extends Slot {
+        public SlotModule(IInventory inv, int index, int x, int y) {
+            super(inv, index, x, y);
+        }
+
+        @Override
+        public boolean isItemValid(ItemStack stack) {
+            return inventory.isItemValidForSlot(getSlotIndex(), stack);
         }
     }
 
@@ -135,14 +150,18 @@ public class ContainerArmorStationSC extends Container {
         }
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
-        int own = TileEntityArmorStationSC.SLOTS, end = inventorySlots.size(), hotbar = own + 27;
+        int pieces = TileEntityArmorStationSC.SLOTS, own = TileEntityArmorStationSC.ALL_SLOTS, end = inventorySlots.size(),
+                hotbar = own + 27;
         if (index < own) {
             if (!mergeItemStack(original, own, end, true)) {
                 return null;
             }
+        } else if (TileEntityArmorStationSC.acceptsModule(original)
+                && SlotMergeSC.mergeValid(inventorySlots, original, TileEntityArmorStationSC.FIRST_UPGRADE_SLOT, own)) {
+            // a module: into the module row (what didn't fit stays where it was)
         } else {
             boolean moved = false;
-            for (int i = 0; i < own && !moved; i++) {
+            for (int i = 0; i < pieces && !moved; i++) {
                 Slot target = (Slot) inventorySlots.get(i);
                 if (!target.getHasStack() && target.isItemValid(original)) {
                     target.putStack(original.splitStack(1));

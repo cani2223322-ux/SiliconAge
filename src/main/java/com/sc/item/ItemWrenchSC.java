@@ -340,7 +340,8 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         return te instanceof TileEntityMachineSC || te instanceof TileEntityGeneratorSC || te instanceof TileEntityEnergyStorageSC
                 || te instanceof TileEntityTransformerSC || te instanceof TileEntityTankSC || te instanceof TileEntityFieldGeneratorSC
                 || te instanceof com.sc.tileentity.TileEntityQuarrySC || te instanceof com.sc.tileentity.TileEntityWirelessSC
-                || te instanceof com.sc.tileentity.TileEntityConduitBundleSC || te instanceof com.sc.tileentity.TileEntityShowerSC;
+                || te instanceof com.sc.tileentity.TileEntityConduitBundleSC || te instanceof com.sc.tileentity.TileEntityShowerSC
+                || te instanceof com.sc.tileentity.TileEntityArmorStationSC;
     }
 
     /**

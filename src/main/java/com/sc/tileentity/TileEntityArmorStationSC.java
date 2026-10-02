@@ -5,11 +5,12 @@ import java.util.List;
 import com.sc.energy.Tier;
 import com.sc.energy.TileEntityEnergyBase;
 import com.sc.item.ItemArmorSC;
+import com.sc.machine.UpgradeType;
 import com.sc.util.ArmorGasSC;
 import com.sc.util.ArmorGasSC.Gas;
 
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.ISidedInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
@@ -30,8 +31,12 @@ import net.minecraftforge.fluids.IFluidHandler;
  * way. Pipes may also push gases straight in (fill). Gases cost energy (pumping): 1 EU per
  * MB_PER_EU mB. Per-gas switches and a master switch on the screen; power switch and redstone
  * like every machine.
+ * Four module slots (UpgradeType, as a machine's): Overclocker (gas and charging x1/0.7 each, up to
+ * MAX_OVERCLOCKERS; pumping EU x1.6 a tick, as a machine's EU/t), Transformer (input one tier up
+ * each - and the charge rate follows the input voltage), Universal Transformer (any voltage),
+ * Energy Storage (+10 000 EU of buffer). Nothing else goes in. The modules ride in the item.
  */
-public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IInventory, IFluidHandler {
+public class TileEntityArmorStationSC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler {
 
     /** Ticks between two rounds. */
     public static final int EVERY = 5;
@@ -40,12 +45,18 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
     /** Pumping: 1 EU per this many mB. */
     public static final int MB_PER_EU = 20;
     public static final int SLOTS = 4;
+    /** Module slots after the armour slots. */
+    public static final int UPGRADE_SLOTS = 4, FIRST_UPGRADE_SLOT = SLOTS, ALL_SLOTS = SLOTS + UPGRADE_SLOTS;
+    /** Overclockers stop adding up past this many. */
+    public static final int MAX_OVERCLOCKERS = 4;
+    /** NBT key the station's item carries its modules under. */
+    public static final String ITEM_UPGRADES_KEY = "UpgradesSC";
     public static final int ST_IDLE = 0, ST_WORKING = 1, ST_FULL = 2, ST_NO_GAS = 3, ST_NO_ENERGY = 4, ST_OFF = 5;
     /** All gases switched on. */
     public static final int ALL_GASES = (1 << Gas.values().length) - 1;
 
-    /** Slot i holds the piece of ItemArmor.armorType i (0 helmet .. 3 boots). */
-    private final ItemStack[] slots = new ItemStack[SLOTS];
+    /** Slot i holds the piece of ItemArmor.armorType i (0 helmet .. 3 boots); FIRST_UPGRADE_SLOT.. the modules. */
+    private final ItemStack[] slots = new ItemStack[ALL_SLOTS];
     private ForgeDirection facing = ForgeDirection.NORTH;
     private boolean fillGases = true;
     private int gasMask = ALL_GASES;
@@ -138,6 +149,119 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         shownCap[gas] = cap;
     }
 
+    // ------------------------------------------------------------------ modules
+
+    /** What the module slots take: Overclocker, Transformer, Universal Transformer, Energy Storage. */
+    public static boolean acceptsModule(ItemStack s) {
+        if (s == null || !(s.getItem() instanceof com.sc.item.ItemUpgradeSC)) {
+            return false;
+        }
+        UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
+        return t == UpgradeType.OVERCLOCKER || t == UpgradeType.TRANSFORMER || t == UpgradeType.UNIVERSAL_TRANSFORMER
+                || t == UpgradeType.ENERGY_STORAGE;
+    }
+
+    /** Modules of a kind in the slots (Overclockers count up to MAX_OVERCLOCKERS, the rest up to UpgradeType.MAX_EFFECTIVE). */
+    public int upgradeCount(UpgradeType type) {
+        int n = 0;
+        for (int i = FIRST_UPGRADE_SLOT; i < ALL_SLOTS; i++) {
+            ItemStack s = slots[i];
+            if (s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC && com.sc.item.ItemUpgradeSC.typeOf(s) == type) {
+                n += s.stackSize;
+            }
+        }
+        return Math.min(n, type == UpgradeType.OVERCLOCKER ? MAX_OVERCLOCKERS : UpgradeType.MAX_EFFECTIVE);
+    }
+
+    /** Filled module slots (the screen's "N of 4"). */
+    public int modulesUsed() {
+        int n = 0;
+        for (int i = FIRST_UPGRADE_SLOT; i < ALL_SLOTS; i++) {
+            n += slots[i] != null ? 1 : 0;
+        }
+        return n;
+    }
+
+    /** Speed with overclockers, as a machine's: 1 / 0.7 per overclocker. */
+    public double speedFactor() {
+        return 1.0 / Math.pow(0.7, upgradeCount(UpgradeType.OVERCLOCKER));
+    }
+
+    /** EU a tick with overclockers, as a machine's: x1.6 per overclocker (pumping a mB: x1.6 x 0.7 = x1.12 each). */
+    public double energyFactor() {
+        return Math.pow(1.6, upgradeCount(UpgradeType.OVERCLOCKER));
+    }
+
+    /** mB of one gas a tick: GAS_PER_TICK, faster with overclockers (100, 143, 204, 292, 416). */
+    public int gasPerTick() {
+        return (int) Math.round(GAS_PER_TICK * speedFactor());
+    }
+
+    /** EU one round may charge the armour with: the input voltage x EVERY, faster with overclockers. */
+    public int chargePerRound() {
+        return (int) Math.min(Integer.MAX_VALUE / 2, Math.round((double) inputTier().getVoltage() * EVERY * speedFactor()));
+    }
+
+    /** EU the pumps take for `mb` mB: 1 per MB_PER_EU, x1.12 per overclocker (rounded up). */
+    public int gasCost(int mb) {
+        if (mb <= 0) {
+            return 0;
+        }
+        if (upgradeCount(UpgradeType.OVERCLOCKER) == 0) {
+            return (mb + MB_PER_EU - 1) / MB_PER_EU;
+        }
+        return (int) Math.min(Integer.MAX_VALUE, (long) Math.ceil(mb * energyFactor() / speedFactor() / MB_PER_EU - 1e-9));
+    }
+
+    /** mB the pumps can move for `eu` EU (gasCost's inverse, rounded down). */
+    public int affordableGas(int eu) {
+        if (eu <= 0) {
+            return 0;
+        }
+        if (upgradeCount(UpgradeType.OVERCLOCKER) == 0) {
+            return (int) Math.min(Integer.MAX_VALUE, (long) eu * MB_PER_EU);
+        }
+        return (int) Math.min(Integer.MAX_VALUE, (long) Math.floor(eu * (double) MB_PER_EU * speedFactor() / energyFactor() + 1e-9));
+    }
+
+    /** Each Transformer takes one tier higher voltage (not above the top tier); a Universal Transformer takes any. */
+    @Override
+    public boolean acceptsAnyVoltage() {
+        return upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0;
+    }
+
+    @Override
+    public Tier inputTier() {
+        if (acceptsAnyVoltage()) {
+            return Tier.max();
+        }
+        return Tier.byOrdinal(getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER));
+    }
+
+    /** The MV buffer + 10 000 EU per Energy Storage module. */
+    @Override
+    public int getMaxEnergyStored() {
+        return super.getMaxEnergyStored() + upgradeCount(UpgradeType.ENERGY_STORAGE) * UpgradeType.STORAGE_PER_UPGRADE;
+    }
+
+    /** The input tier IC2 / the mod's net saw last (-1: any voltage); a change re-announces the tile. */
+    private int lastSinkKey = Tier.MV.ordinal();
+
+    private int sinkKey() {
+        return acceptsAnyVoltage() ? -1 : inputTier().ordinal();
+    }
+
+    /** The modules changed: IC2 caches a sink's tier - re-announce the station when it moved. */
+    private void modulesChanged() {
+        int key = sinkKey();
+        if (key != lastSinkKey) {
+            lastSinkKey = key;
+            if (worldObj != null && !worldObj.isRemote) {
+                refreshEnergyNet();
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ the work
 
     @Override
@@ -147,7 +271,11 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
 
     @Override
     public void updateEntity() {
-        if (worldObj == null || worldObj.isRemote || worldObj.getTotalWorldTime() % EVERY != 0) {
+        if (worldObj == null || worldObj.isRemote) {
+            return;
+        }
+        modulesChanged();                                  // also after a hopper / another mod took a module out
+        if (worldObj.getTotalWorldTime() % EVERY != 0) {
             return;
         }
         List<EntityPlayer> on = standing();
@@ -159,8 +287,8 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
             return;
         }
         boolean did = false, needGas = false, gotGas = false, starved = false;
-        // energy: one budget of voltage x EVERY for the slots first, then the players on top (a charge pad)
-        int budget = Math.min(getEnergyStored(), getTier().getVoltage() * EVERY), start = budget;
+        // energy: one budget of the input voltage x EVERY (overclockers: more) for the slots first, then the players on top
+        int budget = Math.min(getEnergyStored(), chargePerRound()), start = budget;
         for (int i = 0; i < SLOTS && budget > 0; i++) {
             budget -= chargePiece(slots[i], budget);
         }
@@ -184,14 +312,14 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
                     continue;
                 }
                 needGas = true;
-                int affordable = getEnergyStored() * MB_PER_EU;
+                int affordable = affordableGas(getEnergyStored());
                 if (affordable <= 0) {
                     starved = true;
                     continue;
                 }
-                int moved = pullGas(g, Math.min(Math.min(need, GAS_PER_TICK * EVERY), affordable), on);
+                int moved = pullGas(g, Math.min(Math.min(need, gasPerTick() * EVERY), affordable), on);
                 if (moved > 0) {
-                    removeEnergy((moved + MB_PER_EU - 1) / MB_PER_EU);
+                    removeEnergy(gasCost(moved));
                     gotGas = true;
                     did = true;
                 }
@@ -220,7 +348,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         }
     }
 
-    /** Charges one piece out of `max` EU, as a charge pad of this tier (only suits whose charge tier is at most MV). */
+    /** Charges one piece out of `max` EU (any of the mod's suits; the rate is the round's budget, chargePerRound). */
     public int chargePiece(ItemStack s, int max) {
         if (s == null || max <= 0 || !(s.getItem() instanceof ItemArmorSC) || !tierAllows(s)) {
             return 0;
@@ -228,7 +356,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         return ItemArmorSC.charge(s, max);
     }
 
-    /** Any of the mod's suits: a service station charges Nano, Quantum and Exo alike, at its own MV rate. */
+    /** Any of the mod's suits: a service station charges Nano, Quantum and Exo alike, at its input voltage's rate. */
     public boolean tierAllows(ItemStack s) {
         return s != null && s.getItem() instanceof ItemArmorSC;
     }
@@ -390,21 +518,24 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         }
     }
 
-    // ------------------------------------------------------------------ inventory: the four pieces
+    // ------------------------------------------------------------------ inventory: the four pieces, then the modules
 
-    /** What goes in slot `slot`: a piece of the mod's suits of that type. */
+    /** What goes in slot `slot`: a piece of the mod's suits of that type (slots 0..3), a module the station takes (4..7). */
     public static boolean fits(int slot, ItemStack stack) {
+        if (slot >= FIRST_UPGRADE_SLOT) {
+            return slot < ALL_SLOTS && acceptsModule(stack);
+        }
         return stack != null && stack.getItem() instanceof ItemArmorSC && ((ItemArmorSC) stack.getItem()).armorType == slot;
     }
 
     @Override
     public int getSizeInventory() {
-        return SLOTS;
+        return ALL_SLOTS;
     }
 
     @Override
     public ItemStack getStackInSlot(int slot) {
-        return slot >= 0 && slot < SLOTS ? slots[slot] : null;
+        return slot >= 0 && slot < ALL_SLOTS ? slots[slot] : null;
     }
 
     @Override
@@ -415,6 +546,9 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         ItemStack out = slots[slot].splitStack(Math.min(amount, slots[slot].stackSize));
         if (slots[slot].stackSize <= 0) {
             slots[slot] = null;
+        }
+        if (slot >= FIRST_UPGRADE_SLOT) {
+            modulesChanged();
         }
         markDirty();
         return out;
@@ -428,6 +562,9 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
     @Override
     public void setInventorySlotContents(int slot, ItemStack stack) {
         slots[slot] = stack;
+        if (slot >= FIRST_UPGRADE_SLOT) {
+            modulesChanged();
+        }
         markDirty();
     }
 
@@ -443,7 +580,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
 
     @Override
     public int getInventoryStackLimit() {
-        return 1;
+        return 64;                                         // modules stack; a suit piece is one anyway (SlotPiece: 1)
     }
 
     @Override
@@ -465,6 +602,24 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         return fits(slot, stack);
     }
 
+    /** Hoppers and tubes reach the armour slots only - the modules are the player's. */
+    private static final int[] PIECE_SLOTS = {0, 1, 2, 3};
+
+    @Override
+    public int[] getAccessibleSlotsFromSide(int side) {
+        return PIECE_SLOTS;
+    }
+
+    @Override
+    public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        return slot < SLOTS && slots[slot] == null && fits(slot, stack);
+    }
+
+    @Override
+    public boolean canExtractItem(int slot, ItemStack stack, int side) {
+        return slot < SLOTS;
+    }
+
     // ------------------------------------------------------------------ gases pushed in by pipes
 
     @Override
@@ -474,9 +629,9 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
             return 0;
         }
         List<EntityPlayer> on = standing();
-        int n = Math.min(resource.amount, Math.min(need(g, on), getEnergyStored() * MB_PER_EU));
+        int n = Math.min(resource.amount, Math.min(need(g, on), affordableGas(getEnergyStored())));
         long now = worldObj.getTotalWorldTime();
-        n = Math.min(n, pipeLeft(g, now));                 // pipes: GAS_PER_TICK a tick per gas, however often they call
+        n = Math.min(n, pipeLeft(g, now));                 // pipes: gasPerTick() a tick per gas, however often they call
         if (n <= 0) {
             return 0;
         }
@@ -486,7 +641,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         int put = putGas(g, n, on);
         if (put > 0) {
             pipeUsed(g, now, put);
-            removeEnergy((put + MB_PER_EU - 1) / MB_PER_EU);
+            removeEnergy(gasCost(put));
             markDirty();
         }
         return put;
@@ -496,13 +651,13 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
     private final int[] pipeIn = new int[Gas.values().length];
     private long pipeTick = Long.MIN_VALUE;
 
-    /** mB of `g` the pipes may still push in at world time `now` (GAS_PER_TICK a tick per gas). */
+    /** mB of `g` the pipes may still push in at world time `now` (gasPerTick() a tick per gas). */
     public int pipeLeft(Gas g, long now) {
         if (now != pipeTick) {
             pipeTick = now;
             java.util.Arrays.fill(pipeIn, 0);
         }
-        return Math.max(0, GAS_PER_TICK - pipeIn[g.ordinal()]);
+        return Math.max(0, gasPerTick() - pipeIn[g.ordinal()]);
     }
 
     /** Counts `mb` of `g` pushed in by a pipe at world time `now`. */
@@ -536,10 +691,68 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         return new FluidTankInfo[0];
     }
 
-    // ------------------------------------------------------------------ the item keeps the energy and the settings
+    // ------------------------------------------------------------------ the item keeps the energy, the settings and the modules
+
+    /** Set once the modules went into the dropped item, so breakBlock doesn't drop them loose too. */
+    private boolean upgradesInItem;
+    /** World tick writeToItem() ran in: a getDrops() from another tick (another mod asking) mustn't stick. */
+    private long upgradesInItemTick = -1;
+
+    /** Whether breakBlock should leave the module slots alone (they're in the dropped item). */
+    public boolean upgradesInItem() {
+        return upgradesInItem && (worldObj == null || upgradesInItemTick == worldObj.getTotalWorldTime());
+    }
+
+    /**
+     * Breaking: what drops loose, taken out of the slots - the armour pieces always, the modules
+     * only when they didn't go into the item (writeToItem in the same tick).
+     */
+    public java.util.List<ItemStack> takeLooseContents() {
+        java.util.List<ItemStack> out = new java.util.ArrayList<ItemStack>();
+        boolean modulesKept = upgradesInItem();
+        for (int i = 0; i < ALL_SLOTS; i++) {
+            if (slots[i] == null || (modulesKept && i >= FIRST_UPGRADE_SLOT)) {
+                continue;
+            }
+            out.add(slots[i]);
+            slots[i] = null;                              // no second copy for a screen still open
+        }
+        markDirty();
+        return out;
+    }
+
+    /** The modules saved in an item's NBT, by slot (null where empty) - also for the item's tooltip. */
+    public static ItemStack[] upgradesOf(NBTTagCompound tag) {
+        ItemStack[] ups = new ItemStack[UPGRADE_SLOTS];
+        NBTTagList list = tag == null ? null : tag.getTagList("Items", 10);
+        for (int k = 0; list != null && k < list.tagCount(); k++) {
+            NBTTagCompound t = list.getCompoundTagAt(k);
+            int i = t.getByte("Slot");
+            if (i >= 0 && i < UPGRADE_SLOTS) {
+                ups[i] = ItemStack.loadItemStackFromNBT(t);
+            }
+        }
+        return ups;
+    }
 
     public NBTTagCompound writeToItem() {
         NBTTagCompound nbt = new NBTTagCompound();
+        NBTTagList ups = new NBTTagList();
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            ItemStack s = slots[FIRST_UPGRADE_SLOT + i];
+            if (s != null) {
+                NBTTagCompound t = s.writeToNBT(new NBTTagCompound());
+                t.setByte("Slot", (byte) i);
+                ups.appendTag(t);
+            }
+        }
+        upgradesInItem = ups.tagCount() > 0;
+        upgradesInItemTick = worldObj != null ? worldObj.getTotalWorldTime() : -1;
+        if (upgradesInItem) {
+            NBTTagCompound u = new NBTTagCompound();
+            u.setTag("Items", ups);
+            nbt.setTag(ITEM_UPGRADES_KEY, u);
+        }
         if (getEnergyStored() > 0) {
             nbt.setInteger("EnergySC", getEnergyStored());
         }
@@ -551,6 +764,15 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
     }
 
     public void readFromItem(NBTTagCompound nbt) {
+        if (nbt.hasKey(ITEM_UPGRADES_KEY)) {               // the modules first: a transformer before the first energy tick
+            ItemStack[] ups = upgradesOf(nbt.getCompoundTag(ITEM_UPGRADES_KEY));
+            for (int i = 0; i < ups.length; i++) {
+                if (ups[i] != null) {
+                    slots[FIRST_UPGRADE_SLOT + i] = ups[i];
+                }
+            }
+            modulesChanged();
+        }
         if (nbt.hasKey("EnergySC")) {
             restoreEnergy(nbt.getInteger("EnergySC"));
         }
@@ -573,17 +795,18 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         fillGases = !nbt.getBoolean("NoGases");
         gasMask = nbt.hasKey("GasMask") ? nbt.getInteger("GasMask") & ALL_GASES : ALL_GASES;
         active = nbt.getBoolean("StationActive");
-        for (int i = 0; i < SLOTS; i++) {
+        for (int i = 0; i < ALL_SLOTS; i++) {
             slots[i] = null;
         }
         NBTTagList list = nbt.getTagList("Items", 10);
         for (int i = 0; i < list.tagCount(); i++) {
             NBTTagCompound t = list.getCompoundTagAt(i);
             int slot = t.getByte("Slot");
-            if (slot >= 0 && slot < SLOTS) {
+            if (slot >= 0 && slot < ALL_SLOTS) {
                 slots[slot] = ItemStack.loadItemStackFromNBT(t);
             }
         }
+        lastSinkKey = sinkKey();                           // loaded before the tile joins the net: nothing to re-announce
     }
 
     @Override
@@ -594,7 +817,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements II
         nbt.setInteger("GasMask", gasMask);
         nbt.setBoolean("StationActive", active);
         NBTTagList list = new NBTTagList();
-        for (int i = 0; i < SLOTS; i++) {
+        for (int i = 0; i < ALL_SLOTS; i++) {
             if (slots[i] != null) {
                 NBTTagCompound t = new NBTTagCompound();
                 t.setByte("Slot", (byte) i);

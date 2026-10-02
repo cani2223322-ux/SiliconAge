@@ -920,6 +920,9 @@ public final class BookContent {
         ItemStack st = new ItemStack(ModBlocks.armorStation);
         BookEntry station = new BookEntry("armorstation", c, st, st.getDisplayName());
         station.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st))).addAll(paras("sc.manual.armor.station"));
+        station.add(BookEl.head(Lang.tr("sc.gui.big.upgrades")))
+                .add(BookEl.para(Lang.tr("sc.manual.armor.station.modules", com.sc.tileentity.TileEntityArmorStationSC.MAX_OVERCLOCKERS,
+                        com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE)));
         crafting(station, st);
         station.about(st);
         list.add(station);

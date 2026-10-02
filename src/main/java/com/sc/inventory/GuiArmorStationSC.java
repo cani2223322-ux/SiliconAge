@@ -18,15 +18,19 @@ import net.minecraft.entity.player.InventoryPlayer;
  * The Armour Service Station's screen (GuiBigSC's layout): the four armour slots down the left of
  * the holo screen beside a suit outline, a row per gas (a check box - fill it or not, its name, a
  * bar of what the pieces in the slots and the suits on top hold, the numbers), "filled / still to
- * go", the status; under the screen the "Fill gases" and "Helium only" switches; the power switch
- * and the energy gauge on the right.
+ * go", the status, the "Fill gases" and "Helium only" switches at the screen's foot; under the
+ * screen the module row (as a machine's) with the input tier, the speed and "N of 4"; the power
+ * switch and the energy gauge on the right.
  */
 public class GuiArmorStationSC extends GuiContainer {
 
     /** The gas rows start right of the slots and the suit outline (x 35..55). */
-    private static final int ROW_X = 58, ROW_Y = 25, ROW_STEP = 9, NAME_X = ROW_X + 10, NAME_W = 40, BAR_X = 111, BAR_W = 45,
-            NUM_X = 160, NUM_W = GuiBigSC.SCREEN_RIGHT - 160, SUM_Y = ROW_Y + 7 * ROW_STEP + 2, STATUS_Y = SUM_Y + 11,
-            BTN_Y = 122, BTN_H = 14;
+    private static final int GASES = Gas.values().length;
+    /** The switches sit at the screen's foot (the row under the screen holds the modules). */
+    private static final int ROW_X = 58, ROW_Y = 25, ROW_STEP = 8, NAME_X = ROW_X + 10, NAME_W = 40, BAR_X = 111, BAR_W = 45,
+            NUM_X = 160, NUM_W = GuiBigSC.SCREEN_RIGHT - 160, SUM_Y = ROW_Y + GASES * ROW_STEP + 2, STATUS_Y = SUM_Y + 10,
+            BTN_Y = STATUS_Y + 10, BTN_H = 10, FILL_X = ROW_X, FILL_W = 84, HELIUM_X = FILL_X + FILL_W + 3,
+            HELIUM_W = GuiBigSC.SCREEN_RIGHT - HELIUM_X;
 
     private final TileEntityArmorStationSC te;
     private GuiPowerSC power;
@@ -48,8 +52,8 @@ public class GuiArmorStationSC extends GuiContainer {
         for (Gas g : Gas.values()) {
             buttonList.add(new CheckButton(ContainerArmorStationSC.BTN_GAS + g.ordinal(), guiLeft + ROW_X, guiTop + rowY(g), g));
         }
-        buttonList.add(new HoloButton(ContainerArmorStationSC.BTN_FILL, guiLeft + 8, guiTop + BTN_Y, 100, BTN_H));
-        buttonList.add(new HoloButton(ContainerArmorStationSC.BTN_HELIUM, guiLeft + 112, guiTop + BTN_Y, 96, BTN_H));
+        buttonList.add(new HoloButton(ContainerArmorStationSC.BTN_FILL, guiLeft + FILL_X, guiTop + BTN_Y, FILL_W, BTN_H));
+        buttonList.add(new HoloButton(ContainerArmorStationSC.BTN_HELIUM, guiLeft + HELIUM_X, guiTop + BTN_Y, HELIUM_W, BTN_H));
     }
 
     private static int rowY(Gas g) {
@@ -66,7 +70,7 @@ public class GuiArmorStationSC extends GuiContainer {
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
         int x = guiLeft, y = guiTop;
-        GuiBigSC.window(x, y, false, 0);
+        GuiBigSC.window(x, y, true, TileEntityArmorStationSC.UPGRADE_SLOTS);
         GuiHoloSC.screen(x + GuiBigSC.SCREEN_X, y + GuiBigSC.SCREEN_Y, GuiBigSC.SCREEN_W, GuiBigSC.SCREEN_H);
         suitOutline(x + ContainerArmorStationSC.PIECE_X + 19, y + ContainerArmorStationSC.PIECE_Y);
         for (int i = 0; i < TileEntityArmorStationSC.SLOTS; i++) {
@@ -130,7 +134,8 @@ public class GuiArmorStationSC extends GuiContainer {
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         fit(Lang.tr("tile.siliconage.armorStation.name"), 8, 5, GuiBigSC.titleRoom(fontRendererObj, te.getTier()), GuiGaugeSC.TITLE_COLOR);
         GuiGaugeSC.drawTierBadge(fontRendererObj, te.getTier(), GuiBigSC.W - 6, 3);
-        fontRendererObj.drawString(Lang.tr("container.inventory"), GuiBigSC.INV_X, GuiBigSC.INV_Y - 10, 0x404040);
+        GuiBigSC.labels(fontRendererObj, Lang.tr("sc.gui.big.upgrades"), Lang.tr("container.inventory"));
+        drawModuleLine();
         long have = 0, room = 0;
         for (Gas g : Gas.values()) {
             int a = te.shownAmount(g), cap = te.shownCapacity(g);
@@ -152,6 +157,31 @@ public class GuiArmorStationSC extends GuiContainer {
         }
         fit(status, ROW_X, STATUS_Y, GuiBigSC.SCREEN_RIGHT - ROW_X, statusColor(st));
         power.drawGaugeOff(fontRendererObj);
+    }
+
+    private static String oneDecimal(double v) {
+        return String.format(java.util.Locale.ROOT, "%.1f", v);
+    }
+
+    /** Beside the module row: the input tier and the speed, then "modules N of 4". */
+    private void drawModuleLine() {
+        int tr = GuiBigSC.UPG_TEXT_W;
+        String in = te.acceptsAnyVoltage() ? Lang.tr("sc.armorStation.modules.any") : te.inputTier().name();
+        fit(Lang.tr("sc.armorStation.modules.line", in, oneDecimal(te.speedFactor())), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
+        fit(Lang.tr("sc.gui.big.upgrades.count", te.modulesUsed(), TileEntityArmorStationSC.UPGRADE_SLOTS),
+                GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y + 9, tr, 0x808894);
+    }
+
+    /** The module row's tooltip: what goes in, and what the modules give now. */
+    private List<String> moduleTip() {
+        List<String> tip = new ArrayList<String>();
+        tip.add(Lang.tr("sc.gui.upgrades"));
+        tip.add(Lang.tr("sc.armorStation.modules.hint"));
+        tip.add(te.acceptsAnyVoltage() ? Lang.tr("sc.armorStation.modules.anyinput")
+                : Lang.tr("sc.gui.input", te.inputTier().name(), te.inputTier().getVoltage()));
+        tip.add(Lang.tr("sc.armorStation.modules.gas", te.gasPerTick(), oneDecimal(te.affordableGas(1000) / 1000.0)));
+        tip.add(Lang.tr("sc.armorStation.modules.charge", te.chargePerRound() / TileEntityArmorStationSC.EVERY));
+        return tip;
     }
 
     @Override
@@ -177,11 +207,16 @@ public class GuiArmorStationSC extends GuiContainer {
                 }
             }
         }
-        if (tip == null && GuiGaugeSC.isOver(8, BTN_Y, 100, BTN_H, mx, my)) {
+        if (tip == null && GuiGaugeSC.isOver(FILL_X, BTN_Y, FILL_W, BTN_H, mx, my)) {
             tip = new ArrayList<String>();
+            tip.add(Lang.tr("sc.armorStation.fill") + ": " + Lang.tr(te.isFillGases() ? "sc.armorStation.on" : "sc.armorStation.off"));
             tip.add(Lang.tr("sc.armorStation.fill.hint"));
         }
-        if (tip == null && GuiGaugeSC.isOver(112, BTN_Y, 96, BTN_H, mx, my)) {
+        if (tip == null && GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.GAUGE_X - 4 - GuiBigSC.UPG_LABEL_X, 18, mx, my)
+                && !GuiBigSC.overUpgradeSlot(mx, my, TileEntityArmorStationSC.UPGRADE_SLOTS)) {
+            tip = moduleTip();
+        }
+        if (tip == null && GuiGaugeSC.isOver(HELIUM_X, BTN_Y, HELIUM_W, BTN_H, mx, my)) {
             tip = new ArrayList<String>();
             tip.add(Lang.tr("sc.armorStation.helium.hint"));
         }
@@ -229,7 +264,7 @@ public class GuiArmorStationSC extends GuiContainer {
 
         private String label() {
             if (id == ContainerArmorStationSC.BTN_FILL) {
-                return Lang.tr("sc.armorStation.fill") + ": " + Lang.tr(te.isFillGases() ? "sc.armorStation.on" : "sc.armorStation.off");
+                return Lang.tr("sc.armorStation.fill.short") + ": " + Lang.tr(te.isFillGases() ? "sc.armorStation.on" : "sc.armorStation.off");
             }
             return Lang.tr("sc.armorStation.helium");
         }

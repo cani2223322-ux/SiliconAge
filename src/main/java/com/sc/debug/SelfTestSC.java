@@ -2181,5 +2181,71 @@ public final class SelfTestSC {
         boolean spent = pipe.pipeLeft(he, 100L) == 0 && pipe.pipeLeft(com.sc.util.ArmorGasSC.Gas.OXYGEN, 100L) == cap;
         boolean next = pipe.pipeLeft(he, 101L) == cap;
         check(fresh && spent && next, "station: pipes push at most " + cap + " mB of a gas a tick, other gases apart, new tick - new limit");
+        armorStationModules();
+    }
+
+    /** The Armour Service Station's module slots: what goes in, what each module does, the modules in the item (no dupe). */
+    private static void armorStationModules() {
+        int up = com.sc.tileentity.TileEntityArmorStationSC.FIRST_UPGRADE_SLOT;
+        com.sc.tileentity.TileEntityArmorStationSC m = new com.sc.tileentity.TileEntityArmorStationSC();
+        ItemStack oc = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER);
+        check(m.isItemValidForSlot(up, oc) && !m.isItemValidForSlot(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.EJECTOR))
+                        && !m.isItemValidForSlot(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION))
+                        && !m.isItemValidForSlot(0, oc) && !m.isItemValidForSlot(up, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.QUANTUM)[0])),
+                "station modules: Overclocker goes in, Ejector / Tank Extension don't; no module in an armour slot, no armour in a module slot");
+        boolean old = m.inputTier() == com.sc.energy.Tier.MV && !m.acceptsAnyVoltage() && m.getMaxEnergyStored() == com.sc.energy.Tier.MV.getBuffer()
+                && m.gasPerTick() == com.sc.tileentity.TileEntityArmorStationSC.GAS_PER_TICK && m.gasCost(20) == 1 && m.gasCost(21) == 2
+                && m.chargePerRound() == com.sc.energy.Tier.MV.getVoltage() * com.sc.tileentity.TileEntityArmorStationSC.EVERY;
+        check(old, "station modules: none in - MV, MV buffer, 100 mB a tick, 1 EU per 20 mB, MV charging, as before");
+        m.setInventorySlotContents(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
+        check(m.inputTier() == com.sc.energy.Tier.HV && m.chargePerRound() == com.sc.energy.Tier.HV.getVoltage() * com.sc.tileentity.TileEntityArmorStationSC.EVERY,
+                "station modules: one Transformer - input HV, charging at HV's rate");
+        ItemStack many = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER);
+        many.stackSize = 20;
+        m.setInventorySlotContents(up, many);
+        check(m.inputTier() == com.sc.energy.Tier.max(), "station modules: Transformers never lift the input past the top tier");
+        m.setInventorySlotContents(up, null);
+        m.setInventorySlotContents(up + 1, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));
+        check(m.acceptsAnyVoltage() && m.inputTier() == com.sc.energy.Tier.max()
+                        && m.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 131072, 100, true) == 100,
+                "station modules: Universal Transformer - any voltage");
+        m.setInventorySlotContents(up + 2, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE));
+        check(m.getMaxEnergyStored() == com.sc.energy.Tier.MV.getBuffer() + com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE,
+                "station modules: Energy Storage - buffer +" + com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE + " EU");
+        ItemStack ocs = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER);
+        ocs.stackSize = 6;
+        m.setInventorySlotContents(up + 3, ocs);
+        int g4 = m.gasPerTick();
+        check(m.upgradeCount(com.sc.machine.UpgradeType.OVERCLOCKER) == com.sc.tileentity.TileEntityArmorStationSC.MAX_OVERCLOCKERS
+                        && g4 == (int) Math.round(100 / Math.pow(0.7, 4)) && m.gasCost(1000) > 50 && m.affordableGas(m.gasCost(1000)) >= 1000,
+                "station modules: Overclockers count up to 4 - gas " + g4 + " mB a tick, pumping dearer (" + m.gasCost(1000) + " EU per 1000 mB)");
+        // the item: the modules go in, come back, and don't also drop loose
+        m.setInventorySlotContents(0, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.QUANTUM)[0]));
+        net.minecraft.nbt.NBTTagCompound item = m.writeToItem();
+        ItemStack[] kept = com.sc.tileentity.TileEntityArmorStationSC.upgradesOf(item.getCompoundTag(com.sc.tileentity.TileEntityArmorStationSC.ITEM_UPGRADES_KEY));
+        java.util.List<ItemStack> loose = m.takeLooseContents();
+        boolean noModuleLoose = true;
+        for (ItemStack l : loose) {
+            noModuleLoose &= !(l.getItem() instanceof com.sc.item.ItemUpgradeSC);
+        }
+        com.sc.tileentity.TileEntityArmorStationSC back = new com.sc.tileentity.TileEntityArmorStationSC();
+        back.readFromItem(item);
+        check(m.upgradesInItem() && kept[1] != null && kept[2] != null && kept[3] != null && kept[3].stackSize == 6 && kept[0] == null
+                        && loose.size() == 1 && noModuleLoose && m.getStackInSlot(0) == null
+                        && back.acceptsAnyVoltage() && back.upgradeCount(com.sc.machine.UpgradeType.ENERGY_STORAGE) == 1
+                        && back.upgradeCount(com.sc.machine.UpgradeType.OVERCLOCKER) == 4 && back.getStackInSlot(0) == null,
+                "station modules: they ride in the item and come back on placement; breaking then drops only the armour (no dupe)");
+        com.sc.tileentity.TileEntityArmorStationSC bare = new com.sc.tileentity.TileEntityArmorStationSC();
+        bare.setInventorySlotContents(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER));
+        java.util.List<ItemStack> all = bare.takeLooseContents();
+        check(!bare.upgradesInItem() && all.size() == 1 && all.get(0).getItem() instanceof com.sc.item.ItemUpgradeSC
+                        && !new com.sc.tileentity.TileEntityArmorStationSC().writeToItem().hasKey(com.sc.tileentity.TileEntityArmorStationSC.ITEM_UPGRADES_KEY),
+                "station modules: not put into an item - they drop loose; an empty station's item has no module list");
+        net.minecraft.nbt.NBTTagCompound saved = new net.minecraft.nbt.NBTTagCompound();
+        back.writeToNBT(saved);
+        com.sc.tileentity.TileEntityArmorStationSC loaded = new com.sc.tileentity.TileEntityArmorStationSC();
+        loaded.readFromNBT(saved);
+        check(loaded.acceptsAnyVoltage() && loaded.upgradeCount(com.sc.machine.UpgradeType.OVERCLOCKER) == 4,
+                "station modules: saved with the world");
     }
 }
