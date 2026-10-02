@@ -15,22 +15,24 @@
 > ⚠️ **Альфа-версия.** Возможны ошибки и изменения, ломающие миры. Делайте резервные копии миров.
 
 ### Возможности
-- **Производство полупроводников:** цепочка от кварца и руд до кремниевых пластин, кристаллов, чипов и контроллеров. 31 машина уровней LV–EV, улучшения машин, брак и побочные продукты.
+- **Производство полупроводников:** цепочка от кварца и руд до кремниевых пластин, кристаллов, чипов и контроллеров. 32 машины уровней LV–IV, улучшения машин, брак и побочные продукты.
 - **Руды и переработка:** 16 руд, дробление, промывка, центрифуга, химия и жидкости. **22 блока металлов** из слитков мода (9 слитков ↔ блок, основание маяка).
 - **Электропечь (LV) и индукционная печь (MV):** плавят всё, что обычная печь, без топлива; индукционная — два предмета сразу и разогрев до x3; опыт копится в печи.
 - **Электролиз и тяжёлая вода:** водород и кислород из воды, тяжёлая вода и дейтерий для термоядерных реакторов.
-- **Энергия LV → XV:** семь уровней напряжения — LV, MV, HV, EV, **IV**, **QV (Квант)** и **XV (Экзо)** до 32 768 EU/t.
-  - Кабели каждого уровня с потерями; кабель под слишком высоким напряжением сгорает с дымом, как в IC2.
-  - Трансформаторы, энергонакопители до 2 млрд EU, **зарядные плиты**, модуль трансформатора и **универсальный модуль трансформатора** (любое напряжение).
-- **Генераторы (21):** твердотопливный, водяное колесо, ветрогенератор, РИТЭГ, термоэлектрический, геотермальный, водородный топливный элемент, внутреннего сгорания (дизель, нефть, биотопливо…), солнечные панели от кремниевых до Нано / Квант / Экзо, паровая и газовая турбины, плазменный генератор, термоядерный реактор, **токамак**, **Токамак XV** и **экзо-сингулярный реактор**. Модули «Форсаж» и «Экономайзер».
-- **Токамак XV — мультиблок 7x7x3:** 65 536 EU/t (XV). 24 катушки, оболочка из свинца, порты в стене: баки мода (жидкий гелий, водород, аргон, дейтерий) и энергохранилища. Стабильность плазмы, мягкая остановка аргоном, срыв с выбросом катушек и вспышкой излучения. Своё большое окно: схема постройки по слоям, чек-лист перед розжигом, индикаторы баков, сводка.
-- **Беспроводная энергия:** передатчики и приёмники LV–XV (связь картой, дальность и потери по уровню) и **квантовый транслятор** — до 32 768 EU/t без потерь в любое измерение на паре запутанных кристаллов.
+- **Энергия LV → SV:** восемь уровней напряжения — LV, MV, HV, EV, **IV**, **QV (Квант)**, **XV (Экзо)** и **SV (Сингулярный)** до 131 072 EU/t.
+  - Кабели каждого уровня с потерями, от медного до **сингулярного**; подсказка показывает пакет и общую пропускную способность; кабель под слишком высоким напряжением сгорает с дымом (и под IC2 — сразу).
+  - Трансформаторы до XV↔SV, энергонакопители до ~2,1 млрд EU, **зарядные плиты**, модуль трансформатора и **универсальный модуль трансформатора** (машина или накопитель принимает любое напряжение).
+- **Генераторы (22):** твердотопливный, водяное колесо, ветрогенератор, РИТЭГ, термоэлектрический, геотермальный, водородный топливный элемент, внутреннего сгорания (дизель, нефть, биотопливо…), солнечные панели от кремниевых до Нано / Квант / Экзо, паровая и газовая турбины, плазменный генератор, термоядерный реактор, **токамак**, **Токамак XV**, **экзо-сингулярный реактор** и **Сингулярный реактор**. Модули «Форсаж» и «Экономайзер».
+- **Токамак XV — мультиблок 7x7x3:** 65 536 EU/t (XV). 24 катушки, оболочка из свинца, порты в стене: баки мода (жидкий гелий, водород, аргон, дейтерий) и энергохранилища. Стабильность плазмы, мягкая остановка аргоном, срыв с выбросом катушек и вспышкой излучения. Своё большое окно: схема постройки по слоям, чек-лист перед розжигом, индикаторы баков, сводка. Рядом с приёмником SV отдаёт SV одним пакетом.
+- **Сингулярный реактор — мультиблок 7x7x5:** 131 072 EU/t (SV). Микро-чёрная дыра в двух кольцах гравитационных катушек; розжиг 700 млн EU из хранилищ-портов, дейтерий и капсула. Масса дыры: окно 40–70% — норма, лёгкая дыра мощнее, но может испариться; подача капсул вручную или «Авто». Гелий 12 мБ/т, удержание, мягкая остановка аргоном, выброс и испарение без разрушения мира. Своё окно и [схема постройки](docs/singular-build-layers.png) ([объёмный вид](docs/singular-build-3d.png)).
+- **Компрессор материи (IV):** сжимает обычные предметы в «массу» (тяжёлые металлы — x4), 576 массы — капсула сжатой материи, топливо Сингулярного реактора; ценное и предметы с данными не принимает.
+- **Беспроводная энергия:** передатчики и приёмники LV–SV (связь картой, дальность и потери по уровню) и **квантовый транслятор** — до 32 768 EU/t без потерь в любое измерение на паре запутанных кристаллов.
 - **Радиация:** РИТЭГ и реакторы излучают, свинец и вода экранируют, доза копится и вызывает эффекты. Защита: свинцовые блоки и стекло, свинцовый кожух, свинцовый костюм, радиационный щит брони и поля, дозиметр, радиопротектор, дезактивационный душ.
-- **Переносные аккумуляторы LV–XV:** от кремниевой батарейки (40 000 EU) до экзо-ядра (4 млрд EU); режимы Shift + ПКМ — заряжать броню, предмет в руке или всё с собой. **Слот аккумулятора** под шкалой энергии у всех машин, карьеров и генератора поля (питает их) и у генераторов (заряжается выработкой); автоматика кладёт и забирает аккумуляторы.
+- **Переносные аккумуляторы LV–SV:** от кремниевой батарейки (40 000 EU) до «Сингулярного ядра» (16 млрд EU); режимы Shift + ПКМ — заряжать броню, предмет в руке или всё с собой. **Слот аккумулятора** под шкалой энергии у всех машин, карьеров и генератора поля (питает их) и у генераторов (заряжается выработкой); автоматика кладёт и забирает аккумуляторы.
 - **Кнопка питания и красный камень** у машин, генераторов, накопителей, карьеров и генератора поля: выключенный блок не берёт энергию и не работает.
 - **Кремниевый карьер LV–EV и Экзо-буровая установка (XV):**
   - Своё меню из 7 вкладок, область с картой и лазерной рамкой в мире, сменные головки бура.
-  - **23 модуля**: скорость, удача, шёлковое касание, дробление, промывка, центрифуга, насос, магнит, радиус, жила, двойной бур, утилизатор, защита от жидкостей, мягкий режим, ремонт головки, энергоэкономия, **расширенный бак**, **насосная жила** и другие. Слоты модулей растут с уровнем.
+  - **24 модуля**: скорость, удача, шёлковое касание, дробление, промывка, центрифуга, насос, магнит, радиус, жила, двойной бур, утилизатор, защита от жидкостей, мягкий режим, ремонт головки, энергоэкономия, **расширенный бак**, **насосная жила**, **удержание чанков** и другие. Слоты модулей растут с уровнем.
   - **Насос с баком из отсеков** (до 4 жидкостей) и вкладка **«Баки»**: сторона выдачи, очистка за энергию, закрепление жидкости, автовыдача, фильтр жидкостей, действие при полном баке. Насос забирает водоём целиком, «бесконечная» вода не восстанавливается.
   - Экзо-установка лазером поднимает руду из недр; линзы руды, резонатор, стабилизатор и глубинный сканер (руды других модов).
 - **Ключи трёх уровней:** поворот машин, демонтаж с сохранением заряда и содержимого, копирование настроек.
@@ -43,17 +45,17 @@
 - **Электробуры** трёх уровней: площадь 3x3 и 5x5, туннель, жила, шёлковое касание, удача до V, автоплавка, лазер, связь с сундуком. Питаются от надетой брони.
 - **Генератор поля:** кластер до 8 узлов, 5 форм поля.
   - Защита от мобов, снарядов и взрывов.
-  - Запрет спавна, приватная зона со списком доступа, лечение союзников.
+  - Запрет спавна, приватная зона со списком доступа (защищены и животные, рамки, вагонетки), лечение союзников; поле нельзя развернуть поверх чужого.
   - **Беспроводная зарядка** предметов мода, IC2 и RF: модуль усилителя, приоритет, резерв буфера, искры.
   - Модули энергонакопителя и трансформатора, управление редстоуном, схема поля в экране генератора.
   - Вкладка **«Зона»**: радиус, высота, смещение, центр и форма поля с предпросмотром; граница, бегущий пунктир, анимация, яркость, лучи между узлами, гудение, три цвета RGB и 24 готовых цвета.
   - **Защита от дождя:** внутри поля нет дождя и снега, вода не замерзает, молнии гасятся.
   - Режимы беспроводной зарядки: всё сразу, сначала броня / рука, самые разряженные или почти полные, порог «заряжать ниже N%».
 - **Меню-голоэкраны:** у каждой машины и генератора свой экран с анимированной сценой процесса (дробилка, CVD, степпер, турбины, реакторы, солнечные панели…), шкала энергии с процентами, полноразмерные баки с текстурой жидкости; тот же стиль у карьера, генератора поля и страниц NEI.
-- **Энергонакопители:** компаратор, выход поворачивается ключом, слот разрядки, модули (трансформатор, объём, форсаж), до 4 слотов зарядки на старших уровнях.
+- **Энергонакопители:** компаратор, выход поворачивается ключом, слот разрядки, модули (трансформатор, объём, форсаж, **расширитель выхода** — до 3 выходных граней, **адаптивный трансформатор** — повышает выход до уровня самого слабого потребителя, **универсальный трансформатор**), до 4 слотов зарядки на старших уровнях.
 - **Жидкости:** вёдра для всех 22 жидкостей мода, заливка и слив ведром или капсулой по машине, модуль расширенного бака и очистка баков за энергию.
 - **Иллюстрированный справочник инженера:** 10 разделов плитками, больше 130 статей с иконками предметов, сетками крафта, рецептами машин, картами руд, схемами мультиблоков и рисунками; поиск, закладки, «первые шаги» с галочками. Выдаётся при первом крафте любого предмета мода.
-- **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое).
+- **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое); на сервере настройки приходят игрокам с сервера. Блоки с содержимым ломаются только киркой — рукой ничего не потеряешь.
 
 ### Управление
 | Клавиша | Действие |
@@ -93,22 +95,24 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 > ⚠️ **Alpha.** Expect bugs and world-breaking changes. Back up your worlds.
 
 ### Features
-- **Semiconductor fabrication:** a chain from quartz and ores to silicon wafers, crystals, chips and controllers. 31 machines from LV to EV, machine upgrades, defects and by-products.
+- **Semiconductor fabrication:** a chain from quartz and ores to silicon wafers, crystals, chips and controllers. 32 machines from LV to IV, machine upgrades, defects and by-products.
 - **Ores and processing:** 16 ores, crushing, washing, centrifuge, chemistry and fluids. **22 metal blocks** from the mod's ingots (9 ingots ↔ a block, a beacon base).
 - **Electric Furnace (LV) and Induction Furnace (MV):** they smelt everything a furnace does, without fuel; the induction one takes two items at once and heats up to x3; smelting XP is stored in the furnace.
 - **Electrolysis and heavy water:** hydrogen and oxygen from water, heavy water and deuterium for the fusion reactors.
-- **Energy LV → XV:** seven voltage tiers - LV, MV, HV, EV, **IV**, **QV (Quantum)** and **XV (Exo)**, up to 32,768 EU/t.
-  - Cables for every tier with loss; a cable under too high a voltage burns out with smoke, as in IC2.
-  - Transformers, energy storages up to 2B EU, **charge pads**, the transformer upgrade and the **universal transformer upgrade** (any voltage).
-- **Generators (21):** solid fuel, water wheel, wind turbine, RTG, thermoelectric, geothermal, hydrogen fuel cell, combustion (diesel, crude oil, biofuel...), solar panels from silicon up to Nano / Quantum / Exo, steam and gas turbines, plasma generator, fusion reactor, **tokamak**, **Tokamak XV** and the **Exo singularity reactor**. Overdrive and Economizer upgrades.
-- **Tokamak XV, a 7x7x3 multiblock:** 65,536 EU/t (XV). 24 coils, a lead shell, ports in the wall: the mod's tanks (liquid helium, hydrogen, argon, deuterium) and energy storages. Plasma stability, a soft stop with argon, a breakdown that throws coils out with a radiation burst. Its own large screen: the build's layers, a pre-ignition checklist, tank gauges, a summary.
-- **Wireless energy:** transmitters and receivers LV-XV (linked with a card, range and loss by tier) and the **quantum translator** - up to 32,768 EU/t lossless into any dimension through a pair of entangled crystals.
+- **Energy LV → SV:** eight voltage tiers - LV, MV, HV, EV, **IV**, **QV (Quantum)**, **XV (Exo)** and **SV (Singular)**, up to 131,072 EU/t.
+  - Cables for every tier with loss, from copper to **singular**; the tooltip shows the packet size and the total throughput; a cable under too high a voltage burns out with smoke (under IC2 too, at once).
+  - Transformers up to XV↔SV, energy storages up to ~2.1B EU, **charge pads**, the transformer upgrade and the **universal transformer upgrade** (a machine or a storage takes any voltage).
+- **Generators (22):** solid fuel, water wheel, wind turbine, RTG, thermoelectric, geothermal, hydrogen fuel cell, combustion (diesel, crude oil, biofuel...), solar panels from silicon up to Nano / Quantum / Exo, steam and gas turbines, plasma generator, fusion reactor, **tokamak**, **Tokamak XV**, the **Exo singularity reactor** and the **Singular Reactor**. Overdrive and Economizer upgrades.
+- **Tokamak XV, a 7x7x3 multiblock:** 65,536 EU/t (XV). 24 coils, a lead shell, ports in the wall: the mod's tanks (liquid helium, hydrogen, argon, deuterium) and energy storages. Plasma stability, a soft stop with argon, a breakdown that throws coils out with a radiation burst. Its own large screen: the build's layers, a pre-ignition checklist, tank gauges, a summary. Next to an SV taker it gives SV as one packet.
+- **Singular Reactor, a 7x7x5 multiblock:** 131,072 EU/t (SV). A micro black hole held by two rings of gravity coils; ignition takes 700 million EU from the port storages, deuterium and a capsule. The hole's mass: the 40-70% window is normal, a light hole gives more but may evaporate; capsules fed by hand or on Auto. Helium 12 mB/t, containment, a soft stop with argon, ejection and evaporation that never break the world. Its own screen and a [build guide](docs/singular-build-layers.png) ([3D view](docs/singular-build-3d.png)).
+- **Matter Compressor (IV):** squeezes ordinary items into "mass" (heavy metals x4), 576 mass make a compressed matter capsule, the Singular Reactor's fuel; it refuses valuables and items with data.
+- **Wireless energy:** transmitters and receivers LV-SV (linked with a card, range and loss by tier) and the **quantum translator** - up to 32,768 EU/t lossless into any dimension through a pair of entangled crystals.
 - **Radiation:** RTGs and reactors emit it, lead and water shield, the dose builds up and has effects. Protection: lead blocks and glass, the lead casing, the lead suit, the armour's and the field's radiation shields, a dosimeter, a radioprotector, a decontamination shower.
-- **Portable batteries LV-XV:** from the silicon cell (40,000 EU) to the Exo core (4B EU); sneak + right-click modes charge your armour, the held item or everything you carry. **A battery slot** under the energy gauge of every machine, quarry and the field generator (it powers them) and of the generators (their output charges it); automation puts batteries in and takes them out.
+- **Portable batteries LV-SV:** from the silicon cell (40,000 EU) to the Singular Core (16B EU); sneak + right-click modes charge your armour, the held item or everything you carry. **A battery slot** under the energy gauge of every machine, quarry and the field generator (it powers them) and of the generators (their output charges it); automation puts batteries in and takes them out.
 - **A power switch and redstone control** on machines, generators, storages, quarries and the field generator: a switched-off block takes no energy and does nothing.
 - **Silicon Quarry LV-EV and the Exo Drilling Rig (XV):**
   - A seven-tab screen, an area with a map and a laser frame in the world, swappable drill heads.
-  - **23 modules**: speed, fortune, silk touch, crushing, washing, centrifuge, pump, magnet, radius, vein miner, twin drill, trash disposal, fluid guard, gentle mode, head repair, energy saver, **tank extension**, **fluid vein** and more. Module slots grow with the tier.
+  - **24 modules**: speed, fortune, silk touch, crushing, washing, centrifuge, pump, magnet, radius, vein miner, twin drill, trash disposal, fluid guard, gentle mode, head repair, energy saver, **tank extension**, **fluid vein**, **chunk keeping** and more. Module slots grow with the tier.
   - **A pump with a compartment tank** (up to 4 fluids) and a **Tanks** tab: output side, clearing for energy, pinning a fluid, auto output, a fluid filter, what to do when full. The pump takes a whole body of water, so "infinite" water doesn't refill.
   - The rig's laser brings ore up from the deep; ore lenses, resonator, stabilizer and a deep scanner (other mods' ores).
 - **Wrenches in three tiers:** turning machines, dismantling with charge and contents kept, copying settings.
@@ -121,17 +125,17 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 - **Electric drills** in three tiers: 3x3 and 5x5 areas, tunnel, vein, silk touch, fortune up to V, autosmelt, laser, chest link. Powered by the worn suit.
 - **Field generator:** a cluster of up to 8 nodes, 5 field shapes.
   - Protection from mobs, projectiles and explosions.
-  - No spawning, a private zone with an access list, healing of allies.
+  - No spawning, a private zone with an access list (animals, frames and carts protected too), healing of allies; a field can't be deployed over someone else's.
   - **Wireless charging** of the mod's, IC2 and RF items: a charge booster upgrade, priority, a buffer reserve, sparks.
   - Energy storage and transformer upgrades, redstone control, a map of the field on its screen.
   - A **Zone** tab: the field's radius, height, offset, centre and shape with a preview; outline, running dashes, animation, brightness, node beams, hum, three RGB colours and 24 ready colours.
   - **Rain shield:** no rain or snow inside the field, no water freezing, lightning put out.
   - Wireless charging modes: all at once, armour / held item first, emptiest or nearly full first, a "charge below N%" threshold.
 - **Holo-screen menus:** every machine and generator has its own screen with an animated scene of its process (crusher, CVD, stepper, turbines, reactors, solar panels...), an energy gauge with the percentage and full-size tank gauges in the fluid's texture; the quarry, the field generator and the NEI pages share the style.
-- **Energy storages:** comparator output, the output face turned with a wrench, a discharge slot, upgrades (transformer, capacity, overdrive), up to 4 charge slots on the higher tiers.
+- **Energy storages:** comparator output, the output face turned with a wrench, a discharge slot, upgrades (transformer, capacity, overdrive, **output splitter** - up to 3 output faces, **adaptive transformer** - raises the output up to the weakest consumer's tier, **universal transformer**), up to 4 charge slots on the higher tiers.
 - **Fluids:** buckets for all 22 of the mod's fluids, filling and draining machines with a bucket or a cell, a tank extension upgrade and clearing tanks for energy.
 - **Illustrated engineer's handbook:** 10 chapter tiles, 130+ articles with item icons, crafting grids, machine recipes, ore cards, multiblock layouts and pictures; search, bookmarks, "first steps" with ticks. Given on the first craft of any item of the mod.
-- **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more).
+- **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more); on a server the players get the server's settings. Blocks that hold things break only with a pickaxe - nothing is lost by hand.
 
 ### Controls
 | Key | Action |
