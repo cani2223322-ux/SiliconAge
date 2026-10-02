@@ -46,7 +46,7 @@ public class ItemBlockCableSC extends ItemBlockConduitSC {
         CableType[] values = CableType.values();
         int meta = stack.getItemDamage();
         CableType type = values[meta >= 0 && meta < values.length ? meta : 0];
-        list.add("§7" + Lang.tr("sc.manual.energy.cableline", type.tier.name(), type.maxAmps, type.maxThroughput(), type.lossPerBlock));
+        list.add("§7" + Lang.tr("sc.manual.energy.cableline", type.tier.name(), type.tier.getVoltage(), type.maxThroughput(), type.maxAmps, type.lossPerBlock));
         com.sc.util.TooltipSC.more(list, Lang.trOr("sc.cable.tooltip." + type.name().toLowerCase(java.util.Locale.ROOT), null), null);
     }
 }

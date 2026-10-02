@@ -138,7 +138,19 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         }
         UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
         return t == UpgradeType.TRANSFORMER || t == UpgradeType.ENERGY_STORAGE || (t == UpgradeType.OVERDRIVE && overdriveWorks())
-                || (t == UpgradeType.OUTPUT_SPLITTER && overdriveWorks()) || t == UpgradeType.ADAPTIVE_TRANSFORMER;
+                || (t == UpgradeType.OUTPUT_SPLITTER && overdriveWorks()) || t == UpgradeType.ADAPTIVE_TRANSFORMER
+                || t == UpgradeType.UNIVERSAL_TRANSFORMER;
+    }
+
+    /** A universal transformer upgrade: the storage takes any voltage in (an SV line into an XV storage), as machines do. */
+    @Override
+    public boolean acceptsAnyVoltage() {
+        return upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0;
+    }
+
+    @Override
+    public Tier inputTier() {
+        return acceptsAnyVoltage() ? Tier.max() : super.inputTier();
     }
 
     /**

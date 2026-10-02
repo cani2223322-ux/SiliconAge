@@ -105,7 +105,7 @@ public class WailaSC implements IWailaDataProvider {
             int c = t.getInteger("scCable");
             if (c >= 0) {
                 com.sc.energy.CableType type = com.sc.energy.CableType.values()[c];
-                tip.add(Lang.tr("sc.waila.cable", type.tier.name(), type.maxThroughput()));
+                tip.add(Lang.tr("sc.waila.cable", type.tier.name(), type.tier.getVoltage(), type.maxThroughput(), type.maxAmps));
             }
             net.minecraftforge.fluids.Fluid fluid = t.hasKey("scFluid") ? FluidRegistry.getFluid(t.getString("scFluid")) : null;
             if (fluid != null) {
