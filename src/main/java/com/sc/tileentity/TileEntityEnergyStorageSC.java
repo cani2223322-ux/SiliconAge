@@ -49,6 +49,39 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     private int flowPerTick;
     private int energyAtWindowStart = -1;
 
+    /**
+     * Output Splitter: the extra output faces, in the order the wrench set them (never `facing`) -
+     * as many count as there are modules, the last ones go when a module comes out. NBT "OutFaces"
+     * (the mask with the front; worlds from before it: the front only) and "OutOrder".
+     */
+    private final java.util.List<ForgeDirection> extraOut = new java.util.ArrayList<ForgeDirection>();
+    /** EU of upkeep the extra faces owe, not yet whole (sentOut). */
+    private double upkeepDue;
+    /** Upkeep of an extra output face: this percent of what goes out of it. */
+    public static final int UPKEEP_PERCENT = 1;
+    /** toggleExtraOutput's answers. */
+    public static final int OUT_ADDED = 1, OUT_REMOVED = 2, OUT_MAIN = 3, OUT_NO_MODULE = 4, OUT_FULL = 5;
+
+    /** Adaptive Transformer: the tier it gives now (null: none) and what holds it there (ADAPT_*). */
+    private Tier adaptiveTier;
+    private int adaptiveWhy;
+    public static final int ADAPT_NONE = 0, ADAPT_CABLE = 1, ADAPT_CONSUMER = 2, ADAPT_CEILING = 3;
+    /** Set when the adaptive tier changed: IC2 is told on the next tick, never in the middle of a net's own work. */
+    private boolean ic2RefreshDue;
+    /** False until the first tick worked the adaptive tier out (it isn't saved). */
+    private boolean adaptiveChecked;
+
+    /**
+     * Cached (refreshModules): the Output Splitters in the slots, whether an Adaptive Transformer
+     * is in, and the output faces (null: work them out again; kept with the tier they were for).
+     */
+    private int splitterModules;
+    private boolean adaptiveModule;
+    private ForgeDirection[] outFacesCache;
+    private Tier outFacesTier;
+    /** Inside upgradesChanged: its own markDirty() calls don't start it again. */
+    private boolean modulesChanging;
+
     public TileEntityEnergyStorageSC() {
         super(Tier.LV);
     }
@@ -101,7 +134,23 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             return false;
         }
         UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
-        return t == UpgradeType.TRANSFORMER || t == UpgradeType.ENERGY_STORAGE || (t == UpgradeType.OVERDRIVE && overdriveWorks());
+        return t == UpgradeType.TRANSFORMER || t == UpgradeType.ENERGY_STORAGE || (t == UpgradeType.OVERDRIVE && overdriveWorks())
+                || (t == UpgradeType.OUTPUT_SPLITTER && overdriveWorks()) || t == UpgradeType.ADAPTIVE_TRANSFORMER;
+    }
+
+    /**
+     * What this storage's upgrade slots take: acceptsUpgrade(), the Output Splitter from HV up, and
+     * the two storage modules not in a charge pad (its top is where one stands).
+     */
+    public boolean acceptsUpgradeHere(ItemStack s) {
+        if (!acceptsUpgrade(s)) {
+            return false;
+        }
+        UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
+        if (t.storageOnly() && this instanceof TileEntityChargePadSC) {
+            return false;
+        }
+        return t != UpgradeType.OUTPUT_SPLITTER || getTier().ordinal() >= Tier.HV.ordinal();
     }
 
     /**
@@ -149,20 +198,322 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
                 n += s.stackSize;
             }
         }
-        return Math.min(n, type == UpgradeType.OVERDRIVE ? MAX_EXTRA_PACKETS : UpgradeType.MAX_EFFECTIVE);
+        int cap = type == UpgradeType.OVERDRIVE ? MAX_EXTRA_PACKETS
+                : type == UpgradeType.OUTPUT_SPLITTER ? UpgradeType.MAX_OUTPUT_SPLITTERS
+                : type == UpgradeType.ADAPTIVE_TRANSFORMER ? 1 : UpgradeType.MAX_EFFECTIVE;
+        return Math.min(n, cap);
     }
 
     /** Transformer upgrades send the output out a tier higher each (up to XV). */
-    @Override
-    public Tier outputTier() {
+    public Tier baseOutputTier() {
         Tier[] tiers = Tier.values();
         return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
     }
 
-    /** One packet a tick, and one more per Overdrive upgrade. */
+    /** The Transformers' tier, or the Adaptive Transformer's when that is higher (it never passes the neighbour). */
+    @Override
+    public Tier outputTier() {
+        Tier base = baseOutputTier();
+        Tier a = getAdaptiveTier();
+        return a != null && a.ordinal() > base.ordinal() ? a : base;
+    }
+
+    /** One packet a tick on each output face, and one more per Overdrive upgrade on each. */
     @Override
     public int packetsPerTick() {
+        return packetsPerFace() * outputFaces().length;
+    }
+
+    @Override
+    public int packetsPerFace() {
         return 1 + upgradeCount(UpgradeType.OVERDRIVE);
+    }
+
+    // ---- Output Splitter: extra output faces (HV and up; not under IC2 without Industrial Upgrade) ----
+
+    /** The splitters that work here: none below HV, in a charge pad, or under IC2 without IU (one packet a tile there). */
+    public int outputSplitters() {
+        if (!overdriveWorks() || getTier().ordinal() < Tier.HV.ordinal() || this instanceof TileEntityChargePadSC) {
+            return 0;
+        }
+        return splitterModules;
+    }
+
+    /** Re-reads the module cache from the slots (the output faces worked out again on the next ask). */
+    private void refreshModules() {
+        splitterModules = upgradeCount(UpgradeType.OUTPUT_SPLITTER);
+        adaptiveModule = upgradeCount(UpgradeType.ADAPTIVE_TRANSFORMER) > 0;
+        outFacesCache = null;
+    }
+
+    /** The slots no longer match the module cache (a stack changed in place - a part taken out, merged in). */
+    private boolean modulesStale() {
+        return upgradeCount(UpgradeType.OUTPUT_SPLITTER) != splitterModules
+                || (upgradeCount(UpgradeType.ADAPTIVE_TRANSFORMER) > 0) != adaptiveModule;
+    }
+
+    /** Any change to the inventory comes here (slots changed in place too): modules in or out - upgradesChanged(). */
+    @Override
+    public void markDirty() {
+        super.markDirty();
+        if (!modulesChanging && modulesStale()) {
+            upgradesChanged();
+        }
+    }
+
+    /** The extra output faces that work now (the first ones set, as many as there are splitters). */
+    public int extraOutputCount() {
+        return Math.min(extraOut.size(), outputSplitters());
+    }
+
+    /**
+     * The wrench on face `face` (sneak + left-click): makes it an extra output, or an input again.
+     * @return OUT_ADDED / OUT_REMOVED, OUT_MAIN (the front - always an output), OUT_NO_MODULE, OUT_FULL
+     */
+    public int toggleExtraOutput(ForgeDirection face) {
+        if (face == null || face == ForgeDirection.UNKNOWN || face == facing) {
+            return OUT_MAIN;
+        }
+        if (extraOut.remove(face)) {
+            outputsChanged();
+            return OUT_REMOVED;
+        }
+        int n = outputSplitters();
+        if (n <= 0) {
+            return OUT_NO_MODULE;
+        }
+        if (extraOut.size() >= n) {
+            return OUT_FULL;
+        }
+        extraOut.add(face);
+        outputsChanged();
+        return OUT_ADDED;
+    }
+
+    /** A splitter came out: the extra faces set last go back to inputs. */
+    private void trimExtraOutputs() {
+        boolean changed = false;
+        while (extraOut.size() > outputSplitters()) {
+            extraOut.remove(extraOut.size() - 1);
+            changed = true;
+        }
+        if (changed) {
+            outputsChanged();
+        }
+    }
+
+    private void outputsChanged() {
+        outFacesCache = null;
+        markDirty();
+        if (worldObj != null && !worldObj.isRemote) {
+            refreshEnergyNet();          // IC2 caches the faces a tile emits / accepts on - re-announce it
+            recomputeAdaptive();         // the faces it looks at changed
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the extra terminals render on the client
+        }
+    }
+
+    /** Upkeep: UPKEEP_PERCENT of what leaves through an extra face (IC2 doesn't say which face: their share). */
+    @Override
+    protected void sentOut(ForgeDirection face, int eu) {
+        int extras = extraOutputCount();
+        if (extras <= 0 || eu <= 0) {
+            return;
+        }
+        double share = face == ForgeDirection.UNKNOWN ? (double) eu * extras / (extras + 1) : face != facing ? eu : 0;
+        upkeepDue += share * UPKEEP_PERCENT / 100.0;
+        int fee = (int) upkeepDue;
+        if (fee > 0) {
+            upkeepDue -= fee;
+            removeEnergy(fee);
+        }
+    }
+
+    // ---- Adaptive Transformer: up to what the neighbour on the output face takes, at most 2 tiers over ----
+
+    public boolean hasAdaptive() {
+        return adaptiveModule && !(this instanceof TileEntityChargePadSC);
+    }
+
+    /** The highest tier the Adaptive Transformer gives: the storage's own + 2, at most XV. */
+    public Tier adaptiveCeiling() {
+        Tier[] tiers = Tier.values();
+        return tiers[Math.min(tiers.length - 1, getTier().ordinal() + UpgradeType.ADAPTIVE_MAX_RAISE)];
+    }
+
+    /** The tier the Adaptive Transformer gives now (null: none, or nothing to go by). */
+    public Tier getAdaptiveTier() {
+        return hasAdaptive() ? adaptiveTier : null;
+    }
+
+    /** What holds the adaptive tier where it is: ADAPT_CABLE, ADAPT_CONSUMER, ADAPT_CEILING or ADAPT_NONE. */
+    public int getAdaptiveWhy() {
+        return adaptiveWhy;
+    }
+
+    /**
+     * Sets the adaptive tier from the weakest output neighbour's limit (`why`: ADAPT_CABLE or
+     * ADAPT_CONSUMER); null: no neighbour to go by - no raise. @return whether outputTier() changed
+     */
+    public boolean applyAdaptiveLimit(Tier limit, int why) {
+        Tier before = outputTier();
+        Tier ceiling = adaptiveCeiling();
+        if (limit == null) {
+            adaptiveTier = null;
+            adaptiveWhy = ADAPT_NONE;
+        } else if (limit.ordinal() > ceiling.ordinal()) {
+            adaptiveTier = ceiling;
+            adaptiveWhy = ADAPT_CEILING;
+        } else {
+            adaptiveTier = limit;
+            adaptiveWhy = why;
+        }
+        return outputTier() != before;
+    }
+
+    /** A neighbour's limit for the Adaptive Transformer: the tier it takes (null: nothing safe - no raise) and what it is. */
+    public static final class Limit {
+        public final Tier tier;
+        public final int why;
+
+        Limit(Tier tier, int why) {
+            this.tier = tier;
+            this.why = why;
+        }
+    }
+
+    /**
+     * What `te`, beside this storage's face `face`, takes at most - never more than the weakest
+     * thing behind it: the mod's cable (bundle) its tier, but no more than the weakest consumer on
+     * the mod's network behind it (cableLimit; no network known - nothing safe); the mod's consumer
+     * its input tier (any voltage: XV); an IC2 cable nothing safe (what hangs on it can't be seen);
+     * an IC2 sink its sink tier (none given - nothing safe); another IC2 energy acceptor nothing safe.
+     * `self`: this storage, left out of its own cable's network.
+     * @return null when it takes no energy from there (it doesn't count)
+     */
+    public static Limit neighbourLimit(net.minecraft.tileentity.TileEntity te, ForgeDirection face, TileEntityEnergyBase self) {
+        if (te == null) {
+            return null;
+        }
+        if (te instanceof TileEntityConduitBundleSC) {
+            com.sc.energy.CableType c = ((TileEntityConduitBundleSC) te).getCable();
+            return c == null ? null
+                    : cableLimit(c.tier, com.sc.energy.EnergyNetSC.instance().weakestSinkOn((TileEntityConduitBundleSC) te, self));
+        }
+        if (te instanceof TileEntityCableSC) {
+            com.sc.energy.CableType c = ((TileEntityCableSC) te).getCableType();
+            return c == null ? null : new Limit(null, ADAPT_CABLE);     // an old cable, about to turn into a bundle: no network yet
+        }
+        if (te instanceof TileEntityEnergyBase) {
+            TileEntityEnergyBase e = (TileEntityEnergyBase) te;
+            if (!e.isEnergySink() || !e.acceptsFrom(face.getOpposite())) {
+                return null;
+            }
+            return new Limit(e.acceptsAnyVoltage() ? Tier.XV : e.inputTier(), ADAPT_CONSUMER);
+        }
+        if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
+            return Ic2Limit.of(te);
+        }
+        return null;
+    }
+
+    /**
+     * The mod's cable of tier `cable` with `weakest` the lowest input tier on its network
+     * (EnergyNetSC.weakestSinkOn; null: no network known or nobody on it - nothing to go by, no raise).
+     */
+    public static Limit cableLimit(Tier cable, Tier weakest) {
+        if (weakest == null) {
+            return new Limit(null, ADAPT_NONE);
+        }
+        return weakest.ordinal() < cable.ordinal() ? new Limit(weakest, ADAPT_CONSUMER) : new Limit(cable, ADAPT_CABLE);
+    }
+
+    /**
+     * An IC2 neighbour: a conductor - nothing safe (the machines behind it can't be seen); a sink -
+     * its sink tier (0 or less: none given - nothing safe); another acceptor - nothing safe.
+     * @return null when it is none of them (it doesn't count)
+     */
+    public static Limit ic2Limit(boolean conductor, boolean sink, int sinkTier, boolean acceptor) {
+        if (conductor) {
+            return new Limit(null, ADAPT_NONE);
+        }
+        if (sink) {
+            return sinkTier <= 0 ? new Limit(null, ADAPT_NONE) : new Limit(Tier.fromIc2Tier(sinkTier), ADAPT_CONSUMER);
+        }
+        return acceptor ? new Limit(null, ADAPT_NONE) : null;
+    }
+
+    /** Kept apart so IC2's API is only loaded when IC2 is. */
+    private static final class Ic2Limit {
+        static Limit of(net.minecraft.tileentity.TileEntity te) {
+            boolean conductor = te instanceof ic2.api.energy.tile.IEnergyConductor;
+            boolean sink = !conductor && te instanceof ic2.api.energy.tile.IEnergySink;
+            return ic2Limit(conductor, sink, sink ? ((ic2.api.energy.tile.IEnergySink) te).getSinkTier() : 0,
+                    te instanceof ic2.api.energy.tile.IEnergyAcceptor);
+        }
+    }
+
+    /**
+     * Looks at the neighbours on the output faces (server: every tick with the module, when one
+     * changes, when the faces or upgrades do, when the mod's networks are rebuilt): the weakest one
+     * sets the tier - one tier a tile, as IC2 and the mod's net both want.
+     */
+    public void recomputeAdaptive() {
+        if (worldObj == null || worldObj.isRemote) {
+            return;
+        }
+        Tier limit = null;
+        int why = ADAPT_NONE;
+        boolean blocked = false;
+        if (hasAdaptive()) {
+            for (ForgeDirection d : outputFaces()) {
+                int x = xCoord + d.offsetX, y = yCoord + d.offsetY, z = zCoord + d.offsetZ;
+                if (!worldObj.blockExists(x, y, z)) {
+                    blocked = true;              // not loaded: can't see what's there - no raise
+                    break;
+                }
+                Limit l = neighbourLimit(worldObj.getTileEntity(x, y, z), d, this);
+                if (l == null) {
+                    continue;
+                }
+                if (l.tier == null) {
+                    blocked = true;
+                    break;
+                }
+                if (limit == null || l.tier.ordinal() < limit.ordinal()) {
+                    limit = l.tier;
+                    why = l.why;
+                }
+            }
+        }
+        if (applyAdaptiveLimit(blocked ? null : limit, why)) {
+            // re-announced on the next tick (IC2 caches the source tier; the mod's net reads it live)
+            ic2RefreshDue = cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID);
+            markDirty();
+        }
+    }
+
+    /** The mod's networks were rebuilt: a consumer may have joined one behind a cable - look again before it gets energy. */
+    @Override
+    public void energyNetRebuilt() {
+        if (hasAdaptive()) {
+            recomputeAdaptive();
+        }
+    }
+
+    /** A neighbouring block changed (BlockEnergyStorageSC). */
+    public void neighbourChanged() {
+        recomputeAdaptive();
+    }
+
+    /** The adaptive tier and its reason as one int for the screen's sync. */
+    public int adaptiveSync() {
+        return (adaptiveTier == null ? 0 : adaptiveTier.ordinal() + 1) | adaptiveWhy << 4;
+    }
+
+    public void setAdaptiveClient(int v) {
+        int t = v & 15;
+        adaptiveTier = t == 0 || t > Tier.values().length ? null : Tier.values()[t - 1];
+        adaptiveWhy = (v >> 4) & 15;
     }
 
     /** Industrial Upgrade's energy net: several packets a tick (see packetsPerTick()). */
@@ -227,8 +578,11 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     public void setFacing(ForgeDirection facing) {
         boolean changed = this.facing != facing;
         this.facing = facing;
+        extraOut.remove(facing);      // the front is an output anyway
+        outFacesCache = null;
         if (changed) {
             refreshEnergyNet();       // IC2 caches the faces a tile emits / accepts on - re-announce it
+            recomputeAdaptive();
         }
     }
 
@@ -246,12 +600,24 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
 
     @Override
     public boolean acceptsFrom(ForgeDirection side) {
-        return side != facing;
+        return !isOutputFace(side);
     }
 
+    /** The front, and the extra faces of the Output Splitters. */
     @Override
     public ForgeDirection[] outputFaces() {
-        return new ForgeDirection[]{facing};
+        if (outFacesCache != null && outFacesTier == getTier()) {
+            return outFacesCache;                    // asked many times a tick (isOutputFace) - shared, never changed
+        }
+        int extras = extraOutputCount();
+        ForgeDirection[] out = new ForgeDirection[1 + extras];
+        out[0] = facing;
+        for (int i = 0; i < extras; i++) {
+            out[i + 1] = extraOut.get(i);
+        }
+        outFacesTier = getTier();                    // below HV the splitters don't work
+        outFacesCache = out;
+        return out;
     }
 
     /** Loaded charge from a placed item (BlockEnergyStorageSC.onBlockPlacedBy). */
@@ -301,6 +667,14 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (tierFromMeta) {
             fixTierFromMeta();
         }
+        if (!adaptiveChecked || hasAdaptive()) {        // every tick with the module (a few lookups): a weaker consumer counts at once
+            adaptiveChecked = true;
+            recomputeAdaptive();
+        }
+        if (ic2RefreshDue) {
+            ic2RefreshDue = false;
+            refreshEnergyNet();       // the adaptive tier changed: IC2 caches the source tier
+        }
         if (switchedOn()) {                                          // off: no charging or emptying items either
             chargeRound();
             dischargeRound();
@@ -340,6 +714,11 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             case IV: return 3;
             default: return 4;
         }
+    }
+
+    /** The self-test's handle on an extra face's upkeep (sentOut is protected). */
+    public void sentOutForTest(ForgeDirection face, int eu) {
+        sentOut(face, eu);
     }
 
     /** The self-test's handle on one charging round (chargeRound is protected). */
@@ -540,6 +919,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         ItemStack out = s.splitStack(Math.min(amount, s.stackSize));   // never more than the slot holds
         if (s.stackSize <= 0) {
             setInventorySlotContents(slot, null);
+        } else if (slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE) {
+            upgradesChanged();                             // e.g. one splitter of two out
         }
         markDirty();
         return out;
@@ -563,10 +944,32 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             if (worldObj != null && !worldObj.isRemote) {
                 refreshEnergyNet();   // a transformer changes the output tier IC2 cached
             }
+            upgradesChanged();
         } else {
             return;
         }
         markDirty();
+    }
+
+    /** The upgrades changed: extra outputs past the splitters go, the adaptive tier is looked at again. */
+    private void upgradesChanged() {
+        if (modulesChanging) {
+            return;
+        }
+        modulesChanging = true;
+        try {
+            refreshModules();              // both sides: the screen reads the faces and the module too
+            if (worldObj != null && worldObj.isRemote) {
+                return;                    // the client gets both with the tile's NBT / the screen's sync
+            }
+            trimExtraOutputs();
+            recomputeAdaptive();
+            if (worldObj != null) {
+                worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            }
+        } finally {
+            modulesChanging = false;
+        }
     }
 
     @Override
@@ -609,7 +1012,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (slot >= FIRST_EXTRA_CHARGE && slot < SLOT_COUNT) {
             return slot - FIRST_EXTRA_CHARGE + 1 < chargeSlots() && isChargeable(stack) && tierAllows(stack);
         }
-        return slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE && acceptsUpgrade(stack);
+        return slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE && acceptsUpgradeHere(stack);
     }
 
     // ---- automation: hoppers and pipes reach the charge slots and the discharge slot, never the upgrades ----
@@ -667,6 +1070,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (facing == ForgeDirection.UNKNOWN) {
             facing = ForgeDirection.SOUTH;
         }
+        readExtraOutputs(nbt);
         chargeSlot = nbt.hasKey("ChargeSlot") ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag("ChargeSlot")) : null;
         dischargeSlot = nbt.hasKey("DischargeSlot") ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag("DischargeSlot")) : null;
         for (int i = 0; i < UPGRADE_SLOTS; i++) {
@@ -677,12 +1081,14 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             String k = "ChargeSlot" + (i + 2);
             extraCharge[i] = nbt.hasKey(k) ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag(k)) : null;
         }
+        refreshModules();
     }
 
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
         nbt.setInteger("Facing", facing.ordinal());
+        writeExtraOutputs(nbt);
         if (chargeSlot != null) {
             nbt.setTag("ChargeSlot", chargeSlot.writeToNBT(new NBTTagCompound()));
         }
@@ -698,6 +1104,43 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             if (extraCharge[i] != null) {
                 nbt.setTag("ChargeSlot" + (i + 2), extraCharge[i].writeToNBT(new NBTTagCompound()));
             }
+        }
+    }
+
+    /**
+     * "OutFaces": a bit per output face, the front's included (missing - a world from before the
+     * splitter: the front only); "OutOrder": the extra faces in the order they were set, 3 bits
+     * each (ordinal + 1), the first in the lowest bits.
+     */
+    private void readExtraOutputs(NBTTagCompound nbt) {
+        extraOut.clear();
+        if (!nbt.hasKey("OutFaces")) {
+            return;
+        }
+        int mask = nbt.getInteger("OutFaces");
+        int order = nbt.getInteger("OutOrder");
+        for (int i = 0; i < 6 && (order >> 3 * i & 7) != 0; i++) {
+            ForgeDirection d = ForgeDirection.getOrientation((order >> 3 * i & 7) - 1);
+            if (d != ForgeDirection.UNKNOWN && d != facing && (mask & 1 << d.ordinal()) != 0 && !extraOut.contains(d)) {
+                extraOut.add(d);
+            }
+        }
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {     // in the mask but not the order: by face
+            if (d != facing && (mask & 1 << d.ordinal()) != 0 && !extraOut.contains(d)) {
+                extraOut.add(d);
+            }
+        }
+    }
+
+    private void writeExtraOutputs(NBTTagCompound nbt) {
+        int mask = 1 << facing.ordinal(), order = 0;
+        for (int i = 0; i < extraOut.size(); i++) {
+            mask |= 1 << extraOut.get(i).ordinal();
+            order |= (extraOut.get(i).ordinal() + 1) << 3 * i;
+        }
+        nbt.setInteger("OutFaces", mask);
+        if (order != 0) {
+            nbt.setInteger("OutOrder", order);
         }
     }
 

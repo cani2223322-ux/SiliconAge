@@ -127,6 +127,24 @@ public class BlockEnergyStorageSC extends Block {
         return true;
     }
 
+    /** A neighbour changed: the Adaptive Transformer looks at what's on the output faces again. */
+    @Override
+    public void onNeighborBlockChange(World world, int x, int y, int z, Block neighbour) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!world.isRemote && te instanceof TileEntityEnergyStorageSC) {
+            ((TileEntityEnergyStorageSC) te).neighbourChanged();
+        }
+    }
+
+    /** A neighbour's tile entity changed (a cable put into a bundle, say) - as above. */
+    @Override
+    public void onNeighborChange(IBlockAccess world, int x, int y, int z, int tileX, int tileY, int tileZ) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityEnergyStorageSC && te.getWorldObj() != null && !te.getWorldObj().isRemote) {
+            ((TileEntityEnergyStorageSC) te).neighbourChanged();
+        }
+    }
+
     /** Other mods' wrenches: the output a quarter turn round the vertical axis. */
     @Override
     public boolean rotateBlock(World world, int x, int y, int z, ForgeDirection axis) {
@@ -262,7 +280,8 @@ public class BlockEnergyStorageSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityEnergyStorageSC && frontIcons != null) {
             int t = tierFor(meta).ordinal();
-            return side == ((TileEntityEnergyStorageSC) te).getFacing().ordinal() ? frontIcons[t] : sideIcons[t];
+            // the front and the Output Splitters' extra outputs carry the same terminal
+            return ((TileEntityEnergyStorageSC) te).isOutputFace(ForgeDirection.getOrientation(side)) ? frontIcons[t] : sideIcons[t];
         }
         return getIcon(side, meta);
     }

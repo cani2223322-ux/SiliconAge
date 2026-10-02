@@ -38,7 +38,27 @@ public enum UpgradeType {
      * RTGs and reactors only: a lead casing - no radiation gets out, but the output is 10% lower
      * and a fusion / exo reactor runs hotter (one is enough).
      */
-    RAD_SHIELDING("upgradeRadShielding");
+    RAD_SHIELDING("upgradeRadShielding"),
+    /**
+     * Energy storages only (HV and up, not under IC2 without Industrial Upgrade): one more output
+     * face each (at most 2 count), set with the mod's wrench. Appended last: meta = ordinal.
+     */
+    OUTPUT_SPLITTER("upgradeOutputSplitter"),
+    /**
+     * Energy storages only: the output goes up to what the neighbour on the output face takes,
+     * at most two tiers over the storage's own (one is enough). Works under plain IC2 too.
+     */
+    ADAPTIVE_TRANSFORMER("upgradeAdaptiveTransformer");
+
+    /** Output splitters: at most this many count (3 output faces in all). */
+    public static final int MAX_OUTPUT_SPLITTERS = 2;
+    /** The adaptive transformer raises the output at most this many tiers over the storage's own. */
+    public static final int ADAPTIVE_MAX_RAISE = 2;
+
+    /** Only energy storages take it (machines, generators and the field generator refuse it). */
+    public boolean storageOnly() {
+        return this == OUTPUT_SPLITTER || this == ADAPTIVE_TRANSFORMER;
+    }
 
     public static final int MAX_TANK_UPGRADES = 4, TANK_PER_UPGRADE = 8000;
     /** EU to pour out a machine's or generator's tank: 1 per 10 mB (as the quarry's tanks). */

@@ -60,6 +60,8 @@ public final class EnergyNetSC {
     private final Map<World, List<Direct>> directs = new WeakHashMap<World, List<Direct>>();
     private int version;
     private final Map<World, Integer> builtVersion = new WeakHashMap<World, Integer>();
+    /** The built networks by cable (weakestSinkOn) - rebuilt with them. */
+    private final Map<World, Map<TileEntityConduitBundleSC, Network>> netOfCable = new WeakHashMap<World, Map<TileEntityConduitBundleSC, Network>>();
 
     private EnergyNetSC() {
     }
@@ -104,13 +106,29 @@ public final class EnergyNetSC {
         }
         Integer built = builtVersion.get(world);
         if (built == null || built != version) {
-            networks.put(world, build(world));
+            List<Network> rebuilt = build(world);
+            networks.put(world, rebuilt);
             directs.put(world, buildDirect(world));
+            Map<TileEntityConduitBundleSC, Network> byCable = new HashMap<TileEntityConduitBundleSC, Network>();
+            for (Network net : rebuilt) {
+                for (TileEntityConduitBundleSC c : net.cables) {
+                    byCable.put(c, net);
+                }
+            }
+            netOfCable.put(world, byCable);
             builtVersion.put(world, version);
+            // a storage's Adaptive Transformer looks behind its cables again before anything moves
+            // (a machine that joined in the middle of a tick must not get the raised tier)
+            for (Network net : rebuilt) {
+                for (Endpoint ep : net.endpoints) {
+                    ep.tile.energyNetRebuilt();
+                }
+            }
         }
         // what each tile has already sent this tick, over all networks: a storage or transformer
         // touching two networks still gives out one packet per tick, not one per network
-        Map<TileEntityEnergyBase, Integer> sent = new HashMap<TileEntityEnergyBase, Integer>();
+        // (per output face [0..5] and in all [TOTAL] - a storage's extra output faces each send their own)
+        Map<TileEntityEnergyBase, int[]> sent = new HashMap<TileEntityEnergyBase, int[]>();
         List<Network> nets = networks.get(world);
         if (nets != null) {
             for (Network net : nets) {
@@ -138,7 +156,72 @@ public final class EnergyNetSC {
     public void onWorldUnload(WorldEvent.Unload event) {
         networks.remove(event.world);
         directs.remove(event.world);
+        netOfCable.remove(event.world);
         builtVersion.remove(event.world);
+    }
+
+    /**
+     * The lowest input tier of what takes energy off the mod's network `cable` belongs to:
+     * machines, and storages / transformers as buffers (their input tier), `self` left out; the
+     * ones taking any voltage don't limit (XV when only they are there). For the Adaptive
+     * Transformer: never more than the weakest thing behind a cable.
+     * @return null - nothing to go by: no network built with that cable (under IC2, not yet, a
+     *         new cable), something on it gone, or nothing on it takes energy
+     */
+    public Tier weakestSinkOn(TileEntityConduitBundleSC cable, TileEntityEnergyBase self) {
+        World world = cable == null ? null : cable.getWorldObj();
+        if (world == null || cable.isInvalid()) {
+            return null;
+        }
+        // the last build, even when something changed since: a newcomer is seen once rebuilt, and
+        // the rebuild asks the storages again before anything moves (serverTick)
+        Map<TileEntityConduitBundleSC, Network> byCable = netOfCable.get(world);
+        Network net = byCable == null ? null : byCable.get(cable);
+        if (net == null) {
+            return null;
+        }
+        Tier weakest = null;
+        for (Endpoint ep : net.endpoints) {
+            TileEntityEnergyBase t = ep.tile;
+            if (t == self || !t.isEnergySink()) {
+                continue;
+            }
+            if (t.isInvalid()) {
+                return null;                  // gone - the network is about to be rebuilt
+            }
+            boolean takes = false;
+            for (ForgeDirection f : ep.faces) {       // connector modes not asked: they change without a rebuild
+                takes |= t.acceptsFrom(f);
+            }
+            if (!takes) {
+                continue;
+            }
+            Tier in = t.acceptsAnyVoltage() ? Tier.XV : t.inputTier();
+            if (weakest == null || in.ordinal() < weakest.ordinal()) {
+                weakest = in;
+            }
+        }
+        return weakest;
+    }
+
+    /** Index of the all-faces total in a tile's entry of the per-tick `sent` ledger (0..5 are the faces). */
+    static final int TOTAL = 6;
+
+    /** Books `eu` sent by `tile` through `face` (UNKNOWN: only the total) and tells the tile (a storage's upkeep). */
+    static void record(TileEntityEnergyBase tile, ForgeDirection face, int eu, Map<TileEntityEnergyBase, int[]> sent) {
+        if (eu <= 0) {
+            return;
+        }
+        int[] already = sent.get(tile);
+        if (already == null) {
+            already = new int[TOTAL + 1];
+            sent.put(tile, already);
+        }
+        if (face != null && face != ForgeDirection.UNKNOWN) {
+            already[face.ordinal()] += eu;
+        }
+        already[TOTAL] += eu;
+        tile.reportSent(face == null ? ForgeDirection.UNKNOWN : face, eu);
     }
 
     // ------------------------------------------------------------------ direct contact
@@ -183,20 +266,22 @@ public final class EnergyNetSC {
         }
 
         /** @return false when something exploded or went away (the caller rebuilds). */
-        boolean tick(Map<TileEntityEnergyBase, Integer> sent) {
+        boolean tick(Map<TileEntityEnergyBase, int[]> sent) {
             if (tile.isInvalid()) {
                 return false;
             }
             if (!tile.isEnergySource()) {
                 return true;
             }
-            int offer = Network.offerOf(tile, sent);
+            int offer = Network.offerOf(tile, null, sent);
             if (offer <= 0) {
                 return true;
             }
             int n = faces.size();
             int[] demand = new int[n];
             boolean any = false;
+            int[] already = sent.get(tile);
+            int perFace = tile.outputTier().getVoltage() * tile.packetsPerFace();
             for (int k = 0; k < n; k++) {
                 TileEntityEnergyBase sink = neighbours.get(k);
                 if (sink.isInvalid()) {
@@ -207,7 +292,8 @@ public final class EnergyNetSC {
                 // (blocks placed side by side in worlds from before direct transfer would blow up on load)
                 if (tile.isOutputFace(face) && sink.isEnergySink() && sink.acceptsFrom(face.getOpposite())
                         && sink.inputTier().excessTiersOf(tile.outputTier()) <= 0) {
-                    demand[k] = Math.max(0, sink.demandedEnergy());
+                    int faceRoom = perFace - (already == null ? 0 : already[face.ordinal()]);   // each face its own stream
+                    demand[k] = Math.max(0, Math.min(faceRoom, sink.demandedEnergy()));
                     any |= demand[k] > 0;
                 }
             }
@@ -216,7 +302,6 @@ public final class EnergyNetSC {
             }
             int[] give = EnergySplitSC.split(offer, demand, new int[n]);
             int voltage = tile.outputTier().getVoltage();
-            int spent = 0;
             boolean ok = true;
             for (int k = 0; k < n && ok; k++) {
                 if (give[k] <= 0) {
@@ -224,17 +309,12 @@ public final class EnergyNetSC {
                 }
                 TileEntityEnergyBase sink = neighbours.get(k);
                 int accepted = sink.receiveEnergy(faces.get(k).getOpposite(), voltage, give[k], false);
-                if (sink.isInvalid()) {
-                    spent += give[k];       // overvolted - it's gone, the packet with it
-                    ok = false;
-                } else if (accepted > 0) {
-                    spent += accepted;
+                int spent = sink.isInvalid() ? give[k] : accepted;   // overvolted - it's gone, the packet with it
+                ok = !sink.isInvalid();
+                if (spent > 0) {
+                    tile.removeEnergy(spent);
+                    record(tile, faces.get(k), spent, sent);
                 }
-            }
-            if (spent > 0) {
-                tile.removeEnergy(spent);
-                Integer already = sent.get(tile);
-                sent.put(tile, (already == null ? 0 : already) + spent);
             }
             return ok;
         }
@@ -359,6 +439,26 @@ public final class EnergyNetSC {
             return null;
         }
 
+        /**
+         * Every face energy comes out of into this network (a storage's extra outputs may touch it
+         * twice), in the tile's outputFaces() order: the main face (the front) always first, so what
+         * takeFrom books goes to it before the extra faces (their upkeep) the same way every tick.
+         */
+        List<ForgeDirection> outFaces() {
+            List<ForgeDirection> out = new ArrayList<ForgeDirection>(1);
+            if (!tile.isEnergySource()) {
+                return out;
+            }
+            for (ForgeDirection d : tile.outputFaces()) {
+                for (int k = 0; k < faces.size(); k++) {
+                    if (faces.get(k) == d && connectorAllows(k, true) && !out.contains(d)) {
+                        out.add(d);
+                    }
+                }
+            }
+            return out;
+        }
+
         /** The face energy from this network goes in through (the connector letting it in), or null. */
         ForgeDirection inFace() {
             if (!tile.isEnergySink()) {
@@ -433,7 +533,7 @@ public final class EnergyNetSC {
         }
 
         /** @return false when something exploded (the caller rebuilds). */
-        boolean tick(World world, Map<TileEntityEnergyBase, Integer> sent) {
+        boolean tick(World world, Map<TileEntityEnergyBase, int[]> sent) {
             List<Endpoint> suppliers = new ArrayList<Endpoint>();
             List<Endpoint> consumers = new ArrayList<Endpoint>();
             List<Endpoint> buffers = new ArrayList<Endpoint>();
@@ -473,11 +573,22 @@ public final class EnergyNetSC {
             return move(buffers, consumers, capacity, used, sent, true);   // shortfall is drawn from them
         }
 
-        /** What a tile can still give this tick: its packets of the output voltage in all, whatever it touches. */
-        private static int offerOf(TileEntityEnergyBase tile, Map<TileEntityEnergyBase, Integer> sent) {
-            Integer already = sent.get(tile);
+        /**
+         * What a tile can still give this tick: its packets of the output voltage in all, whatever it
+         * touches - and through `faces` (null: any) no more than those faces' own streams have left.
+         */
+        private static int offerOf(TileEntityEnergyBase tile, List<ForgeDirection> faces, Map<TileEntityEnergyBase, int[]> sent) {
+            int[] already = sent.get(tile);
             int packets = tile.packetsPerTick();
-            int room = tile.outputTier().getVoltage() * packets - (already == null ? 0 : already);
+            int voltage = tile.outputTier().getVoltage();
+            int room = voltage * packets - (already == null ? 0 : already[TOTAL]);
+            if (faces != null) {
+                int perFace = voltage * tile.packetsPerFace(), faceRoom = 0;
+                for (ForgeDirection f : faces) {
+                    faceRoom += Math.max(0, perFace - (already == null ? 0 : already[f.ordinal()]));
+                }
+                room = Math.min(room, faceRoom);
+            }
             int offer = tile.offerableEnergy();
             if (packets > 1 && offer > 0) {
                 offer = tile.getEnergyStored();
@@ -487,7 +598,7 @@ public final class EnergyNetSC {
 
         /** One supply -> demand pass within what's left of the network's rating (line loss from the nearest buffer when `fromBuffers`). */
         private boolean move(List<Endpoint> from, List<Endpoint> to, int capacity, int[] used,
-                             Map<TileEntityEnergyBase, Integer> sent, boolean fromBuffers) {
+                             Map<TileEntityEnergyBase, int[]> sent, boolean fromBuffers) {
             if (from.isEmpty() || to.isEmpty() || used[0] >= capacity) {
                 return true;
             }
@@ -495,7 +606,7 @@ public final class EnergyNetSC {
             long supply = 0;
             Tier voltage = null;
             for (int i = 0; i < offer.length; i++) {
-                offer[i] = offerOf(from.get(i).tile, sent);
+                offer[i] = offerOf(from.get(i).tile, from.get(i).outFaces(), sent);
                 supply += offer[i];
                 if (offer[i] > 0 && (voltage == null || from.get(i).tile.outputTier().ordinal() > voltage.ordinal())) {
                     voltage = from.get(i).tile.outputTier();
@@ -533,14 +644,25 @@ public final class EnergyNetSC {
             return true;
         }
 
-        private static void takeFrom(List<Endpoint> from, int[] offer, int total, Map<TileEntityEnergyBase, Integer> sent) {
+        private static void takeFrom(List<Endpoint> from, int[] offer, int total, Map<TileEntityEnergyBase, int[]> sent) {
             int[] taken = EnergySplitSC.draw(total, offer);
             for (int i = 0; i < taken.length; i++) {
                 if (taken[i] > 0) {
                     TileEntityEnergyBase tile = from.get(i).tile;
                     tile.removeEnergy(taken[i]);
-                    Integer already = sent.get(tile);
-                    sent.put(tile, (already == null ? 0 : already) + taken[i]);
+                    // spread over the faces touching this network, each up to what its stream has left
+                    List<ForgeDirection> faces = from.get(i).outFaces();
+                    int perFace = tile.outputTier().getVoltage() * tile.packetsPerFace(), left = taken[i];
+                    for (int f = 0; f < faces.size() && left > 0; f++) {
+                        int[] already = sent.get(tile);
+                        int part = f == faces.size() - 1 ? left
+                                : Math.min(left, Math.max(0, perFace - (already == null ? 0 : already[faces.get(f).ordinal()])));
+                        record(tile, faces.get(f), part, sent);
+                        left -= part;
+                    }
+                    if (left > 0) {
+                        record(tile, ForgeDirection.UNKNOWN, left, sent);
+                    }
                 }
             }
         }

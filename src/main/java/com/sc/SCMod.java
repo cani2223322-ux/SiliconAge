@@ -51,6 +51,8 @@ public class SCMod {
         FMLCommonHandler.instance().bus().register(new com.sc.energy.Ic2LoadQueueSC());   // energy tiles join IC2's net a tick late
         // World events (explosions) live on the Forge bus, not FML's.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ShieldEventHandler());
+        // sneak + left-click with the wrench on a storage's face: an extra output (Output Splitter)
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.sc.item.ItemWrenchSC.StorageFaceClick());
         // ...and so does WorldEvent.Unload, which frees the fallback energy net's cache of that world.
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.energy.EnergyNetSC.instance());
         NetworkRegistry.INSTANCE.registerGuiHandler(this, new GuiHandlerSC());

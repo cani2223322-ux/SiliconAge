@@ -1155,6 +1155,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             return stack != null && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly()
+                    && !com.sc.item.ItemUpgradeSC.typeOf(stack).storageOnly()
                     && !(machineType.isSmelter() && (com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.QUALITY
                             || com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK))    // nothing to improve there
                     // a heat sink only where there's heat, a tank extension only where there are tanks

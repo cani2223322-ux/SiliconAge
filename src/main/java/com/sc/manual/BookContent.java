@@ -618,7 +618,15 @@ public final class BookContent {
             slots.append(slots.length() == 0 ? "" : ", ").append(tier.name()).append(" ").append(com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotsFor(tier));
         }
         st.addAll(paras("sc.manual.energy.storage")).add(BookEl.para(Lang.tr("sc.manual.energy.chargeslots", slots.toString())))
-                .addAll(paras("sc.manual.energy.storage2")).about(new ItemStack(ModBlocks.energyStorageSC, 1, OreDictionary.WILDCARD_VALUE));
+                .addAll(paras("sc.manual.energy.storage2"));
+        // the two storage-only modules: the Output Splitter and the Adaptive Transformer
+        ItemStack splitter = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OUTPUT_SPLITTER);
+        ItemStack adaptive = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ADAPTIVE_TRANSFORMER);
+        st.add(BookEl.head(Lang.tr("sc.manual.energy.storagemodshead")))
+                .add(BookEl.item(splitter, splitter.getDisplayName(), Lang.tr("sc.manual.energy.storagemod.splitter")))
+                .add(BookEl.item(adaptive, adaptive.getDisplayName(), Lang.tr("sc.manual.energy.storagemod.adaptive")))
+                .addAll(paras("sc.manual.energy.storagemods"))
+                .about(new ItemStack(ModBlocks.energyStorageSC, 1, OreDictionary.WILDCARD_VALUE));
         list.add(st);
         list.add(simple("chargepad", c, new ItemStack(ModBlocks.chargePadSC, 1, 0), "sc.manual.energy.padhead", "sc.manual.energy.pad")
                 .about(new ItemStack(ModBlocks.chargePadSC, 1, OreDictionary.WILDCARD_VALUE)));

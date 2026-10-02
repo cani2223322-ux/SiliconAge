@@ -30,7 +30,7 @@ public class ContainerEnergyStorageSC extends Container {
     private final int tileSlots;
 
     private final TileEntityEnergyStorageSC storage;
-    private final IntSyncSC sync = new IntSyncSC(3);   // energy, flow per tick, the power switch
+    private final IntSyncSC sync = new IntSyncSC(4);   // energy, flow per tick, the power switch, the adaptive tier
     /** The power switch and the redstone mode (GuiPowerSC). */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11;
 
@@ -83,7 +83,7 @@ public class ContainerEnergyStorageSC extends Container {
             addSlotToContainer(new Slot(storage, upgSlot, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y) {
                 @Override
                 public boolean isItemValid(ItemStack stack) {
-                    return TileEntityEnergyStorageSC.acceptsUpgrade(stack);
+                    return ContainerEnergyStorageSC.this.storage.acceptsUpgradeHere(stack);   // the splitter from HV, none in a pad
                 }
 
                 /** A capacity upgrade stays while the charge wouldn't fit without it. */
@@ -124,7 +124,7 @@ public class ContainerEnergyStorageSC extends Container {
     @Override
     public void detectAndSendChanges() {
         super.detectAndSendChanges();
-        sync.send(this, crafters, new int[]{storage.getEnergyStored(), storage.getFlowPerTick(), storage.powerFlags()});
+        sync.send(this, crafters, new int[]{storage.getEnergyStored(), storage.getFlowPerTick(), storage.powerFlags(), storage.adaptiveSync()});
         com.sc.energy.Tier out = storage.outputTier();
         if (lastOutput != null && out.ordinal() > lastOutput.ordinal()) {   // a Transformer upgrade went in
             for (Object o : crafters) {
@@ -148,6 +148,8 @@ public class ContainerEnergyStorageSC extends Container {
             storage.setFlowClient(sync.value(1));
         } else if (id == 2) {
             storage.setPowerFlagsClient(sync.value(2));
+        } else if (id == 3) {
+            storage.setAdaptiveClient(sync.value(3));
         }
     }
 

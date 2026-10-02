@@ -41,9 +41,17 @@ public class ItemUpgradeSC extends Item {
 
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
-        String details = Lang.tr("sc.upgrade.tooltip." + typeOf(stack).name().toLowerCase(java.util.Locale.ROOT));
-        if (typeOf(stack) == UpgradeType.OVERDRIVE && !com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks()) {
-            details += "\n" + Lang.tr("sc.upgrade.tooltip.overdrive.noiu");   // IC2 without Industrial Upgrade: not in a storage
+        String name = typeOf(stack).name().toLowerCase(java.util.Locale.ROOT);
+        String details = Lang.tr("sc.upgrade.tooltip." + name);
+        if (typeOf(stack).storageOnly()) {
+            // energy storage modules: a summary line, what it does on Shift, how to use it on Ctrl
+            list.add("§7" + Lang.tr("sc.upgrade.tooltip.short." + name));
+            if (typeOf(stack) == UpgradeType.OUTPUT_SPLITTER && !com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks()) {
+                details += "\n" + Lang.tr("sc.upgrade.tooltip.output_splitter.noiu");   // IC2 without IU: one packet a tile
+            }
+            com.sc.util.TooltipSC.more(list, details,
+                    Lang.tr("sc.upgrade.tooltip.howto." + name) + "\n" + Lang.tr("sc.upgrade.tooltip.slot.storage"));
+            return;
         }
         com.sc.util.TooltipSC.more(list, details,
                 Lang.tr(typeOf(stack).fieldOnly() ? "sc.upgrade.tooltip.slot.field" : "sc.upgrade.tooltip.slot"));

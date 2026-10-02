@@ -243,6 +243,80 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         return false;                                    // machines, transformers, conduits handle the wrench themselves
     }
 
+    // ------------------------------------------------------------------ storage output faces (Output Splitter)
+
+    /**
+     * Sneak + left-click with the mod's wrench on an energy storage's face (any mode): that face
+     * becomes an extra output, or an input again (TileEntityEnergyStorageSC.toggleExtraOutput) -
+     * right-click is already taken (turning the front: plain = a quarter turn, sneak = to the face).
+     * Registered on the Forge bus in SCMod.preInit.
+     */
+    public static final class StorageFaceClick {
+        /**
+         * Quiet ticks before the next click toggles: every click (holding the button clicks again
+         * every few ticks) pushes the mark on, so a held button toggles once and never back.
+         */
+        private static final int DEBOUNCE = 8;
+
+        @cpw.mods.fml.common.eventhandler.SubscribeEvent
+        public void onInteract(net.minecraftforge.event.entity.player.PlayerInteractEvent event) {
+            if (event.action != net.minecraftforge.event.entity.player.PlayerInteractEvent.Action.LEFT_CLICK_BLOCK
+                    || event.world.isRemote || !isStorageFaceClick(event.entityPlayer, event.world, event.x, event.y, event.z)) {
+                return;
+            }
+            event.setCanceled(true);                   // never starts breaking the storage
+            EntityPlayer p = event.entityPlayer;
+            World world = event.world;
+            long now = world.getTotalWorldTime();
+            long last = p.getEntityData().getLong("scWrenchFaceAt");
+            p.getEntityData().setLong("scWrenchFaceAt", now);      // sliding: each event moves the mark
+            if (now - last < DEBOUNCE && now >= last) {
+                return;
+            }
+            if (com.sc.ShieldEventHandler.privateFor(world, p, event.x, event.y, event.z)) {
+                return;                                // someone else's private field
+            }
+            TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) world.getTileEntity(event.x, event.y, event.z);
+            ForgeDirection face = ForgeDirection.getOrientation(event.face);
+            ChatComponentTranslation side = new ChatComponentTranslation("sc.side." + face.name().toLowerCase(java.util.Locale.ROOT));
+            switch (s.toggleExtraOutput(face)) {
+                case TileEntityEnergyStorageSC.OUT_ADDED:
+                    p.addChatComponentMessage(new ChatComponentTranslation("sc.storage.out.added", side,
+                            s.extraOutputCount(), s.outputSplitters()));
+                    break;
+                case TileEntityEnergyStorageSC.OUT_REMOVED:
+                    p.addChatComponentMessage(new ChatComponentTranslation("sc.storage.out.removed", side));
+                    break;
+                case TileEntityEnergyStorageSC.OUT_MAIN:
+                    p.addChatComponentMessage(new ChatComponentTranslation("sc.storage.out.main"));
+                    break;
+                case TileEntityEnergyStorageSC.OUT_FULL:
+                    p.addChatComponentMessage(new ChatComponentTranslation("sc.storage.out.full", s.outputSplitters()));
+                    break;
+                default:
+                    p.addChatComponentMessage(new ChatComponentTranslation(
+                            TileEntityEnergyStorageSC.overdriveWorks() ? "sc.storage.out.nomodule" : "sc.storage.out.noiu"));
+            }
+            world.markBlockForUpdate(event.x, event.y, event.z);   // a creative click broke it on the client: put it back whole
+        }
+    }
+
+    /** The mod's wrench, sneaking, on an energy storage (not a charge pad - it takes no splitter). */
+    static boolean isStorageFaceClick(EntityPlayer p, World world, int x, int y, int z) {
+        ItemStack held = p == null ? null : p.getCurrentEquippedItem();
+        if (held == null || !(held.getItem() instanceof ItemWrenchSC) || !p.isSneaking()) {
+            return false;
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof TileEntityEnergyStorageSC && !(te instanceof com.sc.tileentity.TileEntityChargePadSC);
+    }
+
+    /** Sneak + left-click on a storage sets its outputs - in creative it must not break it (client and server). */
+    @Override
+    public boolean onBlockStartBreak(ItemStack stack, int x, int y, int z, EntityPlayer player) {
+        return player != null && isStorageFaceClick(player, player.worldObj, x, y, z);
+    }
+
     /** Rotate mode, a block that didn't take the click itself: its own rotation, if it has one (vanilla and other mods). */
     @Override
     public boolean onItemUse(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int side,

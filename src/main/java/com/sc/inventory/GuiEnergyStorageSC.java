@@ -177,16 +177,32 @@ public class GuiEnergyStorageSC extends GuiContainer {
         small(whenLabel, INFO_X + half + 3, c1 + 2, half - 4, GuiHoloSC.LABEL);
         fit(when, INFO_X + half + 3, c1 + 8, half - 5, whenCol);
         // card 2: the output, the comparator
-        int packets = storage.packetsPerTick(), volt = storage.outputTier().getVoltage();
+        int packets = storage.packetsPerFace(), volt = storage.outputTier().getVoltage();   // per output face
         small(Lang.tr("sc.storage.gui.c.out"), INFO_X + 3, c2 + 2, half - 4, GuiHoloSC.LABEL);
         fit(packets > 1 ? volt + " x " + packets : volt + " EU/t", INFO_X + 3, c2 + 8, half - 5,
                 storage.outputTier() != storage.getTier() ? GuiHoloSC.WARN : GuiHoloSC.VALUE);
         small(Lang.tr("sc.storage.gui.c.comp"), INFO_X + half + 3, c2 + 2, half - 4, GuiHoloSC.LABEL);
         fit(Lang.tr("sc.storage.gui.c.level", storage.comparatorLevel()), INFO_X + half + 3, c2 + 8, half - 5, GuiHoloSC.VALUE);
         small(Lang.tr("sc.storage.gui.hint"), INFO_X, 96, CARD_W, GuiHoloSC.LABEL);
+        // the storage modules: how many outputs and what they give in all, the adaptive tier and its limit
+        int line = 103;
+        int faces = storage.outputFaces().length;
+        if (storage.outputSplitters() > 0 || faces > 1) {
+            small(Lang.tr("sc.storage.gui.outputs", faces, (long) faces * volt * packets), INFO_X, line, CARD_W, GuiHoloSC.VALUE);
+            line += 6;
+        }
+        if (storage.hasAdaptive()) {
+            com.sc.energy.Tier a = storage.getAdaptiveTier();
+            String tier = a == null ? storage.baseOutputTier().name() : a.name();   // nothing to go by: no raise (Transformers still count)
+            small(Lang.tr("sc.storage.gui.adaptive", tier, Lang.tr("sc.storage.gui.adaptive.by." + ADAPT_KEYS[storage.getAdaptiveWhy() & 3])),
+                    INFO_X, line, CARD_W, GuiHoloSC.VALUE);
+        }
         power.drawGaugeOff(fontRendererObj);
         power.drawWarning(fontRendererObj, INFO_X, 84, CARD_W, guiLeft, guiTop);
     }
+
+    /** TileEntityEnergyStorageSC.ADAPT_NONE / CABLE / CONSUMER / CEILING -> lang key ends. */
+    private static final String[] ADAPT_KEYS = {"none", "cable", "consumer", "max"};
 
     /** A string that fits its room (smaller, or cut with the full text as a tooltip) - foreground coordinates. */
     private void fit(String text, int x, int y, int maxW, int color) {
@@ -211,6 +227,8 @@ public class GuiEnergyStorageSC extends GuiContainer {
             lines.add(Lang.tr("sc.storage.upgrades.hint.1"));
             lines.add(Lang.tr("sc.storage.upgrades.hint.2"));
             lines.add(Lang.tr("sc.storage.upgrades.hint.3"));
+            lines.add(Lang.tr("sc.storage.upgrades.hint.4"));      // Output Splitter
+            lines.add(Lang.tr("sc.storage.upgrades.hint.5"));      // Adaptive Transformer
             return lines;
         }
         if (storage.getStackInSlot(TileEntityEnergyStorageSC.SLOT_DISCHARGE) == null

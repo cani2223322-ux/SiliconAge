@@ -409,6 +409,33 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         return 1;
     }
 
+    /**
+     * Packets of the output voltage one output face may send a tick (EnergyNetSC keeps each face
+     * to it): all of packetsPerTick() - only a storage with extra output faces (Output Splitter)
+     * gives each face a stream of its own.
+     */
+    public int packetsPerFace() {
+        return packetsPerTick();
+    }
+
+    /**
+     * `eu` left through output face `face` (UNKNOWN: IC2's net took it, the face not told) - a
+     * storage pays its extra faces' upkeep here.
+     */
+    protected void sentOut(ForgeDirection face, int eu) {
+    }
+
+    /** EnergyNetSC rebuilt the networks this tile touches (before anything moves on them). */
+    public void energyNetRebuilt() {
+    }
+
+    /** EnergyNetSC's handle on sentOut. */
+    final void reportSent(ForgeDirection face, int eu) {
+        if (eu > 0) {
+            sentOut(face, eu);
+        }
+    }
+
     @Override
     public int demandedEnergy() {
         return isEnergySink() ? Math.max(0, getMaxEnergyStored() - energyStored) : 0;
@@ -560,6 +587,7 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         int eu = (int) Math.round(amount);
         if (eu >= 0) {
             removeEnergy(eu);
+            reportSent(ForgeDirection.UNKNOWN, eu);
         } else {
             addEnergy(-eu);     // IC2 hands unrouted surplus back as a negative draw
         }

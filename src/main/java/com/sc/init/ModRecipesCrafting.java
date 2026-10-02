@@ -655,6 +655,16 @@ public final class ModRecipesCrafting {
                 'I', ingot(Material.TIN), 'G', Blocks.glass, 'W', wire, 'X', new ItemStack(ModBlocks.tankSC, 1, 0), 'T', transistor);
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.QUALITY), " L ", "SXS", " T ",
                 'L', comp("lens"), 'S', comp("sensor"), 'X', silicon(SiliconMaterial.CONTROLLER), 'T', transistor);
+        // energy storage modules, both on a Transformer upgrade: the Output Splitter between two HV-EV
+        // transformers and four tungsten (HV) cables; the Adaptive Transformer reads the line with a
+        // comparator and a controller chip, gold contacts
+        ItemStack transformerUpgrade = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER);
+        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OUTPUT_SPLITTER), "PKP", "TXT", "PKP",
+                'P', cable(CableType.TUNGSTEN), 'K', Items.comparator, 'T', new ItemStack(ModBlocks.transformerSC, 1, 2),
+                'X', transformerUpgrade);
+        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ADAPTIVE_TRANSFORMER), "GKG", "TXT", "GCG",
+                'G', Items.gold_ingot, 'K', Items.comparator, 'T', transistor, 'X', transformerUpgrade,
+                'C', silicon(SiliconMaterial.CONTROLLER));
     }
 
     /**

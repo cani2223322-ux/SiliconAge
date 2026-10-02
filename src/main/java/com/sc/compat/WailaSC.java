@@ -84,6 +84,9 @@ public class WailaSC implements IWailaDataProvider {
             int flow = t.getInteger("scFlow");
             tip.add(Lang.tr("sc.waila.flow", (flow > 0 ? "+" : "") + flow));
         }
+        if (t.hasKey("scOutFaces")) {                                  // a storage with Output Splitters
+            tip.add(Lang.tr("sc.waila.outputs", t.getInteger("scOutFaces"), t.getInteger("scOutTotal")));
+        }
         if (t.hasKey("scStatus")) {
             tip.add(com.sc.machine.MachineStatus.byOrdinal(t.getInteger("scStatus")).localized());
             int ticks = t.getInteger("scTicks");
@@ -174,7 +177,13 @@ public class WailaSC implements IWailaDataProvider {
             tag.setBoolean("scStepUp", ((TileEntityTransformerSC) te).isStepUp());
         }
         if (te instanceof TileEntityEnergyStorageSC) {
-            tag.setInteger("scFlow", ((TileEntityEnergyStorageSC) te).getFlowPerTick());
+            TileEntityEnergyStorageSC st = (TileEntityEnergyStorageSC) te;
+            tag.setInteger("scFlow", st.getFlowPerTick());
+            int faces = st.outputFaces().length;
+            if (faces > 1) {
+                tag.setInteger("scOutFaces", faces);
+                tag.setInteger("scOutTotal", st.outputTier().getVoltage() * st.packetsPerTick());
+            }
         }
         if (te instanceof TileEntityMachineSC) {
             TileEntityMachineSC m = (TileEntityMachineSC) te;

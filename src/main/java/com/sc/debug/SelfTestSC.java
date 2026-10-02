@@ -44,6 +44,7 @@ public final class SelfTestSC {
             fieldShapes();
             fluidDrops();
             energyStorage();
+            storageModules();
             electricArmor();
             transformers();
             energySplit();
@@ -378,6 +379,121 @@ public final class SelfTestSC {
                         && thirdRefused && before - hv.getEnergyStored() == 1024
                         && com.sc.item.ItemArmorSC.chargeOf(b1) == 512 && com.sc.item.ItemArmorSC.chargeOf(b2) == 512,
                 "charge slots by tier: LV 1, HV 2, XV 4; HV charges two pieces at 512 EU/t each (" + (before - hv.getEnergyStored()) + ")");
+    }
+
+    /**
+     * The storage-only modules: Output Splitter (extra output faces set with the wrench, each its own
+     * stream, 1% upkeep) and Adaptive Transformer (up to the output neighbour's limit, at most +2).
+     */
+    private static void storageModules() {
+        com.sc.machine.UpgradeType[] types = com.sc.machine.UpgradeType.values();
+        com.sc.machine.UpgradeType split = com.sc.machine.UpgradeType.OUTPUT_SPLITTER, adapt = com.sc.machine.UpgradeType.ADAPTIVE_TRANSFORMER;
+        int up = com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT;
+        check(split.ordinal() == types.length - 2 && adapt.ordinal() == types.length - 1
+                        && com.sc.machine.UpgradeType.RAD_SHIELDING.ordinal() == types.length - 3
+                        && split.storageOnly() && adapt.storageOnly() && !split.forGenerators() && !adapt.forGenerators()
+                        && !split.fieldOnly() && !adapt.generatorOnly()
+                        && !new com.sc.tileentity.TileEntityChargePadSC().isItemValidForSlot(up, ModItems.upgrade.stackOf(adapt)),
+                "storage modules appended last (meta " + split.ordinal() + ", " + adapt.ordinal() + "), storages only, not in a charge pad");
+        net.minecraftforge.common.util.ForgeDirection N = net.minecraftforge.common.util.ForgeDirection.NORTH,
+                E = net.minecraftforge.common.util.ForgeDirection.EAST, W = net.minecraftforge.common.util.ForgeDirection.WEST,
+                S = net.minecraftforge.common.util.ForgeDirection.SOUTH;
+        // A: Output Splitter
+        com.sc.tileentity.TileEntityEnergyStorageSC hv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        hv.setStorageTier(com.sc.energy.Tier.HV);
+        hv.setFacing(N);
+        com.sc.tileentity.TileEntityEnergyStorageSC mv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        mv.setStorageTier(com.sc.energy.Tier.MV);
+        ItemStack two = ModItems.upgrade.stackOf(split);
+        two.stackSize = 2;
+        if (com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks()) {
+            boolean takes = hv.isItemValidForSlot(up, two) && !mv.isItemValidForSlot(up, two);
+            hv.setInventorySlotContents(up, two);
+            int a = hv.toggleExtraOutput(E), b = hv.toggleExtraOutput(W), c = hv.toggleExtraOutput(S), m = hv.toggleExtraOutput(N);
+            int front = hv.receiveEnergy(E, 512, 100, false), side = hv.receiveEnergy(S, 512, 100, false);
+            check(takes && a == com.sc.tileentity.TileEntityEnergyStorageSC.OUT_ADDED && b == com.sc.tileentity.TileEntityEnergyStorageSC.OUT_ADDED
+                            && c == com.sc.tileentity.TileEntityEnergyStorageSC.OUT_FULL && m == com.sc.tileentity.TileEntityEnergyStorageSC.OUT_MAIN
+                            && hv.outputFaces().length == 3 && hv.isOutputFace(E) && hv.isOutputFace(W) && !hv.isOutputFace(S)
+                            && front == 0 && side == 100
+                            && hv.packetsPerFace() == 1 && hv.packetsPerTick() == 3 && hv.outputTier().getVoltage() * hv.packetsPerTick() == 1536,
+                    "splitter: HV storage with 2 takes 3 output faces, the 4th refused, MV refuses it; out 3 x 512 = "
+                            + hv.outputTier().getVoltage() * hv.packetsPerTick() + " EU/t");
+            hv.setInventorySlotContents(up + 1, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE));
+            int withOverdrive = hv.outputTier().getVoltage() * hv.packetsPerTick();
+            hv.setStoredFromItem(100000);
+            int e0 = hv.getEnergyStored();
+            hv.sentOutForTest(E, 1000);
+            int e1 = hv.getEnergyStored();
+            hv.sentOutForTest(N, 1000);
+            int e2 = hv.getEnergyStored();
+            check(withOverdrive == 3 * 512 * 2 && e0 - e1 == 10 && e1 == e2,
+                    "splitter + overdrive: 3 faces x 512 x 2 = " + withOverdrive + "; upkeep 1% on an extra face (" + (e0 - e1) + "), none on the front");
+            net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+            hv.writeToNBT(nbt);
+            com.sc.tileentity.TileEntityEnergyStorageSC copy = new com.sc.tileentity.TileEntityEnergyStorageSC();
+            copy.readFromNBT(nbt);
+            hv.decrStackSize(up, 1);                                // one splitter out: the face set last goes
+            net.minecraft.nbt.NBTTagCompound old = new net.minecraft.nbt.NBTTagCompound();
+            copy.writeToNBT(old);
+            old.removeTag("OutFaces");
+            old.removeTag("OutOrder");
+            com.sc.tileentity.TileEntityEnergyStorageSC legacy = new com.sc.tileentity.TileEntityEnergyStorageSC();
+            legacy.readFromNBT(old);
+            check(copy.outputFaces().length == 3 && copy.isOutputFace(E) && copy.isOutputFace(W)
+                            && hv.outputFaces().length == 2 && hv.isOutputFace(E) && !hv.isOutputFace(W)
+                            && legacy.outputFaces().length == 1 && legacy.outputFaces()[0] == N,
+                    "splitter: outputs survive NBT, a module out drops the last face set, old saves have the front only");
+            copy.getStackInSlot(up).stackSize = 1;                  // part of the stack out past decrStackSize (a slot changed in place)
+            copy.markDirty();
+            check(copy.outputSplitters() == 1 && copy.outputFaces().length == 2 && copy.isOutputFace(E) && !copy.isOutputFace(W),
+                    "splitter: a stack changed in place is caught by markDirty (" + copy.outputFaces().length + " outputs)");
+        } else {
+            check(!hv.isItemValidForSlot(up, two) && hv.outputSplitters() == 0,
+                    "splitter: under IC2 without Industrial Upgrade a storage doesn't take it");
+        }
+        // B: Adaptive Transformer
+        com.sc.tileentity.TileEntityEnergyStorageSC ad = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        ad.setStorageTier(com.sc.energy.Tier.HV);
+        ad.setFacing(N);
+        boolean takesAdaptive = ad.isItemValidForSlot(up, ModItems.upgrade.stackOf(adapt)) && mv.isItemValidForSlot(up, ModItems.upgrade.stackOf(adapt));
+        ad.setInventorySlotContents(up, ModItems.upgrade.stackOf(adapt));
+        ad.applyAdaptiveLimit(null, com.sc.tileentity.TileEntityEnergyStorageSC.ADAPT_NONE);
+        com.sc.energy.Tier alone = ad.outputTier();
+        // the mod's cable: no more than the weakest consumer on its network; no network known - no raise
+        com.sc.energy.Tier HV = com.sc.energy.Tier.HV, EV = com.sc.energy.Tier.EV, LV = com.sc.energy.Tier.LV, XV = com.sc.energy.Tier.XV;
+        com.sc.tileentity.TileEntityEnergyStorageSC.Limit fast = com.sc.tileentity.TileEntityEnergyStorageSC.cableLimit(XV, EV),
+                thin = com.sc.tileentity.TileEntityEnergyStorageSC.cableLimit(LV, EV),
+                empty = com.sc.tileentity.TileEntityEnergyStorageSC.cableLimit(XV, null);
+        TileEntityConduitBundleSC loose = new TileEntityConduitBundleSC();
+        loose.addPart(com.sc.conduit.ConduitKind.CABLE, com.sc.energy.CableType.SUPERCONDUCTOR.ordinal());
+        com.sc.tileentity.TileEntityEnergyStorageSC.Limit off = com.sc.tileentity.TileEntityEnergyStorageSC.neighbourLimit(loose, N, ad);
+        boolean byCable = fast.tier == EV && fast.why == com.sc.tileentity.TileEntityEnergyStorageSC.ADAPT_CONSUMER
+                && thin.tier == LV && thin.why == com.sc.tileentity.TileEntityEnergyStorageSC.ADAPT_CABLE
+                && empty.tier == null && off != null && off.tier == null;
+        ad.applyAdaptiveLimit(fast.tier, fast.why);
+        byCable &= ad.outputTier() == EV;
+        ad.applyAdaptiveLimit(off == null ? null : off.tier, off == null ? 0 : off.why);
+        byCable &= ad.outputTier() == HV;
+        // a consumer of the mod's beside the front: its input tier
+        com.sc.tileentity.TileEntityEnergyStorageSC sink = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        sink.setStorageTier(EV);
+        sink.setFacing(N);                                          // takes on its south face, which touches our north
+        com.sc.tileentity.TileEntityEnergyStorageSC.Limit sl = com.sc.tileentity.TileEntityEnergyStorageSC.neighbourLimit(sink, N, ad);
+        ad.applyAdaptiveLimit(sl == null ? null : sl.tier, sl == null ? 0 : sl.why);
+        boolean byConsumer = sl != null && sl.why == com.sc.tileentity.TileEntityEnergyStorageSC.ADAPT_CONSUMER && ad.outputTier() == EV;
+        // IC2: behind a cable nothing can be seen - no raise; a sink its tier, none given (0) - no raise
+        com.sc.tileentity.TileEntityEnergyStorageSC.Limit ic2Cable = com.sc.tileentity.TileEntityEnergyStorageSC.ic2Limit(true, false, 0, true),
+                ic2Zero = com.sc.tileentity.TileEntityEnergyStorageSC.ic2Limit(false, true, 0, true),
+                ic2Ev = com.sc.tileentity.TileEntityEnergyStorageSC.ic2Limit(false, true, 4, true);
+        boolean byIc2 = ic2Cable.tier == null && ic2Zero.tier == null && ic2Ev.tier == EV
+                && com.sc.tileentity.TileEntityEnergyStorageSC.ic2Limit(false, false, 0, false) == null;
+        // with a plain Transformer: max(base with transformers, adaptive); the adaptive never passes the neighbour
+        ad.setInventorySlotContents(up + 1, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
+        ad.applyAdaptiveLimit(LV, com.sc.tileentity.TileEntityEnergyStorageSC.ADAPT_CABLE);
+        boolean withTransformer = ad.outputTier() == EV && ad.baseOutputTier() == EV;
+        check(takesAdaptive && alone == HV && byCable && byConsumer && byIc2 && withTransformer,
+                "adaptive: HV alone stays HV; mod cable min(cable, weakest consumer), no network - no raise; EV consumer -> EV;"
+                        + " IC2 cable / sink tier 0 - no raise; + Transformer over an LV cable -> EV");
     }
 
     /** Electric armor: no protection while empty, EU paid per absorbed damage, charged by the storage slot. */
