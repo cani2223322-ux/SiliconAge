@@ -229,6 +229,8 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
                 gasLines(stack, list);
                 if (ArmorLogicSC.strict(suit)) {
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.strict"), "§6");
+                    // С-3: the helium loop is in the chestplate - a piece worn without one is always in emergency mode
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr(armorType == 1 ? "sc.tooltip.armor.loop.chest" : "sc.tooltip.armor.loop"), "§7");
                 }
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;

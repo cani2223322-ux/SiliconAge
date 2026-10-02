@@ -56,7 +56,7 @@ public final class DrillLogicSC {
     }
 
     private static boolean fullSetOf(EntityPlayer p, DrillType type) {
-        return ArmorLogicSC.fullSet(p) == type.suit;
+        return ArmorLogicSC.bonusSet(p) == type.suit;           // none in emergency mode (no helium)
     }
 
     /** Worn energy armour feeding the drill: the chestplate, any suit - not while it's overheated. */

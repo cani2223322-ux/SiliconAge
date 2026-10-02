@@ -14,6 +14,7 @@ import cpw.mods.fml.relauncher.Side;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraftforge.fluids.FluidContainerRegistry;
 import net.minecraftforge.fluids.FluidStack;
@@ -38,6 +39,14 @@ public final class ArmorNetSC {
     public static final byte GLOW_COLOR = 11;
     /** Life support: pour the gas container in the player's inventory slot `feature` into the worn suit (K screen). */
     public static final byte GAS_FILL = 12;
+    /**
+     * Life support: pour every suitable gas container of the main inventory into the worn suit - the
+     * server walks the inventory itself (same rules as GAS_FILL, slot by slot) and answers with ONE chat line.
+     */
+    public static final byte GAS_FILL_ALL = 13;
+    /** GAS_FILL_ALL: at most this many single pours per press, and the press at most once per this many ticks. */
+    private static final int FILL_ALL_MAX = 64, FILL_ALL_COOLDOWN = 10;
+    private static final String FILL_ALL_TIME_TAG = "ScGasFillAllT";
 
     private ArmorNetSC() {
     }
@@ -156,6 +165,9 @@ public final class ArmorNetSC {
                 case GAS_FILL:
                     fillSuit(p, msg.feature);
                     break;
+                case GAS_FILL_ALL:
+                    fillSuitAll(p);
+                    break;
                 case com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION:   // hydrogen: a second jump in mid-air
                     com.sc.item.ArmorLogicSC.airJump(p);
                     break;
@@ -174,27 +186,86 @@ public final class ArmorNetSC {
      * Creative players keep their containers full, as with a machine.
      */
     public static void fillSuit(EntityPlayerMP p, int slot) {
+        if (pour(p, slot, null)) {
+            p.worldObj.playSoundAtEntity(p, "random.fizz", 0.3F, 1.6F);
+            p.inventory.markDirty();
+            p.inventoryContainer.detectAndSendChanges();
+        }
+    }
+
+    /**
+     * "Fill everything": every slot of the main inventory in order, each poured exactly as a single
+     * GAS_FILL would (a stack of whole-only containers - one by one while whole ones fit). No chat line
+     * per container: one summary at the end ("Suit filled: Helium 2000 mB, Hydrogen 1000 mB" / nothing to fill).
+     */
+    public static void fillSuitAll(EntityPlayerMP p) {
+        long now = p.worldObj.getTotalWorldTime();
+        net.minecraft.nbt.NBTTagCompound data = p.getEntityData();
+        long last = data.getLong(FILL_ALL_TIME_TAG);
+        if (last > 0 && now >= last && now - last < FILL_ALL_COOLDOWN) {
+            return;                                             // a flood of presses: one per half a second
+        }
+        data.setLong(FILL_ALL_TIME_TAG, now);
+        int[] got = new int[ArmorGasSC.Gas.values().length];
+        int pours = 0;
+        for (int slot = 0; slot < p.inventory.mainInventory.length && pours < FILL_ALL_MAX; slot++) {
+            while (pours < FILL_ALL_MAX && pour(p, slot, got)) {   // until the slot has nothing more that fits
+                pours++;
+            }
+        }
+        if (pours > 0) {
+            p.worldObj.playSoundAtEntity(p, "random.fizz", 0.3F, 1.6F);
+            p.inventory.markDirty();
+            p.inventoryContainer.detectAndSendChanges();
+        }
+        ChatComponentText list = new ChatComponentText("");
+        boolean any = false;
+        for (ArmorGasSC.Gas g : ArmorGasSC.Gas.values()) {
+            if (got[g.ordinal()] <= 0) {
+                continue;
+            }
+            if (any) {
+                list.appendText(", ");
+            }
+            list.appendSibling(new ChatComponentTranslation("sc.chat.gas.fillall.part", new ChatComponentTranslation("sc.gas." + g.key()),
+                    String.valueOf(got[g.ordinal()])));
+            any = true;
+        }
+        p.addChatComponentMessage(any ? new ChatComponentTranslation("sc.chat.gas.fillall", list)
+                : new ChatComponentTranslation("sc.chat.gas.fillall.none"));
+    }
+
+    /**
+     * One pour from main-inventory slot `slot` (the rules above). `got` null: a single fill - every
+     * outcome gets its chat line; otherwise silent, the poured mB added to got[gas ordinal].
+     * @return true when gas went into the suit
+     */
+    private static boolean pour(EntityPlayerMP p, int slot, int[] got) {
         if (slot < 0 || slot >= p.inventory.mainInventory.length) {
-            return;
+            return false;
         }
         ItemStack stack = p.inventory.mainInventory[slot];
         if (stack == null || stack.stackSize <= 0) {
-            return;
+            return false;
         }
         boolean creative = p.capabilities.isCreativeMode;
         if (FluidContainerRegistry.isFilledContainer(stack)) {
             FluidStack in = FluidContainerRegistry.getFluidForFilledItem(stack);
             ArmorGasSC.Gas g = in == null ? null : ArmorGasSC.Gas.of(in.getFluid());
             if (g == null || in.amount <= 0) {
-                return;                                         // not one of the suit's gases
+                return false;                                   // not one of the suit's gases
             }
             if (ArmorGasSC.suitCapacity(p, g) <= 0) {
-                tell(p, "sc.chat.gas.notank", g, in.amount);
-                return;
+                if (got == null) {
+                    tell(p, "sc.chat.gas.notank", g, in.amount);
+                }
+                return false;
             }
             if (ArmorGasSC.suitFill(p, g, in.amount, true) != in.amount) {
-                tell(p, "sc.chat.gas.nofit", g, in.amount);   // a whole-only container: nothing spent
-                return;
+                if (got == null) {
+                    tell(p, "sc.chat.gas.nofit", g, in.amount);   // a whole-only container: nothing spent
+                }
+                return false;
             }
             ArmorGasSC.suitFill(p, g, in.amount, false);
             if (!creative) {
@@ -211,40 +282,53 @@ public final class ArmorNetSC {
                     }
                 }
             }
-            tell(p, "sc.chat.gas.in", g, in.amount);
+            report(got, p, g, in.amount);
         } else if (stack.getItem() instanceof IFluidContainerItem && stack.stackSize == 1) {
             IFluidContainerItem item = (IFluidContainerItem) stack.getItem();
             FluidStack carried = item.getFluid(stack);
             ArmorGasSC.Gas g = carried == null || carried.amount <= 0 ? null : ArmorGasSC.Gas.of(carried.getFluid());
             if (g == null) {
-                return;
+                return false;
             }
             if (ArmorGasSC.suitCapacity(p, g) <= 0) {
-                tell(p, "sc.chat.gas.notank", g, carried.amount);
-                return;
+                if (got == null) {
+                    tell(p, "sc.chat.gas.notank", g, carried.amount);
+                }
+                return false;
             }
             int room = ArmorGasSC.suitFill(p, g, carried.amount, true);
             if (room <= 0) {
-                tell(p, "sc.chat.gas.full", g, 0);
-                return;
+                if (got == null) {
+                    tell(p, "sc.chat.gas.full", g, 0);
+                }
+                return false;
             }
             FluidStack taken = item.drain(stack, room, false);      // what the container really gives
             int put = taken == null ? 0 : Math.min(room, taken.amount);
             if (put <= 0) {
-                return;
+                return false;
             }
             if (!creative) {
                 FluidStack drained = item.drain(stack, put, true);
                 put = drained == null ? 0 : Math.min(put, drained.amount);
             }
             ArmorGasSC.suitFill(p, g, put, false);
-            tell(p, "sc.chat.gas.in", g, put);
+            if (put <= 0) {
+                return false;                                   // the container gave nothing after all
+            }
+            report(got, p, g, put);
         } else {
-            return;
+            return false;
         }
-        p.worldObj.playSoundAtEntity(p, "random.fizz", 0.3F, 1.6F);
-        p.inventory.markDirty();
-        p.inventoryContainer.detectAndSendChanges();
+        return true;
+    }
+
+    private static void report(int[] got, EntityPlayerMP p, ArmorGasSC.Gas g, int mb) {
+        if (got == null) {
+            tell(p, "sc.chat.gas.in", g, mb);
+        } else {
+            got[g.ordinal()] += mb;
+        }
     }
 
     private static void tell(EntityPlayerMP p, String key, ArmorGasSC.Gas g, int mb) {

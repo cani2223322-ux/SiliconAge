@@ -1108,7 +1108,6 @@ public final class BookContent {
         return e;
     }
 
-    /** A block of prose stored as key.1, key.2, ... */
     /**
      * The strict rules of the Quantum / Exo suits: the "function - gas - use" table straight from
      * ArmorFeature.gas() / gasUse() (what the armour logic runs on), and the emergency mode.
@@ -1132,15 +1131,14 @@ public final class BookContent {
         gases.add(BookEl.head(Lang.tr("sc.manual.armor.emergency.head"))).addAll(paras("sc.manual.armor.emergency"));
     }
 
-    /** "1 mB/s", "50 mB a use", "1 mB/min", "the loop's cooling", "by the radiation". */
+    /** "1 mB/s", "50 mB a use", "1 mB per damage point", "1 mB/min", "the loop's cooling", "by the radiation". */
     private static String gasUseText(com.sc.util.ArmorFeature f) {
-        float v = f.gasUse();
-        String n = v == (int) v ? String.valueOf((int) v) : String.valueOf(v);
+        String n = number(f.gasUse());
         switch (f.gasUseKind()) {
             case com.sc.util.ArmorFeature.USE_MINUTE:
                 return Lang.tr("sc.manual.armor.strict.min", n);
             case com.sc.util.ArmorFeature.USE_ONCE:
-                return Lang.tr("sc.manual.armor.strict.once", n);
+                return Lang.tr(f.gasPerPoint() ? "sc.manual.armor.strict.point" : "sc.manual.armor.strict.once", n);
             case com.sc.util.ArmorFeature.USE_COOLING:
                 return Lang.tr("sc.manual.armor.strict.cooling");
             case com.sc.util.ArmorFeature.USE_RADIATION:
@@ -1150,6 +1148,20 @@ public final class BookContent {
         }
     }
 
+    /**
+     * A rate for the text: whole numbers as they are, fractions with the language's decimal mark
+     * ("sc.num.decimal": a comma in Russian "0,2", a dot in English "0.2"; a dot when the key is missing).
+     */
+    static String number(float v) {
+        if (v == (int) v) {
+            return String.valueOf((int) v);
+        }
+        String s = String.valueOf(v);
+        String mark = Lang.trOr("sc.num.decimal", ".");
+        return mark.isEmpty() || ".".equals(mark) ? s : s.replace(".", mark);
+    }
+
+    /** A block of prose stored as key.1, key.2, ... */
     static List<BookEl> paras(String baseKey) {
         List<BookEl> out = new ArrayList<BookEl>();
         for (int i = 1; ; i++) {

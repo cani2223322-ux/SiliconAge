@@ -106,7 +106,7 @@ public class ArmorClientSC {
         if (p.isInvisible() || p.ticksExisted % 3 != 0) {
             return;
         }
-        com.sc.util.ArmorSuit set = ArmorLogicSC.fullSet(p);
+        com.sc.util.ArmorSuit set = ArmorLogicSC.bonusSet(p);      // no aura in emergency mode
         ItemStack chest = ArmorLogicSC.piece(p, 1);
         if (set == null || chest == null || !ItemArmorSC.isEnabled(chest, ArmorFeature.SET_AURA) || ItemArmorSC.chargeOf(chest) <= 0) {
             return;
@@ -166,7 +166,7 @@ public class ArmorClientSC {
 
     /** The helmet's HUD: set, charge of every piece, heat, power mode. @return the y under it */
     private static int drawSuit(Minecraft mc, EntityPlayer p, int y) {
-        ArmorSuit set = ArmorLogicSC.fullSet(p);
+        ArmorSuit set = ArmorLogicSC.bonusSet(p);                // the set line only while its bonus works (not in emergency mode)
         if (set != null) {
             mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.set." + set.name().toLowerCase(Locale.ROOT)), 4, y, 0x80FF80);
             y += 10;

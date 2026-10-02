@@ -265,12 +265,25 @@ public final class ArmorGasSC {
     /**
      * The strict rules (Quantum / Exo: every function on its own gas, ArmorFeature.gas()): what each
      * spends while it works. Hydrogen: flight without the boost mB a second, a jump, sprinting mB a
-     * second, a fall softened; oxygen per effect cleansed; argon: fire proofing mB a second while
-     * burning, walking on a liquid mB a second. Krypton (night vision, scanner, thermal) is KRYPTON_PER_MIN each.
+     * second, a fall softened - mB per damage point the boots absorbed (at least 1); oxygen per effect
+     * cleansed; argon: fire proofing mB a second while burning, walking on a liquid mB a second.
+     * Krypton (night vision, scanner, thermal) is KRYPTON_PER_MIN each.
      */
     public static final float H2_FLIGHT_BASE_PER_SECOND = 1F, H2_JUMP = 0.2F, H2_SPEED_PER_SECOND = 0.5F;
-    public static final int H2_FALL_DAMPING = 10, O2_CLEANSE = 5, ARGON_FIRE_PROOF_PER_SECOND = 2;
+    public static final int H2_FALL_DAMPING_PER_POINT = 1, O2_CLEANSE = 5, ARGON_FIRE_PROOF_PER_SECOND = 2;
     public static final float ARGON_WATER_WALK_PER_SECOND = 0.5F;
+    /** Flying on the suit: "hydrogen low" when what's left lasts under this many seconds of flight. */
+    public static final int H2_LOW_WARN_SECONDS = 30;
+
+    /** Hydrogen the boots' soft landing takes for `absorbed` damage points (0 when nothing was absorbed). */
+    public static int fallDampingGas(int absorbed) {
+        return absorbed <= 0 ? 0 : Math.max(1, absorbed * H2_FALL_DAMPING_PER_POINT);
+    }
+
+    /** Whether `leftMb` of hydrogen lasts under H2_LOW_WARN_SECONDS of flight at `perSecond` mB a second. */
+    public static boolean hydrogenLow(int leftMb, float perSecond) {
+        return perSecond > 0 && leftMb < perSecond * H2_LOW_WARN_SECONDS;
+    }
 
     /**
      * Old worlds, the strict rules: each Quantum / Exo piece of the set not given it yet gets

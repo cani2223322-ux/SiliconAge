@@ -146,7 +146,7 @@ public enum ArmorFeature {
             case DASH: return ArmorGasSC.H2_DASH;
             case JUMP: return ArmorGasSC.H2_JUMP;
             case SPEED: return ArmorGasSC.H2_SPEED_PER_SECOND;
-            case FALL_DAMPING: return ArmorGasSC.H2_FALL_DAMPING;
+            case FALL_DAMPING: return ArmorGasSC.H2_FALL_DAMPING_PER_POINT;   // per damage point absorbed (gasPerPoint)
             case AIR: return ArmorGasSC.OXYGEN_PER_SECOND;
             case CLEANSE: return ArmorGasSC.O2_CLEANSE;
             case NIGHT_VISION: case ORE_SCANNER: case THERMAL: case SEARCHLIGHT: return ArmorGasSC.KRYPTON_PER_MIN;
@@ -155,6 +155,19 @@ public enum ArmorFeature {
             case FUSION_CELL: return ArmorGasSC.FUSION_D_PER_TICK * 20;
             default: return 0F;
         }
+    }
+
+    /**
+     * A USE_ONCE function whose gasUse() is per damage point it absorbs, not per use (the soft
+     * landing: ArmorGasSC.fallDampingGas) - the texts say "mB per damage point" for it.
+     */
+    public boolean gasPerPoint() {
+        return this == FALL_DAMPING;
+    }
+
+    /** The least of its gas the function needs in the suit to switch on (the dash: a whole dash's worth). */
+    public int gasMin() {
+        return this == DASH ? ArmorGasSC.H2_DASH : 1;
     }
 
     /** Fired by its key (once, then off again) instead of switched on and off. */

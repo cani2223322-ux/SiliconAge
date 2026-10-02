@@ -37,7 +37,9 @@ import net.minecraft.util.Vec3;
  * - Exo set: no need to eat at all - the chestplate's energy keeps the food bar full.
  * Power modes (chestplate): economy halves function costs and weakens speed / jump, combat makes
  * them cost half as much again but absorbing damage 20% cheaper and the shield reach twice as far.
- * An overheated suit (chips shut down, §16) switches its functions and the set bonuses off too.
+ * An overheated suit (chips shut down, §16) switches its functions and the set bonuses off too;
+ * so does emergency mode (Quantum / Exo without helium) - chips included, the gases' passives
+ * (heavy water against radiation, argon putting fires out) still work.
  */
 public final class ArmorLogicSC {
 
@@ -63,15 +65,35 @@ public final class ArmorLogicSC {
 
     /** The suit of a full set (all four pieces of one suit, each with some charge), or null. */
     public static ArmorSuit fullSet(EntityPlayer p) {
+        return fullSetOf(ArmorGasSC.wornSet(p));
+    }
+
+    /** fullSet for a set of pieces indexed HELMET..BOOTS (no player needed). */
+    public static ArmorSuit fullSetOf(ItemStack[] worn) {
         ArmorSuit suit = null;
         for (int t = 0; t < 4; t++) {
-            ItemStack s = piece(p, t);
-            if (s == null || ItemArmorSC.chargeOf(s) <= 0 || (suit != null && suitOf(s) != suit)) {
+            ItemStack s = worn == null || t >= worn.length ? null : worn[t];
+            if (s == null || !(s.getItem() instanceof ItemArmorSC) || ItemArmorSC.chargeOf(s) <= 0
+                    || (suit != null && suitOf(s) != suit)) {
                 return null;
             }
             suit = suitOf(s);
         }
         return suit;
+    }
+
+    /**
+     * The full set whose set bonuses work (Quantum knockback, cheaper absorbing; Exo food by EU):
+     * none in emergency mode (Quantum / Exo without helium in the loop). Overheating is checked where
+     * the bonus is given (setBonuses).
+     */
+    public static ArmorSuit bonusSetOf(ItemStack[] worn) {
+        ArmorSuit set = fullSetOf(worn);
+        return set == null || emergency(worn) ? null : set;
+    }
+
+    public static ArmorSuit bonusSet(EntityPlayer p) {
+        return bonusSetOf(ArmorGasSC.wornSet(p));
     }
 
     /** The suit's chips (and functions) are shut down by heat. */
@@ -135,7 +157,7 @@ public final class ArmorLogicSC {
         if (s == null || g == null || !(strict(suitOf(s)) || f == ArmorFeature.AIR)) {
             return null;
         }
-        boolean has = g == Gas.HELIUM ? heliumReady(worn) : ArmorGasSC.amountOf(worn, g) > 0;
+        boolean has = g == Gas.HELIUM ? heliumReady(worn) : ArmorGasSC.amountOf(worn, g) >= f.gasMin();   // the dash: a whole dash's worth
         return has ? null : g;
     }
 
@@ -326,7 +348,7 @@ public final class ArmorLogicSC {
     /** Energy multiplier for absorbing damage: the Quantum set and combat mode make it cheaper; regeneration triples it. */
     public static float absorbCostMul(EntityPlayer p) {
         float mul = powerMode(p) == 2 ? 0.8F : 1F;
-        return (fullSet(p) == ArmorSuit.QUANTUM ? mul * 0.7F : mul) * regenMul(p);
+        return (bonusSet(p) == ArmorSuit.QUANTUM ? mul * 0.7F : mul) * regenMul(p);     // no set bonus in emergency mode
     }
 
     /**
@@ -375,9 +397,11 @@ public final class ArmorLogicSC {
         }
         if (p.worldObj.isRemote) {
             airJumpKey(p);
+            softDescent(p);
             return;
         }
         flight(p);
+        softDescent(p);
         argon(p);
         searchlight(p);
         if (active(p, ArmorFeature.SHIELD) && p.ticksExisted % 2 == 0) {
@@ -639,6 +663,12 @@ public final class ArmorLogicSC {
             p.sendPlayerAbilities();
         } else if (!can && data.getBoolean(FLIGHT_FLAG)) {
             data.removeTag(FLIGHT_FLAG);
+            if (!p.capabilities.isCreativeMode && p.capabilities.isFlying && !p.onGround
+                    && flightCutByGas(ArmorGasSC.wornSet(p))) {
+                // cut in mid-air by the gases: a few seconds of slowed fall (the client slows it, see softDescent)
+                data.setInteger(DESCENT, SOFT_DESCENT_TICKS);
+                warn(p, "sc.gas.warn.flightcut", 100);
+            }
             if (!p.capabilities.isCreativeMode) {
                 p.capabilities.allowFlying = false;
                 p.capabilities.isFlying = false;
@@ -662,6 +692,63 @@ public final class ArmorLogicSC {
         if (can && p.capabilities.isFlying) {
             p.fallDistance = 0;           // vanilla adds up the descent while flying - landing turned it into fall damage
         }
+    }
+
+    /** Soft descent after the gases cut the flight in mid-air: how long (ticks), and the fastest fall meanwhile (motionY). */
+    public static final int SOFT_DESCENT_TICKS = 100;
+    public static final double SOFT_DESCENT_SPEED = -0.15;
+    private static final String DESCENT = "scSoftDescent", WAS_FLYING = "scWasFlying";
+
+    /**
+     * The flight is cut by the gases, not by the wearer: the chestplate is worn with its flight
+     * switched on, but the gases forbid it (hydrogen out, or emergency mode - helium under 1%).
+     */
+    public static boolean flightCutByGas(ItemStack[] worn) {
+        ItemStack chest = worn[ArmorGasSC.CHEST];
+        return chest != null && strict(suitOf(chest)) && ItemArmorSC.isEnabled(chest, ArmorFeature.FLIGHT)
+                && !gasAllows(worn, ArmorFeature.FLIGHT);
+    }
+
+    /**
+     * Every tick, both sides (the player's own client, the server). The gases cut the flight in
+     * mid-air: for SOFT_DESCENT_TICKS the fall is slowed to SOFT_DESCENT_SPEED (the client, which
+     * moves its player) and that landing does no damage (the server: fall distance kept at 0, and
+     * fall() lets the landing through). It only limits falling - never lifts - and comes once per cut:
+     * the server starts it in flight(), the client when its flight is taken away (abilities from the
+     * server) with the same gas check. Over on the ground, in water / lava, on a ladder, flying again.
+     */
+    private static void softDescent(EntityPlayer p) {
+        NBTTagCompound data = p.getEntityData();
+        if (p.worldObj.isRemote) {
+            boolean was = data.getBoolean(WAS_FLYING), now = p.capabilities.isFlying;
+            data.setBoolean(WAS_FLYING, now);
+            if (was && !now && !p.capabilities.allowFlying && !p.capabilities.isCreativeMode && !p.onGround
+                    && flightCutByGas(ArmorGasSC.wornSet(p))) {
+                data.setInteger(DESCENT, SOFT_DESCENT_TICKS);
+            }
+        }
+        int left = data.getInteger(DESCENT);
+        if (left <= 0) {
+            return;
+        }
+        if (p.onGround || p.capabilities.isFlying || p.isInWater() || p.handleLavaMovement() || p.isOnLadder()) {
+            data.removeTag(DESCENT);
+            return;
+        }
+        if (left == 1) {
+            data.removeTag(DESCENT);
+        } else {
+            data.setInteger(DESCENT, left - 1);
+        }
+        p.fallDistance = 0;
+        if (p.worldObj.isRemote && p.motionY < SOFT_DESCENT_SPEED) {
+            p.motionY = SOFT_DESCENT_SPEED;
+        }
+    }
+
+    /** The soft descent is on (server: its landing does no damage). */
+    public static boolean softDescending(EntityPlayer p) {
+        return p.getEntityData().getInteger(DESCENT) > 0;
     }
 
     /** Creative / Exo flight speed, and the Quantum chestplate's slower one. */
@@ -742,7 +829,7 @@ public final class ArmorLogicSC {
             heat += ArmorFeature.NIGHT_VISION.heat;
         } else {
             ItemStack chest = piece(p, 1);
-            boolean sensorChip = chest != null && chest.hasTagCompound() && !overheated(p)
+            boolean sensorChip = chest != null && chest.hasTagCompound() && !overheated(p) && !emergency(ArmorGasSC.wornSet(p))
                     && chest.getTagCompound().getCompoundTag("ChipsSC").hasKey(com.sc.util.ChipType.SENSOR.name());
             if (sensorChip) {
                 // a running Sensor chip gives the same effect (CommonEventHandler) - it's ours too, left on
@@ -838,13 +925,20 @@ public final class ArmorLogicSC {
         if (p.ticksExisted % 200 == 0) {
             resendFlight(p);
         }
+        if (ArmorGasSC.suitAmount(p, Gas.HYDROGEN) >= H2_WARN_REARM) {
+            rearm(p, H2_WARN);                                    // refilled: the warning may come again
+        }
         if (active(p, ArmorFeature.FLIGHT) && p.capabilities.isFlying && !p.capabilities.isCreativeMode) {
             if (boostedFlight(p)) {                               // the engine boost: hydrogen instead of EU
                 ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_FLIGHT_PER_SECOND);
                 heat += ArmorFeature.FLIGHT.heat + ArmorFeature.BOOSTER.heat;
+                hydrogenWarning(p, ArmorGasSC.H2_FLIGHT_PER_SECOND);
             } else if (pay(p, ArmorFeature.FLIGHT, ArmorFeature.FLIGHT.euPerSecond)) {
                 spendGas(p, ArmorFeature.FLIGHT);                 // and a little hydrogen
                 heat += ArmorFeature.FLIGHT.heat;
+                if (strict(suitOf(piece(p, 1)))) {
+                    hydrogenWarning(p, ArmorGasSC.H2_FLIGHT_BASE_PER_SECOND);
+                }
             }
         }
         if (active(p, ArmorFeature.FIRE_PROOF) && (p.isBurning() || p.handleLavaMovement())) {
@@ -921,7 +1015,7 @@ public final class ArmorLogicSC {
         }
         // oxygen regenerator chip (Exo): under water the helmet's oxygen comes back, for EU
         int regen = ArmorGasSC.chipTier(chest, ChipType.OXYGEN_REGEN);
-        if (regen > 0 && !overheated(p) && suitOf(chest) == ArmorSuit.EXO && p.isInWater()
+        if (regen > 0 && !overheated(p) && !emergency(worn) && suitOf(chest) == ArmorSuit.EXO && p.isInWater()
                 && ArmorGasSC.capacityOf(worn, Gas.OXYGEN) > ArmorGasSC.amountOf(worn, Gas.OXYGEN)
                 && ItemArmorSC.pay(chest, (int) Math.ceil(ArmorGasSC.OXYGEN_REGEN_EU * costMul(p)))) {
             ArmorGasSC.fillOf(worn, Gas.OXYGEN, ArmorGasSC.OXYGEN_REGEN_BASE + ArmorGasSC.OXYGEN_REGEN_PER_TIER * regen, false);
@@ -954,6 +1048,17 @@ public final class ArmorLogicSC {
         }
         ArmorGasSC.drainFraction(worn, Gas.DEUTERIUM, use);
         return true;
+    }
+
+    private static final String H2_WARN = "sc.gas.warn.hydrogen";
+    /** Hydrogen to have again before "hydrogen low" may come again: twice the warning line of the boosted flight. */
+    private static final int H2_WARN_REARM = 2 * ArmorGasSC.H2_FLIGHT_PER_SECOND * ArmorGasSC.H2_LOW_WARN_SECONDS;
+
+    /** Flying on the suit at `perSecond` mB of hydrogen a second: "hydrogen low" once, when it lasts under H2_LOW_WARN_SECONDS. */
+    private static void hydrogenWarning(EntityPlayer p, float perSecond) {
+        if (ArmorGasSC.hydrogenLow(ArmorGasSC.suitAmount(p, Gas.HYDROGEN), perSecond)) {
+            warn(p, H2_WARN, 20 * 60 * 10);
+        }
     }
 
     /** "Oxygen: 30 seconds" once, while breathing on it; again after a refill. */
@@ -1032,7 +1137,7 @@ public final class ArmorLogicSC {
     }
 
     private static void setBonuses(EntityPlayer p) {
-        ArmorSuit set = overheated(p) ? null : fullSet(p);      // an overheated suit gives no set bonus
+        ArmorSuit set = overheated(p) ? null : bonusSet(p);     // an overheated suit (or emergency mode) gives no set bonus
         // Exo: never hungry - the chestplate's energy stands in for food
         if (set == ArmorSuit.EXO) {
             ItemStack chest = piece(p, 1);
@@ -1057,6 +1162,10 @@ public final class ArmorLogicSC {
 
     /** Boots soften a fall: Nano half, Quantum three quarters, Exo all of it - paid per point. @return the new fall distance */
     public static float fall(EntityPlayer p, float distance) {
+        if (!p.worldObj.isRemote && softDescending(p)) {
+            p.getEntityData().removeTag(DESCENT);                 // the gases cut the flight: this landing is soft, once
+            return 0F;
+        }
         float left = dampFall(p, distance);
         // the engine boost: what the boots' EU didn't soften, a hydrogen burst does - no damage at all
         PotionEffect jump = p.getActivePotionEffect(Potion.jump);
@@ -1084,7 +1193,8 @@ public final class ArmorLogicSC {
         int absorbed = Math.min(want, can);
         pay(p, ArmorFeature.FALL_DAMPING, absorbed * ArmorFeature.FALL_COST_PER_POINT);
         if (absorbed > 0) {
-            spendGas(p, ArmorFeature.FALL_DAMPING);               // Quantum / Exo: a hydrogen burst per fall softened
+            // Quantum / Exo: a hydrogen burst by the damage absorbed - 1 mB a point, at least 1
+            spendGas(p, ArmorFeature.FALL_DAMPING, ArmorGasSC.fallDampingGas(absorbed));
         }
         return distance - absorbed;
     }

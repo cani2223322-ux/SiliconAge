@@ -59,8 +59,8 @@ public class GuiArmorSC extends GuiScreen {
             FILL_ALL_ID = 1003, BIND_BASE = 2000;
     /** Life support tab: "fill from this inventory slot" buttons (FILL_BASE + slot, under BIND_BASE). */
     private static final int FILL_BASE = 1100, FILL_MAX = 5;
-    /** "Fill everything": at most this many containers in one press (one GAS_FILL message each). */
-    private static final int FILL_ALL_MAX = 32;
+    /** "Fill everything": the count on its button stops at this many containers (the server pours them all with one GAS_FILL_ALL). */
+    private static final int FILL_ALL_MAX = 64;
 
     // ---- layout ----
     private static final int WIN_W = 470, WIN_H = 236, KEY_W = 20, CHIP_W = 26, GAP = 3, COL_GAP = 8, GAS_PITCH = 11;
@@ -109,6 +109,11 @@ public class GuiArmorSC extends GuiScreen {
     private final List<int[]> fills = new ArrayList<int[]>();
     /** Ticks the "fill everything" button stays off after a press (the server answers meanwhile). */
     private int fillAllWait;
+    /** The power mode caption in the status strip, {x, y, w, h} as last drawn (a click steps the mode), or null. */
+    private int[] modeLabel;
+    /** Life support tab: the dim "N more ..." lines under the systems / the fill buttons (y -1: none), with their text. */
+    private int sysMoreY = -1, fillMoreY = -1;
+    private String sysMore = "", fillMore = "";
 
     /**
      * The life support systems the armour logic adds at the end of ArmorFeature. Looked up by name,
@@ -175,6 +180,8 @@ public class GuiArmorSC extends GuiScreen {
         fills.clear();
         fillHeadY = -1;
         sysHeadY = -1;
+        sysMoreY = -1;
+        fillMoreY = -1;
         lifeY = -1;
         tabs.clear();
         for (int type = 0; type < 4; type++) {
@@ -505,7 +512,7 @@ public class GuiArmorSC extends GuiScreen {
     }
 
     /**
-     * "Fill everything": the inventory slots to pour in, in order, one entry per GAS_FILL message -
+     * "Fill everything": the inventory slots to pour in, in order, one entry per single pour -
      * whole-only containers (buckets, cells) as many times as whole ones fit, a tank-in-an-item once.
      * Counted against the room the tanks have now, so the server (which checks it all again) takes
      * every one of them; a stale count at worst gets a "doesn't fit" and nothing is spent.
@@ -590,14 +597,22 @@ public class GuiArmorSC extends GuiScreen {
         if (!sys.isEmpty() && y + 10 + btnH <= bottom) {
             sysHeadY = y;
             y += 10;
-            for (ArmorFeature f : sys) {
-                if (y + btnH > bottom) {
-                    break;
-                }
-                addRow(f, sysX, y, sysW - KEY_W - GAP, false);
+            int fitAll = (bottom - y - btnH) / pitch + 1;       // rows that fit with nothing under them
+            int shown = sys.size() <= fitAll ? sys.size() : Math.max(0, (bottom - 9 - y) / pitch);   // else room for the note
+            for (int k = 0; k < shown; k++) {
+                addRow(sys.get(k), sysX, y, sysW - KEY_W - GAP, false);
                 y += pitch;
             }
+            if (shown < sys.size()) {                           // not cut silently: the rest is on the pieces' tabs
+                sysMoreY = y;
+                sysMore = Lang.tr("sc.lifegui.systems.more", sys.size() - shown);
+                y += 10;
+            }
             y += 4;
+        } else if (!sys.isEmpty() && y + 9 <= bottom) {
+            sysMoreY = y;
+            sysMore = Lang.tr("sc.lifegui.systems.more", sys.size());
+            y += 14;
         }
         if (halves) {
             y = sysTop;                                       // the refuelling beside the systems
@@ -605,6 +620,7 @@ public class GuiArmorSC extends GuiScreen {
         // one button per kind of container (same item, gas and amount), the first slot holding it
         List<String> seen = new ArrayList<String>();
         List<Integer> counts = new ArrayList<Integer>();
+        List<String> extraKinds = new ArrayList<String>();
         ItemStack[] inv = mc.thePlayer.inventory.mainInventory;
         for (int i = 0; i < inv.length; i++) {
             int[] gi = gasIn(inv[i]);
@@ -618,6 +634,9 @@ public class GuiArmorSC extends GuiScreen {
                 continue;
             }
             if (seen.size() >= FILL_MAX) {
+                if (!extraKinds.contains(kind)) {
+                    extraKinds.add(kind);                       // no button of its own: counted in the "N more" line
+                }
                 continue;
             }
             seen.add(kind);
@@ -632,12 +651,21 @@ public class GuiArmorSC extends GuiScreen {
         }
         fillHeadY = y;
         y += 10;
+        boolean allShown = false;
         if (!fills.isEmpty() && y + btnH <= bottom) {
             GuiButton all = new TextFitSC.Button(FILL_ALL_ID, fillX, y, fillW, btnH, "");
             buttonList.add(all);
             y += pitch + 2;
+            allShown = true;
         }
-        for (int k = 0; k < fills.size() && y + btnH <= bottom; k++) {   // the rest of the containers: "fill everything" has them
+        int total = fills.size() + extraKinds.size();
+        int fitAll = y + btnH <= bottom ? (bottom - y - btnH) / pitch + 1 : 0;
+        int shown = Math.min(fills.size(), total <= fitAll ? total : Math.max(0, (bottom - 9 - y) / pitch));   // else room for the note
+        if (shown < total && y + 9 <= bottom && !fills.isEmpty()) {   // not cut silently: "fill everything" takes the rest too
+            fillMoreY = y + shown * pitch;
+            fillMore = Lang.tr(allShown ? "sc.lifegui.fill.more" : "sc.lifegui.fill.more.plain", total - shown);
+        }
+        for (int k = 0; k < shown; k++) {
             int[] f = fills.get(k);
             String label = Lang.tr("sc.lifegui.fill", GasUiSC.shortName(Gas.values()[f[1]]), f[2]) + (counts.get(k) > 1 ? " §7(" + counts.get(k) + ")" : "");
             GuiButton b = new TextFitSC.Button(FILL_BASE + f[0], fillX, y, fillW, btnH, label);
@@ -713,7 +741,7 @@ public class GuiArmorSC extends GuiScreen {
     }
 
     private static String num(float v) {
-        return v == Math.round(v) ? String.valueOf(Math.round(v)) : String.format(Locale.ROOT, "%.1f", v);
+        return v == Math.round(v) ? String.valueOf(Math.round(v)) : String.format(Locale.ROOT, "%.1f", v).replace(".", Lang.tr("sc.num.decimal"));
     }
 
     /** "~17 min" / "~27 h" at the measured rate; "..." while measuring, a dash while it isn't used. */
@@ -827,9 +855,14 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (!mode.isEmpty() && rest > 10) {
             int w = fit(mode, x, ty, Math.min(mw, rest), modeColor);
+            List<String> tip = new ArrayList<String>();
+            tip.add(Lang.tr("sc.armorgui.mode", Lang.tr("sc.armorgui.mode." + ArmorLogicSC.powerMode(p))));
             if (ArmorLogicSC.regenOn(p)) {
-                TextFitSC.hover(x, sy, w, 13, "§d" + Lang.tr("sc.armorhud.regen"));
+                tip.add("§d" + Lang.tr("sc.armorhud.regen"));
             }
+            tip.add("§e" + Lang.tr("sc.armorgui.strip.mode.click"));
+            TextFitSC.hover(x, sy, w, 13, tip);
+            modeLabel = new int[]{x, sy, w, 13};
             x += w + 10;
         }
         if (!state.isEmpty() && end - x > 10) {
@@ -1064,6 +1097,12 @@ public class GuiArmorSC extends GuiScreen {
         if (fillHeadY >= 0) {
             fit(Lang.tr(fills.isEmpty() ? "sc.lifegui.fill.none" : "sc.lifegui.fill.head"), fillX, fillHeadY, fillW, fills.isEmpty() ? 0x808080 : HEAD);
         }
+        if (sysMoreY >= 0) {                                    // rows that didn't fit: said, not cut silently
+            fit(sysMore, sysX, sysMoreY, sysW, 0x707070);
+        }
+        if (fillMoreY >= 0) {
+            fit(fillMore, fillX, fillMoreY, fillW, 0x707070);
+        }
     }
 
     /** Tooltips of the life support tab: the cooling line, a fill button. */
@@ -1218,7 +1257,7 @@ public class GuiArmorSC extends GuiScreen {
             char kind = a.gasUseKind();
             String use = kind == ArmorFeature.USE_SECOND ? Lang.tr("sc.armorgui.tip.use.s", num(a.gasUse()))
                     : kind == ArmorFeature.USE_MINUTE ? Lang.tr("sc.armorgui.tip.use.m", num(a.gasUse()))
-                    : kind == ArmorFeature.USE_ONCE ? Lang.tr("sc.armorgui.tip.use.u", num(a.gasUse()))
+                    : kind == ArmorFeature.USE_ONCE ? Lang.tr(a.gasPerPoint() ? "sc.armorgui.tip.use.p" : "sc.armorgui.tip.use.u", num(a.gasUse()))
                     : kind == ArmorFeature.USE_COOLING ? Lang.tr("sc.armorgui.tip.use.h") : Lang.tr("sc.armorgui.tip.use.r");
             tip.add("§7" + use);
             if (cap > 0) {
@@ -1282,10 +1321,8 @@ public class GuiArmorSC extends GuiScreen {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.GAS_FILL, b.id - FILL_BASE));
             return;
         }
-        if (b.id == FILL_ALL_ID) {                              // the same message for every container that fits, in order
-            for (int slot : fillAllPlan()) {
-                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.GAS_FILL, slot));
-            }
+        if (b.id == FILL_ALL_ID) {                              // one message: the server walks the inventory and answers with one chat line
+            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.GAS_FILL_ALL, 0));
             fillAllWait = 20;
             b.enabled = false;
             return;
@@ -1307,11 +1344,7 @@ public class GuiArmorSC extends GuiScreen {
             return;
         }
         if (b.id == MODE_ID) {
-            ItemStack chest = ArmorLogicSC.piece(mc.thePlayer, 1);
-            if (chest != null) {
-                ItemArmorSC.setPowerMode(chest, (ItemArmorSC.powerMode(chest) + 1) % 3);   // shown at once
-            }
-            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.POWER_MODE, ArmorLogicSC.powerMode(mc.thePlayer)));
+            cyclePowerMode();
         } else if (b.id >= BIND_BASE) {
             capturing = featureOf(b.id);          // the next key press becomes its key
         } else if (featureOf(b.id) instanceof PowerModeKey) {
@@ -1352,6 +1385,15 @@ public class GuiArmorSC extends GuiScreen {
         refresh();
     }
 
+    /** The next power mode (the chestplate tab's button, the strip's caption): shown at once, the server told the mode wanted. */
+    private void cyclePowerMode() {
+        ItemStack chest = ArmorLogicSC.piece(mc.thePlayer, 1);
+        if (chest != null) {
+            ItemArmorSC.setPowerMode(chest, (ItemArmorSC.powerMode(chest) + 1) % 3);
+        }
+        ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.POWER_MODE, ArmorLogicSC.powerMode(mc.thePlayer)));
+    }
+
     /** Setting a key: Esc cancels, Backspace / Delete clears, a modifier alone waits for the real key. */
     @Override
     protected void keyTyped(char c, int key) {
@@ -1380,6 +1422,14 @@ public class GuiArmorSC extends GuiScreen {
                 capturing = null;
                 refresh();
             }
+            return;
+        }
+        int[] ml = modeLabel;
+        if (button == 0 && ml != null && ArmorLogicSC.piece(mc.thePlayer, 1) != null
+                && x >= ml[0] && y >= ml[1] && x < ml[0] + ml[2] && y < ml[1] + ml[3]) {   // the strip's mode caption: the next mode
+            mc.getSoundHandler().playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0F));
+            cyclePowerMode();
+            refresh();
             return;
         }
         if (button == 0 && panelMode > 0) {
@@ -1431,6 +1481,7 @@ public class GuiArmorSC extends GuiScreen {
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         TextFitSC.beginFrame();
+        modeLabel = null;                                        // set again by drawStrip while the chestplate is worn
         drawDefaultBackground();
         box(winX, top, winW, winH, C_FRAME, C_EDGE);
         drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.title"), width / 2, top + 4, 0xFFFFFF);
@@ -1457,7 +1508,7 @@ public class GuiArmorSC extends GuiScreen {
                     bonus = Lang.tr("sc.bladegui.set." + ItemBladeSC.typeOf(b).key());
                 }
             } else {
-                ArmorSuit set = ArmorLogicSC.fullSet(mc.thePlayer);
+                ArmorSuit set = ArmorLogicSC.bonusSet(mc.thePlayer);
                 if (set != null) {
                     bonus = Lang.tr("sc.armorgui.set." + set.name().toLowerCase(Locale.ROOT));
                 }

@@ -130,7 +130,9 @@ public class CommonEventHandler {
         int heatGen = shutDown ? 0 : functionHeat;       // the suit's own functions heat it too
         // the Nether, lava, a desert sun; snow and water cool - also the heat already stored (excess below is clamped at 0)
         heatGen += environmentHeat(player);
-        if (!shutDown) {
+        ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(player);
+        // emergency mode (Quantum / Exo without helium in the loop): the chips are off too - no effect, no EU, no heat
+        if (!shutDown && !com.sc.item.ArmorLogicSC.emergency(worn)) {
             int cost = 0;
             for (ChipType type : ChipType.values()) {
                 if (chips.hasKey(type.name())) {
@@ -152,7 +154,6 @@ public class CommonEventHandler {
         // the suit sheds its own little (passive); what's left the chestplate's helium loop takes
         // away (docs/plan-armor-gases.md: hybrid - the radiators of the other pieces help it)
         int excess = Math.max(0, heat + heatGen - suit.heatDissipation);
-        ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(player);
         excess -= com.sc.util.ArmorGasSC.heliumCool(worn, excess, com.sc.item.ArmorLogicSC.fusionRunning(player));
         com.sc.util.ArmorGasSC.heliumBoilOff(worn, com.sc.item.ArmorLogicSC.fusionRunning(player));
         heliumWarning(player, worn, heat + heatGen - suit.heatDissipation > 0);

@@ -1475,6 +1475,80 @@ public final class SelfTestSC {
                 "strict rules: old-world hydrogen start 25% once (" + first + "/" + h2After + "/" + second + ")");
     }
 
+    /**
+     * The strict rules, fixes С-1..С-5: the dash needs a whole dash of hydrogen (client and server
+     * agree); the soft landing costs 1 mB a damage point absorbed; the "hydrogen low" line; no set
+     * bonus in emergency mode; the flight cut by the gases (soft descent) told from one switched off.
+     */
+    private static void armorStrictFixes() {
+        com.sc.util.ArmorGasSC.Gas h2 = com.sc.util.ArmorGasSC.Gas.HYDROGEN, he = com.sc.util.ArmorGasSC.Gas.HELIUM;
+        com.sc.util.ArmorFeature dash = com.sc.util.ArmorFeature.DASH;
+        // С-4: the dash - under H2_DASH it's missing hydrogen (the K screen shows it off), at H2_DASH it works
+        ItemStack[] e = gasSuit(com.sc.util.ArmorSuit.EXO, true, true, true, true);
+        fillSuit(e, 50);
+        com.sc.util.ArmorGasSC.setAmount(e[1], h2, 0);
+        com.sc.util.ArmorGasSC.setAmount(e[3], h2, com.sc.util.ArmorGasSC.H2_DASH - 1);
+        boolean shortDash = !com.sc.item.ArmorLogicSC.worksIn(e, dash) && com.sc.item.ArmorLogicSC.missingGas(e, dash) == h2
+                && com.sc.item.ArmorLogicSC.worksIn(e, com.sc.util.ArmorFeature.SPEED);          // other hydrogen functions still on
+        com.sc.util.ArmorGasSC.setAmount(e[3], h2, com.sc.util.ArmorGasSC.H2_DASH);
+        boolean fullDash = com.sc.item.ArmorLogicSC.worksIn(e, dash) && com.sc.item.ArmorLogicSC.missingGas(e, dash) == null;
+        check(shortDash && fullDash, "strict rules: the dash needs " + com.sc.util.ArmorGasSC.H2_DASH + " mB of hydrogen to show on ("
+                + shortDash + "/" + fullDash + ")");
+
+        // С-5: the soft landing - 1 mB a damage point absorbed, at least 1, none for nothing absorbed
+        boolean landing = com.sc.util.ArmorGasSC.fallDampingGas(0) == 0 && com.sc.util.ArmorGasSC.fallDampingGas(1) == 1
+                && com.sc.util.ArmorGasSC.fallDampingGas(4) == 4 && com.sc.util.ArmorGasSC.fallDampingGas(20) == 20
+                && com.sc.util.ArmorFeature.FALL_DAMPING.gasUse() == 1F && com.sc.util.ArmorFeature.FALL_DAMPING.gasPerPoint()
+                && !dash.gasPerPoint();
+        check(landing, "strict rules: the soft landing costs 1 mB of hydrogen per damage point absorbed (min 1)");
+
+        // С-1: "hydrogen low" under 30 s of flight (boosted 2 mB/s: under 60 mB; plain 1 mB/s: under 30 mB)
+        boolean low = com.sc.util.ArmorGasSC.hydrogenLow(59, com.sc.util.ArmorGasSC.H2_FLIGHT_PER_SECOND)
+                && !com.sc.util.ArmorGasSC.hydrogenLow(60, com.sc.util.ArmorGasSC.H2_FLIGHT_PER_SECOND)
+                && com.sc.util.ArmorGasSC.hydrogenLow(29, com.sc.util.ArmorGasSC.H2_FLIGHT_BASE_PER_SECOND)
+                && !com.sc.util.ArmorGasSC.hydrogenLow(30, com.sc.util.ArmorGasSC.H2_FLIGHT_BASE_PER_SECOND)
+                && !com.sc.util.ArmorGasSC.hydrogenLow(0, 0F);
+        check(low, "strict rules: the 'hydrogen low' warning comes under 30 s of flight");
+
+        // С-1: the flight cut by the gases (soft descent) - not when it's switched off, not with hydrogen in
+        ItemStack[] q = gasSuit(com.sc.util.ArmorSuit.QUANTUM, true, true, true, true);
+        fillSuit(q, 50);
+        boolean flying = !com.sc.item.ArmorLogicSC.flightCutByGas(q);
+        com.sc.util.ArmorGasSC.setAmount(q[1], h2, 0);
+        com.sc.util.ArmorGasSC.setAmount(q[3], h2, 0);
+        boolean noH2 = com.sc.item.ArmorLogicSC.flightCutByGas(q);
+        com.sc.item.ItemArmorSC.setEnabled(q[1], com.sc.util.ArmorFeature.FLIGHT, false);
+        boolean switchedOff = !com.sc.item.ArmorLogicSC.flightCutByGas(q);
+        com.sc.item.ItemArmorSC.setEnabled(q[1], com.sc.util.ArmorFeature.FLIGHT, true);
+        com.sc.util.ArmorGasSC.setAmount(q[3], h2, 100);
+        for (ItemStack s : q) {
+            com.sc.util.ArmorGasSC.setAmount(s, he, 0);
+        }
+        boolean noHe = com.sc.item.ArmorLogicSC.flightCutByGas(q);                            // emergency mode cuts it too
+        check(flying && noH2 && switchedOff && noHe, "strict rules: the flight cut by the gases (no hydrogen / no helium) gets the soft descent, "
+                + "switched off - not (" + flying + "/" + noH2 + "/" + switchedOff + "/" + noHe + ")");
+
+        // С-2: no set bonus in emergency mode (a full charged Quantum set: bonus with helium, none without)
+        ItemStack[] b = gasSuit(com.sc.util.ArmorSuit.QUANTUM, true, true, true, true);
+        fillSuit(b, 50);
+        for (ItemStack s : b) {
+            com.sc.item.ItemArmorSC.setCharge(s, 1000);
+        }
+        boolean withHe = com.sc.item.ArmorLogicSC.fullSetOf(b) == com.sc.util.ArmorSuit.QUANTUM
+                && com.sc.item.ArmorLogicSC.bonusSetOf(b) == com.sc.util.ArmorSuit.QUANTUM;
+        for (ItemStack s : b) {
+            com.sc.util.ArmorGasSC.setAmount(s, he, 0);
+        }
+        boolean withoutHe = com.sc.item.ArmorLogicSC.fullSetOf(b) == com.sc.util.ArmorSuit.QUANTUM
+                && com.sc.item.ArmorLogicSC.bonusSetOf(b) == null;
+        ItemStack[] n = gasSuit(com.sc.util.ArmorSuit.NANO, true, true, true, true);
+        for (ItemStack s : n) {
+            com.sc.item.ItemArmorSC.setCharge(s, 1000);
+        }
+        boolean nano = com.sc.item.ArmorLogicSC.bonusSetOf(n) == com.sc.util.ArmorSuit.NANO;          // Nano: no emergency mode
+        check(withHe && withoutHe && nano, "strict rules: emergency mode switches the set bonuses off (" + withHe + "/" + withoutHe + "/" + nano + ")");
+    }
+
     /** Life support (docs/plan-armor-gases.md): tanks, the hybrid helium loop, the hard rules, the Cryo Tank chip, the old-world start. */
     private static void armorGases() {
         com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, o2 = com.sc.util.ArmorGasSC.Gas.OXYGEN,
@@ -1598,6 +1672,7 @@ public final class SelfTestSC {
                 "old-world start: 25% helium (2250 of 9000) and oxygen (1000 of 4000), only once (" + first + "/" + heAfter + "/" + o2After + "/" + second + ")");
 
         armorGasRules();
+        armorStrictFixes();
 
         // chips: the new ones are life-support chips, metadata past the old 15
         check(com.sc.util.ChipType.CRYO_LOOP.isGasChip() && !com.sc.util.ChipType.UTILITY.isGasChip()
