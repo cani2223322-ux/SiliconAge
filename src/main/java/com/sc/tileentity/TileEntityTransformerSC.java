@@ -99,18 +99,31 @@ public class TileEntityTransformerSC extends TileEntityEnergyBase {
         return stepUp ? side != facing : side == facing;
     }
 
+    /** outputFaces() as last worked out, for that facing and mode (asked many times a tick - shared, never changed). */
+    private ForgeDirection[] outCache;
+    private ForgeDirection outCacheFacing;
+    private boolean outCacheUp;
+
     @Override
     public ForgeDirection[] outputFaces() {
-        if (stepUp) {
-            return new ForgeDirection[]{facing};
+        if (outCache != null && outCacheFacing == facing && outCacheUp == stepUp) {
+            return outCache;
         }
-        ForgeDirection[] out = new ForgeDirection[5];
-        int i = 0;
-        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
-            if (d != facing) {
-                out[i++] = d;
+        ForgeDirection[] out;
+        if (stepUp) {
+            out = new ForgeDirection[]{facing};
+        } else {
+            out = new ForgeDirection[5];
+            int i = 0;
+            for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+                if (d != facing) {
+                    out[i++] = d;
+                }
             }
         }
+        outCacheFacing = facing;
+        outCacheUp = stepUp;
+        outCache = out;
         return out;
     }
 

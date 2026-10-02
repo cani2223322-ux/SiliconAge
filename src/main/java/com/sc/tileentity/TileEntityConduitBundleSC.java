@@ -527,8 +527,12 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         if (tube) {
             moveItems();
         }
-        if (cable != null && registeredEnergy && Loader.isModLoaded(Reference.IC2_MODID)) {
-            checkIc2Overvoltage();   // every tick: the cable burns on the first packet above its tier
+        // every other tick, by position (getNodeStats allocates): the cable burns within 2 ticks of a packet
+        // above its tier; the top tier only under Industrial Upgrade - its sources go past SV, IC2's don't
+        if (cable != null && registeredEnergy && Loader.isModLoaded(Reference.IC2_MODID)
+                && ((worldObj.getTotalWorldTime() + xCoord + zCoord) & 1) == 0
+                && (cable.tier != com.sc.energy.Tier.max() || Loader.isModLoaded(TileEntityEnergyStorageSC.IU_MODID))) {
+            checkIc2Overvoltage();
         }
     }
 

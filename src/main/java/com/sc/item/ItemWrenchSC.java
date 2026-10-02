@@ -252,6 +252,9 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
      * Registered on the Forge bus in SCMod.preInit.
      */
     public static final class StorageFaceClick {
+        private static final java.util.Map<net.minecraft.entity.player.EntityPlayer, Long> FACE_CLICK_AT =
+                new java.util.WeakHashMap<net.minecraft.entity.player.EntityPlayer, Long>();
+
         /**
          * Quiet ticks before the next click toggles: every click (holding the button clicks again
          * every few ticks) pushes the mark on, so a held button toggles once and never back.
@@ -268,8 +271,9 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             EntityPlayer p = event.entityPlayer;
             World world = event.world;
             long now = world.getTotalWorldTime();
-            long last = p.getEntityData().getLong("scWrenchFaceAt");
-            p.getEntityData().setLong("scWrenchFaceAt", now);      // sliding: each event moves the mark
+            Long prev = FACE_CLICK_AT.get(p);
+            long last = prev == null ? 0L : prev;
+            FACE_CLICK_AT.put(p, now);                             // sliding: each event moves the mark (not saved with the player)
             if (now - last < DEBOUNCE && now >= last) {
                 return;
             }

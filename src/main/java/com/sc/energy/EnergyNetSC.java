@@ -180,28 +180,7 @@ public final class EnergyNetSC {
         if (net == null) {
             return null;
         }
-        Tier weakest = null;
-        for (Endpoint ep : net.endpoints) {
-            TileEntityEnergyBase t = ep.tile;
-            if (t == self || !t.isEnergySink()) {
-                continue;
-            }
-            if (t.isInvalid()) {
-                return null;                  // gone - the network is about to be rebuilt
-            }
-            boolean takes = false;
-            for (ForgeDirection f : ep.faces) {       // connector modes not asked: they change without a rebuild
-                takes |= t.acceptsFrom(f);
-            }
-            if (!takes) {
-                continue;
-            }
-            Tier in = t.acceptsAnyVoltage() ? Tier.max() : t.inputTier();
-            if (weakest == null || in.ordinal() < weakest.ordinal()) {
-                weakest = in;
-            }
-        }
-        return weakest;
+        return net.weakestSink(self, world.getTotalWorldTime());
     }
 
     /** Index of the all-faces total in a tile's entry of the per-tick `sent` ledger (0..5 are the faces). */
@@ -445,19 +424,45 @@ public final class EnergyNetSC {
          * takeFrom books goes to it before the extra faces (their upkeep) the same way every tick.
          */
         List<ForgeDirection> outFaces() {
-            List<ForgeDirection> out = new ArrayList<ForgeDirection>(1);
             if (!tile.isEnergySource()) {
-                return out;
+                return java.util.Collections.emptyList();
             }
-            for (ForgeDirection d : tile.outputFaces()) {
-                for (int k = 0; k < faces.size(); k++) {
-                    if (faces.get(k) == d && connectorAllows(k, true) && !out.contains(d)) {
-                        out.add(d);
+            ForgeDirection[] key = tile.outputFaces();
+            if (key != outKey) {                 // the tiles hand out a cached array until their faces change
+                List<ForgeDirection> all = new ArrayList<ForgeDirection>(1);
+                List<Integer> ks = new ArrayList<Integer>(1);
+                for (ForgeDirection d : key) {
+                    for (int k = 0; k < faces.size(); k++) {
+                        if (faces.get(k) == d && !all.contains(d)) {
+                            all.add(d);
+                            ks.add(k);
+                        }
                     }
                 }
+                outAll = java.util.Collections.unmodifiableList(all);
+                outK = new int[ks.size()];
+                for (int i = 0; i < outK.length; i++) {
+                    outK[i] = ks.get(i);
+                }
+                outKey = key;
             }
-            return out;
+            // the connectors are asked every time (their redstone control); all open - the shared list, no allocation
+            List<ForgeDirection> out = null;
+            for (int i = 0; i < outK.length; i++) {
+                boolean open = connectorAllows(outK[i], true);
+                if (!open && out == null) {
+                    out = new ArrayList<ForgeDirection>(outAll.subList(0, i));
+                } else if (open && out != null) {
+                    out.add(outAll.get(i));
+                }
+            }
+            return out == null ? outAll : out;
         }
+
+        /** outFaces()'s cache for the tile's outputFaces() array `outKey`: the faces touching this network and their index k. */
+        private ForgeDirection[] outKey;
+        private List<ForgeDirection> outAll;
+        private int[] outK;
 
         /** The face energy from this network goes in through (the connector letting it in), or null. */
         ForgeDirection inFace() {
@@ -483,6 +488,56 @@ public final class EnergyNetSC {
 
         Network(CableType type) {
             this.type = type;
+        }
+
+        /**
+         * weakestSinkOn's cache, worked out once a world tick (every Adaptive Transformer / Tokamak
+         * on the network asks every tick): the lowest input tier taking energy here and its tile,
+         * the next lowest (another tile's - what that tile itself is given), or `weakGone` when a
+         * sink on it is gone. A new tile means a rebuild - a new Network, a fresh cache.
+         */
+        private long weakAt = Long.MIN_VALUE;
+        private boolean weakGone;
+        private Tier weak1, weak2;
+        private TileEntityEnergyBase weak1Tile;
+
+        Tier weakestSink(TileEntityEnergyBase self, long now) {
+            if (weakAt != now) {
+                weakAt = now;
+                weakGone = false;
+                weak1 = null;
+                weak2 = null;
+                weak1Tile = null;
+                for (Endpoint ep : endpoints) {
+                    TileEntityEnergyBase t = ep.tile;
+                    if (!t.isEnergySink()) {
+                        continue;
+                    }
+                    if (t.isInvalid()) {
+                        weakGone = true;              // gone - the network is about to be rebuilt
+                        break;
+                    }
+                    boolean takes = false;
+                    for (ForgeDirection f : ep.faces) {       // connector modes not asked: they change without a rebuild
+                        takes |= t.acceptsFrom(f);
+                    }
+                    if (!takes) {
+                        continue;
+                    }
+                    Tier in = t.acceptsAnyVoltage() ? Tier.max() : t.inputTier();
+                    if (weak1 == null || in.ordinal() < weak1.ordinal()) {
+                        weak2 = weak1;
+                        weak1 = in;
+                        weak1Tile = t;
+                    } else if (weak2 == null || in.ordinal() < weak2.ordinal()) {
+                        weak2 = in;
+                    }
+                }
+            }
+            if (weakGone) {
+                return null;
+            }
+            return self != null && self == weak1Tile ? weak2 : weak1;   // `self` left out
         }
 
         /**

@@ -134,7 +134,7 @@ public final class ModBlocks {
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityShowerSC.class, "SiliconAge.shower");
 
         fieldGeneratorSC = new BlockFieldGeneratorSC();
-        GameRegistry.registerBlock(fieldGeneratorSC, "fieldGeneratorSC");
+        GameRegistry.registerBlock(fieldGeneratorSC, com.sc.block.ItemBlockFieldGeneratorSC.class, "fieldGeneratorSC");
 
         energyStorageSC = new com.sc.block.BlockEnergyStorageSC();
         GameRegistry.registerBlock(energyStorageSC, com.sc.block.ItemBlockEnergyStorageSC.class, "energyStorageSC");

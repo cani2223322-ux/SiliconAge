@@ -352,11 +352,16 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * owner) that this zone would overlap, or null. Server side.
      */
     public TileEntityFieldGeneratorSC foreignOverlap() {
+        return foreignOverlap(null);
+    }
+
+    /** foreignOverlap() leaving `ignore` out (link: the cluster that joins). */
+    private TileEntityFieldGeneratorSC foreignOverlap(TileEntityFieldGeneratorSC ignore) {
         if (worldObj == null || worldObj.isRemote || !master) {
             return null;
         }
         for (TileEntityFieldGeneratorSC f : activeFieldsIn(worldObj)) {
-            if (f == this || f.owner.isEmpty() || f.allowedName(owner)) {
+            if (f == this || f == ignore || f.owner.isEmpty() || f.allowedName(owner)) {
                 continue;
             }
             if (FieldShapeSC.overlaps(mode, zoneNodes(), range, height, f.mode, f.zoneNodes(), f.range, f.height)) {
@@ -1117,6 +1122,24 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 return LinkResult.UNLOADED;
             }
         }
+        // the bigger cluster's zone mustn't reach over a stranger's field (as a power-on / a new zone)
+        List<int[]> had = new ArrayList<int[]>(masterTe.nodePositions);
+        for (int[] pos : incoming) {
+            if (!containsPos(masterTe.nodePositions, pos)) {
+                masterTe.nodePositions.add(pos);
+            }
+        }
+        masterTe.zoneCache = null;
+        TileEntityFieldGeneratorSC stranger = masterTe.foreignOverlap(joiningMaster);
+        masterTe.nodePositions.clear();
+        masterTe.nodePositions.addAll(had);
+        masterTe.zoneCache = null;
+        if (stranger != null) {
+            if (player != null) {
+                player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", stranger.getOwner()));
+            }
+            return LinkResult.FOREIGN;
+        }
         int[] masterCoord = {masterTe.xCoord, masterTe.yCoord, masterTe.zCoord};
         for (int[] pos : incoming) {
             if (!containsPos(masterTe.nodePositions, pos)) {
@@ -1144,7 +1167,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return LinkResult.LINKED;
     }
 
-    public enum LinkResult { LINKED, INVALID, TOO_FAR, SAME_CLUSTER, NODE_CAP, UNLOADED, NO_ACCESS }
+    public enum LinkResult { LINKED, INVALID, TOO_FAR, SAME_CLUSTER, NODE_CAP, UNLOADED, NO_ACCESS, FOREIGN }
 
     /**
      * This node's cluster master; a member whose master is gone becomes its own master again.

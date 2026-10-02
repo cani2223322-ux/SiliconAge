@@ -42,8 +42,7 @@ public final class RecipeDumpSC {
             PrintWriter out = new PrintWriter(new OutputStreamWriter(new FileOutputStream(new File(path)), "UTF-8"));
             dumpItems(out);
             for (MachineType type : MachineType.values()) {
-                int ord = type.ordinal();
-                out.println("B\tmachine\t" + type.name() + "\t" + name(new ItemStack(ord < 16 ? ModBlocks.machineSC : ModBlocks.machineSC2, 1, ord % 16)));
+                out.println("B\tmachine\t" + type.name() + "\t" + name(com.sc.block.BlockMachineSC.stackOf(type, 1)));
                 for (MachineRecipe r : RecipeRegistry.recipesFor(type)) {
                     out.println("M\t" + type.name() + "\t" + stacks(r.inputs) + "\t" + fluid(r.fluidInputA) + "\t" + fluid(r.fluidInputB)
                             + "\t" + stacks(r.outputs) + "\t" + fluid(r.fluidOutputA) + "\t" + fluid(r.fluidOutputB) + "\t" + stacks(r.byproducts));

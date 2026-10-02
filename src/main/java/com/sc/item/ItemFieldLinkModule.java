@@ -92,6 +92,8 @@ public class ItemFieldLinkModule extends net.minecraft.item.Item {
             case NO_ACCESS:
                 player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.link.noaccess"));
                 break;
+            case FOREIGN:
+                break;                              // link() told them whose field is in the way
             default:
                 player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.link.invalid"));
         }

@@ -154,9 +154,15 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         return kind == RECEIVER || kind == QUANTUM && !giving;
     }
 
+    /** outputFaces() for that facing (asked many times a tick - shared, never changed). */
+    private ForgeDirection[] outCache;
+
     @Override
     public ForgeDirection[] outputFaces() {
-        return new ForgeDirection[]{facing};
+        if (outCache == null || outCache[0] != facing) {
+            outCache = new ForgeDirection[]{facing};
+        }
+        return outCache;
     }
 
     /** Switched off (or held by redstone, or a paused translator): nothing taken from the grid or given to it. */

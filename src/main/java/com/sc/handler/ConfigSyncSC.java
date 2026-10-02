@@ -110,8 +110,8 @@ public final class ConfigSyncSC {
         if (localOres != null) {
             Map<OreEntry, ConfigSC.OreGenSettings> map = oreMap();
             if (map != null) {
-                map.clear();
-                map.putAll(localOres);
+                map.putAll(localOres);              // over the server's, no clear(): a tooltip reading it meanwhile (the
+                                                    // network thread runs this) never finds an ore missing
             }
             localOres = null;
         }

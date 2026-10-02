@@ -71,9 +71,8 @@ public class WorldTestWirelessSC {
     }
 
     private static com.sc.tileentity.TileEntityMachineSC smelter(World w, com.sc.machine.MachineType type, int x) {
-        int ord = type.ordinal();
         w.setBlockToAir(x, 200, 40);
-        w.setBlock(x, 200, 40, ord < 16 ? ModBlocks.machineSC : ModBlocks.machineSC2, ord % 16, 3);
+        w.setBlock(x, 200, 40, com.sc.block.BlockMachineSC.blockFor(type), com.sc.block.BlockMachineSC.metaFor(type), 3);
         net.minecraft.tileentity.TileEntity te = w.getTileEntity(x, 200, 40);
         if (!(te instanceof com.sc.tileentity.TileEntityMachineSC)) {
             return null;

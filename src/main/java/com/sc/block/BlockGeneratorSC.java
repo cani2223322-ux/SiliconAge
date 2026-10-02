@@ -69,7 +69,7 @@ public class BlockGeneratorSC extends Block {
     /** A Singular Reactor with a live hole (running, being eaten, about to be thrown out). */
     public static boolean holdsHole(IBlockAccess world, int x, int y, int z) {
         TileEntity te = world.getTileEntity(x, y, z);
-        return te instanceof TileEntityGeneratorSC && ((TileEntityGeneratorSC) te).singular() && ((TileEntityGeneratorSC) te).getSingular().hasHole();
+        return te instanceof TileEntityGeneratorSC && ((TileEntityGeneratorSC) te).singular() && ((TileEntityGeneratorSC) te).getSingular().holdsBlock();
     }
 
     /** With its hole: unbreakable like bedrock - quarries, block breakers and the like skip hardness -1. */

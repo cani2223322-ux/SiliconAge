@@ -1675,13 +1675,27 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return c == null ? heldDig : new ChunkCoordIntPair(c[0] >> 4, c[1] >> 4);   // a cell the shape leaves out: keep the last
     }
 
+    /**
+     * World tick the chunks were last wanted. A running quarry that only waits a moment (the energy for
+     * the next block, a full buffer or tank) keeps its ticket CHUNK_GRACE ticks: on a weak feed the status
+     * flips RUNNING / NO_POWER every few ticks, and each flip released the ticket and asked for a new one.
+     */
+    private long chunksWantedAt;
+    public static final int CHUNK_GRACE = 200;
+
     private void holdChunks() {
-        if (!wantChunks()) {
-            releaseChunks();
+        long now = worldObj.getTotalWorldTime();
+        if (wantChunks()) {
+            chunksWantedAt = now;
+        } else {
+            boolean waiting = running && powerOn && moduleCount(ItemQuarryModuleSC.Kind.CHUNK_LOADER) > 0
+                    && now >= chunksWantedAt && now - chunksWantedAt < CHUNK_GRACE;
+            if (!waiting) {
+                releaseChunks();
+            }
             return;
         }
         if (ticket == null) {
-            long now = worldObj.getTotalWorldTime();
             if (now < ticketRetryAt) {
                 return;
             }
@@ -1737,6 +1751,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         ForgeChunkManager.forceChunk(t, own);
         heldDig = null;
         chunksHeld = t.getChunkList().size();
+        if (worldObj != null) {
+            chunksWantedAt = worldObj.getTotalWorldTime();   // saved mid-wait (no power...): the grace starts over
+        }
     }
 
     @Override

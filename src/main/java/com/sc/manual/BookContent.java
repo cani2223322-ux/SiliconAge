@@ -379,8 +379,7 @@ public final class BookContent {
     // ------------------------------------------------------------------ 4. machines
 
     public static ItemStack machineStack(MachineType type) {
-        int ord = type.ordinal();
-        return new ItemStack(ord < 16 ? ModBlocks.machineSC : ModBlocks.machineSC2, 1, ord % 16);
+        return com.sc.block.BlockMachineSC.stackOf(type, 1);
     }
 
     private static final int RECIPES_SHOWN = 8;

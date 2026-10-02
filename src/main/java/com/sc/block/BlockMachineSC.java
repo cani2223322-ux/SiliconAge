@@ -27,7 +27,8 @@ import net.minecraft.world.World;
  * 29 values, and 1.7.10 block metadata is a 4-bit nibble (max 16, 0-15) - the exact same wall
  * BlockOreSC hit in §10. So this class takes a `typeOffset` (0 or 16) and covers at most 16
  * consecutive MachineType ordinals per instance; ModBlocks registers two instances
- * (machineSC = ordinals 0-15, machineSC2 = ordinals 16-28) to cover all of them.
+ * (machineSC = ordinals 0-15, machineSC2 = ordinals 16-31) to cover all of them - both full now;
+ * blockFor / metaFor / stackOf are the one place that maps a type to its block (MAX_TYPES).
  *
  * The front texture shows on the machine's facing (TileEntityMachineSC.getFacing): it turns to the
  * player on placement, a wrench turns it (click: a quarter turn; sneak + click: to the clicked
@@ -42,8 +43,30 @@ public class BlockMachineSC extends Block {
     private IIcon[] frontIcons;
     private IIcon[] casingIcons;
 
+    /** Machine types the two blocks hold: machineSC ordinals 0-15, machineSC2 16-31. */
+    public static final int MAX_TYPES = 32;
+
+    /** The block a machine type sits on (see MAX_TYPES). */
+    public static Block blockFor(MachineType type) {
+        return type.ordinal() < 16 ? com.sc.init.ModBlocks.machineSC : com.sc.init.ModBlocks.machineSC2;
+    }
+
+    /** The metadata a machine type has on its block. */
+    public static int metaFor(MachineType type) {
+        return type.ordinal() % 16;
+    }
+
+    /** A machine type as an item (recipes, NEI, the handbook). */
+    public static ItemStack stackOf(MachineType type, int count) {
+        return new ItemStack(blockFor(type), count, metaFor(type));
+    }
+
     public BlockMachineSC(int typeOffset) {
         super(Material.iron);
+        if (MachineType.values().length > MAX_TYPES) {     // a 33rd type would silently land on another machine's meta
+            throw new IllegalStateException("MachineType has " + MachineType.values().length + " values, the machine blocks hold "
+                    + MAX_TYPES + ": register a third block (machineSC3) and extend BlockMachineSC.blockFor");
+        }
         this.typeOffset = typeOffset;
         this.typeCount = Math.min(16, MachineType.values().length - typeOffset);
         setBlockName(Reference.ASSETS + ".machineSC" + (typeOffset == 0 ? "" : String.valueOf(typeOffset / 16 + 1)));

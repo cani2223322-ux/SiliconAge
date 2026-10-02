@@ -188,8 +188,7 @@ public abstract class MachineRecipeHandlerSC extends TemplateRecipeHandler {
     }
 
     static ItemStack machineStack(MachineType type) {
-        int ord = type.ordinal();
-        return new ItemStack(ord < 16 ? ModBlocks.machineSC : ModBlocks.machineSC2, 1, ord % 16);
+        return com.sc.block.BlockMachineSC.stackOf(type, 1);
     }
 
     // ---- drawing ----

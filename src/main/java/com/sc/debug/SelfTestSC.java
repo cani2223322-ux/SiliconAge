@@ -353,7 +353,7 @@ public final class SelfTestSC {
         lv.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 2,
                 ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE));
         lv.setStoredFromItem(30000);
-        check(lv.getMaxEnergyStored() == 60000 && lv.outputTier() == com.sc.energy.Tier.MV && lv.packetsPerTick() == 2
+        check(lv.getMaxEnergyStored() == 60000 && lv.outputTier() == com.sc.energy.Tier.MV && lv.packetsPerTick() == (com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks() ? 2 : 1)
                         && emptyLevel == 0 && lv.comparatorLevel() == 1 + 14 * 30000 / 60000
                         && lv.isItemValidForSlot(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 3,
                                 ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE))

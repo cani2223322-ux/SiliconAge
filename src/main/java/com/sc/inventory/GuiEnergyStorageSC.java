@@ -193,8 +193,11 @@ public class GuiEnergyStorageSC extends GuiContainer {
         }
         if (storage.hasAdaptive()) {
             com.sc.energy.Tier a = storage.getAdaptiveTier();
-            String tier = a == null ? storage.baseOutputTier().name() : a.name();   // nothing to go by: no raise (Transformers still count)
-            small(Lang.tr("sc.storage.gui.adaptive", tier, Lang.tr("sc.storage.gui.adaptive.by." + ADAPT_KEYS[storage.getAdaptiveWhy() & 3])),
+            // nothing to go by, or a limit below the storage's own output (it never lowers it): no raise
+            boolean raises = a != null && a.ordinal() >= storage.baseOutputTier().ordinal();
+            String tier = raises ? a.name() : storage.baseOutputTier().name();
+            int why = raises ? storage.getAdaptiveWhy() & 3 : TileEntityEnergyStorageSC.ADAPT_NONE;
+            small(Lang.tr("sc.storage.gui.adaptive", tier, Lang.tr("sc.storage.gui.adaptive.by." + ADAPT_KEYS[why])),
                     INFO_X, line, CARD_W, GuiHoloSC.VALUE);
         }
         power.drawGaugeOff(fontRendererObj);

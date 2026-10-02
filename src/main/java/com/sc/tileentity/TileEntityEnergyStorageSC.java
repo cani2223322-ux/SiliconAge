@@ -243,7 +243,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
 
     @Override
     public int packetsPerFace() {
-        return 1 + upgradeCount(UpgradeType.OVERDRIVE);
+        return 1 + (overdriveWorks() ? upgradeCount(UpgradeType.OVERDRIVE) : 0);   // an old world's Overdrive under IC2 without IU: one packet
     }
 
     // ---- Output Splitter: extra output faces (HV and up; not under IC2 without Industrial Upgrade) ----

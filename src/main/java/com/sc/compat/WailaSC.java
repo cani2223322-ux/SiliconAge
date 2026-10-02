@@ -103,7 +103,7 @@ public class WailaSC implements IWailaDataProvider {
         }
         if (t.hasKey("scCable")) {
             int c = t.getInteger("scCable");
-            if (c >= 0) {
+            if (c >= 0 && c < com.sc.energy.CableType.values().length) {   // a newer server's cable on an older client: skip
                 com.sc.energy.CableType type = com.sc.energy.CableType.values()[c];
                 tip.add(Lang.tr("sc.waila.cable", type.tier.name(), type.tier.getVoltage(), type.maxThroughput(), type.maxAmps));
             }

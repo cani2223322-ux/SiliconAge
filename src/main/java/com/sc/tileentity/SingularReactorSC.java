@@ -301,6 +301,11 @@ public class SingularReactorSC {
         return phase == PHASE_RUN || phase == PHASE_DRAIN || phase == PHASE_PULL;
     }
 
+    /** The block can't be broken: a hole, the 30 s of compression (the charge, capsule and deuterium are in it) or a flash still burning. */
+    public boolean holdsBlock() {
+        return hasHole() || phase == PHASE_COMPRESS || burstTicks > 0;
+    }
+
     public int getCoils() {
         return coils;
     }
@@ -515,8 +520,8 @@ public class SingularReactorSC {
     int tick(boolean switchedOn) {
         World w = g.getWorldObj();
         long time = w.getTotalWorldTime();
-        if (burstTicks > 0) {
-            burstTicks--;
+        if (burstTicks > 0 && --burstTicks == 0) {
+            syncBlock();                  // the flash is over: the client may let the block be broken again
         }
         if (time % 20 == 5) {
             hist[histHead] = (byte) (hasHole() ? Math.max(0, Math.min(100, (int) Math.round(mass * 100))) : 255);
@@ -685,6 +690,11 @@ public class SingularReactorSC {
         drainHelium();
         if (time % 20 == 0) {
             containment = Math.max(0F, Math.min(100F, containment + containmentDelta(heShort, false, ready, START_MASS)));
+            if (containment < CONT_ARGON && g.drainPortsSC(GASES[2], ARGON_STOP, true) == ARGON_STOP) {
+                g.tellNearSC("sc.chat.sing.argon");                  // argon puts it out softly here too, as while it runs
+                endHole(EVENT_SOFT, GeneratorStatus.SOFT_STOP);
+                return 0;
+            }
             if (containment <= 0F) {
                 beginPull();
                 return 0;

@@ -973,7 +973,15 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (o == null || o == this || !holds(o, key)) {
             return false;
         }
-        return !(ignited && !o.ignited);
+        return !(portsInUse() && !o.portsInUse());
+    }
+
+    /**
+     * Lit - or a Singular Reactor compressing its seed (not lit yet, but the charge, the capsule and
+     * the deuterium are in): it keeps its ports over an unlit build after a load.
+     */
+    private boolean portsInUse() {
+        return ignited || singular() && getSingular().getPhase() == SingularReactorSC.PHASE_COMPRESS;
     }
 
     /** After a scan: the ports in use are held, the others let go. */
