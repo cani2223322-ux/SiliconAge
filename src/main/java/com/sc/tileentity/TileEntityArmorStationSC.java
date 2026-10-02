@@ -897,11 +897,13 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             }
         }
         for (int i = 0; i < ALL_SLOTS; i++) {
-            if (slots[i] == null || (modulesKept && i >= FIRST_UPGRADE_SLOT)) {
+            if (slots[i] == null) {
                 continue;
             }
-            out.add(slots[i]);
-            slots[i] = null;                              // no second copy for a screen still open
+            if (!(modulesKept && i >= FIRST_UPGRADE_SLOT)) {
+                out.add(slots[i]);
+            }
+            slots[i] = null;                              // no second copy for a screen still open (the item's modules too)
         }
         markDirty();
         return out;

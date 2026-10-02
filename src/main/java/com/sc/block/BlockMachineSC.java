@@ -354,7 +354,8 @@ public class BlockMachineSC extends Block {
             for (int i = 0; i < machine.getSizeInventory(); i++) {
                 if (machine.upgradesInItem() && i >= TileEntityMachineSC.FIRST_UPGRADE_SLOT
                         && i < TileEntityMachineSC.FIRST_UPGRADE_SLOT + TileEntityMachineSC.UPGRADE_SLOTS) {
-                    continue;                                        // they left inside the machine's item
+                    machine.setInventorySlotContents(i, null);       // they left inside the machine's item - and not
+                    continue;                                        // again from a screen still open this tick
                 }
                 ItemStack stack = machine.getStackInSlot(i);
                 if (stack != null) {

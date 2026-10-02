@@ -128,7 +128,8 @@ public class CommonEventHandler {
         boolean shutDown = root.getBoolean("ChipsOffSC");
 
         int heatGen = shutDown ? 0 : functionHeat;       // the suit's own functions heat it too
-        heatGen = Math.max(0, heatGen + environmentHeat(player));   // the Nether, lava, a desert sun; snow and water cool
+        // the Nether, lava, a desert sun; snow and water cool - also the heat already stored (excess below is clamped at 0)
+        heatGen += environmentHeat(player);
         if (!shutDown) {
             int cost = 0;
             for (ChipType type : ChipType.values()) {

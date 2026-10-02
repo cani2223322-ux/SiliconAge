@@ -367,7 +367,7 @@ public final class ArmorLogicSC {
      * puts the wearer out at once for ARGON_EXTINGUISH mB.
      */
     private static void argon(EntityPlayer p) {
-        if (!p.isBurning() || p.handleLavaMovement() || active(p, ArmorFeature.FIRE_PROOF)
+        if (!p.isBurning() || p.handleLavaMovement() || active(p, ArmorFeature.FIRE_PROOF) || fireHarmless(p)
                 || p.worldObj.func_147470_e(p.boundingBox.contract(0.001, 0.001, 0.001))) {
             return;                                    // standing in fire / lava: it would light again at once
         }
@@ -381,6 +381,11 @@ public final class ArmorLogicSC {
             p.extinguish();
             p.worldObj.playSoundAtEntity(p, "random.fizz", 0.7F, 1.4F);
         }
+    }
+
+    /** Fire and lava can't hurt the player anyway (creative, a fire resistance potion): no argon spent on them. */
+    private static boolean fireHarmless(EntityPlayer p) {
+        return p.capabilities.disableDamage || p.isPotionActive(Potion.fireResistance);
     }
 
     /** Lava hurting a Nano / Quantum wearer (no fire proofing on) with argon in the chestplate: half the damage. */
@@ -654,7 +659,9 @@ public final class ArmorLogicSC {
         data.removeTag(HEAT_KEY);
         heat += lifeSupport(p);
         // breathing on the helmet's oxygen: under water or stuck inside a block (no oxygen - no breathing)
-        boolean underwater = p.isInsideOfMaterial(Material.water), inWall = p.isEntityInsideOpaqueBlock();
+        // only while it's needed: the air going down (not in creative, not with water breathing), able to suffocate
+        boolean underwater = p.isInsideOfMaterial(Material.water) && p.getAir() < 300;
+        boolean inWall = p.isEntityInsideOpaqueBlock() && !p.capabilities.disableDamage;
         if ((underwater || inWall) && canBreathe(p) && pay(p, ArmorFeature.AIR, ArmorFeature.AIR.euPerSecond)
                 && breathe(ArmorGasSC.wornSet(p))) {
             if (underwater) {
@@ -751,7 +758,7 @@ public final class ArmorLogicSC {
                 }
             }
         }
-        if (p.handleLavaMovement() && !active(p, ArmorFeature.FIRE_PROOF) && ArmorGasSC.suitAmount(p, Gas.ARGON) > 0) {
+        if (p.handleLavaMovement() && !active(p, ArmorFeature.FIRE_PROOF) && !fireHarmless(p) && ArmorGasSC.suitAmount(p, Gas.ARGON) > 0) {
             ArmorGasSC.suitDrain(p, Gas.ARGON, ArmorGasSC.ARGON_LAVA_PER_SECOND, false);   // half the lava's damage meanwhile
         }
         ArmorSuit legs = suitOf(piece(p, 2));
@@ -792,7 +799,7 @@ public final class ArmorLogicSC {
         // deuterium fusion cell (Exo chestplate): only with helium in the loop as well
         data.removeTag(FUSION_ON);
         if (active(p, ArmorFeature.FUSION_CELL)) {
-            if (fusionStep(worn)) {
+            if (suitNeedsCharge(p) && fusionStep(worn)) {                // a full suit: the cell idles, no deuterium burnt for nothing
                 chargeSuit(p, ArmorGasSC.FUSION_EU_PER_TICK * 20);
                 heat += ArmorFeature.FUSION_CELL.heat;
                 data.setBoolean(FUSION_ON, true);
@@ -814,6 +821,17 @@ public final class ArmorLogicSC {
             ArmorGasSC.drainFraction(worn, Gas.KRYPTON, ArmorGasSC.KRYPTON_PER_MIN / 60F);
         }
         return heat;
+    }
+
+    /** Some worn piece can take more EU. */
+    private static boolean suitNeedsCharge(EntityPlayer p) {
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = piece(p, t);
+            if (s != null && ItemArmorSC.chargeOf(s) < ItemArmorSC.capacityOf(s)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** One second of the fusion cell: deuterium burnt, if there is deuterium and helium. @return whether it ran */

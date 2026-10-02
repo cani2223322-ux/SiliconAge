@@ -384,7 +384,7 @@ public class GuiArmorSC extends GuiScreen {
             if (w == null) {
                 continue;
             }
-            int bx = x0 + 3;
+            int bx = x0 + 2;                                // three 4px bars fit the 20px helmet (krypton was cut off at +3)
             for (Gas g : Gas.values()) {
                 int cap = ArmorGasSC.capacity(w, g);
                 if (cap <= 0 || bx + 4 > x1 - 2) {

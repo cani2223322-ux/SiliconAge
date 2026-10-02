@@ -227,6 +227,7 @@ public class BlockEnergyStorageSC extends Block {
             TileEntityEnergyStorageSC s = (TileEntityEnergyStorageSC) te;
             for (int i = 0; i < TileEntityEnergyStorageSC.SLOT_COUNT; i++) {
                 if (s.upgradesInItem() && i >= TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT && i < TileEntityEnergyStorageSC.FIRST_EXTRA_CHARGE) {
+                    s.setInventorySlotContents(i, null);   // in the storage's item - not again from a screen still open
                     continue;
                 }
                 ItemStack in = s.getStackInSlot(i);

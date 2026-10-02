@@ -356,10 +356,12 @@ public final class RadiationSC {
         // heavy water in the leggings (docs/plan-armor-gases.md): an Exo piece stops the wall-piercing
         // flashes outright; any piece adds HEAVY_WATER_PCT to the suit's share. Used only under radiation.
         ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(p);
-        boolean heavy = level > 0.01F && com.sc.util.ArmorGasSC.amountOf(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER) > 0;
+        // spent on what reaches the wearer (not on what the field already took), never in creative (no dose there)
+        boolean heavy = left > 0.01F && !p.capabilities.isCreativeMode
+                && com.sc.util.ArmorGasSC.amountOf(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER) > 0;
         if (heavy) {
             com.sc.util.ArmorGasSC.drainFraction(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER,
-                    level * com.sc.util.ArmorGasSC.HEAVY_WATER_PER_LEVEL_MIN / 60F);
+                    left * com.sc.util.ArmorGasSC.HEAVY_WATER_PER_LEVEL_MIN / 60F);
             if (left > 0.01F && ArmorLogicSC.suitOf(worn[com.sc.util.ArmorGasSC.LEGS]) == ArmorSuit.EXO) {
                 float pierce = Math.min(left, piercingAt(p));
                 if (pierce > 0F) {
