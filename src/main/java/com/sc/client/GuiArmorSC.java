@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.Locale;
 
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.opengl.GL11;
 
 import com.sc.handler.ArmorNetSC;
+import com.sc.inventory.TextFitSC;
 import com.sc.item.ArmorLogicSC;
 import com.sc.item.BladeLogicSC;
 import com.sc.item.DrillLogicSC;
@@ -25,10 +27,14 @@ import com.sc.util.DrillFeature;
 import com.sc.util.DrillType;
 import com.sc.util.PowerModeKey;
 
+import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.FluidContainerRegistry;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.IFluidContainerItem;
@@ -36,27 +42,73 @@ import net.minecraftforge.fluids.IFluidContainerItem;
 /**
  * Armour settings (the "armour" key, K): a tab for each worn piece, a "Blade" tab while an
  * energy blade is in hand, a "Drill" tab while a drill is in hand (opened on its own when no armour
- * is worn), and a "Mode" tab (keys for the power mode) while a chestplate is worn; for each function a switch and the key that switches it (or fires it -
+ * is worn), a "Mode" tab (keys for the power mode) while a chestplate is worn and a "Gases" tab (life
+ * support); for each function a switch, the gas it runs on and the key that switches it (or fires it -
  * dash, annihilation pulse, the blade's sweep / wave / lunge) - any key, with Ctrl / Shift / Alt,
  * or a middle / side mouse button. Plus the power mode, the set bonus and (chestplate tab) taking the chips out.
+ * Every tab: a status strip (charge, heat, power mode, emergency) and, on the left, the worn pieces
+ * with their gas tanks (a click opens the piece's tab). The window is about 470 px wide and narrows
+ * on small screens: the left panel loses its percentages, then goes; two columns become one.
  * Switches go to the server (ArmorNetSC) and show at once; keys live in the player's own config.
  */
 public class GuiArmorSC extends GuiScreen {
 
-    private static final int NAME_W = 170, BIND_W = 90, ROW = 20;
     /** The blade's tab (after the four armour pieces). */
     private static final int BLADE_TAB = 4, MODE_TAB = 5, DRILL_TAB = 6, LIFE_TAB = 7;
-    private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002, BIND_BASE = 2000;
+    private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002,
+            FILL_ALL_ID = 1003, BIND_BASE = 2000;
     /** Life support tab: "fill from this inventory slot" buttons (FILL_BASE + slot, under BIND_BASE). */
     private static final int FILL_BASE = 1100, FILL_MAX = 5;
+    /** "Fill everything": at most this many containers in one press (one GAS_FILL message each). */
+    private static final int FILL_ALL_MAX = 32;
+
+    // ---- layout ----
+    private static final int WIN_W = 470, WIN_H = 236, KEY_W = 20, CHIP_W = 26, GAP = 3, COL_GAP = 8, GAS_PITCH = 11;
+    private static final int LOW_PCT = 20, CRIT_PCT = 5;
+    private static final int C_FRAME = 0xB0101418, C_EDGE = 0xFF46505A, C_PANEL = 0xC01E252C, C_STRIP = 0xC0242C34, C_SEL = 0xFF2D3C4B;
+    private static final int ORANGE = 0xFF8C3C, RED = 0xFF5050, DIM = 0x909090, HEAD = 0x8C8C8C;
+
+    private int winX, winW, top, winH, contentX, contentW, contentY, footY;
+    /** Left panel: 2 full, 1 without the percentages, 0 hidden. */
+    private int panelMode;
+    /** Pitch of the gas lines in the panel. */
+    private int panelLine = 9;
+    /** Per piece: {x, y, w, h} of its block in the panel. */
+    private final int[][] pieceRect = new int[4][];
+    private int pitch = 16, btnH = 14;
+    private final List<Integer> tabs = new ArrayList<Integer>();
+
+    /** A function's row: switch, gas chip (armour only), key. */
+    private static final class Row {
+        final Enum<?> f;
+        final int x, y, w, h;
+        final boolean chip;
+
+        Row(Enum<?> f, int x, int y, int w, int h, boolean chip) {
+            this.f = f;
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.chip = chip;
+        }
+    }
+
+    private final List<Row> rows = new ArrayList<Row>();
+    /** Column headings over the rows: {x, y, switch width, chip 1/0, column width}. */
+    private final List<int[]> heads = new ArrayList<int[]>();
+    /** Mode tab: {mode key ordinal, description x, y, width}. */
+    private final List<int[]> modeDescs = new ArrayList<int[]>();
+    private int modeHeadW;
 
     // ---- life support tab layout (set by initGui) ----
-    private static final int SIL_W = 60, GAS_W = 200, CTRL_W = 200, GAS_ROW = 20;
-    private int silX, gasX, ctrlX, lifeY, fillHeadY = -1, coolY;
+    private int tableX, tableW, lifeY = -1, coolY, sysX, sysW, sysHeadY = -1, fillX, fillW, fillHeadY = -1;
     /** What the tab was built for - rebuilt when the worn pieces or the inventory's gas containers change. */
-    private String lifeSig = "";
+    private String layoutSig = "";
     /** Per fill button: {slot, gas ordinal, mB, whole-only 1/0, fits 1/0}. */
     private final List<int[]> fills = new ArrayList<int[]>();
+    /** Ticks the "fill everything" button stays off after a press (the server answers meanwhile). */
+    private int fillAllWait;
 
     /**
      * The life support systems the armour logic adds at the end of ArmorFeature. Looked up by name,
@@ -79,7 +131,6 @@ public class GuiArmorSC extends GuiScreen {
     private int selectedPiece = -1;
     /** The "remove chips" button is on screen (rebuilt when the chips come or go). */
     private boolean chipsShown;
-    private int top;
     /** The function (ArmorFeature, BladeFeature or PowerModeKey) whose key is being set (waiting for a key press), or null. */
     private Enum<?> capturing;
 
@@ -113,11 +164,19 @@ public class GuiArmorSC extends GuiScreen {
                 : f instanceof DrillFeature ? DRILL_BASE + f.ordinal() : f.ordinal();
     }
 
+    // ------------------------------------------------------------------ layout
+
     @Override
     public void initGui() {
         buttonList.clear();
-        top = Math.max(4, height / 2 - 105);
-        List<Integer> tabs = new ArrayList<Integer>();
+        rows.clear();
+        heads.clear();
+        modeDescs.clear();
+        fills.clear();
+        fillHeadY = -1;
+        sysHeadY = -1;
+        lifeY = -1;
+        tabs.clear();
         for (int type = 0; type < 4; type++) {
             if (ArmorLogicSC.piece(mc.thePlayer, type) != null) {
                 tabs.add(type);
@@ -138,84 +197,203 @@ public class GuiArmorSC extends GuiScreen {
         if (selectedPiece < 0 || !tabs.contains(selectedPiece)) {
             selectedPiece = tabs.isEmpty() ? -1 : tabs.get(0);
         }
-        int tabW = tabs.isEmpty() ? 70 : Math.max(40, Math.min(70, (width - 8) / tabs.size() - 2));   // eight tabs on a narrow screen
-        int tx = width / 2 - tabs.size() * (tabW + 2) / 2;
+        layoutSig = selectedPiece == LIFE_TAB ? lifeSignature() : wornSignature();
+
+        winW = Math.min(WIN_W, width - 8);
+        winX = (width - winW) / 2;
+        winH = Math.min(WIN_H, height - 4);
+        top = Math.max(2, (height - winH) / 2);
+        contentY = top + 53;
+        footY = top + winH - 11;
+
+        int n = tabs.size();
+        int tabW = n == 0 ? 70 : Math.max(24, Math.min(80, (winW - 8) / n - 2));   // eight tabs on a narrow screen
+        int tx = width / 2 - n * (tabW + 2) / 2 + 1;
         for (int type : tabs) {
-            String label = type == LIFE_TAB ? Lang.tr("sc.lifegui.tab") : type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
+            String label = type == LIFE_TAB ? Lang.tr("sc.lifegui.tab.short") : type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
                     : type == DRILL_TAB ? Lang.tr("sc.drillgui.tab") : Lang.tr("sc.armorhud.piece." + type);
-            GuiButton tab = new com.sc.inventory.TextFitSC.Button(TAB_BASE + type, tx, top + 14, tabW, 18, label);
+            GuiButton tab = new TextFitSC.Button(TAB_BASE + type, tx, top + 15, tabW, 16, label);
             tab.enabled = type != selectedPiece;                // the pressed-in one is the open tab
             buttonList.add(tab);
             tx += tabW + 2;
         }
-        int left = width / 2 - (NAME_W + BIND_W + 4) / 2;
-        int y = top + 40;
-        fills.clear();
-        fillHeadY = -1;
+        setPanel(0);
+        if (selectedPiece < 0) {
+            refresh();
+            return;
+        }
         if (selectedPiece == LIFE_TAB) {
             initLife();
-        } else if (selectedPiece == DRILL_TAB) {
-            DrillType t = ItemDrillSC.typeOf(drill());
-            List<DrillFeature> rows = new ArrayList<DrillFeature>();
-            for (DrillFeature f : DrillFeature.values()) {
-                if (f.availableIn(t)) {
-                    rows.add(f);
-                }
-            }
-            int rowW = NAME_W + BIND_W + 4;
-            boolean twoCols = rows.size() > 8 && width >= rowW * 2 + 16;     // the Exo drill's 12 rows don't fit one column
-            int perCol = twoCols ? (rows.size() + 1) / 2 : rows.size();
-            int colLeft = twoCols ? width / 2 - rowW - 4 : left;
-            for (int i = 0; i < rows.size(); i++) {
-                int col = i / perCol;
-                addRow(rows.get(i), colLeft + col * (rowW + 8), y + (i % perCol) * ROW);
-            }
-            y += perCol * ROW;
         } else if (selectedPiece == MODE_TAB) {
+            int[] r = chooseRows(PowerModeKey.values().length, 130, 0);
+            int btnW = Math.max(110, Math.min(150, contentW - KEY_W - GAP - 6 - 100));
+            btnW = Math.min(btnW, contentW - KEY_W - GAP);
+            modeHeadW = btnW + GAP + KEY_W;
+            int y = contentY + 10;
             for (PowerModeKey k : PowerModeKey.values()) {
-                addRow(k, left, y);
-                y += ROW;
+                addRow(k, contentX, y, btnW, false);
+                int dx = contentX + btnW + GAP + KEY_W + 6;
+                modeDescs.add(new int[]{k.ordinal(), dx, y + (btnH - 8) / 2, contentX + contentW - dx});
+                y += r[1];
             }
-        } else if (selectedPiece == BLADE_TAB) {
-            BladeType t = ItemBladeSC.typeOf(blade());
-            for (BladeFeature f : BladeFeature.values()) {
-                if (f.availableIn(t)) {
-                    addRow(f, left, y);
-                    y += ROW;
+        } else {
+            List<Enum<?>> list = new ArrayList<Enum<?>>();
+            boolean armour = selectedPiece < 4;
+            if (selectedPiece == DRILL_TAB) {
+                DrillType t = ItemDrillSC.typeOf(drill());
+                for (DrillFeature f : DrillFeature.values()) {
+                    if (f.availableIn(t)) {
+                        list.add(f);
+                    }
+                }
+            } else if (selectedPiece == BLADE_TAB) {
+                BladeType t = ItemBladeSC.typeOf(blade());
+                for (BladeFeature f : BladeFeature.values()) {
+                    if (f.availableIn(t)) {
+                        list.add(f);
+                    }
+                }
+            } else {
+                ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, selectedPiece);
+                for (ArmorFeature f : ArmorFeature.values()) {
+                    if (f.availableIn(ArmorLogicSC.suitOf(piece), selectedPiece)) {
+                        list.add(f);
+                    }
                 }
             }
-        } else if (selectedPiece >= 0) {
-            ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, selectedPiece);
-            for (ArmorFeature f : ArmorFeature.values()) {
-                if (f.availableIn(ArmorLogicSC.suitOf(piece), selectedPiece)) {
-                    addRow(f, left, y);
-                    y += ROW;
+            boolean chest = selectedPiece == 1;
+            int[] r = chooseRows(list.size(), armour ? 150 : 140, chest ? 20 : 0);
+            int cols = r[0];
+            int colW = (contentW - (cols - 1) * COL_GAP) / cols;
+            if (cols == 1) {
+                colW = Math.min(colW, 240);                // one column: no endless buttons on a wide window
+            }
+            int per = Math.max(1, (list.size() + cols - 1) / cols);
+            int rowsY = contentY + 10;
+            for (int c = 0; c < cols && c * per < list.size(); c++) {
+                int x = contentX + c * (colW + COL_GAP);
+                heads.add(new int[]{x, contentY, colW - KEY_W - GAP - (armour ? CHIP_W + GAP : 0), armour ? 1 : 0, colW});
+            }
+            for (int i = 0; i < list.size(); i++) {
+                int x = contentX + (i / per) * (colW + COL_GAP);
+                addRow(list.get(i), x, rowsY + (i % per) * r[1], colW - KEY_W - GAP - (armour ? CHIP_W + GAP : 0), armour);
+            }
+            int y = rowsY + per * r[1] + 4;
+            chipsShown = chest && ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1));
+            if (chest) {                                   // chips out / light colour / power mode, in one row
+                List<Integer> ids = new ArrayList<Integer>();
+                if (chipsShown) {
+                    ids.add(CHIPS_ID);
+                }
+                ids.add(COLOR_ID);
+                ids.add(MODE_ID);
+                int span = cols == 1 ? colW : contentW;
+                int bw = (span - (ids.size() - 1) * 4) / ids.size();
+                for (int i = 0; i < ids.size(); i++) {
+                    String label = ids.get(i) == CHIPS_ID ? Lang.tr("sc.armorgui.chips.remove") : "";
+                    buttonList.add(new TextFitSC.Button(ids.get(i), contentX + i * (bw + 4), y, bw, 16, label));
                 }
             }
-        }
-        chipsShown = selectedPiece == 1 && ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1));
-        if (chipsShown) {
-            buttonList.add(new com.sc.inventory.TextFitSC.Button(CHIPS_ID, width / 2 - 90, y + 4, 180, 18, Lang.tr("sc.armorgui.chips.remove")));
-            y += 22;
-        }
-        if (selectedPiece == 1) {                          // the chestplate's tab: the light colour of the whole suit
-            buttonList.add(new com.sc.inventory.TextFitSC.Button(COLOR_ID, width / 2 - 90, y + 4, 180, 18, ""));
-            y += 22;
-        }
-        if (ArmorLogicSC.piece(mc.thePlayer, 1) != null && selectedPiece != BLADE_TAB && selectedPiece != MODE_TAB && selectedPiece != DRILL_TAB
-                && selectedPiece != LIFE_TAB) {
-            buttonList.add(new com.sc.inventory.TextFitSC.Button(MODE_ID, width / 2 - 90, Math.max(y + 6, top + 190), 180, 18, ""));
         }
         refresh();
     }
 
-    private void addRow(Enum<?> f, int left, int y) {
-        addRow(f, left, y, NAME_W, BIND_W);
+    private int panelW(int mode) {
+        return mode == 2 ? 100 : mode == 1 ? 80 : 0;
     }
 
-    private void addRow(Enum<?> f, int left, int y, int nameW, int bindW) {
-        buttonList.add(new com.sc.inventory.TextFitSC.Button(switchId(f), left, y, nameW, 18, ""));
-        buttonList.add(new com.sc.inventory.TextFitSC.Button(BIND_BASE + switchId(f), left + nameW + 4, y, bindW, 18, ""));
+    private void setPanel(int mode) {
+        panelMode = mode;
+        int pw = panelW(mode);
+        contentX = winX + 5 + (pw > 0 ? pw + 5 : 0);
+        contentW = winX + winW - 5 - contentX;
+    }
+
+    /** The tanks of a worn piece, in the gases' order. */
+    private static List<Gas> tanksOf(ItemStack w) {
+        List<Gas> out = new ArrayList<Gas>();
+        if (w != null) {
+            for (Gas g : Gas.values()) {
+                if (ArmorGasSC.capacity(w, g) > 0) {
+                    out.add(g);
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Lays the left panel out for `mode` (pieceRect); false when it doesn't fit (or there's nothing to show). */
+    private boolean layoutPanel(int mode) {
+        if (mode == 0) {
+            return true;
+        }
+        if (!anyPieceWorn()) {
+            return false;
+        }
+        int px = winX + 5, py = top + 51, pw = panelW(mode), ph = top + winH - 4 - py;
+        for (int lp = 9; lp >= 8; lp--) {
+            int y = py + 3, gap = 4;
+            boolean fits = true;
+            for (int t = 0; t < 4; t++) {
+                int h = Math.max(20, tanksOf(ArmorGasSC.worn(mc.thePlayer, t)).size() * lp + 4);
+                pieceRect[t] = new int[]{px + 2, y, pw - 4, h};
+                y += h + gap;
+                fits &= y <= py + ph;
+            }
+            if (fits) {
+                panelLine = lp;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Tries `cols` / pitch for n rows in width cw: {cols, pitch}, or null when it would be cramped (loose: the best there is). */
+    private int[] fitRows(int n, int cw, int colMin, int extraH, boolean loose) {
+        int avail = (footY - 2) - (contentY + 10) - extraH;
+        int[] order = n > 8 ? new int[]{2, 1} : new int[]{1, 2};
+        for (int cols : order) {
+            int colW = (cw - (cols - 1) * COL_GAP) / cols;
+            if (colW < colMin || cols > Math.max(1, n)) {
+                continue;
+            }
+            int per = Math.max(1, (n + cols - 1) / cols);
+            int p = Math.min(16, avail / per);
+            if (p >= 15) {
+                return new int[]{cols, p};
+            }
+        }
+        if (!loose) {
+            return null;
+        }
+        int cols = cw >= 2 * colMin + COL_GAP && n > 1 ? 2 : 1;
+        int per = Math.max(1, (n + cols - 1) / cols);
+        return new int[]{cols, Math.max(12, Math.min(16, avail / per))};
+    }
+
+    /** Picks the panel and the columns for a tab of n rows; sets pitch / btnH. @return {cols, pitch} */
+    private int[] chooseRows(int n, int colMin, int extraH) {
+        int[] r = null;
+        for (int mode = 2; mode >= 0 && r == null; mode--) {
+            if (layoutPanel(mode)) {
+                setPanel(mode);
+                r = fitRows(n, contentW, colMin, extraH, false);
+            }
+        }
+        if (r == null) {                                   // a tiny screen: no panel, rows squeezed
+            setPanel(0);
+            r = fitRows(n, contentW, colMin, extraH, true);
+        }
+        pitch = r[1];
+        btnH = pitch - 2;
+        return r;
+    }
+
+    private void addRow(Enum<?> f, int x, int y, int switchW, boolean chip) {
+        buttonList.add(new TextFitSC.Button(switchId(f), x, y, switchW, btnH, ""));
+        int keyX = x + switchW + GAP + (chip ? CHIP_W + GAP : 0);
+        buttonList.add(new TextFitSC.Button(BIND_BASE + switchId(f), keyX, y, KEY_W, btnH, ""));
+        rows.add(new Row(f, x, y, switchW, btnH, chip));
     }
 
     // ------------------------------------------------------------------ life support tab
@@ -273,13 +451,19 @@ public class GuiArmorSC extends GuiScreen {
         return g == null ? null : new int[]{g.ordinal(), fs.amount, whole ? 1 : 0};
     }
 
-    /** The worn pieces, their tanks and the inventory's gas containers - what initLife() laid out. */
-    private String lifeSignature() {
+    /** The worn pieces and their tanks - what the left panel and the rows were laid out for. */
+    private String wornSignature() {
         StringBuilder sb = new StringBuilder();
         for (int t = 0; t < 4; t++) {
             ItemStack w = ArmorGasSC.worn(mc.thePlayer, t);
             sb.append(w == null ? "-" : Item.getIdFromItem(w.getItem()) + ":" + ArmorGasSC.capacityBonusPercent(w)).append(';');
         }
+        return sb.toString();
+    }
+
+    /** The worn pieces, their tanks and the inventory's gas containers - what initLife() laid out. */
+    private String lifeSignature() {
+        StringBuilder sb = new StringBuilder(wornSignature());
         for (ArmorFeature f : lifeFeatures()) {
             ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, f.piece);
             sb.append(piece != null && f.availableIn(ArmorLogicSC.suitOf(piece), f.piece) ? 'f' : '-');
@@ -307,34 +491,114 @@ public class GuiArmorSC extends GuiScreen {
                 }
             }
         }
+        int plan = fillAllPlan().size();
+        for (Object o : buttonList) {
+            GuiButton b = (GuiButton) o;
+            if (b.id == FILL_ALL_ID) {
+                b.displayString = Lang.tr("sc.lifegui.fillall", plan);
+                b.enabled = plan > 0 && fillAllWait <= 0;
+            }
+        }
+    }
+
+    /**
+     * "Fill everything": the inventory slots to pour in, in order, one entry per GAS_FILL message -
+     * whole-only containers (buckets, cells) as many times as whole ones fit, a tank-in-an-item once.
+     * Counted against the room the tanks have now, so the server (which checks it all again) takes
+     * every one of them; a stale count at worst gets a "doesn't fit" and nothing is spent.
+     */
+    private List<Integer> fillAllPlan() {
+        List<Integer> out = new ArrayList<Integer>();
+        EntityPlayer p = mc.thePlayer;
+        int[] room = new int[Gas.values().length];
+        for (Gas g : Gas.values()) {
+            room[g.ordinal()] = ArmorGasSC.suitFill(p, g, 1 << 30, true);
+        }
+        ItemStack[] inv = p.inventory.mainInventory;
+        for (int i = 0; i < inv.length && out.size() < FILL_ALL_MAX; i++) {
+            int[] gi = gasIn(inv[i]);
+            if (gi == null || room[gi[0]] <= 0) {
+                continue;
+            }
+            if (gi[2] == 1) {
+                int k = Math.min(inv[i].stackSize, room[gi[0]] / gi[1]);
+                for (int j = 0; j < k && out.size() < FILL_ALL_MAX; j++) {
+                    out.add(i);
+                    room[gi[0]] -= gi[1];
+                }
+            } else {
+                out.add(i);
+                room[gi[0]] -= Math.min(room[gi[0]], gi[1]);
+            }
+        }
+        return out;
     }
 
     private void initLife() {
-        lifeSig = lifeSignature();
-        int rows = shownGases().size();
-        lifeY = top + 40;
-        coolY = lifeY + rows * GAS_ROW + 2;
-        int total = SIL_W + 8 + GAS_W + 8 + CTRL_W;
-        boolean wide = width >= total + 8;
-        silX = width / 2 - (wide ? total : SIL_W + 8 + GAS_W) / 2;
-        gasX = silX + SIL_W + 8;
-        int y;
-        if (wide) {
-            ctrlX = gasX + GAS_W + 8;
-            y = lifeY;
-        } else {                                              // narrow: the controls under the gases
-            ctrlX = gasX;
-            y = coolY + 14;
+        // the panel and the columns: the table with the controls beside it, or under it
+        boolean side = false, halves = false;
+        for (int mode = 2; mode >= 0 && !side; mode--) {
+            if (layoutPanel(mode)) {
+                setPanel(mode);
+                side = contentW >= 344;
+            }
         }
+        if (!side) {
+            boolean found = false;
+            for (int mode = 2; mode >= 0 && !found; mode--) {
+                if (layoutPanel(mode)) {
+                    setPanel(mode);
+                    found = contentW >= 288;
+                }
+            }
+            halves = found;
+            if (!found) {
+                setPanel(0);
+            }
+        }
+        pitch = 16;
+        btnH = 14;
+        int rc = side ? Math.max(136, Math.min(150, contentW - 208)) : 0;
+        tableX = contentX;
+        tableW = side ? contentW - COL_GAP - rc : contentW;
+        lifeY = contentY + 10;
+        coolY = lifeY + shownGases().size() * GAS_PITCH + 2;
+        int y;
+        if (side) {
+            sysX = fillX = contentX + tableW + COL_GAP;
+            sysW = fillW = rc;
+            y = contentY;
+        } else {
+            y = coolY + 14;
+            sysX = contentX;
+            sysW = halves ? (contentW - COL_GAP) / 2 : contentW;
+            fillX = halves ? sysX + sysW + COL_GAP : contentX;
+            fillW = sysW;
+        }
+        int bottom = footY - 2;
+        List<ArmorFeature> sys = new ArrayList<ArmorFeature>();
         for (ArmorFeature f : lifeFeatures()) {
             ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, f.piece);
             if (piece != null && f.availableIn(ArmorLogicSC.suitOf(piece), f.piece)) {
-                addRow(f, ctrlX, y, CTRL_W - 60, 56);
-                y += ROW;
+                sys.add(f);
             }
         }
-        fillHeadY = y + 4;
-        y = fillHeadY + 12;
+        int sysTop = y;
+        if (!sys.isEmpty() && y + 10 + btnH <= bottom) {
+            sysHeadY = y;
+            y += 10;
+            for (ArmorFeature f : sys) {
+                if (y + btnH > bottom) {
+                    break;
+                }
+                addRow(f, sysX, y, sysW - KEY_W - GAP, false);
+                y += pitch;
+            }
+            y += 4;
+        }
+        if (halves) {
+            y = sysTop;                                       // the refuelling beside the systems
+        }
         // one button per kind of container (same item, gas and amount), the first slot holding it
         List<String> seen = new ArrayList<String>();
         List<Integer> counts = new ArrayList<Integer>();
@@ -360,125 +624,462 @@ public class GuiArmorSC extends GuiScreen {
             boolean fits = gi[2] == 1 ? room == gi[1] : room > 0;
             fills.add(new int[]{i, gi[0], gi[1], gi[2], fits ? 1 : 0});
         }
-        for (int k = 0; k < fills.size(); k++) {
+        if (y + 9 > bottom) {
+            return;
+        }
+        fillHeadY = y;
+        y += 10;
+        if (!fills.isEmpty() && y + btnH <= bottom) {
+            GuiButton all = new TextFitSC.Button(FILL_ALL_ID, fillX, y, fillW, btnH, "");
+            buttonList.add(all);
+            y += pitch + 2;
+        }
+        for (int k = 0; k < fills.size() && y + btnH <= bottom; k++) {   // the rest of the containers: "fill everything" has them
             int[] f = fills.get(k);
             String label = Lang.tr("sc.lifegui.fill", GasUiSC.shortName(Gas.values()[f[1]]), f[2]) + (counts.get(k) > 1 ? " §7(" + counts.get(k) + ")" : "");
-            GuiButton b = new com.sc.inventory.TextFitSC.Button(FILL_BASE + f[0], ctrlX, y, CTRL_W, 18, label);
+            GuiButton b = new TextFitSC.Button(FILL_BASE + f[0], fillX, y, fillW, btnH, label);
             b.enabled = f[4] == 1;
             buttonList.add(b);
-            y += ROW;
+            y += pitch;
+        }
+        refreshFills();
+    }
+
+    // ------------------------------------------------------------------ drawing helpers
+
+    private static void box(int x, int y, int w, int h, int fill, int edge) {
+        drawRect(x, y, x + w, y + h, edge);
+        drawRect(x + 1, y + 1, x + w - 1, y + h - 1, fill);
+    }
+
+    private static boolean low(int amount, int cap) {
+        return cap > 0 && (long) amount * 100 < (long) LOW_PCT * cap;
+    }
+
+    private static boolean critical(int amount, int cap) {
+        return cap > 0 && (long) amount * 100 < (long) CRIT_PCT * cap;
+    }
+
+    /** Text colour of a tank's level: red empty (blinking under 5%), orange under 20%, else `normal`. */
+    private static int levelColor(int amount, int cap, int normal) {
+        if (cap <= 0) {
+            return 0x808080;
+        }
+        if (amount <= 0) {
+            return RED;
+        }
+        if (critical(amount, cap)) {
+            return GasUiSC.blinkOff() ? 0xA02020 : RED;
+        }
+        return low(amount, cap) ? ORANGE : normal;
+    }
+
+    /** A level bar: frame (orange low, red empty), dark inside, the fill in `color` (orange when low, blinking under 5%). */
+    private static void bar(int x, int y, int w, int h, int amount, int cap, int color, boolean gasRules) {
+        int edge = 0xFF55555F, fill = 0xFF000000 | color;
+        if (gasRules && cap > 0) {
+            if (amount <= 0) {
+                edge = 0xFF000000 | RED;
+            } else if (critical(amount, cap)) {
+                edge = fill = 0xFF000000 | RED;
+            } else if (low(amount, cap)) {
+                edge = fill = 0xFF000000 | ORANGE;
+            }
+        }
+        drawRect(x, y, x + w, y + h, edge);
+        drawRect(x + 1, y + 1, x + w - 1, y + h - 1, 0xFF0C0C0E);
+        int fw = cap <= 0 ? 0 : (int) ((long) (w - 2) * Math.max(0, Math.min(amount, cap)) / cap);
+        if (amount > 0 && cap > 0 && fw == 0) {
+            fw = 1;
+        }
+        boolean blink = gasRules && amount > 0 && critical(amount, cap) && GasUiSC.blinkOff();
+        if (fw > 0 && !blink) {
+            drawRect(x + 1, y + 1, x + 1 + fw, y + h - 1, fill);
         }
     }
 
-    /** Silhouette parts: {x, y, w, h} relative to (silX, lifeY), by piece type. */
-    private static final int[][] PART = {{20, 0, 20, 18}, {10, 20, 40, 38}, {14, 60, 32, 30}, {12, 92, 36, 14}};
+    private int fit(String text, int x, int y, int maxW, int color) {
+        return TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, true, 0, 0);
+    }
 
-    private void drawLife(int mouseX, int mouseY) {
-        net.minecraft.entity.player.EntityPlayer p = mc.thePlayer;
-        // the suit: each worn piece with its own tanks as small level bars
-        for (int t = 0; t < 4; t++) {
-            int x0 = silX + PART[t][0], y0 = lifeY + PART[t][1], x1 = x0 + PART[t][2], y1 = y0 + PART[t][3];
-            ItemStack w = ArmorGasSC.worn(p, t);
-            drawRect(x0, y0, x1, y1, w != null ? 0xFF6A7380 : 0xFF303030);
-            drawRect(x0 + 1, y0 + 1, x1 - 1, y1 - 1, w != null ? 0xFF22262E : 0xC0101010);
-            if (w == null) {
-                continue;
+    private static int pct(int amount, int cap) {
+        return cap <= 0 ? 0 : (int) ((long) Math.max(0, amount) * 100 / cap);
+    }
+
+    private static String num(float v) {
+        return v == Math.round(v) ? String.valueOf(Math.round(v)) : String.format(Locale.ROOT, "%.1f", v);
+    }
+
+    /** "~17 min" / "~27 h" at the measured rate; "..." while measuring, a dash while it isn't used. */
+    private String timeLeft(Gas g, int amount) {
+        float rate = GasUiSC.perMinute(g);
+        if (rate < 0) {
+            return "...";
+        }
+        if (rate < 0.05F) {
+            return "—";
+        }
+        int minutes = (int) Math.min(Integer.MAX_VALUE, amount / rate);
+        return minutes >= 120 ? Lang.tr("sc.lifegui.left.h", minutes / 60) : Lang.tr("sc.lifegui.left.min", minutes);
+    }
+
+    private void drawIcon(ItemStack s, int x, int y) {
+        GL11.glColor4f(1F, 1F, 1F, 1F);
+        RenderHelper.enableGUIStandardItemLighting();
+        GL11.glEnable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
+        itemRender.renderItemAndEffectIntoGUI(fontRendererObj, mc.getTextureManager(), s, x, y);
+        RenderHelper.disableStandardItemLighting();
+        GL11.glDisable(org.lwjgl.opengl.GL12.GL_RESCALE_NORMAL);
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glColor4f(1F, 1F, 1F, 1F);
+    }
+
+    // ------------------------------------------------------------------ status strip
+
+    private void drawStrip() {
+        EntityPlayer p = mc.thePlayer;
+        int sx = winX + 5, sy = top + 35, sw = winW - 10;
+        box(sx, sy, sw, 13, C_STRIP, C_EDGE);
+        int ty = sy + 3;
+        boolean narrow = sw < 400;
+        int barW = narrow ? 30 : 56;
+        int x = sx + 5;
+        ItemStack chest = ArmorLogicSC.piece(p, 1);
+        // charge: the tool of the tab, or the whole suit
+        int charge = -1, heat = -1;
+        boolean hot = false;
+        List<String> chargeTip = new ArrayList<String>();
+        ItemStack tool = selectedPiece == BLADE_TAB ? blade() : selectedPiece == DRILL_TAB ? drill() : null;
+        if (tool != null) {
+            boolean isBlade = selectedPiece == BLADE_TAB;
+            int cap = isBlade ? ItemBladeSC.capacityOf(tool) : ItemDrillSC.capacityOf(tool);
+            charge = pct(isBlade ? ItemBladeSC.chargeOf(tool) : ItemDrillSC.chargeOf(tool), cap);
+            heat = isBlade ? ItemBladeSC.heatPercent(tool) : ItemDrillSC.heatPercent(tool);
+            hot = isBlade ? ItemBladeSC.overheated(tool) : ItemDrillSC.overheated(tool);
+            chargeTip.add(tool.getDisplayName() + ": " + charge + "%");
+        } else {
+            long sum = 0, cap = 0;
+            for (int t = 0; t < 4; t++) {
+                ItemStack s = ArmorLogicSC.piece(p, t);
+                if (s != null) {
+                    sum += ItemArmorSC.chargeOf(s);
+                    cap += ItemArmorSC.capacityOf(s);
+                    chargeTip.add(Lang.tr("sc.armorhud.piece." + t) + ": " + pct(ItemArmorSC.chargeOf(s), ItemArmorSC.capacityOf(s)) + "%");
+                }
             }
-            int bx = x0 + 2;                                // three 4px bars fit the 20px helmet (krypton was cut off at +3)
-            for (Gas g : Gas.values()) {
-                int cap = ArmorGasSC.capacity(w, g);
-                if (cap <= 0 || bx + 4 > x1 - 2) {
-                    continue;
-                }
-                int h = y1 - y0 - 6;
-                int lvl = (int) ((long) ArmorGasSC.amount(w, g) * h / cap);
-                drawRect(bx, y0 + 3, bx + 4, y1 - 3, 0xFF0A0A0A);
-                if (lvl > 0) {
-                    drawRect(bx, y1 - 3 - lvl, bx + 4, y1 - 3, 0xFF000000 | g.color);
-                }
-                bx += 6;
+            charge = cap > 0 ? (int) (sum * 100 / cap) : -1;
+            if (chest != null) {
+                ArmorSuit suit = ArmorLogicSC.suitOf(chest);
+                heat = chest.hasTagCompound() ? chest.getTagCompound().getInteger("HeatSC") * 100 / suit.heatCapacity : 0;
+                hot = chest.hasTagCompound() && chest.getTagCompound().getBoolean("ChipsOffSC");
             }
         }
-        // the gases: name, bar, amount; under it the use and how long it lasts
+        if (charge >= 0) {
+            int x0 = x;
+            if (!narrow) {
+                x += fit(Lang.tr("sc.armorgui.strip.charge"), x, ty, 50, HEAD) + 4;
+            }
+            bar(x, ty, barW, 7, charge, 100, 0x50C8FF, false);
+            x += barW + 3;
+            x += fit(charge + "%", x, ty, 24, charge <= 15 ? RED : 0xE0E0E0) + 8;
+            chargeTip.add(0, Lang.tr("sc.armorgui.strip.charge"));
+            TextFitSC.hover(x0, sy, x - x0, 13, chargeTip);
+        }
+        if (heat >= 0) {
+            int x0 = x;
+            if (!narrow) {
+                x += fit(Lang.tr("sc.armorgui.strip.heat"), x, ty, 50, HEAD) + 4;
+            }
+            int hc = hot || heat > 80 ? RED : 0xFFAA3C;
+            bar(x, ty, barW, 7, Math.min(heat, 100), 100, hc, false);
+            x += barW + 3;
+            x += fit(heat + "%", x, ty, 24, hot ? RED : heat > 80 ? ORANGE : 0xE0E0E0) + 8;
+            String key = tool == null ? (hot ? "sc.armorhud.overheat" : "sc.armorhud.heat")
+                    : selectedPiece == BLADE_TAB ? (hot ? "sc.bladehud.overheat" : "sc.bladehud.heat") : (hot ? "sc.drillhud.overheat" : "sc.drillhud.heat");
+            TextFitSC.hover(x0, sy, x - x0, 13, Lang.tr(key, heat));
+        }
+        int end = sx + sw - 5;
+        // emergency (no helium in the loop) or all well
+        boolean emergency = ArmorLogicSC.emergency(ArmorGasSC.wornSet(p));
+        String state = emergency ? Lang.tr("sc.gas.emergency") : anyPieceWorn() ? Lang.tr("sc.armorgui.strip.ok") : "";
+        int stateColor = emergency ? (GasUiSC.blinkOff() ? 0xB02020 : 0xFF4040) : 0x8FE3FF;
+        String mode = "";
+        int modeColor = 0;
+        if (chest != null) {
+            int m = ArmorLogicSC.powerMode(p);
+            String name = Lang.tr("sc.armorgui.mode." + m);
+            mode = Lang.tr("sc.armorgui.mode", name);
+            if (narrow || fontRendererObj.getStringWidth(mode) + 10 + fontRendererObj.getStringWidth(state) > end - x) {
+                mode = name;                               // "Power mode: Normal" or just "Normal"
+            }
+            modeColor = m == 0 ? 0x8FE3FF : m == 2 ? 0xFF7050 : 0x60FF60;
+        }
+        int rest = end - x;
+        int mw = fontRendererObj.getStringWidth(mode), stw = fontRendererObj.getStringWidth(state);
+        if (mw + 10 + stw > rest && !mode.isEmpty() && !state.isEmpty()) {
+            mw = Math.min(mw, Math.max(rest * 2 / 5, rest - 10 - stw));
+        }
+        if (!mode.isEmpty() && rest > 10) {
+            int w = fit(mode, x, ty, Math.min(mw, rest), modeColor);
+            if (ArmorLogicSC.regenOn(p)) {
+                TextFitSC.hover(x, sy, w, 13, "§d" + Lang.tr("sc.armorhud.regen"));
+            }
+            x += w + 10;
+        }
+        if (!state.isEmpty() && end - x > 10) {
+            int w = fit(state, x, ty, end - x, stateColor);
+            if (!emergency) {
+                List<String> tip = new ArrayList<String>();
+                float cool = ArmorGasSC.coolingFactor(p);
+                tip.add(cool <= 0F ? Lang.tr("sc.lifegui.cool.none")
+                        : Lang.tr("sc.lifegui.cool", String.format(Locale.ROOT, "%.2f", cool), Math.round(ArmorGasSC.RADIATOR_BONUS * 100)));
+                tip.add("§7" + Lang.tr("sc.lifegui.cool.tip"));
+                TextFitSC.hover(x, sy, w, 13, tip);
+            } else {
+                List<String> tip = new ArrayList<String>();
+                tip.add("§c" + Lang.tr("sc.gas.emergency"));
+                tip.add("§7" + Lang.tr("sc.gas.warn.emergency"));
+                TextFitSC.hover(x, sy, w, 13, tip);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ left panel: the worn pieces and their tanks
+
+    private void drawPanel() {
+        if (panelMode == 0) {
+            return;
+        }
+        EntityPlayer p = mc.thePlayer;
+        int px = winX + 5, py = top + 51, pw = panelW(panelMode), ph = top + winH - 4 - py;
+        box(px, py, pw, ph, C_PANEL, C_EDGE);
+        boolean chest = ArmorGasSC.worn(p, ArmorGasSC.CHEST) != null;
+        int lastBottom = py;
+        for (int t = 0; t < 4; t++) {
+            int[] r = pieceRect[t];
+            if (r == null) {
+                continue;
+            }
+            lastBottom = r[1] + r[3];
+            if (t == selectedPiece) {
+                box(r[0], r[1], r[2], r[3], C_SEL, 0xFFFFFFFF);
+            }
+            ItemStack w = ArmorGasSC.worn(p, t);
+            int ix = r[0] + 2, iy = r[1] + (r[3] - 16) / 2;
+            List<String> pieceTip = new ArrayList<String>();
+            pieceTip.add(Lang.tr("sc.armorhud.piece." + t));
+            if (w == null) {
+                drawRect(ix, iy, ix + 16, iy + 16, 0xFF2A2A2A);
+                drawRect(ix + 1, iy + 1, ix + 15, iy + 15, 0xFF161616);
+                fit(Lang.tr("sc.lifegui.part.none"), r[0] + 21, r[1] + (r[3] - 8) / 2, r[2] - 23, 0x707070);
+                pieceTip.add("§7" + Lang.tr("sc.lifegui.part.none"));
+                TextFitSC.hover(r[0], r[1], r[2], r[3], pieceTip);
+                continue;
+            }
+            pieceTip.set(0, w.getDisplayName());
+            pieceTip.add(Lang.tr("sc.armorgui.panel.charge", pct(ItemArmorSC.chargeOf(w), ItemArmorSC.capacityOf(w))));
+            List<Gas> tanks = tanksOf(w);
+            int lp = panelLine;
+            int ly = r[1] + (r[3] - tanks.size() * lp) / 2 + 1;
+            int symX = r[0] + 20, barX = r[0] + 42;
+            int barW = panelMode == 2 ? 32 : r[0] + r[2] - 3 - barX;
+            if (tanks.isEmpty()) {
+                fit(Lang.tr("sc.lifegui.part.notanks"), symX, r[1] + (r[3] - 8) / 2, r[2] - 22, 0x707070);
+                pieceTip.add("§7" + Lang.tr("sc.lifegui.part.notanks"));
+            }
+            for (Gas g : tanks) {
+                int cap = ArmorGasSC.capacity(w, g), amount = ArmorGasSC.amount(w, g);
+                boolean dead = g == Gas.HELIUM && !chest;               // radiators without the loop
+                fit(GasUiSC.shortName(g), symX, ly, barX - symX - 2, dead ? 0x707070 : g.color);
+                if (dead) {
+                    bar(barX, ly + 1, barW, 6, 0, 1, 0x505050, false);
+                } else {
+                    bar(barX, ly + 1, barW, 6, amount, cap, g.color, true);
+                }
+                if (panelMode == 2) {
+                    fit(dead ? "-" : String.valueOf(pct(amount, cap)), barX + barW + 3, ly, r[0] + r[2] - (barX + barW + 3), dead ? 0x707070
+                            : levelColor(amount, cap, 0xA0A0A0));
+                }
+                List<String> tip = new ArrayList<String>();
+                tip.add(Lang.tr("sc.lifegui.part.tank", GasUiSC.name(g), amount, cap) + " (" + pct(amount, cap) + "%)");
+                if (dead) {
+                    tip.add("§7" + Lang.tr("sc.lifegui.noloop"));
+                }
+                TextFitSC.hover(symX, ly - 1, r[0] + r[2] - symX, lp, tip);
+                ly += lp;
+            }
+            if (t != ArmorGasSC.CHEST && ArmorGasSC.baseCapacity(w, Gas.HELIUM) > 0) {
+                pieceTip.add("§b" + Lang.tr("sc.lifegui.part.radiator", Math.round(ArmorGasSC.RADIATOR_BONUS * 100)));
+            } else if (t == ArmorGasSC.CHEST && ArmorGasSC.baseCapacity(w, Gas.HELIUM) > 0) {
+                pieceTip.add("§b" + Lang.tr("sc.lifegui.part.loop"));
+            }
+            TextFitSC.hover(r[0], r[1], symX - r[0], r[3], pieceTip);
+            drawIcon(w, ix, iy);
+        }
+        if (lastBottom + 13 <= py + ph) {
+            fit(Lang.tr("sc.armorgui.panel.hint"), px + 4, py + ph - 11, pw - 8, 0x707070);
+        }
+    }
+
+    // ------------------------------------------------------------------ rows: headings, gas chips, mode descriptions
+
+    /** The gas the function's chip shows: its own gas where the suit runs on gases (Quantum / Exo; breathing in every suit), else null - EU. */
+    private Gas chipGas(Enum<?> f) {
+        if (!(f instanceof ArmorFeature)) {
+            return null;
+        }
+        ArmorFeature a = (ArmorFeature) f;
+        ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, a.piece);
+        if (piece == null || !(ArmorLogicSC.strict(ArmorLogicSC.suitOf(piece)) || a == ArmorFeature.AIR)) {
+            return null;
+        }
+        return a.gas();
+    }
+
+    private void drawRows() {
+        EntityPlayer p = mc.thePlayer;
+        for (int[] h : heads) {
+            fit(Lang.tr("sc.armorgui.col.function"), h[0], h[1], h[2], HEAD);
+            if (h[3] == 1) {
+                fit(Lang.tr("sc.armorgui.col.gas"), h[0] + h[2] + GAP, h[1], CHIP_W, HEAD);
+            }
+            String k = Lang.tr("sc.armorgui.col.key");
+            int kw = Math.min(fontRendererObj.getStringWidth(k), KEY_W + 8);
+            fit(k, h[0] + h[4] - kw, h[1], kw, HEAD);
+        }
+        if (selectedPiece == MODE_TAB && !rows.isEmpty()) {
+            Row r0 = rows.get(0);
+            fit(Lang.tr("sc.modegui.col.mode"), r0.x, contentY, r0.w, HEAD);
+            String k = Lang.tr("sc.armorgui.col.key");
+            int kw = Math.min(fontRendererObj.getStringWidth(k), KEY_W + 8);
+            fit(k, r0.x + modeHeadW - kw, contentY, kw, HEAD);
+            for (int[] d : modeDescs) {
+                PowerModeKey k2 = PowerModeKey.of(d[0]);
+                if (d[3] >= 40 && k2 != null) {
+                    fit(Lang.tr("sc.modegui." + k2.key() + ".desc"), d[1], d[2], d[3], DIM);
+                }
+            }
+        }
+        for (Row r : rows) {
+            if (!r.chip) {
+                continue;
+            }
+            int cx = r.x + r.w + GAP, ch = Math.min(12, r.h), cy = r.y + (r.h - ch) / 2;
+            Gas g = chipGas(r.f);
+            int edge = 0xFF50505A;
+            if (g != null) {
+                int cap = ArmorGasSC.suitCapacity(p, g), amount = ArmorGasSC.suitAmount(p, g);
+                boolean empty = cap <= 0 || amount <= 0 || g == Gas.HELIUM && !ArmorLogicSC.heliumReady(ArmorGasSC.wornSet(p));
+                edge = empty ? 0xFF000000 | RED : low(amount, cap) ? 0xFF000000 | ORANGE : edge;
+                box(cx, cy, CHIP_W, ch, 0xFF19191E, edge);
+                drawRect(cx + 2, cy + (ch - 6) / 2, cx + 8, cy + (ch - 6) / 2 + 6, 0xFF000000 | g.color);
+                fit(GasUiSC.shortName(g), cx + 10, cy + (ch - 8) / 2 + 1, CHIP_W - 11, empty ? RED : g.color);
+            } else {
+                box(cx, cy, CHIP_W, ch, 0xFF19191E, edge);
+                drawRect(cx + 2, cy + (ch - 6) / 2, cx + 8, cy + (ch - 6) / 2 + 6, 0xFFAAAAAA);
+                fit("EU", cx + 10, cy + (ch - 8) / 2 + 1, CHIP_W - 11, 0xAAAAAA);
+            }
+            TextFitSC.hover(cx, cy, CHIP_W, ch, featureTip(r.f));
+        }
+    }
+
+    // ------------------------------------------------------------------ the gases tab
+
+    private void drawLife() {
+        EntityPlayer p = mc.thePlayer;
+        int x = tableX;
+        int symX = x + 9, nameX = x + 31;
+        int leftW = 34, pctW = 20;
+        int barW = Math.max(30, Math.min(60, tableW / 4));
+        int nameW = tableW - 31 - barW - 4 - pctW - leftW - 6;
+        if (nameW < 24) {
+            nameW = 0;
+        }
+        int barX = nameW > 0 ? nameX + nameW + 4 : nameX;
+        int pctX = barX + barW + 4, leftX = pctX + pctW + 2;
+        leftW = x + tableW - leftX;
+        fit(Lang.tr("sc.lifegui.col.gas"), x, contentY, barX - x - 2, HEAD);
+        fit(Lang.tr("sc.lifegui.col.stock"), barX, contentY, barW, HEAD);
+        fit("%", pctX, contentY, pctW, HEAD);
+        fit(Lang.tr("sc.lifegui.col.left"), leftX, contentY, leftW, HEAD);
         int y = lifeY;
         for (Gas g : shownGases()) {
             int cap = ArmorGasSC.suitCapacity(p, g);
-            int barX = gasX + 56, barW = 70;
+            List<String> tip = new ArrayList<String>();
             if (cap <= 0) {                                 // helium radiators with no loop
-                fontRendererObj.drawStringWithShadow(GasUiSC.shortName(g), gasX, y, 0x808080);
-                drawRect(barX - 1, y + 1, barX + barW + 1, y + 8, 0xFF000000);
-                drawRect(barX, y + 2, barX + barW, y + 7, 0xFF505050);
-                fontRendererObj.drawStringWithShadow(Lang.tr("sc.gashud.noloop"), barX + barW + 4, y, 0x808080);
-                fontRendererObj.drawStringWithShadow(fontRendererObj.trimStringToWidth(Lang.tr("sc.lifegui.noloop"), GAS_W), gasX, y + 10, 0x707070);
+                drawRect(x, y + 1, x + 6, y + 7, 0xFF505050);
+                fit(GasUiSC.shortName(g), symX, y, nameX - symX - 2, 0x808080);
+                if (nameW > 0) {
+                    fit(GasUiSC.name(g), nameX, y, nameW, 0x808080);
+                }
+                bar(barX, y + 1, barW, 7, 0, 1, 0x505050, false);
+                fit(Lang.tr("sc.gashud.noloop"), pctX, y, x + tableW - pctX, 0x808080);
+                tip.add(GasUiSC.name(g));
+                tip.add("§7" + Lang.tr("sc.lifegui.noloop"));
             } else {
                 int amount = ArmorGasSC.suitAmount(p, g);
-                boolean low = (long) amount * 100 < 15L * cap;
-                boolean blink = low && GasUiSC.blinkOff();
-                fontRendererObj.drawStringWithShadow(fontRendererObj.trimStringToWidth(GasUiSC.name(g), 54), gasX, y, blink ? 0xFF5050 : g.color);
-                drawRect(barX - 1, y + 1, barX + barW + 1, y + 8, 0xFF000000);
-                int fill = (int) ((long) amount * barW / cap);
-                if (fill > 0) {
-                    drawRect(barX, y + 2, barX + fill, y + 7, 0xFF000000 | g.color);
+                drawRect(x, y + 1, x + 6, y + 7, 0xFF000000 | g.color);
+                fit(GasUiSC.shortName(g), symX, y, nameX - symX - 2, critical(amount, cap) && GasUiSC.blinkOff() ? RED : g.color);
+                if (nameW > 0) {
+                    fit(GasUiSC.name(g), nameX, y, nameW, 0xE0E0E0);
                 }
-                fontRendererObj.drawStringWithShadow(Lang.tr("sc.lifegui.amount", amount, cap), barX + barW + 4, y, low ? 0xFF5050 : 0xE0E0E0);
-                fontRendererObj.drawStringWithShadow(fontRendererObj.trimStringToWidth(GasUiSC.usage(p, g), GAS_W), gasX, y + 10, 0x909090);
+                bar(barX, y + 1, barW, 7, amount, cap, g.color, true);
+                fit(String.valueOf(pct(amount, cap)), pctX, y, pctW, levelColor(amount, cap, 0xE0E0E0));
+                fit(timeLeft(g, amount), leftX, y, leftW, levelColor(amount, cap, DIM));
+                tip.add(Lang.tr("sc.lifegui.gas.head", GasUiSC.name(g), amount, cap));
+                tip.add("§7" + GasUiSC.usage(p, g));
+                for (int t = 0; t < 4; t++) {
+                    ItemStack w = ArmorGasSC.worn(p, t);
+                    int c = ArmorGasSC.capacity(w, g);
+                    if (c > 0) {
+                        tip.add("§7" + Lang.tr("sc.lifegui.part.tank", Lang.tr("sc.armorhud.piece." + t), ArmorGasSC.amount(w, g), c));
+                    }
+                }
+                StringBuilder users = new StringBuilder();
+                for (ArmorFeature f : ArmorFeature.values()) {
+                    ItemStack piece = ArmorLogicSC.piece(p, f.piece);
+                    if (f.gas() == g && piece != null && f.availableIn(ArmorLogicSC.suitOf(piece), f.piece)) {
+                        users.append(users.length() > 0 ? ", " : "").append(nameOf(f));
+                    }
+                }
+                tip.add("§b" + (users.length() > 0 ? Lang.tr("sc.lifegui.gas.users", users) : Lang.tr("sc.lifegui.gas.users.none")));
             }
-            y += GAS_ROW;
+            TextFitSC.hover(x, y - 1, tableW, GAS_PITCH, tip);
+            y += GAS_PITCH;
         }
         // helium cooling
         float cool = ArmorGasSC.coolingFactor(p);
         String coolText = cool <= 0F ? Lang.tr("sc.lifegui.cool.none")
                 : Lang.tr("sc.lifegui.cool", String.format(Locale.ROOT, "%.2f", cool), Math.round(ArmorGasSC.RADIATOR_BONUS * 100));
-        fontRendererObj.drawStringWithShadow(fontRendererObj.trimStringToWidth(coolText, GAS_W), gasX, coolY, cool <= 0F ? 0x808080 : 0x8FE3FF);
-        // refuelling
+        fit(coolText, x, coolY, tableW, cool <= 0F ? 0x808080 : 0x8FE3FF);
+        if (sysHeadY >= 0) {
+            fit(Lang.tr("sc.lifegui.systems"), sysX, sysHeadY, sysW, HEAD);
+        }
         if (fillHeadY >= 0) {
-            fontRendererObj.drawStringWithShadow(Lang.tr(fills.isEmpty() ? "sc.lifegui.fill.none" : "sc.lifegui.fill.head"), ctrlX, fillHeadY,
-                    fills.isEmpty() ? 0x808080 : 0xE0E0E0);
+            fit(Lang.tr(fills.isEmpty() ? "sc.lifegui.fill.none" : "sc.lifegui.fill.head"), fillX, fillHeadY, fillW, fills.isEmpty() ? 0x808080 : HEAD);
         }
     }
 
-    /** Tooltips of the life support tab: a piece of the silhouette, the cooling line, a fill button. */
+    /** Tooltips of the life support tab: the cooling line, a fill button. */
     private List<String> lifeTip(int mouseX, int mouseY) {
-        net.minecraft.entity.player.EntityPlayer p = mc.thePlayer;
+        EntityPlayer p = mc.thePlayer;
         List<String> tip = new ArrayList<String>();
-        for (int t = 0; t < 4; t++) {
-            int x0 = silX + PART[t][0], y0 = lifeY + PART[t][1];
-            if (mouseX < x0 || mouseY < y0 || mouseX >= x0 + PART[t][2] || mouseY >= y0 + PART[t][3]) {
-                continue;
-            }
-            ItemStack w = ArmorGasSC.worn(p, t);
-            tip.add(Lang.tr("sc.armorhud.piece." + t));
-            if (w == null) {
-                tip.add("§7" + Lang.tr("sc.lifegui.part.none"));
-                return tip;
-            }
-            boolean any = false;
-            for (Gas g : Gas.values()) {
-                int cap = ArmorGasSC.capacity(w, g);
-                if (cap > 0) {
-                    any = true;
-                    tip.add(Lang.tr("sc.lifegui.part.tank", GasUiSC.name(g), ArmorGasSC.amount(w, g), cap));
-                }
-            }
-            if (!any) {
-                tip.add("§7" + Lang.tr("sc.lifegui.part.notanks"));
-            }
-            if (t != ArmorGasSC.CHEST && ArmorGasSC.baseCapacity(w, Gas.HELIUM) > 0) {
-                tip.add("§b" + Lang.tr("sc.lifegui.part.radiator", Math.round(ArmorGasSC.RADIATOR_BONUS * 100)));
-            } else if (t == ArmorGasSC.CHEST && ArmorGasSC.baseCapacity(w, Gas.HELIUM) > 0) {
-                tip.add("§b" + Lang.tr("sc.lifegui.part.loop"));
-            }
-            return tip;
-        }
-        if (mouseX >= gasX && mouseX < gasX + GAS_W && mouseY >= coolY && mouseY < coolY + 9) {
+        if (mouseX >= tableX && mouseX < tableX + tableW && mouseY >= coolY && mouseY < coolY + 9) {
             tip.add(Lang.tr("sc.lifegui.cool.tip"));
             tip.add("§7" + Lang.tr("sc.lifegui.cool.tip2", Math.round(ArmorGasSC.RADIATOR_BONUS * 100)));
             return tip;
         }
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
-            if (b.id < FILL_BASE || b.id >= FILL_BASE + 64 || mouseX < b.xPosition || mouseY < b.yPosition
-                    || mouseX >= b.xPosition + b.width || mouseY >= b.yPosition + b.height) {
+            if (mouseX < b.xPosition || mouseY < b.yPosition || mouseX >= b.xPosition + b.width || mouseY >= b.yPosition + b.height) {
+                continue;
+            }
+            if (b.id == FILL_ALL_ID) {
+                tip.add(Lang.tr("sc.lifegui.fillall.tip"));
+                tip.add("§7" + Lang.tr("sc.lifegui.fillall.tip2"));
+                return tip;
+            }
+            if (b.id < FILL_BASE || b.id >= FILL_BASE + 64) {
                 continue;
             }
             int slot = b.id - FILL_BASE;
@@ -500,6 +1101,8 @@ public class GuiArmorSC extends GuiScreen {
         }
         return tip;
     }
+
+    // ------------------------------------------------------------------ state
 
     private boolean isOn(Enum<?> f) {
         if (f instanceof DrillFeature) {
@@ -543,6 +1146,85 @@ public class GuiArmorSC extends GuiScreen {
                 : Lang.tr("sc.armorfn." + f.name().toLowerCase(Locale.ROOT));
     }
 
+    /** A key in three letters at most for the small key button ("F", "^N", "LSH", "M4"); a dash for none. */
+    private static String shortKey(int[] b) {
+        if (b == null || b[0] == 0) {
+            return "—";
+        }
+        String k = b[0] < 0 ? "M" + (b[0] - ArmorKeyBindsSC.MOUSE_BASE + 1) : Keyboard.getKeyName(b[0]);
+        if (k == null) {
+            k = "?";
+        }
+        if (k.startsWith("NUMPAD") && k.length() > 6) {
+            k = "N" + k.substring(6);
+        }
+        boolean mods = b[1] != 0;
+        int max = mods ? 2 : 3;
+        if (k.length() > max) {
+            k = k.substring(0, max);
+        }
+        return (mods ? "^" : "") + k;
+    }
+
+    /** Hover text of a function: what it does, why it's blocked, its gas (where it's held, the use, how long it lasts). */
+    private List<String> featureTip(Enum<?> f) {
+        List<String> tip = new ArrayList<String>();
+        if (f instanceof PowerModeKey) {
+            tip.add(Lang.tr("sc.modegui." + ((PowerModeKey) f).key() + ".desc"));
+            return tip;
+        }
+        if (f instanceof DrillFeature) {
+            tip.add(Lang.tr("sc.drillfn." + ((DrillFeature) f).key() + ".desc"));
+            return tip;
+        }
+        if (f instanceof BladeFeature) {
+            tip.add(Lang.tr("sc.bladefn." + ((BladeFeature) f).key() + ".desc"));
+            return tip;
+        }
+        ArmorFeature a = (ArmorFeature) f;
+        EntityPlayer p = mc.thePlayer;
+        tip.add(nameOf(a));
+        tip.add("§7" + Lang.tr("sc.armorfn." + a.name().toLowerCase(Locale.ROOT) + ".desc"));
+        String why = gasBlock(a);
+        if (why != null) {
+            tip.add("§c" + why);
+            tip.add("§7" + Lang.tr("sc.armorgui.row.state", Lang.tr(isOn(a) ? "sc.armorgui.on" : "sc.armorgui.off")));
+        }
+        Gas g = chipGas(a);
+        if (g == null) {
+            if (a != ArmorFeature.HUD) {
+                tip.add("§7" + Lang.tr("sc.armorgui.tip.eu"));
+            }
+        } else {
+            int cap = ArmorGasSC.suitCapacity(p, g), amount = ArmorGasSC.suitAmount(p, g);
+            if (cap > 0) {
+                StringBuilder where = new StringBuilder();
+                for (int t = 0; t < 4; t++) {
+                    if (ArmorGasSC.capacity(ArmorGasSC.worn(p, t), g) > 0) {
+                        where.append(where.length() > 0 ? ", " : "").append(Lang.tr("sc.armorhud.piece." + t).toLowerCase(Locale.ROOT));
+                    }
+                }
+                String c = amount <= 0 ? "§c" : low(amount, cap) ? "§6" : "§b";
+                tip.add(c + Lang.tr("sc.armorgui.tip.gas", GasUiSC.name(g).toLowerCase(Locale.ROOT), where, amount, cap));
+            } else {
+                tip.add("§c" + Lang.tr("sc.armorgui.tip.gas.none", GasUiSC.name(g)));
+            }
+            char kind = a.gasUseKind();
+            String use = kind == ArmorFeature.USE_SECOND ? Lang.tr("sc.armorgui.tip.use.s", num(a.gasUse()))
+                    : kind == ArmorFeature.USE_MINUTE ? Lang.tr("sc.armorgui.tip.use.m", num(a.gasUse()))
+                    : kind == ArmorFeature.USE_ONCE ? Lang.tr("sc.armorgui.tip.use.u", num(a.gasUse()))
+                    : kind == ArmorFeature.USE_COOLING ? Lang.tr("sc.armorgui.tip.use.h") : Lang.tr("sc.armorgui.tip.use.r");
+            tip.add("§7" + use);
+            if (cap > 0) {
+                tip.add("§7" + GasUiSC.usage(p, g));
+            }
+        }
+        if (a.euPerSecond > 0) {
+            tip.add("§7" + Lang.tr("sc.armorgui.tip.euuse", a.euPerSecond));
+        }
+        return tip;
+    }
+
     private void refresh() {
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
@@ -554,22 +1236,31 @@ public class GuiArmorSC extends GuiScreen {
                 continue;
             } else if (b.id >= BIND_BASE) {
                 Enum<?> f = featureOf(b.id);
-                b.displayString = f == capturing ? "§e> ... <"
-                        : (ArmorKeyBindsSC.conflicts(f).isEmpty() ? "" : "§c") + ArmorKeyBindsSC.describe(ArmorKeyBindsSC.get(f));   // red: the key is taken
+                int[] k = ArmorKeyBindsSC.get(f);
+                b.displayString = f == capturing ? "§e..." : !ArmorKeyBindsSC.conflicts(f).isEmpty() ? "§c" + shortKey(k)   // red: the key is taken
+                        : k == null ? "§7" + shortKey(k) : "§e" + shortKey(k);
             } else if (featureOf(b.id) instanceof PowerModeKey) {
                 PowerModeKey k = (PowerModeKey) featureOf(b.id);
                 int mode = ArmorLogicSC.powerMode(mc.thePlayer);
                 b.displayString = k == PowerModeKey.CYCLE
                         ? Lang.tr("sc.modegui.cycle", Lang.tr("sc.armorgui.mode." + mode))
-                        : (k.mode() == mode ? "§a" : "§7") + Lang.tr("sc.armorgui.mode." + k.mode());
+                        : k.mode() == mode ? "§a> " + Lang.tr("sc.armorgui.mode." + k.mode()) + " <" : "§7" + Lang.tr("sc.armorgui.mode." + k.mode());
             } else {
                 Enum<?> f = featureOf(b.id);
                 boolean on = isOn(f);
-                boolean blocked = gasBlock(f) != null;               // no gas of its own / emergency mode: grey
-                b.displayString = (blocked ? "§8" : on ? "§a" : "§7") + nameOf(f) + ": " + Lang.tr(on ? "sc.armorgui.on" : "sc.armorgui.off");
+                String why = gasBlock(f);                          // no gas of its own / emergency mode: grey
+                if (why != null) {
+                    boolean emergency = f instanceof ArmorFeature
+                            && ArmorLogicSC.pieceEmergency(ArmorGasSC.wornSet(mc.thePlayer), ArmorLogicSC.suitOf(ArmorLogicSC.piece(mc.thePlayer, ((ArmorFeature) f).piece)));
+                    b.displayString = "§8" + nameOf(f) + ": " + Lang.tr(emergency ? "sc.armorgui.row.emergency" : "sc.armorgui.row.needgas");
+                } else {
+                    b.displayString = (on ? "§a" : "§7") + nameOf(f) + ": " + Lang.tr(on ? "sc.armorgui.on" : "sc.armorgui.off");
+                }
             }
         }
     }
+
+    // ------------------------------------------------------------------ input
 
     @Override
     protected void actionPerformed(GuiButton b) {
@@ -583,6 +1274,14 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (b.id >= FILL_BASE && b.id < FILL_BASE + 64) {       // the server pours it in and sends the tanks back
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.GAS_FILL, b.id - FILL_BASE));
+            return;
+        }
+        if (b.id == FILL_ALL_ID) {                              // the same message for every container that fits, in order
+            for (int slot : fillAllPlan()) {
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.GAS_FILL, slot));
+            }
+            fillAllWait = 20;
+            b.enabled = false;
             return;
         }
         if (b.id == COLOR_ID) {                         // the next colour, on every worn piece (shown at once)
@@ -635,7 +1334,7 @@ public class GuiArmorSC extends GuiScreen {
                     ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BLADE_TOGGLE, f.ordinal(), want));
                 }
             }
-        } else {
+        } else if (featureOf(b.id) instanceof ArmorFeature) {
             ArmorFeature f = (ArmorFeature) featureOf(b.id);
             ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, f.piece);
             if (piece != null) {
@@ -666,7 +1365,7 @@ public class GuiArmorSC extends GuiScreen {
         refresh();
     }
 
-    /** A middle or side mouse button can be a function's key too (left / right click stay the screen's). */
+    /** A middle or side mouse button can be a function's key too (left / right click stay the screen's); a piece in the panel opens its tab. */
     @Override
     protected void mouseClicked(int x, int y, int button) {
         if (capturing != null) {
@@ -677,15 +1376,30 @@ public class GuiArmorSC extends GuiScreen {
             }
             return;
         }
+        if (button == 0 && panelMode > 0) {
+            for (int t = 0; t < 4; t++) {
+                int[] r = pieceRect[t];
+                if (r != null && t != selectedPiece && tabs.contains(t) && x >= r[0] && y >= r[1] && x < r[0] + r[2] && y < r[1] + r[3]) {
+                    mc.getSoundHandler().playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0F));
+                    selectedPiece = t;
+                    initGui();
+                    return;
+                }
+            }
+        }
         super.mouseClicked(x, y, button);
     }
 
     @Override
     public void updateScreen() {
+        if (fillAllWait > 0) {
+            fillAllWait--;
+        }
+        String sig = selectedPiece == LIFE_TAB ? lifeSignature() : wornSignature();
         if (selectedPiece == BLADE_TAB && blade() == null || selectedPiece == DRILL_TAB && drill() == null || selectedPiece == MODE_TAB && ArmorLogicSC.piece(mc.thePlayer, 1) == null
                 || selectedPiece == 1 && chipsShown != ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1))) {
             initGui();                                           // the blade left the hand / the chips came out
-        } else if (selectedPiece == LIFE_TAB && (!anyPieceWorn() || !lifeSig.equals(lifeSignature()))) {
+        } else if (selectedPiece == LIFE_TAB && !anyPieceWorn() || !layoutSig.equals(sig)) {
             initGui();                                           // other pieces worn, a container used up or picked up
         } else if (selectedPiece == LIFE_TAB) {
             refreshFills();
@@ -693,84 +1407,81 @@ public class GuiArmorSC extends GuiScreen {
         refresh();
     }
 
+    // ------------------------------------------------------------------ drawing
+
+    private List<String> wrap(List<String> tip) {
+        int maxW = Math.max(120, Math.min(220, width / 2 - 20));
+        List<String> wrapped = new ArrayList<String>();
+        for (String line : tip) {
+            String color = line.startsWith("§") && line.length() > 1 ? line.substring(0, 2) : "";
+            for (Object part : fontRendererObj.listFormattedStringToWidth(line, maxW)) {
+                String s = (String) part;
+                wrapped.add(s.startsWith("§") ? s : color + s);    // a wrapped grey line stays grey
+            }
+        }
+        return wrapped;
+    }
+
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        com.sc.inventory.TextFitSC.beginFrame();
+        TextFitSC.beginFrame();
         drawDefaultBackground();
-        drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.title"), width / 2, top, 0xFFFFFF);
+        box(winX, top, winW, winH, C_FRAME, C_EDGE);
+        drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.title"), width / 2, top + 4, 0xFFFFFF);
         if (selectedPiece < 0) {
             drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.none"), width / 2, height / 2, 0xA0A0A0);
-        } else if (selectedPiece == LIFE_TAB) {
-            drawLife(mouseX, mouseY);
-        } else if (selectedPiece == MODE_TAB) {
-            drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.mode", Lang.tr("sc.armorgui.mode." + ArmorLogicSC.powerMode(mc.thePlayer))),
-                    width / 2, top + 35 - 2, 0xE0E0E0);
-        } else if (selectedPiece == DRILL_TAB) {
-            ItemStack d = drill();
-            if (d != null) {
-                int cap = ItemDrillSC.capacityOf(d);
-                int pct = cap <= 0 ? 0 : (int) ((long) ItemDrillSC.chargeOf(d) * 100 / cap);
-                drawCenteredString(fontRendererObj, d.getDisplayName() + " §7(" + pct + "%, "
-                        + Lang.tr(ItemDrillSC.overheated(d) ? "sc.drillhud.overheat" : "sc.drillhud.heat", ItemDrillSC.heatPercent(d)) + ")",
-                        width / 2, top + 35 - 2, 0xE0E0E0);
-            }
-        } else if (selectedPiece == BLADE_TAB) {
-            ItemStack b = blade();
-            if (b != null) {
-                int cap = ItemBladeSC.capacityOf(b);
-                int pct = cap <= 0 ? 0 : (int) ((long) ItemBladeSC.chargeOf(b) * 100 / cap);
-                drawCenteredString(fontRendererObj, b.getDisplayName() + " §7(" + pct + "%, "
-                        + Lang.tr(ItemBladeSC.overheated(b) ? "sc.bladehud.overheat" : "sc.bladehud.heat", ItemBladeSC.heatPercent(b)) + ")",
-                        width / 2, top + 35 - 2, 0xE0E0E0);
-            }
         } else {
-            ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, selectedPiece);
-            if (piece != null) {
-                int cap = ItemArmorSC.capacityOf(piece);
-                int pct = cap <= 0 ? 0 : (int) ((long) ItemArmorSC.chargeOf(piece) * 100 / cap);
-                drawCenteredString(fontRendererObj, piece.getDisplayName() + " §7(" + pct + "%)", width / 2, top + 35 - 2, 0xE0E0E0);
+            drawStrip();
+            drawPanel();
+            if (selectedPiece == LIFE_TAB) {
+                drawLife();
+            } else {
+                drawRows();
             }
-        }
-        if (capturing != null) {
-            drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.bind.wait"), width / 2, height - 26, 0xFFE060);
-        }
-        if ((selectedPiece >= 0 && selectedPiece < 4 || selectedPiece == LIFE_TAB || selectedPiece == MODE_TAB)
-                && ArmorLogicSC.emergency(ArmorGasSC.wornSet(mc.thePlayer))) {
-            // above the title when there is room (the bottom holds the mode button and the set bonus)
-            drawCenteredString(fontRendererObj, Lang.tr("sc.gas.emergency"), width / 2, top >= 12 ? top - 11 : height - 38, 0xFF4040);
-        }
-        if (selectedPiece == DRILL_TAB) {
-            ItemStack d = drill();
-            if (d != null && DrillLogicSC.setBonus(mc.thePlayer, d)) {
-                drawCenteredString(fontRendererObj, Lang.tr("sc.drillgui.set." + ItemDrillSC.typeOf(d).key()),
-                        width / 2, height - 14, 0x80FF80);
+            // the set bonus at the foot of the window
+            String bonus = null;
+            if (selectedPiece == DRILL_TAB) {
+                ItemStack d = drill();
+                if (d != null && DrillLogicSC.setBonus(mc.thePlayer, d)) {
+                    bonus = Lang.tr("sc.drillgui.set." + ItemDrillSC.typeOf(d).key());
+                }
+            } else if (selectedPiece == BLADE_TAB) {
+                ItemStack b = blade();
+                if (b != null && BladeLogicSC.setBonus(mc.thePlayer, b)) {
+                    bonus = Lang.tr("sc.bladegui.set." + ItemBladeSC.typeOf(b).key());
+                }
+            } else {
+                ArmorSuit set = ArmorLogicSC.fullSet(mc.thePlayer);
+                if (set != null) {
+                    bonus = Lang.tr("sc.armorgui.set." + set.name().toLowerCase(Locale.ROOT));
+                }
             }
-        } else if (selectedPiece == BLADE_TAB) {
-            ItemStack b = blade();
-            if (b != null && BladeLogicSC.setBonus(mc.thePlayer, b)) {
-                drawCenteredString(fontRendererObj, Lang.tr("sc.bladegui.set." + ItemBladeSC.typeOf(b).key()),
-                        width / 2, height - 14, 0x80FF80);
-            }
-        } else {
-            ArmorSuit set = ArmorLogicSC.fullSet(mc.thePlayer);
-            if (set != null) {
-                drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.set." + set.name().toLowerCase(Locale.ROOT)),
-                        width / 2, height - 14, 0x80FF80);
+            if (bonus != null) {
+                TextFitSC.drawCentered(fontRendererObj, bonus, contentX, footY, contentW, 0x80FF80, true, 0, 0);
             }
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
+        if (capturing != null) {                                 // over the strip: what to press
+            List<?> lines = fontRendererObj.listFormattedStringToWidth(Lang.tr("sc.armorgui.bind.wait"), winW - 20);
+            int bh = lines.size() * 10 + 6, by = top + 34;
+            box(winX + 5, by, winW - 10, bh, 0xF0181A10, 0xFFFFE060);
+            for (int i = 0; i < lines.size(); i++) {
+                drawCenteredString(fontRendererObj, (String) lines.get(i), width / 2, by + 4 + i * 10, 0xFFE060);
+            }
+            return;
+        }
         boolean overFeature = false;
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
             overFeature |= !(b.id >= TAB_BASE && b.id < BIND_BASE) && mouseX >= b.xPosition && mouseY >= b.yPosition
                     && mouseX < b.xPosition + b.width && mouseY < b.yPosition + b.height;
         }
-        List<String> cut = com.sc.inventory.TextFitSC.hoverAt(mouseX, mouseY);
+        List<String> cut = TextFitSC.hoverAt(mouseX, mouseY);
         List<String> life = selectedPiece == LIFE_TAB && !overFeature ? lifeTip(mouseX, mouseY) : null;
         if (life != null && !life.isEmpty()) {
-            drawHoveringText(life, mouseX, mouseY, fontRendererObj);
-        } else if (!overFeature && cut != null) {             // a caption too long for its button or tab
-            drawHoveringText(cut, mouseX, mouseY, fontRendererObj);
+            drawHoveringText(wrap(life), mouseX, mouseY, fontRendererObj);
+        } else if (!overFeature && cut != null) {             // a caption too long for its place, a tank, a gas chip
+            drawHoveringText(wrap(cut), mouseX, mouseY, fontRendererObj);
         }
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
@@ -778,12 +1489,17 @@ public class GuiArmorSC extends GuiScreen {
                     || mouseX >= b.xPosition + b.width || mouseY >= b.yPosition + b.height) {
                 continue;
             }
-            List<String> tip = new ArrayList<String>();
             Enum<?> f = featureOf(b.id);
-            boolean action = f instanceof PowerModeKey || (f instanceof DrillFeature ? ((DrillFeature) f).isAction()
-                    : f instanceof BladeFeature ? ((BladeFeature) f).isAction() : ((ArmorFeature) f).isAction());
+            if (f == null) {
+                continue;
+            }
+            List<String> tip;
             if (b.id >= BIND_BASE) {
+                boolean action = f instanceof PowerModeKey || (f instanceof DrillFeature ? ((DrillFeature) f).isAction()
+                        : f instanceof BladeFeature ? ((BladeFeature) f).isAction() : ((ArmorFeature) f).isAction());
+                tip = new ArrayList<String>();
                 tip.add(Lang.tr(action ? "sc.armorgui.bind.tip.action" : "sc.armorgui.bind.tip"));
+                tip.add("§e" + Lang.tr("sc.armorgui.bind.current", ArmorKeyBindsSC.describe(ArmorKeyBindsSC.get(f))));
                 tip.add("§7" + Lang.tr("sc.armorgui.bind.tip2"));
                 List<String> taken = ArmorKeyBindsSC.conflicts(f);
                 if (!taken.isEmpty()) {
@@ -793,30 +1509,10 @@ public class GuiArmorSC extends GuiScreen {
                     }
                     tip.add("§c" + Lang.tr("sc.armorgui.bind.conflict", names));
                 }
-            } else if (f instanceof PowerModeKey) {
-                tip.add(Lang.tr("sc.modegui." + ((PowerModeKey) f).key() + ".desc"));
-            } else if (f instanceof DrillFeature) {
-                tip.add(Lang.tr("sc.drillfn." + ((DrillFeature) f).key() + ".desc"));
-            } else if (f instanceof BladeFeature) {
-                tip.add(Lang.tr("sc.bladefn." + ((BladeFeature) f).key() + ".desc"));
             } else {
-                tip.add(Lang.tr("sc.armorfn." + f.name().toLowerCase(Locale.ROOT) + ".desc"));
-                String why = gasBlock(f);
-                if (why != null) {
-                    tip.add("§c" + why);
-                }
+                tip = featureTip(f);
             }
-            // long descriptions wrapped - one line ran off the screen's edge
-            int maxW = Math.max(120, Math.min(220, width / 2 - 20));
-            List<String> wrapped = new ArrayList<String>();
-            for (String line : tip) {
-                String color = line.startsWith("§") && line.length() > 1 ? line.substring(0, 2) : "";
-                for (Object part : fontRendererObj.listFormattedStringToWidth(line, maxW)) {
-                    String s = (String) part;
-                    wrapped.add(s.startsWith("§") ? s : color + s);    // a wrapped grey line stays grey
-                }
-            }
-            drawHoveringText(wrapped, mouseX, mouseY, fontRendererObj);
+            drawHoveringText(wrap(tip), mouseX, mouseY, fontRendererObj);
         }
     }
 
