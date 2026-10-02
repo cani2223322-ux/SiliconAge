@@ -129,6 +129,8 @@ public class BlockQuarrySC extends Block {
                 q.setOwner(placer.getCommandSenderName());     // the placer owns it - not whoever the item came from
             }
         }
+        // placed switched off, as a machine: nothing can overvolt it (or flood the line) before it is checked and switched on
+        q.setPowerOn(false);
         world.markBlockForUpdate(x, y, z);
     }
 

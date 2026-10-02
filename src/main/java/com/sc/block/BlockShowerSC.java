@@ -84,6 +84,10 @@ public class BlockShowerSC extends Block {
         if (!world.isRemote && te instanceof TileEntityShowerSC && stack.hasTagCompound()) {
             ((TileEntityShowerSC) te).readFromItem(stack.getTagCompound());
         }
+        if (te instanceof TileEntityShowerSC) {
+            // placed switched off, as a machine: nothing can overvolt it (or flood the line) before it is checked and switched on
+            ((TileEntityShowerSC) te).setPowerOn(false);
+        }
     }
 
     // ---- the item keeps the energy and the water: drop while the tile entity still exists ----

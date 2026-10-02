@@ -1057,4 +1057,15 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             worldObj.markBlockRangeForRenderUpdate(xCoord, yCoord, zCoord, xCoord, yCoord, zCoord);
         }
     }
+
+    /** Switched off (it's placed so): it takes no energy, so no line can overvolt it. */
+    @Override
+    public int demandedEnergy() {
+        return powerOn ? super.demandedEnergy() : 0;
+    }
+
+    @Override
+    public int receiveEnergy(net.minecraftforge.common.util.ForgeDirection from, int voltage, int amount, boolean simulate) {
+        return powerOn ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
+    }
 }

@@ -75,6 +75,8 @@ public class BlockFieldGeneratorSC extends Block {
         if (placer instanceof EntityPlayer) {
             field.setPlacer(placer.getCommandSenderName());
         }
+        // placed switched off, as a machine: nothing can overvolt it (or flood the line) before it is checked and switched on
+        field.setPowerOn(false);
         String stranger = field.placedNearForeign();
         if (stranger != null && placer instanceof EntityPlayer) {
             ((EntityPlayer) placer).addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", stranger));

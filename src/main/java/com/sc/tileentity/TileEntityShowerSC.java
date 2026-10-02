@@ -297,4 +297,15 @@ public class TileEntityShowerSC extends TileEntityEnergyBase implements IInvento
     public void onDataPacket(net.minecraft.network.NetworkManager manager, net.minecraft.network.play.server.S35PacketUpdateTileEntity pkt) {
         washing = pkt.func_148857_g().getBoolean("Washing");
     }
+
+    /** Switched off (it's placed so): it takes no energy, so no line can overvolt it. */
+    @Override
+    public int demandedEnergy() {
+        return powerOn ? super.demandedEnergy() : 0;
+    }
+
+    @Override
+    public int receiveEnergy(net.minecraftforge.common.util.ForgeDirection from, int voltage, int amount, boolean simulate) {
+        return powerOn ? super.receiveEnergy(from, voltage, amount, simulate) : 0;
+    }
 }

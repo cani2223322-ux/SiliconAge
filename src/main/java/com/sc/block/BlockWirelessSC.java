@@ -96,6 +96,8 @@ public class BlockWirelessSC extends Block {
         if (stack.hasTagCompound()) {
             w.readFromItem(stack.getTagCompound());
         }
+        // placed switched off, as a machine: nothing can overvolt it (or flood the line) before it is checked and switched on
+        w.setPowerOn(false);
         world.markBlockForUpdate(x, y, z);
     }
 

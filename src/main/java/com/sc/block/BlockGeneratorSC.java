@@ -157,6 +157,8 @@ public class BlockGeneratorSC extends Block {
         if (!world.isRemote && stack.hasTagCompound()) {
             generator.readFromItem(stack.getTagCompound());
         }
+        // placed switched off, as a machine: nothing can overvolt it (or flood the line) before it is checked and switched on
+        generator.setPowerOn(false);
         world.markBlockForUpdate(x, y, z);
         com.sc.energy.CableWarningSC.sourcePlaced(world, x, y, z, placer);
     }
