@@ -366,7 +366,8 @@ public class GuiArmorSC extends GuiScreen {
         if (!loose) {
             return null;
         }
-        int cols = cw >= 2 * colMin + COL_GAP && n > 1 ? 2 : 1;
+        // two columns also when one column can't hold the rows even at the smallest pitch (Exo chestplate, 320x200)
+        int cols = n > 1 && (cw >= 2 * colMin + COL_GAP || avail / n < 12) ? 2 : 1;
         int per = Math.max(1, (n + cols - 1) / cols);
         return new int[]{cols, Math.max(12, Math.min(16, avail / per))};
     }
@@ -458,6 +459,8 @@ public class GuiArmorSC extends GuiScreen {
             ItemStack w = ArmorGasSC.worn(mc.thePlayer, t);
             sb.append(w == null ? "-" : Item.getIdFromItem(w.getItem()) + ":" + ArmorGasSC.capacityBonusPercent(w)).append(';');
         }
+        ItemStack tool = blade() != null ? blade() : drill();    // a blade / drill taken in hand: its tab and rows
+        sb.append(tool == null ? "-" : String.valueOf(Item.getIdFromItem(tool.getItem())));
         return sb.toString();
     }
 
@@ -703,7 +706,10 @@ public class GuiArmorSC extends GuiScreen {
     }
 
     private static int pct(int amount, int cap) {
-        return cap <= 0 ? 0 : (int) ((long) Math.max(0, amount) * 100 / cap);
+        if (cap <= 0 || amount <= 0) {
+            return 0;
+        }
+        return Math.max(1, (int) ((long) amount * 100 / cap));   // not empty: never "0"
     }
 
     private static String num(float v) {
@@ -767,7 +773,7 @@ public class GuiArmorSC extends GuiScreen {
                     chargeTip.add(Lang.tr("sc.armorhud.piece." + t) + ": " + pct(ItemArmorSC.chargeOf(s), ItemArmorSC.capacityOf(s)) + "%");
                 }
             }
-            charge = cap > 0 ? (int) (sum * 100 / cap) : -1;
+            charge = cap > 0 ? (sum > 0 ? (int) Math.max(1, sum * 100 / cap) : 0) : -1;
             if (chest != null) {
                 ArmorSuit suit = ArmorLogicSC.suitOf(chest);
                 heat = chest.hasTagCompound() ? chest.getTagCompound().getInteger("HeatSC") * 100 / suit.heatCapacity : 0;
@@ -1464,9 +1470,14 @@ public class GuiArmorSC extends GuiScreen {
         if (capturing != null) {                                 // over the strip: what to press
             List<?> lines = fontRendererObj.listFormattedStringToWidth(Lang.tr("sc.armorgui.bind.wait"), winW - 20);
             int bh = lines.size() * 10 + 6, by = top + 34;
+            boolean depth = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);                  // the panel's item icons (z +50) would show through
             box(winX + 5, by, winW - 10, bh, 0xF0181A10, 0xFFFFE060);
             for (int i = 0; i < lines.size(); i++) {
                 drawCenteredString(fontRendererObj, (String) lines.get(i), width / 2, by + 4 + i * 10, 0xFFE060);
+            }
+            if (depth) {
+                GL11.glEnable(GL11.GL_DEPTH_TEST);
             }
             return;
         }

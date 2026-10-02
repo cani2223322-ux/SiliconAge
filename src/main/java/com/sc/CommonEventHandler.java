@@ -264,19 +264,18 @@ public class CommonEventHandler {
             }
         }
         // the strict rules (Quantum / Exo run every function on a gas): a quarter of hydrogen once, and the news
-        if (!data.getBoolean("scGasStart2")) {
+        boolean strict = false;
+        for (ItemStack s : worn) {
+            strict |= s != null && com.sc.item.ArmorLogicSC.strict(((ItemArmorSC) s.getItem()).getSuit());
+        }
+        // only with a Quantum / Exo piece on (a Nano-only login must not use the flag up: no hydrogen, no news)
+        if (strict && !data.getBoolean("scGasStart2")) {
             data.setBoolean("scGasStart2", true);
             entityData.setTag(EntityPlayer.PERSISTED_NBT_TAG, data);
-            boolean strict = false;
-            for (ItemStack s : worn) {
-                strict |= s != null && com.sc.item.ArmorLogicSC.strict(((ItemArmorSC) s.getItem()).getSuit());
-            }
             if (com.sc.util.ArmorGasSC.giveHydrogenStarter(worn) > 0) {
                 p.inventoryContainer.detectAndSendChanges();
             }
-            if (strict) {
-                p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.gas.starter2"));
-            }
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.gas.starter2"));
         }
     }
 
