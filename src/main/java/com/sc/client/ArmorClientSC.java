@@ -13,6 +13,7 @@ import com.sc.item.ArmorLogicSC;
 import com.sc.item.ItemArmorSC;
 import com.sc.manual.Lang;
 import com.sc.util.ArmorFeature;
+import com.sc.util.ArmorGasSC;
 import com.sc.util.ArmorSuit;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
@@ -67,6 +68,7 @@ public class ArmorClientSC {
         if (event.phase != TickEvent.Phase.END || mc.thePlayer == null) {
             return;
         }
+        GasUiSC.tick(mc);                                   // gas use estimate (HUD, life support tab)
         if (KEY_ARMOR.isPressed() && mc.currentScreen == null) {
             mc.displayGuiScreen(new GuiArmorSC());
         }
@@ -163,6 +165,7 @@ public class ArmorClientSC {
             mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.set." + set.name().toLowerCase(Locale.ROOT)), 4, y, 0x80FF80);
             y += 10;
         }
+        int chargeTop = y, chargeW = 0;
         for (int type = 0; type < 4; type++) {
             ItemStack s = ArmorLogicSC.piece(p, type);
             if (s == null) {
@@ -171,7 +174,9 @@ public class ArmorClientSC {
             int cap = ItemArmorSC.capacityOf(s);
             int pct = cap <= 0 ? 0 : (int) ((long) ItemArmorSC.chargeOf(s) * 100 / cap);
             int color = pct > 50 ? 0x60FF60 : pct > 15 ? 0xFFD040 : 0xFF5050;
-            mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.piece." + type) + ": " + pct + "%", 4, y, color);
+            String line = Lang.tr("sc.armorhud.piece." + type) + ": " + pct + "%";
+            mc.fontRenderer.drawStringWithShadow(line, 4, y, color);
+            chargeW = Math.max(chargeW, mc.fontRenderer.getStringWidth(line));
             y += 10;
         }
         ItemStack chest = ArmorLogicSC.piece(p, 1);
@@ -179,17 +184,78 @@ public class ArmorClientSC {
             ArmorSuit suit = ArmorLogicSC.suitOf(chest);
             int heat = chest.hasTagCompound() ? chest.getTagCompound().getInteger("HeatSC") * 100 / suit.heatCapacity : 0;
             boolean off = chest.hasTagCompound() && chest.getTagCompound().getBoolean("ChipsOffSC");
-            mc.fontRenderer.drawStringWithShadow(Lang.tr(off ? "sc.armorhud.overheat" : "sc.armorhud.heat", heat), 4, y,
-                    off ? 0xFF4040 : heat > 80 ? 0xFFA040 : 0xB0B0B0);
+            String line = Lang.tr(off ? "sc.armorhud.overheat" : "sc.armorhud.heat", heat);
+            mc.fontRenderer.drawStringWithShadow(line, 4, y, off ? 0xFF4040 : heat > 80 ? 0xFFA040 : 0xB0B0B0);
+            chargeW = Math.max(chargeW, mc.fontRenderer.getStringWidth(line));
             y += 10;
-            mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorgui.mode." + ArmorLogicSC.powerMode(p)), 4, y, 0xB0B0B0);
+            line = Lang.tr("sc.armorgui.mode." + ArmorLogicSC.powerMode(p));
+            mc.fontRenderer.drawStringWithShadow(line, 4, y, 0xB0B0B0);
+            chargeW = Math.max(chargeW, mc.fontRenderer.getStringWidth(line));
             y += 10;
             if (ArmorLogicSC.regenOn(p)) {
-                mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.regen"), 4, y, 0xFF7090);
+                line = Lang.tr("sc.armorhud.regen");
+                mc.fontRenderer.drawStringWithShadow(line, 4, y, 0xFF7090);
+                chargeW = Math.max(chargeW, mc.fontRenderer.getStringWidth(line));
                 y += 10;
             }
         }
+        // the gases, in a column to the right of the charge lines
+        return Math.max(y, drawGases(mc, p, 4 + chargeW + 10, chargeTop));
+    }
+
+    private static final int GAS_BAR_W = 34, GAS_LABEL_W = 22;
+
+    /**
+     * Thin bars of the gases the worn suit has tanks for, in the gas's colour; below 15% the
+     * label blinks red. Helium without a chestplate: a grey "no loop" bar. @return the y under them
+     */
+    private static int drawGases(Minecraft mc, EntityPlayer p, int x, int y) {
+        boolean anyPiece = false;
+        for (int t = 0; t < 4 && !anyPiece; t++) {
+            anyPiece = ArmorGasSC.worn(p, t) != null;
+        }
+        if (!anyPiece) {
+            return y;
+        }
+        for (ArmorGasSC.Gas g : ArmorGasSC.Gas.values()) {
+            int cap = ArmorGasSC.suitCapacity(p, g);
+            boolean noLoop = g == ArmorGasSC.Gas.HELIUM && cap <= 0 && ArmorGasSC.worn(p, ArmorGasSC.CHEST) == null && radiators(p);
+            if (cap <= 0 && !noLoop) {
+                continue;
+            }
+            String label = GasUiSC.shortName(g);
+            int barX = x + GAS_LABEL_W, barY = y + 3;
+            if (noLoop) {
+                mc.fontRenderer.drawStringWithShadow(label, x, y, 0x808080);
+                net.minecraft.client.gui.Gui.drawRect(barX - 1, barY - 1, barX + GAS_BAR_W + 1, barY + 3, 0xA0000000);
+                net.minecraft.client.gui.Gui.drawRect(barX, barY, barX + GAS_BAR_W, barY + 2, 0xFF505050);
+                mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.gashud.noloop"), barX + GAS_BAR_W + 4, y, 0x808080);
+            } else {
+                int amount = ArmorGasSC.suitAmount(p, g);
+                int pct = (int) ((long) amount * 100 / cap);
+                boolean low = pct < 15;
+                int fill = (int) ((long) amount * GAS_BAR_W / cap);
+                net.minecraft.client.gui.Gui.drawRect(barX - 1, barY - 1, barX + GAS_BAR_W + 1, barY + 3, 0xA0000000);
+                if (fill > 0 && !(low && GasUiSC.blinkOff())) {
+                    net.minecraft.client.gui.Gui.drawRect(barX, barY, barX + fill, barY + 2, 0xFF000000 | g.color);
+                }
+                mc.fontRenderer.drawStringWithShadow(label, x, y, low && GasUiSC.blinkOff() ? 0xFF5050 : g.color);
+                mc.fontRenderer.drawStringWithShadow(pct + "%", barX + GAS_BAR_W + 4, y, low ? 0xFF5050 : 0xB0B0B0);
+            }
+            y += 10;
+        }
+        GL11.glColor4f(1F, 1F, 1F, 1F);
         return y;
+    }
+
+    /** Whether a piece that could carry helium radiators is worn (so "no loop" means something). */
+    private static boolean radiators(EntityPlayer p) {
+        for (int t : new int[]{ArmorGasSC.HELMET, ArmorGasSC.LEGS, ArmorGasSC.BOOTS}) {
+            if (ArmorGasSC.baseCapacity(ArmorGasSC.worn(p, t), ArmorGasSC.Gas.HELIUM) > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---- through walls ----
@@ -198,9 +264,10 @@ public class ArmorClientSC {
         ores.clear();
         boolean all = ArmorLogicSC.suitOf(ArmorLogicSC.piece(p, 0)) == ArmorSuit.EXO;
         int cx = MathHelper.floor_double(p.posX), cy = MathHelper.floor_double(p.posY), cz = MathHelper.floor_double(p.posZ);
-        for (int x = cx - SCAN_RADIUS; x <= cx + SCAN_RADIUS; x++) {
-            for (int y = Math.max(0, cy - SCAN_RADIUS); y <= Math.min(255, cy + SCAN_RADIUS); y++) {
-                for (int z = cz - SCAN_RADIUS; z <= cz + SCAN_RADIUS && ores.size() < 512; z++) {
+        int r = ArmorLogicSC.oreScanRadius(p, SCAN_RADIUS);   // krypton in the helmet: x1.5
+        for (int x = cx - r; x <= cx + r; x++) {
+            for (int y = Math.max(0, cy - r); y <= Math.min(255, cy + r); y++) {
+                for (int z = cz - r; z <= cz + r && ores.size() < 512; z++) {
                     Block b = p.worldObj.getBlock(x, y, z);
                     if (b == ModBlocks.oreSC || (all && isOreCached(b, p.worldObj.getBlockMetadata(x, y, z)))) {
                         ores.add(new int[]{x, y, z});

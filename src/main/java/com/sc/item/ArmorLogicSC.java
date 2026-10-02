@@ -4,7 +4,10 @@ import java.util.List;
 import java.util.UUID;
 
 import com.sc.util.ArmorFeature;
+import com.sc.util.ArmorGasSC;
+import com.sc.util.ArmorGasSC.Gas;
 import com.sc.util.ArmorSuit;
+import com.sc.util.ChipType;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -87,8 +90,121 @@ public final class ArmorLogicSC {
         if (s == null || !ItemArmorSC.isEnabled(s, f) || (f != ArmorFeature.HUD && overheated(p))) {
             return false;
         }
-        int need = f.euPerSecond > 0 ? (int) Math.ceil(f.euPerSecond * costMul(p)) : f == ArmorFeature.SOLAR ? 0 : 1;
+        int need = f.euPerSecond > 0 ? (int) Math.ceil(f.euPerSecond * costMul(p)) : f == ArmorFeature.SOLAR || f.gasPowered() ? 0 : 1;
+        if (f == ArmorFeature.FLIGHT && boostedFlight(p)) {
+            need = 0;                     // the engine boost flies on hydrogen, not EU
+        }
         return ItemArmorSC.chargeOf(s) >= need;
+    }
+
+    // ------------------------------------------------------------------ life support (gases, docs/plan-armor-gases.md)
+
+    /** The engine boost is switched on (Quantum+ chestplate) - what it does still needs hydrogen. */
+    public static boolean boosterOn(EntityPlayer p) {
+        return active(p, ArmorFeature.BOOSTER);
+    }
+
+    /** Flight on hydrogen: the boost on and enough hydrogen for the next second. */
+    public static boolean boostedFlight(EntityPlayer p) {
+        return boosterOn(p) && ArmorGasSC.suitAmount(p, Gas.HYDROGEN) >= ArmorGasSC.H2_FLIGHT_PER_SECOND;
+    }
+
+    /**
+     * Helium in the worn loop: what the Exo shield and the annihilation pulse need to switch on at
+     * all - at least HELIUM_READY_PCT of the loop's volume (and never under 1 mB), not a last drop.
+     */
+    public static boolean heliumReady(ItemStack[] worn) {
+        int cap = ArmorGasSC.capacityOf(worn, Gas.HELIUM);
+        return cap > 0 && ArmorGasSC.amountOf(worn, Gas.HELIUM) >= heliumReadyMin(cap);
+    }
+
+    /** heliumReady: the share of the helium loop it needs, percent. */
+    public static final int HELIUM_READY_PCT = 1;
+
+    /** The least helium heliumReady accepts for a loop of `cap` mB. */
+    public static int heliumReadyMin(int cap) {
+        return Math.max(1, cap * HELIUM_READY_PCT / 100);
+    }
+
+    /**
+     * Breathing on the helmet's oxygen this second (under water, inside a block, in space): the
+     * function on and OXYGEN_PER_SECOND mB taken. No oxygen - no breathing. @return whether it breathed
+     */
+    public static boolean breathe(ItemStack[] worn) {
+        ItemStack helmet = worn[ArmorGasSC.HELMET];
+        return helmet != null && ItemArmorSC.isEnabled(helmet, ArmorFeature.AIR)
+                && ArmorGasSC.drainExact(worn, Gas.OXYGEN, ArmorGasSC.OXYGEN_PER_SECOND);
+    }
+
+    /** The helmet's breathing can work right now (switched on, not overheated, charge, oxygen left). */
+    public static boolean canBreathe(EntityPlayer p) {
+        return active(p, ArmorFeature.AIR) && ArmorGasSC.suitAmount(p, Gas.OXYGEN) >= ArmorGasSC.OXYGEN_PER_SECOND;
+    }
+
+    /**
+     * Galacticraft's airless worlds (compat.GalacticraftSC): the suit's oxygen instead of their
+     * tanks, OXYGEN_PER_SECOND a second (their check comes every tick). @return true to cancel the suffocation
+     */
+    public static boolean breatheInSpace(EntityPlayer p) {
+        if (p.worldObj.isRemote || !canBreathe(p)) {
+            return false;
+        }
+        NBTTagCompound data = p.getEntityData();
+        long now = p.worldObj.getTotalWorldTime();
+        if (now - data.getLong(O2_SPACE_AT) >= 20 || now < data.getLong(O2_SPACE_AT)) {
+            if (!breathe(ArmorGasSC.wornSet(p))) {
+                return false;
+            }
+            data.setLong(O2_SPACE_AT, now);
+            data.setBoolean(O2_USED, true);
+        }
+        return true;
+    }
+
+    /** Suffocating inside a block: the helmet's oxygen stops it (paid once a second in perSecond). */
+    public static boolean stopsSuffocation(EntityPlayer p, net.minecraft.util.DamageSource src) {
+        return src == net.minecraft.util.DamageSource.inWall && !p.worldObj.isRemote && canBreathe(p);
+    }
+
+    /** The ore scanner's reach: an Exo helmet with krypton sees half as far again. Used by the client's scanner. */
+    public static int oreScanRadius(EntityPlayer p, int base) {
+        ItemStack helmet = piece(p, 0);
+        return suitOf(helmet) == ArmorSuit.EXO && ArmorGasSC.amount(helmet, Gas.KRYPTON) > 0
+                ? Math.round(base * ArmorGasSC.KRYPTON_SCAN_MUL) : base;
+    }
+
+    private static final String O2_SPACE_AT = "scO2SpaceAt", O2_USED = "scO2Used", FUSION_ON = "scFusionOn",
+            AIR_JUMPED = "scAirJumped", AIR_JUMP_AT = "scAirJumpAt", ARGON_AT = "scArgonAt", WARN_PREFIX = "scGasWarn_";
+    /** The searchlight's light: where it stands (player data), and when it was last pointed at. */
+    public static final String LIGHT_X = "scLightX", LIGHT_Y = "scLightY", LIGHT_Z = "scLightZ", LIGHT_DIM = "scLightDim",
+            LIGHT_AT = "scLightAt", LIGHT_ON = "scLightOn", LIGHT_MOVED = "scLightMoved";
+    /** ArmorNetSC action byte the client sends for the Quantum air jump (handled by airJump). */
+    public static final byte AIR_JUMP_ACTION = 20;
+
+    /** The fusion cell ran this second (the helium loop burns twice as fast meanwhile). */
+    public static boolean fusionRunning(EntityPlayer p) {
+        return p.getEntityData().getBoolean(FUSION_ON);
+    }
+
+    /** A warning in chat with a short sound, at most once in `cooldown` ticks per key. */
+    public static void warn(EntityPlayer p, String key, int cooldown) {
+        NBTTagCompound data = p.getEntityData();
+        long now = p.worldObj.getTotalWorldTime();
+        long at = data.getLong(WARN_PREFIX + key);
+        if (data.hasKey(WARN_PREFIX + key) && now - at < cooldown && now >= at) {
+            return;
+        }
+        data.setLong(WARN_PREFIX + key, now);
+        p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key));
+        if (p instanceof EntityPlayerMP && ((EntityPlayerMP) p).playerNetServerHandler != null) {
+            ((EntityPlayerMP) p).playerNetServerHandler.sendPacket(
+                    new net.minecraft.network.play.server.S29PacketSoundEffect("note.pling", p.posX, p.posY, p.posZ, 0.7F, 0.6F));
+        }
+    }
+
+    /** Lets the warning come again at once next time (the cause went away). */
+    public static void rearm(EntityPlayer p, String key) {
+        p.getEntityData().removeTag(WARN_PREFIX + key);
     }
 
     /** Heat from things that happen between the once-a-second checks (dash, shield), collected per player. */
@@ -154,10 +270,16 @@ public final class ArmorLogicSC {
         if (active(p, ArmorFeature.WATER_WALK) && !p.isSneaking() && !p.capabilities.isFlying) {
             walkOnFluid(p);
         }
+        if (p.onGround || p.capabilities.isFlying || p.isInWater() || p.isOnLadder()) {
+            data.removeTag(AIR_JUMPED);                       // one air jump per time off the ground
+        }
         if (p.worldObj.isRemote) {
+            airJumpKey(p);
             return;
         }
         flight(p);
+        argon(p);
+        searchlight(p);
         if (active(p, ArmorFeature.SHIELD) && p.ticksExisted % 2 == 0) {
             shield(p);
         }
@@ -170,6 +292,220 @@ public final class ArmorLogicSC {
     public static void resendFlight(EntityPlayer p) {
         if (p.getEntityData().getBoolean(FLIGHT_FLAG)) {
             p.sendPlayerAbilities();
+        }
+    }
+
+    // ------------------------------------------------------------------ hydrogen: the Quantum air jump
+
+    private static java.lang.reflect.Field jumpingField;
+
+    /** EntityLivingBase.isJumping (the jump key held, on the client). */
+    private static boolean jumping(EntityPlayer p) {
+        try {
+            if (jumpingField == null) {
+                jumpingField = cpw.mods.fml.relauncher.ReflectionHelper.findField(net.minecraft.entity.EntityLivingBase.class,
+                        "isJumping", "field_70703_bu");
+            }
+            return jumpingField.getBoolean(p);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Client, the player's own: the jump key pressed again in mid-air with the engine boost on, the
+     * jump boots on and hydrogen enough - the server is asked for the air jump (airJump); it pays and
+     * pushes the player up. Once per time off the ground.
+     */
+    private static void airJumpKey(EntityPlayer p) {
+        NBTTagCompound data = p.getEntityData();
+        boolean now = jumping(p);
+        boolean was = data.getBoolean("scJumpHeld");
+        data.setBoolean("scJumpHeld", now);
+        if (!now || was || p.onGround || p.capabilities.isFlying || p.isInWater() || p.isOnLadder()
+                || data.getBoolean(AIR_JUMPED) || p.fallDistance <= 0.1F && p.motionY > 0.1) {
+            return;                                   // still rising from the ground jump: not yet
+        }
+        if (!airJumpReady(p)) {
+            return;
+        }
+        data.setBoolean(AIR_JUMPED, true);
+        com.sc.handler.ArmorNetSC.CHANNEL.sendToServer(new com.sc.handler.ArmorNetSC.Message(AIR_JUMP_ACTION, 0));
+    }
+
+    private static boolean airJumpReady(EntityPlayer p) {
+        return boosterOn(p) && active(p, ArmorFeature.JUMP) && ArmorGasSC.suitAmount(p, Gas.HYDROGEN) >= ArmorGasSC.H2_AIR_JUMP;
+    }
+
+    /** Server, from the client's AIR_JUMP_ACTION: a second jump in mid-air for H2_AIR_JUMP mB of hydrogen. */
+    public static void airJump(EntityPlayerMP p) {
+        NBTTagCompound data = p.getEntityData();
+        long now = p.worldObj.getTotalWorldTime();
+        if (p.onGround || p.capabilities.isFlying || data.getBoolean(AIR_JUMPED)
+                || (data.hasKey(AIR_JUMP_AT) && now - data.getLong(AIR_JUMP_AT) < 10 && now >= data.getLong(AIR_JUMP_AT))) {
+            return;
+        }
+        if (!airJumpReady(p) || !ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_AIR_JUMP)) {
+            return;
+        }
+        data.setBoolean(AIR_JUMPED, true);
+        data.setLong(AIR_JUMP_AT, now);
+        PotionEffect jump = p.getActivePotionEffect(Potion.jump);
+        p.motionY = 0.42 + (jump == null ? 0 : (jump.getAmplifier() + 1) * 0.1);
+        p.fallDistance = 0;
+        p.velocityChanged = true;
+        p.worldObj.playSoundAtEntity(p, "fire.ignite", 0.5F, 1.8F);
+        if (p.worldObj instanceof net.minecraft.world.WorldServer) {
+            ((net.minecraft.world.WorldServer) p.worldObj).func_147487_a("cloud", p.posX, p.posY, p.posZ, 6, 0.2, 0.05, 0.2, 0.02);
+        }
+    }
+
+    // ------------------------------------------------------------------ argon: putting fires out
+
+    /**
+     * Every tick, server. Burning (not in lava or a fire, not fire proof): the chestplate's argon
+     * puts the wearer out at once for ARGON_EXTINGUISH mB.
+     */
+    private static void argon(EntityPlayer p) {
+        if (!p.isBurning() || p.handleLavaMovement() || active(p, ArmorFeature.FIRE_PROOF)
+                || p.worldObj.func_147470_e(p.boundingBox.contract(0.001, 0.001, 0.001))) {
+            return;                                    // standing in fire / lava: it would light again at once
+        }
+        NBTTagCompound data = p.getEntityData();
+        long now = p.worldObj.getTotalWorldTime();
+        if (data.hasKey(ARGON_AT) && now - data.getLong(ARGON_AT) < 20 && now >= data.getLong(ARGON_AT)) {
+            return;
+        }
+        if (ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.ARGON, ArmorGasSC.ARGON_EXTINGUISH)) {
+            data.setLong(ARGON_AT, now);
+            p.extinguish();
+            p.worldObj.playSoundAtEntity(p, "random.fizz", 0.7F, 1.4F);
+        }
+    }
+
+    /** Lava hurting a Nano / Quantum wearer (no fire proofing on) with argon in the chestplate: half the damage. */
+    public static float argonLava(EntityPlayer p, net.minecraft.util.DamageSource src, float amount) {
+        if (src != net.minecraft.util.DamageSource.lava || p.worldObj.isRemote || active(p, ArmorFeature.FIRE_PROOF)
+                || ArmorGasSC.suitAmount(p, Gas.ARGON) <= 0) {
+            return amount;
+        }
+        return amount / 2F;
+    }
+
+    /** Exo fire proofing with argon: the fire round the wearer goes out. @return argon spent */
+    private static int argonFireAround(EntityPlayer p, ItemStack[] worn) {
+        int r = ArmorGasSC.ARGON_FIRE_RADIUS, spent = 0;
+        int px = MathHelper.floor_double(p.posX), py = MathHelper.floor_double(p.posY), pz = MathHelper.floor_double(p.posZ);
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -1; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (p.worldObj.getBlock(px + dx, py + dy, pz + dz) != net.minecraft.init.Blocks.fire) {
+                        continue;
+                    }
+                    if (!ArmorGasSC.drainExact(worn, Gas.ARGON, ArmorGasSC.ARGON_PER_FIRE)) {
+                        return spent;
+                    }
+                    spent += ArmorGasSC.ARGON_PER_FIRE;
+                    p.worldObj.setBlockToAir(px + dx, py + dy, pz + dz);
+                    p.worldObj.playSoundEffect(px + dx + 0.5, py + dy + 0.5, pz + dz + 0.5, "random.fizz", 0.5F, 2.0F);
+                }
+            }
+        }
+        return spent;
+    }
+
+    // ------------------------------------------------------------------ krypton: the searchlight
+
+    /**
+     * Server, every tick: the helmet's searchlight on with krypton - an invisible light block
+     * (BlockLightSC) SEARCHLIGHT_RANGE blocks ahead along the look, or just before the block the
+     * look hits; aimed every 4 ticks, but moved only when the aim shifted by LIGHT_MOVE_DIST blocks
+     * or LIGHT_MOVE_TICKS have passed since it last moved (fewer light updates). Only ever placed in
+     * plain air (never in another mod's air, like Galacticraft's breathable one). The light puts
+     * itself out once nobody points at it.
+     */
+    private static void searchlight(EntityPlayer p) {
+        NBTTagCompound data = p.getEntityData();
+        boolean on = com.sc.init.ModBlocks.lightSC != null && active(p, ArmorFeature.SEARCHLIGHT)
+                && ArmorGasSC.suitAmount(p, Gas.KRYPTON) > 0 && !p.isPlayerSleeping();
+        if (!on) {
+            clearLight(p);
+            return;
+        }
+        if (p.ticksExisted % 4 != 0) {
+            return;
+        }
+        double ey = p.posY + 1.62;                     // server: posY is the feet
+        Vec3 eye = Vec3.createVectorHelper(p.posX, ey, p.posZ);
+        Vec3 look = p.getLookVec();
+        int range = ArmorGasSC.SEARCHLIGHT_RANGE;
+        Vec3 end = Vec3.createVectorHelper(p.posX + look.xCoord * range, ey + look.yCoord * range, p.posZ + look.zCoord * range);
+        net.minecraft.util.MovingObjectPosition hit = p.worldObj.rayTraceBlocks(eye, end, true);
+        int x, y, z;
+        if (hit != null && hit.typeOfHit == net.minecraft.util.MovingObjectPosition.MovingObjectType.BLOCK) {
+            net.minecraftforge.common.util.ForgeDirection d = net.minecraftforge.common.util.ForgeDirection.getOrientation(hit.sideHit);
+            x = hit.blockX + d.offsetX;
+            y = hit.blockY + d.offsetY;
+            z = hit.blockZ + d.offsetZ;
+        } else {
+            x = MathHelper.floor_double(end.xCoord);
+            y = MathHelper.floor_double(end.yCoord);
+            z = MathHelper.floor_double(end.zCoord);
+        }
+        long now = p.worldObj.getTotalWorldTime();
+        int lx = data.getInteger(LIGHT_X), ly = data.getInteger(LIGHT_Y), lz = data.getInteger(LIGHT_Z);
+        // the light still standing where it was put (it can be gone: replaced, a block placed there)
+        boolean standing = data.getBoolean(LIGHT_ON) && data.getInteger(LIGHT_DIM) == p.dimension
+                && p.worldObj.blockExists(lx, ly, lz) && p.worldObj.getBlock(lx, ly, lz) == com.sc.init.ModBlocks.lightSC;
+        boolean keep = standing && !lightShouldMove(lx, ly, lz, x, y, z, now - data.getLong(LIGHT_MOVED));
+        if (!keep) {
+            clearLight(p);
+            if (y < 1 || y > 254 || !p.worldObj.blockExists(x, y, z) || p.worldObj.getBlock(x, y, z) != net.minecraft.init.Blocks.air) {
+                return;
+            }
+            p.worldObj.setBlock(x, y, z, com.sc.init.ModBlocks.lightSC, 0, 2);
+            data.setBoolean(LIGHT_ON, true);
+            data.setInteger(LIGHT_X, x);
+            data.setInteger(LIGHT_Y, y);
+            data.setInteger(LIGHT_Z, z);
+            data.setInteger(LIGHT_DIM, p.dimension);
+            data.setLong(LIGHT_MOVED, now);
+        }
+        data.setLong(LIGHT_AT, now);
+    }
+
+    /** The searchlight's light moves when the aim shifted this many blocks (any axis)... */
+    public static final int LIGHT_MOVE_DIST = 2;
+    /** ...or after this many ticks in one place when it shifted less. */
+    public static final int LIGHT_MOVE_TICKS = 8;
+
+    /** Pure: whether the light at (lx, ly, lz), put there `age` ticks ago, should go to the aim (x, y, z). */
+    public static boolean lightShouldMove(int lx, int ly, int lz, int x, int y, int z, long age) {
+        if (lx == x && ly == y && lz == z) {
+            return false;
+        }
+        int d = Math.max(Math.abs(lx - x), Math.max(Math.abs(ly - y), Math.abs(lz - z)));
+        return d >= LIGHT_MOVE_DIST || age >= LIGHT_MOVE_TICKS || age < 0;
+    }
+
+    /**
+     * The player's searchlight light goes out (if it's still there) - in the world it was put in,
+     * also when the player has just left that world (a portal: the stored dimension). Server only;
+     * also called on logout and death (CommonEventHandler / ShieldEventHandler).
+     */
+    public static void clearLight(EntityPlayer p) {
+        NBTTagCompound data = p.getEntityData();
+        if (!data.getBoolean(LIGHT_ON)) {
+            return;
+        }
+        data.removeTag(LIGHT_ON);
+        if (p.worldObj == null || p.worldObj.isRemote || com.sc.init.ModBlocks.lightSC == null) {
+            return;
+        }
+        int x = data.getInteger(LIGHT_X), y = data.getInteger(LIGHT_Y), z = data.getInteger(LIGHT_Z), dim = data.getInteger(LIGHT_DIM);
+        net.minecraft.world.World w = dim == p.dimension ? p.worldObj : net.minecraftforge.common.DimensionManager.getWorld(dim);
+        if (w != null && w.blockExists(x, y, z) && w.getBlock(x, y, z) == com.sc.init.ModBlocks.lightSC) {
+            w.setBlock(x, y, z, net.minecraft.init.Blocks.air, 0, 2);
         }
     }
 
@@ -207,8 +543,12 @@ public final class ArmorLogicSC {
             p.sendPlayerAbilities();
         }
         if (can) {
-            // the Quantum chestplate flies at half the speed, the Exo one (and creative) as in creative
+            // the Quantum chestplate flies at half the speed, the Exo one (and creative) as in creative;
+            // the engine boost on hydrogen doubles it
             float speed = p.capabilities.isCreativeMode || suitOf(piece(p, 1)) == ArmorSuit.EXO ? VANILLA_FLY_SPEED : QUANTUM_FLY_SPEED;
+            if (!p.capabilities.isCreativeMode && boostedFlight(p)) {
+                speed *= 2F;
+            }
             if (Math.abs(p.capabilities.getFlySpeed() - speed) > 1e-4) {
                 setFlySpeed(p, speed);
                 p.sendPlayerAbilities();          // the client takes its fly speed from this packet
@@ -312,11 +652,18 @@ public final class ArmorLogicSC {
         }
         heat += data.getInteger(HEAT_KEY);
         data.removeTag(HEAT_KEY);
-        if (active(p, ArmorFeature.AIR) && p.isInsideOfMaterial(Material.water) && p.getAir() < 300
-                && pay(p, ArmorFeature.AIR, ArmorFeature.AIR.euPerSecond)) {
-            p.setAir(300);
+        heat += lifeSupport(p);
+        // breathing on the helmet's oxygen: under water or stuck inside a block (no oxygen - no breathing)
+        boolean underwater = p.isInsideOfMaterial(Material.water), inWall = p.isEntityInsideOpaqueBlock();
+        if ((underwater || inWall) && canBreathe(p) && pay(p, ArmorFeature.AIR, ArmorFeature.AIR.euPerSecond)
+                && breathe(ArmorGasSC.wornSet(p))) {
+            if (underwater) {
+                p.setAir(300);
+            }
+            data.setBoolean(O2_USED, true);
             heat += ArmorFeature.AIR.heat;
         }
+        oxygenWarning(p);
         if (active(p, ArmorFeature.CLEANSE)) {
             for (Potion bad : new Potion[]{Potion.poison, Potion.wither, Potion.hunger, Potion.confusion, Potion.blindness}) {
                 if (p.isPotionActive(bad) && !com.sc.radiation.RadiationSC.sicknessHolds(p, bad.id)
@@ -333,8 +680,24 @@ public final class ArmorLogicSC {
         if (active(p, ArmorFeature.SOLAR) && !precipitationAt(p)
                 && p.worldObj.canBlockSeeTheSky(MathHelper.floor_double(p.posX), MathHelper.floor_double(p.posY) + 2,
                 MathHelper.floor_double(p.posZ))) {
-            // all worn pieces at once: an even share each, what a full piece can't take goes to the rest
-            int left = solarPerSecond(p);
+            chargeSuit(p, solarPerSecond(p));
+        }
+        // regeneration (combat mode): heals while hurt, paid from the chestplate at the tripled rate
+        if (regenOn(p) && p.getHealth() < p.getMaxHealth() && !p.isDead
+                && pay(p, ArmorFeature.REGENERATION, ArmorFeature.REGENERATION.euPerSecond)) {
+            p.heal(ArmorFeature.REGEN_HEAL[suitOf(piece(p, 1)).ordinal()]);
+            heat += ArmorFeature.REGENERATION.heat;
+        }
+        return heat + perSecondRest(p, mode);
+    }
+
+    /**
+     * EU into all worn pieces at once: an even share each, what a full piece can't take goes to the
+     * rest (the solar film, the fusion cell). @return EU taken
+     */
+    public static int chargeSuit(EntityPlayer p, int eu) {
+        int left = eu;
+        {
             while (left > 0) {
                 java.util.List<ItemStack> needy = new java.util.ArrayList<ItemStack>();
                 for (int t : new int[]{1, 0, 2, 3}) {               // chestplate first for the odd EU
@@ -352,12 +715,12 @@ public final class ArmorLogicSC {
                 }
             }
         }
-        // regeneration (combat mode): heals while hurt, paid from the chestplate at the tripled rate
-        if (regenOn(p) && p.getHealth() < p.getMaxHealth() && !p.isDead
-                && pay(p, ArmorFeature.REGENERATION, ArmorFeature.REGENERATION.euPerSecond)) {
-            p.heal(ArmorFeature.REGEN_HEAL[suitOf(piece(p, 1)).ordinal()]);
-            heat += ArmorFeature.REGENERATION.heat;
-        }
+        return eu - left;
+    }
+
+    /** The second half of perSecond (kept apart only to keep the method short). @return heat */
+    private static int perSecondRest(EntityPlayer p, int mode) {
+        int heat = 0;
         if (active(p, ArmorFeature.CHARGER)) {
             heat += chargeWeapons(p);
         }
@@ -365,15 +728,31 @@ public final class ArmorLogicSC {
             resendFlight(p);
         }
         if (active(p, ArmorFeature.FLIGHT) && p.capabilities.isFlying && !p.capabilities.isCreativeMode) {
-            if (pay(p, ArmorFeature.FLIGHT, ArmorFeature.FLIGHT.euPerSecond)) {
+            if (boostedFlight(p)) {                               // the engine boost: hydrogen instead of EU
+                ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_FLIGHT_PER_SECOND);
+                heat += ArmorFeature.FLIGHT.heat + ArmorFeature.BOOSTER.heat;
+            } else if (pay(p, ArmorFeature.FLIGHT, ArmorFeature.FLIGHT.euPerSecond)) {
                 heat += ArmorFeature.FLIGHT.heat;
             }
         }
-        if (active(p, ArmorFeature.FIRE_PROOF) && (p.isBurning() || p.handleLavaMovement())
-                && pay(p, ArmorFeature.FIRE_PROOF, ArmorFeature.FIRE_PROOF.euPerSecond)) {
-            p.addPotionEffect(new PotionEffect(Potion.fireResistance.id, 45, 0, true));
-            p.extinguish();
-            heat += ArmorFeature.FIRE_PROOF.heat;
+        if (active(p, ArmorFeature.FIRE_PROOF) && (p.isBurning() || p.handleLavaMovement())) {
+            // Exo with argon: half the EU, and the fire round the wearer goes out
+            ItemStack[] worn = ArmorGasSC.wornSet(p);
+            boolean argon = ArmorGasSC.amountOf(worn, Gas.ARGON) >= ArmorGasSC.ARGON_EXO_PER_SECOND;
+            int eu = argon ? (int) Math.ceil(ArmorFeature.FIRE_PROOF.euPerSecond * ArmorGasSC.ARGON_EXO_EU_MUL)
+                    : ArmorFeature.FIRE_PROOF.euPerSecond;
+            if (pay(p, ArmorFeature.FIRE_PROOF, eu)) {
+                argon = argon && ArmorGasSC.drainExact(worn, Gas.ARGON, ArmorGasSC.ARGON_EXO_PER_SECOND);
+                p.addPotionEffect(new PotionEffect(Potion.fireResistance.id, 45, 0, true));
+                p.extinguish();
+                heat += ArmorFeature.FIRE_PROOF.heat;
+                if (argon) {
+                    argonFireAround(p, worn);
+                }
+            }
+        }
+        if (p.handleLavaMovement() && !active(p, ArmorFeature.FIRE_PROOF) && ArmorGasSC.suitAmount(p, Gas.ARGON) > 0) {
+            ArmorGasSC.suitDrain(p, Gas.ARGON, ArmorGasSC.ARGON_LAVA_PER_SECOND, false);   // half the lava's damage meanwhile
         }
         ArmorSuit legs = suitOf(piece(p, 2));
         if (active(p, ArmorFeature.SPEED) && p.isSprinting() && pay(p, ArmorFeature.SPEED, ArmorFeature.SPEED.euPerSecond)) {
@@ -394,6 +773,70 @@ public final class ArmorLogicSC {
         }
         setBonuses(p);
         return heat;
+    }
+
+    /**
+     * Once a second, server: the gases' own systems - the Cryo Tank chip's tank volume, the fusion
+     * cell, the oxygen regenerator chip, krypton for the searchlight / the Exo ore scanner.
+     * (Helium cooling is in the heat step, CommonEventHandler; radiation's heavy water in RadiationSC.)
+     * @return heat made
+     */
+    private static int lifeSupport(EntityPlayer p) {
+        int heat = 0;
+        NBTTagCompound data = p.getEntityData();
+        ItemStack[] worn = ArmorGasSC.wornSet(p);
+        ItemStack chest = worn[ArmorGasSC.CHEST], helmet = worn[ArmorGasSC.HELMET];
+        if (ArmorGasSC.applyCapacityBonus(worn)) {
+            p.inventoryContainer.detectAndSendChanges();
+        }
+        // deuterium fusion cell (Exo chestplate): only with helium in the loop as well
+        data.removeTag(FUSION_ON);
+        if (active(p, ArmorFeature.FUSION_CELL)) {
+            if (fusionStep(worn)) {
+                chargeSuit(p, ArmorGasSC.FUSION_EU_PER_TICK * 20);
+                heat += ArmorFeature.FUSION_CELL.heat;
+                data.setBoolean(FUSION_ON, true);
+            } else if (!heliumReady(worn) && ArmorGasSC.amountOf(worn, Gas.DEUTERIUM) > 0) {
+                warn(p, "sc.gas.warn.fusion", 1200);
+            }
+        }
+        // oxygen regenerator chip (Exo): under water the helmet's oxygen comes back, for EU
+        int regen = ArmorGasSC.chipTier(chest, ChipType.OXYGEN_REGEN);
+        if (regen > 0 && !overheated(p) && suitOf(chest) == ArmorSuit.EXO && p.isInWater()
+                && ArmorGasSC.capacityOf(worn, Gas.OXYGEN) > ArmorGasSC.amountOf(worn, Gas.OXYGEN)
+                && ItemArmorSC.pay(chest, (int) Math.ceil(ArmorGasSC.OXYGEN_REGEN_EU * costMul(p)))) {
+            ArmorGasSC.fillOf(worn, Gas.OXYGEN, ArmorGasSC.OXYGEN_REGEN_BASE + ArmorGasSC.OXYGEN_REGEN_PER_TIER * regen, false);
+        }
+        // krypton: the searchlight, and the Exo ore scanner's longer reach
+        boolean light = active(p, ArmorFeature.SEARCHLIGHT) && data.getBoolean(LIGHT_ON);
+        boolean scan = active(p, ArmorFeature.ORE_SCANNER) && suitOf(helmet) == ArmorSuit.EXO;
+        if ((light || scan) && ArmorGasSC.amountOf(worn, Gas.KRYPTON) > 0) {
+            ArmorGasSC.drainFraction(worn, Gas.KRYPTON, ArmorGasSC.KRYPTON_PER_MIN / 60F);
+        }
+        return heat;
+    }
+
+    /** One second of the fusion cell: deuterium burnt, if there is deuterium and helium. @return whether it ran */
+    public static boolean fusionStep(ItemStack[] worn) {
+        float use = ArmorGasSC.FUSION_D_PER_TICK * 20;
+        if (!heliumReady(worn) || ArmorGasSC.amountOf(worn, Gas.DEUTERIUM) < (int) Math.ceil(use)) {
+            return false;
+        }
+        ArmorGasSC.drainFraction(worn, Gas.DEUTERIUM, use);
+        return true;
+    }
+
+    /** "Oxygen: 30 seconds" once, while breathing on it; again after a refill. */
+    private static void oxygenWarning(EntityPlayer p) {
+        NBTTagCompound data = p.getEntityData();
+        boolean used = data.getBoolean(O2_USED);
+        data.removeTag(O2_USED);
+        int left = ArmorGasSC.suitAmount(p, Gas.OXYGEN);
+        if (left > 30 * ArmorGasSC.OXYGEN_PER_SECOND * 2) {
+            rearm(p, "sc.gas.warn.oxygen");
+        } else if (used && left <= 30 * ArmorGasSC.OXYGEN_PER_SECOND) {
+            warn(p, "sc.gas.warn.oxygen", 20 * 60 * 10);
+        }
     }
 
     /** Rain or snow falls where the player stands (a desert, savanna or the Nether stays dry in any weather). */
@@ -484,6 +927,18 @@ public final class ArmorLogicSC {
 
     /** Boots soften a fall: Nano half, Quantum three quarters, Exo all of it - paid per point. @return the new fall distance */
     public static float fall(EntityPlayer p, float distance) {
+        float left = dampFall(p, distance);
+        // the engine boost: what the boots' EU didn't soften, a hydrogen burst does - no damage at all
+        PotionEffect jump = p.getActivePotionEffect(Potion.jump);
+        if (left - 3 - (jump == null ? 0 : jump.getAmplifier() + 1) > 0 && boosterOn(p)
+                && ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_SOFT_LANDING)) {
+            p.worldObj.playSoundAtEntity(p, "fire.ignite", 0.6F, 1.5F);
+            return 0F;
+        }
+        return left;
+    }
+
+    private static float dampFall(EntityPlayer p, float distance) {
         if (!active(p, ArmorFeature.FALL_DAMPING) || distance <= 3) {
             return distance;
         }
@@ -518,6 +973,10 @@ public final class ArmorLogicSC {
         }
         if (fullSet(p) != ArmorSuit.EXO) {
             p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.armor.annihilate.low"));
+            return;
+        }
+        if (!heliumReady(ArmorGasSC.wornSet(p))) {                  // hard rule: no helium in the loop - no pulse
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.gas.nohelium"));
             return;
         }
         for (int t = 0; t < 4; t++) {                               // all four Exo pieces worn, each 95%+ full
@@ -589,6 +1048,10 @@ public final class ArmorLogicSC {
         if (!active(p, ArmorFeature.SHIELD)) {
             return false;
         }
+        if (!heliumReady(ArmorGasSC.wornSet(p))) {
+            warn(p, "sc.gas.nohelium.shield", 600);             // hard rule: the energy shield needs the helium loop
+            return false;
+        }
         NBTTagCompound data = p.getEntityData();
         long now = p.worldObj.getTotalWorldTime();
         float covered = now - data.getLong("scExoShieldAt") < 10 ? data.getFloat("scExoShieldAmt") : 0;
@@ -632,12 +1095,18 @@ public final class ArmorLogicSC {
         if (len < 0.01) {
             return;                                        // straight up / down: no direction - nothing paid (it used to be)
         }
-        if (!active(p, ArmorFeature.DASH) || !pay(p, ArmorFeature.DASH, ArmorFeature.DASH_COST)) {
+        if (!active(p, ArmorFeature.DASH)) {
             return;
         }
+        // the engine boost: half as far again, on hydrogen instead of EU
+        boolean boost = boosterOn(p) && ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_DASH);
+        if (!boost && !pay(p, ArmorFeature.DASH, ArmorFeature.DASH_COST)) {
+            return;
+        }
+        double push = boost ? 1.8 * 1.5 : 1.8;
         data.setLong("scDashAt", now);
-        p.motionX = look.xCoord / len * 1.8;
-        p.motionZ = look.zCoord / len * 1.8;
+        p.motionX = look.xCoord / len * push;
+        p.motionZ = look.zCoord / len * push;
         p.motionY = Math.max(p.motionY, 0.35);
         p.fallDistance = 0;
         p.velocityChanged = true;

@@ -116,6 +116,10 @@ public class WailaSC implements IWailaDataProvider {
         if (t.hasKey("scWlKind")) {
             wireless(t, tip);
         }
+        if (t.hasKey("scStationSt")) {                               // the Armour Service Station
+            tip.add(Lang.tr("sc.armorStation.status." + t.getInteger("scStationSt")));
+            tip.add(Lang.tr("sc.waila.armorStation", t.getInteger("scStationGas"), t.getInteger("scStationCap"), t.getInteger("scStationPieces")));
+        }
         if (t.hasKey("scShowerSt")) {
             tip.add(Lang.tr("sc.shower.status." + t.getInteger("scShowerSt")));
             tip.add(Lang.tr("sc.waila.shower", t.getInteger("scShowerWater"), com.sc.tileentity.TileEntityShowerSC.TANK,
@@ -226,6 +230,7 @@ public class WailaSC implements IWailaDataProvider {
         }
         if (te instanceof TileEntityEnergyBase && !(te instanceof com.sc.tileentity.TileEntityFieldGeneratorSC)
                 && !(te instanceof com.sc.tileentity.TileEntityShowerSC) && !(te instanceof com.sc.tileentity.TileEntityWirelessSC)
+                && !(te instanceof com.sc.tileentity.TileEntityArmorStationSC)
                 && !((TileEntityEnergyBase) te).isPowerOn()) {                // (the shower and wireless say so in their status)
             tag.setBoolean("scOff", true);
         }
@@ -255,6 +260,22 @@ public class WailaSC implements IWailaDataProvider {
             tag.setInteger("scSingOut", s.outputNow());
             tag.setInteger("scSingEvent", s.getEvent());
             tag.setBoolean("scSingReady", s.isReady());
+        }
+        if (te instanceof com.sc.tileentity.TileEntityArmorStationSC) {
+            com.sc.tileentity.TileEntityArmorStationSC st = (com.sc.tileentity.TileEntityArmorStationSC) te;
+            long gas = 0, cap = 0;
+            for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+                gas += st.shownAmount(g);
+                cap += st.shownCapacity(g);
+            }
+            int pieces = 0;
+            for (int i = 0; i < st.getSizeInventory(); i++) {
+                pieces += st.getStackInSlot(i) != null ? 1 : 0;
+            }
+            tag.setInteger("scStationSt", st.getStatus());
+            tag.setInteger("scStationGas", (int) Math.min(Integer.MAX_VALUE, gas));
+            tag.setInteger("scStationCap", (int) Math.min(Integer.MAX_VALUE, cap));
+            tag.setInteger("scStationPieces", pieces);
         }
         if (te instanceof com.sc.tileentity.TileEntityShowerSC) {
             com.sc.tileentity.TileEntityShowerSC sh = (com.sc.tileentity.TileEntityShowerSC) te;

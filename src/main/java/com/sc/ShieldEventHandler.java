@@ -17,6 +17,19 @@ import net.minecraftforge.event.world.ExplosionEvent;
  */
 public class ShieldEventHandler {
 
+    /** Galacticraft's modid (checked in its jar's mcmod.info / @Mod: "GalacticraftCore"). */
+    public static final String GALACTICRAFT = "GalacticraftCore";
+
+    /**
+     * Made once in preInit (SCMod): with Galacticraft loaded, its suffocation event is handled too
+     * (compat.GalacticraftSC) - without it that class is never loaded at all.
+     */
+    public ShieldEventHandler() {
+        if (cpw.mods.fml.common.Loader.isModLoaded(GALACTICRAFT)) {
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.sc.compat.GalacticraftSC());
+        }
+    }
+
     /**
      * A player allowed to fly (the Exo flight function) takes no fall damage in vanilla and gets no
      * LivingFallEvent - without this the flight function was also free fall immunity. Charged as a
@@ -33,6 +46,14 @@ public class ShieldEventHandler {
         int damage = (int) Math.ceil(distance - 3 - (jump == null ? 0 : jump.getAmplifier() + 1));
         if (damage > 0) {
             p.attackEntityFrom(net.minecraft.util.DamageSource.fall, damage);
+        }
+    }
+
+    /** A player's death puts their searchlight's light out (Forge's death event is on this bus). */
+    @SubscribeEvent
+    public void onDeath(net.minecraftforge.event.entity.living.LivingDeathEvent event) {
+        if (event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer && !event.entityLiving.worldObj.isRemote) {
+            com.sc.item.ArmorLogicSC.clearLight((net.minecraft.entity.player.EntityPlayer) event.entityLiving);
         }
     }
 
@@ -54,16 +75,21 @@ public class ShieldEventHandler {
     @SubscribeEvent
     public void onHurt(net.minecraftforge.event.entity.living.LivingHurtEvent event) {
         if (event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer && !event.entityLiving.worldObj.isRemote) {
-            event.ammount = com.sc.item.BladeLogicSC.onHurt((net.minecraft.entity.player.EntityPlayer) event.entityLiving,
-                    event.source, event.ammount);
+            net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) event.entityLiving;
+            event.ammount = com.sc.item.BladeLogicSC.onHurt(p, event.source, event.ammount);
+            event.ammount = com.sc.item.ArmorLogicSC.argonLava(p, event.source, event.ammount);   // argon: lava hurts half
         }
     }
 
     /** Full Exo set: the energy shield lets nothing through, explosion proofing stops explosions (ArmorLogicSC.exoStops). */
     @SubscribeEvent
     public void onAttacked(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
-        if (event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer
-                && com.sc.item.ArmorLogicSC.exoStops((net.minecraft.entity.player.EntityPlayer) event.entityLiving, event.source, event.ammount)) {
+        if (!(event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer)) {
+            return;
+        }
+        net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) event.entityLiving;
+        // stuck in a block: the helmet's oxygen keeps the wearer breathing (paid once a second, ArmorLogicSC)
+        if (com.sc.item.ArmorLogicSC.stopsSuffocation(p, event.source) || com.sc.item.ArmorLogicSC.exoStops(p, event.source, event.ammount)) {
             event.setCanceled(true);
         }
     }

@@ -14,7 +14,7 @@ public enum ArmorFeature {
     // helmet
     NIGHT_VISION(0, ArmorSuit.NANO, 40, 1, true),
     HUD(0, ArmorSuit.NANO, 0, 0, true),
-    AIR(0, ArmorSuit.QUANTUM, 40, 1, true),         // breathing under water
+    AIR(0, ArmorSuit.NANO, 40, 1, true),            // breathing on the helmet's oxygen: under water, inside a block, in space (Galacticraft)
     CLEANSE(0, ArmorSuit.QUANTUM, 0, 0, true),      // poison, wither, hunger, nausea, blindness removed (EU per effect)
     ORE_SCANNER(0, ArmorSuit.QUANTUM, 60, 2, false), // this mod's ores (Exo: every ore) outlined through the ground
     SOLAR(0, ArmorSuit.EXO, 0, 0, true),            // open sky charges the whole suit, at night at half rate
@@ -37,7 +37,11 @@ public enum ArmorFeature {
     REGENERATION(1, ArmorSuit.NANO, 200, 2, false), // combat mode only: heals every second; the whole suit costs 3x combat meanwhile
     EXPLOSION_PROOF(1, ArmorSuit.EXO, 0, 2, true),  // full Exo set only: explosions neither hurt nor throw (EU per explosion)
     SET_AURA(1, ArmorSuit.NANO, 0, 0, true),        // full set of one suit: sparks of its light colour around the wearer (looks only)
-    RAD_SHIELD(1, ArmorSuit.QUANTUM, 0, 0, true);   // radiation stopped (Quantum 75%, Exo 100%): EU and heat only while irradiated
+    RAD_SHIELD(1, ArmorSuit.QUANTUM, 0, 0, true),   // radiation stopped (Quantum 75%, Exo 100%): EU and heat only while irradiated
+    // life support (docs/plan-armor-gases.md), appended: these run on their gas, never on EU alone
+    BOOSTER(1, ArmorSuit.QUANTUM, 0, 1, true),      // hydrogen: flight x2 speed, a longer dash, an air jump, a soft landing
+    SEARCHLIGHT(0, ArmorSuit.QUANTUM, 0, 0, false), // krypton: a moving light 12 blocks ahead
+    FUSION_CELL(1, ArmorSuit.EXO, 0, 6, false);     // deuterium + helium: 256 EU/t into the suit, heats hard
 
     public final int piece;
     public final ArmorSuit minSuit;
@@ -81,6 +85,11 @@ public enum ArmorFeature {
     public static final int RAD_QUANTUM_PCT = 75, RAD_EXO_PCT = 100, RAD_ECO_PCT_LESS = 25;
     public static final int RAD_QUANTUM_EU = 20, RAD_EXO_EU = 25;
     public static final float RAD_HEAT_PER_LEVEL = 0.4F;
+
+    /** Runs on its gas: needs no EU in its piece to be active (the gas is checked where it's spent). */
+    public boolean gasPowered() {
+        return this == BOOSTER || this == SEARCHLIGHT || this == FUSION_CELL;
+    }
 
     /** Fired by its key (once, then off again) instead of switched on and off. */
     public boolean isAction() {

@@ -33,6 +33,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
             covered.add(handler.getMachineType());
         }
         CompressorRecipeHandlerSC compressor = new CompressorRecipeHandlerSC();
+        API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.lightSC));   // the searchlight's light: not an item to have
         API.registerRecipeHandler(compressor);
         API.registerUsageHandler(compressor);
         covered.add(compressor.getMachineType());

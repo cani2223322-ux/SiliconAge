@@ -57,6 +57,12 @@ repositories {
 // such configuration) - javac only needs IC2's own (non-SRG) method signatures to compile
 // against, and Forge's dev classloader remaps vanilla-internal references at runtime same
 // as for any other mod jar dropped into run/mods.
+// Compile-only jars (ForgeGradle 1.2's Gradle has no compileOnly): on javac's classpath, not at runtime.
+configurations {
+    compileOnlySC
+}
+sourceSets.main.compileClasspath += configurations.compileOnlySC
+
 dependencies {
     compile files(
             'libs/industrialcraft-2-2.2.828-experimental.jar',
@@ -66,6 +72,11 @@ dependencies {
             'libs/CodeChickenLib-1.7.10-1.1.3.141-universal.jar',
             'libs/Waila-1.5.10_1.7.10.jar'
     )
+    // Galacticraft (com.sc.compat.GalacticraftSC: breathing in space on the suit's oxygen) - compile
+    // only: never packed into our jar, and kept off the dev run's classpath too (it needs
+    // MicdoodleCore, which isn't there - runClient / runServer would stop on the missing mod).
+    // Our handler is registered only when GalacticraftCore is loaded (ShieldEventHandler).
+    compileOnlySC files('libs/GalacticraftCore-1.7-3.0.12.504.jar')
 }
 
 // ic2/api/energy/tile/IMultiEnergySource is only compiled against: Industrial Upgrade ships the real one

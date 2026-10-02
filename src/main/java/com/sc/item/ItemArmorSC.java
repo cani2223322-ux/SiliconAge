@@ -226,6 +226,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             case 1:
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.pairs(list, names, on);
+                gasLines(stack, list);
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;
             case 2:
@@ -235,6 +236,27 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             default:
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.hintShift(list);
+        }
+    }
+
+    /** Shift page: the gases inside - one line for each gas this piece has a tank of (helium on the radiator pieces too). */
+    private static void gasLines(ItemStack stack, List list) {
+        boolean head = false;
+        for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+            int cap = com.sc.util.ArmorGasSC.capacity(stack, g);
+            if (cap <= 0) {
+                continue;
+            }
+            if (!head) {
+                list.add(Lang.tr("sc.tooltip.armor.gases"));
+                head = true;
+            }
+            String name = Lang.trOr("sc.gas." + g.key(), g.key());
+            list.add(Lang.tr("sc.tooltip.armor.gas", name, com.sc.util.ArmorGasSC.amount(stack, g), cap));
+        }
+        int bonus = com.sc.util.ArmorGasSC.capacityBonusPercent(stack);
+        if (head && bonus > 0) {
+            list.add(Lang.tr("sc.tooltip.armor.gasbonus", bonus));
         }
     }
 

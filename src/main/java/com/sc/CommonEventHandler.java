@@ -23,6 +23,8 @@ public class CommonEventHandler {
     // tickArmorHeat for the numbers.
     private static final int HEAT_INTERVAL_TICKS = 20;
     private static final int HEAT_CAPACITY_WARN_PCT = 80;
+    /** "Overheat: 70%" in chat (with a sound), at most every 30 s, again once it's cooled under 60%. */
+    private static final int HEAT_WARN_CHAT_PCT = 70;
 
     @SubscribeEvent
     public void onWorldTick(TickEvent.WorldTickEvent event) {
@@ -67,10 +69,23 @@ public class CommonEventHandler {
         }
     }
 
-    /** A portal resets the client's abilities: the Exo flight has to be sent again. */
+    /**
+     * A portal resets the client's abilities: the Exo flight has to be sent again. The searchlight's
+     * light left in the old world goes out (there is no event before the move; clearLight finds the
+     * old world by the dimension stored with the light).
+     */
     @SubscribeEvent
     public void onDimensionChange(PlayerEvent.PlayerChangedDimensionEvent event) {
+        com.sc.item.ArmorLogicSC.clearLight(event.player);
         com.sc.item.ArmorLogicSC.resendFlight(event.player);
+    }
+
+    /** Logging out: the searchlight's light goes out with the player. */
+    @SubscribeEvent
+    public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.player != null) {
+            com.sc.item.ArmorLogicSC.clearLight(event.player);
+        }
     }
 
     @SubscribeEvent
@@ -132,8 +147,20 @@ public class CommonEventHandler {
                 }
             }
         }
-        heat = Math.max(0, Math.min(suit.heatCapacity, heat + heatGen - suit.heatDissipation));
+        // the suit sheds its own little (passive); what's left the chestplate's helium loop takes
+        // away (docs/plan-armor-gases.md: hybrid - the radiators of the other pieces help it)
+        int excess = Math.max(0, heat + heatGen - suit.heatDissipation);
+        ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(player);
+        excess -= com.sc.util.ArmorGasSC.heliumCool(worn, excess, com.sc.item.ArmorLogicSC.fusionRunning(player));
+        com.sc.util.ArmorGasSC.heliumBoilOff(worn, com.sc.item.ArmorLogicSC.fusionRunning(player));
+        heliumWarning(player, worn, heat + heatGen - suit.heatDissipation > 0);
+        heat = Math.min(suit.heatCapacity, excess);
         int pct = heat * 100 / suit.heatCapacity;
+        if (pct >= HEAT_WARN_CHAT_PCT) {
+            com.sc.item.ArmorLogicSC.warn(player, "sc.gas.warn.heat", 600);
+        } else if (pct < HEAT_WARN_CHAT_PCT - 10) {
+            com.sc.item.ArmorLogicSC.rearm(player, "sc.gas.warn.heat");
+        }
         if (pct >= 100) {
             shutDown = true;
         } else if (pct <= 50) {
@@ -150,12 +177,58 @@ public class CommonEventHandler {
         }
     }
 
+    /** "Helium running low" while the loop has to work and under a tenth is left; again after a refill. */
+    private static void heliumWarning(EntityPlayer player, ItemStack[] worn, boolean cooling) {
+        int cap = com.sc.util.ArmorGasSC.capacityOf(worn, com.sc.util.ArmorGasSC.Gas.HELIUM);
+        int left = com.sc.util.ArmorGasSC.amountOf(worn, com.sc.util.ArmorGasSC.Gas.HELIUM);
+        if (cap <= 0) {
+            return;
+        }
+        if (left * 5 > cap) {
+            com.sc.item.ArmorLogicSC.rearm(player, "sc.gas.warn.helium");
+        } else if (cooling && left * 10 <= cap) {
+            com.sc.item.ArmorLogicSC.warn(player, "sc.gas.warn.helium", 20 * 60 * 5);
+        }
+    }
+
+    /**
+     * Old worlds, first login after the life-support update: the worn pieces get a start of helium
+     * and oxygen (ArmorGasSC.STARTER_PCT), once per player (persisted flag) and once per piece. The
+     * flag is only set at a login with some of the mod's armour on - a player who came in without it
+     * gets the start at a later login wearing it.
+     */
+    @SubscribeEvent
+    public void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        EntityPlayer p = event.player;
+        if (p == null || p.worldObj.isRemote) {
+            return;
+        }
+        NBTTagCompound entityData = p.getEntityData();
+        NBTTagCompound data = entityData.getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG);
+        if (data.getBoolean("scGasStart")) {
+            return;
+        }
+        ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(p);
+        if (!com.sc.util.ArmorGasSC.anyPiece(worn)) {
+            return;                                 // nothing of the mod on: try again next login
+        }
+        data.setBoolean("scGasStart", true);
+        entityData.setTag(EntityPlayer.PERSISTED_NBT_TAG, data);
+        if (com.sc.util.ArmorGasSC.giveStarter(worn) > 0) {
+            p.inventoryContainer.detectAndSendChanges();
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.gas.starter", com.sc.util.ArmorGasSC.STARTER_PCT));
+        }
+    }
+
     private static int chipTier(NBTTagCompound chips, ChipType type) {
         return Math.max(1, Math.min(3, chips.getInteger(type.name())));
     }
 
     private static void applyChip(EntityPlayer player, ChipType type, int tier) {
         int duration = HEAT_INTERVAL_TICKS + 5;
+        if (type.isGasChip()) {
+            return;                         // life-support chips act through the gases (ArmorLogicSC / ArmorGasSC)
+        }
         switch (type) {
             case SENSOR:
                 // Night vision flickers in its last 10 s, so it's kept topped up well above that.

@@ -149,6 +149,30 @@ public final class RadiationSC {
         return sum;
     }
 
+    /** The part of the sources' radiation at a player that comes from wall-piercing flashes (x the config's multiplier). */
+    public static float piercingAt(EntityPlayer p) {
+        Map<Long, Source> map = SOURCES.get(p.worldObj.provider.dimensionId);
+        if (map == null) {
+            return 0F;
+        }
+        long now = p.worldObj.getTotalWorldTime();
+        double px = p.posX, py = p.posY + 1.0, pz = p.posZ;
+        float sum = 0F;
+        for (Source s : map.values()) {
+            if (!s.pierce || now - s.seen > 40 || now < s.seen) {
+                continue;
+            }
+            double sx = s.x + 0.5, sy = s.y + 0.5, sz = s.z + 0.5;
+            sum += atDistance(s.level, s.radius, Math.sqrt((px - sx) * (px - sx) + (py - sy) * (py - sy) + (pz - sz) * (pz - sz)));
+        }
+        return Math.min(MAX_LEVEL, sum * ConfigSC.radiationMultiplier);
+    }
+
+    /** The share heavy water in the worn leggings adds to the suit's radiation protection, % (0 without it). */
+    public static int heavyWaterPct(EntityPlayer p) {
+        return com.sc.util.ArmorGasSC.suitAmount(p, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER) > 0 ? com.sc.util.ArmorGasSC.HEAVY_WATER_PCT : 0;
+    }
+
     /** Level of one source at a distance, before any blocks (the handbook's and the screen's numbers). */
     public static float atDistance(float level, int radius, double d) {
         return d >= radius ? 0F : (float) (level * (1.0 - d / radius));
@@ -329,6 +353,22 @@ public final class RadiationSC {
             left *= 1F - leadShare(p);
             flags |= F_LEAD;
         }
+        // heavy water in the leggings (docs/plan-armor-gases.md): an Exo piece stops the wall-piercing
+        // flashes outright; any piece adds HEAVY_WATER_PCT to the suit's share. Used only under radiation.
+        ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(p);
+        boolean heavy = level > 0.01F && com.sc.util.ArmorGasSC.amountOf(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER) > 0;
+        if (heavy) {
+            com.sc.util.ArmorGasSC.drainFraction(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER,
+                    level * com.sc.util.ArmorGasSC.HEAVY_WATER_PER_LEVEL_MIN / 60F);
+            if (left > 0.01F && ArmorLogicSC.suitOf(worn[com.sc.util.ArmorGasSC.LEGS]) == ArmorSuit.EXO) {
+                float pierce = Math.min(left, piercingAt(p));
+                if (pierce > 0F) {
+                    left -= pierce;
+                    flags |= F_ARMOR;
+                }
+            }
+        }
+        float beforeSuit = left;
         ItemStack chest = ArmorLogicSC.piece(p, 1);
         boolean shieldOn = chest != null && com.sc.item.ItemArmorSC.isEnabled(chest, ArmorFeature.RAD_SHIELD) && armorSharePct(p) > 0;
         if (left > 0.01F && shieldOn) {
@@ -348,6 +388,10 @@ public final class RadiationSC {
             } else {
                 flags |= F_ARMOR_FAIL;                      // switched on but overheated or out of charge
             }
+        }
+        if (heavy && left > 0.01F) {                        // added to the shield's share: Quantum 75 + 20 = 95%
+            left -= Math.min(left, beforeSuit * com.sc.util.ArmorGasSC.HEAVY_WATER_PCT / 100F);
+            flags |= F_ARMOR;
         }
         float dose = doseOf(p);
         if (left > 0.01F && !p.capabilities.isCreativeMode) {

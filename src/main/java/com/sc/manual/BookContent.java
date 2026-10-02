@@ -849,6 +849,7 @@ public final class BookContent {
             fn.add(BookEl.dim(Lang.tr("sc.armorgui.set." + suit.name().toLowerCase(Locale.ROOT))));
         }
         list.add(fn);
+        armorGases(list, c);
         BookEntry weapons = new BookEntry("weapons", c, new ItemStack(ModItems.WEAPONS.get(WeaponType.values()[0])), Lang.tr("sc.manual.armor.weapons"));
         weapons.add(BookEl.title(Lang.tr("sc.manual.armor.weapons")));
         for (WeaponType type : WeaponType.values()) {
@@ -889,6 +890,39 @@ public final class BookContent {
             drills.add(BookEl.dim(Lang.tr("sc.drillgui.set." + type.key())));
         }
         list.add(drills);
+    }
+
+    /**
+     * Gases in the energy suits (ArmorGasSC): what each one gives, and the tanks per suit and piece
+     * straight from ArmorGasSC; then the Armour Service Station that fills them.
+     */
+    private static void armorGases(List<BookEntry> list, BookChapter c) {
+        BookEntry gases = new BookEntry("armorgases", c, new ItemStack(ModItems.ARMOR.get(ArmorSuit.QUANTUM)[1]), Lang.tr("sc.manual.armor.gaseshead"));
+        gases.add(BookEl.title(Lang.tr("sc.manual.armor.gaseshead"))).addAll(paras("sc.manual.armor.gases"));
+        for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+            gases.add(BookEl.head(Lang.tr("sc.armorStation.gas." + g.key())));
+            gases.add(BookEl.para(Lang.tr("sc.manual.armor.gas." + g.key())));
+            for (ArmorSuit suit : ArmorSuit.values()) {
+                StringBuilder tanks = new StringBuilder();
+                for (int t = 0; t < 4; t++) {
+                    int cap = com.sc.util.ArmorGasSC.baseCapacity(new ItemStack(ModItems.ARMOR.get(suit)[t]), g);
+                    if (cap > 0) {
+                        tanks.append(tanks.length() > 0 ? ", " : "").append(Lang.tr("sc.armorhud.piece." + t)).append(' ').append(cap);
+                    }
+                }
+                if (tanks.length() > 0) {
+                    gases.add(BookEl.dim(Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)) + ": " + tanks + " mB"));
+                }
+            }
+        }
+        gases.add(BookEl.head(Lang.tr("sc.manual.armor.gasfillhead"))).addAll(paras("sc.manual.armor.gasfill"));
+        list.add(gases);
+        ItemStack st = new ItemStack(ModBlocks.armorStation);
+        BookEntry station = new BookEntry("armorstation", c, st, st.getDisplayName());
+        station.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st))).addAll(paras("sc.manual.armor.station"));
+        crafting(station, st);
+        station.about(st);
+        list.add(station);
     }
 
     // ------------------------------------------------------------------ 8. field generator

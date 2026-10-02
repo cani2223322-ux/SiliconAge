@@ -3,6 +3,7 @@ package com.sc.handler;
 import com.sc.item.ArmorLogicSC;
 import com.sc.item.ItemArmorSC;
 import com.sc.util.ArmorFeature;
+import com.sc.util.ArmorGasSC;
 
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
@@ -13,6 +14,10 @@ import cpw.mods.fml.relauncher.Side;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraftforge.fluids.FluidContainerRegistry;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.IFluidContainerItem;
 
 /**
  * Client -> server messages for the suits: switch one function of a worn piece on or off, step the
@@ -31,6 +36,8 @@ public final class ArmorNetSC {
     public static final byte DRILL_TOGGLE = 9, DRILL_LASER = 10;
     /** The light colour of every worn piece of the mod (feature = the colour index). */
     public static final byte GLOW_COLOR = 11;
+    /** Life support: pour the gas container in the player's inventory slot `feature` into the worn suit (K screen). */
+    public static final byte GAS_FILL = 12;
 
     private ArmorNetSC() {
     }
@@ -146,10 +153,101 @@ public final class ArmorNetSC {
                     p.inventoryContainer.detectAndSendChanges();
                     break;
                 }
+                case GAS_FILL:
+                    fillSuit(p, msg.feature);
+                    break;
+                case com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION:   // hydrogen: a second jump in mid-air
+                    com.sc.item.ArmorLogicSC.airJump(p);
+                    break;
                 default:
                     break;
             }
             return null;
         }
+    }
+
+    /**
+     * Pours the gas container in main-inventory slot `slot` into the worn suit's tanks. A container
+     * that only empties whole (a bucket, a cell from the FluidContainerRegistry) goes in only if all of
+     * it fits - otherwise nothing is spent; a tank-in-an-item (IFluidContainerItem) gives what fits and
+     * keeps the rest. The empty container comes back to the inventory (or drops at the feet).
+     * Creative players keep their containers full, as with a machine.
+     */
+    public static void fillSuit(EntityPlayerMP p, int slot) {
+        if (slot < 0 || slot >= p.inventory.mainInventory.length) {
+            return;
+        }
+        ItemStack stack = p.inventory.mainInventory[slot];
+        if (stack == null || stack.stackSize <= 0) {
+            return;
+        }
+        boolean creative = p.capabilities.isCreativeMode;
+        if (FluidContainerRegistry.isFilledContainer(stack)) {
+            FluidStack in = FluidContainerRegistry.getFluidForFilledItem(stack);
+            ArmorGasSC.Gas g = in == null ? null : ArmorGasSC.Gas.of(in.getFluid());
+            if (g == null || in.amount <= 0) {
+                return;                                         // not one of the suit's gases
+            }
+            if (ArmorGasSC.suitCapacity(p, g) <= 0) {
+                tell(p, "sc.chat.gas.notank", g, in.amount);
+                return;
+            }
+            if (ArmorGasSC.suitFill(p, g, in.amount, true) != in.amount) {
+                tell(p, "sc.chat.gas.nofit", g, in.amount);   // a whole-only container: nothing spent
+                return;
+            }
+            ArmorGasSC.suitFill(p, g, in.amount, false);
+            if (!creative) {
+                ItemStack empty = FluidContainerRegistry.drainFluidContainer(stack);
+                if (empty == null && stack.getItem().hasContainerItem(stack)) {
+                    empty = stack.getItem().getContainerItem(stack);
+                }
+                if (stack.stackSize <= 1) {
+                    p.inventory.setInventorySlotContents(slot, empty);
+                } else {
+                    stack.stackSize--;
+                    if (empty != null && !p.inventory.addItemStackToInventory(empty)) {
+                        p.dropPlayerItemWithRandomChoice(empty, false);
+                    }
+                }
+            }
+            tell(p, "sc.chat.gas.in", g, in.amount);
+        } else if (stack.getItem() instanceof IFluidContainerItem && stack.stackSize == 1) {
+            IFluidContainerItem item = (IFluidContainerItem) stack.getItem();
+            FluidStack carried = item.getFluid(stack);
+            ArmorGasSC.Gas g = carried == null || carried.amount <= 0 ? null : ArmorGasSC.Gas.of(carried.getFluid());
+            if (g == null) {
+                return;
+            }
+            if (ArmorGasSC.suitCapacity(p, g) <= 0) {
+                tell(p, "sc.chat.gas.notank", g, carried.amount);
+                return;
+            }
+            int room = ArmorGasSC.suitFill(p, g, carried.amount, true);
+            if (room <= 0) {
+                tell(p, "sc.chat.gas.full", g, 0);
+                return;
+            }
+            FluidStack taken = item.drain(stack, room, false);      // what the container really gives
+            int put = taken == null ? 0 : Math.min(room, taken.amount);
+            if (put <= 0) {
+                return;
+            }
+            if (!creative) {
+                FluidStack drained = item.drain(stack, put, true);
+                put = drained == null ? 0 : Math.min(put, drained.amount);
+            }
+            ArmorGasSC.suitFill(p, g, put, false);
+            tell(p, "sc.chat.gas.in", g, put);
+        } else {
+            return;
+        }
+        p.worldObj.playSoundAtEntity(p, "random.fizz", 0.3F, 1.6F);
+        p.inventory.markDirty();
+        p.inventoryContainer.detectAndSendChanges();
+    }
+
+    private static void tell(EntityPlayerMP p, String key, ArmorGasSC.Gas g, int mb) {
+        p.addChatComponentMessage(new ChatComponentTranslation(key, mb, new ChatComponentTranslation("sc.gas." + g.key())));
     }
 }

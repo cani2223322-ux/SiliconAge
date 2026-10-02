@@ -72,6 +72,10 @@ public final class ModBlocks {
     public static com.sc.block.BlockTransformerSC transformerSC;
     public static com.sc.block.BlockTankSC tankSC;
     public static com.sc.block.BlockChargePadSC chargePadSC;
+    /** The Armour Service Station (MV): gases and EU for the energy suits. */
+    public static com.sc.block.BlockArmorStationSC armorStation;
+    /** The krypton searchlight's moving light (ArmorLogicSC.searchlight). */
+    public static com.sc.block.BlockLightSC lightSC;
 
     private ModBlocks() {
     }
@@ -145,6 +149,12 @@ public final class ModBlocks {
         // IC2-style charge pads: an energy storage with a pad on top
         chargePadSC = new com.sc.block.BlockChargePadSC();
         GameRegistry.registerBlock(chargePadSC, com.sc.block.ItemBlockEnergyStorageSC.class, "chargePadSC");
+        armorStation = new com.sc.block.BlockArmorStationSC();
+        GameRegistry.registerBlock(armorStation, com.sc.block.ItemBlockArmorStationSC.class, "armorStation");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityArmorStationSC.class, "SiliconAge.armorStation");
+        // the helmet's krypton searchlight: an invisible light that goes out by itself (no item in any tab)
+        lightSC = new com.sc.block.BlockLightSC();
+        GameRegistry.registerBlock(lightSC, "lightSC");   // with its item: a world that knew the item refuses to load without it ("dangling"); hidden from creative
 
         GameRegistry.registerTileEntity(TileEntityCableSC.class, "SiliconAge.cable");
         GameRegistry.registerTileEntity(TileEntityPipeSC.class, "SiliconAge.pipe");

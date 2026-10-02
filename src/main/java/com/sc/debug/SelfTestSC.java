@@ -51,12 +51,14 @@ public final class SelfTestSC {
             tokamakSvOutput();
             singularReactor();
             matterCompressor();
+            armorStation();
             energySplit();
             conduitBundles();
             machineSidesAndUpgrades();
             tubeFilters();
             portableTanks();
             armorFunctions();
+            armorGases();
             bladeFunctions();
             chargePad();
             batteries();
@@ -1327,9 +1329,11 @@ public final class SelfTestSC {
                 exo += f.availableIn(com.sc.util.ArmorSuit.EXO, type) ? 1 : 0;
             }
         }
-        check(nano == 7 && quantum == 15 && exo == 22 && com.sc.util.ArmorFeature.ANNIHILATION.isAction()
-                        && !com.sc.util.ArmorFeature.ANNIHILATION.availableIn(com.sc.util.ArmorSuit.QUANTUM, 1),
-                "suit functions: Nano 7, Quantum 15 (flight, radiation shield from Quantum), Exo all 22 incl. the annihilation pulse, regeneration, explosion proofing, set aura (" + nano + "/" + quantum + "/" + exo + ")");
+        check(nano == 8 && quantum == 17 && exo == 25 && com.sc.util.ArmorFeature.ANNIHILATION.isAction()
+                        && !com.sc.util.ArmorFeature.ANNIHILATION.availableIn(com.sc.util.ArmorSuit.QUANTUM, 1)
+                        && com.sc.util.ArmorFeature.AIR.availableIn(com.sc.util.ArmorSuit.NANO, 0)
+                        && !com.sc.util.ArmorFeature.FUSION_CELL.availableIn(com.sc.util.ArmorSuit.QUANTUM, 1),
+                "suit functions: Nano 8 (oxygen breathing from Nano), Quantum 17 (+engine boost, searchlight), Exo all 25 incl. the fusion cell (" + nano + "/" + quantum + "/" + exo + ")");
 
         ItemStack helmet = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[0]);
         ItemStack nanoHelmet = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[0]);
@@ -1351,6 +1355,145 @@ public final class SelfTestSC {
                 && com.sc.item.ItemArmorSC.pay(chest, 60) && com.sc.item.ItemArmorSC.chargeOf(chest) == 40;
         check(defaults && flipped && mode && pay,
                 "functions: defaults (thermal off), each switched on its own, only in pieces that have them; power mode; all-or-nothing payment");
+    }
+
+    private static ItemStack[] gasSuit(com.sc.util.ArmorSuit suit, boolean helmet, boolean chest, boolean legs, boolean boots) {
+        com.sc.item.ItemArmorSC[] a = ModItems.ARMOR.get(suit);
+        boolean[] on = {helmet, chest, legs, boots};
+        ItemStack[] w = new ItemStack[4];
+        for (int t = 0; t < 4; t++) {
+            w[t] = on[t] ? new ItemStack(a[t]) : null;
+        }
+        return w;
+    }
+
+    /** Life support (docs/plan-armor-gases.md): tanks, the hybrid helium loop, the hard rules, the Cryo Tank chip, the old-world start. */
+    private static void armorGases() {
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, o2 = com.sc.util.ArmorGasSC.Gas.OXYGEN,
+                d = com.sc.util.ArmorGasSC.Gas.DEUTERIUM;
+        com.sc.util.ArmorSuit nano = com.sc.util.ArmorSuit.NANO, quantum = com.sc.util.ArmorSuit.QUANTUM, exo = com.sc.util.ArmorSuit.EXO;
+        ItemStack[] qFull = gasSuit(quantum, true, true, true, true), eFull = gasSuit(exo, true, true, true, true);
+        ItemStack[] nFull = gasSuit(nano, true, true, true, true);
+        check(com.sc.util.ArmorGasSC.capacityOf(qFull, he) == 9000 && com.sc.util.ArmorGasSC.capacityOf(eFull, he) == 18000
+                        && com.sc.util.ArmorGasSC.capacity(qFull[1], he) == 6000 && com.sc.util.ArmorGasSC.capacityOf(nFull, he) == 2000
+                        && com.sc.util.ArmorGasSC.capacityOf(nFull, o2) == 2000 && com.sc.util.ArmorGasSC.capacityOf(eFull, d) == 4000
+                        && com.sc.util.ArmorGasSC.capacityOf(qFull, d) == 0,
+                "gas tanks: helium Quantum 9000 / Exo 18000 (chest 6000 + radiators), Nano 2000 helium + 2000 oxygen, deuterium Exo only");
+
+        // hybrid: radiators without a chestplate hold helium but cool nothing
+        ItemStack[] noChest = gasSuit(quantum, true, false, true, true);
+        for (ItemStack s : noChest) {
+            if (s != null) {
+                com.sc.util.ArmorGasSC.setAmount(s, he, 1000);
+            }
+        }
+        check(com.sc.util.ArmorGasSC.amountOf(noChest, he) == 0 && com.sc.util.ArmorGasSC.coolingFactorOf(noChest) == 0F
+                        && com.sc.util.ArmorGasSC.heliumCool(noChest, 100, false) == 0
+                        && com.sc.util.ArmorGasSC.amount(noChest[0], he) == 1000,
+                "helium without a chestplate: no loop - no cooling, the radiators keep their helium");
+        check(com.sc.util.ArmorGasSC.fillOf(noChest, he, 100, true) == 0 && com.sc.util.ArmorGasSC.fillOf(noChest, o2, 100, true) == 100,
+                "helium without a chestplate: the suit takes none in (oxygen still goes into the helmet)");
+
+        // radiators: +15% each; the pump's rate grows with them
+        ItemStack[] chestOnly = gasSuit(quantum, false, true, false, false);
+        com.sc.util.ArmorGasSC.setAmount(chestOnly[1], he, 6000);
+        com.sc.util.ArmorGasSC.setAmount(qFull[1], he, 6000);
+        int alone = com.sc.util.ArmorGasSC.heliumCool(chestOnly, 100, false);
+        int full = com.sc.util.ArmorGasSC.heliumCool(qFull, 100, false);
+        check(Math.abs(com.sc.util.ArmorGasSC.coolingFactorOf(qFull) - 1.45F) < 1e-4 && com.sc.util.ArmorGasSC.coolingFactorOf(chestOnly) == 1F
+                        && alone == 8 && full == 11 && com.sc.util.ArmorGasSC.heliumCool(chestOnly, 0, false) == 0,
+                "helium cooling: Quantum pump 8 heat/s alone, x1.45 with three radiators (" + alone + "/" + full + ")");
+        // the helium used: 1 mB per 20 heat (x cooling factor) - 400 heat from the chestplate alone costs 20 mB
+        ItemStack[] use = gasSuit(exo, false, true, false, false);
+        com.sc.util.ArmorGasSC.setAmount(use[1], he, 1000);
+        int took = 0;
+        for (int i = 0; i < 25; i++) {
+            took += com.sc.util.ArmorGasSC.heliumCool(use, 16, false);
+        }
+        int left = com.sc.util.ArmorGasSC.amount(use[1], he);
+        com.sc.item.ItemArmorSC.chipsTag(use[1]).setInteger(com.sc.util.ChipType.RECUPERATOR.name(), 1);
+        for (int i = 0; i < 25; i++) {
+            com.sc.util.ArmorGasSC.heliumCool(use, 16, false);
+        }
+        int leftRec = com.sc.util.ArmorGasSC.amount(use[1], he);
+        check(took == 400 && Math.abs(left - 980) <= 1 && Math.abs(leftRec - (left - 14)) <= 1,
+                "helium use: 400 heat = 20 mB; the Recuperator gives 30% back (" + took + ", " + left + ", " + leftRec + ")");
+
+        // hard rules: the Exo shield / annihilation need helium; breathing needs oxygen
+        for (ItemStack s : eFull) {
+            com.sc.util.ArmorGasSC.setAmount(s, he, 0);
+        }
+        boolean shieldDry = !com.sc.item.ArmorLogicSC.heliumReady(eFull);
+        int readyMin = com.sc.item.ArmorLogicSC.heliumReadyMin(com.sc.util.ArmorGasSC.capacityOf(eFull, he));
+        com.sc.util.ArmorGasSC.setAmount(eFull[1], he, readyMin - 1);
+        shieldDry &= !com.sc.item.ArmorLogicSC.heliumReady(eFull);
+        com.sc.util.ArmorGasSC.setAmount(eFull[1], he, readyMin);
+        boolean shieldWet = com.sc.item.ArmorLogicSC.heliumReady(eFull);
+        check(readyMin == 180 && com.sc.item.ArmorLogicSC.heliumReadyMin(50) == 1,
+                "helium ready: 1% of the loop (Exo 18000 -> 180 mB), never under 1 mB (" + readyMin + ")");
+        ItemStack[] head = gasSuit(nano, true, false, false, false);
+        boolean noAir = !com.sc.item.ArmorLogicSC.breathe(head);
+        com.sc.util.ArmorGasSC.setAmount(head[0], o2, 2);
+        boolean air = com.sc.item.ArmorLogicSC.breathe(head) && com.sc.util.ArmorGasSC.amount(head[0], o2) == 1;
+        com.sc.item.ItemArmorSC.setEnabled(head[0], com.sc.util.ArmorFeature.AIR, false);
+        boolean off = !com.sc.item.ArmorLogicSC.breathe(head) && com.sc.util.ArmorGasSC.amount(head[0], o2) == 1;
+        check(shieldDry && shieldWet && noAir && air && off,
+                "hard rules: no helium - no Exo shield / pulse; no oxygen (or breathing off) - no breath, 1 mB a breath");
+
+        // fusion cell: deuterium and helium both, 2 mB of deuterium a second
+        ItemStack[] cell = gasSuit(exo, false, true, false, false);
+        com.sc.util.ArmorGasSC.setAmount(cell[1], d, 100);
+        boolean dryCell = !com.sc.item.ArmorLogicSC.fusionStep(cell) && com.sc.util.ArmorGasSC.amount(cell[1], d) == 100;
+        com.sc.util.ArmorGasSC.setAmount(cell[1], he, 1000);                 // over the 1% the loop needs (120 of 12000)
+        boolean wetCell = com.sc.item.ArmorLogicSC.fusionStep(cell) && com.sc.util.ArmorGasSC.amount(cell[1], d) == 98;
+        check(dryCell && wetCell, "fusion cell: off without helium, 2 mB deuterium a second with it");
+
+        // the Cryo Tank chip: +50% tanks; without it (or the chestplate) the extra is out of reach, not erased
+        ItemStack[] tank = gasSuit(quantum, true, true, false, false);
+        com.sc.item.ItemArmorSC.chipsTag(tank[1]).setInteger(com.sc.util.ChipType.CRYO_TANK.name(), 1);
+        com.sc.util.ArmorGasSC.applyCapacityBonus(tank);
+        int bigger = com.sc.util.ArmorGasSC.capacity(tank[0], o2);
+        com.sc.util.ArmorGasSC.setAmount(tank[0], o2, bigger);
+        tank[1].getTagCompound().removeTag("ChipsSC");
+        com.sc.util.ArmorGasSC.applyCapacityBonus(tank);
+        boolean shrunk = com.sc.util.ArmorGasSC.capacity(tank[0], o2) == 4000 && com.sc.util.ArmorGasSC.amount(tank[0], o2) == 4000
+                && tank[0].getTagCompound().getInteger("Gas_oxygen") == 6000
+                && com.sc.util.ArmorGasSC.fill(tank[0], o2, 100, true) == 0 && com.sc.util.ArmorGasSC.drain(tank[0], o2, 99999, true) == 4000;
+        com.sc.item.ItemArmorSC.chipsTag(tank[1]).setInteger(com.sc.util.ChipType.CRYO_TANK.name(), 1);
+        com.sc.util.ArmorGasSC.applyCapacityBonus(tank);
+        boolean back = com.sc.util.ArmorGasSC.amount(tank[0], o2) == 6000;
+        // the chestplate off: the helmet's bonus goes, its gas stays in the NBT
+        ItemStack[] noChestNow = {tank[0], null, null, null};
+        com.sc.util.ArmorGasSC.applyCapacityBonus(noChestNow);
+        boolean chestOff = com.sc.util.ArmorGasSC.amount(tank[0], o2) == 4000 && tank[0].getTagCompound().getInteger("Gas_oxygen") == 6000;
+        // used while shrunk: what it writes back is at most the tank - the hidden extra can't be drawn on
+        com.sc.util.ArmorGasSC.drain(tank[0], o2, 1, false);
+        boolean noDupe = com.sc.util.ArmorGasSC.amount(tank[0], o2) == 3999 && tank[0].getTagCompound().getInteger("Gas_oxygen") == 3999;
+        check(bigger == 6000 && shrunk && back && chestOff && noDupe,
+                "Cryo Tank chip: helmet oxygen 4000 -> 6000; without the chip / chestplate 4000 shown, 6000 kept, back with the chip; no extra drawn (" + shrunk + "/" + back + "/" + chestOff + "/" + noDupe + ")");
+
+        // the searchlight: moves on a 2-block shift at once, a 1-block one only after 8 ticks
+        check(!com.sc.item.ArmorLogicSC.lightShouldMove(0, 64, 0, 0, 64, 0, 100)
+                        && com.sc.item.ArmorLogicSC.lightShouldMove(0, 64, 0, 2, 64, 0, 0)
+                        && !com.sc.item.ArmorLogicSC.lightShouldMove(0, 64, 0, 1, 65, 0, 4)
+                        && com.sc.item.ArmorLogicSC.lightShouldMove(0, 64, 0, 1, 65, 0, 8)
+                        && com.sc.block.BlockLightSC.LIGHT == 13,
+                "searchlight: moves at 2 blocks, or a small shift after 8 ticks; light 13");
+
+        // old worlds: a quarter of helium and oxygen, once per piece
+        ItemStack[] old = gasSuit(quantum, true, true, true, true);
+        int first = com.sc.util.ArmorGasSC.giveStarter(old);
+        int heAfter = com.sc.util.ArmorGasSC.amountOf(old, he), o2After = com.sc.util.ArmorGasSC.amountOf(old, o2);
+        int second = com.sc.util.ArmorGasSC.giveStarter(old);
+        check(first == 4 && heAfter == 2250 && o2After == 1000 && second == 0
+                        && com.sc.util.ArmorGasSC.amountOf(old, he) == 2250,
+                "old-world start: 25% helium (2250 of 9000) and oxygen (1000 of 4000), only once (" + first + "/" + heAfter + "/" + o2After + "/" + second + ")");
+
+        // chips: the new ones are life-support chips, metadata past the old 15
+        check(com.sc.util.ChipType.CRYO_LOOP.isGasChip() && !com.sc.util.ChipType.UTILITY.isGasChip()
+                        && com.sc.item.ItemArmorChipSC.typeAt(com.sc.item.ItemArmorChipSC.metaFor(com.sc.util.ChipType.RECUPERATOR, 3)) == com.sc.util.ChipType.RECUPERATOR
+                        && com.sc.item.ItemArmorChipSC.gasChipValue(com.sc.util.ChipType.CRYO_TANK, 1) == 50,
+                "life-support chips: appended after Utility, tiers kept, Cryo Tank I = +50%");
     }
 
     /** Energy blades: functions per tier, defaults and switches, the blade's own heat with its cool-down to half. */
@@ -1997,5 +2140,46 @@ public final class SelfTestSC {
                 + com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE + "; water bucket, the mod's machine, nether star, diamond refused; nothing swallowed"
                 + " without power (mass " + mass + ", idle " + idle + ", made " + made + ", absorb " + absorb + ", refused " + refused
                 + ", unpowered " + unpowered + ", last " + last + ")");
+    }
+
+    /** The Armour Service Station: sharing gas over the pieces (pure), and filling a Quantum set in its slots. */
+    private static void armorStation() {
+        int[] s = com.sc.tileentity.TileEntityArmorStationSC.split(7000, new int[]{6000, 1000, 1000, 0});
+        check(s[0] == 6000 && s[1] == 1000 && s[2] == 0 && s[3] == 0, "station: gas goes to the chestplate first, then on in order");
+        s = com.sc.tileentity.TileEntityArmorStationSC.split(500, new int[]{0, 300, 1000, 0});
+        check(s[0] == 0 && s[1] == 300 && s[2] == 200 && s[3] == 0, "station: full tanks skipped, the rest takes what's left");
+        s = com.sc.tileentity.TileEntityArmorStationSC.split(99999, new int[]{10, 20, 0, 5});
+        check(s[0] + s[1] + s[2] + s[3] == 35, "station: never more than the room");
+        com.sc.item.ItemArmorSC[] q = ModItems.ARMOR.get(com.sc.util.ArmorSuit.QUANTUM);
+        check(!com.sc.tileentity.TileEntityArmorStationSC.fits(com.sc.util.ArmorGasSC.HELMET, new ItemStack(q[com.sc.util.ArmorGasSC.CHEST])), "station: a chestplate doesn't fit the helmet slot");
+        check(com.sc.tileentity.TileEntityArmorStationSC.fits(com.sc.util.ArmorGasSC.CHEST, new ItemStack(q[com.sc.util.ArmorGasSC.CHEST])), "station: a chestplate fits its slot");
+        com.sc.tileentity.TileEntityArmorStationSC st = new com.sc.tileentity.TileEntityArmorStationSC();
+        for (int t = 0; t < 4; t++) {
+            st.setInventorySlotContents(t, new ItemStack(q[t]));
+        }
+        java.util.List<net.minecraft.entity.player.EntityPlayer> nobody = new java.util.ArrayList<net.minecraft.entity.player.EntityPlayer>();
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM;
+        int room = 0;
+        for (int t = 0; t < 4; t++) {
+            room += com.sc.util.ArmorGasSC.capacity(st.getStackInSlot(t), he);
+        }
+        check(room > 0 && st.need(he, nobody) == room, "station: need = the empty helium tanks of the set (" + room + " mB)");
+        int chestCap = com.sc.util.ArmorGasSC.capacity(st.getStackInSlot(com.sc.util.ArmorGasSC.CHEST), he);
+        int put = st.putGas(he, chestCap + 1, nobody);
+        check(put == chestCap + 1 && com.sc.util.ArmorGasSC.amount(st.getStackInSlot(com.sc.util.ArmorGasSC.CHEST), he) == chestCap
+                && com.sc.util.ArmorGasSC.amount(st.getStackInSlot(com.sc.util.ArmorGasSC.HELMET), he) == 1, "station: the chestplate's loop fills first, then the helmet");
+        put = st.putGas(he, room * 2, nobody);
+        check(put == room - chestCap - 1 && st.need(he, nobody) == 0, "station: tops up to full and no further");
+        check(st.putGas(com.sc.util.ArmorGasSC.Gas.DEUTERIUM, 1000, nobody) == 0, "station: no deuterium tank in Quantum - nothing goes in");
+        check(st.tierAllows(new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[1])), "station: charges Exo too (at MV rate)");
+        // pipes: GAS_PER_TICK a tick per gas, however many calls
+        int cap = com.sc.tileentity.TileEntityArmorStationSC.GAS_PER_TICK;
+        com.sc.tileentity.TileEntityArmorStationSC pipe = new com.sc.tileentity.TileEntityArmorStationSC();
+        boolean fresh = pipe.pipeLeft(he, 100L) == cap;
+        pipe.pipeUsed(he, 100L, 60);
+        pipe.pipeUsed(he, 100L, cap - 60);
+        boolean spent = pipe.pipeLeft(he, 100L) == 0 && pipe.pipeLeft(com.sc.util.ArmorGasSC.Gas.OXYGEN, 100L) == cap;
+        boolean next = pipe.pipeLeft(he, 101L) == cap;
+        check(fresh && spent && next, "station: pipes push at most " + cap + " mB of a gas a tick, other gases apart, new tick - new limit");
     }
 }

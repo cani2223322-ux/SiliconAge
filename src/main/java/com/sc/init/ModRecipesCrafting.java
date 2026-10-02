@@ -395,6 +395,11 @@ public final class ModRecipesCrafting {
             case POWER: return comp("tantalumCapacitor");
             case DEFENSE: return comp("tiPlate");
             case MOBILITY: return comp("copperCoil");
+            // life-support chips (docs/plan-armor-gases.md)
+            case CRYO_LOOP: return comp("heLoopModule");
+            case CRYO_TANK: return comp("ptfeSheet");
+            case OXYGEN_REGEN: return comp("quartzChamber");
+            case RECUPERATOR: return comp("nb3SnCoil");
             default: return comp("resistor");
         }
     }
@@ -524,6 +529,11 @@ public final class ModRecipesCrafting {
         OreRecipes.shaped(new ItemStack(ModBlocks.shower), "IPI", "GBG", "ICI",
                 'I', new ItemStack(Items.iron_ingot), 'P', pipe(PipeType.COPPER), 'G', window, 'B', new ItemStack(Items.bucket),
                 'C', cable(CableType.SILVER));
+        // the Armour Service Station: an MV charge pad on top, steel tanks and pistons (the pumps), a controller, MV cable
+        OreRecipes.shaped(new ItemStack(ModBlocks.armorStation), "KPK", "TXT", "ICI",
+                'K', new ItemStack(Blocks.piston), 'P', new ItemStack(ModBlocks.chargePadSC, 1, com.sc.energy.Tier.MV.ordinal()),
+                'T', new ItemStack(ModBlocks.tankSC, 1, 0), 'X', silicon(SiliconMaterial.CONTROLLER), 'I', new ItemStack(Items.iron_ingot),
+                'C', cable(cableOf(com.sc.energy.Tier.MV)));
     }
 
     /**

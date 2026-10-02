@@ -79,6 +79,22 @@ public class ItemArmorChipSC extends Item {
         int tier = tierAt(stack.getItemDamage());
         list.add(com.sc.manual.Lang.tr("sc.tooltip.chip.tier", tierLabel(tier)));
         list.add(com.sc.manual.Lang.tr("sc.tooltip.chip.heat", tier));
+        ChipType type = typeAt(stack.getItemDamage());
+        if (type.isGasChip()) {
+            list.add("§7" + com.sc.manual.Lang.tr("sc.tooltip.chip." + type.name().toLowerCase(Locale.ROOT), gasChipValue(type, tier)));
+        }
+    }
+
+    /** What a life-support chip of that tier gives (the number its tooltip shows). */
+    public static int gasChipValue(ChipType type, int tier) {
+        int i = Math.max(1, Math.min(TIER_COUNT, tier)) - 1;
+        switch (type) {
+            case CRYO_LOOP: return com.sc.util.ArmorGasSC.CRYO_LOOP_PCT[i];
+            case CRYO_TANK: return com.sc.util.ArmorGasSC.CRYO_TANK_PCT[i];
+            case OXYGEN_REGEN: return com.sc.util.ArmorGasSC.OXYGEN_REGEN_BASE + com.sc.util.ArmorGasSC.OXYGEN_REGEN_PER_TIER * (i + 1);
+            case RECUPERATOR: return com.sc.util.ArmorGasSC.RECUPERATOR_PCT[i];
+            default: return 0;
+        }
     }
 
     private static String tierLabel(int tier) {
@@ -119,6 +135,7 @@ public class ItemArmorChipSC extends Item {
             returned = stackOf(type, Math.max(1, Math.min(TIER_COUNT, installed)));
         }
         chips.setInteger(type.name(), tier);
+        com.sc.util.ArmorGasSC.applyCapacityBonus(com.sc.util.ArmorGasSC.wornSet(player));   // Cryo Tank: the tanks grow / shrink now (the gas kept, ArmorGasSC.applyCapacityBonus)
         stack.stackSize--;
         player.addChatComponentMessage(new ChatComponentTranslation(returned == null ? "sc.chat.chip.installed" : "sc.chat.chip.swapped",
                 new ChatComponentTranslation(getUnlocalizedName(stack) + ".name"), tierLabel(tier)));
@@ -155,6 +172,7 @@ public class ItemArmorChipSC extends Item {
             removed++;
         }
         chest.getTagCompound().removeTag("ChipsSC");
+        com.sc.util.ArmorGasSC.applyCapacityBonus(com.sc.util.ArmorGasSC.wornSet(player));   // no Cryo Tank: the tanks shrink, the extra stays hidden till the chip is back
         player.inventoryContainer.detectAndSendChanges();
         player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.chip.removed", removed));
         return removed;
