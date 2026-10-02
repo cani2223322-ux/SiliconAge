@@ -433,21 +433,6 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             return;
         }
         boolean did = false, needGas = false, gotGas = false, starved = false;
-        // energy: one budget of the input voltage x EVERY (overclockers: more) for the slots first, then the players on top
-        int budget = Math.min(getEnergyStored(), chargePerRound()), start = budget;
-        for (int i = 0; i < SLOTS && budget > 0; i++) {
-            budget -= chargePiece(slots[i], budget);
-        }
-        for (EntityPlayer p : on) {
-            for (int t = 0; t < 4 && budget > 0; t++) {
-                budget -= chargePiece(ArmorGasSC.worn(p, t), budget);
-            }
-        }
-        boolean needEu = anyNeedsCharge(on);
-        if (start - budget > 0) {
-            removeEnergy(start - budget);
-            did = true;
-        }
         boolean pulled = false;
         if (fillGases) {
             for (Gas g : Gas.values()) {
@@ -472,6 +457,22 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
                     did = true;
                 }
             }
+        }
+        // energy, after the gases (their pumps cost little; a flat suit must not starve them): one budget
+        // of the input voltage x EVERY (overclockers: more) for the slots first, then the players on top
+        int budget = Math.min(getEnergyStored(), chargePerRound()), start = budget;
+        for (int i = 0; i < SLOTS && budget > 0; i++) {
+            budget -= chargePiece(slots[i], budget);
+        }
+        for (EntityPlayer p : on) {
+            for (int t = 0; t < 4 && budget > 0; t++) {
+                budget -= chargePiece(ArmorGasSC.worn(p, t), budget);
+            }
+        }
+        boolean needEu = anyNeedsCharge(on);
+        if (start - budget > 0) {
+            removeEnergy(start - budget);
+            did = true;
         }
         if (did || pulled) {
             markDirty();
