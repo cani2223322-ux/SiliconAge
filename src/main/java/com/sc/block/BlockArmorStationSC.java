@@ -63,13 +63,33 @@ public class BlockArmorStationSC extends Block {
 
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int s, float hx, float hy, float hz) {
-        if (!(world.getTileEntity(x, y, z) instanceof TileEntityArmorStationSC)) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityArmorStationSC)) {
             return false;
+        }
+        ItemStack held = player.getCurrentEquippedItem();
+        if (holdsGas(held)) {                                // a bucket / cell of a gas: into its tank, as a machine
+            if (!world.isRemote) {
+                com.sc.util.FluidHandSC.use(world, x, y, z, player, (TileEntityArmorStationSC) te, held);
+            }
+            return true;
         }
         if (!world.isRemote) {
             player.openGui(SCMod.instance, GuiHandlerSC.ARMOR_STATION_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    /** A full container of one of the suit gases (an empty one, or any other fluid, opens the screen instead). */
+    private static boolean holdsGas(ItemStack held) {
+        if (held == null || !com.sc.util.FluidHandSC.isContainer(held)) {
+            return false;
+        }
+        net.minecraftforge.fluids.FluidStack f = net.minecraftforge.fluids.FluidContainerRegistry.getFluidForFilledItem(held);
+        if (f == null && held.getItem() instanceof net.minecraftforge.fluids.IFluidContainerItem) {
+            f = ((net.minecraftforge.fluids.IFluidContainerItem) held.getItem()).getFluid(held);
+        }
+        return f != null && f.amount > 0 && com.sc.util.ArmorGasSC.Gas.of(f.getFluid()) != null;
     }
 
     @Override

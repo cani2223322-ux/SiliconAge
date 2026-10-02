@@ -798,14 +798,15 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         }
         int n = fillTank(g, resource.amount, false);
         long now = worldObj != null ? worldObj.getTotalWorldTime() : 0L;
-        if (worldObj != null) {
+        boolean byHand = from == ForgeDirection.UNKNOWN;      // a bucket / cell poured by a player (FluidHandSC): no pipe limit
+        if (worldObj != null && !byHand) {
             n = Math.min(n, pipeLeft(g, now));
         }
         if (n <= 0 || !doFill) {
             return Math.max(0, n);
         }
         int put = fillTank(g, n, true);
-        if (put > 0 && worldObj != null) {
+        if (put > 0 && worldObj != null && !byHand) {
             pipeUsed(g, now, put);
         }
         return put;
