@@ -247,7 +247,9 @@ public class BlockEnergyStorageSC extends Block {
     @Override
     public void getSubBlocks(Item item, CreativeTabs tab, List list) {
         for (Tier tier : Tier.values()) {
-            list.add(new ItemStack(item, 1, tier.ordinal()));
+            if (tier.isContentReady()) {              // SV: hidden until Tier.SV_CONTENT_READY
+                list.add(new ItemStack(item, 1, tier.ordinal()));
+            }
         }
     }
 
@@ -259,8 +261,9 @@ public class BlockEnergyStorageSC extends Block {
         frontIcons = new IIcon[tiers.length];
         sideIcons = new IIcon[tiers.length];
         for (Tier tier : tiers) {
-            frontIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":energyStorage" + tier.name() + "Front");
-            sideIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":energyStorage" + tier.name() + "Side");
+            String name = tier.name();
+            frontIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":energyStorage" + name + "Front");
+            sideIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":energyStorage" + name + "Side");
         }
     }
 

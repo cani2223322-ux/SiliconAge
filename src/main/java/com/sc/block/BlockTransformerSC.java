@@ -24,7 +24,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.util.ForgeDirection;
 
 /**
- * Transformers LV-MV / MV-HV / HV-EV (metadata = the low tier's ordinal). The front (high-voltage)
+ * Transformers LV-MV / MV-HV / HV-EV ... XV-SV (metadata = the low tier's ordinal). The front (high-voltage)
  * face turns to the player on placement. Right-click with an empty hand or a wrench switches
  * step-down / step-up (with anything else in hand the click places it as usual); sneak +
  * right-click with an empty hand, or a wrench's rotate, turns the front to the clicked side.
@@ -151,7 +151,9 @@ public class BlockTransformerSC extends Block {
     @Override
     public void getSubBlocks(Item item, CreativeTabs tab, List list) {
         for (int meta = 0; meta < VARIANTS; meta++) {
-            list.add(new ItemStack(item, 1, meta));
+            if (highTierFor(meta).isContentReady()) { // XV-SV: hidden until Tier.SV_CONTENT_READY
+                list.add(new ItemStack(item, 1, meta));
+            }
         }
     }
 

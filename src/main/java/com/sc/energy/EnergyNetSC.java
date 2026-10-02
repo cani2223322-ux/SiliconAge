@@ -196,7 +196,7 @@ public final class EnergyNetSC {
             if (!takes) {
                 continue;
             }
-            Tier in = t.acceptsAnyVoltage() ? Tier.XV : t.inputTier();
+            Tier in = t.acceptsAnyVoltage() ? Tier.max() : t.inputTier();
             if (weakest == null || in.ordinal() < weakest.ordinal()) {
                 weakest = in;
             }

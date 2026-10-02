@@ -733,6 +733,7 @@ public class GuiTokamakXVSC extends GuiContainer {
         boolean lit = gen.isIgnited();
         String[][] rows = {
             {lit ? Lang.tr("sc.gui.xv.out", gen.getLastOutput()) : Lang.tr("sc.gui.xv.notlit"), lit ? "ok" : "idle"},
+            {Lang.tr(gen.isSvOutput() ? "sc.gui.xv.tier.sv" : "sc.gui.xv.tier.xv"), gen.isSvOutput() ? "ok" : "idle"},
             {Lang.tr("sc.gui.xv.perminute", eu((long) gen.getLastOutput() * 1200)), "val"},
             {Lang.tr("sc.gui.xv.instores", eu(gen.getStoresHave())), "val"},
             {fullIn(), "idle"},
@@ -743,7 +744,7 @@ public class GuiTokamakXVSC extends GuiContainer {
         for (int i = 0; i < rows.length; i++) {
             String kind = rows[i][1];
             int col = "ok".equals(kind) ? GuiHoloSC.OK : "warn".equals(kind) ? GuiHoloSC.WARN : "idle".equals(kind) ? GuiHoloSC.IDLE : GuiHoloSC.VALUE;
-            small(rows[i][0], x, y + 10 + i * 10, 96, col);
+            small(rows[i][0], x, y + 9 + i * 9, 96, col);          // 7 rows of 9 fit the 73 px panel
         }
     }
 

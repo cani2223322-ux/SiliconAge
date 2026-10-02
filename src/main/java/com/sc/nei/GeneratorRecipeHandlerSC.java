@@ -160,7 +160,9 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
         GuiDraw.changeTexture(SHEET);
         GuiGaugeSC.drawSpriteHorizontal(gui, ARROW_X, ARROW_Y, GuiGaugeSC.SPR_ARROW_R_FULL_U, GuiGaugeSC.SPR_ARROW_R_V,
                 24, 17, (cycleticks % 40) / 40F);
-        GuiDraw.drawString(Lang.tr("sc.nei.gen.output", e.type.euPerTick, e.type.tier.name()), 4, 40, 0x404040, false);
+        // the Tokamak XV: XV, or SV when what is beside it takes SV (TileEntityGeneratorSC.tokamakOutputFor)
+        String tier = e.type == GeneratorType.TOKAMAK_XV ? e.type.tier.name() + "/" + com.sc.energy.Tier.SV.name() : e.type.tier.name();
+        GuiDraw.drawString(Lang.tr("sc.nei.gen.output", e.type.euPerTick, tier), 4, 40, 0x404040, false);
         String[] lines = e.details();
         for (int i = 0; i < lines.length; i++) {
             GuiDraw.drawString(lines[i], 4, 50 + i * 9, 0x606060, false);

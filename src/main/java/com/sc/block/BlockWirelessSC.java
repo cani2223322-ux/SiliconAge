@@ -207,7 +207,9 @@ public class BlockWirelessSC extends Block {
             return;
         }
         for (Tier tier : Tier.values()) {
-            list.add(new ItemStack(item, 1, tier.ordinal()));
+            if (tier.isContentReady()) {              // SV: hidden until Tier.SV_CONTENT_READY
+                list.add(new ItemStack(item, 1, tier.ordinal()));
+            }
         }
     }
 
@@ -224,9 +226,10 @@ public class BlockWirelessSC extends Block {
                 fronts[t.ordinal()] = register.registerIcon(Reference.ASSETS + ":quantumTranslatorFront");
                 sides[t.ordinal()] = register.registerIcon(Reference.ASSETS + ":quantumTranslatorSide");
             } else {
+                String name = t.name();
                 fronts[t.ordinal()] = register.registerIcon(Reference.ASSETS + ":wireless"
-                        + (kind == TileEntityWirelessSC.TRANSMITTER ? "Tx" : "Rx") + t.name() + "Front");
-                sides[t.ordinal()] = register.registerIcon(Reference.ASSETS + ":wireless" + t.name() + "Side");
+                        + (kind == TileEntityWirelessSC.TRANSMITTER ? "Tx" : "Rx") + name + "Front");
+                sides[t.ordinal()] = register.registerIcon(Reference.ASSETS + ":wireless" + name + "Side");
             }
         }
     }

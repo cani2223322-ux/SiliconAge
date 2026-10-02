@@ -46,6 +46,7 @@ public final class ModRecipesCrafting {
         armorAndChips();
         weaponsAndField();
         batteries();
+        svBlocks();
         wireless();
         radiation();
         upgrades();
@@ -112,6 +113,9 @@ public final class ModRecipesCrafting {
                 ingot(Material.PLATINUM), new ItemStack(ModItems.component("nb3SnPlate")), new ItemStack(ModItems.liquidHeCell));
         OreRecipes.shapeless(cable(CableType.EXO, 2), cable(CableType.QUANTUM), cable(CableType.QUANTUM),
                 ingot(Material.HAFNIUM), ingot(Material.TANTALUM), silicon(SiliconMaterial.CONTROLLER));
+        // SV: four Exo cables round a He loop module, hafnium in the corners
+        OreRecipes.shaped(cable(CableType.SINGULAR, 4), new Object[]{"HEH", "ELE", "HEH",
+                'E', cable(CableType.EXO), 'L', comp("heLoopModule"), 'H', ingot(Material.HAFNIUM)});
 
         // §12.4: "кольцом" = cross pattern, top/bottom/left/right filled, centre+corners empty.
         OreRecipes.shaped(pipe(PipeType.COPPER), new Object[]{" X ", "X X", " X ", 'X', ingot(Material.COPPER)});
@@ -413,6 +417,49 @@ public final class ModRecipesCrafting {
         GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 5), " C ", "BSB", "HXH",
                 'C', cable(CableType.EXO), 'B', new ItemStack(b, 1, 4), 'S', new ItemStack(Items.nether_star),
                 'H', ingot(Material.HAFNIUM), 'X', silicon(SiliconMaterial.CONTROLLER)));
+        GameRegistry.addRecipe(new BatteryRecipeSC(new ItemStack(b, 1, 6), " C ", "BFB", "HSH",
+                'C', cable(CableType.SINGULAR), 'B', new ItemStack(b, 1, 5), 'F', comp("fusionCore"),
+                'H', ingot(Material.HAFNIUM), 'S', new ItemStack(Items.nether_star)));
+    }
+
+    /** The tier's own cable (the first one of that tier), or the best cable below it if it has none (SV: Exo). */
+    private static CableType cableOf(com.sc.energy.Tier t) {
+        CableType best = CableType.COPPER_BARE;
+        for (CableType c : CableType.values()) {
+            if (c.tier == t) {
+                return c;
+            }
+            if (c.tier.ordinal() < t.ordinal() && c.tier.ordinal() >= best.tier.ordinal()) {
+                best = c;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * SV (Singular) blocks, each built round its XV one: the storage round an XV storage with two
+     * exo cores (XV batteries), a fusion core, hafnium and Exo cable (its charge comes along); the
+     * charge pad, like the others, the SV storage under pressure plates; the XV-SV transformer round
+     * the QV-XV one with controllers, hafnium and Exo cable. The cable is Exo (cableOf) as long as
+     * there is no SV cable - none is needed. Only while Tier.SV_CONTENT_READY.
+     */
+    private static void svBlocks() {
+        com.sc.energy.Tier sv = com.sc.energy.Tier.SV;
+        if (!sv.isContentReady()) {
+            return;
+        }
+        ItemStack xvStorage = new ItemStack(ModBlocks.energyStorageSC, 1, com.sc.energy.Tier.XV.ordinal());
+        ItemStack svStorage = new ItemStack(ModBlocks.energyStorageSC, 1, sv.ordinal());
+        ItemStack exoCore = new ItemStack(ModItems.battery, 1, 5);
+        GameRegistry.addRecipe(new StorageUpgradeRecipeSC(svStorage, "CFC", "BXB", "HCH",
+                'C', cable(CableType.EXO), 'F', comp("fusionCore"), 'B', exoCore, 'X', xvStorage,
+                'H', ingot(Material.HAFNIUM)));
+        GameRegistry.addRecipe(new StorageUpgradeRecipeSC(new ItemStack(ModBlocks.chargePadSC, 1, sv.ordinal()), "PPP", "CXC",
+                'P', new ItemStack(Blocks.heavy_weighted_pressure_plate), 'C', cable(cableOf(sv)), 'X', svStorage.copy()));
+        // the transformer's meta is its low tier: XV-SV = XV's ordinal, built round QV-XV
+        OreRecipes.shaped(new ItemStack(ModBlocks.transformerSC, 1, com.sc.energy.Tier.XV.ordinal()), "HCH", "EXE", "HCH",
+                'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'E', silicon(SiliconMaterial.CONTROLLER),
+                'X', new ItemStack(ModBlocks.transformerSC, 1, com.sc.energy.Tier.QV.ordinal()));
     }
 
     /**
@@ -424,13 +471,10 @@ public final class ModRecipesCrafting {
         OreRecipes.shapeless(new ItemStack(ModItems.linkCard), new ItemStack(Items.paper), new ItemStack(Items.redstone),
                 silicon(SiliconMaterial.TRANSISTOR), cable(CableType.COPPER_BARE));
         for (com.sc.energy.Tier t : com.sc.energy.Tier.values()) {
-            CableType wire = CableType.COPPER_INSULATED;
-            for (CableType c : CableType.values()) {
-                if (c.tier == t) {
-                    wire = c;
-                    break;
-                }
+            if (!t.isContentReady()) {
+                continue;                     // a tier whose blocks are hidden (Tier.SV_CONTENT_READY) has no Tx / Rx recipe
             }
+            CableType wire = cableOf(t);
             ItemStack storage = new ItemStack(ModBlocks.energyStorageSC, 1, t.ordinal());
             OreRecipes.shaped(new ItemStack(ModBlocks.wirelessTx, 1, t.ordinal()), " E ", "CSC", "IXI",
                     'E', new ItemStack(Items.ender_pearl), 'C', cable(wire), 'S', storage,

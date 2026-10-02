@@ -50,8 +50,8 @@ public class GuiEnergyStorageSC extends GuiContainer {
         return (float) storage.getEnergyStored() / Math.max(1, storage.getMaxEnergyStored());
     }
 
-    /** The battery's edge colour by tier: LV grey, MV orange, HV yellow, EV violet, IV teal, QV blue, XV magenta. */
-    private static final int[] TIER_TINT = {0xFF9AA0AA, 0xFFE0903A, 0xFFE8C040, 0xFFA070E0, 0xFF40C8B0, 0xFF4A80F0, 0xFFC040C0};
+    /** The battery's edge colour by tier: LV grey, MV orange, HV yellow, EV violet, IV teal, QV blue, XV magenta, SV purple. */
+    private static final int[] TIER_TINT = {0xFF9AA0AA, 0xFFE0903A, 0xFFE8C040, 0xFFA070E0, 0xFF40C8B0, 0xFF4A80F0, 0xFFC040C0, 0xFFFF3C50};
     private static final int CELL_X = 56, CELL_Y = 34, CELL_W = 30, CELL_H = 72, INFO_X = 90, CARD_W = 112;
 
     /** How charged an item is, 0..1, from its durability bar (the mod's gear and IC2's items draw theirs that way). */

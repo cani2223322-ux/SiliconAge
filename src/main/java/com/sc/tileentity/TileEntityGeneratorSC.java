@@ -99,7 +99,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     /** Not saved: cachedOutput worked out since the load (else the first second after loading gave nothing). */
     private boolean outputWorkedOut;
     private boolean structureOk;
-    private int creativeTier = Tier.values().length - 1;
+    /** A new Creative Generator starts at XV (the top before SV); the button cycles through all, SV too. */
+    private int creativeTier = Tier.XV.ordinal();
     /** EU made last tick - for the screen and WAILA. */
     private int lastOutput;
     private GeneratorStatus status = GeneratorStatus.IDLE;
@@ -425,6 +426,72 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     public int getBigEvent() {
         return bigEvent;
     }
+
+    // ---- the Tokamak XV's output tier: SV only into what takes SV ----
+
+    /**
+     * Not saved (looked at again every tick): the Tokamak XV sends its output into the net at SV -
+     * one packet of up to 131 072 EU - instead of XV (2 x 32 768), because everything taking energy
+     * on its output faces takes SV. Anything else (an XV cable, an IC2 cable, a machine below SV,
+     * a cable whose network isn't known yet) keeps it at XV, as before SV - old XV lines don't burn.
+     */
+    private boolean svOut;
+
+    /** The Tokamak XV sends at SV now (see svOut); on the client as the server last said. */
+    public boolean isSvOutput() {
+        return xv() && svOut;
+    }
+
+    /**
+     * The Tokamak XV's output tier from what its output neighbours take, as the Adaptive
+     * Transformer reads them (TileEntityEnergyStorageSC.neighbourLimit): null entries take nothing
+     * from there and don't count; a limit with no tier (an IC2 cable, a mod cable with no network
+     * known, an unloaded face) - nothing safe, XV. SV only when at least one takes energy and every
+     * one that does takes SV (a SV cable with nothing weaker behind it, a SV / any-voltage
+     * consumer, an IC2 sink of tier 7+).
+     */
+    public static Tier tokamakOutputFor(java.util.List<TileEntityEnergyStorageSC.Limit> limits) {
+        boolean any = false;
+        for (TileEntityEnergyStorageSC.Limit l : limits) {
+            if (l == null) {
+                continue;
+            }
+            if (l.tier == null || l.tier.ordinal() < Tier.SV.ordinal()) {
+                return Tier.XV;
+            }
+            any = true;
+        }
+        return any ? Tier.SV : Tier.XV;
+    }
+
+    /** Server: looks at the output faces' neighbours again; tells IC2 when the tier changed (it caches it). */
+    private void recomputeSvOut(boolean ic2Refresh) {
+        if (worldObj == null || worldObj.isRemote || !xv()) {
+            return;
+        }
+        java.util.List<TileEntityEnergyStorageSC.Limit> limits = new java.util.ArrayList<TileEntityEnergyStorageSC.Limit>(6);
+        for (ForgeDirection d : outputFaces()) {
+            int x = xCoord + d.offsetX, y = yCoord + d.offsetY, z = zCoord + d.offsetZ;
+            if (!worldObj.blockExists(x, y, z)) {
+                limits.add(TileEntityEnergyStorageSC.cableLimit(Tier.SV, null));   // not loaded: can't see it - nothing safe
+                continue;
+            }
+            limits.add(TileEntityEnergyStorageSC.neighbourLimit(worldObj.getTileEntity(x, y, z), d, this));
+        }
+        boolean sv = tokamakOutputFor(limits) == Tier.SV;
+        if (sv != svOut) {
+            svOut = sv;
+            if (ic2Refresh && cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
+                refreshEnergyNet();      // IC2 caches the source tier; the mod's net reads outputTier() live
+            }
+        }
+    }
+
+    /** The mod's networks were rebuilt (a cable or consumer came or went): look before anything moves. */
+    @Override
+    public void energyNetRebuilt() {
+        recomputeSvOut(false);
+    }
     private float stability = 100F;
     private int burstTicks, warnedAt = 100;
     private double heDebt, h2Debt, dDebt;
@@ -504,7 +571,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     private int[] bigSyncHead() {
         int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (portTaken ? 4 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
-                | bigEvent << 5;
+                | bigEvent << 5 | (svOut ? 128 : 0);
         return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
                 capMissing | Math.round(stability * 10) << 8, portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
     }
@@ -518,6 +585,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         heShort = (flags & 8) != 0;
         h2Short = (flags & 16) != 0;
         bigEvent = flags >> 5 & 3;
+        svOut = (flags & 128) != 0;
         wallMask = v[1];
         portMask = v[2] & 0xFFFFFF;
         portTanks = v[2] >>> 24 & 7;
@@ -1266,8 +1334,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (generatorType == GeneratorType.CREATIVE) {
             return getCreativeTier();
         }
-        Tier[] tiers = Tier.values();
-        return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
+        if (isSvOutput()) {
+            return Tier.SV;              // the Tokamak XV beside a SV taker (recomputeSvOut)
+        }
+        return getTier().raisedOutput(upgradeCount(UpgradeType.TRANSFORMER));
     }
 
     /** Tier buffer + 10 000 EU per storage upgrade, never less than two ticks of output. */
@@ -1330,6 +1400,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         syncTankCapacity();
         if (xv()) {
+            if (ignited || svOut) {
+                recomputeSvOut(true);     // every tick while lit (six lookups): a weaker neighbour counts before the next packet
+            }
             if (burstTicks > 0) {
                 burstTicks--;
             }
@@ -2336,7 +2409,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         solidBurnTotal = nbt.getInteger("SolidBurnTotal");
         solidBurnItem = nbt.getInteger("SolidBurnItem");
         ramp = nbt.hasKey("Ramp") ? nbt.getInteger("Ramp") : ignited ? RAMP_FULL : 0;
-        creativeTier = nbt.hasKey("CreativeTier") ? nbt.getInteger("CreativeTier") : Tier.values().length - 1;
+        creativeTier = nbt.hasKey("CreativeTier") ? nbt.getInteger("CreativeTier") : Tier.XV.ordinal();
         status = GeneratorStatus.byOrdinal(nbt.getInteger("Status"));
         coolingDown = nbt.hasKey("CoolingDown") ? nbt.getBoolean("CoolingDown") : status == GeneratorStatus.OVERHEATED;
         for (int i = 0; i < SLOT_COUNT; i++) {

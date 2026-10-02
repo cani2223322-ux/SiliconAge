@@ -501,7 +501,7 @@ public final class BookContent {
             BookEntry e = new BookEntry("gen." + type.name().toLowerCase(Locale.ROOT), c, st, type.localizedName());
             e.about(st).add(BookEl.head(type.localizedName(), st));
             BookEl stats = BookEl.table(Lang.tr("sc.book.t.param"), Lang.tr("sc.book.t.value"));
-            stats.row(null, Lang.tr("sc.book.t.tier"), type.tier.name());
+            stats.row(null, Lang.tr("sc.book.t.tier"), type == GeneratorType.TOKAMAK_XV ? type.tier.name() + " / " + Tier.SV.name() : type.tier.name());
             stats.row(null, Lang.tr("sc.book.t.output"), type.euPerTick + " EU/t");
             stats.row(null, Lang.tr("sc.book.t.fuel"), fuel(type));
             float rad = TileEntityGeneratorSC.radiationBase(type);
@@ -515,7 +515,8 @@ public final class BookContent {
             }
             if (type == GeneratorType.TOKAMAK_XV) {
                 e.add(BookEl.head(Lang.tr("sc.manual.generator.bighead"))).add(BookEl.image("tokamakxv", 256, 128)).add(tokamakXv())
-                        .add(BookEl.items(materials(tokamakXvLayers()))).addAll(paras("sc.manual.generator.big"));
+                        .add(BookEl.items(materials(tokamakXvLayers()))).addAll(paras("sc.manual.generator.big"))
+                        .add(BookEl.head(Lang.tr("sc.manual.generator.bigsvhead"))).addAll(paras("sc.manual.generator.bigsv"));
                 e.about(new ItemStack(ModBlocks.tokamakCoil), new ItemStack(ModBlocks.leadBlock), new ItemStack(ModBlocks.leadGlass));
             }
             crafting(e, st);
@@ -604,6 +605,7 @@ public final class BookContent {
         }
         ce.add(BookEl.title(Lang.tr("sc.manual.energy.cables"))).add(cables).addAll(paras("sc.manual.energy.rules"))
                 .add(BookEl.head(Lang.tr("sc.manual.energy.bundlehead"))).addAll(paras("sc.manual.energy.bundle"))
+                .addAll(paras("sc.manual.energy.cablesv"))
                 .about(new ItemStack(ModBlocks.cableSC, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModBlocks.conduitBundle, 1, OreDictionary.WILDCARD_VALUE));
         list.add(ce);
         BookEntry st = new BookEntry("storage", c, new ItemStack(ModBlocks.energyStorageSC, 1, 2), Lang.tr("sc.manual.energy.storagehead"));
@@ -618,7 +620,7 @@ public final class BookContent {
             slots.append(slots.length() == 0 ? "" : ", ").append(tier.name()).append(" ").append(com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotsFor(tier));
         }
         st.addAll(paras("sc.manual.energy.storage")).add(BookEl.para(Lang.tr("sc.manual.energy.chargeslots", slots.toString())))
-                .addAll(paras("sc.manual.energy.storage2"));
+                .addAll(paras("sc.manual.energy.storage2")).addAll(paras("sc.manual.energy.storagesv"));
         // the two storage-only modules: the Output Splitter and the Adaptive Transformer
         ItemStack splitter = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OUTPUT_SPLITTER);
         ItemStack adaptive = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ADAPTIVE_TRANSFORMER);
@@ -638,8 +640,10 @@ public final class BookContent {
             tr.add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.manual.energy.transformerline", high.getVoltage(), low.getVoltage(),
                     low.getVoltage(), high.getVoltage())));
         }
-        tr.addAll(paras("sc.manual.energy.transformer")).about(new ItemStack(ModBlocks.transformerSC, 1, OreDictionary.WILDCARD_VALUE));
+        tr.addAll(paras("sc.manual.energy.transformer")).addAll(paras("sc.manual.energy.transformersv"))
+                .about(new ItemStack(ModBlocks.transformerSC, 1, OreDictionary.WILDCARD_VALUE));
         list.add(tr);
+        list.add(svTier(c));
         BookEntry pipes = new BookEntry("pipes", c, new ItemStack(ModBlocks.pipeSC, 1, 0), Lang.tr("sc.manual.energy.pipes"));
         pipes.add(BookEl.title(Lang.tr("sc.manual.energy.pipes")));
         for (PipeType type : PipeType.values()) {
@@ -690,6 +694,43 @@ public final class BookContent {
                         new ItemStack(ModItems.linkCard)));
         list.add(simple("quantum", c, new ItemStack(ModBlocks.quantumTranslator), "sc.manual.energy.quantumhead", "sc.manual.energy.quantum")
                 .about(new ItemStack(ModBlocks.quantumTranslator, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModItems.entangledCrystal, 1, OreDictionary.WILDCARD_VALUE)));
+    }
+
+    /** The SV tier (Singular, 131 072 EU/t): what it is, how to get it, its blocks, IC2. */
+    private static BookEntry svTier(BookChapter c) {
+        Tier sv = Tier.SV;
+        ItemStack store = new ItemStack(ModBlocks.energyStorageSC, 1, sv.ordinal());
+        ItemStack tokamak = ModBlocks.generatorStack(GeneratorType.TOKAMAK_XV, 1);
+        ItemStack trans = new ItemStack(ModBlocks.transformerSC, 1, Tier.XV.ordinal());       // by its low tier: XV-SV
+        ItemStack adaptive = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ADAPTIVE_TRANSFORMER);
+        ItemStack cable = new ItemStack(ModBlocks.cableSC, 1, CableType.SINGULAR.ordinal());
+        ItemStack pad = new ItemStack(ModBlocks.chargePadSC, 1, sv.ordinal());
+        ItemStack tx = new ItemStack(ModBlocks.wirelessTx, 1, sv.ordinal());
+        int core = java.util.Arrays.asList(com.sc.item.ItemBatterySC.TIERS).indexOf(sv);
+        int range = com.sc.tileentity.TileEntityWirelessSC.range(sv);
+        BookEntry e = new BookEntry("sv", c, store, Lang.tr("sc.manual.energy.svhead"));
+        e.add(BookEl.title(Lang.tr("sc.manual.energy.svhead")))
+                .add(BookEl.para(Lang.tr("sc.manual.energy.svlead", sv.getVoltage(), Tier.XV.getVoltage(), sv.toIc2Tier())))
+                .addAll(paras("sc.manual.energy.svtext"))
+                .add(BookEl.head(Lang.tr("sc.manual.energy.svgethead")))
+                .add(BookEl.item(tokamak, tokamak.getDisplayName(), Lang.tr("sc.manual.energy.svget.tokamak", GeneratorType.TOKAMAK_XV.euPerTick)))
+                .add(BookEl.item(trans, trans.getDisplayName(), Lang.tr("sc.manual.energy.svget.transformer")))
+                .add(BookEl.item(adaptive, adaptive.getDisplayName(), Lang.tr("sc.manual.energy.svget.adaptive")))
+                .add(BookEl.head(Lang.tr("sc.manual.energy.svblockshead")))
+                .add(BookEl.item(cable, cable.getDisplayName(), Lang.tr("sc.manual.energy.svblock.cable", CableType.SINGULAR.maxThroughput())))
+                .add(BookEl.item(store, store.getDisplayName(), Lang.tr("sc.manual.energy.svblock.storage",
+                        String.valueOf(com.sc.tileentity.TileEntityEnergyStorageSC.capacityOf(sv)))))
+                .add(BookEl.item(pad, pad.getDisplayName(), Lang.tr("sc.manual.energy.svblock.pad")))
+                .add(BookEl.item(tx, tx.getDisplayName(), Lang.tr("sc.manual.energy.svblock.wireless",
+                        range == Integer.MAX_VALUE ? Lang.tr("sc.manual.energy.wirelessall") : String.valueOf(range))));
+        if (core >= 0) {
+            ItemStack bat = new ItemStack(ModItems.battery, 1, core);
+            e.add(BookEl.item(bat, bat.getDisplayName(), Lang.tr("sc.manual.energy.svblock.battery",
+                    String.valueOf(com.sc.item.ItemBatterySC.capacity(core)), com.sc.item.ItemBatterySC.RATE[core])));
+        }
+        e.add(BookEl.gap()).add(BookEl.warn(Lang.tr("sc.manual.energy.svcompathead"))).addAll(paras("sc.manual.energy.svcompat"))
+                .about(trans);
+        return e;
     }
 
     // ------------------------------------------------------------------ 7. armour & weapons

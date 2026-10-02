@@ -23,8 +23,9 @@ import net.minecraft.world.World;
 
 /**
  * Portable batteries, one item, the tier in the damage: LV silicon cell, MV lithium pack, HV
- * crystal, EV quartz capacitor, QV quantum cell, XV exo core. The charge (a long - the XV one
- * holds 4 billion) is kept in "ChargeSC"; the icon shows it in five steps, the bar under it too.
+ * crystal, EV quartz capacitor, QV quantum cell, XV exo core, SV singular core (appended last:
+ * the damage is the index, old batteries keep their tier). The charge (a long - the SV one
+ * holds 16 billion) is kept in "ChargeSC"; the icon shows it in five steps, the bar under it too.
  * Charged and emptied by the mod's storages and charge pads (a tier at most the block's), with
  * IC2 by its batboxes and machines as well. Sneak + right-click picks what it charges itself:
  * nothing, the worn armour, the held item, or everything carried (other batteries left alone),
@@ -33,10 +34,11 @@ import net.minecraft.world.World;
 @Optional.Interface(iface = "ic2.api.item.ISpecialElectricItem", modid = Reference.IC2_MODID)
 public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectricItem {
 
-    public static final String[] KEYS = {"lv", "mv", "hv", "ev", "qv", "xv"};
-    public static final Tier[] TIERS = {Tier.LV, Tier.MV, Tier.HV, Tier.EV, Tier.QV, Tier.XV};
-    public static final long[] CAPACITY = {40000L, 400000L, 4000000L, 40000000L, 400000000L, 4000000000L};
-    public static final int[] RATE = {32, 128, 512, 2048, 8192, 32768};
+    // the damage is the index here: only ever append (old worlds keep meta 0..5 = LV..XV)
+    public static final String[] KEYS = {"lv", "mv", "hv", "ev", "qv", "xv", "sv"};
+    public static final Tier[] TIERS = {Tier.LV, Tier.MV, Tier.HV, Tier.EV, Tier.QV, Tier.XV, Tier.SV};
+    public static final long[] CAPACITY = {40000L, 400000L, 4000000L, 40000000L, 400000000L, 4000000000L, 16000000000L};
+    public static final int[] RATE = {32, 128, 512, 2048, 8192, 32768, 131072};
     /** Modes (sneak + right-click): off, the armour, the held item, everything carried. */
     public static final int MODE_OFF = 0, MODE_ARMOR = 1, MODE_HELD = 2, MODE_ALL = 3, MODES = 4;
     private static final String CHARGE = "ChargeSC", MODE = "BatteryMode";
@@ -277,7 +279,8 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
         list.add("§7" + Lang.tr("sc.battery.tier", tierOf(stack).name(), RATE[tierIndex(stack)]));
         int mode = modeOf(stack);
         list.add((mode == MODE_OFF ? "§7" : "§a") + Lang.tr("sc.battery.mode", Lang.tr("sc.battery.mode." + mode)));
-        com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.battery.hint"));
+        // Shift details only where the lang has them (sc.battery.tooltip.<key>, e.g. the SV core)
+        com.sc.util.TooltipSC.more(list, Lang.trOr("sc.battery.tooltip." + KEYS[tierIndex(stack)], null), Lang.tr("sc.battery.hint"));
     }
 
     /** 1 234 567 with spaces. */

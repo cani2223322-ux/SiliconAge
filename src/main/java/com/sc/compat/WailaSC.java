@@ -76,6 +76,9 @@ public class WailaSC implements IWailaDataProvider {
                     tip.add(Lang.tr("sc.waila.gen", t.getInteger("scGen")));
                 }
                 tip.add(Lang.tr("sc.waila.tierout", out.name(), out.getVoltage()));
+                if (t.hasKey("scTokSv") && !t.getBoolean("scTokSv")) {
+                    tip.add(Lang.tr("sc.waila.tok.nosv"));                // a Tokamak XV kept at XV: nothing beside it takes SV
+                }
             } else {
                 tip.add(Lang.tr("sc.waila.tier", in.name(), in.getVoltage()));
             }
@@ -223,6 +226,7 @@ public class WailaSC implements IWailaDataProvider {
         if (te instanceof com.sc.tileentity.TileEntityGeneratorSC
                 && ((com.sc.tileentity.TileEntityGeneratorSC) te).getGeneratorType() == com.sc.energy.GeneratorType.TOKAMAK_XV) {
             com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
+            tag.setBoolean("scTokSv", g.isSvOutput());                 // its output tier is outputTier() above: SV or XV
             if (g.isBigRunning()) {
                 tag.setInteger("scBig", 2);
                 tag.setInteger("scStab", Math.round(g.getStability()));

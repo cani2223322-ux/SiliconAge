@@ -47,6 +47,8 @@ public final class SelfTestSC {
             storageModules();
             electricArmor();
             transformers();
+            tierSV();
+            tokamakSvOutput();
             energySplit();
             conduitBundles();
             machineSidesAndUpgrades();
@@ -56,6 +58,7 @@ public final class SelfTestSC {
             bladeFunctions();
             chargePad();
             batteries();
+            singularCableAndCore();
             batterySlot();
             generatorBattery();
             audit2Fixes();
@@ -541,7 +544,9 @@ public final class SelfTestSC {
                         && t.getMaxEnergyStored() == 1024,
                 "step-up: MV in on the sides only (HV there refused), one HV packet (512 EU/t) out of the front, buffer 8 MV packets");
         t.setLowTier(com.sc.energy.Tier.XV);
-        check(t.getLowTier() == com.sc.energy.Tier.QV && t.getHighTier() == com.sc.energy.Tier.XV, "top transformer is QV-XV");
+        check(t.getLowTier() == com.sc.energy.Tier.XV && t.getHighTier() == com.sc.energy.Tier.SV, "XV-SV transformer: XV low, SV high");
+        t.setLowTier(com.sc.energy.Tier.SV);
+        check(t.getLowTier() == com.sc.energy.Tier.XV && t.getHighTier() == com.sc.energy.Tier.SV, "top transformer is XV-SV (SV as low clamps to it)");
         com.sc.tileentity.TileEntityEnergyStorageSC xv = new com.sc.tileentity.TileEntityEnergyStorageSC();
         xv.setStorageTier(com.sc.energy.Tier.XV);
         com.sc.tileentity.TileEntityEnergyStorageSC qv = new com.sc.tileentity.TileEntityEnergyStorageSC();
@@ -550,8 +555,107 @@ public final class SelfTestSC {
                         && qv.getMaxEnergyStored() == 1000000000 && qv.outputTier().getVoltage() == 16384
                         && com.sc.energy.CableType.EXO.tier == com.sc.energy.Tier.XV
                         && com.sc.energy.Tier.QV.toIc2Tier() == 6 && com.sc.energy.Tier.IV.toIc2Tier() == 5
-                        && com.sc.block.BlockTransformerSC.VARIANTS == 6,
+                        && com.sc.block.BlockTransformerSC.VARIANTS == 7,
                 "tiers above EV: XV storage 2 000 000 000 EU / 32768 EU/t, QV half of it, cables, transformers, IC2 tiers");
+    }
+
+    /** SV (Singular): the top tier - order, IC2 numbers, the net's "any voltage", hidden content, overvoltage, ints. */
+    @SuppressWarnings("unchecked")
+    private static void tierSV() {
+        com.sc.energy.Tier SV = com.sc.energy.Tier.SV, XV = com.sc.energy.Tier.XV, QV = com.sc.energy.Tier.QV;
+        com.sc.energy.Tier[] all = com.sc.energy.Tier.values();
+        check(all[all.length - 1] == SV && SV.ordinal() == 7 && com.sc.energy.Tier.max() == SV
+                        && SV.getVoltage() == 131072 && SV.getBuffer() == 13107200,
+                "SV is the last tier (ordinal 7), Tier.max(), 131072 EU/t, buffer 13 107 200");
+        check(SV.toIc2Tier() == 7 && XV.toIc2Tier() == 6 && QV.toIc2Tier() == 6
+                        && com.sc.energy.Tier.fromIc2Tier(7) == SV && com.sc.energy.Tier.fromIc2Tier(6) == XV
+                        && com.sc.energy.Tier.fromIc2Tier(13) == SV && com.sc.energy.Tier.fromIc2Tier(5) == com.sc.energy.Tier.IV,
+                "IC2 tiers: SV 7, QV / XV 6; back: 7+ SV, 6 XV, 5 IV");
+        check(com.sc.energy.Tier.byOrdinal(99) == SV && com.sc.energy.Tier.byOrdinal(-1) == com.sc.energy.Tier.LV
+                        && XV.up() == SV && SV.up() == SV,
+                "byOrdinal clamps, up() stops at SV");
+        // overvoltage: an SV packet is one tier over an XV cable / consumer (it burns / blows), two over QV
+        check(XV.excessTiersOf(SV) == 1 && QV.excessTiersOf(SV) == 2 && SV.excessTiersOf(XV) == 0
+                        && com.sc.energy.CableType.EXO.tier.excessTiersOf(SV) == 1,
+                "SV over XV is one tier of overvoltage, over QV two, nothing the other way");
+        // int headroom: SV voltage x the most packets x faces, the biggest capacities
+        long worst = (long) SV.getVoltage() * (1 + com.sc.tileentity.TileEntityEnergyStorageSC.MAX_EXTRA_PACKETS) * 3;
+        check(worst < Integer.MAX_VALUE && com.sc.tileentity.TileEntityEnergyStorageSC.CAPACITY.length == all.length
+                        && com.sc.tileentity.TileEntityEnergyStorageSC.capacityOf(SV) >= com.sc.tileentity.TileEntityEnergyStorageSC.capacityOf(XV)
+                        && com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotsFor(SV) == com.sc.tileentity.TileEntityEnergyStorageSC.MAX_CHARGE_SLOTS,
+                "SV fits ints: voltage x packets x 3 faces = " + worst + ", a capacity per tier, SV storage >= XV, 4 charge slots");
+        com.sc.tileentity.TileEntityEnergyStorageSC svs = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        svs.setStorageTier(SV);
+        boolean svStore = svs.getMaxEnergyStored() > 0 && svs.outputTier() == SV && svs.adaptiveCeiling() == SV;
+        for (int n = 1; n <= com.sc.machine.UpgradeType.MAX_EFFECTIVE; n++) {
+            ItemStack caps = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE);
+            caps.stackSize = n;
+            svs.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT, caps);
+            svStore &= svs.getMaxEnergyStored() > 0;              // clamped, never wraps negative
+        }
+        check(svStore, "SV storage: SV out, adaptive ceiling SV, capacity upgrades clamp to int (" + svs.getMaxEnergyStored() + ")");
+        // the wireless link of SV: no worse than XV
+        check(com.sc.tileentity.TileEntityWirelessSC.range(SV) == Integer.MAX_VALUE
+                        && com.sc.tileentity.TileEntityWirelessSC.blocksPerPercent(SV) >= com.sc.tileentity.TileEntityWirelessSC.blocksPerPercent(XV),
+                "wireless SV: the whole dimension, losing no more than XV");
+        // a Transformer upgrade lifts an XV storage no higher than outputRaiseCeiling (XV until SV content is in)
+        com.sc.tileentity.TileEntityEnergyStorageSC xvs = new com.sc.tileentity.TileEntityEnergyStorageSC();
+        xvs.setStorageTier(XV);
+        xvs.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT,
+                ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
+        check(xvs.baseOutputTier() == com.sc.energy.Tier.outputRaiseCeiling() && SV.raisedOutput(2) == SV
+                        && QV.raisedOutput(5) == com.sc.energy.Tier.outputRaiseCeiling(),
+                "Transformer upgrade: XV storage goes no higher than " + com.sc.energy.Tier.outputRaiseCeiling() + " (SV content ready: "
+                        + com.sc.energy.Tier.SV_CONTENT_READY + ")");
+        // SV blocks stay out of the creative tab / NEI until Tier.SV_CONTENT_READY
+        List<ItemStack> st = new java.util.ArrayList<ItemStack>(), pad = new java.util.ArrayList<ItemStack>(),
+                tr = new java.util.ArrayList<ItemStack>(), tx = new java.util.ArrayList<ItemStack>();
+        com.sc.init.ModBlocks.energyStorageSC.getSubBlocks(net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.energyStorageSC), null, st);
+        com.sc.init.ModBlocks.chargePadSC.getSubBlocks(net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.chargePadSC), null, pad);
+        com.sc.init.ModBlocks.transformerSC.getSubBlocks(net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.transformerSC), null, tr);
+        com.sc.init.ModBlocks.wirelessTx.getSubBlocks(net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.wirelessTx), null, tx);
+        int shown = com.sc.energy.Tier.SV_CONTENT_READY ? all.length : all.length - 1;
+        check(st.size() == shown && pad.size() == shown && tr.size() == shown - 1 && tx.size() == shown,
+                "SV variants in creative only when SV_CONTENT_READY (" + com.sc.energy.Tier.SV_CONTENT_READY + "): storage " + st.size()
+                        + ", pad " + pad.size() + ", transformers " + tr.size() + ", Tx " + tx.size());
+    }
+
+    /**
+     * The Tokamak XV goes SV only into what takes SV (TileEntityGeneratorSC.tokamakOutputFor, on
+     * the same neighbour limits as the Adaptive Transformer): XV with nothing beside it, beside an
+     * XV cable / XV machine / IC2 cable / a cable with no network; SV beside a SV cable with SV
+     * behind it or an IC2 sink of tier 7. A tile with no world stays XV, 2 packets of 32 768.
+     */
+    private static void tokamakSvOutput() {
+        com.sc.energy.Tier SV = com.sc.energy.Tier.SV, XV = com.sc.energy.Tier.XV;
+        com.sc.tileentity.TileEntityEnergyStorageSC.Limit svCable = com.sc.tileentity.TileEntityEnergyStorageSC.cableLimit(SV, SV),
+                svCableXvMachine = com.sc.tileentity.TileEntityEnergyStorageSC.cableLimit(SV, XV),
+                xvCable = com.sc.tileentity.TileEntityEnergyStorageSC.cableLimit(XV, SV),
+                noNet = com.sc.tileentity.TileEntityEnergyStorageSC.cableLimit(SV, null),
+                ic2Cable = com.sc.tileentity.TileEntityEnergyStorageSC.ic2Limit(true, false, 0, true),
+                ic2Sv = com.sc.tileentity.TileEntityEnergyStorageSC.ic2Limit(false, true, 7, true),
+                ic2Xv = com.sc.tileentity.TileEntityEnergyStorageSC.ic2Limit(false, true, 6, true);
+        check(out() == XV && out((com.sc.tileentity.TileEntityEnergyStorageSC.Limit) null) == XV,
+                "Tokamak XV: nothing beside it -> XV");
+        check(out(xvCable) == XV && out(svCableXvMachine) == XV && out(noNet) == XV && out(ic2Cable) == XV && out(ic2Xv) == XV,
+                "Tokamak XV: XV cable, SV cable with an XV machine on it, no network, IC2 cable, IC2 tier-6 sink -> XV");
+        check(out(svCable) == SV && out(ic2Sv) == SV && out(svCable, null, ic2Sv) == SV,
+                "Tokamak XV: SV cable with SV behind it, IC2 tier-7 sink -> SV");
+        check(out(svCable, xvCable) == XV && out(ic2Sv, ic2Cable) == XV,
+                "Tokamak XV: one weaker neighbour among SV ones -> XV");
+        com.sc.tileentity.TileEntityGeneratorSC tok = new com.sc.tileentity.TileEntityGeneratorSC();
+        tok.setGeneratorType(com.sc.energy.GeneratorType.TOKAMAK_XV);
+        check(!tok.isSvOutput() && tok.outputTier() == XV && tok.packetsPerTick() == 2,
+                "Tokamak XV without a world: XV, 2 packets of 32768 (" + tok.outputTier() + ", " + tok.packetsPerTick() + ")");
+        int[] sync = tok.bigSync();
+        sync[0] |= 128 << 24;                                    // the server says: SV
+        tok.setBigClient(sync);
+        check(tok.isSvOutput() && tok.outputTier() == SV && tok.packetsPerTick() == 1,
+                "Tokamak XV at SV (synced flag): one packet of 131072 carries 65536 (" + tok.outputTier() + ", " + tok.packetsPerTick() + ")");
+    }
+
+    private static com.sc.energy.Tier out(com.sc.tileentity.TileEntityEnergyStorageSC.Limit... limits) {
+        return com.sc.tileentity.TileEntityGeneratorSC.tokamakOutputFor(java.util.Arrays.asList(limits));
     }
 
     /** Cable network arithmetic: even shares, line loss, the rating cap, drawing from several generators. */
@@ -995,8 +1099,9 @@ public final class SelfTestSC {
         TileEntityMachineSC u = new TileEntityMachineSC();
         u.setMachineType(MachineType.CRUSHER);
         u.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));
-        check(u.inputTier() == com.sc.energy.Tier.XV && u.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 100, true) == 100,
-                "universal transformer upgrade: an LV machine takes any voltage, XV included");
+        check(u.inputTier() == com.sc.energy.Tier.max() && u.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 100, true) == 100
+                        && u.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 131072, 100, true) == 100,
+                "universal transformer upgrade: an LV machine takes any voltage, XV and SV included");
         net.minecraft.nbt.NBTTagCompound ut = u.upgradesForItem();
         TileEntityMachineSC u2 = new TileEntityMachineSC();
         u2.setMachineType(MachineType.CRUSHER);
@@ -1204,7 +1309,7 @@ public final class SelfTestSC {
         f.setInventorySlotContents(2, up.stackOf(com.sc.machine.UpgradeType.TRANSFORMER));
         boolean ev = hv && f.inputTier() == com.sc.energy.Tier.EV;
         f.setInventorySlotContents(3, up.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER));
-        ev &= f.inputTier() == com.sc.energy.Tier.XV;
+        ev &= f.inputTier() == com.sc.energy.Tier.max();
         f.setInventorySlotContents(3, null);
         boolean only = !f.isItemValidForSlot(3, up.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER))
                 && f.isItemValidForSlot(3, two) && f.getAccessibleSlotsFromSide(1).length == 0;
@@ -1631,6 +1736,62 @@ public final class SelfTestSC {
                 && com.sc.item.ItemChargeSC.charge(quantum, 500, com.sc.energy.Tier.LV) == 0
                 && com.sc.item.ItemChargeSC.isBattery(hv) && !com.sc.item.ItemChargeSC.isBattery(nano);
         check(ok, "batteries: charge worn suits up to their own tier; a battery counts as a battery");
+    }
+
+    /** SV content: the Singular cable (last CableType, SV) and the Singular core battery (meta 6). */
+    private static void singularCableAndCore() {
+        com.sc.energy.CableType[] cables = com.sc.energy.CableType.values();
+        com.sc.energy.CableType sing = com.sc.energy.CableType.SINGULAR;
+        check(cables[cables.length - 1] == sing && sing.ordinal() == 8 && com.sc.energy.CableType.EXO.ordinal() == 7
+                        && sing.tier == com.sc.energy.Tier.SV && sing.maxAmps == 4 && sing.lossPerBlock == 0 && sing.insulated
+                        && sing.maxThroughput() == 524288 && "wireSingularSV".equals(sing.oreDictName),
+                "Singular cable: last CableType (meta 8, Exo stays 7), SV, 4 A = 524288 EU/t, no loss, insulated");
+        TileEntityConduitBundleSC xvBundle = new TileEntityConduitBundleSC();
+        xvBundle.addPart(com.sc.conduit.ConduitKind.CABLE, com.sc.energy.CableType.EXO.ordinal());
+        TileEntityConduitBundleSC svBundle = new TileEntityConduitBundleSC();
+        boolean added = svBundle.addPart(com.sc.conduit.ConduitKind.CABLE, sing.ordinal())
+                && svBundle.addPart(com.sc.conduit.ConduitKind.PIPE, com.sc.util.PipeType.PTFE.ordinal())
+                && svBundle.addPart(com.sc.conduit.ConduitKind.TUBE, 0);
+        net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
+        svBundle.writeToNBT(nbt);
+        TileEntityConduitBundleSC back = new TileEntityConduitBundleSC();
+        back.readFromNBT(nbt);
+        check(added && svBundle.getCable() == sing && back.getCable() == sing && back.getPipe() == com.sc.util.PipeType.PTFE && back.hasTube()
+                        && com.sc.energy.ExplosionLogic.burnCableIfOvervolted(xvBundle, com.sc.energy.CableType.EXO.tier, com.sc.energy.Tier.SV)
+                        && !com.sc.energy.ExplosionLogic.burnCableIfOvervolted(svBundle, sing.tier, com.sc.energy.Tier.SV),
+                "Singular cable: in a bundle with a pipe and a tube (NBT round trip); an SV packet burns an Exo cable, not a Singular one");
+
+        com.sc.energy.Tier[] old = {com.sc.energy.Tier.LV, com.sc.energy.Tier.MV, com.sc.energy.Tier.HV,
+                com.sc.energy.Tier.EV, com.sc.energy.Tier.QV, com.sc.energy.Tier.XV};
+        String[] oldKeys = {"lv", "mv", "hv", "ev", "qv", "xv"};
+        boolean kept = com.sc.item.ItemBatterySC.TIERS.length == 7 && com.sc.item.ItemBatterySC.KEYS.length == 7
+                && com.sc.item.ItemBatterySC.CAPACITY.length == 7 && com.sc.item.ItemBatterySC.RATE.length == 7;
+        for (int m = 0; m < old.length; m++) {
+            ItemStack s = new ItemStack(ModItems.battery, 1, m);
+            kept &= com.sc.item.ItemBatterySC.tierOf(s) == old[m] && s.getUnlocalizedName().endsWith(".battery." + oldKeys[m]);
+        }
+        check(kept, "batteries: meta 0..5 keep LV..XV (SV appended as meta 6)");
+        ItemStack sv = new ItemStack(ModItems.battery, 1, 6);
+        com.sc.item.ItemBatterySC.setCharge(sv, Long.MAX_VALUE);
+        boolean ok = com.sc.item.ItemBatterySC.tierOf(sv) == com.sc.energy.Tier.SV && sv.getUnlocalizedName().endsWith(".battery.sv")
+                && com.sc.item.ItemBatterySC.CAPACITY[6] == 16000000000L && com.sc.item.ItemBatterySC.RATE[6] == 131072
+                && com.sc.item.ItemBatterySC.capacityOf(sv) == com.sc.item.ItemBatterySC.capacity(6)
+                && com.sc.item.ItemBatterySC.chargeOf(sv) == com.sc.item.ItemBatterySC.capacityOf(sv)
+                && com.sc.item.ItemBatterySC.charge(sv, Integer.MAX_VALUE) == 0
+                && com.sc.item.ItemBatterySC.discharge(sv, Integer.MAX_VALUE) == 131072
+                && com.sc.item.ItemBatterySC.chargeOf(sv) == com.sc.item.ItemBatterySC.capacityOf(sv) - 131072
+                && ModItems.battery.getTier(sv) == 7;
+        com.sc.item.ItemBatterySC.setCharge(sv, 16000000000L);
+        ok &= com.sc.item.ItemBatterySC.chargeOf(sv) == Math.min(16000000000L, com.sc.item.ItemBatterySC.capacityOf(sv));
+        check(ok, "Singular core: SV, 16 000 000 000 EU (a long, capped, no overflow), 131072 EU/t a call, IC2 tier 7");
+        com.sc.tileentity.TileEntityChargePadSC svPad = new com.sc.tileentity.TileEntityChargePadSC();
+        svPad.setStorageTier(com.sc.energy.Tier.SV);
+        com.sc.tileentity.TileEntityChargePadSC xvPad = new com.sc.tileentity.TileEntityChargePadSC();
+        xvPad.setStorageTier(com.sc.energy.Tier.XV);
+        ItemStack empty = new ItemStack(ModItems.battery, 1, 6), exo = new ItemStack(ModItems.battery, 1, 5);
+        check(xvPad.chargeItem(empty, 1000000) == 0 && svPad.chargeItem(empty, 1000000) == 131072
+                        && svPad.chargeItem(exo, 1000000) == 32768 && svPad.dischargeItem(empty, 1000000) == 131072,
+                "Singular core: an SV pad charges it at 131072 (and an Exo core at 32768), an XV pad refuses it");
     }
 
     /** Kept in its own class so IC2's API is only loaded when IC2 is. */

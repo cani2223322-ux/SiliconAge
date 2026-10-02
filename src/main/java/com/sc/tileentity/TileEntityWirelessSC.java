@@ -96,7 +96,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
 
     // ------------------------------------------------------------------ range and loss
 
-    /** How far a link of this tier reaches (blocks); XV: the whole dimension. */
+    /** How far a link of this tier reaches (blocks); XV and SV: the whole dimension. */
     public static int range(Tier t) {
         int r = baseRange(t);
         return r == Integer.MAX_VALUE ? r : com.sc.util.ConfigSC.scale(r, com.sc.util.ConfigSC.wirelessRange, 1);
@@ -110,7 +110,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             case EV: return 128;
             case IV: return 256;
             case QV: return 512;
-            default: return Integer.MAX_VALUE;
+            default: return Integer.MAX_VALUE;     // XV, SV: the whole dimension
         }
     }
 
@@ -128,7 +128,8 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             case EV: return 12;
             case IV: return 16;
             case QV: return 24;
-            default: return 32;
+            case XV: return 32;
+            default: return 64;                    // SV
         }
     }
 

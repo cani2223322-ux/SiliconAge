@@ -279,7 +279,7 @@ public class GuiWirelessSC extends GuiContainer {
     private void linkTexts(int[] p, int c, int dim) {
         boolean tx = te.getKind() == TileEntityWirelessSC.TRANSMITTER, linked = te.hasLink();
         small(Lang.tr(tx ? "sc.wl.link" : "sc.wl.source"), CARD_X + 3, CARD_Y + 2, 80, dim);
-        String who = !linked ? "-" : Lang.tr(tx ? "sc.wl.rxname" : "sc.wl.txname", p[4] >= 0 ? Tier.values()[Math.min(p[4], 6)].name() : "?");
+        String who = !linked ? "-" : Lang.tr(tx ? "sc.wl.rxname" : "sc.wl.txname", p[4] >= 0 ? Tier.byOrdinal(p[4]).name() : "?");
         fit(who, CARD_X + 3, CARD_Y + 8, 80, linked ? c : GuiHoloSC.IDLE);
         if (!linked) {
             small(Lang.tr("sc.wl.hint.1"), 14, 54, 86, c);

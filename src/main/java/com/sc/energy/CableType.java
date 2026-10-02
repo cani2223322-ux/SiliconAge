@@ -14,7 +14,9 @@ public enum CableType {
     // The mod's own tiers above EV (appended: the cable's metadata is its ordinal).
     NIOBIUM_TITANIUM("cableNiobiumTitanium", "wireNiobiumTitaniumIV", Tier.IV, 4, 0, true),
     QUANTUM("cableQuantum", "wireQuantumQV", Tier.QV, 4, 0, true),
-    EXO("cableExo", "wireExoXV", Tier.XV, 4, 0, true);
+    EXO("cableExo", "wireExoXV", Tier.XV, 4, 0, true),
+    // SV (131072 EU/t): appended last for the same reason - never reorder.
+    SINGULAR("cableSingular", "wireSingularSV", Tier.SV, 4, 0, true);
 
     public final String textureName;
     /** OreDict name, §12.5. */

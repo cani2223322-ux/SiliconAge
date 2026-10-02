@@ -30,8 +30,11 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     /** Overdrive: one more packet of the output voltage a tick each, at most this many. */
     public static final int MAX_EXTRA_PACKETS = 4;
 
-    /** TODO(design doc has no storage blocks): capacities per tier, LV..XV (XV close to the int ceiling). */
-    public static final int[] CAPACITY = {40000, 300000, 4000000, 40000000, 300000000, 1000000000, 2000000000};
+    /**
+     * TODO(design doc has no storage blocks): capacities per tier, LV..SV (XV close to the int ceiling,
+     * SV right on it - capacity upgrades can't raise it any more, getMaxEnergyStored clamps to int).
+     */
+    public static final int[] CAPACITY = {40000, 300000, 4000000, 40000000, 300000000, 1000000000, 2000000000, Integer.MAX_VALUE};
 
     private ForgeDirection facing = ForgeDirection.SOUTH;
     private ItemStack chargeSlot;
@@ -150,6 +153,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (t.storageOnly() && this instanceof TileEntityChargePadSC) {
             return false;
         }
+        if (t == UpgradeType.ENERGY_STORAGE && capacityOf(getTier()) == Integer.MAX_VALUE) {
+            return false;                       // already at the ceiling (SV): the upgrade would be lost for nothing
+        }
         return t != UpgradeType.OUTPUT_SPLITTER || getTier().ordinal() >= Tier.HV.ordinal();
     }
 
@@ -204,10 +210,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         return Math.min(n, cap);
     }
 
-    /** Transformer upgrades send the output out a tier higher each (up to XV). */
+    /** Transformer upgrades send the output out a tier higher each (up to Tier.outputRaiseCeiling()). */
     public Tier baseOutputTier() {
-        Tier[] tiers = Tier.values();
-        return tiers[Math.min(tiers.length - 1, getTier().ordinal() + upgradeCount(UpgradeType.TRANSFORMER))];
+        return getTier().raisedOutput(upgradeCount(UpgradeType.TRANSFORMER));
     }
 
     /** The Transformers' tier, or the Adaptive Transformer's when that is higher (it never passes the neighbour). */
@@ -334,7 +339,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         return adaptiveModule && !(this instanceof TileEntityChargePadSC);
     }
 
-    /** The highest tier the Adaptive Transformer gives: the storage's own + 2, at most XV. */
+    /** The highest tier the Adaptive Transformer gives: the storage's own + 2, at most Tier.max(). */
     public Tier adaptiveCeiling() {
         Tier[] tiers = Tier.values();
         return tiers[Math.min(tiers.length - 1, getTier().ordinal() + UpgradeType.ADAPTIVE_MAX_RAISE)];
@@ -408,7 +413,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             if (!e.isEnergySink() || !e.acceptsFrom(face.getOpposite())) {
                 return null;
             }
-            return new Limit(e.acceptsAnyVoltage() ? Tier.XV : e.inputTier(), ADAPT_CONSUMER);
+            return new Limit(e.acceptsAnyVoltage() ? Tier.max() : e.inputTier(), ADAPT_CONSUMER);
         }
         if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
             return Ic2Limit.of(te);

@@ -55,8 +55,9 @@ public class BlockChargePadSC extends BlockEnergyStorageSC {
         topIdle = new IIcon[tiers.length];
         topActive = new IIcon[tiers.length];
         for (Tier tier : tiers) {
-            topIdle[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":chargePad" + tier.name() + "Top");
-            topActive[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":chargePad" + tier.name() + "TopOn");
+            String name = tier.name();
+            topIdle[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":chargePad" + name + "Top");
+            topActive[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":chargePad" + name + "TopOn");
         }
     }
 

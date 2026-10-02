@@ -95,7 +95,7 @@ public class BlockGeneratorSC extends Block {
         Tier[] tiers = Tier.values();
         casingIcons = new IIcon[tiers.length];
         for (Tier tier : tiers) {
-            casingIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":machineCasing" + tier.name());
+            casingIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":machineCasing" + tier.name());   // every tier, SV too (machineCasingSV.png)
         }
     }
 

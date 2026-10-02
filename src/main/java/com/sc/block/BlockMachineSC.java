@@ -97,7 +97,7 @@ public class BlockMachineSC extends Block {
         com.sc.energy.Tier[] tiers = com.sc.energy.Tier.values();
         casingIcons = new IIcon[tiers.length];
         for (com.sc.energy.Tier tier : tiers) {
-            casingIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":machineCasing" + tier.name());
+            casingIcons[tier.ordinal()] = register.registerIcon(Reference.ASSETS + ":machineCasing" + tier.name());   // every tier, SV too (machineCasingSV.png)
         }
     }
 

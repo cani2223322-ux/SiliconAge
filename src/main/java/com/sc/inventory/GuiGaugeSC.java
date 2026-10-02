@@ -156,7 +156,7 @@ public final class GuiGaugeSC {
 
     /**
      * LV grey, MV orange, HV gold, EV violet - the usual IC2/GregTech reading of the tiers; the
-     * mod's own above: IV teal, QV (Quantum) blue, XV (Exo) near-black violet.
+     * mod's own above: IV teal, QV (Quantum) blue, XV (Exo) near-black violet, SV (Singular) purple.
      */
     public static int tierColor(Tier tier) {
         switch (tier) {
@@ -166,7 +166,8 @@ public final class GuiGaugeSC {
             case EV: return 0x7A3CB8;
             case IV: return 0x178C84;
             case QV: return 0x2F7FD0;
-            default: return 0x2A1C3E;
+            case XV: return 0x2A1C3E;
+            default: return 0xB81E32;
         }
     }
 
