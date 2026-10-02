@@ -915,6 +915,7 @@ public final class BookContent {
                 }
             }
         }
+        armorGasRules(gases);
         gases.add(BookEl.head(Lang.tr("sc.manual.armor.gasfillhead"))).addAll(paras("sc.manual.armor.gasfill"));
         list.add(gases);
         ItemStack st = new ItemStack(ModBlocks.armorStation);
@@ -1108,6 +1109,47 @@ public final class BookContent {
     }
 
     /** A block of prose stored as key.1, key.2, ... */
+    /**
+     * The strict rules of the Quantum / Exo suits: the "function - gas - use" table straight from
+     * ArmorFeature.gas() / gasUse() (what the armour logic runs on), and the emergency mode.
+     */
+    private static void armorGasRules(BookEntry gases) {
+        gases.add(BookEl.head(Lang.tr("sc.manual.armor.strict.head"))).addAll(paras("sc.manual.armor.strict"));
+        BookEl t = BookEl.table(Lang.tr("sc.manual.armor.strict.t.fn"), Lang.tr("sc.manual.armor.strict.t.gas"),
+                Lang.tr("sc.manual.armor.strict.t.use"));
+        for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+            for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
+                if (f.gas() != g) {
+                    continue;
+                }
+                ArmorSuit from = f.minSuit.ordinal() < ArmorSuit.QUANTUM.ordinal() && f != com.sc.util.ArmorFeature.AIR ? ArmorSuit.QUANTUM : f.minSuit;
+                ItemStack icon = new ItemStack(ModItems.ARMOR.get(from)[f.piece]);
+                t.row(icon, Lang.tr("sc.armorfn." + f.name().toLowerCase(Locale.ROOT)),
+                        Lang.trOr("sc.gas." + g.key(), g.key()), gasUseText(f));
+            }
+        }
+        gases.add(t);
+        gases.add(BookEl.head(Lang.tr("sc.manual.armor.emergency.head"))).addAll(paras("sc.manual.armor.emergency"));
+    }
+
+    /** "1 mB/s", "50 mB a use", "1 mB/min", "the loop's cooling", "by the radiation". */
+    private static String gasUseText(com.sc.util.ArmorFeature f) {
+        float v = f.gasUse();
+        String n = v == (int) v ? String.valueOf((int) v) : String.valueOf(v);
+        switch (f.gasUseKind()) {
+            case com.sc.util.ArmorFeature.USE_MINUTE:
+                return Lang.tr("sc.manual.armor.strict.min", n);
+            case com.sc.util.ArmorFeature.USE_ONCE:
+                return Lang.tr("sc.manual.armor.strict.once", n);
+            case com.sc.util.ArmorFeature.USE_COOLING:
+                return Lang.tr("sc.manual.armor.strict.cooling");
+            case com.sc.util.ArmorFeature.USE_RADIATION:
+                return Lang.tr("sc.manual.armor.strict.rad");
+            default:
+                return Lang.tr("sc.manual.armor.strict.sec", n);
+        }
+    }
+
     static List<BookEl> paras(String baseKey) {
         List<BookEl> out = new ArrayList<BookEl>();
         for (int i = 1; ; i++) {

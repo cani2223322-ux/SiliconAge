@@ -139,6 +139,12 @@ public class ArmorClientSC {
         if (ArmorLogicSC.active(p, ArmorFeature.HUD)) {
             y = drawSuit(mc, p, y);
         }
+        // Quantum / Exo with no helium in the loop: emergency mode, shown with or without the HUD
+        if (ArmorLogicSC.emergency(ArmorGasSC.wornSet(p))) {
+            mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.gas.emergency"), 4, y > 4 ? y + 2 : y,
+                    GasUiSC.blinkOff() ? 0xB02020 : 0xFF4040);
+            y += y > 4 ? 12 : 10;
+        }
         // the energy blade's own heat, under the suit's lines (shown with or without the helmet)
         ItemStack blade = com.sc.item.BladeLogicSC.held(p);
         if (blade != null) {

@@ -91,6 +91,72 @@ public enum ArmorFeature {
         return this == BOOSTER || this == SEARCHLIGHT || this == FUSION_CELL;
     }
 
+    // ------------------------------------------------------------------ the gas each function runs on (one table for the logic, the K screen and the handbook)
+
+    /** How gasUse() is counted. */
+    public static final char USE_SECOND = 's', USE_MINUTE = 'm', USE_ONCE = 'u', USE_COOLING = 'h', USE_RADIATION = 'r';
+
+    /**
+     * The gas this function needs in the worn suit (Quantum / Exo; a Nano suit only ever needs oxygen
+     * to breathe) - without it the function doesn't switch on; null: runs on EU alone. Helium means
+     * the loop at work (ArmorLogicSC.heliumReady). The boost / searchlight / fusion cell listed too.
+     */
+    public ArmorGasSC.Gas gas() {
+        switch (this) {
+            case FLIGHT: case DASH: case JUMP: case SPEED: case FALL_DAMPING: case BOOSTER:
+                return ArmorGasSC.Gas.HYDROGEN;
+            case SHIELD: case ANNIHILATION: case EXPLOSION_PROOF: case REGENERATION: case CHARGER:
+                return ArmorGasSC.Gas.HELIUM;
+            case AIR: case CLEANSE:
+                return ArmorGasSC.Gas.OXYGEN;
+            case NIGHT_VISION: case ORE_SCANNER: case THERMAL: case SEARCHLIGHT:
+                return ArmorGasSC.Gas.KRYPTON;
+            case FIRE_PROOF: case WATER_WALK:
+                return ArmorGasSC.Gas.ARGON;
+            case RAD_SHIELD:
+                return ArmorGasSC.Gas.HEAVY_WATER;
+            case FUSION_CELL:
+                return ArmorGasSC.Gas.DEUTERIUM;
+            default:
+                return null;
+        }
+    }
+
+    /** How the gas is spent while it works: USE_SECOND / USE_MINUTE (mB a second / minute), USE_ONCE (mB a use), USE_COOLING, USE_RADIATION. */
+    public char gasUseKind() {
+        switch (this) {
+            case DASH: case JUMP: case FALL_DAMPING: case CLEANSE:
+                return USE_ONCE;
+            case NIGHT_VISION: case ORE_SCANNER: case THERMAL: case SEARCHLIGHT:
+                return USE_MINUTE;
+            case SHIELD: case ANNIHILATION: case EXPLOSION_PROOF: case REGENERATION: case CHARGER:
+                return USE_COOLING;
+            case RAD_SHIELD:
+                return USE_RADIATION;
+            default:
+                return USE_SECOND;
+        }
+    }
+
+    /** mB spent (per gasUseKind; 0 for the cooling / radiation kinds, spent by the loop / RadiationSC). */
+    public float gasUse() {
+        switch (this) {
+            case FLIGHT: return ArmorGasSC.H2_FLIGHT_BASE_PER_SECOND;
+            case BOOSTER: return ArmorGasSC.H2_FLIGHT_PER_SECOND;
+            case DASH: return ArmorGasSC.H2_DASH;
+            case JUMP: return ArmorGasSC.H2_JUMP;
+            case SPEED: return ArmorGasSC.H2_SPEED_PER_SECOND;
+            case FALL_DAMPING: return ArmorGasSC.H2_FALL_DAMPING;
+            case AIR: return ArmorGasSC.OXYGEN_PER_SECOND;
+            case CLEANSE: return ArmorGasSC.O2_CLEANSE;
+            case NIGHT_VISION: case ORE_SCANNER: case THERMAL: case SEARCHLIGHT: return ArmorGasSC.KRYPTON_PER_MIN;
+            case FIRE_PROOF: return ArmorGasSC.ARGON_FIRE_PROOF_PER_SECOND;
+            case WATER_WALK: return ArmorGasSC.ARGON_WATER_WALK_PER_SECOND;
+            case FUSION_CELL: return ArmorGasSC.FUSION_D_PER_TICK * 20;
+            default: return 0F;
+        }
+    }
+
     /** Fired by its key (once, then off again) instead of switched on and off. */
     public boolean isAction() {
         return this == DASH || this == ANNIHILATION;

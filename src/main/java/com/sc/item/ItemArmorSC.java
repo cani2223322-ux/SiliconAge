@@ -227,6 +227,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.pairs(list, names, on);
                 gasLines(stack, list);
+                if (ArmorLogicSC.strict(suit)) {
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.strict"), "§6");
+                }
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;
             case 2:
@@ -356,12 +359,25 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         }
         // Forge works in 1/25ths of a damage point here, so the EU left buys 25 x charge / cost.
         int absorbMax = (int) Math.min(Integer.MAX_VALUE, 25.0 * chargeOf(armor) / damageCost());
-        return new ArmorProperties(0, damageReduceAmount / 25.0, absorbMax);
+        return new ArmorProperties(0, protection(player) / 25.0, absorbMax);
     }
 
     @Override
     public int getArmorDisplay(EntityPlayer player, ItemStack armor, int slot) {
-        return powered(armor) ? damageReduceAmount : 0;
+        return powered(armor) ? protection(player) : 0;
+    }
+
+    /** The plating's armour points worn by `wearer`: in emergency mode (Quantum / Exo, no helium) only as good as iron. */
+    private int protection(EntityLivingBase wearer) {
+        if (wearer instanceof EntityPlayer) {
+            return protectionIn(com.sc.util.ArmorGasSC.wornSet((EntityPlayer) wearer));
+        }
+        return damageReduceAmount;
+    }
+
+    /** Armour points of this piece with the set `worn` (no player needed): iron's 2 / 6 / 5 / 2 in emergency mode. */
+    public int protectionIn(ItemStack[] worn) {
+        return ArmorLogicSC.pieceEmergency(worn, suit) ? ArmorMaterial.IRON.getDamageReductionAmount(armorType) : damageReduceAmount;
     }
 
     /** Absorbed damage costs EU - less for a full Quantum set and in combat mode (ArmorLogicSC). */

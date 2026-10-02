@@ -1367,6 +1367,114 @@ public final class SelfTestSC {
         return w;
     }
 
+    /** Fills every tank of the set to `pct` percent. */
+    private static void fillSuit(ItemStack[] w, int pct) {
+        for (ItemStack s : w) {
+            if (s == null) {
+                continue;
+            }
+            for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+                com.sc.util.ArmorGasSC.setAmount(s, g, com.sc.util.ArmorGasSC.capacity(s, g) * pct / 100);
+            }
+        }
+    }
+
+    /**
+     * The strict rules: Nano runs its functions on EU (oxygen only to breathe); Quantum / Exo need each
+     * function's own gas (ArmorFeature.gas()), and without helium go into emergency mode - everything
+     * off but the HUD, the plating only as good as iron; the old-world hydrogen start, once.
+     */
+    private static void armorGasRules() {
+        com.sc.util.ArmorGasSC.Gas h2 = com.sc.util.ArmorGasSC.Gas.HYDROGEN, he = com.sc.util.ArmorGasSC.Gas.HELIUM,
+                kr = com.sc.util.ArmorGasSC.Gas.KRYPTON;
+        // the table: one place, the gases the rules name
+        boolean table = com.sc.util.ArmorFeature.FLIGHT.gas() == h2 && com.sc.util.ArmorFeature.DASH.gas() == h2
+                && com.sc.util.ArmorFeature.SHIELD.gas() == he && com.sc.util.ArmorFeature.CHARGER.gas() == he
+                && com.sc.util.ArmorFeature.CLEANSE.gas() == com.sc.util.ArmorGasSC.Gas.OXYGEN
+                && com.sc.util.ArmorFeature.THERMAL.gas() == kr && com.sc.util.ArmorFeature.WATER_WALK.gas() == com.sc.util.ArmorGasSC.Gas.ARGON
+                && com.sc.util.ArmorFeature.RAD_SHIELD.gas() == com.sc.util.ArmorGasSC.Gas.HEAVY_WATER
+                && com.sc.util.ArmorFeature.HUD.gas() == null && com.sc.util.ArmorFeature.STEP_ASSIST.gas() == null
+                && com.sc.util.ArmorFeature.SOLAR.gas() == null && com.sc.util.ArmorFeature.SET_AURA.gas() == null
+                && com.sc.util.ArmorFeature.JUMP.gasUse() == 0.2F && com.sc.util.ArmorFeature.FLIGHT.gasUse() == 1F
+                && com.sc.util.ArmorFeature.NIGHT_VISION.gasUseKind() == com.sc.util.ArmorFeature.USE_MINUTE;
+        check(table, "strict rules: the function -> gas table (hydrogen moves, helium works, krypton sees, argon fire, heavy water radiation)");
+
+        // Nano: can't fly at all; its functions work with empty tanks (breathing still needs oxygen)
+        ItemStack[] nano = gasSuit(com.sc.util.ArmorSuit.NANO, true, true, true, true);
+        boolean nanoOk = !com.sc.util.ArmorFeature.FLIGHT.availableIn(com.sc.util.ArmorSuit.NANO, 1)
+                && com.sc.item.ArmorLogicSC.worksIn(nano, com.sc.util.ArmorFeature.NIGHT_VISION)
+                && com.sc.item.ArmorLogicSC.worksIn(nano, com.sc.util.ArmorFeature.CHARGER)
+                && com.sc.item.ArmorLogicSC.worksIn(nano, com.sc.util.ArmorFeature.FALL_DAMPING)
+                && com.sc.item.ArmorLogicSC.worksIn(nano, com.sc.util.ArmorFeature.STEP_ASSIST)
+                && !com.sc.item.ArmorLogicSC.emergency(nano)
+                && !com.sc.item.ArmorLogicSC.worksIn(nano, com.sc.util.ArmorFeature.AIR)
+                && com.sc.item.ArmorLogicSC.missingGas(nano, com.sc.util.ArmorFeature.AIR) == com.sc.util.ArmorGasSC.Gas.OXYGEN;
+        check(nanoOk, "strict rules: Nano can't fly; its functions run without gases (no emergency mode), breathing needs oxygen");
+
+        // Quantum: helium in the loop, no hydrogen - no flight; hydrogen in - flight
+        ItemStack[] q = gasSuit(com.sc.util.ArmorSuit.QUANTUM, true, true, true, true);
+        fillSuit(q, 50);
+        com.sc.util.ArmorGasSC.setAmount(q[1], h2, 0);
+        com.sc.util.ArmorGasSC.setAmount(q[3], h2, 0);
+        boolean dry = !com.sc.item.ArmorLogicSC.emergency(q) && !com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.FLIGHT)
+                && com.sc.item.ArmorLogicSC.missingGas(q, com.sc.util.ArmorFeature.FLIGHT) == h2
+                && !com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.JUMP)
+                && com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.NIGHT_VISION)
+                && com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.STEP_ASSIST);
+        com.sc.util.ArmorGasSC.setAmount(q[3], h2, 1);
+        boolean wet = com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.FLIGHT)
+                && com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.SPEED);       // the leggings use the suit's hydrogen
+        // fractions add up: five 0.2 mB jumps are one whole mB
+        com.sc.util.ArmorGasSC.setAmount(q[3], h2, 100);
+        com.sc.util.ArmorGasSC.setAmount(q[1], h2, 0);
+        for (int i = 0; i < 5; i++) {
+            com.sc.util.ArmorGasSC.drainFraction(q, h2, com.sc.util.ArmorFeature.JUMP.gasUse());
+        }
+        int afterJumps = com.sc.util.ArmorGasSC.amountOf(q, h2);
+        check(dry && wet && afterJumps == 99, "strict rules: Quantum without hydrogen - no flight / jump (night vision on krypton still works); "
+                + "with hydrogen - flight; 5 jumps = 1 mB (" + dry + "/" + wet + "/" + afterJumps + ")");
+
+        // no helium: emergency mode - all off but the HUD, iron-grade plating; helium back - all back
+        for (ItemStack s : q) {
+            com.sc.util.ArmorGasSC.setAmount(s, he, 0);
+        }
+        com.sc.item.ItemArmorSC qChest = (com.sc.item.ItemArmorSC) q[1].getItem();
+        boolean em = com.sc.item.ArmorLogicSC.emergency(q)
+                && !com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.FLIGHT)
+                && !com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.NIGHT_VISION)
+                && !com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.STEP_ASSIST)
+                && com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.HUD)
+                && qChest.protectionIn(q) == 6 && ((com.sc.item.ItemArmorSC) q[0].getItem()).protectionIn(q) == 2
+                && ((com.sc.item.ItemArmorSC) q[2].getItem()).protectionIn(q) == 5 && ((com.sc.item.ItemArmorSC) q[3].getItem()).protectionIn(q) == 2;
+        ItemStack[] noChest = {q[0], null, q[2], q[3]};
+        em &= com.sc.item.ArmorLogicSC.emergency(noChest);                                  // no chestplate: no loop - emergency
+        com.sc.util.ArmorGasSC.setAmount(q[1], he, 3000);
+        boolean back = !com.sc.item.ArmorLogicSC.emergency(q) && com.sc.item.ArmorLogicSC.worksIn(q, com.sc.util.ArmorFeature.FLIGHT)
+                && qChest.protectionIn(q) == com.sc.util.ArmorSuit.QUANTUM.material.getDamageReductionAmount(1);
+        check(em && back, "strict rules: no helium (or no chestplate) - emergency mode: only the HUD, armour 2/6/5/2 like iron; helium back - all back ("
+                + em + "/" + back + ")");
+
+        // Exo: no krypton - no night vision
+        ItemStack[] e = gasSuit(com.sc.util.ArmorSuit.EXO, true, true, true, true);
+        fillSuit(e, 50);
+        boolean nvOn = com.sc.item.ArmorLogicSC.worksIn(e, com.sc.util.ArmorFeature.NIGHT_VISION);
+        com.sc.util.ArmorGasSC.setAmount(e[0], kr, 0);
+        boolean nvOff = !com.sc.item.ArmorLogicSC.worksIn(e, com.sc.util.ArmorFeature.NIGHT_VISION)
+                && com.sc.item.ArmorLogicSC.missingGas(e, com.sc.util.ArmorFeature.NIGHT_VISION) == kr
+                && com.sc.item.ArmorLogicSC.worksIn(e, com.sc.util.ArmorFeature.SOLAR);
+        check(nvOn && nvOff, "strict rules: Exo without krypton - night vision off (the solar film needs no gas)");
+
+        // old worlds: a quarter of hydrogen once (Quantum chestplate 4000 + boots 2000 -> 1500), Nano none
+        ItemStack[] old = gasSuit(com.sc.util.ArmorSuit.QUANTUM, true, true, true, true);
+        int first = com.sc.util.ArmorGasSC.giveHydrogenStarter(old);
+        int h2After = com.sc.util.ArmorGasSC.amountOf(old, h2);
+        int second = com.sc.util.ArmorGasSC.giveHydrogenStarter(old);
+        ItemStack[] oldNano = gasSuit(com.sc.util.ArmorSuit.NANO, true, true, true, true);
+        check(first == 2 && h2After == 1500 && second == 0 && com.sc.util.ArmorGasSC.amountOf(old, h2) == 1500
+                        && com.sc.util.ArmorGasSC.giveHydrogenStarter(oldNano) == 0,
+                "strict rules: old-world hydrogen start 25% once (" + first + "/" + h2After + "/" + second + ")");
+    }
+
     /** Life support (docs/plan-armor-gases.md): tanks, the hybrid helium loop, the hard rules, the Cryo Tank chip, the old-world start. */
     private static void armorGases() {
         com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, o2 = com.sc.util.ArmorGasSC.Gas.OXYGEN,
@@ -1488,6 +1596,8 @@ public final class SelfTestSC {
         check(first == 4 && heAfter == 2250 && o2After == 1000 && second == 0
                         && com.sc.util.ArmorGasSC.amountOf(old, he) == 2250,
                 "old-world start: 25% helium (2250 of 9000) and oxygen (1000 of 4000), only once (" + first + "/" + heAfter + "/" + o2After + "/" + second + ")");
+
+        armorGasRules();
 
         // chips: the new ones are life-support chips, metadata past the old 15
         check(com.sc.util.ChipType.CRYO_LOOP.isGasChip() && !com.sc.util.ChipType.UTILITY.isGasChip()

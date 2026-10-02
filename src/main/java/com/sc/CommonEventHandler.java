@@ -251,18 +251,32 @@ public class CommonEventHandler {
         }
         NBTTagCompound entityData = p.getEntityData();
         NBTTagCompound data = entityData.getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG);
-        if (data.getBoolean("scGasStart")) {
-            return;
-        }
         ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(p);
         if (!com.sc.util.ArmorGasSC.anyPiece(worn)) {
             return;                                 // nothing of the mod on: try again next login
         }
-        data.setBoolean("scGasStart", true);
-        entityData.setTag(EntityPlayer.PERSISTED_NBT_TAG, data);
-        if (com.sc.util.ArmorGasSC.giveStarter(worn) > 0) {
-            p.inventoryContainer.detectAndSendChanges();
-            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.gas.starter", com.sc.util.ArmorGasSC.STARTER_PCT));
+        if (!data.getBoolean("scGasStart")) {
+            data.setBoolean("scGasStart", true);
+            entityData.setTag(EntityPlayer.PERSISTED_NBT_TAG, data);
+            if (com.sc.util.ArmorGasSC.giveStarter(worn) > 0) {
+                p.inventoryContainer.detectAndSendChanges();
+                p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.gas.starter", com.sc.util.ArmorGasSC.STARTER_PCT));
+            }
+        }
+        // the strict rules (Quantum / Exo run every function on a gas): a quarter of hydrogen once, and the news
+        if (!data.getBoolean("scGasStart2")) {
+            data.setBoolean("scGasStart2", true);
+            entityData.setTag(EntityPlayer.PERSISTED_NBT_TAG, data);
+            boolean strict = false;
+            for (ItemStack s : worn) {
+                strict |= s != null && com.sc.item.ArmorLogicSC.strict(((ItemArmorSC) s.getItem()).getSuit());
+            }
+            if (com.sc.util.ArmorGasSC.giveHydrogenStarter(worn) > 0) {
+                p.inventoryContainer.detectAndSendChanges();
+            }
+            if (strict) {
+                p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.gas.starter2"));
+            }
         }
     }
 

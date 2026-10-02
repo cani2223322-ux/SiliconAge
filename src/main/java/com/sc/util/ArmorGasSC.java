@@ -262,6 +262,39 @@ public final class ArmorGasSC {
     public static final int[] RECUPERATOR_PCT = {30, 45, 60};
     /** First login after the update: worn pieces get this share of their helium and oxygen once. */
     public static final int STARTER_PCT = 25;
+    /**
+     * The strict rules (Quantum / Exo: every function on its own gas, ArmorFeature.gas()): what each
+     * spends while it works. Hydrogen: flight without the boost mB a second, a jump, sprinting mB a
+     * second, a fall softened; oxygen per effect cleansed; argon: fire proofing mB a second while
+     * burning, walking on a liquid mB a second. Krypton (night vision, scanner, thermal) is KRYPTON_PER_MIN each.
+     */
+    public static final float H2_FLIGHT_BASE_PER_SECOND = 1F, H2_JUMP = 0.2F, H2_SPEED_PER_SECOND = 0.5F;
+    public static final int H2_FALL_DAMPING = 10, O2_CLEANSE = 5, ARGON_FIRE_PROOF_PER_SECOND = 2;
+    public static final float ARGON_WATER_WALK_PER_SECOND = 0.5F;
+
+    /**
+     * Old worlds, the strict rules: each Quantum / Exo piece of the set not given it yet gets
+     * STARTER_PCT of its hydrogen tank, once (piece NBT "GasStartH2SC"). @return how many pieces got some
+     */
+    public static int giveHydrogenStarter(ItemStack[] w) {
+        int given = 0;
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = at(w, t);
+            if (s == null || ((ItemArmorSC) s.getItem()).getSuit() == com.sc.util.ArmorSuit.NANO
+                    || (s.hasTagCompound() && s.getTagCompound().getBoolean("GasStartH2SC"))) {
+                continue;
+            }
+            if (!s.hasTagCompound()) {
+                s.setTagCompound(new NBTTagCompound());
+            }
+            s.getTagCompound().setBoolean("GasStartH2SC", true);
+            int cap = capacity(s, Gas.HYDROGEN);
+            if (cap > 0 && fill(s, Gas.HYDROGEN, cap * STARTER_PCT / 100, false) > 0) {
+                given++;
+            }
+        }
+        return given;
+    }
 
     // ------------------------------------------------------------------ a set of pieces (index = armorType), no player needed
 

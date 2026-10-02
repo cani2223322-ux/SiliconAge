@@ -57,6 +57,14 @@ public class ShieldEventHandler {
         }
     }
 
+    /** Quantum / Exo jump boots spend a little hydrogen a jump (ArmorLogicSC.jumped; the server sees the jump too). */
+    @SubscribeEvent
+    public void onJump(net.minecraftforge.event.entity.living.LivingEvent.LivingJumpEvent event) {
+        if (event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer && !event.entityLiving.worldObj.isRemote) {
+            com.sc.item.ArmorLogicSC.jumped((net.minecraft.entity.player.EntityPlayer) event.entityLiving);
+        }
+    }
+
     /** Armour boots soften falls (ArmorLogicSC.fall) - Forge's fall event is on this bus too. */
     @SubscribeEvent
     public void onFall(net.minecraftforge.event.entity.living.LivingFallEvent event) {

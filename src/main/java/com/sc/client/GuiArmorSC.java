@@ -515,6 +515,26 @@ public class GuiArmorSC extends GuiScreen {
         return piece != null && ItemArmorSC.isEnabled(piece, a);
     }
 
+    /**
+     * Why an armour function can't work for the gases (ArmorLogicSC.gasAllows): "Нужен газ: X" or the
+     * emergency mode line; null when it can (or it isn't an armour function).
+     */
+    private String gasBlock(Enum<?> f) {
+        if (!(f instanceof ArmorFeature) || f == ArmorFeature.HUD) {
+            return null;
+        }
+        ArmorFeature a = (ArmorFeature) f;
+        ItemStack[] worn = ArmorGasSC.wornSet(mc.thePlayer);
+        if (worn[a.piece] == null || ArmorLogicSC.gasAllows(worn, a)) {
+            return null;
+        }
+        if (ArmorLogicSC.pieceEmergency(worn, ArmorLogicSC.suitOf(worn[a.piece]))) {
+            return Lang.tr("sc.gas.emergency");
+        }
+        Gas g = ArmorLogicSC.missingGas(worn, a);
+        return g == null ? null : Lang.tr("sc.armorgui.needgas", GasUiSC.name(g));
+    }
+
     private static String nameOf(Enum<?> f) {
         if (f instanceof DrillFeature) {
             return Lang.tr("sc.drillfn." + ((DrillFeature) f).key());
@@ -545,7 +565,8 @@ public class GuiArmorSC extends GuiScreen {
             } else {
                 Enum<?> f = featureOf(b.id);
                 boolean on = isOn(f);
-                b.displayString = (on ? "§a" : "§7") + nameOf(f) + ": " + Lang.tr(on ? "sc.armorgui.on" : "sc.armorgui.off");
+                boolean blocked = gasBlock(f) != null;               // no gas of its own / emergency mode: grey
+                b.displayString = (blocked ? "§8" : on ? "§a" : "§7") + nameOf(f) + ": " + Lang.tr(on ? "sc.armorgui.on" : "sc.armorgui.off");
             }
         }
     }
@@ -713,6 +734,11 @@ public class GuiArmorSC extends GuiScreen {
         if (capturing != null) {
             drawCenteredString(fontRendererObj, Lang.tr("sc.armorgui.bind.wait"), width / 2, height - 26, 0xFFE060);
         }
+        if ((selectedPiece >= 0 && selectedPiece < 4 || selectedPiece == LIFE_TAB || selectedPiece == MODE_TAB)
+                && ArmorLogicSC.emergency(ArmorGasSC.wornSet(mc.thePlayer))) {
+            // above the title when there is room (the bottom holds the mode button and the set bonus)
+            drawCenteredString(fontRendererObj, Lang.tr("sc.gas.emergency"), width / 2, top >= 12 ? top - 11 : height - 38, 0xFF4040);
+        }
         if (selectedPiece == DRILL_TAB) {
             ItemStack d = drill();
             if (d != null && DrillLogicSC.setBonus(mc.thePlayer, d)) {
@@ -775,6 +801,10 @@ public class GuiArmorSC extends GuiScreen {
                 tip.add(Lang.tr("sc.bladefn." + ((BladeFeature) f).key() + ".desc"));
             } else {
                 tip.add(Lang.tr("sc.armorfn." + f.name().toLowerCase(Locale.ROOT) + ".desc"));
+                String why = gasBlock(f);
+                if (why != null) {
+                    tip.add("§c" + why);
+                }
             }
             // long descriptions wrapped - one line ran off the screen's edge
             int maxW = Math.max(120, Math.min(220, width / 2 - 20));
