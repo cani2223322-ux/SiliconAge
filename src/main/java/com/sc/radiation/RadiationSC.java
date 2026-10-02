@@ -71,6 +71,8 @@ public final class RadiationSC {
         float level;
         int radius;
         long seen;
+        /** A burst that walls don't stop (the Singular Reactor's flash): no blocks in the way count. */
+        boolean pierce;
 
         Source(int x, int y, int z) {
             this.x = x;
@@ -91,6 +93,15 @@ public final class RadiationSC {
 
     /** A source says it's radiating (once a second). */
     public static void report(World w, int x, int y, int z, float level, int radius) {
+        report(w, x, y, z, level, radius, false);
+    }
+
+    /** A source whose radiation goes through any wall, lead too (the Singular Reactor's flash) - once a second. */
+    public static void reportPiercing(World w, int x, int y, int z, float level, int radius) {
+        report(w, x, y, z, level, radius, true);
+    }
+
+    private static void report(World w, int x, int y, int z, float level, int radius, boolean pierce) {
         if (w == null || w.isRemote || level <= 0 || radius <= 0) {
             return;
         }
@@ -107,6 +118,7 @@ public final class RadiationSC {
         }
         s.level = level;
         s.radius = radius;
+        s.pierce = pierce;
         s.seen = w.getTotalWorldTime();
     }
 
@@ -131,7 +143,7 @@ public final class RadiationSC {
             }
             float base = (float) (s.level * (1.0 - d / s.radius));
             if (base > 0.01F) {
-                sum += base * through(w, sx, sy, sz, px, py, pz, s.x, s.y, s.z);
+                sum += s.pierce ? base : base * through(w, sx, sy, sz, px, py, pz, s.x, s.y, s.z);
             }
         }
         return sum;

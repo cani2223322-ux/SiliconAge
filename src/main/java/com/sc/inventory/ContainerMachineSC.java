@@ -145,8 +145,10 @@ public class ContainerMachineSC extends Container {
 
     /** After the tanks: a smelter's second stream, its experience (tenths), keep-warm. */
     private static final int ID_SMELT2 = TANK_ID_BASE + TANK_COUNT * 2, ID_XP = ID_SMELT2 + 1, ID_WARM = ID_SMELT2 + 2;
+    /** The Matter Compressor's mass counter. */
+    private static final int ID_MATTER = ID_WARM + 1;
 
-    private final IntSyncSC sync = new IntSyncSC(ID_WARM + 1);
+    private final IntSyncSC sync = new IntSyncSC(ID_MATTER + 1);
 
     private int currentValue(int id) {
         if (id == ID_SMELT2) {
@@ -157,6 +159,9 @@ public class ContainerMachineSC extends Container {
         }
         if (id == ID_WARM) {
             return machine.isKeepWarm() ? 1 : 0;
+        }
+        if (id == ID_MATTER) {
+            return machine.getMatter();
         }
         if (id >= TANK_ID_BASE) {
             FluidStack fluid = machine.getTank((id - TANK_ID_BASE) / 2).getFluid();
@@ -202,6 +207,10 @@ public class ContainerMachineSC extends Container {
         }
         if (id == ID_WARM) {
             machine.setKeepWarmClient(data != 0);
+            return;
+        }
+        if (id == ID_MATTER) {
+            machine.setMatterClient(data);
             return;
         }
         if (id >= TANK_ID_BASE) {

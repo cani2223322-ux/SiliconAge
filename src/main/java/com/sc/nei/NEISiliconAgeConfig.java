@@ -32,6 +32,10 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
             API.registerUsageHandler(handler);
             covered.add(handler.getMachineType());
         }
+        CompressorRecipeHandlerSC compressor = new CompressorRecipeHandlerSC();
+        API.registerRecipeHandler(compressor);
+        API.registerUsageHandler(compressor);
+        covered.add(compressor.getMachineType());
         for (MachineType type : MachineType.values()) {
             if (!covered.contains(type)) {
                 cpw.mods.fml.common.FMLLog.warning("[Silicon Age] no NEI handler class for %s - add one to MachineHandlersSC", type);

@@ -355,6 +355,9 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
                 ((EntityPlayerMP) player).theItemInWorldManager.getGameType(), (EntityPlayerMP) player, x, y, z).isCanceled()) {
             return;
         }
+        if (com.sc.block.BlockGeneratorSC.holdsHole(world, x, y, z)) {
+            return;                                       // a Singular Reactor with its hole: put it out first (Stop)
+        }
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof com.sc.tileentity.TileEntityConduitBundleSC) {
             dismantlePart(stack, player, world, x, y, z, (com.sc.tileentity.TileEntityConduitBundleSC) te, block,

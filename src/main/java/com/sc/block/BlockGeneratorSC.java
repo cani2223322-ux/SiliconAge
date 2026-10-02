@@ -60,7 +60,28 @@ public class BlockGeneratorSC extends Block {
     @Override
     public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world,
                                                 int x, int y, int z) {
+        if (holdsHole(world, x, y, z)) {
+            return 0F;                // a Singular Reactor holding its hole can't be broken - put it out first (Stop)
+        }
         return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
+    /** A Singular Reactor with a live hole (running, being eaten, about to be thrown out). */
+    public static boolean holdsHole(IBlockAccess world, int x, int y, int z) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof TileEntityGeneratorSC && ((TileEntityGeneratorSC) te).singular() && ((TileEntityGeneratorSC) te).getSingular().hasHole();
+    }
+
+    /** With its hole: unbreakable like bedrock - quarries, block breakers and the like skip hardness -1. */
+    @Override
+    public float getBlockHardness(World world, int x, int y, int z) {
+        return holdsHole(world, x, y, z) ? -1F : super.getBlockHardness(world, x, y, z);
+    }
+
+    @Override
+    public float getExplosionResistance(net.minecraft.entity.Entity entity, World world, int x, int y, int z,
+                                        double explosionX, double explosionY, double explosionZ) {
+        return holdsHole(world, x, y, z) ? 6000000F : super.getExplosionResistance(entity, world, x, y, z, explosionX, explosionY, explosionZ);
     }
 
     @Override
@@ -144,6 +165,9 @@ public class BlockGeneratorSC extends Block {
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (holdsHole(world, x, y, z)) {
+            return false;             // creative mode too: the hole isn't left without its reactor
+        }
         if (willHarvest) {
             return true;              // harvestBlock drops (reading the TE) and then removes the block
         }

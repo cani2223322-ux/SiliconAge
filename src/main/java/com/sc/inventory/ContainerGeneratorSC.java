@@ -51,6 +51,9 @@ public class ContainerGeneratorSC extends Container {
         if (type == GeneratorType.TOKAMAK_XV) {
             return slot == 0 ? XV_FUEL_X : XV_BLANKET_X;
         }
+        if (type == GeneratorType.SINGULAR_REACTOR) {
+            return slot == 0 ? SING_SLOT_X : SLOT_BLANKET_X;
+        }
         if (type.kind == GeneratorType.Kind.FUSION) {
             return slot == 0 ? FUS_FUEL_X : FUS_BLANKET_X;
         }
@@ -58,7 +61,7 @@ public class ContainerGeneratorSC extends Container {
     }
 
     public static int slotY(GeneratorType type) {
-        return type == GeneratorType.TOKAMAK_XV ? XV_SLOT_Y : type.kind == GeneratorType.Kind.FUSION ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
+        return type == GeneratorType.TOKAMAK_XV ? XV_SLOT_Y : type == GeneratorType.SINGULAR_REACTOR ? SING_SLOT_Y : type.kind == GeneratorType.Kind.FUSION ? FUS_SLOT_Y : type == GeneratorType.SOLID_FUEL ? SF_SLOT_Y
                 : type == GeneratorType.WIND_TURBINE ? WD_SLOT_Y : type == GeneratorType.GEOTHERMAL ? GEO_SLOT_Y
                 : type == GeneratorType.RTG ? RTG_SLOT_Y : SLOT_Y;
     }
@@ -81,6 +84,12 @@ public class ContainerGeneratorSC extends Container {
 
     /** The Tokamak XV: put the plasma out safely / allow lighting again. */
     public static final int BTN_SOFT_STOP = 20;
+    /**
+     * The Singular Reactor (GuiSingularSC, the Tokamak XV's window size): lighting; stop / cancel /
+     * allow lighting; the feed mode; Auto. Its capsule slot sits on the screen, right of the port tanks.
+     */
+    public static final int BTN_SING_LIGHT = 21, BTN_SING_STOP = 22, BTN_SING_FEED = 23, BTN_SING_AUTO = 24;
+    public static final int SING_SLOT_X = 356, SING_SLOT_Y = 58;
 
     private final TileEntityGeneratorSC generator;
 
@@ -89,7 +98,7 @@ public class ContainerGeneratorSC extends Container {
         GeneratorType type = generator.getGeneratorType();
         addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_FUEL, slotX(type, 0), slotY(type)));
         addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.SLOT_BLANKET, slotX(type, 1), slotY(type)));
-        boolean xv = type == GeneratorType.TOKAMAK_XV;
+        boolean xv = type == GeneratorType.TOKAMAK_XV || type == GeneratorType.SINGULAR_REACTOR;     // the big window
         for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
             addSlotToContainer(new SlotFiltered(generator, TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i,
                     (xv ? XV_UPG_X : GuiBigSC.UPG_X) + i * 18, xv ? XV_UPG_Y : GuiBigSC.UPG_Y));
@@ -149,6 +158,16 @@ public class ContainerGeneratorSC extends Container {
             generator.softStop();
             return true;
         }
+        com.sc.tileentity.SingularReactorSC sing = generator.getSingular();
+        if (sing != null && id >= BTN_SING_LIGHT && id <= BTN_SING_AUTO && canInteractWith(player)) {
+            switch (id) {
+                case BTN_SING_LIGHT: sing.light(); break;
+                case BTN_SING_STOP: sing.stop(); break;
+                case BTN_SING_FEED: sing.cycleFeed(); break;
+                default: sing.toggleAuto();
+            }
+            return true;
+        }
         if (id == BTN_BATTERY_MODE && canInteractWith(player)) {
             generator.cycleBatteryMode();
             return true;
@@ -167,7 +186,7 @@ public class ContainerGeneratorSC extends Container {
             ID_INFO_B = 14, ID_TIER = 15, ID_POWER = 16, ID_INFLOW = 17, ID_CELL = 18,
             ID_LIFE = 19, ID_SOLID = 20, ID_SOLID_TOTAL = 21, ID_SOLID_ITEM = 22, ID_SIDES = 23,
             /** The Tokamak XV's numbers (TileEntityGeneratorSC.bigSync). */
-            ID_BIG = 24, COUNT = ID_BIG + TileEntityGeneratorSC.BIG_SYNC;
+            ID_BIG = 24, COUNT = ID_BIG + TileEntityGeneratorSC.SYNC_SIZE;
 
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 

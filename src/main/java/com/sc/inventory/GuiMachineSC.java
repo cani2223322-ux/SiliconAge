@@ -89,6 +89,9 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean boil;
     /** The electric / induction furnace: its own left column (streams), scene, heat, experience and buttons. */
     private final boolean smelter;
+    /** The Matter Compressor: the press with its hopper, the mass gauge (two capsules long, a mark at one), the numbers. */
+    private final boolean comp;
+    private static final int COMP_X = 88, COMP_Y = 36, COMP_W = 74, COMP_H = 44, COMP_INFO_X = 166, COMP_BAR_Y = 86, COMP_BAR_H = 5;
     private static final int SM_X = 90, SM_W = 116, SM_SCENE_Y = 36, SM_SCENE_H = 40, SM_BTN_Y = 103;
     private static final int BOIL_X = 140, BOIL_W = 33, BOIL_Y = 36, BOIL_H = 56, BOIL_BADGE_W = 31;
     private static final int FILL_Y = 36, FILL_H = 42, FILL_ROW_Y = 81, FILL_BADGE_W = 40;
@@ -175,6 +178,7 @@ public class GuiMachineSC extends GuiContainer {
         fill = machine.getMachineType() == com.sc.machine.MachineType.FLUID_CELL_FILLER;
         boil = machine.getMachineType() == com.sc.machine.MachineType.BOILER_LV || machine.getMachineType() == com.sc.machine.MachineType.BOILER_MV;
         smelter = machine.getMachineType().isSmelter();
+        comp = machine.getMachineType().isCompressor();
         station = machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_MV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_HV
                 || machine.getMachineType() == com.sc.machine.MachineType.UPGRADE_STATION_EV;
@@ -648,6 +652,16 @@ public class GuiMachineSC extends GuiContainer {
                 drawRect(x + CENT_LIST_X + 1, by + 1, x + CENT_LIST_X + 1 + Math.max(1, (int) ((CENT_BAR_W - 2) * c)), by + 3,
                         itemColour(outs[i]) | 0xFF000000);
             }
+        } else if (comp) {                                              // the press, the mass gauge
+            float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
+            float fill = (float) machine.getMatter() / TileEntityMachineSC.MATTER_MAX;
+            GuiSceneSC.matterPress(x + COMP_X, y + COMP_Y, COMP_W, COMP_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress, fill);
+            int bw = GuiBigSC.SCREEN_RIGHT - COMP_X;
+            boolean ready = machine.getMatter() >= TileEntityMachineSC.MATTER_PER_CAPSULE;
+            GuiHoloSC.bar(x + COMP_X, y + COMP_BAR_Y, bw, COMP_BAR_H, Math.min(1F, fill), 16,
+                    ready ? GuiSceneSC.SV_MAIN : GuiSceneSC.SV_DARK);
+            int mark = x + COMP_X + bw / 2;                             // one capsule's worth
+            drawRect(mark, y + COMP_BAR_Y - 2, mark + 1, y + COMP_BAR_Y + COMP_BAR_H + 2, GuiSceneSC.SV_LIGHT);
         } else if (pack) {                                              // the assembly scene and its stages
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
@@ -828,6 +842,11 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (pack) {
             drawPackText(rx);
+            drawUpgradeLine();
+            return;
+        }
+        if (comp) {
+            drawCompText();
             drawUpgradeLine();
             return;
         }
@@ -1687,6 +1706,21 @@ public class GuiMachineSC extends GuiContainer {
         }
     }
 
+    /** The Matter Compressor: caption, the capsules in the counter, time and EU/t beside the press, the mass under its gauge. */
+    private void drawCompText() {
+        fit(Lang.tr("sc.gui.comp.cap"), COMP_X, CAPTION_Y, GuiBigSC.SCREEN_RIGHT - COMP_X, GuiHoloSC.CYAN & 0xFFFFFF);
+        int room = GuiBigSC.SCREEN_RIGHT - COMP_INFO_X;
+        int matter = machine.getMatter(), per = TileEntityMachineSC.MATTER_PER_CAPSULE;
+        smallFit(Lang.tr("sc.gui.comp.ready"), COMP_INFO_X, COMP_Y + 1, room, GuiHoloSC.LABEL);
+        fit(String.valueOf(matter / per), COMP_INFO_X, COMP_Y + 8, room, matter >= per ? 0xFF9AA4 : GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.comp.time"), COMP_INFO_X, COMP_Y + 20, room, GuiHoloSC.LABEL);
+        smallFit(String.format(java.util.Locale.ROOT, "%.1f s", machine.compressTicks() / 20F), COMP_INFO_X, COMP_Y + 27, room, GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.big.col.energy"), COMP_INFO_X, COMP_Y + 35, room, GuiHoloSC.LABEL);
+        smallFit(machine.effectiveEuPerTick() + " EU/t", COMP_INFO_X, COMP_Y + 42, room, GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.comp.mass", matter, per), COMP_X, COMP_BAR_Y + COMP_BAR_H + 3, GuiBigSC.SCREEN_RIGHT - COMP_X,
+                matter >= per ? 0xFF9AA4 : GuiHoloSC.VALUE);
+    }
+
     /** The Wire Saw's key, or the Dicing Saw's own wording of it. */
     private String sk(String key) {
         return (dice ? "sc.gui.dice." : "sc.gui.saw.") + key;
@@ -2102,6 +2136,14 @@ public class GuiMachineSC extends GuiContainer {
         if (cent && GuiGaugeSC.isOver(CENT_X, CENT_Y, GuiBigSC.SCREEN_RIGHT - CENT_X, CENT_S, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.cent.title"));
             lines.add(Lang.tr("sc.gui.cent.hint"));
+            return lines;
+        }
+        if (comp && GuiGaugeSC.isOver(COMP_X, COMP_Y, GuiBigSC.SCREEN_RIGHT - COMP_X, COMP_BAR_Y + COMP_BAR_H + 12 - COMP_Y, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.comp.title"));
+            lines.add(Lang.tr("sc.gui.comp.mass", machine.getMatter(), TileEntityMachineSC.MATTER_PER_CAPSULE));
+            lines.add(Lang.tr("sc.gui.comp.rule", TileEntityMachineSC.MASS_BLOCK, TileEntityMachineSC.MASS_ITEM, TileEntityMachineSC.MASS_HEAVY));
+            lines.add(Lang.tr("sc.gui.comp.hint"));
+            lines.add(Lang.tr("sc.gui.comp.hint.2"));
             return lines;
         }
         if (pack && GuiGaugeSC.isOver(PACK_X, PACK_Y, PACK_STAGE_X + PACK_STAGE_W - PACK_X, PACK_H, mouseX, mouseY)) {

@@ -121,6 +121,19 @@ public class WailaSC implements IWailaDataProvider {
             tip.add(Lang.tr("sc.waila.shower", t.getInteger("scShowerWater"), com.sc.tileentity.TileEntityShowerSC.TANK,
                     t.getInteger("scShowerPlayers")));
         }
+        if (t.hasKey("scSingPhase")) {                                // the Singular Reactor: its hole
+            int ph = t.getInteger("scSingPhase");
+            tip.add(Lang.tr("sc.waila.sing.phase." + ph));
+            if (ph == com.sc.tileentity.SingularReactorSC.PHASE_RUN || ph == com.sc.tileentity.SingularReactorSC.PHASE_DRAIN) {
+                tip.add(Lang.tr("sc.waila.sing.hole", String.format(java.util.Locale.ROOT, "%.1f", t.getInteger("scSingMass") / 10F).replace('.', ','),
+                        t.getInteger("scSingCont")));
+                tip.add(Lang.tr("sc.waila.sing.power", t.getInteger("scSingOut")));
+            } else if (ph == com.sc.tileentity.SingularReactorSC.PHASE_IDLE && t.getInteger("scSingEvent") > 0) {
+                tip.add(Lang.tr("sc.waila.sing.event." + t.getInteger("scSingEvent")));
+            } else if (ph == com.sc.tileentity.SingularReactorSC.PHASE_IDLE) {
+                tip.add(Lang.tr(t.getBoolean("scSingReady") ? "sc.waila.sing.ready" : "sc.waila.sing.notready"));
+            }
+        }
         if (t.hasKey("scBig")) {
             tip.add(t.getInteger("scBig") == 2 ? Lang.tr("sc.waila.tok.big", String.valueOf(t.getInteger("scStab")))
                     : Lang.tr("sc.waila.tok.ready"));
@@ -233,6 +246,15 @@ public class WailaSC implements IWailaDataProvider {
             } else if (g.isBigReady()) {
                 tag.setInteger("scBig", 1);
             }
+        }
+        if (te instanceof com.sc.tileentity.TileEntityGeneratorSC && ((com.sc.tileentity.TileEntityGeneratorSC) te).singular()) {
+            com.sc.tileentity.SingularReactorSC s = ((com.sc.tileentity.TileEntityGeneratorSC) te).getSingular();
+            tag.setInteger("scSingPhase", s.getPhase());
+            tag.setInteger("scSingMass", (int) Math.round(s.getMass() * 1000));
+            tag.setInteger("scSingCont", Math.round(s.getContainment()));
+            tag.setInteger("scSingOut", s.outputNow());
+            tag.setInteger("scSingEvent", s.getEvent());
+            tag.setBoolean("scSingReady", s.isReady());
         }
         if (te instanceof com.sc.tileentity.TileEntityShowerSC) {
             com.sc.tileentity.TileEntityShowerSC sh = (com.sc.tileentity.TileEntityShowerSC) te;

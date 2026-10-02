@@ -1830,6 +1830,80 @@ public final class GuiSceneSC {
         rect(x + w - 11, base + 3, 8, 2, colB != 0 ? colB : 0xFF3A4450);
     }
 
+    /** The Singular range's scarlet (SV): main, dark, light, shadow. */
+    public static final int SV_MAIN = 0xFFFF3C50, SV_DARK = 0xFFB81E32, SV_LIGHT = 0xFFFF9AA4, SV_SHADOW = 0xFF7E1222;
+
+    /**
+     * The Matter Compressor: a hopper on the left heaped as high as the mass counter is full, a
+     * hydraulic press in a frame of two columns, its ram coming down with the progress onto a lump
+     * of mixed matter that shrinks and glows scarlet, field lines squeezing it from the sides, and
+     * the finished capsule on the anvil at the end. Still (the ram up, no field) while it waits.
+     * @param fill the mass counter, 0..1 (1 = enough for two capsules)
+     */
+    public static void matterPress(int x, int y, int w, int h, float t, boolean running, float progress, float fill) {
+        frame(x, y, w, h);
+        progress = Math.max(0F, Math.min(1F, progress));
+        fill = Math.max(0F, Math.min(1F, fill));
+        // the hopper: a funnel, the heap inside as high as the counter
+        int hx = x + 3, hw = 14, hy0 = y + 6, hy1 = y + h - 10;
+        rect(hx - 1, hy0, 1, hy1 - hy0, 0xFF6A707A);
+        rect(hx + hw, hy0, 1, hy1 - hy0, 0xFF4A505A);
+        rect(hx - 1, hy1, hw + 2, 1, 0xFF5A606A);
+        int heap = Math.round((hy1 - hy0 - 1) * fill);
+        int[] debris = {0xFF7A7E88, 0xFF6A5A4A, 0xFF8A8E98, 0xFF5A6068, 0xFF9A7A5A};
+        for (int yy = 0; yy < heap; yy++) {
+            for (int xx = 0; xx < hw; xx += 2) {
+                rect(hx + xx, hy1 - 1 - yy, 2, 1, debris[(xx * 3 + yy * 7) % debris.length]);
+            }
+        }
+        if (heap > 0) {
+            rect(hx, hy1 - heap, hw, 1, mix(debris[0], 0xFFFFFFFF, 0.3F));
+        }
+        rect(hx + hw / 2 - 1, hy1 + 1, 3, h - 10 - (hy1 - y) + 6, 0xFF3A4048);   // the chute down to the anvil
+        // the press frame: two columns and the crossbeam with its cylinder
+        int px0 = x + 24, px1 = x + w - 4, pcx = (px0 + px1) / 2;
+        rect(px0, y + 3, 3, h - 6, 0xFF6A707A);
+        rect(px1 - 3, y + 3, 3, h - 6, 0xFF6A707A);
+        rect(px0, y + 3, px1 - px0, 4, 0xFF8A909A);
+        rect(px0, y + 3, px1 - px0, 1, 0xFFB8BEC8);
+        rect(pcx - 5, y + 7, 10, 5, 0xFF4A505A);
+        // the anvil
+        int ay = y + h - 7;
+        rect(px0 + 4, ay, px1 - px0 - 8, 4, 0xFF5A606A);
+        rect(px0 + 4, ay, px1 - px0 - 8, 1, 0xFF8A909A);
+        // the ram: up while it waits, down with the progress (a little throb while it works)
+        int travel = ay - (y + 12) - 14;
+        int ramY = y + 12 + (running ? Math.round(travel * progress) + (int) Math.round(Math.sin(t * 0.9F)) : 0);
+        rect(pcx - 1, y + 12, 3, ramY - (y + 12), 0xFFB8BEC8);                    // the rod
+        rect(pcx - 8, ramY, 17, 4, 0xFF8A909A);                                   // the head
+        rect(pcx - 8, ramY + 3, 17, 1, SV_DARK);
+        // the lump: mixed matter shrinking and turning scarlet under the ram
+        int full = Math.max(4, ay - ramY - 5);
+        int size = running ? Math.max(3, Math.round(full * (1F - 0.75F * progress))) : Math.min(full, 10);
+        int lw = Math.min(px1 - px0 - 12, size + 4), lx = pcx - lw / 2, ly = ay - size;
+        if (running || fill > 0F) {
+            int base = mix(0xFF7A7E88, SV_MAIN, running ? progress : 0F);
+            rect(lx, ly, lw, size, base);
+            rect(lx, ly, lw, 1, mix(base, 0xFFFFFFFF, 0.35F));
+            rect(lx, ly + size - 1, lw, 1, mix(base, SV_SHADOW, 0.6F));
+            if (running && progress > 0.6F) {                                     // the hot core
+                int c = Math.max(1, size / 3);
+                rect(pcx - c / 2, ly + size / 2 - c / 2, c, c, SV_LIGHT);
+            }
+        }
+        if (running) {                                                            // field lines from the sides
+            for (int k = 0; k < 3; k++) {
+                int fy = ly + k * Math.max(1, size / 3);
+                int d = (int) ((t * 0.8F + k * 3) % 6);
+                rect(px0 + 3 + d, fy, 2, 1, SV_MAIN);
+                rect(px1 - 5 - d, fy, 2, 1, SV_MAIN);
+            }
+            if (progress > 0.9F) {                                                // the capsule's flash
+                rect(lx - 2, ly - 2, lw + 4, 1, SV_LIGHT);
+            }
+        }
+    }
+
     private static int lighter(int c) {
         int r = Math.min(255, ((c >> 16) & 255) + 50), g = Math.min(255, ((c >> 8) & 255) + 50), b = Math.min(255, (c & 255) + 50);
         return 0xFF000000 | r << 16 | g << 8 | b;

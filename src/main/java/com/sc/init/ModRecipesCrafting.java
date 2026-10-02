@@ -258,6 +258,14 @@ public final class ModRecipesCrafting {
         OreRecipes.shaped(generator(GeneratorType.EXO_REACTOR), "HCH", "XTX", "HFH",
                 'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', controller, 'T', generator(GeneratorType.TOKAMAK),
                 'F', comp("fusionCore"));
+        // SV: the Singular Reactor - an Exo Reactor and a Tokamak XV round a fusion core, a nether star, Singular cable
+        OreRecipes.shaped(generator(GeneratorType.SINGULAR_REACTOR), "CNC", "EFT", "CCC",
+                'C', cable(CableType.SINGULAR), 'N', new ItemStack(Items.nether_star), 'E', generator(GeneratorType.EXO_REACTOR),
+                'F', comp("fusionCore"), 'T', generator(GeneratorType.TOKAMAK_XV));
+        // its gravity coils (16 in the build), two at a time: tokamak coils, hafnium, Singular cable, a fusion core
+        OreRecipes.shaped(new ItemStack(ModBlocks.gravityCoil, 2), "HSH", "KFK", "HSH",
+                'H', ingot(Material.HAFNIUM), 'S', cable(CableType.SINGULAR), 'K', new ItemStack(ModBlocks.tokamakCoil),
+                'F', comp("fusionCore"));
         // generator upgrades
         ItemStack transistor = silicon(SiliconMaterial.TRANSISTOR);
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE), "KKK", "WTW", "WCW",

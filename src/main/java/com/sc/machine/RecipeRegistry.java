@@ -98,6 +98,9 @@ public final class RecipeRegistry {
         if (type.isSmelter()) {
             return com.sc.tileentity.TileEntityMachineSC.smeltResult(stack) != null;
         }
+        if (type.isCompressor()) {
+            return com.sc.tileentity.TileEntityMachineSC.matterMass(stack) > 0;
+        }
         List<MachineRecipe> list = RECIPES.get(type);
         if (list == null) {
             return false;

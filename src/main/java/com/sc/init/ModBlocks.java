@@ -41,6 +41,8 @@ public final class ModBlocks {
     public static BlockGeneratorSC generatorSC;
     public static BlockGeneratorSC generatorSC2;
     public static Block tokamakCoil;
+    /** The Singular Reactor's gravity coils (16 in its 7x7x5 build). */
+    public static Block gravityCoil;
     /** Radiation: the lead block and lead glass (shielding), the decontamination shower. */
     public static com.sc.block.BlockLeadSC.Solid leadBlock;
     public static com.sc.block.BlockLeadSC.Glass leadGlass;
@@ -110,6 +112,8 @@ public final class ModBlocks {
         GameRegistry.registerBlock(quarrySC, com.sc.block.ItemBlockQuarrySC.class, "quarrySC");
         tokamakCoil = new com.sc.block.BlockTokamakCoilSC();
         GameRegistry.registerBlock(tokamakCoil, com.sc.block.ItemBlockTokamakCoilSC.class, "tokamakCoil");
+        gravityCoil = new com.sc.block.BlockGravityCoilSC();
+        GameRegistry.registerBlock(gravityCoil, com.sc.block.ItemBlockGravityCoilSC.class, "gravityCoil");
         leadBlock = new com.sc.block.BlockLeadSC.Solid();
         GameRegistry.registerBlock(leadBlock, com.sc.block.ItemBlockLeadSC.class, "leadBlock");
         net.minecraftforge.oredict.OreDictionary.registerOre("blockLead", leadBlock);

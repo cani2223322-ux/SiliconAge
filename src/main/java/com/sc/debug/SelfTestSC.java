@@ -49,6 +49,8 @@ public final class SelfTestSC {
             transformers();
             tierSV();
             tokamakSvOutput();
+            singularReactor();
+            matterCompressor();
             energySplit();
             conduitBundles();
             machineSidesAndUpgrades();
@@ -652,6 +654,113 @@ public final class SelfTestSC {
         tok.setBigClient(sync);
         check(tok.isSvOutput() && tok.outputTier() == SV && tok.packetsPerTick() == 1,
                 "Tokamak XV at SV (synced flag): one packet of 131072 carries 65536 (" + tok.outputTier() + ", " + tok.packetsPerTick() + ")");
+    }
+
+    /**
+     * The Singular Reactor's logic without a world: the type (last, SV, 700 million to light), the
+     * output by mass and the 40-70% window, Auto holding 55%, the fixed feeds steering the mass,
+     * evaporation under 5%, containment without helium, the screen's sync.
+     */
+    private static void singularReactor() {
+        com.sc.energy.GeneratorType[] types = com.sc.energy.GeneratorType.values();
+        com.sc.energy.GeneratorType sr = com.sc.energy.GeneratorType.SINGULAR_REACTOR;
+        check(types[types.length - 1] == sr && sr.tier == com.sc.energy.Tier.SV && sr.euPerTick == 131072
+                        && sr.ignitionThreshold() == 700000000L && sr.kind == com.sc.energy.GeneratorType.Kind.SINGULAR
+                        && com.sc.init.ModBlocks.generatorTypeOf(com.sc.init.ModBlocks.generatorStack(sr, 1)) == sr,
+                "singular reactor: the last generator type, SV 131072 EU/t, lit by 700 000 000 EU, its own block metadata");
+        Class<com.sc.tileentity.SingularReactorSC> S = com.sc.tileentity.SingularReactorSC.class;
+        boolean power = com.sc.tileentity.SingularReactorSC.outputFor(0.10) == 196608 && com.sc.tileentity.SingularReactorSC.outputFor(0.30) == 157286
+                && com.sc.tileentity.SingularReactorSC.outputFor(0.55) == 131072 && com.sc.tileentity.SingularReactorSC.outputFor(0.85) == 78643
+                && com.sc.tileentity.SingularReactorSC.MAX_OUTPUT == 196608;
+        check(power && S != null, "singular reactor: output by mass - <20% 196608, 20-40% 157286, 40-70% 131072, >70% 78643 EU/t (x1.5 at most)");
+        boolean window = com.sc.tileentity.SingularReactorSC.powerFactor(0.40) == 1.0 && com.sc.tileentity.SingularReactorSC.powerFactor(0.70) == 1.0
+                && com.sc.tileentity.SingularReactorSC.powerFactor(0.399) == 1.2 && com.sc.tileentity.SingularReactorSC.powerFactor(0.701) == 0.6
+                && com.sc.tileentity.SingularReactorSC.powerFactor(0.199) == 1.5;
+        check(window, "singular reactor: the window 40-70% (both ends) is x1.0, just below x1.2, just above x0.6, under 20% x1.5");
+        check(com.sc.tileentity.SingularReactorSC.HE_START == 8000
+                        && com.sc.tileentity.SingularReactorSC.HE_START > com.sc.tileentity.SingularReactorSC.COMPRESS_TICKS * com.sc.tileentity.SingularReactorSC.HE_PER_TICK,
+                "singular reactor: lighting needs 8000 mB of helium - more than the whole compression takes ("
+                        + Math.round(com.sc.tileentity.SingularReactorSC.COMPRESS_TICKS * com.sc.tileentity.SingularReactorSC.HE_PER_TICK) + " mB)");
+        double lo = simulateSingular(0.45, true, 1, 72000), hi = simulateSingular(0.68, true, 1, 72000);
+        check(Math.abs(lo - 0.55) < 0.01 && Math.abs(hi - 0.55) < 0.01,
+                "singular reactor: Auto holds the mass near 55% (from 45% -> " + Math.round(lo * 1000) / 10.0 + "%, from 68% -> "
+                        + Math.round(hi * 1000) / 10.0 + "% in an hour)");
+        double eco = simulateSingular(0.55, false, com.sc.tileentity.SingularReactorSC.MODE_ECO, 12000),
+                force = simulateSingular(0.55, false, com.sc.tileentity.SingularReactorSC.MODE_FORCE, 12000);
+        boolean ticks = Math.round(com.sc.tileentity.SingularReactorSC.CAPSULE_MASS / com.sc.tileentity.SingularReactorSC.feedRate(0, false, 0.5)) == 12000
+                && Math.round(com.sc.tileentity.SingularReactorSC.CAPSULE_MASS / com.sc.tileentity.SingularReactorSC.feedRate(1, false, 0.5)) == 9000
+                && Math.round(com.sc.tileentity.SingularReactorSC.CAPSULE_MASS / com.sc.tileentity.SingularReactorSC.feedRate(2, false, 0.5)) == 6000
+                && Math.round(com.sc.tileentity.SingularReactorSC.CAPSULE_MASS / com.sc.tileentity.SingularReactorSC.evaporation(0.55)) == 9000;
+        check(eco < 0.55 && force > 0.55 && ticks && com.sc.tileentity.SingularReactorSC.feedRate(1, true, 0.99) == 0,
+                "singular reactor: a capsule lasts 10 / 7.5 / 5 min (Economy / Normal / Overdrive), Economy lets the mass fall ("
+                        + Math.round(eco * 1000) / 10.0 + "%), Overdrive raises it (" + Math.round(force * 1000) / 10.0 + "%); nothing fed near full");
+        double m = 0.55;
+        int t = 0;
+        while (m >= com.sc.tileentity.SingularReactorSC.EVAP_MASS && t < 200000) {
+            m -= com.sc.tileentity.SingularReactorSC.evaporation(m);
+            t++;
+        }
+        check(t > 20000 && t < 30000 && com.sc.tileentity.SingularReactorSC.evaporation(0.1) > com.sc.tileentity.SingularReactorSC.evaporation(0.5),
+                "singular reactor: no capsules - the mass falls under 5% (evaporation, an accident) in " + t / 1200 + " min; lighter evaporates faster");
+        float c = 100F;
+        int secs = 0, warn40 = -1, argon = -1;
+        while (c > 0F && secs < 100) {
+            c = Math.max(0F, c + com.sc.tileentity.SingularReactorSC.containmentDelta(true, false, true, 0.55));
+            secs++;
+            if (warn40 < 0 && c < 40F) {
+                warn40 = secs;
+            }
+            if (argon < 0 && c < com.sc.tileentity.SingularReactorSC.CONT_ARGON) {
+                argon = secs;
+            }
+        }
+        check(com.sc.tileentity.SingularReactorSC.containmentDelta(false, false, true, 0.55) > 0F && warn40 > 10 && argon > warn40 && secs == 25
+                        && com.sc.tileentity.SingularReactorSC.containmentDelta(false, false, true, 0.1) < 0F,
+                "singular reactor: without helium containment falls (40% after " + warn40 + " s, argon after " + argon + " s, ejection at " + secs
+                        + " s); in the norm it recovers; a light hole loses it");
+        com.sc.tileentity.TileEntityGeneratorSC g = new com.sc.tileentity.TileEntityGeneratorSC();
+        g.setGeneratorType(sr);
+        com.sc.tileentity.SingularReactorSC s = g.getSingular();
+        int[] sync = g.bigSync();
+        sync[1] = 423456;                                         // the server says: 42.3456%
+        sync[2] = 7700;
+        com.sc.tileentity.TileEntityGeneratorSC client = new com.sc.tileentity.TileEntityGeneratorSC();
+        client.setGeneratorType(sr);
+        client.setBigClient(sync);
+        net.minecraft.item.Item cap = ModItems.component("matterCapsule");
+        boolean capsuleOk = cap == null || g.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.SLOT_FUEL, new ItemStack(cap));
+        check(s != null && !s.canLight() && !g.isEnergySink() && !g.isEnergySource() && g.outputTier() == com.sc.energy.Tier.SV
+                        && !com.sc.tileentity.TileEntityGeneratorSC.hasUpgradeSlots(sr) && com.sc.tileentity.TileEntityGeneratorSC.usesSlot(sr, 0)
+                        && !com.sc.tileentity.TileEntityGeneratorSC.usesSlot(sr, 1) && capsuleOk
+                        && !g.isItemValidForSlot(com.sc.tileentity.TileEntityGeneratorSC.SLOT_FUEL, new ItemStack(ModItems.deuteriumCell))
+                        && Math.abs(client.getSingular().getMass() - 0.423456) < 1e-6 && client.getSingular().getContainment() == 77F
+                        && sync.length == com.sc.tileentity.TileEntityGeneratorSC.SYNC_SIZE
+                        && com.sc.tileentity.TileEntityGeneratorSC.radiationBase(sr) == 9F && com.sc.tileentity.TileEntityGeneratorSC.radiationRadius(sr) == 20,
+                "singular reactor tile: no world - can't light, no sink (the charge comes from the port storages), SV, no upgrade slots, "
+                        + "capsules only (" + (cap == null ? "capsule not registered yet" : "capsule fits") + "), the screen's sync, radiation 9 to 20 blocks");
+        int roles = 0;
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int dx = -3; dx <= 3; dx++) {
+                    roles += com.sc.tileentity.SingularReactorSC.cellRole(dx, dy, dz) == 2 ? 1 : 0;
+                }
+            }
+        }
+        com.sc.manual.BookEntry be = com.sc.manual.BookContent.entryFor(com.sc.init.ModBlocks.generatorStack(sr, 1));
+        com.sc.manual.BookEntry coilEntry = com.sc.manual.BookContent.entryFor(new ItemStack(com.sc.init.ModBlocks.gravityCoil));
+        check(roles == 16 && com.sc.tileentity.SingularReactorSC.wallIndex(3, 3) == 23 && com.sc.tileentity.SingularReactorSC.ringIndex(1, 1) == 7
+                        && be != null && coilEntry == be,
+                "singular reactor build: 16 coil places (2 rings of 8), 24 wall cells a level, the handbook finds the reactor and its coil");
+    }
+
+    /** The mass after `ticks` of feeding (an endless supply of capsules) and evaporation. */
+    private static double simulateSingular(double mass, boolean auto, int mode, int ticks) {
+        double m = mass;
+        for (int i = 0; i < ticks; i++) {
+            m = Math.min(1.0, m + com.sc.tileentity.SingularReactorSC.feedRate(mode, auto, m));
+            m -= com.sc.tileentity.SingularReactorSC.evaporation(m);
+        }
+        return m;
     }
 
     private static com.sc.energy.Tier out(com.sc.tileentity.TileEntityEnergyStorageSC.Limit... limits) {
@@ -1835,5 +1944,58 @@ public final class SelfTestSC {
     private static String describe(MachineRecipe r) {
         List<ItemStack> outs = java.util.Arrays.asList(r.outputs);
         return "[" + describeInputs(r) + "] => " + outs;
+    }
+
+    /** Matter Compressor: stone block 9, lead block 36, NBT items / capsules refused, a capsule at the threshold, last MachineType. */
+    private static void matterCompressor() {
+        com.sc.machine.MachineType[] all = com.sc.machine.MachineType.values();
+        com.sc.tileentity.TileEntityMachineSC c = new com.sc.tileentity.TileEntityMachineSC();
+        c.setMachineType(com.sc.machine.MachineType.MATTER_COMPRESSOR);
+        ItemStack stone = new ItemStack(net.minecraft.init.Blocks.stone);
+        java.util.List<ItemStack> leads = net.minecraftforge.oredict.OreDictionary.getOres("blockLead");
+        ItemStack lead = leads.isEmpty() ? null : leads.get(0).copy();
+        ItemStack tagged = new ItemStack(net.minecraft.init.Items.iron_ingot);
+        tagged.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        ItemStack capsule = com.sc.tileentity.TileEntityMachineSC.capsuleStack();
+        boolean mass = com.sc.tileentity.TileEntityMachineSC.matterMass(stone) == 9
+                && lead != null && com.sc.tileentity.TileEntityMachineSC.matterMass(lead) == 36
+                && com.sc.tileentity.TileEntityMachineSC.matterMass(new ItemStack(net.minecraft.init.Items.stick)) == 1
+                && com.sc.tileentity.TileEntityMachineSC.matterMass(tagged) == 0 && !c.isItemValidForSlot(0, tagged)
+                && capsule != null && com.sc.tileentity.TileEntityMachineSC.matterMass(capsule) == 0 && !c.isItemValidForSlot(0, capsule)
+                && c.isItemValidForSlot(0, stone) && !c.isItemValidForSlot(3, stone);
+        c.setPowerOn(true);
+        c.loadEnergyFromItem(c.getMaxEnergyStored());
+        c.setMatterForTest(com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE - 1);   // one short: nothing happens
+        c.compressorTickForTest();
+        boolean idle = c.getStatus() == com.sc.machine.MachineStatus.IDLE && c.getProgressTicks() == 0;
+        c.setMatterForTest(com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE);
+        int ticks = c.compressTicks();
+        for (int i = 0; i < ticks; i++) {
+            c.compressorTickForTest();
+        }
+        ItemStack out = c.getStackInSlot(com.sc.tileentity.TileEntityMachineSC.INPUT_SLOTS);
+        boolean made = out != null && capsule != null && out.getItem() == capsule.getItem() && out.stackSize == 1 && c.getMatter() == 0;
+        c.loadEnergyFromItem(c.getMaxEnergyStored());
+        c.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Blocks.stone, 64));   // swallowed 8 a tick
+        c.compressorTickForTest();
+        boolean absorb = c.getMatter() == 72 && c.getStackInSlot(0) != null && c.getStackInSlot(0).stackSize == 56;
+        // nothing valuable burnt by accident: fluid buckets, the mod's machines, nether stars; nothing swallowed without power
+        ItemStack machine = new ItemStack(com.sc.init.ModBlocks.machineSC, 1, 0);
+        boolean refused = com.sc.tileentity.TileEntityMachineSC.matterMass(new ItemStack(net.minecraft.init.Items.water_bucket)) == 0
+                && com.sc.tileentity.TileEntityMachineSC.matterMass(machine) == 0 && !c.isItemValidForSlot(0, machine)
+                && com.sc.tileentity.TileEntityMachineSC.matterMass(new ItemStack(net.minecraft.init.Items.nether_star)) == 0
+                && com.sc.tileentity.TileEntityMachineSC.matterMass(new ItemStack(net.minecraft.init.Items.diamond)) == 0;
+        com.sc.tileentity.TileEntityMachineSC dark = new com.sc.tileentity.TileEntityMachineSC();
+        dark.setMachineType(com.sc.machine.MachineType.MATTER_COMPRESSOR);
+        dark.setPowerOn(true);
+        dark.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Blocks.stone, 64));
+        dark.compressorTickForTest();
+        boolean unpowered = dark.getMatter() == 0 && dark.getStackInSlot(0) != null && dark.getStackInSlot(0).stackSize == 64;
+        boolean last = all[all.length - 1] == com.sc.machine.MachineType.MATTER_COMPRESSOR
+                && com.sc.machine.MachineType.MATTER_COMPRESSOR.ordinal() < 32 && com.sc.machine.MachineType.MATTER_COMPRESSOR.tier == com.sc.energy.Tier.IV;
+        check(mass && idle && made && absorb && refused && unpowered && last, "matter compressor: stone 9, lead block 36, NBT / capsule refused, capsule at "
+                + com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE + "; water bucket, the mod's machine, nether star, diamond refused; nothing swallowed"
+                + " without power (mass " + mass + ", idle " + idle + ", made " + made + ", absorb " + absorb + ", refused " + refused
+                + ", unpowered " + unpowered + ", last " + last + ")");
     }
 }

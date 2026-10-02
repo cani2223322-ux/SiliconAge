@@ -50,7 +50,13 @@ public enum MachineType {
     /** Smelts what a furnace smelts, one piece at a time, twice as fast as a furnace; keeps the experience. */
     ELECTRIC_FURNACE("ElectricFurnace", Tier.LV, 4, false),
     /** Two pieces at once; heats up while it works: x1 cold, x3 hot (EU/t for both streams). */
-    INDUCTION_FURNACE("InductionFurnace", Tier.MV, 24, false);
+    INDUCTION_FURNACE("InductionFurnace", Tier.MV, 24, false),
+    /**
+     * Matter Compressor: takes any item into a "mass" counter (TileEntityMachineSC.matterMass) and
+     * presses a Compressed Matter Capsule out of every MATTER_PER_CAPSULE of it. Not a recipe
+     * machine - it has a branch of its own in TileEntityMachineSC. Appended last: meta = ordinal.
+     */
+    MATTER_COMPRESSOR("MatterCompressor", Tier.IV, 2048, false);
 
     public final String displayName;
     public final Tier tier;
@@ -77,6 +83,11 @@ public enum MachineType {
     /** Smelts furnace recipes (FurnaceRecipes), not the mod's recipe list. */
     public boolean isSmelter() {
         return this == ELECTRIC_FURNACE || this == INDUCTION_FURNACE;
+    }
+
+    /** The Matter Compressor: any item becomes mass, mass becomes capsules (no RecipeRegistry recipes). */
+    public boolean isCompressor() {
+        return this == MATTER_COMPRESSOR;
     }
 
     /** Pieces a smelter works on at once (input slot i -> output slot i). */

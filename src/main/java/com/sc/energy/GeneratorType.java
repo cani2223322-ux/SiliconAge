@@ -55,9 +55,15 @@ public enum GeneratorType {
      * The tokamak inside its 7x7x3 build (24 coils, a lead shell, port tanks and storages) - lit
      * only with the build whole; see TileEntityGeneratorSC's "Tokamak XV" section.
      */
-    TOKAMAK_XV("TokamakXV", Tier.XV, 65536, Kind.FUSION, null, 0);
+    TOKAMAK_XV("TokamakXV", Tier.XV, 65536, Kind.FUSION, null, 0),
+    /**
+     * A tiny black hole held by 16 gravity coils inside its 7x7x5 build: lit by a 700 million EU
+     * charge from its port storages, fed with matter capsules, cooled by liquid helium. Its output
+     * follows the hole's mass (x0.6 - x1.5 of this); see tileentity/SingularReactorSC.
+     */
+    SINGULAR_REACTOR("SingularReactor", Tier.SV, 131072, Kind.SINGULAR, null, 0);
 
-    public enum Kind { PASSIVE, FLUID_FUEL, FUSION, SOLID, WIND, WATER, THERMO, DUAL_FLUID, RTG, EXO, CREATIVE }
+    public enum Kind { PASSIVE, FLUID_FUEL, FUSION, SOLID, WIND, WATER, THERMO, DUAL_FLUID, RTG, EXO, CREATIVE, SINGULAR }
 
     public final String displayName;
     public final Tier tier;
@@ -107,6 +113,7 @@ public enum GeneratorType {
             case TOKAMAK:
             case TOKAMAK_XV: return 10000000L;
             case EXO_REACTOR: return 100000000L;
+            case SINGULAR_REACTOR: return 700000000L;
             default: return 0;
         }
     }

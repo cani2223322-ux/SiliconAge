@@ -409,7 +409,8 @@ public final class BookContent {
             BookEl stats = BookEl.table(Lang.tr("sc.book.t.param"), Lang.tr("sc.book.t.value"));
             stats.row(null, Lang.tr("sc.book.t.tier"), type.tier.name());
             stats.row(null, Lang.tr("sc.book.t.use"), type.euPerTick + " EU/t");
-            stats.row(null, Lang.tr("sc.book.t.recipes"), type.isSmelter() ? Lang.tr("sc.manual.machines.smelts") : String.valueOf(recipes.size()));
+            stats.row(null, Lang.tr("sc.book.t.recipes"), type.isSmelter() ? Lang.tr("sc.manual.machines.smelts")
+                    : type.isCompressor() ? Lang.tr("sc.nei.comp.any") : String.valueOf(recipes.size()));
             if (type.heatCapable) {
                 stats.row(null, Lang.tr("sc.book.t.heat"), Lang.tr("sc.book.yes"));
             }
@@ -417,6 +418,11 @@ public final class BookContent {
                 stats.row(null, Lang.tr("sc.book.t.topout"), Lang.tr("sc.book.yes"));
             }
             e.add(stats).add(BookEl.para(Lang.tr("sc.manual.machine." + type.name().toLowerCase(Locale.ROOT))));
+            if (type.isCompressor()) {                 // what it makes: the Singular Reactor's fuel
+                ItemStack cap = new ItemStack(ModItems.component("matterCapsule"));
+                e.about(cap).add(BookEl.head(cap.getDisplayName(), cap))
+                        .add(BookEl.para(Lang.tr("sc.manual.matterCapsule"))).add(BookEl.para(Lang.tr("sc.manual.matterCapsule.2")));
+            }
             if (!recipes.isEmpty()) {
                 e.add(BookEl.head(Lang.tr("sc.book.recipes")));
                 for (int i = 0; i < Math.min(RECIPES_SHOWN, recipes.size()); i++) {
@@ -502,7 +508,8 @@ public final class BookContent {
             e.about(st).add(BookEl.head(type.localizedName(), st));
             BookEl stats = BookEl.table(Lang.tr("sc.book.t.param"), Lang.tr("sc.book.t.value"));
             stats.row(null, Lang.tr("sc.book.t.tier"), type == GeneratorType.TOKAMAK_XV ? type.tier.name() + " / " + Tier.SV.name() : type.tier.name());
-            stats.row(null, Lang.tr("sc.book.t.output"), type.euPerTick + " EU/t");
+            stats.row(null, Lang.tr("sc.book.t.output"), type == GeneratorType.SINGULAR_REACTOR
+                    ? Lang.tr("sc.manual.generator.sing.output", type.euPerTick, com.sc.tileentity.SingularReactorSC.MAX_OUTPUT) : type.euPerTick + " EU/t");
             stats.row(null, Lang.tr("sc.book.t.fuel"), fuel(type));
             float rad = TileEntityGeneratorSC.radiationBase(type);
             if (rad > 0) {
@@ -519,9 +526,71 @@ public final class BookContent {
                         .add(BookEl.head(Lang.tr("sc.manual.generator.bigsvhead"))).addAll(paras("sc.manual.generator.bigsv"));
                 e.about(new ItemStack(ModBlocks.tokamakCoil), new ItemStack(ModBlocks.leadBlock), new ItemStack(ModBlocks.leadGlass));
             }
+            if (type == GeneratorType.SINGULAR_REACTOR) {
+                singular(e);
+            }
             crafting(e, st);
             list.add(e);
         }
+    }
+
+    /**
+     * The Singular Reactor's article: the build by layer, fuel, the cycle, mass and its window (a
+     * table), accidents, radiation - the texts under sc.manual.generator.sing.*.
+     */
+    private static void singular(BookEntry e) {
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.buildhead"))).add(singularBuild())
+                .add(BookEl.items(materials(singularLayers()))).addAll(paras("sc.manual.generator.sing.build"));
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.fuelhead"))).addAll(paras("sc.manual.generator.sing.fuel"));
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.cyclehead"))).addAll(paras("sc.manual.generator.sing.cycle"));
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.masshead"))).addAll(paras("sc.manual.generator.sing.mass"));
+        BookEl t = BookEl.table(Lang.tr("sc.manual.generator.sing.t.mass"), Lang.tr("sc.manual.generator.sing.t.power"),
+                Lang.tr("sc.manual.generator.sing.t.rad"), Lang.tr("sc.manual.generator.sing.t.risk"));
+        double[] at = {0.10, 0.30, 0.55, 0.85};
+        String[] range = {"< 20%", "20-40%", "40-70%", "> 70%"};
+        for (int i = 0; i < 4; i++) {
+            t.row(null, range[i], com.sc.tileentity.SingularReactorSC.outputFor(at[i]) + " EU/t",
+                    com.sc.radiation.RadiationSC.fmt(com.sc.tileentity.SingularReactorSC.radiationLevelFor(at[i])) + " / "
+                            + com.sc.tileentity.SingularReactorSC.radiationRadiusFor(at[i]) + " " + Lang.tr("sc.book.blocks"),
+                    Lang.tr("sc.manual.generator.sing.t.risk." + i));
+        }
+        e.add(t);
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.feedhead"))).addAll(paras("sc.manual.generator.sing.feed"));
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.accidenthead"))).addAll(paras("sc.manual.generator.sing.accident"));
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.radhead"))).addAll(paras("sc.manual.generator.sing.rad"));
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.screenhead"))).addAll(paras("sc.manual.generator.sing.screen"));
+        e.about(new ItemStack(ModBlocks.gravityCoil));
+    }
+
+    /** The 7x7x5, floor to cap: lead floor; coil ring and walls with ports; the reactor, walls and ports; coils again; the cap with a window. */
+    public static ItemStack[][][] singularLayers() {
+        ItemStack lead = new ItemStack(ModBlocks.leadBlock), glass = new ItemStack(ModBlocks.leadGlass), coil = new ItemStack(ModBlocks.gravityCoil);
+        ItemStack tank = new ItemStack(ModBlocks.tankSC, 1, 2), store = new ItemStack(ModBlocks.energyStorageSC, 1, Tier.SV.ordinal());
+        ItemStack core = ModBlocks.generatorStack(GeneratorType.SINGULAR_REACTOR, 1);
+        ItemStack[][][] l = new ItemStack[5][7][7];
+        for (int y = 0; y < 5; y++) {
+            for (int z = 0; z < 7; z++) {
+                for (int x = 0; x < 7; x++) {
+                    int role = com.sc.tileentity.SingularReactorSC.cellRole(x - 3, y - 2, z - 3);
+                    l[y][z][x] = role == 0 || role == 1 ? lead : role == 2 ? coil : role == 4 ? core : null;
+                }
+            }
+        }
+        l[4][3][3] = glass;             // a window in the cap
+        l[2][3][0] = tank;              // liquid helium
+        l[2][3][6] = tank;              // deuterium
+        l[2][0][3] = tank;              // argon
+        l[2][6][3] = store;             // the energy storage (IV+, an SV one holds the whole charge)
+        l[1][3][0] = tank;              // a second helium tank, below
+        return l;
+    }
+
+    private static BookEl singularBuild() {
+        String[] names = new String[5];
+        for (int i = 0; i < 5; i++) {
+            names[i] = Lang.tr("sc.book.layer.sing." + i);
+        }
+        return BookEl.layers(singularLayers(), names);
     }
 
     private static String fuel(GeneratorType type) {
@@ -714,6 +783,9 @@ public final class BookContent {
                 .addAll(paras("sc.manual.energy.svtext"))
                 .add(BookEl.head(Lang.tr("sc.manual.energy.svgethead")))
                 .add(BookEl.item(tokamak, tokamak.getDisplayName(), Lang.tr("sc.manual.energy.svget.tokamak", GeneratorType.TOKAMAK_XV.euPerTick)))
+                .add(BookEl.item(ModBlocks.generatorStack(GeneratorType.SINGULAR_REACTOR, 1), GeneratorType.SINGULAR_REACTOR.localizedName(),
+                        Lang.tr("sc.manual.energy.svget.singular", GeneratorType.SINGULAR_REACTOR.euPerTick,
+                                com.sc.tileentity.SingularReactorSC.MAX_OUTPUT)))
                 .add(BookEl.item(trans, trans.getDisplayName(), Lang.tr("sc.manual.energy.svget.transformer")))
                 .add(BookEl.item(adaptive, adaptive.getDisplayName(), Lang.tr("sc.manual.energy.svget.adaptive")))
                 .add(BookEl.head(Lang.tr("sc.manual.energy.svblockshead")))

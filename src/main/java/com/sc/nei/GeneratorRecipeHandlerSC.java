@@ -117,6 +117,8 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
             } else if (e.type.kind == GeneratorType.Kind.FUSION && (sameItem(ingredient, ModItems.deuteriumCell)
                     || sameItem(ingredient, ModItems.component("liBlanketModule")))) {
                 arecipes.add(e);
+            } else if (e.type.kind == GeneratorType.Kind.SINGULAR && com.sc.tileentity.SingularReactorSC.isCapsule(ingredient)) {
+                arecipes.add(e);
             } else if (furnaceFuel && e.isSolidFuel()) {
                 arecipes.add(e);
             }
@@ -187,6 +189,12 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
             if (type.kind == GeneratorType.Kind.FUSION) {
                 fuelStacks.add(new PositionedStack(new ItemStack(ModItems.deuteriumCell), FUEL_X, SLOT_Y));
                 fuelStacks.add(new PositionedStack(new ItemStack(ModItems.component("liBlanketModule")), FUEL2_X, SLOT_Y));
+            } else if (type.kind == GeneratorType.Kind.SINGULAR) {
+                net.minecraft.item.Item cap = ModItems.component("matterCapsule");
+                if (cap != null) {
+                    fuelStacks.add(new PositionedStack(new ItemStack(cap), FUEL_X, SLOT_Y));
+                }
+                fuelStacks.add(new PositionedStack(new ItemStack(ModBlocks.gravityCoil, 16), fuelStacks.isEmpty() ? FUEL_X : FUEL2_X, SLOT_Y));
             } else if (fuel != null) {
                 fuelStacks.add(new PositionedStack(fuel, FUEL_X, SLOT_Y));
             }
@@ -217,6 +225,11 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                         return new String[]{Lang.tr("sc.nei.gen.solid", seconds(t), String.valueOf((long) t * type.euPerTick))};
                     }
                     return new String[]{Lang.tr("sc.manual.gen.kind.solid")};
+                case SINGULAR:
+                    return new String[]{
+                            Lang.tr("sc.nei.gen.sing1", com.sc.tileentity.SingularReactorSC.IGNITION_EU / 1000000,
+                                    com.sc.tileentity.SingularReactorSC.D_IGNITION, com.sc.tileentity.SingularReactorSC.MAX_OUTPUT),
+                            Lang.tr("sc.nei.gen.sing2", (int) com.sc.tileentity.SingularReactorSC.HE_PER_TICK)};
                 case WIND:
                 case WATER:
                 case THERMO:

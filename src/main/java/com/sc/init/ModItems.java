@@ -272,6 +272,32 @@ public final class ModItems {
             GameRegistry.registerItem(item, name);
             COMPONENTS.put(name, item);
         }
+        // Singular reactor: its fuel, pressed by the Matter Compressor (appended last - registry
+        // names are what worlds keep, the list order is only the creative tab's).
+        ItemSimpleSC capsule = new MatterCapsule();
+        GameRegistry.registerItem(capsule, "matterCapsule");
+        COMPONENTS.put("matterCapsule", capsule);
+    }
+
+    /** The Compressed Matter Capsule: a plain component with a TooltipSC tooltip. */
+    public static final class MatterCapsule extends ItemSimpleSC {
+        MatterCapsule() {
+            super("matterCapsule", "matterCapsule");
+            setMaxStackSize(16);
+        }
+
+        @Override
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        public void addInformation(ItemStack stack, net.minecraft.entity.player.EntityPlayer player, java.util.List list, boolean advanced) {
+            list.add("§7" + com.sc.manual.Lang.tr("sc.tooltip.matterCapsule"));
+            com.sc.util.TooltipSC.more(list, com.sc.manual.Lang.tr("sc.tooltip.matterCapsule.details",
+                    com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE), com.sc.manual.Lang.tr("sc.tooltip.matterCapsule.howto"));
+        }
+
+        @Override
+        public net.minecraft.item.EnumRarity getRarity(ItemStack stack) {
+            return net.minecraft.item.EnumRarity.rare;
+        }
     }
 
     private static ItemMaterialSC registerKind(MaterialItemKind kind, String registryName) {

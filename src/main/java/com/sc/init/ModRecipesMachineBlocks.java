@@ -44,6 +44,7 @@ public final class ModRecipesMachineBlocks {
         registerMV();
         registerHV();
         registerEV();
+        registerIV();
         registerTools();
         registerEnergyStorage();
         registerTransformers();
@@ -101,6 +102,19 @@ public final class ModRecipesMachineBlocks {
         upgrade(MachineType.CZOCHRALSKI_PULLER_EV, MachineType.CZOCHRALSKI_PULLER);
         upgrade(MachineType.STEPPER_EV, MachineType.STEPPER);
         upgrade(MachineType.UPGRADE_STATION_EV, MachineType.UPGRADE_STATION_HV);
+    }
+
+    /**
+     * IV: the Matter Compressor (Singular reactor's fuel). The IV frame is the IV storage's - W-Ti
+     * plates and niobium-titanium cable; a Rolling Machine is the press at its heart, pistons drive
+     * it, tungsten ingots weigh it down and a Controller runs it.
+     */
+    private static void registerIV() {
+        OreRecipes.shaped(block(MachineType.MATTER_COMPRESSOR), new Object[]{
+                "WNW", "PXP", "TKT",
+                'W', new ItemStack(ModItems.component("wTiPlate")), 'N', cable(CableType.NIOBIUM_TITANIUM),
+                'P', new ItemStack(Blocks.piston), 'X', block(MachineType.ROLLING_MACHINE),
+                'T', ModItems.ingot.stackOf(Material.TUNGSTEN), 'K', ModItems.siliconMaterial.stackOf(SiliconMaterial.CONTROLLER)});
     }
 
     /**

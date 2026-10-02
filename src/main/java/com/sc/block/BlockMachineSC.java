@@ -185,6 +185,10 @@ public class BlockMachineSC extends Block {
             ((TileEntityMachineSC) te).loadTanksFromItem(stack.getTagCompound().getCompoundTag(TileEntityMachineSC.ITEM_TANKS_KEY));
             world.markBlockForUpdate(x, y, z);
         }
+        if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
+                && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_MATTER_KEY)) {
+            ((TileEntityMachineSC) te).loadMatterFromItem(stack.getTagCompound().getInteger(TileEntityMachineSC.ITEM_MATTER_KEY));
+        }
         // the charge last: the upgrades above set how much the buffer holds
         if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
                 && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_ENERGY_KEY)) {
@@ -224,7 +228,8 @@ public class BlockMachineSC extends Block {
         net.minecraft.nbt.NBTTagCompound ups = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).upgradesForItem() : null;
         int redstone = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getRedstoneMode() : 0;
         int energy = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getEnergyStored() : 0;
-        if (tanks != null || ups != null || redstone != 0 || energy > 0) {
+        int matter = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getMatter() : 0;
+        if (tanks != null || ups != null || redstone != 0 || energy > 0 || matter > 0) {
             net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
             if (redstone != 0) {
                 nbt.setInteger(TileEntityMachineSC.ITEM_REDSTONE_KEY, redstone);
@@ -234,6 +239,9 @@ public class BlockMachineSC extends Block {
             }
             if (tanks != null) {
                 nbt.setTag(TileEntityMachineSC.ITEM_TANKS_KEY, tanks);
+            }
+            if (matter > 0) {                                        // the compressor's mass counter
+                nbt.setInteger(TileEntityMachineSC.ITEM_MATTER_KEY, matter);
             }
             if (ups != null) {
                 nbt.setTag(TileEntityMachineSC.ITEM_UPGRADES_KEY, ups);

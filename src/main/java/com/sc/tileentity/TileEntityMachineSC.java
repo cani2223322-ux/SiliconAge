@@ -449,6 +449,13 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             }
             return;
         }
+        if (machineType.isCompressor()) {
+            updateCompressor();
+            if (status == MachineStatus.PROCESSING) {
+                com.sc.util.SoundsSC.loop(this, com.sc.util.SoundsSC.of(machineType));
+            }
+            return;
+        }
         if (!powerOn || !redstoneAllows()) {
             status = powerOn ? MachineStatus.REDSTONE : MachineStatus.DISABLED;
             dissipateHeat();
@@ -736,6 +743,199 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
     }
 
+    // ------------------------------------------------------------------ the matter compressor
+
+    /** Mass one Compressed Matter Capsule takes: 64 stone blocks, or 16 lead blocks. */
+    public static final int MATTER_PER_CAPSULE = 576;
+    /** The counter takes in items up to this (two capsules), so the next capsule is ready as one comes out. */
+    public static final int MATTER_MAX = 2 * MATTER_PER_CAPSULE;
+    /** Ticks a capsule takes with no overclockers (10 s). */
+    public static final int COMPRESS_TICKS = 200;
+    /** Items the compressor swallows a tick (from its three input slots together). */
+    public static final int MATTER_ABSORB_PER_TICK = 8;
+    /** Base mass: a block 9, anything else 1; heavy metals x4. */
+    public static final int MASS_BLOCK = 9, MASS_ITEM = 1, MASS_HEAVY = 4;
+    /** OreDictionary forms and metals that count as heavy (exact names, e.g. "blockLead", "ingotGold"). */
+    private static final String[] HEAVY_FORMS = {"ingot", "block", "dust", "plate", "crushed", "crushedPurified"};
+    private static final String[] HEAVY_METALS = {"Lead", "Tungsten", "Hafnium", "Tantalum", "Iron", "Gold"};
+    /** NBT key the compressor's item carries its mass under (BlockMachineSC drops / placement). */
+    public static final String ITEM_MATTER_KEY = "MatterSC";
+    /** The mass in the counter (Matter Compressor only). */
+    private int matter;
+
+    public int getMatter() {
+        return matter;
+    }
+
+    /** Client-side sync only. */
+    public void setMatterClient(int value) {
+        matter = value;
+    }
+
+    /** On placement of the compressor's item (BlockMachineSC). */
+    public void loadMatterFromItem(int value) {
+        matter = Math.max(0, Math.min(MATTER_MAX + MASS_BLOCK * MASS_HEAVY, value));
+        markDirty();
+    }
+
+    /** Self-test: set the counter directly. */
+    public void setMatterForTest(int value) {
+        matter = Math.max(0, value);
+    }
+
+    /**
+     * The mass one piece of `stack` gives the compressor, or 0 when it doesn't take it at all: nothing
+     * with NBT (a charged battery, a configured tool, a machine with upgrades inside - it would be
+     * destroyed with everything on it), and never the capsule itself. Nor what would be a pity to burn
+     * by accident: anything with a container (fluid buckets, cells), the mod's own machines, generators,
+     * storages and tanks (its blocks with a tile entity), anything not of common rarity, and the
+     * valuables of VALUABLES. A block 9, any other item 1; lead, tungsten, hafnium, tantalum, iron and
+     * gold (ingot, dust, plate, crushed ore, block) x4.
+     */
+    public static int matterMass(ItemStack stack) {
+        if (stack == null || stack.getItem() == null || stack.hasTagCompound()) {
+            return 0;
+        }
+        net.minecraft.item.Item capsule = ModItems.component("matterCapsule");
+        if (capsule != null && stack.getItem() == capsule
+                // machine upgrades and batteries: shift-click would feed them in instead of their own slots
+                || stack.getItem() instanceof com.sc.item.ItemUpgradeSC || stack.getItem() instanceof com.sc.item.ItemBatterySC) {
+            return 0;
+        }
+        if (stack.getItem().hasContainerItem(stack) || stack.getRarity() != net.minecraft.item.EnumRarity.common
+                || isValuable(stack) || isModTileBlock(stack)) {
+            return 0;
+        }
+        int mass = stack.getItem() instanceof net.minecraft.item.ItemBlock ? MASS_BLOCK : MASS_ITEM;
+        return isHeavyMetal(stack) ? mass * MASS_HEAVY : mass;
+    }
+
+    /** What the compressor never takes, whatever its rarity says: nether stars, diamonds, emeralds, ender pearls and eyes, beacons. */
+    private static boolean isValuable(ItemStack stack) {
+        net.minecraft.item.Item i = stack.getItem();
+        return i == net.minecraft.init.Items.nether_star || i == net.minecraft.init.Items.diamond || i == net.minecraft.init.Items.emerald
+                || i == net.minecraft.init.Items.ender_pearl || i == net.minecraft.init.Items.ender_eye
+                || i == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.diamond_block)
+                || i == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.emerald_block)
+                || i == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.beacon)
+                || i == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.dragon_egg);
+    }
+
+    /** The mod's machines, generators, storages, tanks...: its blocks with a tile entity (lead blocks and the like still go in). */
+    private static boolean isModTileBlock(ItemStack stack) {
+        if (!(stack.getItem() instanceof net.minecraft.item.ItemBlock)) {
+            return false;
+        }
+        net.minecraft.block.Block b = net.minecraft.block.Block.getBlockFromItem(stack.getItem());
+        return b != null && b.getClass().getName().startsWith("com.sc.") && b.hasTileEntity(stack.getItem().getMetadata(stack.getItemDamage()));
+    }
+
+    /** The mod's own tile entities (machines, generators, storages, the quarry, tanks...): the compressor's puller leaves them alone. */
+    private static boolean isModTile(net.minecraft.tileentity.TileEntity te) {
+        return te != null && te.getClass().getName().startsWith("com.sc.");
+    }
+
+    private static boolean isHeavyMetal(ItemStack stack) {
+        int[] ids;
+        try {
+            ids = net.minecraftforge.oredict.OreDictionary.getOreIDs(stack);
+        } catch (RuntimeException e) {                       // a wildcard / broken stack: just not heavy
+            return false;
+        }
+        for (int id : ids) {
+            String name = net.minecraftforge.oredict.OreDictionary.getOreName(id);
+            for (String form : HEAVY_FORMS) {
+                if (!name.startsWith(form)) {
+                    continue;
+                }
+                for (String metal : HEAVY_METALS) {
+                    if (name.length() == form.length() + metal.length() && name.endsWith(metal)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /** Ticks a capsule takes now: overclockers and the config's machine speed. */
+    public int compressTicks() {
+        return Math.max(1, (int) Math.round(COMPRESS_TICKS * Math.pow(0.7, upgradeCount(UpgradeType.OVERCLOCKER))
+                / com.sc.util.ConfigSC.machineSpeed));
+    }
+
+    /** What the compressor makes (null if the item isn't registered). */
+    public static ItemStack capsuleStack() {
+        net.minecraft.item.Item capsule = ModItems.component("matterCapsule");
+        return capsule == null ? null : new ItemStack(capsule);
+    }
+
+    /**
+     * One tick of the compressor: it swallows up to MATTER_ABSORB_PER_TICK items from its inputs
+     * into the counter (free, while it's switched on and has a tick's energy), and with MATTER_PER_CAPSULE of mass, room in
+     * the outputs and the energy, it presses a capsule over compressTicks() ticks.
+     */
+    private void updateCompressor() {
+        if (!powerOn || !redstoneAllows()) {
+            status = powerOn ? MachineStatus.REDSTONE : MachineStatus.DISABLED;
+            return;
+        }
+        if (getEnergyStored() >= effectiveEuPerTick()) {
+            absorbMatter();                                  // only while it can work: nothing vanishes into an unpowered one
+        }
+        currentRecipeTicks = compressTicks();
+        ItemStack capsule = capsuleStack();
+        if (matter < MATTER_PER_CAPSULE || capsule == null) {
+            progressTicks = 0;
+            status = MachineStatus.IDLE;
+            return;
+        }
+        if (!canInsertAll(new ItemStack[]{capsule})) {
+            status = MachineStatus.OUTPUT_FULL;
+            return;
+        }
+        int cost = effectiveEuPerTick();
+        if (getEnergyStored() < cost) {
+            status = MachineStatus.NO_POWER;
+            return;
+        }
+        removeEnergy(cost);
+        status = MachineStatus.PROCESSING;
+        if (++progressTicks >= currentRecipeTicks) {
+            progressTicks = 0;
+            matter -= MATTER_PER_CAPSULE;
+            insertOutput(capsule);
+            markDirty();
+        }
+    }
+
+    /** Moves items from the input slots into the counter, up to MATTER_MAX. */
+    private void absorbMatter() {
+        int budget = MATTER_ABSORB_PER_TICK;
+        boolean changed = false;
+        for (int i = 0; i < INPUT_SLOTS && budget > 0 && matter < MATTER_MAX; i++) {
+            ItemStack s = slots[i];
+            int mass = matterMass(s);
+            while (s != null && mass > 0 && budget > 0 && matter < MATTER_MAX) {
+                matter += mass;
+                budget--;
+                changed = true;
+                if (--s.stackSize <= 0) {
+                    slots[i] = null;
+                    s = null;
+                }
+            }
+        }
+        if (changed) {
+            markDirty();
+        }
+    }
+
+    /** Self-test: one compressor tick, power and switches as they are. */
+    public void compressorTickForTest() {
+        updateCompressor();
+    }
+
     private net.minecraft.tileentity.TileEntity neighbour(ForgeDirection dir) {
         int x = xCoord + dir.offsetX, y = yCoord + dir.offsetY, z = zCoord + dir.offsetZ;
         return worldObj.blockExists(x, y, z) ? worldObj.getTileEntity(x, y, z) : null;
@@ -783,8 +983,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         int budget = PULL_ITEMS;
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
             net.minecraft.tileentity.TileEntity te = neighbour(dir);
-            if (te instanceof IInventory && budget > 0) {
-                IInventory source = (IInventory) te;
+            if (te instanceof IInventory && budget > 0 && !(machineType.isCompressor() && isModTile(te))) {
+                IInventory source = (IInventory) te;      // the compressor: only from other inventories (chests...), never the mod's own
                 for (int slot : InvUtilSC.slots(source, dir)) {
                     ItemStack stack = source.getStackInSlot(slot);
                     if (budget <= 0) {
@@ -1156,7 +1356,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).generatorOnly()
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).fieldOnly()
                     && !com.sc.item.ItemUpgradeSC.typeOf(stack).storageOnly()
-                    && !(machineType.isSmelter() && (com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.QUALITY
+                    && !((machineType.isSmelter() || machineType.isCompressor()) && (com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.QUALITY
                             || com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK))    // nothing to improve there
                     // a heat sink only where there's heat, a tank extension only where there are tanks
                     // (only new ones are refused - what an older world already has in the slots stays)
@@ -1165,6 +1365,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
         if (machineType.isSmelter()) {
             return slot < machineType.smeltStreams() && smeltResult(stack) != null;
+        }
+        if (machineType.isCompressor()) {
+            return slot < INPUT_SLOTS && matterMass(stack) > 0;
         }
         return slot < INPUT_SLOTS && RecipeRegistry.isValidInput(machineType, stack);
     }
@@ -1190,7 +1393,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (slot == SLOT_BATTERY) {
             return slots[SLOT_BATTERY] == null && com.sc.item.BatteryFeedSC.accepts(stack);   // a full one in
         }
-        if (machineType.isSmelter()) {
+        if (machineType.isSmelter() || machineType.isCompressor()) {
             return isItemValidForSlot(slot, stack) && (slots[slot] == null || slots[slot].isItemEqual(stack));
         }
         return slot < INPUT_SLOTS && isItemValidForSlot(slot, stack) && fitsSomeRecipe(slot, stack);
@@ -1400,6 +1603,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         smeltProgress[1] = nbt.getInteger("SmeltP1");
         storedXp = nbt.getDouble("StoredXp");                 // (an older float tag reads as well)
         keepWarm = nbt.getBoolean("KeepWarm");
+        matter = nbt.getInteger("Matter");
         coolingDown = nbt.getBoolean("CoolingDown");
         overheatedThisRun = nbt.getBoolean("OverheatedRun");
         tankA.readFromNBT(nbt.getCompoundTag("TankA"));
@@ -1432,6 +1636,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         nbt.setInteger("SmeltP1", smeltProgress[1]);
         nbt.setDouble("StoredXp", storedXp);
         nbt.setBoolean("KeepWarm", keepWarm);
+        if (matter > 0) {
+            nbt.setInteger("Matter", matter);
+        }
         nbt.setBoolean("CoolingDown", coolingDown);
         nbt.setBoolean("OverheatedRun", overheatedThisRun);
         nbt.setTag("TankA", tankA.writeToNBT(new NBTTagCompound()));
