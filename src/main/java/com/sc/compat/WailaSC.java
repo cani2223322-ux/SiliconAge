@@ -122,6 +122,13 @@ public class WailaSC implements IWailaDataProvider {
             if (t.getInteger("scStationModules") > 0) {             // the input tier is the line above (scIn)
                 tip.add(Lang.tr("sc.waila.upgrades", t.getInteger("scStationModules")));
             }
+            NBTTagCompound tanks = t.getCompoundTag("scStationTanks");        // the inner tanks, only those with gas
+            for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+                if (tanks.getInteger(g.key()) > 0) {
+                    tip.add(Lang.tr("sc.waila.armorStation.tank", Lang.tr("sc.armorStation.gas." + g.key()), tanks.getInteger(g.key()),
+                            t.getInteger("scStationTankCap")));
+                }
+            }
         }
         if (t.hasKey("scShowerSt")) {
             tip.add(Lang.tr("sc.shower.status." + t.getInteger("scShowerSt")));
@@ -285,6 +292,14 @@ public class WailaSC implements IWailaDataProvider {
             tag.setInteger("scStationGas", (int) Math.min(Integer.MAX_VALUE, gas));
             tag.setInteger("scStationCap", (int) Math.min(Integer.MAX_VALUE, cap));
             tag.setInteger("scStationPieces", pieces);
+            NBTTagCompound tanks = new NBTTagCompound();
+            for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+                if (st.tankAmount(g) > 0) {
+                    tanks.setInteger(g.key(), st.tankAmount(g));
+                }
+            }
+            tag.setTag("scStationTanks", tanks);
+            tag.setInteger("scStationTankCap", st.tankCapacity());
         }
         if (te instanceof com.sc.tileentity.TileEntityShowerSC) {
             com.sc.tileentity.TileEntityShowerSC sh = (com.sc.tileentity.TileEntityShowerSC) te;

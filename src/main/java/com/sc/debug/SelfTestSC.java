@@ -1708,10 +1708,11 @@ public final class SelfTestSC {
                 && com.sc.util.ArmorFeature.RAD_QUANTUM_PCT * 10 / 100F * com.sc.util.ArmorFeature.RAD_QUANTUM_EU == 150F
                 && com.sc.util.ArmorFeature.RAD_EXO_PCT * 10 / 100F * com.sc.util.ArmorFeature.RAD_EXO_EU == 250F
                 && com.sc.util.ArmorFeature.RAD_QUANTUM_PCT * 10 / 100F * com.sc.util.ArmorFeature.RAD_HEAT_PER_LEVEL < com.sc.util.ArmorSuit.QUANTUM.heatDissipation
+                        + com.sc.util.ArmorGasSC.HELIUM_PUMP[com.sc.util.ArmorSuit.QUANTUM.ordinal()]   // passive + the helium loop
                 && com.sc.tileentity.TileEntityFieldGeneratorSC.F_RADIATION == 1 << 16
                 && com.sc.inventory.ContainerFieldGeneratorSC.BTN_FLAG_BASE + com.sc.inventory.ContainerFieldGeneratorSC.FLAG_COUNT
                         <= com.sc.inventory.ContainerFieldGeneratorSC.BTN_RESERVE_PLUS;
-        check(ok, "radiation shield: Quantum / Exo chestplate only, 150 / 250 EU/s at level 10, Quantum's heat under its cooling;"
+        check(ok, "radiation shield: Quantum / Exo chestplate only, 150 / 250 EU/s at level 10, Quantum's heat under its cooling (with helium);"
                 + " the field's switch is bit 16 and its button id is free");
         com.sc.tileentity.TileEntityShowerSC shower = new com.sc.tileentity.TileEntityShowerSC();
         int water = shower.fill(net.minecraftforge.common.util.ForgeDirection.UP,
@@ -2182,6 +2183,95 @@ public final class SelfTestSC {
         boolean next = pipe.pipeLeft(he, 101L) == cap;
         check(fresh && spent && next, "station: pipes push at most " + cap + " mB of a gas a tick, other gases apart, new tick - new limit");
         armorStationModules();
+        armorStationTanks();
+    }
+
+    /**
+     * The station's seven inner tanks: each takes only its own gas, Tank Extensions add room (and
+     * taking them out loses nothing), the armour is filled out of the tank, x pours it out for EU,
+     * the tanks ride in the item (no dupe), and an older station loads with empty tanks.
+     */
+    private static void armorStationTanks() {
+        net.minecraftforge.common.util.ForgeDirection any = net.minecraftforge.common.util.ForgeDirection.UNKNOWN;
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, o2 = com.sc.util.ArmorGasSC.Gas.OXYGEN;
+        int cap = com.sc.tileentity.TileEntityArmorStationSC.TANK_CAPACITY, ext = com.sc.machine.UpgradeType.TANK_PER_UPGRADE;
+        int up = com.sc.tileentity.TileEntityArmorStationSC.FIRST_UPGRADE_SLOT;
+        if (he.fluidOf() == null || o2.fluidOf() == null) {
+            check(false, "station tanks: the helium / oxygen fluids aren't registered");
+            return;
+        }
+        // only its own gas; pipes can't drain; seven tanks
+        com.sc.tileentity.TileEntityArmorStationSC s = new com.sc.tileentity.TileEntityArmorStationSC();
+        boolean own = s.fill(any, new FluidStack(o2.fluidOf(), 1000), true) == 1000 && s.tankAmount(o2) == 1000 && s.tankAmount(he) == 0
+                && s.fill(any, new FluidStack(FluidRegistry.WATER, 1000), true) == 0 && !s.canFill(any, FluidRegistry.WATER)
+                && s.drain(any, 1000, true) == null && s.drain(any, new FluidStack(o2.fluidOf(), 1000), true) == null
+                && s.tankAmount(o2) == 1000 && s.getTankInfo(any).length == com.sc.util.ArmorGasSC.Gas.values().length;
+        check(own, "station tanks: oxygen goes into the oxygen tank only, water is refused, pipes can't drain; 7 tanks");
+        // Tank Extension: +8000 each, up to 4; out again - nothing lost, nothing taken in
+        boolean full = s.fillTank(he, 100000, true) == cap;
+        s.setInventorySlotContents(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION));
+        boolean one = s.tankCapacity() == cap + ext && s.fillTank(he, 100000, true) == ext && s.tankAmount(he) == cap + ext;
+        ItemStack six = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION);
+        six.stackSize = 6;
+        s.setInventorySlotContents(up, six);
+        boolean four = s.tankCapacity() == cap + com.sc.machine.UpgradeType.MAX_TANK_UPGRADES * ext;
+        s.setInventorySlotContents(up, null);
+        boolean kept = s.tankCapacity() == cap && s.getTank(he).getFluidAmount() == cap + ext && s.fillTank(he, 1, true) == 0
+                && s.fill(any, new FluidStack(he.fluidOf(), 1), true) == 0;
+        check(full && one && four && kept, "station tanks: " + cap + " mB, +" + ext + " per Tank Extension (counted up to "
+                + com.sc.machine.UpgradeType.MAX_TANK_UPGRADES + "); taken out - nothing lost, the tank takes nothing until used down");
+        // the armour is filled out of the tank, the pumps paid
+        com.sc.item.ItemArmorSC[] q = ModItems.ARMOR.get(com.sc.util.ArmorSuit.QUANTUM);
+        com.sc.tileentity.TileEntityArmorStationSC f = new com.sc.tileentity.TileEntityArmorStationSC();
+        f.setInventorySlotContents(com.sc.util.ArmorGasSC.CHEST, new ItemStack(q[com.sc.util.ArmorGasSC.CHEST]));
+        java.util.List<net.minecraft.entity.player.EntityPlayer> nobody = new java.util.ArrayList<net.minecraft.entity.player.EntityPlayer>();
+        boolean dry = f.fillFromTank(he, 1000, nobody) == 0;                       // an empty tank: nothing
+        f.fillTank(he, 5000, true);
+        boolean poor = f.fillFromTank(he, 1000, nobody) == 0 && f.tankAmount(he) == 5000;   // no energy: nothing
+        f.setEnergyStoredClient(10000);
+        int moved = f.fillFromTank(he, 1000, nobody);
+        int inChest = com.sc.util.ArmorGasSC.amount(f.getStackInSlot(com.sc.util.ArmorGasSC.CHEST), he);
+        check(dry && poor && moved == 1000 && inChest == 1000 && f.tankAmount(he) == 4000 && f.getEnergyStored() == 10000 - f.gasCost(1000),
+                "station tanks: the armour is filled out of the tank (5000 -> " + f.tankAmount(he) + " mB, chestplate " + inChest
+                        + " mB), the pumps paid; an empty tank or no energy - nothing moves");
+        // x: pour out for EU, only if it pays it all
+        com.sc.tileentity.TileEntityArmorStationSC c = new com.sc.tileentity.TileEntityArmorStationSC();
+        c.fillTank(he, 1234, true);
+        int cost = c.clearCost(he);
+        c.setEnergyStoredClient(cost - 1);
+        boolean refused = !c.clearTank(he) && c.tankAmount(he) == 1234 && c.getEnergyStored() == cost - 1;
+        c.setEnergyStoredClient(1000);
+        boolean poured = c.clearTank(he) && c.tankAmount(he) == 0 && c.getEnergyStored() == 1000 - cost && !c.clearTank(he);
+        check(cost == (1234 + com.sc.machine.UpgradeType.CLEAR_MB_PER_EU - 1) / com.sc.machine.UpgradeType.CLEAR_MB_PER_EU && refused && poured,
+                "station tanks: x pours a tank out for " + cost + " EU (1 EU / " + com.sc.machine.UpgradeType.CLEAR_MB_PER_EU
+                        + " mB) - only when the buffer pays it all");
+        // the item: the tanks go in, come back, and aren't left behind too
+        com.sc.tileentity.TileEntityArmorStationSC a = new com.sc.tileentity.TileEntityArmorStationSC();
+        a.fillTank(he, 3000, true);
+        a.fillTank(o2, 500, true);
+        net.minecraft.nbt.NBTTagCompound item = a.writeToItem();
+        a.takeLooseContents();
+        com.sc.tileentity.TileEntityArmorStationSC b = new com.sc.tileentity.TileEntityArmorStationSC();
+        b.readFromItem(item);
+        check(item.hasKey(com.sc.tileentity.TileEntityArmorStationSC.ITEM_TANKS_KEY) && a.tanksInItem() && a.tankAmount(he) == 0
+                        && a.tankAmount(o2) == 0 && b.tankAmount(he) == 3000 && b.tankAmount(o2) == 500
+                        && !new com.sc.tileentity.TileEntityArmorStationSC().writeToItem().hasKey(com.sc.tileentity.TileEntityArmorStationSC.ITEM_TANKS_KEY),
+                "station tanks: they ride in the item and come back on placement; the broken station keeps no copy (no dupe); empty tanks - no tag");
+        // saving; an older station (no tanks in its NBT) loads with empty tanks
+        net.minecraft.nbt.NBTTagCompound saved = new net.minecraft.nbt.NBTTagCompound();
+        b.writeToNBT(saved);
+        com.sc.tileentity.TileEntityArmorStationSC back = new com.sc.tileentity.TileEntityArmorStationSC();
+        back.readFromNBT(saved);
+        boolean roundTrip = back.tankAmount(he) == 3000 && back.tankAmount(o2) == 500;
+        saved.removeTag(com.sc.tileentity.TileEntityArmorStationSC.TANKS_KEY);
+        com.sc.tileentity.TileEntityArmorStationSC old = new com.sc.tileentity.TileEntityArmorStationSC();
+        old.fillTank(he, 999, true);
+        old.readFromNBT(saved);
+        boolean empty = true;
+        for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+            empty &= old.tankAmount(g) == 0;
+        }
+        check(roundTrip && empty, "station tanks: saved with the world; an older station without tanks loads with empty ones");
     }
 
     /** The Armour Service Station's module slots: what goes in, what each module does, the modules in the item (no dupe). */
@@ -2190,9 +2280,9 @@ public final class SelfTestSC {
         com.sc.tileentity.TileEntityArmorStationSC m = new com.sc.tileentity.TileEntityArmorStationSC();
         ItemStack oc = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERCLOCKER);
         check(m.isItemValidForSlot(up, oc) && !m.isItemValidForSlot(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.EJECTOR))
-                        && !m.isItemValidForSlot(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION))
+                        && m.isItemValidForSlot(up, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION))
                         && !m.isItemValidForSlot(0, oc) && !m.isItemValidForSlot(up, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.QUANTUM)[0])),
-                "station modules: Overclocker goes in, Ejector / Tank Extension don't; no module in an armour slot, no armour in a module slot");
+                "station modules: Overclocker and Tank Extension go in, Ejector doesn't; no module in an armour slot, no armour in a module slot");
         boolean old = m.inputTier() == com.sc.energy.Tier.MV && !m.acceptsAnyVoltage() && m.getMaxEnergyStored() == com.sc.energy.Tier.MV.getBuffer()
                 && m.gasPerTick() == com.sc.tileentity.TileEntityArmorStationSC.GAS_PER_TICK && m.gasCost(20) == 1 && m.gasCost(21) == 2
                 && m.chargePerRound() == com.sc.energy.Tier.MV.getVoltage() * com.sc.tileentity.TileEntityArmorStationSC.EVERY;

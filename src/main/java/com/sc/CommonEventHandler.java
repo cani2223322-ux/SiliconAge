@@ -128,6 +128,7 @@ public class CommonEventHandler {
         boolean shutDown = root.getBoolean("ChipsOffSC");
 
         int heatGen = shutDown ? 0 : functionHeat;       // the suit's own functions heat it too
+        heatGen = Math.max(0, heatGen + environmentHeat(player));   // the Nether, lava, a desert sun; snow and water cool
         if (!shutDown) {
             int cost = 0;
             for (ChipType type : ChipType.values()) {
@@ -175,6 +176,50 @@ public class CommonEventHandler {
         } else if (pct >= HEAT_CAPACITY_WARN_PCT) {
             player.addPotionEffect(new PotionEffect(Potion.moveSlowdown.getId(), HEAT_INTERVAL_TICKS + 5, 0));
         }
+    }
+
+    /**
+     * Heat from round the wearer, a second: the Nether +3, lava or fire within 2 blocks (or burning) +5,
+     * a hot biome (desert, savanna, mesa) under an open daytime sky +1; a cold biome -1, in water -2,
+     * high up (y > 150) -1. Checked once a second, 5x3x5 blocks.
+     */
+    static int environmentHeat(EntityPlayer p) {
+        net.minecraft.world.World w = p.worldObj;
+        int heat = 0;
+        if (w.provider.isHellWorld) {
+            heat += 3;
+        }
+        int x = net.minecraft.util.MathHelper.floor_double(p.posX), y = net.minecraft.util.MathHelper.floor_double(p.posY),
+                z = net.minecraft.util.MathHelper.floor_double(p.posZ);
+        boolean hot = p.isBurning();
+        for (int dx = -2; dx <= 2 && !hot; dx++) {
+            for (int dz = -2; dz <= 2 && !hot; dz++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    net.minecraft.block.material.Material m = w.getBlock(x + dx, y + dy, z + dz).getMaterial();
+                    if (m == net.minecraft.block.material.Material.lava || m == net.minecraft.block.material.Material.fire) {
+                        hot = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (hot) {
+            heat += 5;
+        }
+        net.minecraft.world.biome.BiomeGenBase biome = w.getBiomeGenForCoords(x, z);
+        float temp = biome == null ? 0.8F : biome.getFloatTemperature(x, y, z);
+        if (temp >= 1.2F && w.isDaytime() && w.canBlockSeeTheSky(x, y + 1, z)) {
+            heat += 1;
+        } else if (temp < 0.15F) {
+            heat -= 1;
+        }
+        if (p.isInWater()) {
+            heat -= 2;
+        }
+        if (y > 150) {
+            heat -= 1;
+        }
+        return heat;
     }
 
     /** "Helium running low" while the loop has to work and under a tenth is left; again after a refill. */

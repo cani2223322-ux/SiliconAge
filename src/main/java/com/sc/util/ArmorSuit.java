@@ -34,7 +34,11 @@ public enum ArmorSuit {
     public final ItemArmor.ArmorMaterial material;
     /** §16 Heat: suit-level heat capacity (Nano=100, Quantum=200, Exo=400). */
     public final int heatCapacity;
-    /** Heat the suit sheds per second (TODO: not in the design doc - Nano 2, Quantum 4, Exo 8). */
+    /**
+     * Heat the suit sheds by itself per second: Nano 2, Quantum 1, Exo 2. Quantum and Exo carry the
+     * helium loop (docs/plan-armor-gases.md) - their working heat is the loop's job, so the passive
+     * part is small (was 4 / 8 before the life support).
+     */
     public final int heatDissipation;
     /** EU one piece holds. */
     public final int maxCharge;
@@ -48,7 +52,7 @@ public enum ArmorSuit {
         this.textureName = textureName;
         this.material = EnumHelper.addArmorMaterial(name() + "_SC", durabilityFactor, reductionAmounts, enchantability);
         this.heatCapacity = 100 << ordinal(); // 100, 200, 400
-        this.heatDissipation = 2 << ordinal(); // 2, 4, 8
+        this.heatDissipation = new int[]{2, 1, 2}[ordinal()];
         this.maxCharge = maxCharge;
         this.euPerDamage = euPerDamage;
         this.chargeTier = chargeTier;

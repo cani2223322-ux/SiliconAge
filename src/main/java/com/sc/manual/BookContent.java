@@ -923,6 +923,11 @@ public final class BookContent {
         station.add(BookEl.head(Lang.tr("sc.gui.big.upgrades")))
                 .add(BookEl.para(Lang.tr("sc.manual.armor.station.modules", com.sc.tileentity.TileEntityArmorStationSC.MAX_OVERCLOCKERS,
                         com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE)));
+        station.add(BookEl.head(Lang.tr("sc.manual.armor.station.tankshead")))
+                .add(BookEl.para(Lang.tr("sc.manual.armor.station.tanks", com.sc.tileentity.TileEntityArmorStationSC.TANK_CAPACITY,
+                        com.sc.machine.UpgradeType.TANK_PER_UPGRADE, com.sc.machine.UpgradeType.MAX_TANK_UPGRADES,
+                        com.sc.machine.UpgradeType.CLEAR_MB_PER_EU)))
+                .add(BookEl.para(Lang.tr("sc.manual.armor.station.windows")));
         crafting(station, st);
         station.about(st);
         list.add(station);

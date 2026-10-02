@@ -26,6 +26,8 @@ public class ClientProxy extends CommonProxy {
                 com.sc.tileentity.TileEntityTankSC.class, new com.sc.client.TankRendererSC());
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
                 com.sc.tileentity.TileEntityQuarrySC.class, new com.sc.client.QuarryRendererSC());
+        cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+                com.sc.tileentity.TileEntityArmorStationSC.class, new com.sc.client.ArmorStationRendererSC());
     }
 
     @Override

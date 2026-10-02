@@ -27,13 +27,14 @@ import net.minecraftforge.common.util.ForgeDirection;
 /**
  * The Armour Service Station (MV): four armour slots, gases from the tanks beside it, EU from the
  * line; stand on it and the worn suit is filled and charged. The front (its screen) turns to the
- * placer; the top lights up while it works. Broken only with a pickaxe; the item keeps the energy,
- * the settings and the modules, the pieces in the slots drop.
+ * placer; the top lights up while it works; the two sides beside the front have seven windows
+ * showing the inner tanks' levels (ArmorStationRendererSC), the back is plain. Broken only with a
+ * pickaxe; the item keeps the energy, the settings, the modules and the tanks, the pieces drop.
  */
 public class BlockArmorStationSC extends Block {
 
     @SideOnly(Side.CLIENT)
-    private IIcon top, topOn, front, side, bottom;
+    private IIcon top, topOn, front, side, back, bottom;
 
     public BlockArmorStationSC() {
         super(Material.iron);
@@ -155,6 +156,7 @@ public class BlockArmorStationSC extends Block {
         topOn = register.registerIcon(Reference.ASSETS + ":armorStationTopOn");
         front = register.registerIcon(Reference.ASSETS + ":armorStationFront");
         side = register.registerIcon(Reference.ASSETS + ":armorStationSide");
+        back = register.registerIcon(Reference.ASSETS + ":armorStationBack");
         bottom = register.registerIcon(Reference.ASSETS + ":armorStationBottom");
     }
 
@@ -162,7 +164,7 @@ public class BlockArmorStationSC extends Block {
     @Override
     @SideOnly(Side.CLIENT)
     public IIcon getIcon(int face, int meta) {
-        return face == 1 ? top : face == 0 ? bottom : face == 3 ? front : side;
+        return face == 1 ? top : face == 0 ? bottom : face == 3 ? front : face == 2 ? back : side;
     }
 
     @Override
@@ -179,6 +181,6 @@ public class BlockArmorStationSC extends Block {
         if (face == 0) {
             return bottom;
         }
-        return face == st.getFacing().ordinal() ? front : side;
+        return face == st.getFacing().ordinal() ? front : face == st.getFacing().getOpposite().ordinal() ? back : side;
     }
 }

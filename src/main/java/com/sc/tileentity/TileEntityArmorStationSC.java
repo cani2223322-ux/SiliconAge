@@ -19,6 +19,7 @@ import net.minecraft.util.AxisAlignedBB;
 import net.minecraftforge.common.util.ForgeDirection;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.FluidTank;
 import net.minecraftforge.fluids.FluidTankInfo;
 import net.minecraftforge.fluids.IFluidHandler;
 
@@ -34,7 +35,12 @@ import net.minecraftforge.fluids.IFluidHandler;
  * Four module slots (UpgradeType, as a machine's): Overclocker (gas and charging x1/0.7 each, up to
  * MAX_OVERCLOCKERS; pumping EU x1.6 a tick, as a machine's EU/t), Transformer (input one tier up
  * each - and the charge rate follows the input voltage), Universal Transformer (any voltage),
- * Energy Storage (+10 000 EU of buffer). Nothing else goes in. The modules ride in the item.
+ * Energy Storage (+10 000 EU of buffer), Tank Extension (+8 000 mB to every tank, up to 4). Nothing
+ * else goes in. The modules ride in the item.
+ * Seven inner tanks, one per gas (TANK_CAPACITY each): pipes push into them (fill), the station
+ * pulls into them from the containers beside it, and the armour is filled out of them. A tank
+ * takes only its own gas; pipes can't drain the station. The screen's x pours a tank out for EU
+ * (as a machine's). The tanks ride in the item; the sides of the block show their levels.
  */
 public class TileEntityArmorStationSC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler {
 
@@ -54,6 +60,14 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     public static final int ST_IDLE = 0, ST_WORKING = 1, ST_FULL = 2, ST_NO_GAS = 3, ST_NO_ENERGY = 4, ST_OFF = 5;
     /** All gases switched on. */
     public static final int ALL_GASES = (1 << Gas.values().length) - 1;
+    private static final int GASES = Gas.values().length;
+    /** Each gas's inner tank, mB (+ UpgradeType.TANK_PER_UPGRADE per Tank Extension, up to MAX_TANK_UPGRADES). */
+    public static final int TANK_CAPACITY = 16000;
+    public static final int MAX_TANK_CAPACITY = TANK_CAPACITY + UpgradeType.MAX_TANK_UPGRADES * UpgradeType.TANK_PER_UPGRADE;
+    /** NBT key of the tanks (gas key -> mB): in the world save, and in the station's item. */
+    public static final String TANKS_KEY = "StationTanks", ITEM_TANKS_KEY = "StationTanksSC";
+    /** The block's side windows: levels 0..WINDOW_LEVELS, sent to clients at most every WINDOW_EVERY ticks, only on change. */
+    public static final int WINDOW_LEVELS = 15, WINDOW_EVERY = 20;
 
     /** Slot i holds the piece of ItemArmor.armorType i (0 helmet .. 3 boots); FIRST_UPGRADE_SLOT.. the modules. */
     private final ItemStack[] slots = new ItemStack[ALL_SLOTS];
@@ -65,9 +79,16 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     private boolean active;
     /** Screen: per gas, in the slots and on the players on top: [gas] amount / capacity (client copy too). */
     private final int[] shownAmount = new int[Gas.values().length], shownCap = new int[Gas.values().length];
+    /** The inner tanks, by Gas.ordinal(). */
+    private final FluidTank[] tanks = new FluidTank[GASES];
+    /** Clients: the window levels last received; the server: the levels last sent (null - nothing sent yet). */
+    private byte[] windowLevels = new byte[GASES], sentLevels;
 
     public TileEntityArmorStationSC() {
         super(Tier.MV);
+        for (int i = 0; i < GASES; i++) {
+            tanks[i] = new FluidTank(TANK_CAPACITY);
+        }
     }
 
     // ------------------------------------------------------------------ state
@@ -151,14 +172,14 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     // ------------------------------------------------------------------ modules
 
-    /** What the module slots take: Overclocker, Transformer, Universal Transformer, Energy Storage. */
+    /** What the module slots take: Overclocker, Transformer, Universal Transformer, Energy Storage, Tank Extension. */
     public static boolean acceptsModule(ItemStack s) {
         if (s == null || !(s.getItem() instanceof com.sc.item.ItemUpgradeSC)) {
             return false;
         }
         UpgradeType t = com.sc.item.ItemUpgradeSC.typeOf(s);
         return t == UpgradeType.OVERCLOCKER || t == UpgradeType.TRANSFORMER || t == UpgradeType.UNIVERSAL_TRANSFORMER
-                || t == UpgradeType.ENERGY_STORAGE;
+                || t == UpgradeType.ENERGY_STORAGE || t == UpgradeType.TANK_EXTENSION;
     }
 
     /** Modules of a kind in the slots (Overclockers count up to MAX_OVERCLOCKERS, the rest up to UpgradeType.MAX_EFFECTIVE). */
@@ -262,6 +283,127 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         }
     }
 
+    // ------------------------------------------------------------------ the inner tanks
+
+    /** Every tank's size: TANK_CAPACITY + 8000 mB per Tank Extension (up to 4), as a machine's. */
+    public int tankCapacity() {
+        return TANK_CAPACITY + Math.min(UpgradeType.MAX_TANK_UPGRADES, upgradeCount(UpgradeType.TANK_EXTENSION)) * UpgradeType.TANK_PER_UPGRADE;
+    }
+
+    /**
+     * The tanks follow the modules. Taking a Tank Extension out pours nothing away: a tank then
+     * holding more than it can takes nothing in until it has been used down (as a machine's).
+     */
+    private void syncTankCapacity() {
+        int c = tankCapacity();
+        if (tanks[0].getCapacity() != c) {
+            for (FluidTank t : tanks) {
+                t.setCapacity(c);
+            }
+        }
+    }
+
+    public FluidTank getTank(Gas g) {
+        syncTankCapacity();
+        return tanks[g.ordinal()];
+    }
+
+    public int tankAmount(Gas g) {
+        return tanks[g.ordinal()].getFluidAmount();
+    }
+
+    /** Puts up to `mb` of `g` into its own tank (nothing past the capacity). @return mB that went (or would go) in */
+    public int fillTank(Gas g, int mb, boolean doFill) {
+        Fluid f = g == null ? null : g.fluidOf();
+        if (f == null || mb <= 0) {
+            return 0;
+        }
+        int n = TileEntityMachineSC.safeFill(getTank(g), new FluidStack(f, mb), doFill);
+        if (doFill && n > 0) {
+            markDirty();
+        }
+        return n;
+    }
+
+    /** EU to pour a tank out: 1 per UpgradeType.CLEAR_MB_PER_EU mB (as a machine's). */
+    public int clearCost(Gas g) {
+        return (tankAmount(g) + UpgradeType.CLEAR_MB_PER_EU - 1) / UpgradeType.CLEAR_MB_PER_EU;
+    }
+
+    /** The screen's x: the tank is emptied for EU from the buffer - only if it can pay it all. */
+    public boolean clearTank(Gas g) {
+        int cost = clearCost(g);
+        if (tankAmount(g) <= 0 || getEnergyStored() < cost) {
+            return false;
+        }
+        removeEnergy(cost);
+        tanks[g.ordinal()].setFluid(null);
+        markDirty();
+        return true;
+    }
+
+    /** Clients (the screen's sync): a tank's contents - the gas is the tank's own. */
+    public void setTankClient(int gas, int amount) {
+        Fluid f = Gas.values()[gas].fluidOf();
+        tanks[gas].setFluid(amount > 0 && f != null ? new FluidStack(f, amount) : null);
+    }
+
+    /** The windows' levels now: 0 empty, 1..WINDOW_LEVELS (any gas at all shows at least 1). */
+    public byte[] currentWindowLevels() {
+        byte[] out = new byte[GASES];
+        int cap = Math.max(1, tankCapacity());
+        for (Gas g : Gas.values()) {
+            int a = tankAmount(g);
+            out[g.ordinal()] = (byte) (a <= 0 ? 0 : Math.max(1, Math.min(WINDOW_LEVELS, (int) (((long) a * WINDOW_LEVELS + cap - 1) / cap))));
+        }
+        return out;
+    }
+
+    /** Clients: a window's level (0..WINDOW_LEVELS), as last sent. */
+    public int windowLevel(Gas g) {
+        return windowLevels[g.ordinal()];
+    }
+
+    /** Server, every WINDOW_EVERY ticks: the window levels go to the clients only when they changed. */
+    private void refreshWindows() {
+        byte[] now = currentWindowLevels();
+        if (sentLevels == null || !java.util.Arrays.equals(now, sentLevels)) {
+            sentLevels = now;
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
+    }
+
+    /** The tanks as NBT (gas key -> mB, only the gases there are). */
+    private NBTTagCompound tanksTag() {
+        NBTTagCompound t = new NBTTagCompound();
+        for (Gas g : Gas.values()) {
+            if (tankAmount(g) > 0) {
+                t.setInteger(g.key(), tankAmount(g));
+            }
+        }
+        return t;
+    }
+
+    /** The tank amounts saved in `tag` (by Gas.ordinal(), 0 where none) - also for the item's tooltip. */
+    public static int[] tankAmountsOf(NBTTagCompound tag) {
+        int[] out = new int[GASES];
+        for (Gas g : Gas.values()) {
+            if (tag != null && tag.hasKey(g.key())) {
+                out[g.ordinal()] = Math.max(0, Math.min(MAX_TANK_CAPACITY, tag.getInteger(g.key())));
+            }
+        }
+        return out;
+    }
+
+    /** Sets the tanks to what `tag` holds (an old station without the tag: empty tanks). */
+    private void loadTanks(NBTTagCompound tag) {
+        int[] a = tankAmountsOf(tag);
+        for (Gas g : Gas.values()) {
+            Fluid f = g.fluidOf();
+            tanks[g.ordinal()].setFluid(a[g.ordinal()] > 0 && f != null ? new FluidStack(f, a[g.ordinal()]) : null);
+        }
+    }
+
     // ------------------------------------------------------------------ the work
 
     @Override
@@ -275,6 +417,10 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             return;
         }
         modulesChanged();                                  // also after a hopper / another mod took a module out
+        syncTankCapacity();
+        if (worldObj.getTotalWorldTime() % WINDOW_EVERY == 0) {
+            refreshWindows();
+        }
         if (worldObj.getTotalWorldTime() % EVERY != 0) {
             return;
         }
@@ -302,30 +448,32 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             removeEnergy(start - budget);
             did = true;
         }
+        boolean pulled = false;
         if (fillGases) {
             for (Gas g : Gas.values()) {
                 if (!gasEnabled(g)) {
-                    continue;
+                    continue;                              // switched off: neither pulled in nor filled
                 }
+                pulled |= pullIntoTank(g, gasPerTick() * EVERY) > 0;
                 int need = need(g, on);
                 if (need <= 0) {
                     continue;
                 }
                 needGas = true;
-                int affordable = affordableGas(getEnergyStored());
-                if (affordable <= 0) {
+                if (tankAmount(g) <= 0) {
+                    continue;
+                }
+                if (affordableGas(getEnergyStored()) <= 0) {
                     starved = true;
                     continue;
                 }
-                int moved = pullGas(g, Math.min(Math.min(need, gasPerTick() * EVERY), affordable), on);
-                if (moved > 0) {
-                    removeEnergy(gasCost(moved));
+                if (fillFromTank(g, gasPerTick() * EVERY, on) > 0) {
                     gotGas = true;
                     did = true;
                 }
             }
         }
-        if (did) {
+        if (did || pulled) {
             markDirty();
         }
         status = did ? ST_WORKING : starved || (needEu && getEnergyStored() <= 0) ? ST_NO_ENERGY
@@ -410,21 +558,25 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         for (int r : slotRoom(g)) {
             sum += r;
         }
-        for (EntityPlayer p : on) {
+        for (EntityPlayer p : on == null ? java.util.Collections.<EntityPlayer>emptyList() : on) {
             sum += Math.max(0, ArmorGasSC.suitCapacity(p, g) - ArmorGasSC.suitAmount(p, g));
         }
         return (int) Math.min(Integer.MAX_VALUE, sum);
     }
 
-    /** Pulls up to `want` mB of `g` out of the fluid handlers beside the station into the armour. @return mB moved */
-    private int pullGas(Gas g, int want, List<EntityPlayer> on) {
+    /**
+     * Pulls up to `want` mB of `g` out of the fluid handlers beside the station into its own tank
+     * (up to the tank's room - not just what the armour lacks). @return mB moved
+     */
+    private int pullIntoTank(Gas g, int want) {
         Fluid fluid = g.fluidOf();
         if (fluid == null || want <= 0) {
             return 0;
         }
         int got = 0;
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
-            if (got >= want) {
+            int room = fillTank(g, want - got, false);    // never take more than fits
+            if (room <= 0) {
                 break;
             }
             int x = xCoord + dir.offsetX, y = yCoord + dir.offsetY, z = zCoord + dir.offsetZ;
@@ -432,15 +584,12 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
                 continue;
             }
             TileEntity te = worldObj.getTileEntity(x, y, z);
-            if (!(te instanceof IFluidHandler) || te instanceof TileEntityArmorStationSC) {
+            if (!(te instanceof IFluidHandler) || te instanceof TileEntityArmorStationSC
+                    || te instanceof TileEntityMachineSC || te instanceof TileEntityGeneratorSC) {   // not a machine's or a reactor's own feed
                 continue;
             }
             IFluidHandler h = (IFluidHandler) te;
             ForgeDirection from = dir.getOpposite();
-            int room = Math.min(want - got, need(g, on));   // never take more than fits
-            if (room <= 0) {
-                break;
-            }
             FluidStack test = h.drain(from, new FluidStack(fluid, room), false);
             if (test == null || test.amount <= 0 || test.getFluid() != fluid) {
                 continue;
@@ -449,7 +598,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             if (real == null || real.amount <= 0) {
                 continue;
             }
-            int put = putGas(g, Math.min(real.amount, room), on);
+            int put = fillTank(g, Math.min(real.amount, room), true);
             int rest = real.amount - put;
             if (rest > 0) {                                // a handler that gave more than asked: give it back
                 int back = h.fill(from, new FluidStack(fluid, rest), true);
@@ -461,6 +610,24 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             got += put;
         }
         return got;
+    }
+
+    /**
+     * Fills the armour in the slots and on the players on top with up to `max` mB of `g` out of its
+     * tank, as far as the buffer pays the pumps (gasCost). @return mB moved (the tank lost as much)
+     */
+    public int fillFromTank(Gas g, int max, List<EntityPlayer> on) {
+        int n = Math.min(Math.min(max, tankAmount(g)), Math.min(need(g, on), affordableGas(getEnergyStored())));
+        if (n <= 0) {
+            return 0;
+        }
+        int put = putGas(g, n, on);
+        if (put > 0) {
+            getTank(g).drain(put, true);
+            removeEnergy(gasCost(put));
+            markDirty();
+        }
+        return put;
     }
 
     /** Puts `mb` of `g` into the pieces in the slots (chestplate first), then the suits on top. @return mB put */
@@ -622,27 +789,24 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     // ------------------------------------------------------------------ gases pushed in by pipes
 
+    /** Pipes push gases into the tanks (each only its own gas; gasPerTick() a tick per gas, however often they call). */
     @Override
     public int fill(ForgeDirection from, FluidStack resource, boolean doFill) {
         Gas g = resource == null ? null : Gas.of(resource.getFluid());
-        if (g == null || worldObj == null || !fillGases || !gasEnabled(g) || !switchedOn()) {
+        if (g == null || resource.amount <= 0) {
             return 0;
         }
-        List<EntityPlayer> on = standing();
-        int n = Math.min(resource.amount, Math.min(need(g, on), affordableGas(getEnergyStored())));
-        long now = worldObj.getTotalWorldTime();
-        n = Math.min(n, pipeLeft(g, now));                 // pipes: gasPerTick() a tick per gas, however often they call
-        if (n <= 0) {
-            return 0;
+        int n = fillTank(g, resource.amount, false);
+        long now = worldObj != null ? worldObj.getTotalWorldTime() : 0L;
+        if (worldObj != null) {
+            n = Math.min(n, pipeLeft(g, now));
         }
-        if (!doFill) {
-            return n;
+        if (n <= 0 || !doFill) {
+            return Math.max(0, n);
         }
-        int put = putGas(g, n, on);
-        if (put > 0) {
+        int put = fillTank(g, n, true);
+        if (put > 0 && worldObj != null) {
             pipeUsed(g, now, put);
-            removeEnergy(gasCost(put));
-            markDirty();
         }
         return put;
     }
@@ -686,9 +850,14 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         return false;
     }
 
+    /** The seven tanks (read-only for pipes: the station is a consumer, drain gives nothing). */
     @Override
     public FluidTankInfo[] getTankInfo(ForgeDirection from) {
-        return new FluidTankInfo[0];
+        FluidTankInfo[] out = new FluidTankInfo[GASES];
+        for (Gas g : Gas.values()) {
+            out[g.ordinal()] = getTank(g).getInfo();
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ the item keeps the energy, the settings and the modules
@@ -697,19 +866,36 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     private boolean upgradesInItem;
     /** World tick writeToItem() ran in: a getDrops() from another tick (another mod asking) mustn't stick. */
     private long upgradesInItemTick = -1;
+    /** Set once the tanks went into the dropped item (same tick rule): breakBlock empties them here. */
+    private boolean tanksInItem;
 
     /** Whether breakBlock should leave the module slots alone (they're in the dropped item). */
     public boolean upgradesInItem() {
-        return upgradesInItem && (worldObj == null || upgradesInItemTick == worldObj.getTotalWorldTime());
+        return upgradesInItem && sameTick();
+    }
+
+    /** Whether breakBlock should empty the tanks (they're in the dropped item). */
+    public boolean tanksInItem() {
+        return tanksInItem && sameTick();
+    }
+
+    private boolean sameTick() {
+        return worldObj == null || upgradesInItemTick == worldObj.getTotalWorldTime();
     }
 
     /**
      * Breaking: what drops loose, taken out of the slots - the armour pieces always, the modules
-     * only when they didn't go into the item (writeToItem in the same tick).
+     * only when they didn't go into the item (writeToItem in the same tick). The tanks that went
+     * into the item are emptied here, so nothing is left behind to count twice.
      */
     public java.util.List<ItemStack> takeLooseContents() {
         java.util.List<ItemStack> out = new java.util.ArrayList<ItemStack>();
         boolean modulesKept = upgradesInItem();
+        if (tanksInItem()) {
+            for (FluidTank t : tanks) {
+                t.setFluid(null);
+            }
+        }
         for (int i = 0; i < ALL_SLOTS; i++) {
             if (slots[i] == null || (modulesKept && i >= FIRST_UPGRADE_SLOT)) {
                 continue;
@@ -760,6 +946,11 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             nbt.setBoolean("NoGases", !fillGases);
             nbt.setInteger("GasMask", gasMask);
         }
+        NBTTagCompound t = tanksTag();
+        tanksInItem = !t.hasNoTags();
+        if (tanksInItem) {
+            nbt.setTag(ITEM_TANKS_KEY, t);
+        }
         return nbt;
     }
 
@@ -779,6 +970,10 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         if (nbt.hasKey("GasMask")) {
             fillGases = !nbt.getBoolean("NoGases");
             gasMask = nbt.getInteger("GasMask") & ALL_GASES;
+        }
+        if (nbt.hasKey(ITEM_TANKS_KEY)) {                 // after the modules: a Tank Extension sizes the tanks first
+            syncTankCapacity();
+            loadTanks(nbt.getCompoundTag(ITEM_TANKS_KEY));
         }
         markDirty();
     }
@@ -806,6 +1001,8 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
                 slots[slot] = ItemStack.loadItemStackFromNBT(t);
             }
         }
+        loadTanks(nbt.hasKey(TANKS_KEY) ? nbt.getCompoundTag(TANKS_KEY) : null);     // an older station: empty tanks
+        syncTankCapacity();
         lastSinkKey = sinkKey();                           // loaded before the tile joins the net: nothing to re-announce
     }
 
@@ -826,6 +1023,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             }
         }
         nbt.setTag("Items", list);
+        nbt.setTag(TANKS_KEY, tanksTag());
     }
 
     @Override
@@ -833,18 +1031,25 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         NBTTagCompound nbt = new NBTTagCompound();
         nbt.setBoolean("StationActive", active);
         nbt.setInteger("Facing", facing.ordinal());
+        nbt.setByteArray("Lv", currentWindowLevels());   // the side windows
         return new net.minecraft.network.play.server.S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 0, nbt);
     }
 
     @Override
     public void onDataPacket(net.minecraft.network.NetworkManager manager, net.minecraft.network.play.server.S35PacketUpdateTileEntity pkt) {
         NBTTagCompound nbt = pkt.func_148857_g();
+        boolean wasActive = active;
+        ForgeDirection wasFacing = facing;
         active = nbt.getBoolean("StationActive");
         ForgeDirection f = ForgeDirection.getOrientation(nbt.getInteger("Facing"));
         if (f.offsetY == 0 && f != ForgeDirection.UNKNOWN) {
             facing = f;
         }
-        if (worldObj != null) {
+        byte[] lv = nbt.getByteArray("Lv");
+        if (lv.length == GASES) {
+            windowLevels = lv;                            // the windows: ArmorStationRendererSC draws them, no chunk re-render
+        }
+        if (worldObj != null && (wasActive != active || wasFacing != facing)) {
             worldObj.markBlockRangeForRenderUpdate(xCoord, yCoord, zCoord, xCoord, yCoord, zCoord);
         }
     }

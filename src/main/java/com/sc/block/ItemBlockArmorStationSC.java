@@ -11,7 +11,7 @@ import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 
-/** The Armour Service Station as an item: what it does (Shift), how to use it (Ctrl), the energy and the modules it kept. */
+/** The Armour Service Station as an item: what it does and what its tanks hold (Shift), how to use it (Ctrl), the energy and the modules it kept. */
 public class ItemBlockArmorStationSC extends ItemBlock {
 
     public ItemBlockArmorStationSC(Block block) {
@@ -34,10 +34,22 @@ public class ItemBlockArmorStationSC extends ItemBlock {
             }
         }
         PickaxeOnlySC.tooltip(list);
+        StringBuilder tanks = new StringBuilder();                 // Shift: what the tanks hold (only the gases there are)
+        if (nbt != null && nbt.hasKey(TileEntityArmorStationSC.ITEM_TANKS_KEY)) {
+            int[] a = TileEntityArmorStationSC.tankAmountsOf(nbt.getCompoundTag(TileEntityArmorStationSC.ITEM_TANKS_KEY));
+            for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+                if (a[g.ordinal()] > 0) {
+                    tanks.append('\n').append(Lang.tr("sc.armorStation.tooltip.tank", Lang.tr("sc.armorStation.gas." + g.key()), a[g.ordinal()]));
+                }
+            }
+        }
         com.sc.util.TooltipSC.more(list,
                 Lang.tr("sc.armorStation.details", TileEntityArmorStationSC.GAS_PER_TICK, TileEntityArmorStationSC.MB_PER_EU)
+                        + "\n" + Lang.tr("sc.armorStation.tanks.tooltip", TileEntityArmorStationSC.TANK_CAPACITY,
+                        com.sc.machine.UpgradeType.TANK_PER_UPGRADE)
                         + "\n" + Lang.tr("sc.armorStation.modules.tooltip", TileEntityArmorStationSC.MAX_OVERCLOCKERS,
-                        com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE),
+                        com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE)
+                        + (tanks.length() > 0 ? "\n" + Lang.tr("sc.armorStation.tooltip.tanks") + tanks : ""),
                 Lang.tr("sc.armorStation.howto"));
     }
 }
