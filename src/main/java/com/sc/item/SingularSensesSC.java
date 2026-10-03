@@ -192,6 +192,7 @@ public final class SingularSensesSC {
         int r = ArmorFeature.SCANNER_RADIUS;
         int cx = MathHelper.floor_double(p.posX), cy = MathHelper.floor_double(p.posY), cz = MathHelper.floor_double(p.posZ);
         List<int[]> blocks = capScan(scanBlocks(p.worldObj, cx, cy, cz, r, 4096), ArmorFeature.SCANNER_MAX_BLOCKS);
+        com.sc.bridge.BridgeFarSC.noteFinds(p, blocks);                 // the bridge link's «Находки сканера» (chests first: capScan's order)
         int[] b = new int[blocks.size() * 4];
         for (int i = 0; i < blocks.size(); i++) {
             int[] o = blocks.get(i);

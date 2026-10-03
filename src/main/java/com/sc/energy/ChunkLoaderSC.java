@@ -29,6 +29,13 @@ public class ChunkLoaderSC implements ForgeChunkManager.LoadingCallback {
                 } else {
                     ForgeChunkManager.releaseTicket(t);
                 }
+            } else if ("bridgeRemote".equals(t.getModData().getString("Kind"))) {
+                // «Дистанционный режим»: the controller keeps its own chunk while the mode is on
+                if (te instanceof com.sc.tileentity.TileEntityBridgeControllerSC && t.getModData().getInteger("dim") == world.provider.dimensionId) {
+                    ((com.sc.tileentity.TileEntityBridgeControllerSC) te).adoptRemoteTicket(t);
+                } else {
+                    ForgeChunkManager.releaseTicket(t);
+                }
             } else if ("quarry".equals(t.getModData().getString("Kind"))) {
                 if (te instanceof TileEntityQuarrySC) {
                     ((TileEntityQuarrySC) te).adoptTicket(t);

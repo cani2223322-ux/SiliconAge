@@ -851,6 +851,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             return com.sc.item.ItemWrenchSC.charge(s, max);
         }
+        if (com.sc.item.ItemBridgeRemoteSC.isRemote(s)) {
+            return com.sc.item.ItemBridgeRemoteSC.charge(s, max);
+        }
         if (com.sc.item.ItemBatterySC.isBattery(s)) {
             return com.sc.item.ItemBatterySC.charge(s, max);
         }
@@ -877,6 +880,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         }
         if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             return com.sc.item.ItemWrenchSC.tierOf(s).chargeTier.ordinal() <= block.ordinal();
+        }
+        if (com.sc.item.ItemBridgeRemoteSC.isRemote(s)) {
+            return com.sc.item.ItemBridgeRemoteSC.tierOf(s).ordinal() <= block.ordinal();
         }
         if (com.sc.item.ItemBatterySC.isBattery(s)) {
             return com.sc.item.ItemBatterySC.tierOf(s).ordinal() <= block.ordinal();
@@ -1074,7 +1080,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     public static boolean isChargeable(ItemStack stack) {
         return stack != null && (stack.getItem() instanceof ItemWeaponSC || stack.getItem() instanceof com.sc.item.ItemArmorSC
                 || stack.getItem() instanceof com.sc.item.ItemBladeSC || stack.getItem() instanceof com.sc.item.ItemDrillSC
-                || com.sc.item.ItemWrenchSC.isElectric(stack) || com.sc.item.ItemBatterySC.isBattery(stack));
+                || com.sc.item.ItemWrenchSC.isElectric(stack) || com.sc.item.ItemBatterySC.isBattery(stack)
+                || com.sc.item.ItemBridgeRemoteSC.isRemote(stack));
     }
 
     // ---- NBT ----

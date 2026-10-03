@@ -850,6 +850,52 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         SingularLevel.setBranch(donor, 5, SingularLevel.BRANCH_NONE);
     }
 
+    // ------------------------------------------------------------------ the bridge link (docs/plan-ground-bridge.md §8, «Связь»)
+
+    /** The Armour Link Modules in a player's inventory. */
+    public static int linkModules(EntityPlayer p) {
+        int n = 0;
+        for (ItemStack s : p.inventory.mainInventory) {
+            if (s != null && s.getItem() instanceof com.sc.item.ItemBridgeLinkModuleSC) {
+                n += s.stackSize;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * «Связь»: the Singular helmet in the helmet slot takes an Armour Link Module from the player's inventory;
+     * a helmet that has it already forgets its linked bridges instead. @return the chat key
+     */
+    public String linkModule(EntityPlayer p) {
+        ItemStack helmet = getStackInSlot(com.sc.util.ArmorGasSC.HELMET);
+        if (!SingularLevel.isSingular(helmet)) {
+            return "sc.singStation.link.nohelmet";
+        }
+        if (isLocked(com.sc.util.ArmorGasSC.HELMET)) {
+            return "sc.singStation.err.busy";
+        }
+        if (com.sc.bridge.BridgeItemDataSC.hasModule(helmet)) {
+            com.sc.bridge.BridgeItemDataSC.clearLinks(helmet);
+            markDirty();
+            return "sc.singStation.link.cleared";
+        }
+        ItemStack[] inv = p.inventory.mainInventory;
+        for (int i = 0; i < inv.length; i++) {
+            if (inv[i] != null && inv[i].getItem() instanceof com.sc.item.ItemBridgeLinkModuleSC) {
+                if (!p.capabilities.isCreativeMode && --inv[i].stackSize <= 0) {
+                    inv[i] = null;
+                }
+                com.sc.bridge.BridgeItemDataSC.installModule(helmet);
+                p.inventoryContainer.detectAndSendChanges();
+                markDirty();
+                worldObj.playSoundEffect(xCoord + 0.5, yCoord + 1, zCoord + 0.5, "random.anvil_use", 0.5F, 1.6F);
+                return "sc.singStation.link.done";
+            }
+        }
+        return "sc.singStation.link.nomodule";
+    }
+
     // ------------------------------------------------------------------ Ф3 branches, the colour scheme
 
     /** Ф3: the chestplate in the slot takes branch `choice` at `level` (3 / 5) for BRANCH_SM mB of singular matter. */

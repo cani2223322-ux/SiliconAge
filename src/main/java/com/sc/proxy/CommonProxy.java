@@ -33,6 +33,18 @@ public class CommonProxy {
     public void bridgeState(int x, int y, int z, net.minecraft.nbt.NBTTagCompound state) {
     }
 
+    /** A right-click with a Bridge / Space Remote: its screen (client only). */
+    public void openRemote() {
+    }
+
+    /** Sneak + right-click with a Coordinator: its name screen (client only). */
+    public void openCoordinator() {
+    }
+
+    /** The server's answer to a remote's screen / the armour's «Мост» tab (client only). */
+    public void bridgeFarState(net.minecraft.nbt.NBTTagCompound state) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

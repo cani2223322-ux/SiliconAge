@@ -1361,6 +1361,10 @@ public final class BookContent {
         }
         parts.add(new ItemStack(ModBlocks.gravityCoil));
         parts.add(new ItemStack(ModBlocks.gravStabiliser));
+        parts.add(new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND));
+        parts.add(new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE));
+        parts.add(new ItemStack(com.sc.init.ModItems.coordinator));
+        parts.add(new ItemStack(com.sc.init.ModItems.bridgeLinkModule));
         e.add(BookEl.title(Lang.tr("sc.manual.bridge.title"))).add(BookEl.items(parts)).addAll(paras("sc.manual.bridge.about"));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.groundhead"))).add(BookEl.layers(bridgeLayers(5), new String[]{Lang.tr("sc.manual.bridge.front")}))
                 .addAll(paras("sc.manual.bridge.ground"));
@@ -1397,6 +1401,15 @@ public final class BookContent {
         e.add(BookEl.para(Lang.tr("sc.manual.bridge.cool", com.sc.bridge.BridgeMathSC.COOL_S, com.sc.bridge.BridgeMathSC.COOL_S / com.sc.bridge.BridgeMathSC.COOLER_SPEED)));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.coordhead"))).addAll(paras("sc.manual.bridge.coord"));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.modhead"))).addAll(paras("sc.manual.bridge.mod"));
+        // stage 2: remotes, the coordinator, the modes, access and consent, the Singular armour link
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.remotehead"))).add(BookEl.items(listOf(
+                new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND),
+                new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE),
+                new ItemStack(com.sc.init.ModItems.coordinator)))).addAll(paras("sc.manual.bridge.remote"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.modeshead"))).addAll(paras("sc.manual.bridge.modes"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.accesshead"))).addAll(paras("sc.manual.bridge.access"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.armourhead"))).add(BookEl.items(listOf(new ItemStack(com.sc.init.ModItems.bridgeLinkModule))))
+                .addAll(paras("sc.manual.bridge.armour"));
         e.add(BookEl.dim(Lang.tr("sc.manual.bridge.later")));
         e.about(parts.subList(0, com.sc.block.BlockBridgeSC.parts()).toArray(new ItemStack[0]));
         list.add(e);

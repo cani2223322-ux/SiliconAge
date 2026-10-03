@@ -33,6 +33,14 @@ public final class BridgeNetSC {
     public static void init() {
         CHANNEL.registerMessage(ActionHandler.class, Action.class, 0, Side.SERVER);
         CHANNEL.registerMessage(StateHandler.class, State.class, 1, Side.CLIENT);
+        CHANNEL.registerMessage(FarHandler.class, Far.class, 2, Side.SERVER);
+        CHANNEL.registerMessage(FarStateHandler.class, FarState.class, 3, Side.CLIENT);
+        CHANNEL.registerMessage(HudHandler.class, Hud.class, 4, Side.CLIENT);
+    }
+
+    /** A remote / the armour / a coordinator: one command (BridgeFarSC.F_*), no distance limit - the server checks the link. */
+    public static void sendFar(int src, int slot, int action, int[] values, String text) {
+        CHANNEL.sendToServer(new Far(src, slot, action, values, text));
     }
 
     public static void send(int x, int y, int z, int action, int[] values, String text) {
@@ -139,6 +147,140 @@ public final class BridgeNetSC {
         @Override
         public IMessage onMessage(State msg, MessageContext ctx) {
             com.sc.SCMod.proxy.bridgeState(msg.x, msg.y, msg.z, msg.state);
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------------------ stage 2: remotes, armour, the HUD
+
+    /** Client -> server: a remote in the hand (src 0), the helmet's link `slot` (src 1) or the held coordinator (src 2). */
+    public static class Far implements IMessage {
+        public int src, slot, action;
+        public int[] values = new int[0];
+        public String text = "";
+
+        public Far() {
+        }
+
+        public Far(int src, int slot, int action, int[] values, String text) {
+            this.src = src;
+            this.slot = slot;
+            this.action = action;
+            this.values = values == null ? new int[0] : values;
+            this.text = text == null ? "" : text;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            src = buf.readByte();
+            slot = buf.readByte();
+            action = buf.readByte();
+            int n = Math.min(16, buf.readByte() & 0xFF);
+            values = new int[n];
+            for (int i = 0; i < n; i++) {
+                values[i] = buf.readInt();
+            }
+            text = ByteBufUtils.readUTF8String(buf);
+            if (text.length() > 80) {
+                text = text.substring(0, 80);
+            }
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeByte(src);
+            buf.writeByte(slot);
+            buf.writeByte(action);
+            buf.writeByte(Math.min(16, values.length));
+            for (int i = 0; i < values.length && i < 16; i++) {
+                buf.writeInt(values[i]);
+            }
+            ByteBufUtils.writeUTF8String(buf, text.length() > 80 ? text.substring(0, 80) : text);
+        }
+    }
+
+    public static class FarHandler implements IMessageHandler<Far, IMessage> {
+        @Override
+        public IMessage onMessage(Far msg, MessageContext ctx) {
+            EntityPlayerMP p = ctx.getServerHandler().playerEntity;
+            NBTTagCompound out = BridgeFarSC.handle(p, msg.src, msg.slot, msg.action, msg.values, msg.text);
+            return out == null ? null : new FarState(out);
+        }
+    }
+
+    /** Server -> client: what a remote's screen / the «Мост» tab shows. */
+    public static class FarState implements IMessage {
+        public NBTTagCompound state;
+
+        public FarState() {
+        }
+
+        public FarState(NBTTagCompound state) {
+            this.state = state;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            state = ByteBufUtils.readTag(buf);
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            ByteBufUtils.writeTag(buf, state);
+        }
+    }
+
+    public static class FarStateHandler implements IMessageHandler<FarState, IMessage> {
+        @Override
+        public IMessage onMessage(FarState msg, MessageContext ctx) {
+            com.sc.SCMod.proxy.bridgeFarState(msg.state);
+            return null;
+        }
+    }
+
+    /** Server -> client: the opener's HUD line (the bridge's name, time left / total, stability, kind; open false - gone). */
+    public static class Hud implements IMessage {
+        public boolean open;
+        public String name = "";
+        public int left, total, stability, kind;
+
+        public Hud() {
+        }
+
+        public Hud(boolean open, String name, int left, int total, int stability, int kind) {
+            this.open = open;
+            this.name = name == null ? "" : name;
+            this.left = left;
+            this.total = total;
+            this.stability = stability;
+            this.kind = kind;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            open = buf.readBoolean();
+            name = ByteBufUtils.readUTF8String(buf);
+            left = buf.readInt();
+            total = buf.readInt();
+            stability = buf.readByte();
+            kind = buf.readByte();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeBoolean(open);
+            ByteBufUtils.writeUTF8String(buf, name.length() > 32 ? name.substring(0, 32) : name);
+            buf.writeInt(left);
+            buf.writeInt(total);
+            buf.writeByte(stability);
+            buf.writeByte(kind);
+        }
+    }
+
+    public static class HudHandler implements IMessageHandler<Hud, IMessage> {
+        @Override
+        public IMessage onMessage(Hud msg, MessageContext ctx) {
+            BridgeHudDataSC.set(msg.open, msg.name, msg.left, msg.total, msg.stability, msg.kind);
             return null;
         }
     }

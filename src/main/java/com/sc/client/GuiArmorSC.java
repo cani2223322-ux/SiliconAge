@@ -57,6 +57,56 @@ public class GuiArmorSC extends GuiScreen {
     private static final int BLADE_TAB = 4, MODE_TAB = 5, DRILL_TAB = 6, LIFE_TAB = 7;
     /** Stage 5: the Singular levels, branches, profiles and HUD (any Singular piece worn). */
     private static final int LEVEL_TAB = 8;
+    /** The Ground / Space Bridge's tab (a Singular helmet worn): its own screen, GuiArmorBridgeSC, with this window's tab row. */
+    public static final int BRIDGE_TAB = 9;
+
+    public GuiArmorSC() {
+    }
+
+    /** Opens on tab `tab` (GuiArmorBridgeSC's tab row). */
+    public GuiArmorSC(int tab) {
+        selectedPiece = tab;
+    }
+
+    /** The tabs this player has now (the same rule as initGui), for GuiArmorBridgeSC's tab row. */
+    public static List<Integer> tabsFor(net.minecraft.client.Minecraft mc) {
+        List<Integer> out = new ArrayList<Integer>();
+        for (int type = 0; type < 4; type++) {
+            if (ArmorLogicSC.piece(mc.thePlayer, type) != null) {
+                out.add(type);
+            }
+        }
+        if (BladeLogicSC.held(mc.thePlayer) != null) {
+            out.add(BLADE_TAB);
+        }
+        if (DrillLogicSC.held(mc.thePlayer) != null) {
+            out.add(DRILL_TAB);
+        }
+        if (ArmorLogicSC.piece(mc.thePlayer, 1) != null) {
+            out.add(MODE_TAB);
+        }
+        boolean any = false;
+        for (int t = 0; t < 4; t++) {
+            any |= ArmorLogicSC.piece(mc.thePlayer, t) != null;
+        }
+        if (any) {
+            out.add(LIFE_TAB);
+        }
+        if (com.sc.util.SingularLevel.wearsSingular(mc.thePlayer)) {
+            out.add(LEVEL_TAB);
+        }
+        if (com.sc.util.SingularLevel.isSingular(mc.thePlayer.getCurrentArmor(3))) {
+            out.add(BRIDGE_TAB);
+        }
+        return out;
+    }
+
+    /** A tab's caption. */
+    public static String tabLabel(int type) {
+        return type == BRIDGE_TAB ? Lang.tr("sc.bridge.armour.tab") : type == LEVEL_TAB ? Lang.tr("sc.levelgui.tab") : type == LIFE_TAB
+                ? Lang.tr("sc.lifegui.tab.short") : type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
+                : type == DRILL_TAB ? Lang.tr("sc.drillgui.tab") : Lang.tr("sc.armorhud.piece." + type);
+    }
     /** Level tab: branch buttons (level 3 A / B, level 5 A / B), profiles 0..2, "save current", the page switch, the HUD place. */
     private static final int LV_BR = 1020, LV_PROF = 1024, LV_SAVE = 1027, LV_PAGE = 1028, LV_HUD = 1029;
     private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002,
@@ -214,6 +264,13 @@ public class GuiArmorSC extends GuiScreen {
         if (com.sc.util.SingularLevel.wearsSingular(mc.thePlayer)) {
             tabs.add(LEVEL_TAB);
         }
+        if (com.sc.util.SingularLevel.isSingular(mc.thePlayer.getCurrentArmor(3))) {
+            tabs.add(BRIDGE_TAB);
+        }
+        if (selectedPiece == BRIDGE_TAB && tabs.contains(BRIDGE_TAB)) {
+            mc.displayGuiScreen(new GuiArmorBridgeSC());       // the bridge tab is its own screen
+            return;
+        }
         if (selectedPiece < 0 || !tabs.contains(selectedPiece)) {
             selectedPiece = tabs.isEmpty() ? -1 : tabs.get(0);
         }
@@ -230,8 +287,7 @@ public class GuiArmorSC extends GuiScreen {
         int tabW = n == 0 ? 70 : Math.max(24, Math.min(80, (winW - 8) / n - 2));   // eight tabs on a narrow screen
         int tx = width / 2 - n * (tabW + 2) / 2 + 1;
         for (int type : tabs) {
-            String label = type == LEVEL_TAB ? Lang.tr("sc.levelgui.tab") : type == LIFE_TAB ? Lang.tr("sc.lifegui.tab.short") : type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
-                    : type == DRILL_TAB ? Lang.tr("sc.drillgui.tab") : Lang.tr("sc.armorhud.piece." + type);
+            String label = tabLabel(type);
             GuiButton tab = new TextFitSC.Button(TAB_BASE + type, tx, top + 15, tabW, 16, label);
             tab.enabled = type != selectedPiece;                // the pressed-in one is the open tab
             buttonList.add(tab);
@@ -1842,6 +1898,10 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (b.id >= TAB_BASE && b.id < MODE_ID) {
             selectedPiece = b.id - TAB_BASE;
+            if (selectedPiece == BRIDGE_TAB) {
+                mc.displayGuiScreen(new GuiArmorBridgeSC());
+                return;
+            }
             initGui();
             return;
         }

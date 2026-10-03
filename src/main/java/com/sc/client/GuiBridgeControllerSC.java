@@ -46,6 +46,8 @@ public class GuiBridgeControllerSC extends GuiScreen {
             LABEL = 0xA8B4AC, DIM = 0x6E7A72, OK = 0x5AE66E, BAD = 0xFF6A5A, WARN = 0xFFE14D, BLUE = 0x8CB4FF;
     private static final int B_CHECK = 1, B_CALIB = 2, B_POWER = 3, B_PROBE = 4, B_TAKE = 5, B_BM_ADD = 6, B_BM_REN = 7, B_BM_DEL = 8,
             B_OPEN = 9, B_CLOSE = 10, B_DIM = 11, B_MODE = 20, B_CLEAR = 30, B_ACCESS = 40;
+    /** Stage 2: friends, «Дистанционный режим», «Привязать шлем», the name, the coordinators in the inventory. */
+    private static final int B_FRIEND_ADD = 41, B_REMOTE = 42, B_BIND = 43, B_RENAME = 44, B_FROM_COORD = 45, B_TO_COORD = 46;
     private static final int MODES = 6;
     private static final int BM_ROWS = 4, BM_Y = 131, BM_ROW_H = 9;
 
@@ -54,7 +56,12 @@ public class GuiBridgeControllerSC extends GuiScreen {
     private float k = 1F;
     private int left, top, vmx, vmy;
     private final List<Btn> btns = new ArrayList<Btn>();
-    private GuiTextField fx, fy, fz, fname;
+    private GuiTextField fx, fy, fz, fname, ffriend, fbridge;
+    private int seenRev = -1, armedFriend = -1;
+    private long armedFriendAt;
+    private boolean renamingBridge;
+    /** The friends' chips as last drawn: {x, y, w, index}. */
+    private final List<int[]> chips = new ArrayList<int[]>();
     private int selBm = -1, bmScroll, renaming = -1;
     private int dim, reqTimer, sendTimer;
     private String lastSent = "";
@@ -74,6 +81,10 @@ public class GuiBridgeControllerSC extends GuiScreen {
 
     public void setState(NBTTagCompound s) {
         st = s;
+        if (filled && s.getInteger("targetRev") != seenRev && seenRev >= 0) {
+            filled = false;                                   // the server took a coordinator's point: show it
+        }
+        seenRev = s.getInteger("targetRev");
         if (!filled && s.getBoolean("targetSet")) {
             int[] t = s.getIntArray("target");
             if (t.length == 4) {
@@ -110,6 +121,12 @@ public class GuiBridgeControllerSC extends GuiScreen {
         fname = field(110, BM_Y, 190, "");
         fname.setMaxStringLength(32);
         fname.setVisible(false);
+        String of = ffriend == null ? "" : ffriend.getText();
+        ffriend = field(206, 256, 92, of);
+        ffriend.setMaxStringLength(16);
+        fbridge = field(8, 4, 150, "");
+        fbridge.setMaxStringLength(32);
+        fbridge.setVisible(false);
         btns.clear();
         btns.add(new Btn(B_CHECK, 8, 162, 44, 12, "sc.bridge.gui.check"));
         btns.add(new Btn(B_CALIB, 56, 162, 44, 12, "sc.bridge.gui.calibrate"));
@@ -117,7 +134,9 @@ public class GuiBridgeControllerSC extends GuiScreen {
         for (int i = 0; i < MODES; i++) {
             btns.add(new Btn(B_MODE + i, 110 + (i % 3) * 64, 33 + (i / 3) * 13, 62, 11, "sc.bridge.gui.mode." + i));
         }
-        btns.add(new Btn(B_DIM, 180, 73, 122, 11, ""));
+        btns.add(new Btn(B_DIM, 150, 73, 80, 11, ""));
+        btns.add(new Btn(B_FROM_COORD, 232, 73, 34, 11, "sc.bridge.gui.fromcoord"));
+        btns.add(new Btn(B_TO_COORD, 268, 73, 34, 11, "sc.bridge.gui.tocoord"));
         btns.add(new Btn(B_PROBE, 110, 86, 124, 12, "sc.bridge.gui.probe"));
         btns.add(new Btn(B_TAKE, 238, 86, 64, 12, "sc.bridge.gui.take"));
         btns.add(new Btn(B_BM_ADD, 254, 120, 14, 10, ""));
@@ -128,7 +147,11 @@ public class GuiBridgeControllerSC extends GuiScreen {
         for (int i = 0; i < BridgeMathSC.GASES.length; i++) {
             btns.add(new Btn(B_CLEAR + i, 312 + i * 17 + 2, 104, 7, 7, ""));
         }
-        btns.add(new Btn(B_ACCESS, 262, 256, 150, 11, "sc.bridge.gui.access.owner"));
+        btns.add(new Btn(B_FRIEND_ADD, 300, 256, 12, 11, ""));
+        btns.add(new Btn(B_ACCESS, 316, 256, 96, 11, ""));
+        btns.add(new Btn(B_REMOTE, 206, 286, 102, 11, ""));
+        btns.add(new Btn(B_BIND, 312, 286, 100, 11, "sc.bridge.gui.bindhelmet"));
+        btns.add(new Btn(B_RENAME, 270, 4, 12, 10, ""));
         request();
     }
 
@@ -159,6 +182,8 @@ public class GuiBridgeControllerSC extends GuiScreen {
 
     @Override
     public void updateScreen() {
+        ffriend.updateCursorCounter();
+        fbridge.updateCursorCounter();
         fx.updateCursorCounter();
         fy.updateCursorCounter();
         fz.updateCursorCounter();
@@ -227,6 +252,27 @@ public class GuiBridgeControllerSC extends GuiScreen {
         fx.mouseClicked(x, y, button);
         fy.mouseClicked(x, y, button);
         fz.mouseClicked(x, y, button);
+        ffriend.mouseClicked(x, y, button);
+        if (renamingBridge) {
+            fbridge.mouseClicked(x, y, button);
+            if (!fbridge.isFocused()) {
+                renamingBridge = false;
+                fbridge.setVisible(false);
+            }
+        }
+        for (int[] c : chips) {
+            if (x >= c[0] && x < c[0] + c[2] && y >= c[1] && y < c[1] + 8 && has() && st.getBoolean("isOwner")) {
+                long now = System.currentTimeMillis();
+                if (armedFriend == c[3] && now - armedFriendAt < 2000) {
+                    act(TileEntityBridgeControllerSC.A_FRIEND_DEL, new int[]{c[3]}, null);
+                    armedFriend = -1;
+                } else {
+                    armedFriend = c[3];
+                    armedFriendAt = now;
+                }
+                return;
+            }
+        }
         if (renaming >= 0) {
             fname.mouseClicked(x, y, button);
             if (!fname.isFocused()) {
@@ -310,6 +356,31 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 }
                 return;
             case B_CLOSE: act(TileEntityBridgeControllerSC.A_CLOSE, null, null); return;
+            case B_FRIEND_ADD:
+                if (ffriend.getText().trim().length() > 0) {
+                    act(TileEntityBridgeControllerSC.A_FRIEND_ADD, null, ffriend.getText().trim());
+                    ffriend.setText("");
+                }
+                return;
+            case B_ACCESS: act(TileEntityBridgeControllerSC.A_ACCESS, null, null); return;
+            case B_REMOTE: act(TileEntityBridgeControllerSC.A_REMOTE_MODE, null, null); return;
+            case B_BIND: act(TileEntityBridgeControllerSC.A_BIND_HELMET, null, null); return;
+            case B_RENAME:
+                renamingBridge = true;
+                fbridge.setText(has() ? st.getString("name") : "");
+                fbridge.setVisible(true);
+                fbridge.setFocused(true);
+                return;
+            case B_FROM_COORD: act(TileEntityBridgeControllerSC.A_FROM_COORD, null, null); return;
+            case B_TO_COORD:
+                if (button == 1) {
+                    act(TileEntityBridgeControllerSC.A_COPY_COORD, null, null);
+                } else if (t != null) {
+                    int bm = selBm;
+                    String n = bm >= 0 && bm < bookmarks().tagCount() ? bookmarks().getCompoundTagAt(bm).getString("n") : "";
+                    act(TileEntityBridgeControllerSC.A_TO_COORD, t, n);
+                }
+                return;
             case B_DIM: {
                 NBTTagList d = has() ? st.getTagList("dims", 10) : new NBTTagList();
                 if (d.tagCount() == 0) {
@@ -343,6 +414,29 @@ public class GuiBridgeControllerSC extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) {
+        if (renamingBridge) {
+            if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
+                act(TileEntityBridgeControllerSC.A_NAME, null, fbridge.getText());
+                renamingBridge = false;
+                fbridge.setVisible(false);
+            } else if (key == Keyboard.KEY_ESCAPE) {
+                renamingBridge = false;
+                fbridge.setVisible(false);
+            } else {
+                fbridge.textboxKeyTyped(c, key);
+            }
+            return;
+        }
+        if (ffriend.isFocused()) {
+            if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
+                press(B_FRIEND_ADD, 0);
+                return;
+            }
+            if (key != Keyboard.KEY_ESCAPE) {
+                ffriend.textboxKeyTyped(c, key);
+                return;
+            }
+        }
         if (renaming >= 0) {
             if (key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) {
                 act(TileEntityBridgeControllerSC.A_BM_RENAME, new int[]{renaming}, fname.getText());
@@ -516,6 +610,16 @@ public class GuiBridgeControllerSC extends GuiScreen {
         if (renaming >= 0) {
             fname.drawTextBox();
         }
+        if (has()) {
+            ffriend.drawTextBox();
+            if (ffriend.getText().length() == 0 && !ffriend.isFocused()) {
+                small(Lang.tr("sc.bridge.gui.friend.hint"), 209, 258, 88, DIM);
+            }
+        }
+        if (renamingBridge) {
+            rect(6, 3, 260, 13, BG);
+            fbridge.drawTextBox();
+        }
         List<String> tip = has() ? tip() : null;
         GL11.glPopMatrix();
         if (tip != null && !tip.isEmpty()) {
@@ -539,7 +643,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 b.color = on ? OK : BAD;
             } else if (b.id >= B_MODE && b.id < B_MODE + MODES) {
                 b.enabled = false;
-                b.selected = b.id == B_MODE;                    // stage 1: «С базы» only
+                b.selected = b.id == B_MODE;                    // the controller opens «С базы»; ДР1-ДР5 - remotes and the armour
                 b.color = b.selected ? OK : TEXT;
             } else if (b.id == B_DIM) {
                 b.visible = space();
@@ -563,7 +667,27 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 b.clear = true;
                 b.selected = armedClear == i && System.currentTimeMillis() - armedAt < 2000;
             } else if (b.id == B_ACCESS) {
-                b.enabled = false;
+                boolean pub = has() && st.getInteger("access") == BridgeMathSC.ACCESS_PUBLIC;
+                b.enabled = has() && st.getBoolean("isOwner");
+                b.label = Lang.tr(pub ? "sc.bridge.gui.access.public" : "sc.bridge.gui.access.friends");
+                b.color = pub ? WARN : OK;
+            } else if (b.id == B_FRIEND_ADD) {
+                b.enabled = has() && st.getBoolean("isOwner") && ffriend.getText().trim().length() > 1;
+                b.label = "+";
+            } else if (b.id == B_REMOTE) {
+                boolean on = has() && st.getBoolean("remoteMode");
+                b.enabled = has() && st.getBoolean("trusted");
+                b.label = Lang.tr(on ? "sc.bridge.gui.remote.on" : "sc.bridge.gui.remote.off");
+                b.color = on ? BLUE : TEXT;
+            } else if (b.id == B_BIND) {
+                b.enabled = has() && st.getBoolean("trusted");
+            } else if (b.id == B_RENAME) {
+                b.enabled = has() && st.getBoolean("isOwner");
+                b.label = "✎";
+            } else if (b.id == B_FROM_COORD) {
+                b.enabled = a && has() && st.getInteger("coords") > 0;
+            } else if (b.id == B_TO_COORD) {
+                b.enabled = a && has() && st.getInteger("coords") > 0 && target() != null;
             } else if (b.id == B_PROBE) {
                 b.enabled = a && target() != null;
                 b.color = WARN;
@@ -590,7 +714,10 @@ public class GuiBridgeControllerSC extends GuiScreen {
         boolean sp = space();
         String title = !has() || !st.getBoolean("found") ? Lang.tr("sc.bridge.gui.title")
                 : Lang.tr(sp ? "sc.bridge.gui.title.space" : "sc.bridge.gui.title.ground");
-        fit(title, 8, 6, 260, sp ? BLUE : OK);
+        if (has() && st.getString("name").length() > 0) {
+            title = title + " «" + st.getString("name") + "»";
+        }
+        fit(title, 8, 6, 258, sp ? BLUE : OK);
         if (has() && st.getString("owner").length() > 0) {
             String o = Lang.tr("sc.bridge.gui.owner", st.getString("owner"));
             smallRight(o, W - 8, 7, LABEL);
@@ -678,9 +805,9 @@ public class GuiBridgeControllerSC extends GuiScreen {
         text("Y", 170, 61, LABEL);
         text("Z", 218, 61, LABEL);
         if (space()) {
-            small(Lang.tr("sc.bridge.gui.dim"), 110, 75, 68, LABEL);
+            small(Lang.tr("sc.bridge.gui.dim"), 110, 75, 38, LABEL);
         } else {
-            small(Lang.tr("sc.bridge.gui.yauto"), 110, 75, 190, DIM);
+            small(Lang.tr("sc.bridge.gui.yauto"), 110, 75, 120, DIM);
         }
         // the place check's answer
         if (st.hasKey("place")) {
@@ -814,6 +941,9 @@ public class GuiBridgeControllerSC extends GuiScreen {
 
     private void drawBottom() {
         text(Lang.tr("sc.bridge.gui.journal"), 8, 247, LABEL);
+        if (st.hasKey("last")) {
+            small(BridgeMsgSC.read(st.getCompoundTag("last")).text(), 52, 248, 148, WARN);
+        }
         NBTTagList j = st.getTagList("journal", 10);
         SimpleDateFormat f = new SimpleDateFormat("HH:mm");
         int lines = 6;
@@ -822,23 +952,37 @@ public class GuiBridgeControllerSC extends GuiScreen {
             String who = e.getString("p");
             String line = f.format(new Date(e.getLong("t"))) + " " + (who.length() > 0 ? who + " — " : "")
                     + BridgeMsgSC.read(e.getCompoundTag("m")).text();
-            small(line, 8, 257 + i * 7, 246, e.getBoolean("bad") ? BAD : TEXT);
+            small(line, 8, 257 + i * 7, 192, e.getBoolean("bad") ? BAD : TEXT);
         }
         if (j.tagCount() == 0) {
-            small(Lang.tr("sc.bridge.gui.journal.empty"), 8, 257, 246, DIM);
+            small(Lang.tr("sc.bridge.gui.journal.empty"), 8, 257, 192, DIM);
         }
-        text(Lang.tr("sc.bridge.gui.access"), 262, 247, LABEL);
-        small(Lang.tr("sc.bridge.gui.linked"), 262, 271, 150, DIM);
-        if (st.hasKey("last")) {
-            List<String> l = fontRendererObj.listFormattedStringToWidth(BridgeMsgSC.read(st.getCompoundTag("last")).text(), (int) (150 / 0.75F));
-            for (int i = 0; i < l.size() && i < 3; i++) {
-                small(l.get(i), 262, 279 + i * 7, 150, WARN);
+        rect(203, 245, 1, 53, EDGE);
+        text(Lang.tr("sc.bridge.gui.access2"), 206, 247, LABEL);
+        int[] lk = ints("links", 2);
+        smallRight(Lang.tr("sc.bridge.gui.linkedn", lk[0], lk[1]), 412, 248, lk[0] + lk[1] > 0 ? OK : DIM);
+        chips.clear();
+        NBTTagList fr = st.getTagList("friends", 8);
+        int cx2 = 206, cy2 = 269;
+        if (fr.tagCount() == 0) {
+            small(Lang.tr("sc.bridge.gui.friends.none"), 206, 270, 206, DIM);
+        }
+        for (int i = 0; i < fr.tagCount(); i++) {
+            String n = fr.getStringTagAt(i);
+            int w = (int) Math.ceil(fontRendererObj.getStringWidth(n + " ×") * 0.75F) + 4;
+            if (cx2 + w > 412) {
+                cx2 = 206;
+                cy2 += 9;
+                if (cy2 > 277) {
+                    small("...", 404, 278, 8, DIM);
+                    break;
+                }
             }
-        } else {
-            List<String> l = fontRendererObj.listFormattedStringToWidth(Lang.tr("sc.bridge.gui.hint"), (int) (150 / 0.75F));
-            for (int i = 0; i < l.size() && i < 3; i++) {
-                small(l.get(i), 262, 279 + i * 7, 150, DIM);
-            }
+            boolean armed = armedFriend == i && System.currentTimeMillis() - armedFriendAt < 2000;
+            rect(cx2, cy2, w, 8, armed ? 0xFF6A2A2A : 0xFF22302A);
+            small(n + " ×", cx2 + 2, cy2 + 1, w - 2, armed ? BAD : TEXT);
+            chips.add(new int[]{cx2, cy2, w, i});
+            cx2 += w + 2;
         }
     }
 
@@ -856,7 +1000,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
                     t.add(Lang.tr("sc.bridge.gui.mode." + (b.id - B_MODE)));
                     t.add("§7" + Lang.tr("sc.bridge.gui.mode." + (b.id - B_MODE) + ".hint"));
                     if (b.id != B_MODE) {
-                        t.add("§6" + Lang.tr("sc.bridge.gui.stage2"));
+                        t.add("§6" + Lang.tr("sc.bridge.gui.farmode"));
                     }
                 } else if (b.id >= B_CLEAR && b.id < B_CLEAR + BridgeMathSC.GASES.length) {
                     t.add(Lang.tr("sc.bridge.gui.clear"));
@@ -866,7 +1010,24 @@ public class GuiBridgeControllerSC extends GuiScreen {
                     t.add("§7" + Lang.tr("sc.bridge.gui.calibrate.hint", BridgeMathSC.CALIB_KR, eu(BridgeMathSC.CALIB_EU)));
                 } else if (b.id == B_ACCESS) {
                     t.add(Lang.tr("sc.bridge.gui.access.hint"));
-                    t.add("§6" + Lang.tr("sc.bridge.gui.stage2"));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.access.hint2"));
+                } else if (b.id == B_FRIEND_ADD) {
+                    t.add(Lang.tr("sc.bridge.gui.friend.add"));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.friend.add2", BridgeMathSC.MAX_FRIENDS));
+                } else if (b.id == B_REMOTE) {
+                    t.add(Lang.tr("sc.bridge.gui.remote.hint"));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.remote.hint2", g(BridgeMathSC.REMOTE_MODE_EU)));
+                } else if (b.id == B_BIND) {
+                    t.add(Lang.tr("sc.bridge.gui.bindhelmet.hint", BridgeMathSC.MAX_LINKS));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.bindremote.hint"));
+                } else if (b.id == B_RENAME) {
+                    t.add(Lang.tr("sc.bridge.gui.rename"));
+                } else if (b.id == B_FROM_COORD) {
+                    t.add(Lang.tr("sc.bridge.gui.fromcoord.hint"));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.coords.have", has() ? st.getInteger("coords") : 0));
+                } else if (b.id == B_TO_COORD) {
+                    t.add(Lang.tr("sc.bridge.gui.tocoord.hint"));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.copycoord.hint"));
                 } else if (b.id == B_DIM) {
                     t.add(Lang.tr("sc.bridge.gui.dim.hint"));
                 } else if (b.id == B_BM_ADD || b.id == B_BM_REN || b.id == B_BM_DEL) {
@@ -880,7 +1041,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 } else if (b.id == B_OPEN) {
                     t.add(Lang.tr("sc.bridge.gui.open.hint"));
                 }
-                if (!b.enabled && !allowed() && b.id != B_ACCESS && !(b.id >= B_MODE && b.id < B_MODE + MODES)) {
+                if (!b.enabled && !allowed() && b.id != B_ACCESS && b.id != B_RENAME && b.id != B_FRIEND_ADD && !(b.id >= B_MODE && b.id < B_MODE + MODES)) {
                     t.add("§c" + Lang.tr("sc.bridge.gui.notowner", st.getString("owner")));
                 }
                 return t;
@@ -904,6 +1065,10 @@ public class GuiBridgeControllerSC extends GuiScreen {
         if (over(312, 176, 100, 18)) {
             t.add(Lang.tr("sc.bridge.gui.stability"));
             t.add("§7" + Lang.tr("sc.bridge.gui.stab.hint", BridgeMathSC.STAB_MISSING_PERCENT, BridgeMathSC.STAB_FOLD));
+            return t;
+        }
+        if (over(206, 268, 206, 18) && !chips.isEmpty()) {
+            t.add(Lang.tr("sc.bridge.gui.friends.hint"));
             return t;
         }
         if (over(8, 189, 92, 16)) {

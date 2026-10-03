@@ -83,6 +83,7 @@ public final class SelfTestSC {
             drills();
             fieldExtras();
             bridge();
+            bridge2();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -1561,7 +1562,7 @@ public final class SelfTestSC {
     }
 
     /** The Singular suit's own functions: stage 2a Н1, Н7, П3, П7, Б3, Б4, Б1, К9, Ш8, Н11, Н2, П1; stage 2b 10 more. */
-    private static final int SINGULAR_OWN = 22;
+    private static final int SINGULAR_OWN = 23;            // 22 + the bridge link (stage 2 of the bridge)
 
     /**
      * The Singular functions, stage 2a (docs/plan-singular-armor.md §3-§5): appended after the 25 old
@@ -4087,6 +4088,174 @@ public final class SelfTestSC {
         loaded.readFromNBT(saved);
         check(loaded.acceptsAnyVoltage() && loaded.upgradeCount(com.sc.machine.UpgradeType.OVERCLOCKER) == 4,
                 "station modules: saved with the world");
+    }
+
+    // ------------------------------------------------------------------ the Ground / Space Bridge (stage 2)
+
+    /**
+     * Stage 2 (docs/plan-ground-bridge.md §7, §8, §10): the remote's charge and binding data, the coordinator's NBT,
+     * the projected ends' cost (the armour's -25%), the modes' ends, the spot in front of a player, the consent
+     * state machine, the friends and the order's NBT, the helmet's link NBT and the level gate, «Взгляд».
+     */
+    private static void bridge2() {
+        // the remote: charge, tier, signal
+        ItemStack r = new ItemStack(ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND);
+        ItemStack sr = new ItemStack(ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE);
+        int took = com.sc.item.ItemBridgeRemoteSC.charge(r, 4000000);
+        int more = com.sc.item.ItemBridgeRemoteSC.charge(r, 999999999);
+        boolean hv = com.sc.item.ItemChargeSC.charge(new ItemStack(ModItems.bridgeRemote), 100, com.sc.energy.Tier.HV) == 0
+                && com.sc.item.ItemChargeSC.charge(new ItemStack(ModItems.bridgeRemote), 100, com.sc.energy.Tier.IV) == 100;
+        boolean spaceSv = com.sc.item.ItemChargeSC.charge(sr, 100, com.sc.energy.Tier.XV) == 0 && com.sc.item.ItemChargeSC.charge(sr, 100, com.sc.energy.Tier.SV) == 100;
+        check(took == 4000000 && more == 6000000 && com.sc.item.ItemBridgeRemoteSC.chargeOf(r) == com.sc.bridge.BridgeMathSC.REMOTE_CAPACITY && hv && spaceSv
+                && com.sc.item.ItemBridgeRemoteSC.capacityOf(sr) == 20000000L && com.sc.tileentity.TileEntityEnergyStorageSC.isChargeable(r)
+                && com.sc.bridge.BridgeMathSC.remoteAfterSignal(3000000L, false) == 2000000L && com.sc.bridge.BridgeMathSC.remoteAfterSignal(999999L, false) == -1
+                && com.sc.bridge.BridgeMathSC.remoteAfterSignal(5L, true) == 5L,
+                "bridge remote: 10 M EU (Space 20 M), charged from IV (Space SV), 1 M EU a signal, creative free");
+        com.sc.bridge.BridgeItemDataSC.bindRemote(r, 10, 64, -20, 0, 777L, "База", com.sc.bridge.BridgeMathSC.GROUND);
+        ItemStack cell = com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, 500);
+        com.sc.bridge.BridgeItemDataSC.setInside(sr, "Key", cell);
+        int[] l = com.sc.bridge.BridgeItemDataSC.remoteLink(r);
+        check(l != null && l[0] == 10 && l[2] == -20 && com.sc.bridge.BridgeItemDataSC.remoteId(r) == 777L && "База".equals(com.sc.bridge.BridgeItemDataSC.remoteBridgeName(r))
+                && com.sc.item.ItemBridgeRemoteSC.hasKey(sr) && !com.sc.item.ItemBridgeRemoteSC.hasKey(r)
+                && com.sc.bridge.BridgeItemDataSC.remoteLink(new ItemStack(ModItems.bridgeRemote)) == null,
+                "bridge remote NBT: the bound controller, its id and name; the Space remote's key (a cell with matter)");
+        // the coordinator
+        ItemStack c1 = new ItemStack(ModItems.coordinator), c2 = new ItemStack(ModItems.coordinator);
+        boolean empty = com.sc.bridge.BridgeItemDataSC.point(c1) == null;
+        com.sc.bridge.BridgeItemDataSC.setPoint(c1, 12480, 68, -7315, -1, true);
+        com.sc.bridge.BridgeItemDataSC.setPointName(c1, "  Шахта алмазов  ");
+        com.sc.bridge.BridgeItemDataSC.copyPoint(c1, c2);
+        ItemStack back = ItemStack.loadItemStackFromNBT(c2.writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+        int[] p = com.sc.bridge.BridgeItemDataSC.point(back);
+        check(empty && p != null && p[0] == 12480 && p[1] == 68 && p[2] == -7315 && p[3] == -1 && com.sc.bridge.BridgeItemDataSC.safe(back)
+                && "Шахта алмазов".equals(com.sc.bridge.BridgeItemDataSC.pointName(back)),
+                "coordinator NBT: x y z, dimension, a trimmed name, «безопасно»; a copy into another coordinator");
+        // the remote's history: the newest first, the same point moves up, at most 5
+        net.minecraft.nbt.NBTTagCompound h = new net.minecraft.nbt.NBTTagCompound();
+        for (int i = 0; i < 7; i++) {
+            com.sc.bridge.BridgeItemDataSC.pushHistory(h, new int[]{i, 64, 0, 0}, "t" + i);
+        }
+        com.sc.bridge.BridgeItemDataSC.pushHistory(h, new int[]{4, 64, 0, 0}, "again");
+        net.minecraft.nbt.NBTTagList hl = h.getTagList("Hist", 10);
+        check(hl.tagCount() == com.sc.bridge.BridgeMathSC.HISTORY && "again".equals(hl.getCompoundTagAt(0).getString("n"))
+                && hl.getCompoundTagAt(1).getIntArray("p")[0] == 6 && hl.getCompoundTagAt(4).getIntArray("p")[0] == 2,
+                "bridge history: 5 targets, newest first, a repeated point moves to the top");
+        // projected ends: the cost, the armour's -25%, the modes' ends
+        com.sc.bridge.BridgeMathSC.Cost two = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.GROUND, new long[]{1000, 3000}, new int[]{25, 0}, false, false, 0);
+        com.sc.bridge.BridgeMathSC.Cost one = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.GROUND, new long[]{4000}, null, false, false, 0);
+        com.sc.bridge.BridgeMathSC.Cost sp = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.SPACE, new long[]{0}, new int[]{25}, false, false, 0);
+        check(two.eu == 275000000L && two.sm == 87 && two.kr == 38 && one.eu == 280000000L && one.sm == 90 && one.kr == 40 && sp.kr == 150 && sp.eu == 4000000000L,
+                "bridge projections: each end pays its distance; from the armour your end -25% (Ground 275 M EU, SM 87, Kr 38; Space Kr 150)");
+        boolean ends = java.util.Arrays.equals(com.sc.bridge.BridgeMathSC.modeEnds(1, false), new int[]{0, 2})
+                && java.util.Arrays.equals(com.sc.bridge.BridgeMathSC.modeEnds(2, false), new int[]{2, 1})
+                && java.util.Arrays.equals(com.sc.bridge.BridgeMathSC.modeEnds(3, false), new int[]{0, 1})
+                && java.util.Arrays.equals(com.sc.bridge.BridgeMathSC.modeEnds(4, false), new int[]{0, 2})
+                && java.util.Arrays.equals(com.sc.bridge.BridgeMathSC.modeEnds(4, true), new int[]{2, 2})
+                && java.util.Arrays.equals(com.sc.bridge.BridgeMathSC.modeEnds(5, false), new int[]{0, 2})
+                && com.sc.bridge.BridgeMathSC.friendEnd(4, false) == 1 && com.sc.bridge.BridgeMathSC.friendEnd(4, true) == 0
+                && com.sc.bridge.BridgeMathSC.friendEnd(1, false) == -1 && com.sc.bridge.BridgeMathSC.projections(2, false) == 2
+                && com.sc.bridge.BridgeMathSC.projections(4, true) == 2 && com.sc.bridge.BridgeMathSC.projections(0, false) == 1
+                && com.sc.bridge.BridgeMathSC.needsPoint(2) && !com.sc.bridge.BridgeMathSC.needsPoint(1) && !com.sc.bridge.BridgeMathSC.needsPoint(4);
+        int[] s0 = com.sc.bridge.BridgeMathSC.projectionSpot(10.3, 64.0, -5.7, 0F), s1 = com.sc.bridge.BridgeMathSC.projectionSpot(10.3, 64.0, -5.7, 90F),
+                s2 = com.sc.bridge.BridgeMathSC.projectionSpot(10.3, 64.0, -5.7, 180F), s3 = com.sc.bridge.BridgeMathSC.projectionSpot(10.3, 64.0, -5.7, -90F);
+        check(ends && java.util.Arrays.equals(s0, new int[]{10, 64, -3, 0}) && java.util.Arrays.equals(s1, new int[]{7, 64, -6, 1})
+                && java.util.Arrays.equals(s2, new int[]{10, 64, -9, 0}) && java.util.Arrays.equals(s3, new int[]{13, 64, -6, 1}),
+                "bridge modes ДР1-ДР5: the ends (ring / point / next to a player), the friend's end; a projection 3 blocks the way a player faces");
+        // consent (§10): the state machine
+        com.sc.bridge.BridgeConsentSC cs = new com.sc.bridge.BridgeConsentSC(600);
+        net.minecraft.nbt.NBTTagCompound order = new net.minecraft.nbt.NBTTagCompound();
+        order.setInteger("m", 4);
+        com.sc.bridge.BridgeConsentSC.Request q = cs.ask("Alice", "Bob", 0, order);
+        int stranger = cs.answer(q.id, "Eve", true, 10);
+        int yes = cs.answer(q.id, "bob", true, 20);
+        int again = cs.answer(q.id, "Bob", false, 30);
+        boolean used = cs.use(q.id), usedTwice = cs.use(q.id);
+        com.sc.bridge.BridgeConsentSC.Request late = cs.ask("Alice", "Bob", 1000, order);
+        int expired = cs.answer(late.id, "Bob", true, 1601);
+        com.sc.bridge.BridgeConsentSC.Request d1 = cs.ask("Alice", "Carl", 2000, order), d2 = cs.ask("Alice", "Carl", 2001, order);
+        int no = cs.answer(d2.id, "Carl", false, 2002);
+        check(stranger == com.sc.bridge.BridgeConsentSC.NOT_YOURS && yes == com.sc.bridge.BridgeConsentSC.ACCEPTED && again == com.sc.bridge.BridgeConsentSC.CLOSED
+                && used && !usedTwice && cs.state(q.id) == com.sc.bridge.BridgeConsentSC.USED && expired == com.sc.bridge.BridgeConsentSC.CLOSED
+                && cs.state(late.id) == com.sc.bridge.BridgeConsentSC.EXPIRED && cs.state(d1.id) == com.sc.bridge.BridgeConsentSC.EXPIRED
+                && no == com.sc.bridge.BridgeConsentSC.DECLINED && !cs.use(d2.id) && cs.answer(9999, "Bob", true, 2003) == com.sc.bridge.BridgeConsentSC.NOT_FOUND
+                && cs.get(q.id).order.getInteger("m") == 4,
+                "bridge consent: only the asked player answers, once; accepted is used once; 30 s then expired; a new request replaces the old");
+        // access: friends, public, the order's NBT
+        com.sc.tileentity.TileEntityBridgeControllerSC a = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        a.setOwner("Owner");
+        boolean fr = a.addFriend("Pal") && !a.addFriend("pal") && !a.addFriend("Owner") && !a.addFriend("bad name") && !a.addFriend("x")
+                && a.addFriend("Friend_2") && a.isFriend("PAL") && !a.isFriend("Eve");
+        a.setAccess(com.sc.bridge.BridgeMathSC.ACCESS_PUBLIC);
+        a.setBridgeName("База");
+        a.setRemoteMode(true);
+        long id = a.ensureBridgeId();
+        net.minecraft.nbt.NBTTagCompound t = new net.minecraft.nbt.NBTTagCompound();
+        a.writeToNBT(t);
+        com.sc.tileentity.TileEntityBridgeControllerSC b = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        b.readFromNBT(t);
+        a.removeFriend(0);
+        check(fr && b.getFriends().size() == 2 && b.isFriend("pal") && b.getAccess() == com.sc.bridge.BridgeMathSC.ACCESS_PUBLIC && "База".equals(b.getBridgeName())
+                && b.isRemoteMode() && id != 0 && b.getBridgeId() == id && a.getFriends().size() == 1 && b.trusted(null) && b.allowed(null),
+                "bridge access: friends (no owner, no doubles, plausible names), public mode, the name, «Дистанционный режим», the id kept in NBT");
+        com.sc.tileentity.TileEntityBridgeControllerSC.Order o = com.sc.bridge.BridgeFarSC.order(new int[]{0, 1, 5, -1, 7, -1, 1}, "Pal\nШахта", 2);
+        o.consented.add("Pal");
+        com.sc.tileentity.TileEntityBridgeControllerSC.Order o2 = com.sc.tileentity.TileEntityBridgeControllerSC.Order.read(o.write());
+        check(o.mode == com.sc.bridge.BridgeMathSC.MODE_REMOTE && o2.mode == o.mode && o2.hasPoint && o2.px == 5 && o2.py == -1 && o2.pz == 7 && o2.pdim == -1
+                && o2.toMe && "Pal".equals(o2.friend) && "Шахта".equals(o2.pointName) && o2.source == com.sc.bridge.BridgeMathSC.SRC_ARMOUR
+                && o2.agreed("pal") && !o2.agreed("Eve") && com.sc.bridge.BridgeFarSC.order(new int[]{1}, "", 1) == null,
+                "bridge order NBT: mode («С базы» from afar is «удалённо»), point, «к вам», the friend, the name, who agreed");
+        // the helmet's link and the level gate
+        ItemStack helmet = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[0]);
+        boolean noMod = !com.sc.bridge.BridgeItemDataSC.hasModule(helmet) && com.sc.bridge.BridgeItemDataSC.addLink(helmet, 0, 64, 0, 0, 1L, "A", 0) == -1;
+        com.sc.bridge.BridgeItemDataSC.installModule(helmet);
+        int i0 = com.sc.bridge.BridgeItemDataSC.addLink(helmet, 0, 64, 0, 0, 1L, "A", 0);
+        int i1 = com.sc.bridge.BridgeItemDataSC.addLink(helmet, 100, 64, 0, 0, 2L, "B", 0);
+        int i2 = com.sc.bridge.BridgeItemDataSC.addLink(helmet, 0, 64, 900, -1, 3L, "C", 1);
+        int i3 = com.sc.bridge.BridgeItemDataSC.addLink(helmet, 5, 5, 5, 0, 4L, "D", 0);
+        int again2 = com.sc.bridge.BridgeItemDataSC.addLink(helmet, 100, 64, 0, 0, 2L, "B2", 0);
+        com.sc.bridge.BridgeItemDataSC.select(helmet, 2);
+        ItemStack hb = ItemStack.loadItemStackFromNBT(helmet.writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+        boolean links = noMod && i0 == 0 && i1 == 1 && i2 == 2 && i3 == -1 && again2 == 1 && com.sc.bridge.BridgeItemDataSC.links(hb).tagCount() == 3
+                && "B2".equals(com.sc.bridge.BridgeItemDataSC.links(hb).getCompoundTagAt(1).getString("n")) && com.sc.bridge.BridgeItemDataSC.selected(hb) == 2;
+        com.sc.bridge.BridgeItemDataSC.removeLink(hb, 0);
+        links &= com.sc.bridge.BridgeItemDataSC.links(hb).tagCount() == 2 && com.sc.bridge.BridgeItemDataSC.selected(hb) == 1
+                && com.sc.bridge.BridgeItemDataSC.links(hb).getCompoundTagAt(1).getLong("id") == 3L;
+        com.sc.bridge.BridgeItemDataSC.clearLinks(hb);
+        links &= com.sc.bridge.BridgeItemDataSC.hasModule(hb) && com.sc.bridge.BridgeItemDataSC.links(hb).tagCount() == 0;
+        com.sc.util.ArmorFeature f = com.sc.util.ArmorFeature.BRIDGE_LINK;
+        boolean gate = f.ordinal() == 47 && f.piece == 0 && f.availableIn(com.sc.util.ArmorSuit.SINGULAR, 0) && !f.availableIn(com.sc.util.ArmorSuit.EXO, 0)
+                && com.sc.util.SingularLevel.requiredLevel(f) == 3 && !com.sc.util.SingularLevel.unlocked(f, 2, false)
+                && com.sc.util.SingularLevel.unlocked(f, 3, false) && com.sc.util.SingularLevel.unlocked(f, 1, true) && f.gas() == null && f.onByDefault
+                && com.sc.util.SingularLevel.BRIDGE_FINDS_LEVEL == 5 && !f.isAction();
+        check(links && gate, "armour bridge link: the module merged in, up to 3 bridges (the same id renamed, not added), select / unlink / clear kept in NBT;"
+                + " the function on the Singular helmet from level 3 (creative always)");
+        // «Взгляд»
+        com.sc.bridge.BridgeMathSC.Solid floor = new com.sc.bridge.BridgeMathSC.Solid() {
+            @Override
+            public boolean at(int x, int y, int z) {
+                return y < 64 || x == 10 || x == 300;
+            }
+        };
+        int[] down = com.sc.bridge.BridgeMathSC.lookTarget(0.5, 70.5, 0.5, 0, -1, 0, 256, floor);
+        int[] wall = com.sc.bridge.BridgeMathSC.lookTarget(0.5, 64.5, 0.5, 2, 0, 0, 256, floor);
+        int[] far = com.sc.bridge.BridgeMathSC.lookTarget(20.5, 64.5, 0.5, 1, 0, 0, 256, floor);
+        int[] sky = com.sc.bridge.BridgeMathSC.lookTarget(20.5, 64.5, 0.5, 0, 1, 0, 256, floor);
+        check(java.util.Arrays.equals(down, new int[]{0, 64, 0}) && java.util.Arrays.equals(wall, new int[]{10, 65, 0}) && far == null && sky == null
+                && com.sc.bridge.BridgeMathSC.lookTarget(0, 0, 0, 0, 0, 0, 10, floor) == null,
+                "bridge «Взгляд»: the first solid block along the look within 256 blocks (the cell over it), nothing beyond or in the sky");
+        // the messages
+        io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
+        new com.sc.bridge.BridgeNetSC.Far(1, 2, com.sc.bridge.BridgeFarSC.F_OPEN, new int[]{4, 0, -5, 70, 9, -1, 1}, "Pal\nДом").toBytes(buf);
+        com.sc.bridge.BridgeNetSC.Far fm = new com.sc.bridge.BridgeNetSC.Far();
+        fm.fromBytes(buf);
+        buf.clear();
+        new com.sc.bridge.BridgeNetSC.Hud(true, "База", 340, 600, 92, 1).toBytes(buf);
+        com.sc.bridge.BridgeNetSC.Hud hm = new com.sc.bridge.BridgeNetSC.Hud();
+        hm.fromBytes(buf);
+        check(fm.src == 1 && fm.slot == 2 && fm.action == com.sc.bridge.BridgeFarSC.F_OPEN && java.util.Arrays.equals(fm.values, new int[]{4, 0, -5, 70, 9, -1, 1})
+                && "Pal\nДом".equals(fm.text) && hm.open && "База".equals(hm.name) && hm.left == 340 && hm.total == 600 && hm.stability == 92 && hm.kind == 1
+                && com.sc.inventory.ContainerSingularStationSC.TABS == 6 && com.sc.inventory.ContainerSingularStationSC.TAB_LINK == 5,
+                "bridge messages: a remote / armour command and the HUD line through bytes; the Singular Station's «Связь» tab");
     }
 
     // ------------------------------------------------------------------ the Ground / Space Bridge (stage 1)

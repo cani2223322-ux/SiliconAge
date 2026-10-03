@@ -28,13 +28,13 @@ public class ContainerSingularStationSC extends Container {
     public static final int BTN_POWER = ContainerArmorStationSC.BTN_POWER, BTN_REDSTONE = ContainerArmorStationSC.BTN_REDSTONE,
             BTN_FILL = ContainerArmorStationSC.BTN_FILL, BTN_GAS = ContainerArmorStationSC.BTN_GAS, BTN_CHARGE = 14,
             BTN_MODERNISE = 40, BTN_CANCEL = 41, BTN_SYNC = 42, BTN_TRANSFER = 43, BTN_SCHEME_PREV = 44, BTN_SCHEME_NEXT = 45,
-            BTN_CONVERT = 46, BTN_BRANCH = 50, BTN_CLEAR = ContainerArmorStationSC.BTN_CLEAR, BTN_HELIUM = ContainerArmorStationSC.BTN_HELIUM,
+            BTN_CONVERT = 46, BTN_LINK = 47, BTN_BRANCH = 50, BTN_CLEAR = ContainerArmorStationSC.BTN_CLEAR, BTN_HELIUM = ContainerArmorStationSC.BTN_HELIUM,
             BTN_TAB = 60;
     /**
      * The screen's tabs (GuiSingularStationSC); the client tells the server which one is open (BTN_TAB + tab), the
      * slots of the other tabs then take nothing (shift-click included) - what lies in them stays there.
      */
-    public static final int TAB_MODERN = 0, TAB_CONVERT = 1, TAB_TRANSFER = 2, TAB_SYNC = 3, TAB_BRANCH = 4, TABS = 5;
+    public static final int TAB_MODERN = 0, TAB_CONVERT = 1, TAB_TRANSFER = 2, TAB_SYNC = 3, TAB_BRANCH = 4, TAB_LINK = 5, TABS = 6;
     public static final int W = 320, H = 236;
     /** The armour column: rows ROW_STEP apart from ROW_Y; slot (item coordinates) at PIECE_X, row + 3. */
     public static final int ROW_Y = 17, ROW_STEP = 22, PIECE_X = 7;
@@ -236,6 +236,7 @@ public class ContainerSingularStationSC extends Container {
             case BTN_CANCEL: te.cancelProcess(); return true;
             case BTN_SYNC: say(player, te.startSync(player)); return true;
             case BTN_TRANSFER: say(player, te.startTransfer(player)); return true;
+            case BTN_LINK: say(player, te.linkModule(player)); return true;
             case BTN_SCHEME_PREV: te.cycleScheme(-1); return true;
             case BTN_SCHEME_NEXT: te.cycleScheme(1); return true;
             default: return false;

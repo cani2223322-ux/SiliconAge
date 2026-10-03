@@ -153,6 +153,9 @@ public class BlockBridgeSC extends Block {
         if (player.isSneaking() && held != null) {
             return false;
         }
+        if (held != null && held.getItem() instanceof com.sc.item.ItemBridgeRemoteSC) {
+            return true;                              // the remote binds (its onItemUseFirst, on the server) - no screen
+        }
         int[] c = null;
         if (te instanceof TileEntityBridgeControllerSC) {
             c = new int[]{x, y, z};

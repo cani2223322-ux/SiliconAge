@@ -47,6 +47,10 @@ public final class ModItems {
     public static ItemSimpleSC deuteriumCell;
     /** The Singular Matter cell (a tank-in-an-item, 1000 mB). */
     public static com.sc.item.ItemSingularCellSC singularCell;
+    /** The Ground / Space Bridge, stage 2: the remotes (damage 0 / 1), the coordinator, the Armour Link Module. */
+    public static com.sc.item.ItemBridgeRemoteSC bridgeRemote;
+    public static com.sc.item.ItemCoordinatorSC coordinator;
+    public static com.sc.item.ItemBridgeLinkModuleSC bridgeLinkModule;
     public static com.sc.item.ItemWearPartSC windRotor, isotopeCapsule;
     public static com.sc.item.ItemQuarryModuleSC quarryModule;
     public static final java.util.List<com.sc.item.ItemDrillHeadSC> DRILL_HEADS = new java.util.ArrayList<com.sc.item.ItemDrillHeadSC>();
@@ -282,6 +286,13 @@ public final class ModItems {
         // the Singular Matter cell (appended)
         singularCell = new com.sc.item.ItemSingularCellSC();
         GameRegistry.registerItem(singularCell, "singularMatterCell");
+        // the Ground / Space Bridge, stage 2 (appended)
+        bridgeRemote = new com.sc.item.ItemBridgeRemoteSC();
+        GameRegistry.registerItem(bridgeRemote, "bridgeRemote");
+        coordinator = new com.sc.item.ItemCoordinatorSC();
+        GameRegistry.registerItem(coordinator, "coordinator");
+        bridgeLinkModule = new com.sc.item.ItemBridgeLinkModuleSC();
+        GameRegistry.registerItem(bridgeLinkModule, "bridgeLinkModule");
     }
 
     /** The Compressed Matter Capsule: a plain component with a TooltipSC tooltip. */

@@ -35,6 +35,9 @@ public final class ItemChargeSC {
         if (ItemWrenchSC.isElectric(s)) {
             return ItemWrenchSC.tierOf(s).chargeTier.ordinal() <= tier.ordinal() ? ItemWrenchSC.charge(s, max) : 0;
         }
+        if (ItemBridgeRemoteSC.isRemote(s)) {
+            return ItemBridgeRemoteSC.tierOf(s).ordinal() <= tier.ordinal() ? ItemBridgeRemoteSC.charge(s, max) : 0;
+        }
         if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
             return Ic2.charge(s, max, tier.toIc2Tier());
         }

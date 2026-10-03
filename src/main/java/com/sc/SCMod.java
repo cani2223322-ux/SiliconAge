@@ -119,12 +119,15 @@ public class SCMod {
         com.sc.radiation.RadiationSC.clearSources();
         com.sc.energy.Ic2LoadQueueSC.clear();
         com.sc.tileentity.TileEntityGeneratorSC.forgetPorts(null);
+        com.sc.bridge.BridgeConsentSC.reset();
+        com.sc.tileentity.TileEntityBridgeControllerSC.TEST_PLAYERS.clear();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
     @Mod.EventHandler
     public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {
         event.registerServerCommand(new com.sc.debug.CommandEnergySC());
+        event.registerServerCommand(new com.sc.bridge.CommandBridgeSC());          // [Принять] / [Отклонить] of a bridge consent
         if (Boolean.getBoolean("sc.worldtest")) {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWirelessSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestTokamakSC());
@@ -132,6 +135,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSingStationSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSingConvertSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestBridgeSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestBridge2SC());
         }
     }
 }

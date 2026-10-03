@@ -57,13 +57,16 @@ public final class SingularLevel {
     }
 
     /** The level a function opens at: the plan's §3 column; 1 for every function from before the Singular suit. */
+    /** The bridge link's portals to the scanner's finds are precise from this level (stage 3 scatters them below it). */
+    public static final int BRIDGE_FINDS_LEVEL = 5;
+
     public static int requiredLevel(ArmorFeature f) {
         switch (f) {
             case GRAV_STRIKE: case EVENT_HORIZON: case PHASE_DASH:
                 return 2;
             case ANALYZER:
                 return 2;
-            case HEAT_VENT: case GRAV_PRESS: case GRAV_GRAB: case GRAV_SCANNER: case THREAT_SENSE:
+            case HEAT_VENT: case GRAV_PRESS: case GRAV_GRAB: case GRAV_SCANNER: case THREAT_SENSE: case BRIDGE_LINK:
                 return 3;
             case TIME_SLOW: case RESONANCE:
                 return 4;

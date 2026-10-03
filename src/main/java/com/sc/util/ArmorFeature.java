@@ -66,7 +66,10 @@ public enum ArmorFeature {
     RESONANCE(1, ArmorSuit.SINGULAR, 0, 0, true),       // К2: full set - a running Singular reactor / field generator near charges, cools, refills
     GRAV_SCANNER(0, ArmorSuit.SINGULAR, 200, 1, false), // Ш1: every 5 s chests, spawners, ores and mobs within 32 blocks outlined
     THREAT_SENSE(0, ArmorSuit.SINGULAR, 20, 0, false),  // Ш2: mobs that target the wearer outlined red, arrows at the screen's edge
-    ANALYZER(0, ArmorSuit.SINGULAR, 0, 0, true);        // Ш5: the mob / machine looked at - a small table on the HUD
+    ANALYZER(0, ArmorSuit.SINGULAR, 0, 0, true),        // Ш5: the mob / machine looked at - a small table on the HUD
+    // the Ground / Space Bridge, stage 2 (docs/plan-ground-bridge.md §8), appended: the helmet with the Armour Link Module
+    // commands up to 3 bridges (the K menu's «Мост» tab, its keys) - level 3; level 5: precise portals to the scanner's finds
+    BRIDGE_LINK(0, ArmorSuit.SINGULAR, 0, 0, true);
 
     public final int piece;
     public final ArmorSuit minSuit;

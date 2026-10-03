@@ -58,8 +58,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     public static final int MIN_DISTANCE = 16;
     public static final int WORLD_LIMIT = 29999000;
     public static final int AUTO_Y = Integer.MIN_VALUE;
-    /** Access (stage 2: friends, public). */
-    public static final int ACCESS_OWNER = 0;
+    /** Access: owner and friends (BridgeMathSC.ACCESS_FRIENDS), public. */
+    public static final int ACCESS_OWNER = BridgeMathSC.ACCESS_FRIENDS;
 
     // ------------------------------------------------------------------ saved state
 
@@ -88,13 +88,29 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     private BridgeMathSC.Cost hold;
     private String shortWhat = "";
 
+    // stage 2: the name, friends, «Дистанционный режим», the bridge's id (remotes / helmets check it), who is linked
+    private String name = "";
+    private final List<String> friends = new ArrayList<String>();
+    private boolean remoteMode;
+    private long bridgeId;
+    /** Bound remotes and helmets: {"p": player, "k": SRC_REMOTE / SRC_ARMOUR, "t": time}. */
+    private final List<NBTTagCompound> links = new ArrayList<NBTTagCompound>();
+    /** A server-side target change (a coordinator) the screen must take: counted up. */
+    private int targetRev;
+    // the open portal, stage 2: end A away from the ring (a projection), the mode, who opened it
+    private boolean aProj;
+    private int aDim, ax, ay, az, apAxis, aW;
+    private int openMode;
+    private String opener = "";
+    private boolean openPrecise;
+
     // ------------------------------------------------------------------ transient
 
     private BridgeStructureSC.Scan scan;
     private final Set<Long> partKeys = new HashSet<Long>();
     private final List<int[]> linked = new ArrayList<int[]>();
     private int tick;
-    private ForgeChunkManager.Ticket ticketA, ticketB;
+    private ForgeChunkManager.Ticket ticketA, ticketB, ticketR;
     private long chargedThisSecond, chargeRate;
     private int[] highlight;
     private long highlightUntil;
@@ -534,8 +550,117 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     // ------------------------------------------------------------------ access, messages, journal
 
+    /** May use the controller's screen: the owner, a friend, anyone in the public mode (null: the server itself - tests). */
     public boolean allowed(EntityPlayer p) {
-        return p == null || owner.length() == 0 || owner.equals(p.getCommandSenderName());      // null: the server itself (tests)
+        return trusted(p) || access == BridgeMathSC.ACCESS_PUBLIC;
+    }
+
+    /** The owner or a friend: remotes and helmets bind and work only for them (§10). */
+    public boolean trusted(EntityPlayer p) {
+        return p == null || owner.length() == 0 || isOwner(p) || isFriend(p.getCommandSenderName());
+    }
+
+    public boolean isOwner(EntityPlayer p) {
+        return p == null || owner.length() == 0 || owner.equals(p.getCommandSenderName());
+    }
+
+    public boolean isFriend(String n) {
+        for (String f : friends) {
+            if (f.equalsIgnoreCase(n)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public List<String> getFriends() {
+        return friends;
+    }
+
+    public int getAccess() {
+        return access;
+    }
+
+    public void setAccess(int a) {
+        access = a == BridgeMathSC.ACCESS_PUBLIC ? a : BridgeMathSC.ACCESS_FRIENDS;
+        markDirty();
+    }
+
+    /** Adds a friend (not the owner, not twice, at most MAX_FRIENDS, a plausible name). @return whether added */
+    public boolean addFriend(String n) {
+        String t = n == null ? "" : n.trim();
+        if (t.length() < 2 || t.length() > 16 || !t.matches("[A-Za-z0-9_]+") || t.equalsIgnoreCase(owner) || isFriend(t)
+                || friends.size() >= BridgeMathSC.MAX_FRIENDS) {
+            return false;
+        }
+        friends.add(t);
+        markDirty();
+        return true;
+    }
+
+    public void removeFriend(int i) {
+        if (i >= 0 && i < friends.size()) {
+            friends.remove(i);
+            markDirty();
+        }
+    }
+
+    public String getBridgeName() {
+        return name;
+    }
+
+    public void setBridgeName(String n) {
+        name = cut(n);
+        markDirty();
+    }
+
+    /** The name for a BridgeMsgSC argument: the name, or "@noname" (translated by the reader). */
+    public String nameArg() {
+        return name.length() == 0 ? "@noname" : name;
+    }
+
+    /** The name for a chat translation argument. */
+    public Object nameArgChat() {
+        return name.length() == 0 ? new net.minecraft.util.ChatComponentTranslation(BridgeMsgSC.RES + "noname") : name;
+    }
+
+    /** The bridge's id (made once): a remote or a helmet bound to a controller that was broken and put back elsewhere is not fooled. */
+    public long ensureBridgeId() {
+        if (bridgeId == 0) {
+            bridgeId = (worldObj == null ? new java.util.Random().nextLong() : worldObj.rand.nextLong()) ^ System.nanoTime();
+            if (bridgeId == 0) {
+                bridgeId = 1;
+            }
+            markDirty();
+        }
+        return bridgeId;
+    }
+
+    public long getBridgeId() {
+        return bridgeId;
+    }
+
+    public boolean isRemoteMode() {
+        return remoteMode;
+    }
+
+    /** A remote or a helmet was bound: remembered for the screen (the newest 16). */
+    public void noteLink(EntityPlayer p, int kind) {
+        String who = nameOf(p);
+        for (int i = links.size() - 1; i >= 0; i--) {
+            if (links.get(i).getString("p").equalsIgnoreCase(who) && links.get(i).getInteger("k") == kind) {
+                links.remove(i);
+            }
+        }
+        NBTTagCompound e = new NBTTagCompound();
+        e.setString("p", who);
+        e.setInteger("k", kind);
+        e.setLong("t", System.currentTimeMillis());
+        links.add(e);
+        while (links.size() > 16) {
+            links.remove(0);
+        }
+        log(new BridgeMsgSC(kind == BridgeMathSC.SRC_ARMOUR ? "sc.bridge.journal.linkArmour" : "sc.bridge.journal.linkRemote"), who, false);
     }
 
     private void log(BridgeMsgSC m, String who, boolean bad) {
@@ -637,19 +762,45 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (tanks[BridgeMathSC.KR] < BridgeMathSC.PROBE_KR) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.probekr", BridgeMathSC.PROBE_KR));
         }
-        WorldServer w = worldFor(targetDim());
-        if (w == null) {
+        NBTTagCompound t = probeAt(p, tx, ty, tz, targetDim(), true);
+        if (t == null) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.nodim", targetDim()));
         }
-        tanks[BridgeMathSC.KR] -= BridgeMathSC.PROBE_KR;
+        place = t;
+        markDirty();
+        BridgeMsgSC m = BridgeMsgSC.read(t.getCompoundTag("msg"));
+        lastMsg = m;
+        lastMsgAt = worldObj.getTotalWorldTime();
+        return m;
+    }
+
+    /**
+     * «Проверить место» at a point (the controller's screen, a remote - 1 mB Kr from the bridge's tanks - or the
+     * armour, which pays from the helmet itself: payFromBridge false). The Ground bridge looks in its own world only.
+     * @return the answer ("free", "reason", "args", "at", "near", "dist", "w", "beacon", "msg"), or null (no such
+     * dimension / not enough krypton in the bridge)
+     */
+    public NBTTagCompound probeAt(EntityPlayer p, int x, int y, int z, int dim, boolean payFromBridge) {
+        int d = bridgeKind() == BridgeMathSC.SPACE ? dim : ownDim();
+        WorldServer w = worldFor(d);
+        if (w == null || (payFromBridge && tanks[BridgeMathSC.KR] < BridgeMathSC.PROBE_KR)) {
+            return null;
+        }
+        if (payFromBridge) {
+            tanks[BridgeMathSC.KR] -= BridgeMathSC.PROBE_KR;
+            markDirty();
+        }
         int size = BridgeMathSC.vortexSize(bridgeKind());
         int radius = scan != null && scan.nav ? BridgeSpaceSC.NEAR_RADIUS_NAV : BridgeSpaceSC.NEAR_RADIUS;
-        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(BridgeSpaceSC.of(w), tx, ty, tz, size, ringAxis(), radius);
+        x = Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, x));
+        z = Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, z));
+        y = y == AUTO_Y ? AUTO_Y : Math.max(1, Math.min(254, y));
+        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(BridgeSpaceSC.of(w), x, y, z, size, ringAxis(), radius);
         NBTTagCompound t = new NBTTagCompound();
         t.setBoolean("free", r.free);
         t.setString("reason", r.reason);
         t.setTag("args", new BridgeMsgSC("x", (Object[]) r.args).write());
-        t.setIntArray("at", new int[]{r.x, r.y, r.z, targetDim()});
+        t.setIntArray("at", new int[]{r.x, r.y, r.z, d});
         if (r.free && ShieldEventHandlerPrivate.foreignField(w, p, r.x, r.y, r.z)) {
             t.setBoolean("free", false);
             t.setString("reason", "sc.bridge.place.field");
@@ -657,17 +808,22 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (r.hasNearest) {
             t.setIntArray("near", new int[]{r.nx, r.ny, r.nz, r.nDist});
         }
-        t.setLong("dist", targetDistance());
+        int[] c = ringCentre();
+        long dist = d == ownDim() ? BridgeMathSC.distance(c[0], 0, c[2], x, 0, z) : 0;
+        t.setLong("dist", dist);
         t.setInteger("w", size);
-        t.setBoolean("beacon", previewCost().beacon);
+        BridgeMarksSC marks = BridgeMarksSC.get(worldObj);
+        t.setBoolean("beacon", bridgeKind() == BridgeMathSC.GROUND && marks != null
+                && marks.near(BridgeMarksSC.BEACON, d, x, y, z, BridgeMathSC.BEACON_RADIUS));
         t.setLong("time", worldObj.getTotalWorldTime());
-        place = t;
-        markDirty();
         BridgeMsgSC m = t.getBoolean("free") ? new BridgeMsgSC("sc.bridge.place.freeat", r.x, r.y, r.z)
                 : new BridgeMsgSC("sc.bridge.place.blockedat", r.x, r.y, r.z).part(new BridgeMsgSC(t.getString("reason"), (Object[]) r.args));
-        lastMsg = m;
-        lastMsgAt = worldObj.getTotalWorldTime();
-        return m;
+        t.setTag("msg", m.write());
+        return t;
+    }
+
+    private int[] ringCentre() {
+        return scan == null ? new int[]{xCoord, yCoord, zCoord} : scan.centre();
     }
 
     // ------------------------------------------------------------------ calibration
@@ -724,14 +880,334 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     // ------------------------------------------------------------------ opening
 
     /**
-     * «Открыть» to the stored target. Everything is checked at once; if all is there the vortex opens now.
+     * «Открыть» to the stored target (ДР0). Everything is checked at once; if all is there the vortex opens now.
      * @return null when it opened, else the refusal (already in the chat and the journal)
      */
     public BridgeMsgSC tryOpen(EntityPlayer p) {
+        Order o = new Order();
+        o.hasPoint = targetSet;
+        o.px = tx;
+        o.py = ty;
+        o.pz = tz;
+        o.pdim = targetDim();
+        return openOrder(p, o);
+    }
+
+    // ------------------------------------------------------------------ stage 2: orders (ДР0-ДР5), their ends, consent
+
+    /** What to open: the mode, the target point (ДР0 / 2 / 3), the friend and «к вам» (ДР4), the source, who agreed. */
+    public static final class Order {
+        public int mode = BridgeMathSC.MODE_BASE, source = BridgeMathSC.SRC_CONTROLLER;
+        public boolean hasPoint, toMe;
+        public int px, py = AUTO_Y, pz, pdim;
+        public String pointName = "", friend = "";
+        /**
+         * The target came from the scanner's finds (the armour's «Находки сканера»); precise: no scatter of the
+         * far end (stage 3 scatters unfamiliar places - the armour at level 5 opens precisely to its finds).
+         */
+        public boolean fromFind, precise = true;
+        /** Players who agreed to an end next to them (§10). */
+        public final List<String> consented = new ArrayList<String>();
+
+        public NBTTagCompound write() {
+            NBTTagCompound t = new NBTTagCompound();
+            t.setInteger("m", mode);
+            t.setInteger("s", source);
+            t.setBoolean("hp", hasPoint);
+            t.setBoolean("me", toMe);
+            t.setIntArray("p", new int[]{px, py, pz, pdim});
+            t.setString("pn", pointName);
+            t.setString("f", friend);
+            t.setBoolean("ff", fromFind);
+            t.setBoolean("pr", precise);
+            NBTTagList c = new NBTTagList();
+            for (String n : consented) {
+                c.appendTag(new net.minecraft.nbt.NBTTagString(n));
+            }
+            t.setTag("c", c);
+            return t;
+        }
+
+        public static Order read(NBTTagCompound t) {
+            Order o = new Order();
+            o.mode = Math.max(0, Math.min(BridgeMathSC.MODES - 1, t.getInteger("m")));
+            o.source = t.getInteger("s");
+            o.hasPoint = t.getBoolean("hp");
+            o.toMe = t.getBoolean("me");
+            int[] p = t.getIntArray("p");
+            if (p.length == 4) {
+                o.px = p[0];
+                o.py = p[1];
+                o.pz = p[2];
+                o.pdim = p[3];
+            }
+            o.pointName = t.getString("pn");
+            o.friend = t.getString("f");
+            o.fromFind = t.getBoolean("ff");
+            o.precise = !t.hasKey("pr") || t.getBoolean("pr");
+            NBTTagList c = t.getTagList("c", 8);
+            for (int i = 0; i < c.tagCount(); i++) {
+                o.consented.add(c.getStringTagAt(i));
+            }
+            return o;
+        }
+
+        public boolean agreed(String n) {
+            for (String c : consented) {
+                if (c.equalsIgnoreCase(n)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    /** One end of a plan: where its vortex stands; END_NEAR - next to whom. */
+    public static final class End {
+        public int kind, dim, x, y, z, axis, w;
+        public String player = "";
+    }
+
+    /** Where an order's ends go and what it costs - or why not, or whose consent is missing. */
+    public static final class Plan {
+        public End a, b;
+        public BridgeMsgSC refuse;
+        public String consentFrom;
+        public long[] dists = new long[0];
+        public int[] pct = new int[0];
+        public BridgeMathSC.Cost cost;
+        public boolean beacon, anchor;
+    }
+
+    /** Test hook: players by name the world test makes (fake players are not on the server's list). */
+    public static final java.util.Map<String, EntityPlayer> TEST_PLAYERS = new java.util.HashMap<String, EntityPlayer>();
+
+    /** An online player by name (the world test's fake ones too), or null. */
+    public static EntityPlayer playerByName(String n) {
+        if (n == null || n.length() == 0) {
+            return null;
+        }
+        EntityPlayer t = TEST_PLAYERS.get(n.toLowerCase(java.util.Locale.ROOT));
+        if (t != null) {
+            return t;
+        }
+        MinecraftServer s = MinecraftServer.getServer();
+        if (s == null || s.getConfigurationManager() == null) {
+            return null;
+        }
+        for (Object o : s.getConfigurationManager().playerEntityList) {
+            EntityPlayer p = (EntityPlayer) o;
+            if (p.getCommandSenderName().equalsIgnoreCase(n)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    private static BridgeMsgSC placeRefusal(BridgeSpaceSC.Result r) {
+        return new BridgeMsgSC("sc.bridge.refuse.place", r.x, r.y, r.z).part(new BridgeMsgSC(r.reason, (Object[]) r.args));
+    }
+
+    /** Where the ends of an order go now (no side effects): the ring, a free point, the nearest free place next to a player. */
+    public Plan plan(EntityPlayer p, Order o) {
+        return plan(p, o, false);
+    }
+
+    /**
+     * preview (the remote's / the armour's screen, once a second): a target point in a chunk that isn't loaded is
+     * taken as it is - no place check there (it would load or generate far chunks every second); «Открыть» checks it.
+     */
+    public Plan plan(EntityPlayer p, Order o, boolean preview) {
+        Plan pl = new Plan();
+        int kind = bridgeKind(), w = BridgeMathSC.vortexSize(kind);
+        int[] kinds = BridgeMathSC.modeEnds(o.mode, o.toMe);
+        int friendAt = BridgeMathSC.friendEnd(o.mode, o.toMe);
+        String me = nameOf(p);
+        int[] c = ringCentre();
+        int radius = scan != null && scan.nav ? BridgeSpaceSC.NEAR_RADIUS_NAV : BridgeSpaceSC.NEAR_RADIUS;
+        End[] ends = new End[2];
+        List<Long> dists = new ArrayList<Long>();
+        List<Integer> pct = new ArrayList<Integer>();
+        for (int i = 0; i < 2; i++) {
+            End e = new End();
+            e.kind = kinds[i];
+            e.w = w;
+            if (e.kind == BridgeMathSC.END_RING) {
+                e.dim = ownDim();
+                e.x = c[0];
+                e.y = c[1];
+                e.z = c[2];
+                e.axis = ringAxis();
+                ends[i] = e;
+                continue;
+            }
+            WorldServer ws;
+            BridgeSpaceSC.Result r;
+            if (e.kind == BridgeMathSC.END_POINT) {
+                if (!o.hasPoint) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.notarget");
+                    return pl;
+                }
+                e.dim = kind == BridgeMathSC.SPACE ? o.pdim : ownDim();
+                if (kind == BridgeMathSC.GROUND && o.pdim != ownDim()) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.groundDim");
+                    return pl;
+                }
+                ws = worldFor(e.dim);
+                if (ws == null) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.nodim", e.dim);
+                    return pl;
+                }
+                if (kind == BridgeMathSC.GROUND && BridgeMathSC.distance(c[0], 0, c[2], o.px, 0, o.pz) < MIN_DISTANCE) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.near", MIN_DISTANCE);
+                    return pl;
+                }
+                e.axis = ringAxis();
+                if (preview && !ws.getChunkProvider().chunkExists(o.px >> 4, o.pz >> 4)) {
+                    e.x = o.px;
+                    e.y = o.py == AUTO_Y ? 0 : o.py;
+                    e.z = o.pz;
+                    dists.add(e.dim == ownDim() ? BridgeMathSC.distance(c[0], 0, c[2], e.x, 0, e.z) : 0);
+                    pct.add(0);
+                    ends[i] = e;
+                    continue;
+                }
+                r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), o.px, o.py, o.pz, w, ringAxis(), 0);
+                if (!r.free) {
+                    pl.refuse = placeRefusal(r);
+                    return pl;
+                }
+                e.x = r.x;
+                e.y = r.y;
+                e.z = r.z;
+            } else {
+                boolean isFriend = i == friendAt;
+                EntityPlayer who = isFriend ? playerByName(o.friend) : p;
+                if (who == null) {
+                    pl.refuse = isFriend ? new BridgeMsgSC("sc.bridge.refuse.friendOff", o.friend.length() == 0 ? "?" : o.friend)
+                            : new BridgeMsgSC("sc.bridge.refuse.noplayer");
+                    return pl;
+                }
+                if (isFriend && p != null && who.getCommandSenderName().equalsIgnoreCase(me)) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.friendSelf");
+                    return pl;
+                }
+                e.player = who.getCommandSenderName();
+                e.dim = who.worldObj.provider.dimensionId;
+                if (kind == BridgeMathSC.GROUND && e.dim != ownDim()) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.groundDim");
+                    return pl;
+                }
+                ws = worldFor(e.dim);
+                if (ws == null) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.nodim", e.dim);
+                    return pl;
+                }
+                int[] s = BridgeMathSC.projectionSpot(who.posX, who.boundingBox.minY, who.posZ, who.rotationYaw);
+                e.axis = s[3];
+                r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), s[0], s[1], s[2], w, s[3], radius);
+                if (!r.free && !r.hasNearest) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.nearplace", e.player).part(new BridgeMsgSC(r.reason, (Object[]) r.args));
+                    return pl;
+                }
+                e.x = r.free ? r.x : r.nx;
+                e.y = r.free ? r.y : r.ny;
+                e.z = r.free ? r.z : r.nz;
+            }
+            if (ShieldEventHandlerPrivate.foreignField(ws, p, e.x, e.y, e.z)) {
+                pl.refuse = new BridgeMsgSC("sc.bridge.refuse.place", e.x, e.y, e.z).part("sc.bridge.place.field");
+                return pl;
+            }
+            long dist = e.dim == ownDim() ? BridgeMathSC.distance(c[0], 0, c[2], e.x, 0, e.z) : 0;
+            if (kind == BridgeMathSC.GROUND && dist < MIN_DISTANCE) {
+                pl.refuse = new BridgeMsgSC(e.kind == BridgeMathSC.END_NEAR ? "sc.bridge.refuse.nearring" : "sc.bridge.refuse.near", MIN_DISTANCE);
+                return pl;
+            }
+            dists.add(dist);
+            pct.add(o.source == BridgeMathSC.SRC_ARMOUR && e.kind == BridgeMathSC.END_NEAR && e.player.equalsIgnoreCase(me)
+                    ? BridgeMathSC.ARMOUR_DISCOUNT : 0);
+            ends[i] = e;
+        }
+        pl.a = ends[0];
+        pl.b = ends[1];
+        if (pl.a.kind != BridgeMathSC.END_RING && pl.a.dim == pl.b.dim && kind == BridgeMathSC.GROUND
+                && BridgeMathSC.distance(pl.a.x, 0, pl.a.z, pl.b.x, 0, pl.b.z) < MIN_DISTANCE) {
+            pl.refuse = new BridgeMsgSC("sc.bridge.refuse.endsnear", MIN_DISTANCE);
+            return pl;
+        }
+        // §10: an end next to someone else - their consent first
+        for (End e : ends) {
+            if (e.kind == BridgeMathSC.END_RING) {
+                continue;
+            }
+            if (e.kind == BridgeMathSC.END_NEAR && !e.player.equalsIgnoreCase(me) && !o.agreed(e.player)) {
+                pl.consentFrom = e.player;
+                break;
+            }
+            World ew = DimensionManager.getWorld(e.dim);
+            if (ew != null) {
+                for (Object ob : ew.playerEntities) {
+                    EntityPlayer q = (EntityPlayer) ob;
+                    String qn = q.getCommandSenderName();
+                    if (!qn.equalsIgnoreCase(me) && !qn.equalsIgnoreCase(e.player) && !o.agreed(qn)
+                            && q.getDistanceSq(e.x + 0.5, e.y + 1, e.z + 0.5) <= BridgeMathSC.CONSENT_RADIUS * BridgeMathSC.CONSENT_RADIUS) {
+                        pl.consentFrom = qn;
+                        break;
+                    }
+                }
+            }
+            if (pl.consentFrom != null) {
+                break;
+            }
+        }
+        pl.dists = new long[dists.size()];
+        pl.pct = new int[pct.size()];
+        for (int i = 0; i < pl.dists.length; i++) {
+            pl.dists[i] = dists.get(i);
+            pl.pct[i] = pct.get(i);
+        }
+        BridgeMarksSC marks = worldObj == null ? null : BridgeMarksSC.get(worldObj);
+        int farDim = pl.b.dim != ownDim() ? pl.b.dim : pl.a.dim;
+        pl.beacon = kind == BridgeMathSC.GROUND && marks != null && pl.b.kind == BridgeMathSC.END_POINT
+                && marks.near(BridgeMarksSC.BEACON, pl.b.dim, pl.b.x, pl.b.y, pl.b.z, BridgeMathSC.BEACON_RADIUS);
+        pl.anchor = kind == BridgeMathSC.SPACE && marks != null && marks.any(BridgeMarksSC.ANCHOR, farDim);
+        pl.cost = BridgeMathSC.cost(kind, pl.dists, pl.pct, pl.beacon, pl.anchor, scan == null ? 0 : scan.stabCount());
+        return pl;
+    }
+
+    /** The consent request last sent (the world test answers it). */
+    private int lastConsentId;
+
+    public int getLastConsentId() {
+        return lastConsentId;
+    }
+
+    private BridgeMsgSC askConsent(EntityPlayer p, Order o, String who) {
+        NBTTagCompound order = o.write();
+        order.setIntArray("ctrl", new int[]{xCoord, yCoord, zCoord, ownDim()});
+        com.sc.bridge.BridgeConsentSC.Request r = com.sc.bridge.BridgeConsentSC.server().ask(nameOf(p), who, com.sc.bridge.BridgeFarSC.now(), order);
+        lastConsentId = r.id;
+        EntityPlayer target = playerByName(who);
+        if (target != null) {
+            target.addChatComponentMessage(com.sc.bridge.BridgeFarSC.consentQuestion(r.id, nameOf(p), nameArgChat(), o.mode));
+        }
+        BridgeMsgSC m = new BridgeMsgSC("sc.bridge.msg.consentSent", who, BridgeMathSC.CONSENT_TICKS / 20);
+        log(m, nameOf(p), false);
+        tell(p, m);
+        return m;
+    }
+
+    /**
+     * Opens an order (the controller's screen ДР0, a remote, the armour, an accepted consent). Everything is checked
+     * at once; when all is there the singularity is born now.
+     * @return null when it opened; the refusal (already in the chat and the journal); or «sc.bridge.msg.consentSent»
+     */
+    public BridgeMsgSC openOrder(EntityPlayer p, Order o) {
         if (worldObj == null || worldObj.isRemote) {
             return null;
         }
-        if (!allowed(p)) {
+        boolean far = o.source != BridgeMathSC.SRC_CONTROLLER;
+        if (far ? !trusted(p) : !allowed(p)) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
         }
         BridgeStructureSC.Scan s = rescan();
@@ -754,46 +1230,21 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (coolTicks > 0) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.cooling", (coolTicks + 19) / 20));
         }
-        if (!targetSet) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.notarget"));
+        Plan pl = plan(p, o);
+        if (pl.refuse != null) {
+            return refuse(p, pl.refuse);
         }
-        int dim = targetDim();
-        WorldServer w = worldFor(dim);
-        if (w == null) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.nodim", dim));
+        if (pl.consentFrom != null) {
+            return askConsent(p, o, pl.consentFrom);
         }
-        if (s.kind == BridgeMathSC.GROUND && targetDistance() < MIN_DISTANCE) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.near", MIN_DISTANCE));
-        }
-        int size = BridgeMathSC.vortexSize(s.kind);
-        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(BridgeSpaceSC.of(w), tx, ty, tz, size, s.axis, 0);
-        if (!r.free) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.place", r.x, r.y, r.z).part(new BridgeMsgSC(r.reason, (Object[]) r.args)));
-        }
-        if (ShieldEventHandlerPrivate.foreignField(w, p, r.x, r.y, r.z)) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.place", r.x, r.y, r.z).part("sc.bridge.place.field"));
-        }
-        BridgeMathSC.Cost c = previewCost();
-        BridgeMsgSC miss = new BridgeMsgSC("sc.bridge.refuse.missing");
-        long have = capacitorEnergy();
-        if (have < c.eu) {
-            miss.part("sc.bridge.need.cap", BridgeMathSC.group(c.eu - have));
-        }
-        int[] needTank = new int[tanks.length];
-        needTank[BridgeMathSC.SM] = c.sm;
-        needTank[BridgeMathSC.D] = c.d;
-        needTank[BridgeMathSC.KR] = c.kr;
-        needTank[BridgeMathSC.AR] = c.ar;
-        for (int i = 0; i < tanks.length; i++) {
-            if (tanks[i] < needTank[i]) {
-                miss.part("sc.bridge.need.gas", gasName(i), needTank[i], tanks[i]);
-            }
-        }
+        BridgeMathSC.Cost c = pl.cost;
+        BridgeMsgSC miss = missing(c);
         if (!miss.parts.isEmpty()) {
             return refuse(p, miss);
         }
         // everything is there: the singularity is born now
         drawCapacitors(c.eu);
+        int[] needTank = needTanks(c);
         for (int i = 0; i < tanks.length; i++) {
             tanks[i] -= needTank[i];
         }
@@ -811,31 +1262,97 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         shortWhat = "";
         aAxis = s.axis;
         aSize = s.size;
-        bDim = dim;
-        bx = r.x;
-        by = r.y;
-        bz = r.z;
-        bAxis = s.axis;
-        bW = size;
+        aProj = pl.a.kind != BridgeMathSC.END_RING;
+        aDim = pl.a.dim;
+        ax = pl.a.x;
+        ay = pl.a.y;
+        az = pl.a.z;
+        apAxis = pl.a.axis;
+        aW = pl.a.w;
+        bDim = pl.b.dim;
+        bx = pl.b.x;
+        by = pl.b.y;
+        bz = pl.b.z;
+        bAxis = pl.b.axis;
+        bW = pl.b.w;
+        openMode = o.mode;
+        opener = nameOf(p);
+        openPrecise = o.precise;                                     // stage 3: an imprecise far end scatters on unknown ground
         opens++;
         placeEnds();
         litCoils(s, true);
         loadChunks();
-        int[] ce = s.centre();
-        worldObj.playSoundEffect(ce[0] + 0.5, ce[1] + 0.5, ce[2] + 0.5, "portal.trigger", 1.0F, s.kind == BridgeMathSC.SPACE ? 0.7F : 1.0F);
-        w.playSoundEffect(bx + 0.5, by + 1.5, bz + 0.5, "portal.trigger", 1.0F, s.kind == BridgeMathSC.SPACE ? 0.7F : 1.0F);
-        BridgeMsgSC m = new BridgeMsgSC(dim == ownDim() ? "sc.bridge.journal.opened" : "sc.bridge.journal.openedDim", bx, by, bz,
-                BridgeMathSC.group(targetDistance()), dim);
+        float pitch = s.kind == BridgeMathSC.SPACE ? 0.7F : 1.0F;
+        World wa = endWorld(0), wb = endWorld(1);
+        int[] ce = aProj ? new int[]{ax, ay + 1, az} : s.centre();
+        if (wa != null) {
+            wa.playSoundEffect(ce[0] + 0.5, ce[1] + 0.5, ce[2] + 0.5, "portal.trigger", 1.0F, pitch);
+        }
+        if (wb != null) {
+            wb.playSoundEffect(bx + 0.5, by + 1.5, bz + 0.5, "portal.trigger", 1.0F, pitch);
+        }
+        if (aProj) {
+            int[] rc = s.centre();
+            worldObj.playSoundEffect(rc[0] + 0.5, rc[1] + 0.5, rc[2] + 0.5, "portal.trigger", 0.6F, pitch);
+        }
+        long d = 0;
+        for (long x : pl.dists) {
+            d = Math.max(d, x);
+        }
+        BridgeMsgSC m = o.mode == BridgeMathSC.MODE_BASE
+                ? new BridgeMsgSC(bDim == ownDim() ? "sc.bridge.journal.opened" : "sc.bridge.journal.openedDim", bx, by, bz, BridgeMathSC.group(d), bDim)
+                : new BridgeMsgSC("sc.bridge.journal.openedMode", "@mode." + o.mode, bx, by, bz, BridgeMathSC.group(d));
         log(m, nameOf(p), false);
         tell(p, m);
+        for (End e : new End[]{pl.a, pl.b}) {
+            EntityPlayer q = e.kind == BridgeMathSC.END_NEAR && !e.player.equalsIgnoreCase(nameOf(p)) ? playerByName(e.player) : null;
+            if (q != null) {
+                tell(q, new BridgeMsgSC("sc.bridge.msg.openedNear", nameOf(p), nameArg()));
+            }
+        }
+        sendHud();
         markDirty();
         return null;
+    }
+
+    /** What is missing for a cost (capacitors, tanks) - parts empty when nothing. */
+    public BridgeMsgSC missing(BridgeMathSC.Cost c) {
+        BridgeMsgSC miss = new BridgeMsgSC("sc.bridge.refuse.missing");
+        long have = capacitorEnergy();
+        if (have < c.eu) {
+            miss.part("sc.bridge.need.cap", BridgeMathSC.group(c.eu - have));
+        }
+        int[] needTank = needTanks(c);
+        for (int i = 0; i < tanks.length; i++) {
+            if (tanks[i] < needTank[i]) {
+                miss.part("sc.bridge.need.gas", gasName(i), needTank[i], tanks[i]);
+            }
+        }
+        return miss;
+    }
+
+    private int[] needTanks(BridgeMathSC.Cost c) {
+        int[] needTank = new int[tanks.length];
+        needTank[BridgeMathSC.SM] = c.sm;
+        needTank[BridgeMathSC.D] = c.d;
+        needTank[BridgeMathSC.KR] = c.kr;
+        needTank[BridgeMathSC.AR] = c.ar;
+        return needTank;
+    }
+
+    /** The opener's HUD line (§8): the bridge, the time left, the stability - or that it closed. */
+    private void sendHud() {
+        EntityPlayer q = playerByName(opener);
+        if (q instanceof net.minecraft.entity.player.EntityPlayerMP && !(q instanceof net.minecraftforge.common.util.FakePlayer)) {
+            com.sc.bridge.BridgeNetSC.CHANNEL.sendTo(new com.sc.bridge.BridgeNetSC.Hud(open, name, lifeLeft, lifeTotal, stability, openKind),
+                    (net.minecraft.entity.player.EntityPlayerMP) q);
+        }
     }
 
     /** The vortex cells of an end: [x, y, z, tileU, tileV]. */
     public List<int[]> endCells(int end) {
         List<int[]> out = new ArrayList<int[]>();
-        if (end == 0) {
+        if (end == 0 && !aProj) {
             int n = aSize, h = (n - 1) / 2;
             for (int v = 2; v < n; v++) {
                 for (int u = -h + 1; u < h; u++) {
@@ -844,10 +1361,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 }
             }
         } else {
-            int w = bW, h = (w - 1) / 2;
+            boolean a = end == 0;
+            int w = a ? aW : bW, h = (w - 1) / 2, axis = a ? apAxis : bAxis, x0 = a ? ax : bx, y0 = a ? ay : by, z0 = a ? az : bz;
             for (int v = 0; v < w; v++) {
                 for (int u = -h; u <= h; u++) {
-                    int[] p = bAxis == 0 ? new int[]{bx + u, by + v, bz} : new int[]{bx, by + v, bz + u};
+                    int[] p = axis == 0 ? new int[]{x0 + u, y0 + v, z0} : new int[]{x0, y0 + v, z0 + u};
                     out.add(new int[]{p[0], p[1], p[2], u + h, w - 1 - v});
                 }
             }
@@ -856,7 +1374,25 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     }
 
     private World endWorld(int end) {
-        return end == 0 ? worldObj : DimensionManager.getWorld(bDim);
+        return end == 0 ? (aProj ? DimensionManager.getWorld(aDim) : worldObj) : DimensionManager.getWorld(bDim);
+    }
+
+    /** The open portal's end A away from the ring: {dim, x, y, z, axis, w}, or null (A is the ring). */
+    public int[] getEndA() {
+        return aProj ? new int[]{aDim, ax, ay, az, apAxis, aW} : null;
+    }
+
+    public int getOpenMode() {
+        return openMode;
+    }
+
+    public String getOpener() {
+        return opener;
+    }
+
+    /** The open portal's far end is precise (stage 3: otherwise it scatters on unknown ground). */
+    public boolean isOpenPrecise() {
+        return openPrecise;
     }
 
     /** Puts the vortex cells that are missing (into air only). */
@@ -910,6 +1446,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         removeEnds();
         open = false;
+        sendHud();
         litCoils(scan, false);
         releaseChunks();
         coolTotal = BridgeMathSC.coolTicks();
@@ -966,6 +1503,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             }
             placeEnds();                                       // a cell someone took is put back (into air)
             markDirty();
+        }
+        if (tick % 10 == 0) {
+            sendHud();
         }
         if (shortNow) {
             if (shortTicks < 0) {
@@ -1025,6 +1565,13 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             y = by;
             z = bz + 0.5 + o[2];
             yaw = bAxis == 0 ? 0F : -90F;
+        } else if (aProj) {
+            dim = aDim;
+            int[] o = apAxis == 0 ? new int[]{0, 0, 1} : new int[]{1, 0, 0};
+            x = ax + 0.5 + o[0];
+            y = ay;
+            z = az + 0.5 + o[2];
+            yaw = apAxis == 0 ? 0F : -90F;
         } else {
             dim = ownDim();
             int d = exitSideA();
@@ -1070,10 +1617,16 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     private void loadChunks() {
         if (ticketA == null) {
-            ticketA = ticket(worldObj);
+            World wa = aProj ? DimensionManager.getWorld(aDim) : worldObj;
+            if (wa == null && aProj) {
+                wa = worldFor(aDim);
+            }
+            ticketA = wa == null ? null : ticket(wa);
             if (ticketA != null) {
                 forceAround(ticketA, endCells(0));
-                ForgeChunkManager.forceChunk(ticketA, new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4));
+                if (wa == worldObj) {
+                    ForgeChunkManager.forceChunk(ticketA, new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4));
+                }
             }
         }
         if (ticketB == null) {
@@ -1117,9 +1670,59 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             ForgeChunkManager.releaseTicket(t);
             return;
         }
+        if (aProj && aDim != ownDim()) {
+            ForgeChunkManager.releaseTicket(t);              // end A is in another world: asked for again on the next tick
+            return;
+        }
         ticketA = t;
         forceAround(t, endCells(0));
         ForgeChunkManager.forceChunk(t, new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4));
+    }
+
+    /** ChunkLoaderSC: after a load, the «Дистанционный режим» ticket comes back (or goes, when the mode is off). */
+    public void adoptRemoteTicket(ForgeChunkManager.Ticket t) {
+        if (!remoteMode || ticketR != null) {
+            ForgeChunkManager.releaseTicket(t);
+            return;
+        }
+        ticketR = t;
+        ForgeChunkManager.forceChunk(t, new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4));
+    }
+
+    /** «Дистанционный режим» on / off: the controller's chunk stays loaded (REMOTE_MODE_EU a tick) so remotes and helmets reach it. */
+    public void setRemoteMode(boolean on) {
+        if (on == remoteMode) {
+            return;
+        }
+        remoteMode = on;
+        if (!on && ticketR != null) {
+            ForgeChunkManager.releaseTicket(ticketR);
+            ticketR = null;
+        }
+        markDirty();
+    }
+
+    private void remoteModeTick() {
+        if (!remoteMode) {
+            return;
+        }
+        if (!drawAny(BridgeMathSC.REMOTE_MODE_EU)) {
+            setRemoteMode(false);
+            log(new BridgeMsgSC("sc.bridge.journal.remoteOff"), "", true);
+            return;
+        }
+        if (ticketR == null && worldObj instanceof WorldServer) {
+            ticketR = ForgeChunkManager.requestTicket(com.sc.SCMod.instance, worldObj, ForgeChunkManager.Type.NORMAL);
+            if (ticketR != null) {
+                NBTTagCompound d = ticketR.getModData();
+                d.setString("Kind", "bridgeRemote");
+                d.setInteger("x", xCoord);
+                d.setInteger("y", yCoord);
+                d.setInteger("z", zCoord);
+                d.setInteger("dim", ownDim());
+                ForgeChunkManager.forceChunk(ticketR, new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4));
+            }
+        }
     }
 
     // ------------------------------------------------------------------ the tick
@@ -1133,6 +1736,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (scan == null || tick % 20 == 0) {
             rescan();
         }
+        if (bridgeId == 0) {
+            ensureBridgeId();
+        }
+        remoteModeTick();
         if (open) {
             holdTick();
         }
@@ -1170,6 +1777,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         super.invalidate();
         if (worldObj != null && !worldObj.isRemote) {
             releaseChunks();
+            if (ticketR != null) {
+                ForgeChunkManager.releaseTicket(ticketR);
+                ticketR = null;
+            }
         }
     }
 
@@ -1178,15 +1789,60 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         super.onChunkUnload();
         ticketA = null;
         ticketB = null;
+        ticketR = null;
     }
 
     // ------------------------------------------------------------------ the screen's actions (BridgeNetSC)
 
     public static final int A_CHECK = 2, A_CALIBRATE = 3, A_PROBE = 4, A_OPEN = 6, A_CLOSE = 7, A_BM_ADD = 8, A_BM_RENAME = 9,
             A_BM_DELETE = 10, A_POWER = 12, A_CLEAR = 13, A_TARGET = 14, A_MODE = 15;
+    /** Stage 2: the name, friends, access, «Дистанционный режим» (owner); bind the worn helmet; the coordinators in the inventory. */
+    public static final int A_NAME = 16, A_FRIEND_ADD = 17, A_FRIEND_DEL = 18, A_ACCESS = 19, A_REMOTE_MODE = 20, A_BIND_HELMET = 21,
+            A_FROM_COORD = 22, A_TO_COORD = 23, A_COPY_COORD = 24;
 
     public void action(EntityPlayer p, int a, int[] v, String s) {
         switch (a) {
+            case A_NAME:
+            case A_FRIEND_ADD:
+            case A_FRIEND_DEL:
+            case A_ACCESS:
+                if (!isOwner(p)) {
+                    refuse(p, new BridgeMsgSC("sc.bridge.refuse.owneronly", owner));
+                    return;
+                }
+                if (a == A_NAME) {
+                    setBridgeName(s);
+                } else if (a == A_FRIEND_ADD) {
+                    BridgeMsgSC m = addFriend(s) ? new BridgeMsgSC("sc.bridge.msg.friendAdded", cut(s)) : new BridgeMsgSC("sc.bridge.refuse.friendBad");
+                    lastMsg = m;
+                    lastMsgAt = worldObj == null ? 0 : worldObj.getTotalWorldTime();
+                } else if (a == A_FRIEND_DEL) {
+                    if (v.length >= 1) {
+                        removeFriend(v[0]);
+                    }
+                } else {
+                    setAccess(access == BridgeMathSC.ACCESS_PUBLIC ? BridgeMathSC.ACCESS_FRIENDS : BridgeMathSC.ACCESS_PUBLIC);
+                }
+                return;
+            case A_REMOTE_MODE:
+                if (!trusted(p)) {
+                    refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+                    return;
+                }
+                setRemoteMode(!remoteMode);
+                log(new BridgeMsgSC(remoteMode ? "sc.bridge.journal.remoteOn" : "sc.bridge.journal.remoteOffHand"), nameOf(p), false);
+                return;
+            case A_BIND_HELMET:
+                bindHelmet(p);
+                return;
+            case A_FROM_COORD:
+            case A_TO_COORD:
+            case A_COPY_COORD:
+                if (p == null || !allowed(p)) {
+                    return;
+                }
+                coordAction(p, a, v, s);
+                return;
             case A_CHECK:
                 checkBuild();
                 return;
@@ -1270,6 +1926,230 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         return t.length() > 32 ? t.substring(0, 32) : t;
     }
 
+    /** «Привязать шлем»: the worn Singular helmet with the Armour Link Module links this bridge (owner / friends, up to 3). */
+    public BridgeMsgSC bindHelmet(EntityPlayer p) {
+        if (p == null) {
+            return null;
+        }
+        if (!trusted(p)) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+        }
+        net.minecraft.item.ItemStack helmet = p.getCurrentArmor(3);
+        if (!com.sc.util.SingularLevel.isSingular(helmet) || ((com.sc.item.ItemArmorSC) helmet.getItem()).armorType != 0) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.nohelmet"));
+        }
+        if (!com.sc.bridge.BridgeItemDataSC.hasModule(helmet)) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.nomodule"));
+        }
+        if (scan == null || !scan.found) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.build"));
+        }
+        int i = com.sc.bridge.BridgeItemDataSC.addLink(helmet, xCoord, yCoord, zCoord, ownDim(), ensureBridgeId(), name, bridgeKind());
+        if (i < 0) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.links", BridgeMathSC.MAX_LINKS));
+        }
+        com.sc.bridge.BridgeItemDataSC.select(helmet, i);
+        p.inventoryContainer.detectAndSendChanges();
+        noteLink(p, BridgeMathSC.SRC_ARMOUR);
+        BridgeMsgSC m = new BridgeMsgSC("sc.bridge.msg.helmetBound", nameArg(), i + 1, BridgeMathSC.MAX_LINKS);
+        tell(p, m);
+        return m;
+    }
+
+    /** The coordinators in a player's inventory: «Из коорд.» (the first with a point), «В коорд.», copy one into an empty one. */
+    private void coordAction(EntityPlayer p, int a, int[] v, String s) {
+        net.minecraft.item.ItemStack[] inv = p.inventory.mainInventory;
+        int withPoint = -1, empty = -1, any = -1;
+        net.minecraft.item.ItemStack held = p.getHeldItem();
+        for (int i = 0; i < inv.length; i++) {
+            if (com.sc.item.ItemCoordinatorSC.isCoordinator(inv[i])) {
+                any = any < 0 ? i : any;
+                if (com.sc.bridge.BridgeItemDataSC.point(inv[i]) != null) {
+                    withPoint = withPoint < 0 ? i : withPoint;
+                } else if (empty < 0) {
+                    empty = i;
+                }
+            }
+        }
+        BridgeMsgSC m;
+        if (a == A_FROM_COORD) {
+            net.minecraft.item.ItemStack c = com.sc.item.ItemCoordinatorSC.isCoordinator(held) && com.sc.bridge.BridgeItemDataSC.point(held) != null
+                    ? held : withPoint >= 0 ? inv[withPoint] : null;
+            if (c == null) {
+                m = new BridgeMsgSC("sc.bridge.refuse.nocoord");
+            } else {
+                int[] pt = com.sc.bridge.BridgeItemDataSC.point(c);
+                setTarget(pt[0], pt[1], pt[2], pt[3]);
+                targetRev++;
+                m = new BridgeMsgSC("sc.bridge.msg.fromCoord", pt[0], pt[1], pt[2]);
+            }
+        } else if (a == A_TO_COORD) {
+            net.minecraft.item.ItemStack c = com.sc.item.ItemCoordinatorSC.isCoordinator(held) ? held : empty >= 0 ? inv[empty] : any >= 0 ? inv[any] : null;
+            if (c == null || v.length < 4) {
+                m = new BridgeMsgSC("sc.bridge.refuse.nocoord");
+            } else {
+                World w = worldFor(bridgeKind() == BridgeMathSC.SPACE ? v[3] : ownDim());
+                int y = v[1];
+                boolean safe = false;
+                if (w != null && y != AUTO_Y) {
+                    safe = BridgeSpaceSC.check(BridgeSpaceSC.of(w), v[0], y, v[2], BridgeMathSC.vortexSize(BridgeMathSC.GROUND), ringAxis()).free;
+                } else if (w != null) {
+                    y = BridgeSpaceSC.autoY(BridgeSpaceSC.of(w), v[0], v[2], BridgeMathSC.vortexSize(BridgeMathSC.GROUND), ringAxis(), BridgeSpaceSC.AUTO_DEPTH);
+                    safe = y >= 0;
+                    y = y >= 0 ? y : v[1];
+                }
+                com.sc.bridge.BridgeItemDataSC.setPoint(c, v[0], y, v[2], bridgeKind() == BridgeMathSC.SPACE ? v[3] : ownDim(), safe);
+                if (s != null && s.trim().length() > 0) {
+                    com.sc.bridge.BridgeItemDataSC.setPointName(c, s);
+                }
+                m = new BridgeMsgSC("sc.bridge.msg.toCoord", v[0], y == AUTO_Y ? "@auto" : String.valueOf(y), v[2]);
+            }
+        } else {
+            if (withPoint < 0 || empty < 0) {
+                m = new BridgeMsgSC("sc.bridge.refuse.copycoord");
+            } else {
+                com.sc.bridge.BridgeItemDataSC.copyPoint(inv[withPoint], inv[empty]);
+                m = new BridgeMsgSC("sc.bridge.msg.copyCoord", com.sc.item.ItemCoordinatorSC.label(inv[withPoint]));
+            }
+        }
+        p.inventoryContainer.detectAndSendChanges();
+        lastMsg = m;
+        lastMsgAt = worldObj == null ? 0 : worldObj.getTotalWorldTime();
+        tell(p, m);
+    }
+
+    /** Adds a bookmark (the screen, a remote, the armour's «Запомнить точку»). @return the refusal, or null */
+    public BridgeMsgSC addBookmark(EntityPlayer p, String n, int x, int y, int z, int dim) {
+        if (!allowed(p)) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+        }
+        if (bookmarks.size() >= maxBookmarks()) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.bookmarks", maxBookmarks()));
+        }
+        NBTTagCompound b = new NBTTagCompound();
+        b.setString("n", cut(n));
+        b.setIntArray("p", new int[]{x, y, z, dim});
+        bookmarks.add(b);
+        markDirty();
+        return null;
+    }
+
+    /**
+     * What a remote or the armour shows of this bridge (BridgeFarSC): its name, kind, readiness, capacitors,
+     * tanks, ring, stability, the open portal, the bookmarks, and - for an order - its plan: the cost, what is
+     * missing and where the ends would stand.
+     */
+    public NBTTagCompound writeFarState(EntityPlayer viewer, Order o) {
+        if (scan == null) {
+            rescan();
+        }
+        NBTTagCompound t = new NBTTagCompound();
+        t.setString("name", name);
+        t.setString("owner", owner);
+        t.setInteger("kind", bridgeKind());
+        t.setBoolean("trusted", trusted(viewer));
+        t.setBoolean("found", scan != null && scan.found);
+        t.setBoolean("valid", scan != null && scan.valid);
+        t.setBoolean("power", powerOn);
+        t.setBoolean("calibrated", isCalibrated());
+        t.setBoolean("open", open);
+        t.setBoolean("remoteMode", remoteMode);
+        t.setIntArray("time", new int[]{lifeLeft, lifeTotal, coolTicks, coolTotal, stability, shortTicks});
+        t.setInteger("baseStab", BridgeMathSC.baseStability(scan == null ? 0 : scan.stabCount()));
+        t.setInteger("wear", wear);
+        t.setLong("capEu", capacitorEnergy());
+        t.setLong("capMax", capacitorMax());
+        int[] caps = new int[tanks.length];
+        for (int i = 0; i < caps.length; i++) {
+            caps[i] = tankCapacity(i);
+        }
+        t.setIntArray("tanks", tanks.clone());
+        t.setIntArray("tankCaps", caps);
+        t.setIntArray("pos", new int[]{xCoord, yCoord, zCoord, ownDim()});
+        NBTTagList bm = new NBTTagList();
+        for (NBTTagCompound b : bookmarks) {
+            bm.appendTag(b.copy());
+        }
+        t.setTag("bookmarks", bm);
+        t.setInteger("bmMax", maxBookmarks());
+        if (viewer != null && viewer.worldObj != null && viewer.worldObj.provider.dimensionId == ownDim()) {
+            int[] c = ringCentre();
+            t.setLong("dist", BridgeMathSC.distance(c[0], 0, c[2], (int) Math.floor(viewer.posX), 0, (int) Math.floor(viewer.posZ)));
+        } else {
+            t.setLong("dist", -1);
+        }
+        if (open) {
+            t.setIntArray("endB", new int[]{bDim, bx, by, bz});
+            t.setString("opener", opener);
+        }
+        if (o != null) {
+            Plan pl = plan(viewer, o, true);
+            if (pl.refuse != null) {
+                t.setTag("refuse", pl.refuse.write());
+            } else {
+                BridgeMathSC.Cost c = pl.cost;
+                t.setLong("costEu", c.eu);
+                t.setIntArray("cost", new int[]{c.sm, c.d, c.kr, c.ar, c.holdEu, c.heSec, c.arSec, c.d2oSec, c.lifeTicks, c.beacon ? 1 : 0, c.anchor ? 1 : 0});
+                t.setInteger("proj", pl.dists.length);
+                int pct = 0;
+                for (int x : pl.pct) {
+                    pct = Math.max(pct, x);
+                }
+                t.setInteger("pct", pct);
+                BridgeMsgSC miss = missing(c);
+                if (!miss.parts.isEmpty()) {
+                    t.setTag("missing", miss.write());
+                }
+                if (pl.consentFrom != null) {
+                    t.setString("consent", pl.consentFrom);
+                }
+                t.setIntArray("endA", new int[]{pl.a.kind, pl.a.dim, pl.a.x, pl.a.y, pl.a.z});
+                t.setIntArray("endBp", new int[]{pl.b.kind, pl.b.dim, pl.b.x, pl.b.y, pl.b.z});
+                t.setString("endAp", pl.a.player);
+                t.setString("endBpl", pl.b.player);
+            }
+        }
+        if (scan != null && scan.kind == BridgeMathSC.SPACE) {
+            t.setTag("dims", dimList());
+        }
+        return t;
+    }
+
+    /** The registered dimensions with their names (the Space bridge's choice). */
+    private static NBTTagList dimList() {
+        NBTTagList dims = new NBTTagList();
+        for (Integer id : DimensionManager.getStaticDimensionIDs()) {
+            NBTTagCompound d = new NBTTagCompound();
+            d.setInteger("id", id);
+            String nm;
+            try {
+                World dw = DimensionManager.getWorld(id);
+                nm = dw != null ? dw.provider.getDimensionName() : DimensionManager.createProviderFor(id).getDimensionName();
+            } catch (Throwable ex) {
+                nm = "DIM" + id;
+            }
+            d.setString("n", nm);
+            dims.appendTag(d);
+        }
+        return dims;
+    }
+
+    public void closeFrom(EntityPlayer p) {
+        if (!trusted(p)) {
+            refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            return;
+        }
+        if (open) {
+            shortWhat = "";
+            closePortal("sc.bridge.journal.closed");
+        }
+    }
+
+    /** A refusal said to the player and kept in the journal (the remote / armour paths). */
+    public BridgeMsgSC refuseFar(EntityPlayer p, BridgeMsgSC m) {
+        return refuse(p, m);
+    }
+
     /** Everything the screen shows (BridgeNetSC sends it twice a second while the screen is open). */
     public NBTTagCompound writeState(EntityPlayer viewer) {
         if (scan == null) {
@@ -1278,6 +2158,32 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         NBTTagCompound t = new NBTTagCompound();
         t.setString("owner", owner);
         t.setBoolean("allowed", allowed(viewer));
+        t.setBoolean("isOwner", isOwner(viewer));
+        t.setBoolean("trusted", trusted(viewer));
+        t.setString("name", name);
+        NBTTagList fr = new NBTTagList();
+        for (String f : friends) {
+            fr.appendTag(new net.minecraft.nbt.NBTTagString(f));
+        }
+        t.setTag("friends", fr);
+        t.setBoolean("remoteMode", remoteMode);
+        int remotes = 0, helmets = 0;
+        for (NBTTagCompound l : links) {
+            if (l.getInteger("k") == BridgeMathSC.SRC_ARMOUR) {
+                helmets++;
+            } else {
+                remotes++;
+            }
+        }
+        t.setIntArray("links", new int[]{remotes, helmets});
+        t.setInteger("targetRev", targetRev);
+        int coords = 0;
+        if (viewer != null) {
+            for (net.minecraft.item.ItemStack st : viewer.inventory.mainInventory) {
+                coords += com.sc.item.ItemCoordinatorSC.isCoordinator(st) ? 1 : 0;
+            }
+        }
+        t.setInteger("coords", coords);
         t.setBoolean("power", powerOn);
         t.setInteger("mode", mode);
         t.setInteger("access", access);
@@ -1347,21 +2253,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         t.setInteger("dimHere", ownDim());
         if (s != null && s.kind == BridgeMathSC.SPACE) {
-            NBTTagList dims = new NBTTagList();
-            for (Integer id : DimensionManager.getStaticDimensionIDs()) {
-                NBTTagCompound d = new NBTTagCompound();
-                d.setInteger("id", id);
-                String name;
-                try {
-                    World dw = DimensionManager.getWorld(id);
-                    name = dw != null ? dw.provider.getDimensionName() : DimensionManager.createProviderFor(id).getDimensionName();
-                } catch (Throwable ex) {
-                    name = "DIM" + id;
-                }
-                d.setString("n", name);
-                dims.appendTag(d);
-            }
-            t.setTag("dims", dims);
+            t.setTag("dims", dimList());
         }
         return t;
     }
@@ -1421,6 +2313,39 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             open = false;
         }
         shortWhat = nbt.getString("ShortWhat");
+        int[] h = nbt.getIntArray("Hold");
+        if (open && hold != null && h.length == 4) {
+            hold.holdEu = h[0];
+            hold.heSec = h[1];
+            hold.arSec = h[2];
+            hold.d2oSec = h[3];
+        }
+        int[] pa = nbt.getIntArray("PortalA");
+        aProj = open && pa.length == 6;
+        if (aProj) {
+            aDim = pa[0];
+            ax = pa[1];
+            ay = pa[2];
+            az = pa[3];
+            apAxis = pa[4];
+            aW = pa[5];
+        }
+        openMode = nbt.getInteger("OpenMode");
+        opener = nbt.getString("Opener");
+        openPrecise = nbt.getBoolean("Precise");
+        name = nbt.getString("Name");
+        friends.clear();
+        NBTTagList fl = nbt.getTagList("Friends", 8);
+        for (int i = 0; i < fl.tagCount() && i < BridgeMathSC.MAX_FRIENDS; i++) {
+            friends.add(fl.getStringTagAt(i));
+        }
+        remoteMode = nbt.getBoolean("RemoteMode");
+        bridgeId = nbt.getLong("BridgeId");
+        links.clear();
+        NBTTagList ll = nbt.getTagList("Links", 10);
+        for (int i = 0; i < ll.tagCount(); i++) {
+            links.add(ll.getCompoundTagAt(i));
+        }
     }
 
     private void readTanks(NBTTagCompound nbt) {
@@ -1469,6 +2394,28 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         nbt.setIntArray("Portal", new int[]{openKind, lifeLeft, lifeTotal, stability, shortTicks, aAxis, aSize, bDim, bx, by, bz, bAxis, bW,
                 (int) Math.max(0, Math.min(Integer.MAX_VALUE, openKind == BridgeMathSC.GROUND ? dist : 0)), hold != null && hold.anchor ? 1 : 0});
         nbt.setString("ShortWhat", shortWhat);
+        if (hold != null) {
+            nbt.setIntArray("Hold", new int[]{hold.holdEu, hold.heSec, hold.arSec, hold.d2oSec});
+        }
+        if (open && aProj) {
+            nbt.setIntArray("PortalA", new int[]{aDim, ax, ay, az, apAxis, aW});
+        }
+        nbt.setInteger("OpenMode", openMode);
+        nbt.setString("Opener", opener);
+        nbt.setBoolean("Precise", openPrecise);
+        nbt.setString("Name", name);
+        NBTTagList fl = new NBTTagList();
+        for (String f : friends) {
+            fl.appendTag(new net.minecraft.nbt.NBTTagString(f));
+        }
+        nbt.setTag("Friends", fl);
+        nbt.setBoolean("RemoteMode", remoteMode);
+        nbt.setLong("BridgeId", bridgeId);
+        NBTTagList ll = new NBTTagList();
+        for (NBTTagCompound l : links) {
+            ll.appendTag(l.copy());
+        }
+        nbt.setTag("Links", ll);
     }
 
     private void writeBookmarks(NBTTagCompound nbt) {
@@ -1517,6 +2464,16 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     }
 
     // ------------------------------------------------------------------ tests
+
+    /** World test: the ring cooled at once. */
+    public void setCoolForTest(int t) {
+        coolTicks = Math.max(0, t);
+    }
+
+    /** «Дистанционный режим» holds its chunk ticket now. */
+    public boolean hasRemoteTicket() {
+        return ticketR != null;
+    }
 
     /** World test: fill a tank directly. */
     public void putTankForTest(int i, int mb) {

@@ -19,6 +19,7 @@ public class ClientProxy extends CommonProxy {
         com.sc.client.RadiationClientSC.register();
         com.sc.client.BookKeySC.register();
         com.sc.client.BridgeHighlightSC.register();
+        com.sc.client.BridgeHudSC.register();
         BlockConduitSC.renderId = RenderingRegistry.getNextAvailableRenderId();
         RenderingRegistry.registerBlockHandler(new ConduitRenderer(BlockConduitSC.renderId));
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
@@ -46,6 +47,27 @@ public class ClientProxy extends CommonProxy {
         if (s instanceof com.sc.client.GuiBridgeControllerSC && ((com.sc.client.GuiBridgeControllerSC) s).isFor(x, y, z)) {
             ((com.sc.client.GuiBridgeControllerSC) s).setState(state);
         }
+    }
+
+    @Override
+    public void openRemote() {
+        Minecraft.getMinecraft().displayGuiScreen(new com.sc.client.GuiRemoteSC());
+    }
+
+    @Override
+    public void openCoordinator() {
+        Minecraft.getMinecraft().displayGuiScreen(new com.sc.client.GuiCoordinatorSC());
+    }
+
+    @Override
+    public void bridgeFarState(net.minecraft.nbt.NBTTagCompound state) {
+        net.minecraft.client.gui.GuiScreen s = Minecraft.getMinecraft().currentScreen;
+        if (s instanceof com.sc.client.GuiRemoteSC) {
+            ((com.sc.client.GuiRemoteSC) s).setState(state);
+        } else if (s instanceof com.sc.client.GuiArmorBridgeSC) {
+            ((com.sc.client.GuiArmorBridgeSC) s).setState(state);
+        }
+        com.sc.client.BridgeHudSC.heard(state);
     }
 
     @Override

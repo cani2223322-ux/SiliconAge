@@ -45,6 +45,11 @@ public class ArmorClientSC {
     public static final KeyBinding KEY_DASH = new KeyBinding("key.sc.dash", Keyboard.KEY_R, "key.categories.sc");
     /** М4: the next Singular function profile - P by default when nothing else has P, else unbound (set in Controls). */
     public static KeyBinding KEY_PROFILE;
+    /**
+     * The bridge link (docs/plan-ground-bridge.md §8): «Домой» (H), «Открыть по последней цели» (J; Shift+J -
+     * «Запомнить точку»), «Запомнить точку» on its own key too (unbound) - each H / J only when nothing else has it.
+     */
+    public static KeyBinding KEY_BRIDGE_HOME, KEY_BRIDGE_LAST, KEY_BRIDGE_MARK;
 
     private static final int SCAN_RADIUS = 8, SCAN_EVERY = 40, THERMAL_RANGE = 24;
     private final List<int[]> ores = new ArrayList<int[]>();
@@ -58,6 +63,12 @@ public class ArmorClientSC {
         ClientRegistry.registerKeyBinding(KEY_DASH);
         ArmorKeyBindsSC.load(cpw.mods.fml.common.Loader.instance().getConfigDir());
         KEY_PROFILE = new KeyBinding("key.sc.profile", profileKeyDefault(), "key.categories.sc");
+        KEY_BRIDGE_HOME = new KeyBinding("key.sc.bridgeHome", freeKey(Keyboard.KEY_H), "key.categories.sc");
+        KEY_BRIDGE_LAST = new KeyBinding("key.sc.bridgeLast", freeKey(Keyboard.KEY_J), "key.categories.sc");
+        KEY_BRIDGE_MARK = new KeyBinding("key.sc.bridgeMark", Keyboard.KEY_NONE, "key.categories.sc");
+        ClientRegistry.registerKeyBinding(KEY_BRIDGE_HOME);
+        ClientRegistry.registerKeyBinding(KEY_BRIDGE_LAST);
+        ClientRegistry.registerKeyBinding(KEY_BRIDGE_MARK);
         ClientRegistry.registerKeyBinding(KEY_PROFILE);
         SingularHudSC.register();                                                    // М3: the cooldown icons
         ArmorClientSC instance = new ArmorClientSC();
@@ -87,6 +98,48 @@ public class ArmorClientSC {
         return Keyboard.KEY_P;
     }
 
+    /** `key`, unless a key binding (vanilla, another mod's so far, a suit function's own key) already uses it - then unbound. */
+    private static int freeKey(int key) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null && mc.gameSettings != null && mc.gameSettings.keyBindings != null) {
+            for (KeyBinding kb : mc.gameSettings.keyBindings) {
+                if (kb != null && (kb.getKeyCode() == key || kb.getKeyCodeDefault() == key)) {
+                    return Keyboard.KEY_NONE;
+                }
+            }
+        }
+        for (Enum<?> f : ArmorFeature.values()) {
+            int[] b = ArmorKeyBindsSC.get(f);
+            if (b != null && b[0] == key) {
+                return Keyboard.KEY_NONE;
+            }
+        }
+        return key;
+    }
+
+    /** The bridge keys: the server checks the helmet, the module, the level and the bridge, and says why not. */
+    private static void bridgeKeys(Minecraft mc) {
+        boolean home = KEY_BRIDGE_HOME != null && KEY_BRIDGE_HOME.isPressed();
+        boolean last = KEY_BRIDGE_LAST != null && KEY_BRIDGE_LAST.isPressed();
+        boolean mark = KEY_BRIDGE_MARK != null && KEY_BRIDGE_MARK.isPressed();
+        if (!(home || last || mark) || mc.currentScreen != null) {
+            return;
+        }
+        if (!com.sc.util.SingularLevel.isSingular(mc.thePlayer.getCurrentArmor(3))) {
+            mc.ingameGUI.func_110326_a(Lang.tr("sc.bridge.armour.nohelmet"), false);
+            return;
+        }
+        boolean shift = Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT);
+        if (mark || (last && shift)) {
+            String name = Lang.tr("sc.bridge.armour.markname", (int) Math.floor(mc.thePlayer.posX), (int) Math.floor(mc.thePlayer.posZ));
+            com.sc.bridge.BridgeNetSC.sendFar(com.sc.bridge.BridgeFarSC.SRC_ARMOUR, -1, com.sc.bridge.BridgeFarSC.F_MARK, null, name);
+        } else if (home) {
+            com.sc.bridge.BridgeNetSC.sendFar(com.sc.bridge.BridgeFarSC.SRC_ARMOUR, -1, com.sc.bridge.BridgeFarSC.F_HOME, null, null);
+        } else {
+            com.sc.bridge.BridgeNetSC.sendFar(com.sc.bridge.BridgeFarSC.SRC_ARMOUR, -1, com.sc.bridge.BridgeFarSC.F_LAST, null, null);
+        }
+    }
+
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
         Minecraft mc = Minecraft.getMinecraft();
@@ -97,6 +150,7 @@ public class ArmorClientSC {
         if (KEY_ARMOR.isPressed() && mc.currentScreen == null) {
             mc.displayGuiScreen(new GuiArmorSC());
         }
+        bridgeKeys(mc);
         if (KEY_DASH.isPressed() && mc.currentScreen == null && ArmorLogicSC.active(mc.thePlayer, ArmorFeature.DASH)) {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DASH, 0));
         }

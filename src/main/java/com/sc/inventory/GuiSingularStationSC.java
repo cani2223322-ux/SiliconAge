@@ -47,7 +47,7 @@ public class GuiSingularStationSC extends GuiContainer {
     private static final int R = SingularStationMath.RESOURCES, TABS = ContainerSingularStationSC.TABS;
     private static final int T_MODERN = ContainerSingularStationSC.TAB_MODERN, T_CONVERT = ContainerSingularStationSC.TAB_CONVERT,
             T_TRANSFER = ContainerSingularStationSC.TAB_TRANSFER, T_SYNC = ContainerSingularStationSC.TAB_SYNC,
-            T_BRANCH = ContainerSingularStationSC.TAB_BRANCH;
+            T_BRANCH = ContainerSingularStationSC.TAB_BRANCH, T_LINK = ContainerSingularStationSC.TAB_LINK;
     /** Screen-only button ids (never sent as they are). */
     private static final int ID_TAB = 100, ID_ACTION = 110, ID_CANCEL = 111, ID_ALL_GASES = 112;
     /** Off screen: a slot of another tab. */
@@ -92,7 +92,7 @@ public class GuiSingularStationSC extends GuiContainer {
         l.leftR = 100;
         l.modeLabelY = 125; l.modeSlotY = 134; l.coreLabelY = 134; l.coreX = 73; l.coreY = 143; l.extraTextX = 27; l.extraTextW = 72;
         l.warnY = 174; l.warnX = 7;
-        l.tabX = 104; l.tabY = 17; l.tabW = 37; l.tabStep = 39; l.tabH = 13;
+        l.tabX = 104; l.tabY = 17; l.tabW = 31; l.tabStep = 32; l.tabH = 13;
         l.px = 104; l.py = 32; l.pw = 194; l.ph = 168; l.headY = 36; l.rowsY = 50; l.rowH = 13; l.mulY = 141;
         l.actY = 151; l.actH = 14; l.barY = 168; l.barH = 11; l.cancelY = 183; l.cancelW = 92; l.cancelH = 13;
         l.rx = 302; l.rw = 112; l.tankLabelY = 18; l.clearY = 25; l.gaugeY = 34; l.gaugeH = 48; l.gasY = 84;
@@ -117,7 +117,7 @@ public class GuiSingularStationSC extends GuiContainer {
         l.leftR = 96;
         l.modeLabelY = 107; l.modeSlotY = 116; l.coreLabelY = 116; l.coreX = 71; l.coreY = 125; l.extraTextX = 26; l.extraTextW = 70;
         l.warnY = -1; l.warnX = 89;
-        l.tabX = 98; l.tabY = 17; l.tabW = 24; l.tabStep = 25; l.tabH = 11;
+        l.tabX = 98; l.tabY = 17; l.tabW = 20; l.tabStep = 21; l.tabH = 11;
         l.px = 98; l.py = 29; l.pw = 125; l.ph = 121; l.headY = 32; l.rowsY = 42; l.rowH = 9; l.mulY = 106;
         l.actY = 114; l.actH = 12; l.barY = 128; l.barH = 9; l.cancelY = 139; l.cancelW = 56; l.cancelH = 10;
         l.rx = 226; l.rw = 90; l.tankLabelY = 17; l.clearY = 24; l.gaugeY = 32; l.gaugeH = 40; l.gasY = 74;
@@ -260,6 +260,11 @@ public class GuiSingularStationSC extends GuiContainer {
             p.can = !busy && p.lagMask != 0;
         } else if (tab == T_BRANCH) {
             p.header = Lang.tr("sc.singStation.branches.head");
+        } else if (tab == T_LINK) {
+            p.header = Lang.tr("sc.singStation.link.head");
+            ItemStack h = te.getStackInSlot(com.sc.util.ArmorGasSC.HELMET);
+            p.can = !busy && SingularLevel.isSingular(h) && (com.sc.bridge.BridgeItemDataSC.hasModule(h)
+                    ? com.sc.bridge.BridgeItemDataSC.links(h).tagCount() > 0 : TileEntitySingularStationSC.linkModules(me()) > 0);
         } else {
             moderniseEstimate(p);
             p.can = !busy && p.ready > 0 && (!p.catalystNeeded || p.catalystOk);
@@ -327,11 +332,33 @@ public class GuiSingularStationSC extends GuiContainer {
 
     /** Tooltip codes of the rows (100 + r: resource r). */
     private static final int TIP_POINTS = 0, TIP_TASK = 1, TIP_PIECES = 2, TIP_PROGRESS = 3, TIP_EXO = 4, TIP_MAT = 5,
-            TIP_DONOR = 6, TIP_TARGET = 7, TIP_LAG = 8, TIP_TOP = 9, TIP_RES = 100;
+            TIP_DONOR = 6, TIP_TARGET = 7, TIP_LAG = 8, TIP_TOP = 9, TIP_LINK = 10, TIP_RES = 100;
 
     private List<Row> rows(Plan p) {
         List<Row> out = new ArrayList<Row>();
         if (tab == T_BRANCH) {
+            return out;
+        }
+        if (tab == T_LINK) {
+            ItemStack h = te.getStackInSlot(com.sc.util.ArmorGasSC.HELMET);
+            boolean sing = SingularLevel.isSingular(h), mod = com.sc.bridge.BridgeItemDataSC.hasModule(h);
+            int lv = sing ? SingularLevel.levelOf(h) : 0, have = TileEntitySingularStationSC.linkModules(me());
+            int need = SingularLevel.requiredLevel(ArmorFeature.BRIDGE_LINK);
+            out.add(new Row(Lang.tr("sc.singStation.link.row.helmet"), sing ? Lang.tr("sc.singStation.lv", lv) : Lang.tr("sc.singStation.row.none"),
+                    sing ? OK : BAD, sing ? TEXT : BAD, TIP_LINK));
+            out.add(new Row(Lang.tr("sc.singStation.link.row.module"), mod ? Lang.tr("sc.singStation.link.row.installed")
+                    : Lang.tr("sc.singStation.link.row.inv", have), mod || have > 0 ? OK : BAD, mod || have > 0 ? TEXT : BAD, TIP_LINK));
+            out.add(new Row(Lang.tr("sc.singStation.link.row.level"), Lang.tr("sc.singStation.lv", need), lv >= need ? OK : WARN,
+                    lv >= need ? TEXT : WARN, TIP_LINK));
+            net.minecraft.nbt.NBTTagList ls = com.sc.bridge.BridgeItemDataSC.links(h);
+            out.add(new Row(Lang.tr("sc.singStation.link.row.bridges"), ls.tagCount() + " / " + com.sc.bridge.BridgeMathSC.MAX_LINKS,
+                    ls.tagCount() > 0 ? OK : DIM, mod ? TEXT : DIM, TIP_LINK));
+            for (int i = 0; i < ls.tagCount(); i++) {
+                net.minecraft.nbt.NBTTagCompound e = ls.getCompoundTagAt(i);
+                int[] q = e.getIntArray("p");
+                String n = e.getString("n").length() == 0 ? Lang.tr("sc.bridge.res.noname") : e.getString("n");
+                out.add(new Row("  " + n, q.length == 4 ? q[0] + " " + q[1] + " " + q[2] : "", ACCENT & 0xFFFFFF, LABEL, TIP_LINK));
+            }
             return out;
         }
         int acc = ACCENT & 0xFFFFFF;
@@ -569,7 +596,8 @@ public class GuiSingularStationSC extends GuiContainer {
         int win = inventorySlots.windowId;
         if (button.id == ID_ACTION) {
             int id = tab == T_CONVERT ? ContainerSingularStationSC.BTN_CONVERT : tab == T_TRANSFER ? ContainerSingularStationSC.BTN_TRANSFER
-                    : tab == T_SYNC ? ContainerSingularStationSC.BTN_SYNC : ContainerSingularStationSC.BTN_MODERNISE;
+                    : tab == T_SYNC ? ContainerSingularStationSC.BTN_SYNC : tab == T_LINK ? ContainerSingularStationSC.BTN_LINK
+                    : ContainerSingularStationSC.BTN_MODERNISE;
             if (tab != T_BRANCH) {
                 mc.playerController.sendEnchantPacket(win, id);
             }
@@ -611,7 +639,8 @@ public class GuiSingularStationSC extends GuiContainer {
         }
         action.visible = tab != T_BRANCH;
         action.displayString = Lang.tr(tab == T_CONVERT ? "sc.singStation.btn.convert" : tab == T_TRANSFER ? "sc.singStation.btn.dotransfer"
-                : tab == T_SYNC ? "sc.singStation.btn.dosync" : "sc.singStation.btn.modernise");
+                : tab == T_SYNC ? "sc.singStation.btn.dosync" : tab == T_LINK ? (com.sc.bridge.BridgeItemDataSC.hasModule(te.getStackInSlot(0))
+                ? "sc.singStation.btn.unlink" : "sc.singStation.btn.link") : "sc.singStation.btn.modernise");
         action.color = tab == T_CONVERT ? YELLOW : ACCENT;
         action.enabled = p.can;
         cancel.displayString = Lang.tr(armed() ? "sc.singStation.btn.cancel.sure" : "sc.singStation.btn.cancel");
@@ -1092,6 +1121,9 @@ public class GuiSingularStationSC extends GuiContainer {
     }
 
     private String mulLine(Plan p) {
+        if (tab == T_LINK) {
+            return Lang.tr("sc.singStation.link.hint");
+        }
         if (tab == T_BRANCH) {
             return Lang.tr("sc.singStation.branches.cost", SingularStationMath.BRANCH_SM);
         }
@@ -1269,6 +1301,11 @@ public class GuiSingularStationSC extends GuiContainer {
             }
         }
         if (over(L.px + 3, L.mulY - 1, L.pw - 6, 8, mx, my)) {
+            if (tab == T_LINK) {
+                tip.add(Lang.tr("sc.singStation.link.tip"));
+                tip.add("§7" + Lang.tr("sc.singStation.link.hint"));
+                return tip;
+            }
             if (tab == T_BRANCH) {
                 tip.add(Lang.tr("sc.singStation.btn.branches"));
                 tip.add(Lang.tr("sc.singStation.branches.hint", SingularStationMath.BRANCH_SM));
@@ -1479,6 +1516,12 @@ public class GuiSingularStationSC extends GuiContainer {
     private List<String> actionTip(Plan p) {
         List<String> tip = new ArrayList<String>();
         boolean busy = te.getProcess() != null;
+        if (tab == T_LINK) {
+            boolean mod = com.sc.bridge.BridgeItemDataSC.hasModule(te.getStackInSlot(0));
+            tip.add(Lang.tr(mod ? "sc.singStation.btn.unlink" : "sc.singStation.btn.link"));
+            tip.add("§7" + Lang.tr(mod ? "sc.singStation.link.unlink.hint" : "sc.singStation.link.btn.hint"));
+            return tip;
+        }
         if (tab == T_TRANSFER) {
             tip.addAll(transferTip());
         } else if (tab == T_SYNC) {
@@ -1647,6 +1690,10 @@ public class GuiSingularStationSC extends GuiContainer {
                 return tip;
             case TIP_TOP:
                 return syncTip();
+            case TIP_LINK:
+                tip.add(Lang.tr("sc.singStation.link.tip"));
+                tip.add("§7" + Lang.tr("sc.singStation.link.tip2", com.sc.bridge.BridgeMathSC.MAX_LINKS));
+                return tip;
             case TIP_POINTS:
                 tip.add(Lang.tr("sc.singStation.tip.points"));
                 for (int i = 0; i < 4; i++) {

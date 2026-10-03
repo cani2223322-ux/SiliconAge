@@ -140,6 +140,14 @@ public final class BridgeMathSC {
      * @param stabilisers counted stabilisers (lifetime)
      */
     public static Cost cost(int kind, long[] distances, boolean beacon, boolean anchor, int stabilisers) {
+        return cost(kind, distances, null, beacon, anchor, stabilisers);
+    }
+
+    /**
+     * The cost with a discount per projected end (percent off that end's share - the armour's own end -25%,
+     * §8 «броня - маяк на вашем конце»); Space has no distance share: the discount goes off its krypton (the aim).
+     */
+    public static Cost cost(int kind, long[] distances, int[] endPct, boolean beacon, boolean anchor, int stabilisers) {
         Cost c = new Cost();
         c.lifeTicks = lifeTicks(kind, stabilisers);
         if (kind == SPACE) {
@@ -153,14 +161,20 @@ public final class BridgeMathSC {
             c.heSec = 40;
             c.arSec = 8;
             c.d2oSec = 5;
+            int best = 0;
+            for (int i = 0; endPct != null && i < endPct.length; i++) {
+                best = Math.max(best, Math.max(0, Math.min(100, endPct[i])));
+            }
+            c.kr = c.kr * (100 - best) / 100;
             return c;
         }
         long eu = GROUND_BURST, sm = 50, kr = 20;
-        for (long dist : distances) {
-            long d = Math.max(0, dist);
-            eu += GROUND_PER_1000 * d / 1000;
-            sm += 10 * d / 1000;
-            kr += 5 * d / 1000;
+        for (int i = 0; i < distances.length; i++) {
+            long d = Math.max(0, distances[i]);
+            int keep = 100 - (endPct != null && i < endPct.length ? Math.max(0, Math.min(100, endPct[i])) : 0);
+            eu += GROUND_PER_1000 * d / 1000 * keep / 100;
+            sm += 10 * d / 1000 * keep / 100;
+            kr += 5 * d / 1000 * keep / 100;
         }
         if (beacon) {
             c.beacon = true;
@@ -184,6 +198,116 @@ public final class BridgeMathSC {
     public static long distance(int x0, int y0, int z0, int x1, int y1, int z1) {
         double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
         return Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
+    }
+
+    // ------------------------------------------------------------------ stage 2: modes, remotes, armour (§7, §8, §10)
+
+    /** The modes ДР0-ДР5: from the base, home, from me to a point, from the base remotely, fetch a friend, to me. */
+    public static final int MODE_BASE = 0, MODE_HOME = 1, MODE_FROM_ME = 2, MODE_REMOTE = 3, MODE_FRIEND = 4, MODE_TO_ME = 5, MODES = 6;
+    /** What an end is: the ring, a point (coordinates), next to a player (a projection). */
+    public static final int END_RING = 0, END_POINT = 1, END_NEAR = 2;
+    /** Where the commands come from. */
+    public static final int SRC_CONTROLLER = 0, SRC_REMOTE = 1, SRC_ARMOUR = 2;
+    /** A remote's signal: EU taken from its own charge per command (С9); the remotes' charge. */
+    public static final long REMOTE_SIGNAL_EU = 1000000L, REMOTE_CAPACITY = 10000000L, SPACE_REMOTE_CAPACITY = 20000000L;
+    /** «Дистанционный режим»: EU a tick while the controller keeps its own chunk loaded. */
+    public static final int REMOTE_MODE_EU = 500;
+    /** From the armour your end is this much cheaper (and precise). */
+    public static final int ARMOUR_DISCOUNT = 25;
+    /** A projected end stands this many blocks in front of its player. */
+    public static final int PROJECTION_AHEAD = 3;
+    /** Another player within this many blocks of an end must agree (§10); the request lives CONSENT_TICKS. */
+    public static final int CONSENT_RADIUS = 8, CONSENT_TICKS = 600;
+    /** Bridges one helmet links; remembered targets; scanner finds kept; «Взгляд» reach; friends a bridge keeps. */
+    public static final int MAX_LINKS = 3, HISTORY = 5, FINDS = 16, LOOK_RANGE = 256, MAX_FRIENDS = 16;
+    /** Access: owner and friends, or public (anyone at the controller; remotes and armour stay owner / friends). */
+    public static final int ACCESS_FRIENDS = 0, ACCESS_PUBLIC = 1;
+
+    /**
+     * The ends of a mode: {end A, end B} (END_*) - end B is never the ring. Friend: the ring and next to the friend,
+     * or (toMe) next to the friend and next to you; friendEnd() says which one is the friend's.
+     */
+    public static int[] modeEnds(int mode, boolean toMe) {
+        switch (mode) {
+            case MODE_HOME:
+            case MODE_TO_ME:
+                return new int[]{END_RING, END_NEAR};
+            case MODE_FROM_ME:
+                return new int[]{END_NEAR, END_POINT};
+            case MODE_FRIEND:
+                return new int[]{toMe ? END_NEAR : END_RING, END_NEAR};
+            default:
+                return new int[]{END_RING, END_POINT};
+        }
+    }
+
+    /** ДР4: the index of the friend's end (0 with «к вам», else 1); -1 for the other modes. */
+    public static int friendEnd(int mode, boolean toMe) {
+        return mode != MODE_FRIEND ? -1 : toMe ? 0 : 1;
+    }
+
+    /** The mode needs a target point (ДР0, ДР2, ДР3). */
+    public static boolean needsPoint(int mode) {
+        return mode == MODE_BASE || mode == MODE_FROM_ME || mode == MODE_REMOTE;
+    }
+
+    /** How many projected ends (not at the ring) a mode has. */
+    public static int projections(int mode, boolean toMe) {
+        int n = 0;
+        for (int e : modeEnds(mode, toMe)) {
+            n += e == END_RING ? 0 : 1;
+        }
+        return n;
+    }
+
+    /**
+     * Where a projected end stands in front of a player: {x, y, z, axis} - PROJECTION_AHEAD blocks along the
+     * way they face (yaw: 0 south +Z, 90 west -X, 180 north -Z, 270 east +X), the vortex across that way
+     * (axis 0: along X), its lowest cell at the player's feet.
+     */
+    public static int[] projectionSpot(double px, double py, double pz, float yaw) {
+        int f = (int) Math.floor(yaw * 4.0F / 360.0F + 0.5D) & 3;
+        int dx = f == 1 ? -1 : f == 3 ? 1 : 0, dz = f == 0 ? 1 : f == 2 ? -1 : 0;
+        int x = (int) Math.floor(px) + dx * PROJECTION_AHEAD, z = (int) Math.floor(pz) + dz * PROJECTION_AHEAD;
+        int y = (int) Math.floor(py + 0.001);
+        return new int[]{x, y, z, dz != 0 ? 0 : 1};
+    }
+
+    /**
+     * «Взгляд»: the first solid cell along a look from an eye (step 0.25 block, at most `range` blocks) -
+     * {x, y + 1, z} (the cell over it), or null. Pure: `solid` says what is solid.
+     */
+    public static int[] lookTarget(double ex, double ey, double ez, double lx, double ly, double lz, int range, Solid solid) {
+        double len = Math.sqrt(lx * lx + ly * ly + lz * lz);
+        if (len < 1e-6) {
+            return null;
+        }
+        lx /= len;
+        ly /= len;
+        lz /= len;
+        for (double t = 0.5; t <= range; t += 0.25) {
+            int x = (int) Math.floor(ex + lx * t), y = (int) Math.floor(ey + ly * t), z = (int) Math.floor(ez + lz * t);
+            if (y < 0) {
+                return null;
+            }
+            if (solid.at(x, y, z)) {
+                return new int[]{x, y + 1, z};
+            }
+        }
+        return null;
+    }
+
+    /** What is solid for lookTarget. */
+    public interface Solid {
+        boolean at(int x, int y, int z);
+    }
+
+    /** The remote's charge after a command: the signal paid, or -1 when it isn't there. */
+    public static long remoteAfterSignal(long charge, boolean creative) {
+        if (creative) {
+            return charge;
+        }
+        return charge >= REMOTE_SIGNAL_EU ? charge - REMOTE_SIGNAL_EU : -1;
     }
 
     // ------------------------------------------------------------------ capacitors
