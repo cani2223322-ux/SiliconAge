@@ -57,6 +57,8 @@ public class GuiArmorSC extends GuiScreen {
     private static final int BLADE_TAB = 4, MODE_TAB = 5, DRILL_TAB = 6, LIFE_TAB = 7;
     private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002,
             FILL_ALL_ID = 1003, BIND_BASE = 2000;
+    /** Chestplate tab: the free branch choice (Р2) - the first / the second side of the lowest level not chosen yet. */
+    private static final int BRANCH_A_ID = 1004, BRANCH_B_ID = 1005;
     /** Life support tab: "fill from this inventory slot" buttons (FILL_BASE + slot, under BIND_BASE). */
     private static final int FILL_BASE = 1100, FILL_MAX = 5;
     /** "Fill everything": the count on its button stops at this many containers (the server pours them all with one GAS_FILL_ALL). */
@@ -269,7 +271,8 @@ public class GuiArmorSC extends GuiScreen {
                 }
             }
             boolean chest = selectedPiece == 1;
-            int[] r = chooseRows(list.size(), armour ? 150 : 140, chest ? 20 : 0);
+            int branchLevel = chest ? pendingBranch() : 0;
+            int[] r = chooseRows(list.size(), armour ? 150 : 140, chest ? (branchLevel > 0 ? 40 : 20) : 0);
             int cols = r[0];
             int colW = (contentW - (cols - 1) * COL_GAP) / cols;
             if (cols == 1) {
@@ -299,6 +302,14 @@ public class GuiArmorSC extends GuiScreen {
                 for (int i = 0; i < ids.size(); i++) {
                     String label = ids.get(i) == CHIPS_ID ? Lang.tr("sc.armorgui.chips.remove") : "";
                     buttonList.add(new TextFitSC.Button(ids.get(i), contentX + i * (bw + 4), y, bw, 16, label));
+                }
+                if (branchLevel > 0) {                     // Р2: the chestplate reached a branch level - pick a side (free once)
+                    int hw = (span - 4) / 2;
+                    for (int c = 1; c <= 2; c++) {
+                        ArmorFeature bf = com.sc.util.SingularLevel.branchFeature(branchLevel, c);
+                        buttonList.add(new TextFitSC.Button(c == 1 ? BRANCH_A_ID : BRANCH_B_ID, contentX + (c - 1) * (hw + 4), y + 20, hw, 16,
+                                "§d" + Lang.tr("sc.armorgui.branch.pick", branchLevel, nameOf(bf))));
+                    }
                 }
             }
         }
@@ -459,13 +470,34 @@ public class GuiArmorSC extends GuiScreen {
         return g == null ? null : new int[]{g.ordinal(), fs.amount, whole ? 1 : 0};
     }
 
+    /** The lowest branch level (3 / 5) the worn chestplate has reached without a choice, 0: none (creative: none - both work). */
+    private int pendingBranch() {
+        ItemStack chest = ArmorLogicSC.piece(mc.thePlayer, 1);
+        if (mc.thePlayer.capabilities.isCreativeMode) {
+            return 0;
+        }
+        return com.sc.util.SingularLevel.branchPending(chest, 3) ? 3 : com.sc.util.SingularLevel.branchPending(chest, 5) ? 5 : 0;
+    }
+
+    /** A Singular branch function the chestplate's choice (or no choice yet) keeps off; creative: none. */
+    private boolean branchLocked(Enum<?> f) {
+        if (!(f instanceof ArmorFeature) || mc.thePlayer.capabilities.isCreativeMode) {
+            return false;
+        }
+        ArmorFeature a = (ArmorFeature) f;
+        ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, a.piece);
+        return piece != null && !com.sc.util.SingularLevel.branchAllowed(mc.thePlayer, a, piece);
+    }
+
     /** The worn pieces and their tanks - what the left panel and the rows were laid out for. */
     private String wornSignature() {
         StringBuilder sb = new StringBuilder();
         for (int t = 0; t < 4; t++) {
             ItemStack w = ArmorGasSC.worn(mc.thePlayer, t);
-            sb.append(w == null ? "-" : Item.getIdFromItem(w.getItem()) + ":" + ArmorGasSC.capacityBonusPercent(w)).append(';');
+            sb.append(w == null ? "-" : Item.getIdFromItem(w.getItem()) + ":" + ArmorGasSC.capacityBonusPercent(w)
+                    + ":" + com.sc.util.SingularLevel.levelOf(w)).append(';');
         }
+        sb.append(pendingBranch()).append(';');                     // a branch picked / a new one to pick: the chestplate's buttons
         ItemStack tool = blade() != null ? blade() : drill();    // a blade / drill taken in hand: its tab and rows
         sb.append(tool == null ? "-" : String.valueOf(Item.getIdFromItem(tool.getItem())));
         return sb.toString();
@@ -1249,6 +1281,8 @@ public class GuiArmorSC extends GuiScreen {
         int lock = lockedLevel(a);
         if (lock > 0) {
             tip.add("§c" + Lang.tr("sc.armorgui.tip.locked", lock));
+        } else if (branchLocked(a)) {
+            tip.add("§c" + Lang.tr("sc.armorgui.tip.branch"));
         } else if (com.sc.util.SingularLevel.requiredLevel(a) > 1) {
             tip.add("§d" + Lang.tr("sc.armorgui.tip.level", com.sc.util.SingularLevel.requiredLevel(a)));
         }
@@ -1329,6 +1363,8 @@ public class GuiArmorSC extends GuiScreen {
                 int lock = lockedLevel(f);
                 if (lock > 0) {                                    // a Singular function above the piece's level
                     b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.row.locked", lock);
+                } else if (branchLocked(f)) {                      // Р2: the other side chosen, or nothing chosen yet
+                    b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.row.branch");
                 } else if (replacedByHorizon(f)) {                 // the Singular chestplate: Н2 does the shield's work
                     b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.row.replaced");
                 } else if (why != null) {
@@ -1374,6 +1410,14 @@ public class GuiArmorSC extends GuiScreen {
             }
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.GLOW_COLOR, next));
             refresh();
+            return;
+        }
+        if (b.id == BRANCH_A_ID || b.id == BRANCH_B_ID) {      // the server checks and answers; the tab is rebuilt by the signature
+            int lvl = pendingBranch();
+            if (lvl > 0) {
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BRANCH, ArmorNetSC.branchFeature(lvl, b.id == BRANCH_A_ID ? 1 : 2)));
+            }
+            b.enabled = false;
             return;
         }
         if (b.id == CHIPS_ID) {

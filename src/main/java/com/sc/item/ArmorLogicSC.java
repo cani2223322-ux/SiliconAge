@@ -121,8 +121,8 @@ public final class ArmorLogicSC {
         if (f.needsFullSet() && fullSet(p) != ArmorSuit.SINGULAR) {
             return false;                 // К9, К1, К2: all four Singular pieces
         }
-        if (!com.sc.util.SingularLevel.branchAllowed(f, s)) {
-            return false;                 // Р2: the other side of the piece's branch (stage 3; for now both work)
+        if (!com.sc.util.SingularLevel.branchAllowed(p, f, s)) {
+            return false;                 // Р2: the other side of the piece's branch, or no branch chosen yet (creative: both)
         }
         if (!gasAllows(ArmorGasSC.wornSet(p), f)) {
             return false;                 // Quantum / Exo: no gas of its own, or emergency mode (no helium)
@@ -393,6 +393,7 @@ public final class ArmorLogicSC {
     public static boolean pay(EntityPlayer p, ArmorFeature f, int eu) {
         ItemStack s = piece(p, f.piece);
         float mul = costMul(p) * (f.minSuit == ArmorSuit.SINGULAR ? SingularPowersSC.costMul(p) : 1F);   // К1: x2 for the Singular ones
+        mul *= com.sc.util.SingularLevel.euMul(s);                     // Р3 / Р4: -5% a level of the piece (+10% in a synced set)
         return s != null && ItemArmorSC.pay(s, (int) Math.ceil(eu * mul));
     }
 
@@ -2014,6 +2015,7 @@ public final class ArmorLogicSC {
         }
         ArmorGasSC.drainFraction(worn, Gas.HELIUM, he);
         float taken = amount * horizonShare(SingularPowersSC.singularBoost(p));   // К1: 60% while boosted
+        SingularProgressSC.horizonAbsorbed(p, taken);                            // ОЧ3, the task "absorb 300 with Н2"
         chargeSuit(p, (int) Math.min(Integer.MAX_VALUE, Math.round(taken * (double) ArmorFeature.HORIZON_EU_PER_POINT)));
         return amount - taken;
     }
@@ -2074,7 +2076,7 @@ public final class ArmorLogicSC {
             return;
         }
         ItemStack[] worn = ArmorGasSC.wornSet(p);
-        int eu = (int) Math.ceil(ArmorFeature.PHASE_DASH_EU * costMul(p) * SingularPowersSC.costMul(p));
+        int eu = (int) Math.ceil(ArmorFeature.PHASE_DASH_EU * costMul(p) * SingularPowersSC.costMul(p) * com.sc.util.SingularLevel.euMul(piece(p, 2)));
         int h2 = SingularPowersSC.scaled(p, ArmorFeature.SING_H2_PHASE);                    // К1: x2
         if (ArmorGasSC.amountOf(worn, Gas.HYDROGEN) < h2 || ItemArmorSC.chargeOf(piece(p, 2)) < eu) {
             warn(p, "sc.armor.phase.cant", 40);
@@ -2115,6 +2117,7 @@ public final class ArmorLogicSC {
             com.sc.util.SingularCooldowns.set(p, ArmorFeature.PHASE_DASH, ArmorFeature.PHASE_DASH_COOLDOWN);
         }
         addHeat(p, ArmorFeature.PHASE_DASH.heat);
+        SingularProgressSC.dashed(p);                       // ОЧ5 and the task "50 phase dashes"
     }
 
     // ------------------------------------------------------------------ cooldown / chat helpers
@@ -2164,6 +2167,7 @@ public final class ArmorLogicSC {
         }
         heat += SingularSensesSC.second(p);                 // stage 2b: Ш1 scanner, Ш2 threat sense, К2 resonance
         SingularPowersSC.second(p);                         // К1: the boost / weakness turning over
+        SingularProgressSC.second(p);                       // stage 3: level points, task counters, Р4 sync
         return heat;
     }
 

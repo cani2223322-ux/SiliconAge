@@ -139,11 +139,48 @@ public final class ArmorGasSC {
     }
 
     /**
-     * Tank growth by the piece's level (Singular levels, plan §6 R3: +10% a level) - a hook for the
-     * level stage: always 0 for now.
+     * Tank growth by the piece's level (Singular levels, plan §6 Р3: +10% a level above 1; Р4: +10%
+     * more while all four pieces are at one level) - SingularLevel.tankBonusPercent.
      */
     public static int levelBonusPercent(ItemStack piece) {
-        return 0;
+        return SingularLevel.tankBonusPercent(piece);
+    }
+
+    /** Piece NBT: mB of gas the suit spent / mB of singular matter poured in, not yet counted by the level logic (SingularProgressSC). */
+    public static final String SPENT_PENDING = "SingGasPend", SM_PENDING = "SingSmPend";
+
+    private static void addPending(ItemStack piece, String key, int mb) {
+        if (piece == null || mb <= 0) {
+            return;
+        }
+        if (!piece.hasTagCompound()) {
+            piece.setTagCompound(new NBTTagCompound());
+        }
+        NBTTagCompound t = piece.getTagCompound();
+        t.setInteger(key, (int) Math.min(Integer.MAX_VALUE, (long) t.getInteger(key) + mb));
+    }
+
+    /** Takes what's pending under `key` out of the set's pieces. @return the sum */
+    public static int takePending(ItemStack[] w, String key) {
+        long sum = 0;
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = at(w, t);
+            if (s != null && s.hasTagCompound() && s.getTagCompound().hasKey(key)) {
+                sum += Math.max(0, s.getTagCompound().getInteger(key));
+                s.getTagCompound().removeTag(key);
+            }
+        }
+        return (int) Math.min(Integer.MAX_VALUE, sum);
+    }
+
+    /** The first Singular piece of the set (chestplate first), or null. */
+    private static ItemStack singularOf(ItemStack[] w) {
+        for (int t : new int[]{CHEST, HELMET, LEGS, BOOTS}) {
+            if (SingularLevel.isSingular(at(w, t))) {
+                return at(w, t);
+            }
+        }
+        return null;
     }
 
     private ArmorGasSC() {
@@ -201,6 +238,9 @@ public final class ArmorGasSC {
         int put = Math.max(0, Math.min(room, mb));
         if (!simulate && put > 0) {
             setAmount(piece, g, amount(piece, g) + put);
+            if (g == Gas.SINGULAR_MATTER && SingularLevel.isSingular(piece)) {
+                addPending(piece, SM_PENDING, put);        // Р5 "pour 5 000 mB of SM": counted when worn
+            }
         }
         return put;
     }
@@ -437,6 +477,9 @@ public final class ArmorGasSC {
                 break;
             }
             left -= drain(at(w, t), g, left, simulate);
+        }
+        if (!simulate && mb - left > 0) {
+            addPending(singularOf(w), SPENT_PENDING, mb - left);   // ОЧ1 / Р5: what the suit spent (SingularProgressSC)
         }
         return mb - left;
     }

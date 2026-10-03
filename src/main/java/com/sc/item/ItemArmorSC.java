@@ -233,6 +233,59 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         }
     }
 
+    /**
+     * Shift page of a Singular piece (plan §6 "Отображение"): the points towards the next level (or
+     * «готово»), the next level's tasks with their progress, what opens next, the branches (chestplate)
+     * and the level bonuses.
+     */
+    private void levelLines(ItemStack stack, EntityPlayer player, List list) {
+        int lvl = com.sc.util.SingularLevel.levelOf(stack);
+        if (lvl < com.sc.util.SingularLevel.MAX) {
+            int pts = com.sc.util.SingularLevel.points(stack), need = com.sc.util.SingularLevel.threshold(lvl);
+            list.add(com.sc.util.SingularLevel.pointsFull(stack)
+                    ? "\u00a7a" + Lang.tr("sc.tooltip.armor.singular.points.ready", pts, need)
+                    : "\u00a7d" + Lang.tr("sc.tooltip.armor.singular.points", pts, need));
+            int next = lvl + 1;
+            boolean done = com.sc.util.SingularLevel.taskDone(player, next);
+            list.add((done ? "\u00a7a" : "\u00a7d") + Lang.tr(done ? "sc.tooltip.armor.singular.tasks.done" : "sc.tooltip.armor.singular.tasks", next));
+            for (int i = 0; i < com.sc.util.SingularLevel.TASKS; i++) {
+                int[] pr = com.sc.util.SingularLevel.taskProgress(player, next, i);
+                boolean ok = pr[0] >= pr[1];
+                com.sc.util.TooltipSC.wrap(list, (ok ? "+ " : "- ") + Lang.tr("sc.tooltip.armor.singular.task." + next + "." + i, pr[0], pr[1]),
+                        ok ? "\u00a7a" : "\u00a77");
+            }
+            StringBuilder opens = new StringBuilder();
+            for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
+                if (f.availableIn(suit, armorType) && com.sc.util.SingularLevel.requiredLevel(f) == next) {
+                    opens.append(opens.length() > 0 ? ", " : "").append(Lang.tr("sc.armorfn." + f.name().toLowerCase(java.util.Locale.ROOT)));
+                }
+            }
+            if (opens.length() > 0) {
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.opens", next, opens.toString()), "\u00a77");
+            }
+        } else {
+            list.add("\u00a7a" + Lang.tr("sc.tooltip.armor.singular.max"));
+        }
+        if (armorType == 1) {
+            for (int bl : new int[]{3, 5}) {
+                String a = Lang.tr("sc.armorfn." + com.sc.util.SingularLevel.branchFeature(bl, 1).name().toLowerCase(java.util.Locale.ROOT));
+                String b = Lang.tr("sc.armorfn." + com.sc.util.SingularLevel.branchFeature(bl, 2).name().toLowerCase(java.util.Locale.ROOT));
+                int c = com.sc.util.SingularLevel.branchChoice(stack, bl);
+                String state = c == 1 ? a : c == 2 ? b
+                        : Lang.tr(lvl >= bl ? "sc.tooltip.armor.singular.branch.pick" : "sc.tooltip.armor.singular.branch.later", a, b);
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.branch", bl, state), c > 0 ? "\u00a7b" : "\u00a77");
+            }
+        }
+        if (lvl > 1) {
+            boolean sync = com.sc.util.SingularLevel.synced(stack);
+            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.bonus",
+                    com.sc.util.SingularLevel.bonusPercent(lvl, sync, com.sc.util.SingularLevel.TANK_PCT),
+                    com.sc.util.SingularLevel.bonusPercent(lvl, sync, com.sc.util.SingularLevel.PROTECT_PCT),
+                    com.sc.util.SingularLevel.bonusPercent(lvl, sync, com.sc.util.SingularLevel.EU_PCT))
+                    + (sync ? " " + Lang.tr("sc.tooltip.armor.singular.sync") : ""), "\u00a7b");
+        }
+    }
+
     /** Spends `amount` EU if the piece has it all. */
     public static boolean pay(ItemStack stack, int amount) {
         if (amount <= 0) {
@@ -304,9 +357,10 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.pairs(list, names, on);
                 gasLines(stack, list);
-                if (suit == ArmorSuit.SINGULAR) {               // K10: the Exo functions on less gas; levels come later
+                if (suit == ArmorSuit.SINGULAR) {               // K10: the Exo functions on less gas; stage 3: the level
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.legacy",
                             Math.round((1F - com.sc.util.ArmorGasSC.SINGULAR_GAS_MUL) * 100)), "\u00a7d");
+                    levelLines(stack, player, list);
                 }
                 if (ArmorLogicSC.strict(suit)) {
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.strict"), "§6");
@@ -480,6 +534,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     public void damageArmor(EntityLivingBase entity, ItemStack stack, DamageSource source, int damage, int slot) {
         float mul = entity instanceof EntityPlayer ? com.sc.item.ArmorLogicSC.absorbCostMul((EntityPlayer) entity) : 1F;
         discharge(stack, (int) Math.ceil(damage * damageCost() * mul));
+        if (entity instanceof EntityPlayer && suit == ArmorSuit.SINGULAR) {
+            SingularProgressSC.absorbed((EntityPlayer) entity, damage);     // ОЧ3: a point a damage point absorbed
+        }
     }
 
     // ---- IC2: charged by batboxes / MFE / MFSU / charge pads through our own manager ----

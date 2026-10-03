@@ -48,6 +48,16 @@ public final class ArmorNetSC {
     public static final byte PHASE_DASH = 14;
     /** The Singular key functions of stage 2b (SingularPowersSC.key); 20 is the air jump (ArmorLogicSC.AIR_JUMP_ACTION). */
     public static final byte GRAV_PRESS = 15, GRAV_GRAB = 16, TIME_SLOW = 17, BLACK_HOLE = 18, GRAV_DOME = 19, SINGULARITY = 21;
+    /**
+     * Singular levels (Р2): the free first branch choice of the worn chestplate, feature = level x 10 +
+     * choice (31 / 32 at level 3, 51 / 52 at level 5); the server checks the level and that nothing is chosen.
+     */
+    public static final byte BRANCH = 22;
+
+    /** BRANCH's feature byte for a level (3 / 5) and a choice (1 / 2). */
+    public static int branchFeature(int level, int choice) {
+        return level * 10 + choice;
+    }
 
     /** The action byte of a stage 2b key function, -1 for any other function. */
     public static byte actionOf(ArmorFeature f) {
@@ -87,6 +97,7 @@ public final class ArmorNetSC {
         CHANNEL.registerMessage(ScanHandler.class, ScanMessage.class, 2, Side.CLIENT);
         CHANNEL.registerMessage(ThreatHandler.class, ThreatMessage.class, 3, Side.CLIENT);
         CHANNEL.registerMessage(AnalyzeHandler.class, AnalyzeMessage.class, 4, Side.CLIENT);
+        CHANNEL.registerMessage(LevelHandler.class, LevelMessage.class, 5, Side.CLIENT);
     }
 
     // ------------------------------------------------------------------ server -> client: the Singular helmet's senses (stage 2b)
@@ -286,6 +297,54 @@ public final class ArmorNetSC {
         }
     }
 
+    /**
+     * Server -> client: the Singular level task counters ((target-2) x 3 + task, SingularLevel.taskValues)
+     * and how many biomes / dimensions were explored; kept in SingularLevel for the tooltip and the K menu.
+     */
+    public static class LevelMessage implements IMessage {
+        public int[] tasks = new int[0];
+        public int biomes, dims;
+
+        public LevelMessage() {
+        }
+
+        public LevelMessage(int[] tasks, int biomes, int dims) {
+            this.tasks = tasks;
+            this.biomes = biomes;
+            this.dims = dims;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            int n = Math.max(0, Math.min(64, buf.readUnsignedByte()));
+            tasks = new int[n];
+            for (int i = 0; i < n; i++) {
+                tasks[i] = buf.readInt();
+            }
+            biomes = buf.readInt();
+            dims = buf.readInt();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            int n = Math.min(64, tasks.length);
+            buf.writeByte(n);
+            for (int i = 0; i < n; i++) {
+                buf.writeInt(tasks[i]);
+            }
+            buf.writeInt(biomes);
+            buf.writeInt(dims);
+        }
+    }
+
+    public static class LevelHandler implements IMessageHandler<LevelMessage, IMessage> {
+        @Override
+        public IMessage onMessage(LevelMessage msg, MessageContext ctx) {
+            com.sc.util.SingularLevel.clientSet(msg.tasks, msg.biomes, msg.dims);
+            return null;
+        }
+    }
+
     public static class CooldownHandler implements IMessageHandler<CooldownMessage, IMessage> {
         @Override
         public IMessage onMessage(CooldownMessage msg, MessageContext ctx) {
@@ -416,6 +475,14 @@ public final class ArmorNetSC {
                     break;
                 case GRAV_PRESS: case GRAV_GRAB: case TIME_SLOW: case BLACK_HOLE: case GRAV_DOME: case SINGULARITY:
                     com.sc.item.SingularPowersSC.key(p, featureOfAction(msg.action));   // queued: run on the server thread
+                    break;
+                case BRANCH:                                // Р2: the free first choice; only the station changes it later
+                    if (com.sc.util.SingularLevel.chooseFree(p, msg.feature / 10, msg.feature % 10)) {
+                        p.inventoryContainer.detectAndSendChanges();
+                        p.addChatComponentMessage(new ChatComponentTranslation("sc.armor.sing.branch.chosen",
+                                new ChatComponentTranslation("sc.armorfn." + com.sc.util.SingularLevel.branchFeature(msg.feature / 10, msg.feature % 10)
+                                        .name().toLowerCase(java.util.Locale.ROOT))));
+                    }
                     break;
                 default:
                     break;

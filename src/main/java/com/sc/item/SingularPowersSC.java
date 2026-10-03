@@ -228,8 +228,9 @@ public final class SingularPowersSC {
             ArmorLogicSC.warnArgs(p, "sc.armorkey.locked", 40, name(f), String.valueOf(SingularLevel.requiredLevel(f)));
             return false;
         }
-        if (!SingularLevel.branchAllowed(f, s)) {
-            ArmorLogicSC.warnArgs(p, "sc.armor.sing.branch", 40, name(f));
+        if (!SingularLevel.branchAllowed(p, f, s)) {
+            ArmorLogicSC.warnArgs(p, SingularLevel.branchChoice(s, SingularLevel.requiredLevel(f)) == SingularLevel.BRANCH_NONE
+                    ? "sc.armor.sing.branch.choose" : "sc.armor.sing.branch", 40, name(f));
             return false;
         }
         if (!ArmorLogicSC.active(p, f)) {
@@ -261,7 +262,7 @@ public final class SingularPowersSC {
             }
         }
         if (eu > 0) {
-            int need = (int) Math.ceil(eu * ArmorLogicSC.costMul(p) * mul);
+            int need = (int) Math.ceil(eu * ArmorLogicSC.costMul(p) * mul * SingularLevel.euMul(ArmorLogicSC.piece(p, f.piece)));
             if (ItemArmorSC.chargeOf(ArmorLogicSC.piece(p, f.piece)) < need) {
                 ArmorLogicSC.warnArgs(p, "sc.armor.sing.noeu", 40, name(f), String.valueOf(need));
                 return false;
@@ -287,6 +288,7 @@ public final class SingularPowersSC {
         if (share > 0) {
             ArmorLogicSC.paySuitShare(p, share * mul);
         }
+        SingularProgressSC.keyUsed(p, f);                       // ОЧ5: points for the use
     }
 
     private static WorldServer ws(World w) {

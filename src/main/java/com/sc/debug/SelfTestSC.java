@@ -62,6 +62,7 @@ public final class SelfTestSC {
             singularArmor();
             singularFunctions();
             singularFunctions2b();
+            singularLevels();
             bladeFunctions();
             chargePad();
             batteries();
@@ -1805,21 +1806,21 @@ public final class SelfTestSC {
                 && com.sc.util.ArmorFeature.ANALYZE_EU == 1000 && com.sc.util.ArmorFeature.ANALYZE_MOB_RANGE == 16.0 && com.sc.util.ArmorFeature.ANALYZE_BLOCK_RANGE == 8.0;
         check(nums, "Singular stage 2b numbers: press, grab, time slowing, black hole, dome, Singularity, resonance, scanner, analyzer as in the plan");
 
-        // the branch hook (Р2): both sides allowed until stage 3
+        // the branches (Р2): nothing chosen on a new chestplate - both sides locked (stage 3)
         ItemStack chest = new ItemStack(ModItems.ARMOR.get(sg)[1]);
-        boolean branch = com.sc.util.SingularLevel.branchChoice(chest, 3) == com.sc.util.SingularLevel.BRANCH_BOTH
-                && com.sc.util.SingularLevel.branchChoice(chest, 5) == com.sc.util.SingularLevel.BRANCH_BOTH
+        boolean branch = com.sc.util.SingularLevel.branchChoice(chest, 3) == com.sc.util.SingularLevel.BRANCH_NONE
+                && com.sc.util.SingularLevel.branchChoice(chest, 5) == com.sc.util.SingularLevel.BRANCH_NONE
                 && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.GRAV_PRESS) == com.sc.util.SingularLevel.BRANCH_A
                 && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.GRAV_GRAB) == com.sc.util.SingularLevel.BRANCH_B
                 && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.BLACK_HOLE) == com.sc.util.SingularLevel.BRANCH_A
                 && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.GRAV_DOME) == com.sc.util.SingularLevel.BRANCH_B
                 && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.TIME_SLOW) == com.sc.util.SingularLevel.BRANCH_BOTH
                 && com.sc.util.SingularLevel.branchAllows(1, 1) && !com.sc.util.SingularLevel.branchAllows(1, 2)
-                && com.sc.util.SingularLevel.branchAllows(2, 0) && com.sc.util.SingularLevel.branchAllows(0, 2);
+                && !com.sc.util.SingularLevel.branchAllows(2, 0) && com.sc.util.SingularLevel.branchAllows(0, 2);
         for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
-            branch &= com.sc.util.SingularLevel.branchAllowed(f, chest);
+            branch &= com.sc.util.SingularLevel.branchAllowed(f, chest) == (com.sc.util.SingularLevel.branchOf(f) == com.sc.util.SingularLevel.BRANCH_BOTH);
         }
-        check(branch, "Singular branches (P2 hook): press / grab at level 3, black hole / dome at level 5, both allowed for now");
+        check(branch, "Singular branches (P2): press / grab at level 3, black hole / dome at level 5, both locked until chosen");
 
         // К1: the multipliers, the shield share, the black hole's damage
         boolean boost = com.sc.item.SingularPowersSC.boostAt(100, 400, 1600) == 2F && com.sc.item.SingularPowersSC.boostAt(400, 400, 1600) == 0.5F
@@ -1954,6 +1955,217 @@ public final class SelfTestSC {
             }
         }
         check(missing.isEmpty(), "Singular stage 2b: names, descriptions, chat, analyzer and handbook texts in en_US and ru_RU" + missing);
+    }
+
+    /**
+     * Stage 3, the Singular levels (docs/plan-singular-armor.md §6): thresholds, points (capped, every
+     * source's rate), the kill cap, the tasks on a fake persisted NBT, applyLevelUp, the branches, the
+     * bonuses (tanks / EU / protection, Р4 sync), the pending gas / SM counters, the network, the texts.
+     */
+    private static void singularLevels() {
+        com.sc.util.ArmorSuit sg = com.sc.util.ArmorSuit.SINGULAR;
+        // thresholds and the tasks' needs
+        boolean thr = com.sc.util.SingularLevel.threshold(1) == 2000 && com.sc.util.SingularLevel.threshold(2) == 8000
+                && com.sc.util.SingularLevel.threshold(3) == 25000 && com.sc.util.SingularLevel.threshold(4) == 60000
+                && com.sc.util.SingularLevel.threshold(5) == 0 && com.sc.util.SingularLevel.threshold(0) == 0
+                && com.sc.util.SingularLevel.taskNeed(2, 0) == 5000 && com.sc.util.SingularLevel.taskNeed(2, 1) == 300
+                && com.sc.util.SingularLevel.taskNeed(2, 2) == 2000 && com.sc.util.SingularLevel.taskNeed(3, 0) == 100
+                && com.sc.util.SingularLevel.taskNeed(3, 1) == 600 && com.sc.util.SingularLevel.taskNeed(3, 2) == 50
+                && com.sc.util.SingularLevel.taskNeed(4, 0) == 1 && com.sc.util.SingularLevel.taskNeed(4, 1) == 300
+                && com.sc.util.SingularLevel.taskNeed(4, 2) == 20 && com.sc.util.SingularLevel.taskNeed(5, 0) == 1
+                && com.sc.util.SingularLevel.taskNeed(5, 1) == 30 && com.sc.util.SingularLevel.taskNeed(5, 2) == 5000
+                && com.sc.util.SingularLevel.taskNeed(6, 0) == 0 && com.sc.util.SingularLevel.taskNeed(2, 3) == 0;
+        check(thr, "Singular levels: thresholds 2000 / 8000 / 25000 / 60000, none at 5; the 12 tasks' needs as in the plan");
+
+        // points: per piece, capped at the threshold, Singular only; the sources' rates
+        ItemStack legs = new ItemStack(ModItems.ARMOR.get(sg)[2]);
+        ItemStack exoLegs = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[2]);
+        boolean pts = com.sc.util.SingularLevel.points(legs) == 0 && com.sc.util.SingularLevel.addPoints(legs, 1500) == 1500
+                && com.sc.util.SingularLevel.addPoints(legs, 1500) == 500 && com.sc.util.SingularLevel.points(legs) == 2000
+                && com.sc.util.SingularLevel.pointsFull(legs) && com.sc.util.SingularLevel.addPoints(legs, 10) == 0
+                && com.sc.util.SingularLevel.addPoints(exoLegs, 10) == 0 && com.sc.util.SingularLevel.points(exoLegs) == 0
+                && com.sc.util.SingularLevel.capPoints(5, 999) == 0 && com.sc.util.SingularLevel.capPoints(2, -5) == 0
+                && com.sc.util.SingularLevel.capPoints(2, 9000) == 8000
+                && com.sc.util.SingularLevel.wholePoints(29.9, 10) == 2 && com.sc.util.SingularLevel.wholePoints(30, 10) == 3
+                && com.sc.util.SingularLevel.wholePoints(-1, 10) == 0
+                && com.sc.util.SingularLevel.GAS_MB_PER_POINT == 10 && com.sc.util.SingularLevel.FLIGHT_BLOCKS_PER_POINT == 10
+                && com.sc.util.SingularLevel.BIOME_POINTS == 50 && com.sc.util.SingularLevel.DIMENSION_POINTS == 200
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.PHASE_DASH) == 2
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.GRAV_PRESS) == 10
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.GRAV_GRAB) == 5
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.TIME_SLOW) == 15
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.BLACK_HOLE) == 20
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.GRAV_DOME) == 15
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.SINGULARITY) == 20
+                && com.sc.util.SingularLevel.keyPoints(com.sc.util.ArmorFeature.FLIGHT) == 0;
+        net.minecraft.nbt.NBTTagCompound list = new net.minecraft.nbt.NBTTagCompound();
+        pts &= com.sc.item.SingularProgressSC.addOnce(list, "b", 7, 3) && !com.sc.item.SingularProgressSC.addOnce(list, "b", 7, 3)
+                && com.sc.item.SingularProgressSC.addOnce(list, "b", 8, 3) && com.sc.item.SingularProgressSC.addOnce(list, "b", 9, 3)
+                && !com.sc.item.SingularProgressSC.addOnce(list, "b", 10, 3) && list.getIntArray("b").length == 3;
+        check(pts, "Singular points: per piece in SingPts, capped at the threshold (ready), none for other suits; "
+                + "10 mB / 10 blocks a point, keys 2-20, biome 50, dimension 200 once each");
+
+        // the kill cap: 200 a minute from mobs, bosses always 500
+        int used = 0, kills = 0;
+        for (int i = 0; i < 60; i++) {
+            int got = com.sc.util.SingularLevel.killPoints(false, used);
+            used += got;
+            kills += got > 0 ? 1 : 0;
+        }
+        check(used == 200 && kills == 40 && com.sc.util.SingularLevel.killPoints(false, 198) == 2
+                && com.sc.util.SingularLevel.killPoints(true, 200) == 500 && com.sc.util.SingularLevel.killPoints(false, 0) == 5,
+                "Singular kill points: 5 a mob up to 200 a minute (" + used + " from 60 kills), a boss 500 past the cap");
+
+        // the tasks on a fake persisted NBT
+        net.minecraft.nbt.NBTTagCompound per = new net.minecraft.nbt.NBTTagCompound();
+        net.minecraft.nbt.NBTTagCompound store = new net.minecraft.nbt.NBTTagCompound();
+        per.setTag(com.sc.util.SingularLevel.STORE, store);
+        boolean tasks = !com.sc.util.SingularLevel.taskDoneIn(per, 2) && !com.sc.util.SingularLevel.taskDoneIn(per, 5);
+        store.setFloat(com.sc.util.SingularLevel.C_H2ABS, 299.5F);
+        store.setDouble(com.sc.util.SingularLevel.C_FLY, 4999.9);
+        store.setInteger(com.sc.util.SingularLevel.C_GAS, 1999);
+        tasks &= !com.sc.util.SingularLevel.taskDoneIn(per, 2) && com.sc.util.SingularLevel.taskValue(per, 2, 0) == 4999;
+        store.setInteger(com.sc.util.SingularLevel.C_GAS, 2000);
+        tasks &= com.sc.util.SingularLevel.taskDoneIn(per, 2) && !com.sc.util.SingularLevel.taskDoneIn(per, 3);
+        store.setInteger(com.sc.util.SingularLevel.C_DASHES, 50);
+        tasks &= com.sc.util.SingularLevel.taskDoneIn(per, 3);
+        net.minecraft.nbt.NBTTagCompound spawners = new net.minecraft.nbt.NBTTagCompound();
+        for (int i = 0; i < 19; i++) {
+            spawners.setBoolean("0:" + i + ":64:0", true);
+        }
+        per.setTag(com.sc.util.SingularLevel.SPAWNERS, spawners);
+        per.setInteger(com.sc.util.SingularLevel.RES_REACTOR_SEC, 299);
+        tasks &= !com.sc.util.SingularLevel.taskDoneIn(per, 4) && com.sc.util.SingularLevel.taskValue(per, 4, 2) == 19;
+        spawners.setBoolean("0:99:64:0", true);
+        tasks &= com.sc.util.SingularLevel.taskDoneIn(per, 4);
+        per.setInteger(com.sc.util.SingularLevel.HOLE_KILLS, 29);
+        store.setInteger(com.sc.util.SingularLevel.C_SM, 4999);
+        tasks &= !com.sc.util.SingularLevel.taskDoneIn(per, 5);
+        store.setInteger(com.sc.util.SingularLevel.C_DRAGON, 1);
+        tasks &= com.sc.util.SingularLevel.taskDoneIn(per, 5) && com.sc.util.SingularLevel.taskValues(per).length == 12
+                && com.sc.util.SingularLevel.taskValues(per)[3 * 3 + 0] == 1 && com.sc.util.SingularLevel.taskValues(per)[2 * 3 + 1] == 299;
+        com.sc.util.SingularLevel.clientSet(com.sc.util.SingularLevel.taskValues(per), 4, 2);
+        check(tasks, "Singular tasks: one of three per level, read from the persisted NBT (scSingLv + the stage 2b counters), "
+                + "under the need - not done");
+
+        // applyLevelUp: +1, points to 0, Singular only, 5 stays 5
+        ItemStack boots = new ItemStack(ModItems.ARMOR.get(sg)[3]);
+        com.sc.util.SingularLevel.addPoints(boots, 2000);
+        boolean up = com.sc.util.SingularLevel.applyLevelUp(boots) == 2 && com.sc.util.SingularLevel.levelOf(boots) == 2
+                && com.sc.util.SingularLevel.points(boots) == 0 && !com.sc.util.SingularLevel.pointsFull(boots)
+                && com.sc.util.SingularLevel.applyLevelUp(exoLegs) == 1 && com.sc.util.SingularLevel.levelOf(exoLegs) == 1;
+        com.sc.util.SingularLevel.setLevel(boots, 5);
+        up &= com.sc.util.SingularLevel.applyLevelUp(boots) == 5 && com.sc.util.SingularLevel.addPoints(boots, 100) == 0
+                && !com.sc.util.SingularLevel.readyToUpgrade(null, boots) && !com.sc.util.SingularLevel.readyToUpgrade(null, legs);
+        check(up, "Singular applyLevelUp: level + 1 and the points back to 0, only Singular, level 5 is the top (no points)");
+
+        // the branches: locked until chosen, the free choice only at the level, set / clear, the pairs
+        ItemStack chest = new ItemStack(ModItems.ARMOR.get(sg)[1]);
+        com.sc.util.ArmorFeature press = com.sc.util.ArmorFeature.GRAV_PRESS, grab = com.sc.util.ArmorFeature.GRAV_GRAB,
+                hole = com.sc.util.ArmorFeature.BLACK_HOLE, dome = com.sc.util.ArmorFeature.GRAV_DOME;
+        boolean br = !com.sc.util.SingularLevel.branchAllowed(press, chest) && !com.sc.util.SingularLevel.branchAllowed(grab, chest)
+                && com.sc.util.SingularLevel.branchAllowed(com.sc.util.ArmorFeature.TIME_SLOW, chest)
+                && !com.sc.util.SingularLevel.branchPending(chest, 3);
+        com.sc.util.SingularLevel.setLevel(chest, 3);
+        br &= com.sc.util.SingularLevel.branchPending(chest, 3) && !com.sc.util.SingularLevel.branchPending(chest, 5)
+                && com.sc.util.SingularLevel.setBranch(chest, 3, 1) && com.sc.util.SingularLevel.branchAllowed(press, chest)
+                && !com.sc.util.SingularLevel.branchAllowed(grab, chest) && !com.sc.util.SingularLevel.branchPending(chest, 3)
+                && !com.sc.util.SingularLevel.branchAllowed(hole, chest) && !com.sc.util.SingularLevel.branchAllowed(dome, chest);
+        com.sc.util.SingularLevel.setLevel(chest, 5);
+        br &= com.sc.util.SingularLevel.branchPending(chest, 5) && com.sc.util.SingularLevel.setBranch(chest, 5, 2)
+                && com.sc.util.SingularLevel.branchAllowed(dome, chest) && !com.sc.util.SingularLevel.branchAllowed(hole, chest)
+                && com.sc.util.SingularLevel.branchChoice(chest, 3) == 1 && com.sc.util.SingularLevel.branchChoice(chest, 5) == 2
+                && !com.sc.util.SingularLevel.setBranch(chest, 4, 1) && !com.sc.util.SingularLevel.setBranch(chest, 3, 3)
+                && com.sc.util.SingularLevel.setBranch(chest, 3, 0) && com.sc.util.SingularLevel.branchChoice(chest, 3) == 0
+                && com.sc.util.SingularLevel.branchFeature(3, 1) == press && com.sc.util.SingularLevel.branchFeature(3, 2) == grab
+                && com.sc.util.SingularLevel.branchFeature(5, 1) == hole && com.sc.util.SingularLevel.branchFeature(5, 2) == dome
+                && com.sc.util.SingularLevel.branchFeature(4, 1) == null && !com.sc.util.SingularLevel.branchAllowed(null, press, chest)
+                && !com.sc.util.SingularLevel.branchPending(exoLegs, 3);
+        check(br, "Singular branches: both locked until chosen, the choice offered at level 3 / 5, press|grab and hole|dome exclusive, "
+                + "only levels 3 / 5 and choices 0..2");
+
+        // the bonuses: tanks +10% / protection +5% / EU -5% a level, Р4 +10% with all four at one level 2+
+        ItemStack[] w = gasSuit(sg, true, true, true, true);
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM;
+        boolean bonus = com.sc.util.SingularLevel.bonusPercent(1, false, 10) == 0 && com.sc.util.SingularLevel.bonusPercent(1, true, 10) == 0
+                && com.sc.util.SingularLevel.bonusPercent(5, false, 10) == 40 && com.sc.util.SingularLevel.bonusPercent(5, true, 10) == 50
+                && com.sc.util.SingularLevel.bonusPercent(3, false, 5) == 10 && com.sc.util.SingularLevel.syncedLevel(w) == 0
+                && com.sc.util.ArmorGasSC.levelBonusPercent(w[1]) == 0 && com.sc.util.ArmorGasSC.capacity(w[1], he) == 24000
+                && com.sc.util.SingularLevel.euMul(w[1]) == 1F && com.sc.util.SingularLevel.protectionPercent(w) == 0;
+        com.sc.util.ArmorGasSC.setAmount(w[1], he, 24000);
+        for (ItemStack s : w) {
+            com.sc.util.SingularLevel.setLevel(s, 3);
+        }
+        bonus &= com.sc.util.ArmorGasSC.levelBonusPercent(w[1]) == 20 && com.sc.util.ArmorGasSC.capacity(w[1], he) == 28800
+                && com.sc.util.ArmorGasSC.amount(w[1], he) == 24000 && com.sc.util.SingularLevel.syncedLevel(w) == 3
+                && Math.abs(com.sc.util.SingularLevel.euMul(w[1]) - 0.9F) < 1e-6 && com.sc.util.SingularLevel.protectionPercent(w) == 10;
+        bonus &= com.sc.util.SingularLevel.updateSync(w) && !com.sc.util.SingularLevel.updateSync(w)
+                && com.sc.util.ArmorGasSC.levelBonusPercent(w[1]) == 30 && com.sc.util.ArmorGasSC.capacity(w[1], he) == 31200
+                && Math.abs(com.sc.util.SingularLevel.euMul(w[1]) - 0.8F) < 1e-6 && com.sc.util.SingularLevel.protectionPercent(w) == 20;
+        com.sc.util.SingularLevel.setLevel(w[0], 4);
+        bonus &= com.sc.util.SingularLevel.syncedLevel(w) == 0 && com.sc.util.SingularLevel.updateSync(w)
+                && com.sc.util.ArmorGasSC.levelBonusPercent(w[1]) == 20 && com.sc.util.ArmorGasSC.levelBonusPercent(w[0]) == 30
+                && com.sc.util.SingularLevel.tankBonusPercent(exoLegs) == 0 && com.sc.util.SingularLevel.euMul(exoLegs) == 1F;
+        ItemStack[] three = gasSuit(sg, true, true, true, false);
+        for (ItemStack s : three) {
+            com.sc.util.SingularLevel.setLevel(s, 2);
+        }
+        bonus &= com.sc.util.SingularLevel.syncedLevel(three) == 0 && com.sc.util.SingularLevel.protectionPercent(three) == 3;
+        check(bonus, "Singular bonuses: level 3 tanks +20% (He 24000 -> 28800, nothing lost), EU x0.9, protection 10%; "
+                + "all four at level 3: +30% / x0.8 / 20%; out of sync again when one piece differs; other suits none");
+
+        // what the suit spends / the SM poured in is noted on the pieces for the level logic
+        ItemStack[] g = gasSuit(sg, true, true, true, true);
+        com.sc.util.ArmorGasSC.setAmount(g[1], he, 1000);
+        com.sc.util.ArmorGasSC.drainOf(g, he, 30, true);
+        boolean pend = com.sc.util.ArmorGasSC.takePending(g, com.sc.util.ArmorGasSC.SPENT_PENDING) == 0;
+        com.sc.util.ArmorGasSC.drainOf(g, he, 30, false);
+        com.sc.util.ArmorGasSC.drainExact(g, he, 25);
+        pend &= com.sc.util.ArmorGasSC.takePending(g, com.sc.util.ArmorGasSC.SPENT_PENDING) == 55
+                && com.sc.util.ArmorGasSC.takePending(g, com.sc.util.ArmorGasSC.SPENT_PENDING) == 0;
+        com.sc.util.ArmorGasSC.fillOf(g, com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER, 400, false);
+        com.sc.util.ArmorGasSC.fillOf(g, he, 400, false);
+        pend &= com.sc.util.ArmorGasSC.takePending(g, com.sc.util.ArmorGasSC.SM_PENDING) == 400;
+        ItemStack[] exo = gasSuit(com.sc.util.ArmorSuit.EXO, true, true, true, true);
+        com.sc.util.ArmorGasSC.setAmount(exo[1], he, 1000);
+        com.sc.util.ArmorGasSC.drainOf(exo, he, 30, false);
+        pend &= com.sc.util.ArmorGasSC.takePending(exo, com.sc.util.ArmorGasSC.SPENT_PENDING) == 0;
+        check(pend, "Singular levels: gas spent (not simulated) and SM poured noted on the Singular pieces, taken once; nothing for Exo");
+
+        // network: the branch byte and the level message
+        io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
+        int[] vals = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 1234567};
+        new com.sc.handler.ArmorNetSC.LevelMessage(vals, 17, 3).toBytes(buf);
+        com.sc.handler.ArmorNetSC.LevelMessage back = new com.sc.handler.ArmorNetSC.LevelMessage();
+        back.fromBytes(buf);
+        boolean net = java.util.Arrays.equals(back.tasks, vals) && back.biomes == 17 && back.dims == 3
+                && com.sc.handler.ArmorNetSC.BRANCH == 22 && com.sc.handler.ArmorNetSC.featureOfAction(com.sc.handler.ArmorNetSC.BRANCH) == null
+                && com.sc.handler.ArmorNetSC.branchFeature(5, 2) == 52 && com.sc.handler.ArmorNetSC.BRANCH != com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION;
+        check(net, "Singular levels network: BRANCH action 22 (level x 10 + choice), the task counters message reads back as written");
+
+        // texts
+        String missing = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Set<String> keys = langKeys(lang);
+            java.util.List<String> want = new java.util.ArrayList<String>();
+            java.util.Collections.addAll(want, "sc.armor.sing.levelup", "sc.armor.sing.branch.choose", "sc.armor.sing.branch.chosen",
+                    "sc.armorgui.branch.pick", "sc.armorgui.row.branch", "sc.armorgui.tip.branch", "sc.tooltip.armor.singular.points",
+                    "sc.tooltip.armor.singular.points.ready", "sc.tooltip.armor.singular.tasks", "sc.tooltip.armor.singular.tasks.done",
+                    "sc.tooltip.armor.singular.opens", "sc.tooltip.armor.singular.max", "sc.tooltip.armor.singular.branch",
+                    "sc.tooltip.armor.singular.branch.pick", "sc.tooltip.armor.singular.branch.later", "sc.tooltip.armor.singular.bonus",
+                    "sc.tooltip.armor.singular.sync");
+            for (int t = 2; t <= 5; t++) {
+                for (int i = 0; i < 3; i++) {
+                    want.add("sc.tooltip.armor.singular.task." + t + "." + i);
+                }
+            }
+            for (String k : want) {
+                if (!keys.contains(k)) {
+                    missing += " " + lang + ":" + k;
+                }
+            }
+        }
+        check(missing.isEmpty(), "Singular levels: chat, K menu and tooltip texts in en_US and ru_RU" + missing);
     }
 
     /** The keys of one of the mod's lang files. */

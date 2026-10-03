@@ -55,6 +55,7 @@ public class ShieldEventHandler {
         if (event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer && !event.entityLiving.worldObj.isRemote) {
             com.sc.item.ArmorLogicSC.clearLight((net.minecraft.entity.player.EntityPlayer) event.entityLiving);
         }
+        com.sc.item.SingularProgressSC.onDeath(event.entityLiving, event.source);   // Singular levels: kill points and tasks
     }
 
     /** Quantum / Exo jump boots spend a little hydrogen a jump (ArmorLogicSC.jumped; the server sees the jump too). */
@@ -88,6 +89,7 @@ public class ShieldEventHandler {
             event.ammount = com.sc.item.BladeLogicSC.onHurt(p, event.source, event.ammount);
             event.ammount = com.sc.item.ArmorLogicSC.argonLava(p, event.source, event.ammount);   // argon: lava hurts half
             event.ammount = com.sc.item.ArmorLogicSC.voidDamage(p, event.source, event.ammount);  // К9: the void hurts half
+            event.ammount = com.sc.item.SingularProgressSC.protect(p, event.source, event.ammount); // Р3: +5% a level vs. what bypasses the plating
             event.ammount = com.sc.item.ArmorLogicSC.horizonHurt(p, event.source, event.ammount); // Н2: 30% into EU
             com.sc.item.ArmorLogicSC.anchorHit(p, event.source);                                  // П3: no knockback from this hit
         }
