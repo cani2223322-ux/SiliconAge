@@ -60,6 +60,7 @@ public class ShieldEventHandler {
     /** Quantum / Exo jump boots spend a little hydrogen a jump (ArmorLogicSC.jumped; the server sees the jump too). */
     @SubscribeEvent
     public void onJump(net.minecraftforge.event.entity.living.LivingEvent.LivingJumpEvent event) {
+        com.sc.item.SingularPowersSC.onJump(event.entityLiving);           // Н10: a pinned mob can't jump
         if (event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer && !event.entityLiving.worldObj.isRemote) {
             com.sc.item.ArmorLogicSC.jumped((net.minecraft.entity.player.EntityPlayer) event.entityLiving);
         }

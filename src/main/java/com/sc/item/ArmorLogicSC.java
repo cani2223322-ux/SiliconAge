@@ -119,7 +119,10 @@ public final class ArmorLogicSC {
             return false;                 // О2: under 10% charge the flight, the event horizon and the anchor are off
         }
         if (f.needsFullSet() && fullSet(p) != ArmorSuit.SINGULAR) {
-            return false;                 // К9: all four Singular pieces
+            return false;                 // К9, К1, К2: all four Singular pieces
+        }
+        if (!com.sc.util.SingularLevel.branchAllowed(f, s)) {
+            return false;                 // Р2: the other side of the piece's branch (stage 3; for now both work)
         }
         if (!gasAllows(ArmorGasSC.wornSet(p), f)) {
             return false;                 // Quantum / Exo: no gas of its own, or emergency mode (no helium)
@@ -351,6 +354,7 @@ public final class ArmorLogicSC {
     /** Heat from things that happen between the once-a-second checks (dash, shield), collected per player. */
     public static void addHeat(EntityPlayer p, int heat) {
         NBTTagCompound data = p.getEntityData();
+        heat = Math.round(heat * SingularPowersSC.heatMul(p));      // К1: the boost heats twice as hard
         data.setInteger(HEAT_KEY, data.getInteger(HEAT_KEY) + heat);
     }
 
@@ -388,7 +392,8 @@ public final class ArmorLogicSC {
     /** Pays for a function from its own piece. */
     public static boolean pay(EntityPlayer p, ArmorFeature f, int eu) {
         ItemStack s = piece(p, f.piece);
-        return s != null && ItemArmorSC.pay(s, (int) Math.ceil(eu * costMul(p)));
+        float mul = costMul(p) * (f.minSuit == ArmorSuit.SINGULAR ? SingularPowersSC.costMul(p) : 1F);   // К1: x2 for the Singular ones
+        return s != null && ItemArmorSC.pay(s, (int) Math.ceil(eu * mul));
     }
 
     // ------------------------------------------------------------------ every tick, both sides
@@ -437,6 +442,9 @@ public final class ArmorLogicSC {
         }
         if (p.posY < 0 && !p.isDead) {
             voidRescue(p);
+        }
+        if (p.ticksExisted % SingularSensesSC.ANALYZE_EVERY == 0) {
+            SingularSensesSC.analyzer(p);                      // Ш5: what the wearer looks at
         }
         if (active(p, ArmorFeature.FIRE_PROOF) && (p.isBurning() || p.handleLavaMovement()) && !p.isPotionActive(Potion.fireResistance)) {
             p.addPotionEffect(new PotionEffect(Potion.fireResistance.id, 45, 0, true));   // at once, not up to a second late
@@ -740,7 +748,8 @@ public final class ArmorLogicSC {
             // the engine boost on hydrogen doubles it
             float speed = p.capabilities.isCreativeMode || ArmorSuit.exoClass(suitOf(piece(p, 1))) ? VANILLA_FLY_SPEED : QUANTUM_FLY_SPEED;
             if (grav) {
-                speed = VANILLA_FLY_SPEED * ArmorFeature.GRAV_FLIGHT_SPEED_MUL;    // Н1: x3 the Exo flight, in creative too
+                // Н1: x3 the Exo flight, in creative too; К1 doubles it (halves it while weakened)
+                speed = VANILLA_FLY_SPEED * ArmorFeature.GRAV_FLIGHT_SPEED_MUL * SingularPowersSC.singularBoost(p);
             } else if (!p.capabilities.isCreativeMode && boostedFlight(p)) {
                 speed *= 2F;
             }
@@ -889,7 +898,7 @@ public final class ArmorLogicSC {
         p.worldObj.playSoundEffect(e.posX, e.posY, e.posZ, "random.fizz", 0.5F, 1.8F);
     }
 
-    private static boolean shooterIs(Entity e, EntityPlayer p) {
+    static boolean shooterIs(Entity e, EntityPlayer p) {
         if (e instanceof EntityArrow) {
             return ((EntityArrow) e).shootingEntity == p;
         }
@@ -910,7 +919,7 @@ public final class ArmorLogicSC {
         // Ш8 (Singular helmet): it takes the night vision over - on in the dark, off in bright light (no glare)
         boolean sight = active(p, ArmorFeature.CLEAR_SIGHT) && pay(p, ArmorFeature.CLEAR_SIGHT, ArmorFeature.CLEAR_SIGHT.euPerSecond);
         if (sight) {
-            ArmorGasSC.drainFraction(ArmorGasSC.wornSet(p), Gas.KRYPTON, ArmorFeature.SING_KR_SIGHT_PER_MIN / 60F);
+            ArmorGasSC.drainFraction(ArmorGasSC.wornSet(p), Gas.KRYPTON, ArmorFeature.SING_KR_SIGHT_PER_MIN / 60F * SingularPowersSC.costMul(p));
             heat += ArmorFeature.CLEAR_SIGHT.heat;
         }
         boolean nightVision = sight ? !brightAtEyes(p)
@@ -939,7 +948,7 @@ public final class ArmorLogicSC {
                 data.removeTag(NIGHT_VISION_FLAG);
             }
         }
-        heat += data.getInteger(HEAT_KEY);
+        int collected = data.getInteger(HEAT_KEY);                   // already doubled by addHeat during К1
         data.removeTag(HEAT_KEY);
         heat += lifeSupport(p);
         // breathing on the helmet's oxygen: under water or stuck inside a block (no oxygen - no breathing)
@@ -984,7 +993,8 @@ public final class ArmorLogicSC {
             p.heal(ArmorFeature.regenHeal(suitOf(piece(p, 1))));
             heat += ArmorFeature.REGENERATION.heat;
         }
-        return heat + perSecondRest(p, mode) + singularSecond(p);
+        int own = heat + perSecondRest(p, mode) + singularSecond(p);
+        return Math.round(own * SingularPowersSC.heatMul(p)) + collected;   // К1: x2 while boosted
     }
 
     /**
@@ -1029,7 +1039,7 @@ public final class ArmorLogicSC {
         if (gravFlightOn(p) && p.capabilities.isFlying && !p.capabilities.isCreativeMode) {
             // Н1: helium and EU, no hydrogen
             if (pay(p, ArmorFeature.GRAV_FLIGHT, ArmorFeature.GRAV_FLIGHT.euPerSecond)) {
-                ArmorGasSC.drainFraction(ArmorGasSC.wornSet(p), Gas.HELIUM, ArmorFeature.SING_HE_FLIGHT_PER_SECOND);
+                ArmorGasSC.drainFraction(ArmorGasSC.wornSet(p), Gas.HELIUM, ArmorFeature.SING_HE_FLIGHT_PER_SECOND * SingularPowersSC.costMul(p));
                 heat += ArmorFeature.GRAV_FLIGHT.heat;
             }
         } else if (active(p, ArmorFeature.FLIGHT) && p.capabilities.isFlying && !p.capabilities.isCreativeMode) {
@@ -1498,12 +1508,9 @@ public final class ArmorLogicSC {
     public static final String TOSSED_BY = "scTossedBy";
     private static java.lang.reflect.Field inWebField;
 
-    /**
-     * Stage 2b hook (С3: no phase dash cooldown while time is slowed): whether the wearer's time
-     * slowing (Н4) is running. Always false until Н4 exists.
-     */
+    /** С3 (no phase dash cooldown while time is slowed): whether the wearer's time slowing (Н4) is running (server). */
     public static boolean timeSlowActive(EntityPlayer p) {
-        return false;
+        return SingularPowersSC.timeSlowActive(p);
     }
 
     // ------------------------------------------------------------------ Н1 gravitational flight: no inertia (client)
@@ -1748,7 +1755,7 @@ public final class ArmorLogicSC {
     }
 
     /** Living hostile mobs (IMob) within `r` of the player. */
-    private static List<net.minecraft.entity.EntityLivingBase> mobsAround(EntityPlayer p, double r) {
+    static List<net.minecraft.entity.EntityLivingBase> mobsAround(EntityPlayer p, double r) {
         List<net.minecraft.entity.EntityLivingBase> out = new java.util.ArrayList<net.minecraft.entity.EntityLivingBase>();
         List list = p.worldObj.getEntitiesWithinAABB(net.minecraft.entity.EntityLivingBase.class, p.boundingBox.expand(r, r, r));
         for (Object o : list) {
@@ -1761,7 +1768,7 @@ public final class ArmorLogicSC {
     }
 
     /** Throws `e` away from the player: `speed` sideways, `up` upwards. */
-    private static void push(EntityPlayer p, Entity e, double speed, double up) {
+    static void push(EntityPlayer p, Entity e, double speed, double up) {
         double dx = e.posX - p.posX, dz = e.posZ - p.posZ, d = Math.sqrt(dx * dx + dz * dz);
         if (d < 0.01) {
             dx = 1;
@@ -1846,7 +1853,7 @@ public final class ArmorLogicSC {
     }
 
     /** A player-sized box with its feet at (x, y, z). */
-    private static AxisAlignedBB boxAt(double x, double y, double z) {
+    static AxisAlignedBB boxAt(double x, double y, double z) {
         return AxisAlignedBB.getBoundingBox(x - 0.3, y, z - 0.3, x + 0.3, y + 1.8, z + 0.3);
     }
 
@@ -2006,7 +2013,7 @@ public final class ArmorLogicSC {
             return amount;
         }
         ArmorGasSC.drainFraction(worn, Gas.HELIUM, he);
-        float taken = amount * ArmorFeature.HORIZON_SHARE;
+        float taken = amount * horizonShare(SingularPowersSC.singularBoost(p));   // К1: 60% while boosted
         chargeSuit(p, (int) Math.min(Integer.MAX_VALUE, Math.round(taken * (double) ArmorFeature.HORIZON_EU_PER_POINT)));
         return amount - taken;
     }
@@ -2067,8 +2074,9 @@ public final class ArmorLogicSC {
             return;
         }
         ItemStack[] worn = ArmorGasSC.wornSet(p);
-        int eu = (int) Math.ceil(ArmorFeature.PHASE_DASH_EU * costMul(p));
-        if (ArmorGasSC.amountOf(worn, Gas.HYDROGEN) < ArmorFeature.SING_H2_PHASE || ItemArmorSC.chargeOf(piece(p, 2)) < eu) {
+        int eu = (int) Math.ceil(ArmorFeature.PHASE_DASH_EU * costMul(p) * SingularPowersSC.costMul(p));
+        int h2 = SingularPowersSC.scaled(p, ArmorFeature.SING_H2_PHASE);                    // К1: x2
+        if (ArmorGasSC.amountOf(worn, Gas.HYDROGEN) < h2 || ItemArmorSC.chargeOf(piece(p, 2)) < eu) {
             warn(p, "sc.armor.phase.cant", 40);
             return;
         }
@@ -2082,7 +2090,8 @@ public final class ArmorLogicSC {
                         && p.worldObj.getCollidingBoundingBoxes(p, bb).isEmpty() && !p.worldObj.isMaterialInBB(bb, Material.lava);
             }
         };
-        double dist = phaseDistance(space, p.posX, p.boundingBox.minY, p.posZ, look.xCoord, ly, look.zCoord, ArmorFeature.PHASE_DASH_RANGE);
+        double range = ArmorFeature.PHASE_DASH_RANGE * SingularPowersSC.rangeMul(SingularPowersSC.singularBoost(p));   // К1: x1.5
+        double dist = phaseDistance(space, p.posX, p.boundingBox.minY, p.posZ, look.xCoord, ly, look.zCoord, range);
         if (dist < 1.0) {
             warn(p, "sc.armor.phase.blocked", 20);
             return;
@@ -2090,7 +2099,7 @@ public final class ArmorLogicSC {
         double len = Math.sqrt(look.xCoord * look.xCoord + ly * ly + look.zCoord * look.zCoord);
         double x = p.posX + look.xCoord / len * dist, y = p.boundingBox.minY + ly / len * dist, z = p.posZ + look.zCoord / len * dist;
         ItemArmorSC.pay(piece(p, 2), eu);
-        ArmorGasSC.drainExact(worn, Gas.HYDROGEN, ArmorFeature.SING_H2_PHASE);
+        ArmorGasSC.drainExact(worn, Gas.HYDROGEN, h2);
         data.setLong(PHASE_AT, now);
         if (p.worldObj instanceof net.minecraft.world.WorldServer) {
             ((net.minecraft.world.WorldServer) p.worldObj).func_147487_a("portal", p.posX, p.posY + 1, p.posZ, 30, 0.3, 0.8, 0.3, 0.6);
@@ -2111,13 +2120,13 @@ public final class ArmorLogicSC {
     // ------------------------------------------------------------------ cooldown / chat helpers
 
     /** "<function>: cooldown N s" in chat, at most every 2 s. */
-    private static void cooldownWarn(EntityPlayer p, ArmorFeature f, int ticksLeft) {
+    static void cooldownWarn(EntityPlayer p, ArmorFeature f, int ticksLeft) {
         warnArgs(p, "sc.armor.cooldown", 40, new net.minecraft.util.ChatComponentTranslation("sc.armorfn." + f.name().toLowerCase(java.util.Locale.ROOT)),
                 String.valueOf((ticksLeft + 19) / 20));
     }
 
     /** warn() with arguments (the key's throttle as warn's). */
-    private static void warnArgs(EntityPlayer p, String key, int cooldown, Object... args) {
+    static void warnArgs(EntityPlayer p, String key, int cooldown, Object... args) {
         NBTTagCompound data = p.getEntityData();
         long now = p.worldObj.getTotalWorldTime();
         long at = data.getLong(WARN_PREFIX + key);
@@ -2136,22 +2145,30 @@ public final class ArmorLogicSC {
         ItemStack[] worn = ArmorGasSC.wornSet(p);
         long now = p.worldObj.getTotalWorldTime();
         NBTTagCompound data = p.getEntityData();
+        float boostCost = SingularPowersSC.costMul(p);                     // К1: x2 gas while boosted
         if (active(p, ArmorFeature.MAGNET) && pay(p, ArmorFeature.MAGNET, ArmorFeature.MAGNET.euPerSecond)) {
-            ArmorGasSC.drainFraction(worn, Gas.HELIUM, ArmorFeature.SING_HE_MAGNET_PER_MIN / 60F);
+            ArmorGasSC.drainFraction(worn, Gas.HELIUM, ArmorFeature.SING_HE_MAGNET_PER_MIN / 60F * boostCost);
             heat += ArmorFeature.MAGNET.heat;
         }
         if (data.hasKey(STAB_AT) && now - data.getLong(STAB_AT) < 20 && now >= data.getLong(STAB_AT)) {
-            ArmorGasSC.drainFraction(worn, Gas.ARGON, ArmorFeature.SING_AR_STABILIZER_PER_SECOND);   // only while it actually worked
+            ArmorGasSC.drainFraction(worn, Gas.ARGON, ArmorFeature.SING_AR_STABILIZER_PER_SECOND * boostCost);   // only while it worked
         }
         String slowAt = SLOW_FALL + "At";
         if (data.hasKey(slowAt) && now - data.getLong(slowAt) < 20 && now >= data.getLong(slowAt)
                 && pay(p, ArmorFeature.ANTIGRAV, ArmorFeature.ANTIGRAV.euPerSecond)) {
-            ArmorGasSC.drainFraction(worn, Gas.HYDROGEN, ArmorFeature.SING_H2_SLOWFALL_PER_SECOND);
+            ArmorGasSC.drainFraction(worn, Gas.HYDROGEN, ArmorFeature.SING_H2_SLOWFALL_PER_SECOND * boostCost);
             heat += ArmorFeature.ANTIGRAV.heat;
         }
         if (ItemArmorSC.isEnabled(piece(p, 3), ArmorFeature.VOID_RESCUE)) {
             rememberSafe(p);
         }
+        heat += SingularSensesSC.second(p);                 // stage 2b: Ш1 scanner, Ш2 threat sense, К2 resonance
+        SingularPowersSC.second(p);                         // К1: the boost / weakness turning over
         return heat;
+    }
+
+    /** Pure: Н2's share of damage turned into EU at the К1 multiplier `boost` (x2 boosted: 60%, weakened: 15%). */
+    public static float horizonShare(float boost) {
+        return Math.min(0.6F, ArmorFeature.HORIZON_SHARE * boost);
     }
 }

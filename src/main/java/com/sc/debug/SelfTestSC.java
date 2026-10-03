@@ -61,6 +61,7 @@ public final class SelfTestSC {
             armorGases();
             singularArmor();
             singularFunctions();
+            singularFunctions2b();
             bladeFunctions();
             chargePad();
             batteries();
@@ -1554,8 +1555,8 @@ public final class SelfTestSC {
         return w;
     }
 
-    /** The Singular suit's own functions (stage 2a): Н1, Н7, П3, П7, Б3, Б4, Б1, К9, Ш8, Н11, Н2, П1. */
-    private static final int SINGULAR_OWN = 12;
+    /** The Singular suit's own functions: stage 2a Н1, Н7, П3, П7, Б3, Б4, Б1, К9, Ш8, Н11, Н2, П1; stage 2b 10 more. */
+    private static final int SINGULAR_OWN = 22;
 
     /**
      * The Singular functions, stage 2a (docs/plan-singular-armor.md §3-§5): appended after the 25 old
@@ -1596,7 +1597,7 @@ public final class SelfTestSC {
                 && com.sc.util.ArmorFeature.GRAV_FLIGHT.offOnLowCharge() && com.sc.util.ArmorFeature.EVENT_HORIZON.offOnLowCharge()
                 && com.sc.util.ArmorFeature.GRAV_ANCHOR.offOnLowCharge() && !com.sc.util.ArmorFeature.MAGNET.offOnLowCharge()
                 && com.sc.util.SingularLevel.requiredLevel(com.sc.util.ArmorFeature.FLIGHT) == 1;
-        check(layout, "Singular functions: 12 appended (25..36), Singular only, the plan's pieces, levels, gases and rates" + bad);
+        check(layout, "Singular functions: 12 appended (25..36, stage 2a), Singular only, the plan's pieces, levels, gases and rates" + bad);
 
         // the switch bits: an old piece keeps its "FnToggled", bits 32+ go to "FnToggled2"
         ItemStack chest = new ItemStack(ModItems.ARMOR.get(sg)[1]), helmet = new ItemStack(ModItems.ARMOR.get(sg)[0]);
@@ -1736,6 +1737,223 @@ public final class SelfTestSC {
             }
         }
         check(missing.isEmpty(), "Singular functions: names, descriptions, chat and screen texts in en_US and ru_RU" + missing);
+    }
+
+    /**
+     * Stage 2b (docs/plan-singular-armor.md §3-§5): Н10, Н8, Н4, Н3, Н17, К1, К2, Ш1, Ш2, Ш5 appended
+     * (37..46) with the plan's pieces / levels / gases; the branch hook (Р2); К1's multipliers; the
+     * black hole's damage; the scanner's cap; the analyzer's weakness flags; the resonance sources on
+     * a field generator without a world; the new messages written and read back; the texts.
+     */
+    private static void singularFunctions2b() {
+        com.sc.util.ArmorSuit sg = com.sc.util.ArmorSuit.SINGULAR, exo = com.sc.util.ArmorSuit.EXO;
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, kr = com.sc.util.ArmorGasSC.Gas.KRYPTON,
+                sm = com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER;
+        String[] order = {"GRAV_PRESS", "GRAV_GRAB", "TIME_SLOW", "BLACK_HOLE", "GRAV_DOME", "SINGULARITY", "RESONANCE",
+                "GRAV_SCANNER", "THREAT_SENSE", "ANALYZER"};
+        int[] pieces = {1, 1, 1, 1, 1, 1, 1, 0, 0, 0};
+        int[] levels = {3, 3, 4, 5, 5, 5, 4, 3, 3, 2};
+        com.sc.util.ArmorGasSC.Gas[] gases = {he, he, he, he, he, sm, null, kr, kr, kr};
+        float[] use = {100F, 50F, 500F, 1000F, 300F, 200F, 0F, 2F, 0.5F, 1F};
+        boolean[] action = {true, true, true, true, true, true, false, false, false, false};
+        int[] eu = {0, 0, 0, 0, 0, 0, 0, 200, 20, 0};
+        int[] heat = {60, 0, 200, 300, 0, 100, 0, 1, 0, 0};
+        com.sc.util.ArmorFeature[] v = com.sc.util.ArmorFeature.values();
+        boolean layout = v.length == 25 + SINGULAR_OWN && v.length <= 64;
+        String bad = "";
+        for (int i = 0; i < order.length; i++) {
+            com.sc.util.ArmorFeature f = com.sc.util.ArmorFeature.valueOf(order[i]);
+            boolean ok = f.ordinal() == 37 + i && f.minSuit == sg && f.piece == pieces[i] && f.availableIn(sg, pieces[i])
+                    && !f.availableIn(exo, pieces[i]) && com.sc.util.SingularLevel.requiredLevel(f) == levels[i]
+                    && f.gas() == gases[i] && Math.abs(f.gasUse() - use[i]) < 1e-6 && f.isAction() == action[i]
+                    && f.euPerSecond == eu[i] && f.heat == heat[i]
+                    && f.needsFullSet() == (f == com.sc.util.ArmorFeature.SINGULARITY || f == com.sc.util.ArmorFeature.RESONANCE)
+                    && (com.sc.handler.ArmorNetSC.actionOf(f) >= 0) == action[i];
+            if (!ok) {
+                bad += " " + order[i];
+            }
+            layout &= ok;
+        }
+        layout &= com.sc.util.ArmorFeature.GRAV_SCANNER.gasUseKind() == com.sc.util.ArmorFeature.USE_MINUTE
+                && com.sc.util.ArmorFeature.THREAT_SENSE.gasUseKind() == com.sc.util.ArmorFeature.USE_MINUTE
+                && com.sc.util.ArmorFeature.ANALYZER.gasUseKind() == com.sc.util.ArmorFeature.USE_ONCE
+                && com.sc.util.ArmorFeature.BLACK_HOLE.gasUseKind() == com.sc.util.ArmorFeature.USE_ONCE
+                && !com.sc.util.ArmorFeature.GRAV_SCANNER.onByDefault && !com.sc.util.ArmorFeature.THREAT_SENSE.onByDefault
+                && com.sc.util.ArmorFeature.ANALYZER.onByDefault && com.sc.util.ArmorFeature.RESONANCE.onByDefault;
+        check(layout, "Singular functions stage 2b: 10 appended (37..46), Singular only, the plan's pieces, levels, gases, keys" + bad);
+
+        // the plan's numbers (§4: costs, cooldowns, reaches)
+        boolean nums = com.sc.util.ArmorFeature.SING_HE_PRESS == 100 && com.sc.util.ArmorFeature.SING_D_PRESS == 50
+                && com.sc.util.ArmorFeature.PRESS_EU == 200000 && com.sc.util.ArmorFeature.PRESS_COOLDOWN == 600
+                && com.sc.util.ArmorFeature.PRESS_TICKS == 100 && com.sc.util.ArmorFeature.PRESS_RADIUS == 6.0
+                && com.sc.util.ArmorFeature.SING_HE_GRAB == 50 && com.sc.util.ArmorFeature.GRAB_EU == 100000
+                && com.sc.util.ArmorFeature.GRAB_COOLDOWN == 200 && com.sc.util.ArmorFeature.GRAB_TICKS == 120 && com.sc.util.ArmorFeature.GRAB_RANGE == 8.0
+                && com.sc.util.ArmorFeature.SING_KR_SLOW == 100 && com.sc.util.ArmorFeature.SING_HE_SLOW == 500 && com.sc.util.ArmorFeature.SING_SM_SLOW == 50
+                && com.sc.util.ArmorFeature.SLOW_CHARGE == 0.10F && com.sc.util.ArmorFeature.SLOW_COOLDOWN == 3600 && com.sc.util.ArmorFeature.SLOW_TICKS == 120
+                && com.sc.util.ArmorFeature.SLOW_RADIUS == 16.0 && com.sc.util.ArmorFeature.SLOW_FACTOR == 0.2F && com.sc.util.ArmorFeature.AGGRO_RADIUS == 48.0
+                && com.sc.util.ArmorFeature.SING_D_HOLE == 500 && com.sc.util.ArmorFeature.SING_HE_HOLE == 1000 && com.sc.util.ArmorFeature.SING_SM_HOLE == 100
+                && com.sc.util.ArmorFeature.HOLE_CHARGE == 0.25F && com.sc.util.ArmorFeature.HOLE_COOLDOWN == 2400 && com.sc.util.ArmorFeature.HOLE_TICKS == 200
+                && com.sc.util.ArmorFeature.HOLE_RANGE == 24.0 && com.sc.util.ArmorFeature.HOLE_RADIUS == 10.0 && com.sc.util.ArmorFeature.HOLE_COLLAPSE_RADIUS == 4.0
+                && com.sc.util.ArmorFeature.SING_HE_DOME == 300 && com.sc.util.ArmorFeature.SING_D_DOME == 200 && com.sc.util.ArmorFeature.DOME_CHARGE == 0.10F
+                && com.sc.util.ArmorFeature.DOME_COOLDOWN == 2400 && com.sc.util.ArmorFeature.DOME_TICKS == 160 && com.sc.util.ArmorFeature.DOME_RADIUS == 5.0
+                && com.sc.util.ArmorFeature.SING_SM_BOOST == 200 && com.sc.util.ArmorFeature.SING_D_BOOST == 1000 && com.sc.util.ArmorFeature.BOOST_CHARGE == 0.20F
+                && com.sc.util.ArmorFeature.BOOST_COOLDOWN == 12000 && com.sc.util.ArmorFeature.BOOST_TICKS == 300 && com.sc.util.ArmorFeature.WEAK_TICKS == 1200
+                && com.sc.util.ArmorFeature.RESONANCE_RADIUS == 16 && com.sc.util.ArmorFeature.RESONANCE_EU == 20000 && com.sc.util.ArmorFeature.RESONANCE_COOL == 10
+                && com.sc.util.ArmorFeature.RES_HE_PER_SECOND == 2F && com.sc.util.ArmorFeature.RES_D_PER_SECOND == 0.5F
+                && com.sc.util.ArmorFeature.SING_KR_PER_PULSE == 10 && com.sc.util.ArmorFeature.SCANNER_RADIUS == 32 && com.sc.util.ArmorFeature.SCANNER_EVERY == 100
+                && com.sc.util.ArmorFeature.SCANNER_MAX_BLOCKS == 256 && com.sc.util.ArmorFeature.SCANNER_MAX_MOBS == 64
+                && com.sc.util.ArmorFeature.ANALYZE_EU == 1000 && com.sc.util.ArmorFeature.ANALYZE_MOB_RANGE == 16.0 && com.sc.util.ArmorFeature.ANALYZE_BLOCK_RANGE == 8.0;
+        check(nums, "Singular stage 2b numbers: press, grab, time slowing, black hole, dome, Singularity, resonance, scanner, analyzer as in the plan");
+
+        // the branch hook (Р2): both sides allowed until stage 3
+        ItemStack chest = new ItemStack(ModItems.ARMOR.get(sg)[1]);
+        boolean branch = com.sc.util.SingularLevel.branchChoice(chest, 3) == com.sc.util.SingularLevel.BRANCH_BOTH
+                && com.sc.util.SingularLevel.branchChoice(chest, 5) == com.sc.util.SingularLevel.BRANCH_BOTH
+                && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.GRAV_PRESS) == com.sc.util.SingularLevel.BRANCH_A
+                && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.GRAV_GRAB) == com.sc.util.SingularLevel.BRANCH_B
+                && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.BLACK_HOLE) == com.sc.util.SingularLevel.BRANCH_A
+                && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.GRAV_DOME) == com.sc.util.SingularLevel.BRANCH_B
+                && com.sc.util.SingularLevel.branchOf(com.sc.util.ArmorFeature.TIME_SLOW) == com.sc.util.SingularLevel.BRANCH_BOTH
+                && com.sc.util.SingularLevel.branchAllows(1, 1) && !com.sc.util.SingularLevel.branchAllows(1, 2)
+                && com.sc.util.SingularLevel.branchAllows(2, 0) && com.sc.util.SingularLevel.branchAllows(0, 2);
+        for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
+            branch &= com.sc.util.SingularLevel.branchAllowed(f, chest);
+        }
+        check(branch, "Singular branches (P2 hook): press / grab at level 3, black hole / dome at level 5, both allowed for now");
+
+        // К1: the multipliers, the shield share, the black hole's damage
+        boolean boost = com.sc.item.SingularPowersSC.boostAt(100, 400, 1600) == 2F && com.sc.item.SingularPowersSC.boostAt(400, 400, 1600) == 0.5F
+                && com.sc.item.SingularPowersSC.boostAt(1599, 400, 1600) == 0.5F && com.sc.item.SingularPowersSC.boostAt(1600, 400, 1600) == 1F
+                && com.sc.item.SingularPowersSC.boostAt(5, 0, 0) == 1F
+                && com.sc.item.SingularPowersSC.rangeMul(2F) == 1.5F && com.sc.item.SingularPowersSC.rangeMul(0.5F) == 0.75F
+                && com.sc.item.SingularPowersSC.rangeMul(1F) == 1F
+                && com.sc.item.SingularPowersSC.costMulFor(2F) == 2F && com.sc.item.SingularPowersSC.costMulFor(0.5F) == 1F
+                && com.sc.item.SingularPowersSC.costMulFor(1F) == 1F && com.sc.item.SingularPowersSC.singularBoost(null) == 1F
+                && Math.abs(com.sc.item.ArmorLogicSC.horizonShare(2F) - 0.6F) < 1e-6 && Math.abs(com.sc.item.ArmorLogicSC.horizonShare(1F) - 0.3F) < 1e-6
+                && Math.abs(com.sc.item.ArmorLogicSC.horizonShare(0.5F) - 0.15F) < 1e-6
+                && !com.sc.item.SingularPowersSC.timeSlowActive(null) && com.sc.item.SingularPowersSC.fieldCount() == 0
+                && Math.abs(com.sc.item.SingularPowersSC.holeDamage(0, 10, 0, 200) - 3F) < 1e-5
+                && Math.abs(com.sc.item.SingularPowersSC.holeDamage(0, 10, 200, 200) - 9F) < 1e-5
+                && com.sc.item.SingularPowersSC.holeDamage(5, 10, 100, 200) == 0F && com.sc.item.SingularPowersSC.holeDamage(7, 10, 100, 200) == 0F
+                && com.sc.item.SingularPowersSC.holeDamage(4.9, 10, 0, 200) == 1F
+                && com.sc.item.SingularPowersSC.holeDamage(2, 10, 100, 200) > com.sc.item.SingularPowersSC.holeDamage(4, 10, 100, 200);
+        check(boost, "Singularity mode: x2 for 15 s, x0.5 for 60 s, then x1; reach x1.5 / x0.75; use x2 only boosted; "
+                + "horizon 60% / 30% / 15%; black hole damage grows toward the centre and with time");
+
+        // Ш1: chests and spawners first, then the nearest ores; never more than the cap
+        java.util.List<int[]> found = new java.util.ArrayList<int[]>();
+        for (int i = 0; i < 300; i++) {
+            found.add(new int[]{i, 10, 0, com.sc.util.SingularSenseData.ORE, 1000 - i});
+        }
+        found.add(new int[]{0, 20, 0, com.sc.util.SingularSenseData.CHEST, 5000});
+        found.add(new int[]{0, 21, 0, com.sc.util.SingularSenseData.SPAWNER, 4000});
+        java.util.List<int[]> shown = com.sc.item.SingularSensesSC.capScan(found, 256);
+        boolean cap = shown.size() == 256 && shown.get(0)[3] == com.sc.util.SingularSenseData.SPAWNER
+                && shown.get(1)[3] == com.sc.util.SingularSenseData.CHEST && shown.get(2)[4] == 701 && shown.get(255)[4] == 954
+                && com.sc.item.SingularSensesSC.capScan(found.subList(0, 10), 256).size() == 10 && found.size() == 302;
+        cap &= com.sc.item.SingularSensesSC.oreKind(net.minecraft.init.Blocks.diamond_ore) == com.sc.util.SingularSenseData.ORE
+                && com.sc.item.SingularSensesSC.oreKind(net.minecraft.init.Blocks.lit_redstone_ore) == com.sc.util.SingularSenseData.ORE
+                && com.sc.item.SingularSensesSC.oreKind(com.sc.init.ModBlocks.oreSC) == com.sc.util.SingularSenseData.MOD_ORE
+                && com.sc.item.SingularSensesSC.oreKind(net.minecraft.init.Blocks.stone) < 0;
+        check(cap, "gravity scanner: capped at 256, chests and spawners first, then the nearest ores; vanilla and the mod's ores known");
+
+        // Ш5: weaknesses; К2: a field generator as a source (no world needed)
+        int all = com.sc.item.SingularSensesSC.weaknessFlags(true, true, true, true, true, true);
+        boolean senses = com.sc.item.SingularSensesSC.weaknessFlags(false, false, false, false, false, false) == 0
+                && com.sc.item.SingularSensesSC.weaknessFlags(true, false, false, false, true, false)
+                == (com.sc.util.SingularSenseData.Analysis.WEAK_WATER | com.sc.util.SingularSenseData.Analysis.FIRE_IMMUNE)
+                && all == 63 && com.sc.util.SingularSenseData.fresh(1000, 1500, 1000) && !com.sc.util.SingularSenseData.fresh(1000, 2501, 1000)
+                && !com.sc.util.SingularSenseData.fresh(0, 10, 1000) && !com.sc.util.SingularSenseData.fresh(2000, 1000, 1000);
+        com.sc.tileentity.TileEntityFieldGeneratorSC field = new com.sc.tileentity.TileEntityFieldGeneratorSC();
+        field.setPowerOn(false);
+        field.setEnergyStoredClient(5000);
+        int off = com.sc.item.SingularSensesSC.resonanceKind(field);
+        field.setPowerOn(true);
+        int on = com.sc.item.SingularSensesSC.resonanceKind(field);
+        field.setEnergyStoredClient(0);
+        int empty = com.sc.item.SingularSensesSC.resonanceKind(field);
+        senses &= off == 0 && on == 1 && empty == 0 && com.sc.item.SingularSensesSC.resonanceKind(null) == 0;
+        check(senses, "analyzer weakness flags; resonance: a powered, switched-on field generator counts (" + off + "/" + on + "/" + empty + ")");
+
+        // the new messages: action bytes, and written / read back
+        boolean net = com.sc.handler.ArmorNetSC.featureOfAction(com.sc.handler.ArmorNetSC.BLACK_HOLE) == com.sc.util.ArmorFeature.BLACK_HOLE
+                && com.sc.handler.ArmorNetSC.featureOfAction(com.sc.handler.ArmorNetSC.PHASE_DASH) == null
+                && com.sc.handler.ArmorNetSC.featureOfAction((byte) 20) == null
+                && com.sc.handler.ArmorNetSC.actionOf(com.sc.util.ArmorFeature.PHASE_DASH) == -1;
+        java.util.Set<Byte> bytes = new java.util.HashSet<Byte>();
+        for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
+            byte a = com.sc.handler.ArmorNetSC.actionOf(f);
+            if (a >= 0) {
+                net &= bytes.add(a) && a >= 15 && a != 20 && com.sc.handler.ArmorNetSC.featureOfAction(a) == f;
+            }
+        }
+        io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
+        new com.sc.handler.ArmorNetSC.ScanMessage(new int[]{-5, 12, 300, 1, 7, 255, -9, 3}, new int[]{42, 1, 43, 0}).toBytes(buf);
+        com.sc.handler.ArmorNetSC.ScanMessage scan = new com.sc.handler.ArmorNetSC.ScanMessage();
+        scan.fromBytes(buf);
+        net &= java.util.Arrays.equals(scan.blocks, new int[]{-5, 12, 300, 1, 7, 255, -9, 3}) && java.util.Arrays.equals(scan.mobs, new int[]{42, 1, 43, 0});
+        buf.clear();
+        new com.sc.handler.ArmorNetSC.ThreatMessage(new int[]{7, 8, 9}).toBytes(buf);
+        com.sc.handler.ArmorNetSC.ThreatMessage threat = new com.sc.handler.ArmorNetSC.ThreatMessage();
+        threat.fromBytes(buf);
+        net &= java.util.Arrays.equals(threat.ids, new int[]{7, 8, 9});
+        com.sc.util.SingularSenseData.Analysis a = new com.sc.util.SingularSenseData.Analysis();
+        a.kind = com.sc.util.SingularSenseData.Analysis.MACHINE;
+        a.x = -100;
+        a.y = 70;
+        a.z = 2000;
+        a.stored = 123456;
+        a.capacity = 1000000;
+        a.status = 1;
+        a.progress = 45;
+        a.output = -1;
+        a.powerOn = false;
+        buf.clear();
+        new com.sc.handler.ArmorNetSC.AnalyzeMessage(a).toBytes(buf);
+        com.sc.handler.ArmorNetSC.AnalyzeMessage back = new com.sc.handler.ArmorNetSC.AnalyzeMessage();
+        back.fromBytes(buf);
+        net &= back.a.kind == a.kind && back.a.x == -100 && back.a.y == 70 && back.a.z == 2000 && back.a.stored == 123456
+                && back.a.capacity == 1000000 && back.a.status == 1 && back.a.progress == 45 && back.a.output == -1 && !back.a.powerOn;
+        a = new com.sc.util.SingularSenseData.Analysis();
+        a.kind = com.sc.util.SingularSenseData.Analysis.MOB;
+        a.entityId = 99;
+        a.health = 12.5F;
+        a.maxHealth = 20F;
+        a.armor = 2;
+        a.attack = 3F;
+        a.flags = 5;
+        buf.clear();
+        new com.sc.handler.ArmorNetSC.AnalyzeMessage(a).toBytes(buf);
+        back.fromBytes(buf);
+        net &= back.a.kind == a.kind && back.a.entityId == 99 && back.a.health == 12.5F && back.a.maxHealth == 20F && back.a.armor == 2
+                && back.a.attack == 3F && back.a.flags == 5;
+        check(net, "Singular stage 2b network: key action bytes 15..21 (not 14 / 20), scan / threat / analyzer messages read back as written");
+
+        // texts: every new function and line in both languages
+        String missing = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Set<String> keys = langKeys(lang);
+            java.util.List<String> want = new java.util.ArrayList<String>();
+            for (String n : order) {
+                String k = "sc.armorfn." + n.toLowerCase(java.util.Locale.ROOT);
+                want.add(k);
+                want.add(k + ".desc");
+            }
+            java.util.Collections.addAll(want, "sc.armor.sing.unavailable", "sc.armor.sing.unavailable.set", "sc.armor.sing.branch",
+                    "sc.armor.sing.nogas", "sc.armor.sing.noeu", "sc.armor.sing.nocharge", "sc.armor.press", "sc.armor.grab",
+                    "sc.armor.grab.none", "sc.armor.timeslow", "sc.armor.blackhole", "sc.armor.dome", "sc.armor.singularity",
+                    "sc.armor.singularity.weak", "sc.armor.singularity.end", "sc.armor.resonance", "sc.armor.resonance.lost",
+                    "sc.armor.analyzer.cant", "sc.analyzer.health", "sc.analyzer.armor", "sc.analyzer.attack", "sc.analyzer.weak.water",
+                    "sc.analyzer.weak.heat", "sc.analyzer.undead", "sc.analyzer.arthropod", "sc.analyzer.fireimmune", "sc.analyzer.explodes",
+                    "sc.analyzer.energy", "sc.analyzer.off", "sc.analyzer.status", "sc.analyzer.progress", "sc.analyzer.output",
+                    "sc.manual.singular.fn.3", "sc.manual.singular.fn.4", "sc.gas.singular_matter", "sc.gas.deuterium", "sc.gas.krypton");
+            for (String k : want) {
+                if (!keys.contains(k)) {
+                    missing += " " + lang + ":" + k;
+                }
+            }
+        }
+        check(missing.isEmpty(), "Singular stage 2b: names, descriptions, chat, analyzer and handbook texts in en_US and ru_RU" + missing);
     }
 
     /** The keys of one of the mod's lang files. */

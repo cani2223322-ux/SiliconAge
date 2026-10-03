@@ -55,7 +55,18 @@ public enum ArmorFeature {
     CLEAR_SIGHT(0, ArmorSuit.SINGULAR, 40, 1, false),   // Ш8: night vision that goes out in bright light (no glare)
     HEAT_VENT(1, ArmorSuit.SINGULAR, 0, 0, true),       // Н11: at 100% heat a wave throws mobs back and half the heat goes
     EVENT_HORIZON(1, ArmorSuit.SINGULAR, 0, 2, true),   // Н2: projectiles swallowed, 30% of other damage into EU (replaces the shield)
-    PHASE_DASH(2, ArmorSuit.SINGULAR, 0, 10, true);     // П1: on its key - a jump through space up to 16 blocks along the look
+    PHASE_DASH(2, ArmorSuit.SINGULAR, 0, 10, true),     // П1: on its key - a jump through space up to 16 blocks along the look
+    // stage 2b (docs/plan-singular-armor.md §3), appended; heat: per use for the key ones, per second for the rest
+    GRAV_PRESS(1, ArmorSuit.SINGULAR, 0, 60, true),     // Н10: on its key - mobs within 6 blocks pinned to the ground 5 s (branch Р2, lvl 3)
+    GRAV_GRAB(1, ArmorSuit.SINGULAR, 0, 0, true),       // Н8: on its key - a mob held in front of the wearer, then thrown (branch Р2, lvl 3)
+    TIME_SLOW(1, ArmorSuit.SINGULAR, 0, 200, true),     // Н4: on its key - 6 s mobs and projectiles within 16 blocks at x0.2
+    BLACK_HOLE(1, ArmorSuit.SINGULAR, 0, 300, true),    // Н3: on its key - 10 s a point along the look pulls mobs and items, then collapses (Р2, lvl 5)
+    GRAV_DOME(1, ArmorSuit.SINGULAR, 0, 0, true),       // Н17: on its key - 8 s a dome of radius 5 keeps mobs and projectiles out (Р2, lvl 5)
+    SINGULARITY(1, ArmorSuit.SINGULAR, 0, 100, true),   // К1: full set, on its key - 15 s the Singular functions x2, then 60 s weakened
+    RESONANCE(1, ArmorSuit.SINGULAR, 0, 0, true),       // К2: full set - a running Singular reactor / field generator near charges, cools, refills
+    GRAV_SCANNER(0, ArmorSuit.SINGULAR, 200, 1, false), // Ш1: every 5 s chests, spawners, ores and mobs within 32 blocks outlined
+    THREAT_SENSE(0, ArmorSuit.SINGULAR, 20, 0, false),  // Ш2: mobs that target the wearer outlined red, arrows at the screen's edge
+    ANALYZER(0, ArmorSuit.SINGULAR, 0, 0, true);        // Ш5: the mob / machine looked at - a small table on the HUD
 
     public final int piece;
     public final ArmorSuit minSuit;
@@ -143,6 +154,45 @@ public enum ArmorFeature {
     /** О2: under this share of its piece's charge flight, the event horizon and the anchor switch off. */
     public static final float SING_LOW_CHARGE = 0.10F;
 
+    // ------------------------------------------------------------------ stage 2b (docs/plan-singular-armor.md §3-§5, draft)
+
+    /** Н10 press: helium, deuterium, EU, the cooldown (ticks), how long the mobs are held (ticks), the reach. */
+    public static final int SING_HE_PRESS = 100, SING_D_PRESS = 50, PRESS_EU = 200000, PRESS_COOLDOWN = 30 * 20, PRESS_TICKS = 5 * 20;
+    public static final double PRESS_RADIUS = 6.0;
+    /** Н8 grab: helium, EU, the cooldown (from the throw), the longest hold; the reach, how far in front it's held, the throw's speed. */
+    public static final int SING_HE_GRAB = 50, GRAB_EU = 100000, GRAB_COOLDOWN = 10 * 20, GRAB_TICKS = 6 * 20;
+    public static final double GRAB_RANGE = 8.0, GRAB_HOLD = 3.0, GRAB_THROW_SPEED = 2.2;
+    /** Н4 time slowing: krypton, helium, singular matter, cooldown, how long; the suit share, the speed factor; the reach. */
+    public static final int SING_KR_SLOW = 100, SING_HE_SLOW = 500, SING_SM_SLOW = 50, SLOW_COOLDOWN = 3 * 60 * 20, SLOW_TICKS = 6 * 20;
+    public static final float SLOW_CHARGE = 0.10F, SLOW_FACTOR = 0.2F;
+    public static final double SLOW_RADIUS = 16.0;
+    /** О3: the time slowing and the black hole set the hostile mobs within this many blocks on the wearer. */
+    public static final double AGGRO_RADIUS = 48.0;
+    /** Н3 black hole: deuterium, helium, singular matter, cooldown, how long; the suit share, damage; the point's reach, the pull, the collapse. */
+    public static final int SING_D_HOLE = 500, SING_HE_HOLE = 1000, SING_SM_HOLE = 100, HOLE_COOLDOWN = 2 * 60 * 20, HOLE_TICKS = 10 * 20;
+    public static final float HOLE_CHARGE = 0.25F, HOLE_DAMAGE = 6F, HOLE_COLLAPSE_DAMAGE = 20F;
+    public static final double HOLE_RANGE = 24.0, HOLE_RADIUS = 10.0, HOLE_COLLAPSE_RADIUS = 4.0;
+    /** Н17 dome: helium, deuterium, cooldown, how long; the suit share; the radius. */
+    public static final int SING_HE_DOME = 300, SING_D_DOME = 200, DOME_COOLDOWN = 2 * 60 * 20, DOME_TICKS = 8 * 20;
+    public static final float DOME_CHARGE = 0.10F;
+    public static final double DOME_RADIUS = 5.0;
+    /** К1 "Singularity": singular matter, deuterium, cooldown, the boost and the weakness after it (ticks); the suit share, the multipliers. */
+    public static final int SING_SM_BOOST = 200, SING_D_BOOST = 1000, BOOST_COOLDOWN = 10 * 60 * 20, BOOST_TICKS = 15 * 20, WEAK_TICKS = 60 * 20;
+    public static final float BOOST_CHARGE = 0.20F, BOOST_MUL = 2F, WEAK_MUL = 0.5F;
+    /** К2 resonance: the reach, EU a second into the suit, heat a second taken off, seconds between scans; helium / deuterium a second. */
+    public static final int RESONANCE_RADIUS = 16, RESONANCE_EU = 20000, RESONANCE_COOL = 10, RESONANCE_RESCAN = 5;
+    public static final float RES_HE_PER_SECOND = 2F, RES_D_PER_SECOND = 0.5F;
+    /** Ш1 scanner: krypton a minute; a pulse's krypton, the reach, ticks between pulses, how long outlines stay, the most blocks / mobs shown. */
+    public static final float SING_KR_SCANNER_PER_MIN = 2F;
+    public static final int SING_KR_PER_PULSE = 10, SCANNER_RADIUS = 32, SCANNER_EVERY = 5 * 20, SCANNER_SHOW = 5 * 20,
+            SCANNER_MAX_BLOCKS = 256, SCANNER_MAX_MOBS = 64;
+    /** Ш2 threat sense: krypton a minute; the reach, the most mobs sent. */
+    public static final float SING_KR_THREAT_PER_MIN = 0.5F;
+    public static final int THREAT_RANGE = 32, THREAT_MAX = 32;
+    /** Ш5 analyzer: krypton and EU per new target; the reach to a mob / to a machine. */
+    public static final int SING_KR_ANALYZE = 1, ANALYZE_EU = 1000;
+    public static final double ANALYZE_MOB_RANGE = 16.0, ANALYZE_BLOCK_RANGE = 8.0;
+
     /** Runs on its gas: needs no EU in its piece to be active (the gas is checked where it's spent). */
     public boolean gasPowered() {
         return this == BOOSTER || this == SEARCHLIGHT || this == FUSION_CELL;
@@ -184,8 +234,12 @@ public enum ArmorFeature {
                 return ArmorGasSC.Gas.HYDROGEN;
             case WITHER_VOID:
                 return ArmorGasSC.Gas.OXYGEN;
-            case CLEAR_SIGHT:
+            case CLEAR_SIGHT: case GRAV_SCANNER: case THREAT_SENSE: case ANALYZER:
                 return ArmorGasSC.Gas.KRYPTON;
+            case GRAV_PRESS: case GRAV_GRAB: case TIME_SLOW: case BLACK_HOLE: case GRAV_DOME:
+                return ArmorGasSC.Gas.HELIUM;    // the main one; the other gases they need are checked at the key (SingularPowersSC)
+            case SINGULARITY:
+                return ArmorGasSC.Gas.SINGULAR_MATTER;
             default:
                 return null;
         }
@@ -196,8 +250,10 @@ public enum ArmorFeature {
         switch (this) {
             case DASH: case JUMP: case FALL_DAMPING: case CLEANSE:
             case GRAV_ANCHOR: case VOID_RESCUE: case GRAV_STRIKE: case WITHER_VOID: case HEAT_VENT: case EVENT_HORIZON: case PHASE_DASH:
+            case GRAV_PRESS: case GRAV_GRAB: case TIME_SLOW: case BLACK_HOLE: case GRAV_DOME: case SINGULARITY: case ANALYZER:
                 return USE_ONCE;
             case NIGHT_VISION: case ORE_SCANNER: case THERMAL: case SEARCHLIGHT: case MAGNET: case CLEAR_SIGHT:
+            case GRAV_SCANNER: case THREAT_SENSE:
                 return USE_MINUTE;
             case SHIELD: case ANNIHILATION: case EXPLOSION_PROOF: case REGENERATION: case CHARGER:
                 return USE_COOLING;
@@ -236,6 +292,15 @@ public enum ArmorFeature {
             case HEAT_VENT: return SING_AR_HEAT_VENT;
             case EVENT_HORIZON: return SING_HE_PER_PROJECTILE;
             case PHASE_DASH: return SING_H2_PHASE;
+            case GRAV_PRESS: return SING_HE_PRESS;
+            case GRAV_GRAB: return SING_HE_GRAB;
+            case TIME_SLOW: return SING_HE_SLOW;
+            case BLACK_HOLE: return SING_HE_HOLE;
+            case GRAV_DOME: return SING_HE_DOME;
+            case SINGULARITY: return SING_SM_BOOST;
+            case GRAV_SCANNER: return SING_KR_SCANNER_PER_MIN;
+            case THREAT_SENSE: return SING_KR_THREAT_PER_MIN;
+            case ANALYZER: return SING_KR_ANALYZE;
             default: return 0F;
         }
     }
@@ -261,7 +326,8 @@ public enum ArmorFeature {
 
     /** Fired by its key (once, then off again) instead of switched on and off. */
     public boolean isAction() {
-        return this == DASH || this == ANNIHILATION || this == PHASE_DASH;
+        return this == DASH || this == ANNIHILATION || this == PHASE_DASH || this == GRAV_PRESS || this == GRAV_GRAB
+                || this == TIME_SLOW || this == BLACK_HOLE || this == GRAV_DOME || this == SINGULARITY;
     }
 
     /** Switched off below SING_LOW_CHARGE of its piece's charge (plan §5, О2: flight, the event horizon, the anchor). */
@@ -269,9 +335,9 @@ public enum ArmorFeature {
         return this == GRAV_FLIGHT || this == EVENT_HORIZON || this == GRAV_ANCHOR;
     }
 
-    /** Works only with all four Singular pieces worn (К9); its row and its level are the chestplate's. */
+    /** Works only with all four Singular pieces worn (К9, К1, К2); its row and its level are the chestplate's. */
     public boolean needsFullSet() {
-        return this == WITHER_VOID;
+        return this == WITHER_VOID || this == SINGULARITY || this == RESONANCE;
     }
 
     ArmorFeature(int piece, ArmorSuit minSuit, int euPerSecond, int heat, boolean onByDefault) {

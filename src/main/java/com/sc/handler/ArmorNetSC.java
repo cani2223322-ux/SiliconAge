@@ -46,6 +46,34 @@ public final class ArmorNetSC {
     public static final byte GAS_FILL_ALL = 13;
     /** Singular leggings: the phase dash (ArmorLogicSC.phaseDash). */
     public static final byte PHASE_DASH = 14;
+    /** The Singular key functions of stage 2b (SingularPowersSC.key); 20 is the air jump (ArmorLogicSC.AIR_JUMP_ACTION). */
+    public static final byte GRAV_PRESS = 15, GRAV_GRAB = 16, TIME_SLOW = 17, BLACK_HOLE = 18, GRAV_DOME = 19, SINGULARITY = 21;
+
+    /** The action byte of a stage 2b key function, -1 for any other function. */
+    public static byte actionOf(ArmorFeature f) {
+        if (f == null) {
+            return -1;
+        }
+        switch (f) {
+            case GRAV_PRESS: return GRAV_PRESS;
+            case GRAV_GRAB: return GRAV_GRAB;
+            case TIME_SLOW: return TIME_SLOW;
+            case BLACK_HOLE: return BLACK_HOLE;
+            case GRAV_DOME: return GRAV_DOME;
+            case SINGULARITY: return SINGULARITY;
+            default: return -1;
+        }
+    }
+
+    /** The stage 2b key function of an action byte, or null. */
+    public static ArmorFeature featureOfAction(byte action) {
+        for (ArmorFeature f : ArmorFeature.values()) {
+            if (actionOf(f) == action && action >= 0) {
+                return f;
+            }
+        }
+        return null;
+    }
     /** GAS_FILL_ALL: at most this many single pours per press, and the press at most once per this many ticks. */
     private static final int FILL_ALL_MAX = 64, FILL_ALL_COOLDOWN = 10;
     private static final String FILL_ALL_TIME_TAG = "ScGasFillAllT";
@@ -56,6 +84,177 @@ public final class ArmorNetSC {
     public static void init() {
         CHANNEL.registerMessage(Handler.class, Message.class, 0, Side.SERVER);
         CHANNEL.registerMessage(CooldownHandler.class, CooldownMessage.class, 1, Side.CLIENT);
+        CHANNEL.registerMessage(ScanHandler.class, ScanMessage.class, 2, Side.CLIENT);
+        CHANNEL.registerMessage(ThreatHandler.class, ThreatMessage.class, 3, Side.CLIENT);
+        CHANNEL.registerMessage(AnalyzeHandler.class, AnalyzeMessage.class, 4, Side.CLIENT);
+    }
+
+    // ------------------------------------------------------------------ server -> client: the Singular helmet's senses (stage 2b)
+    // The handlers only store what came in SingularSenseData (common code) - no client classes, safe on a server.
+
+    /** Most entries a sense message is read with (a broken packet can't make the client allocate much). */
+    private static final int SENSE_MAX = 1024;
+
+    /** Ш1: the scanner's pulse - blocks (x, y, z, kind) and mobs (entity id, hostile). */
+    public static class ScanMessage implements IMessage {
+        public int[] blocks = new int[0], mobs = new int[0];
+
+        public ScanMessage() {
+        }
+
+        public ScanMessage(int[] blocks, int[] mobs) {
+            this.blocks = blocks;
+            this.mobs = mobs;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            int n = Math.min(SENSE_MAX, buf.readUnsignedShort());
+            blocks = new int[n * 4];
+            for (int i = 0; i < n; i++) {
+                blocks[i * 4] = buf.readInt();
+                blocks[i * 4 + 1] = buf.readUnsignedByte();
+                blocks[i * 4 + 2] = buf.readInt();
+                blocks[i * 4 + 3] = buf.readByte();
+            }
+            int m = Math.min(SENSE_MAX, buf.readUnsignedShort());
+            mobs = new int[m * 2];
+            for (int i = 0; i < m; i++) {
+                mobs[i * 2] = buf.readInt();
+                mobs[i * 2 + 1] = buf.readByte();
+            }
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            int n = Math.min(SENSE_MAX, blocks.length / 4);
+            buf.writeShort(n);
+            for (int i = 0; i < n; i++) {
+                buf.writeInt(blocks[i * 4]);
+                buf.writeByte(blocks[i * 4 + 1]);
+                buf.writeInt(blocks[i * 4 + 2]);
+                buf.writeByte(blocks[i * 4 + 3]);
+            }
+            int m = Math.min(SENSE_MAX, mobs.length / 2);
+            buf.writeShort(m);
+            for (int i = 0; i < m; i++) {
+                buf.writeInt(mobs[i * 2]);
+                buf.writeByte(mobs[i * 2 + 1]);
+            }
+        }
+    }
+
+    public static class ScanHandler implements IMessageHandler<ScanMessage, IMessage> {
+        @Override
+        public IMessage onMessage(ScanMessage msg, MessageContext ctx) {
+            com.sc.util.SingularSenseData.setScan(msg.blocks, msg.mobs);
+            return null;
+        }
+    }
+
+    /** Ш2: the entity ids of the mobs whose target is the player. */
+    public static class ThreatMessage implements IMessage {
+        public int[] ids = new int[0];
+
+        public ThreatMessage() {
+        }
+
+        public ThreatMessage(int[] ids) {
+            this.ids = ids;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            int n = Math.min(SENSE_MAX, buf.readUnsignedShort());
+            ids = new int[n];
+            for (int i = 0; i < n; i++) {
+                ids[i] = buf.readInt();
+            }
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            int n = Math.min(SENSE_MAX, ids.length);
+            buf.writeShort(n);
+            for (int i = 0; i < n; i++) {
+                buf.writeInt(ids[i]);
+            }
+        }
+    }
+
+    public static class ThreatHandler implements IMessageHandler<ThreatMessage, IMessage> {
+        @Override
+        public IMessage onMessage(ThreatMessage msg, MessageContext ctx) {
+            com.sc.util.SingularSenseData.setThreats(msg.ids);
+            return null;
+        }
+    }
+
+    /** Ш5: the analyzer's table of the mob / machine looked at (kind NONE: nothing). */
+    public static class AnalyzeMessage implements IMessage {
+        public com.sc.util.SingularSenseData.Analysis a = new com.sc.util.SingularSenseData.Analysis();
+
+        public AnalyzeMessage() {
+        }
+
+        public AnalyzeMessage(com.sc.util.SingularSenseData.Analysis a) {
+            this.a = a;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            a = new com.sc.util.SingularSenseData.Analysis();
+            a.kind = buf.readByte();
+            if (a.kind == com.sc.util.SingularSenseData.Analysis.MOB) {
+                a.entityId = buf.readInt();
+                a.health = buf.readFloat();
+                a.maxHealth = buf.readFloat();
+                a.armor = buf.readShort();
+                a.attack = buf.readFloat();
+                a.flags = buf.readInt();
+            } else if (a.kind == com.sc.util.SingularSenseData.Analysis.MACHINE) {
+                a.x = buf.readInt();
+                a.y = buf.readUnsignedByte();
+                a.z = buf.readInt();
+                a.stored = buf.readInt();
+                a.capacity = buf.readInt();
+                a.output = buf.readInt();
+                a.status = buf.readByte();
+                a.progress = buf.readByte();
+                a.powerOn = buf.readBoolean();
+            }
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeByte(a.kind);
+            if (a.kind == com.sc.util.SingularSenseData.Analysis.MOB) {
+                buf.writeInt(a.entityId);
+                buf.writeFloat(a.health);
+                buf.writeFloat(a.maxHealth);
+                buf.writeShort(a.armor);
+                buf.writeFloat(a.attack);
+                buf.writeInt(a.flags);
+            } else if (a.kind == com.sc.util.SingularSenseData.Analysis.MACHINE) {
+                buf.writeInt(a.x);
+                buf.writeByte(a.y);
+                buf.writeInt(a.z);
+                buf.writeInt(a.stored);
+                buf.writeInt(a.capacity);
+                buf.writeInt(a.output);
+                buf.writeByte(a.status);
+                buf.writeByte(a.progress);
+                buf.writeBoolean(a.powerOn);
+            }
+        }
+    }
+
+    public static class AnalyzeHandler implements IMessageHandler<AnalyzeMessage, IMessage> {
+        @Override
+        public IMessage onMessage(AnalyzeMessage msg, MessageContext ctx) {
+            com.sc.util.SingularSenseData.setAnalysis(msg.a);
+            return null;
+        }
     }
 
     /**
@@ -214,6 +413,9 @@ public final class ArmorNetSC {
                     break;
                 case PHASE_DASH:
                     com.sc.item.ArmorLogicSC.phaseDash(p);
+                    break;
+                case GRAV_PRESS: case GRAV_GRAB: case TIME_SLOW: case BLACK_HOLE: case GRAV_DOME: case SINGULARITY:
+                    com.sc.item.SingularPowersSC.key(p, featureOfAction(msg.action));   // queued: run on the server thread
                     break;
                 default:
                     break;

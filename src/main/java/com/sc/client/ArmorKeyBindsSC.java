@@ -257,6 +257,15 @@ public final class ArmorKeyBindsSC {
             }
             return;
         }
+        byte action = ArmorNetSC.actionOf(f);
+        if (action >= 0) {                  // the stage 2b key functions: the server checks the rest (level, cooldown, gases, charge) and says why not
+            if (ItemArmorSC.isEnabled(piece, f)) {
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(action, 0));
+            } else {
+                mc.ingameGUI.func_110326_a(Lang.tr("sc.armorkey.off", name), false);
+            }
+            return;
+        }
         boolean want = !ItemArmorSC.isEnabled(piece, f);
         ItemArmorSC.setEnabled(piece, f, want);
         ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.TOGGLE, f.ordinal(), want));

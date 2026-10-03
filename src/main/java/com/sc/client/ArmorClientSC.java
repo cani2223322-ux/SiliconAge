@@ -58,6 +58,7 @@ public class ArmorClientSC {
         ArmorClientSC instance = new ArmorClientSC();
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(instance);   // ClientTickEvent
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(instance);       // overlay, world render
+        SingularClientSC.register();                                                 // the Singular helmet's senses (stage 2b)
     }
 
     // ---- keys ----

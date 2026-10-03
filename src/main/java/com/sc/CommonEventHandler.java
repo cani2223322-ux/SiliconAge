@@ -31,6 +31,7 @@ public class CommonEventHandler {
         if (event.phase == TickEvent.Phase.END && event.world != null && !event.world.isRemote) {
             EnergyNetSC.instance().serverTick(event.world);
             takeLightning(event.world);
+            com.sc.item.SingularPowersSC.worldTick(event.world);   // the Singular key functions: pinned / held mobs, the fields
         }
     }
 
@@ -85,6 +86,7 @@ public class CommonEventHandler {
     public void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.player != null) {
             com.sc.item.ArmorLogicSC.clearLight(event.player);
+            com.sc.item.SingularPowersSC.logout(event.player);
         }
     }
 

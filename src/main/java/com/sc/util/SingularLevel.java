@@ -45,11 +45,54 @@ public final class SingularLevel {
         switch (f) {
             case GRAV_STRIKE: case EVENT_HORIZON: case PHASE_DASH:
                 return 2;
-            case HEAT_VENT:
+            case ANALYZER:
+                return 2;
+            case HEAT_VENT: case GRAV_PRESS: case GRAV_GRAB: case GRAV_SCANNER: case THREAT_SENSE:
                 return 3;
+            case TIME_SLOW: case RESONANCE:
+                return 4;
+            case BLACK_HOLE: case GRAV_DOME: case SINGULARITY:
+                return 5;
             default:
                 return 1;
         }
+    }
+
+    // ------------------------------------------------------------------ the branches (Р2): the hook for stage 3
+
+    /** No branch / both sides of a branch allowed; the first and the second alternative of a branch. */
+    public static final int BRANCH_BOTH = 0, BRANCH_A = 1, BRANCH_B = 2;
+
+    /**
+     * The branch the piece has chosen at `level` (Р2: level 3 - the press or the grab, level 5 - the
+     * black hole or the dome). Stage 2b: BRANCH_BOTH always - both alternatives work; stage 3 keeps
+     * the choice in the piece's NBT (changed in the Singular station for 100 mB of singular matter).
+     */
+    public static int branchChoice(ItemStack piece, int level) {
+        return BRANCH_BOTH;
+    }
+
+    /** Which side of a branch a function is (BRANCH_A / BRANCH_B), BRANCH_BOTH when it's in no branch. */
+    public static int branchOf(ArmorFeature f) {
+        switch (f) {
+            case GRAV_PRESS: case BLACK_HOLE:
+                return BRANCH_A;
+            case GRAV_GRAB: case GRAV_DOME:
+                return BRANCH_B;
+            default:
+                return BRANCH_BOTH;
+        }
+    }
+
+    /** Pure: a function of side `side` is allowed with the choice `choice`. */
+    public static boolean branchAllows(int side, int choice) {
+        return side == BRANCH_BOTH || choice == BRANCH_BOTH || side == choice;
+    }
+
+    /** The piece's branch choice lets the function work (stage 2b: always). */
+    public static boolean branchAllowed(ArmorFeature f, ItemStack piece) {
+        int side = branchOf(f);
+        return side == BRANCH_BOTH || branchAllows(side, branchChoice(piece, requiredLevel(f)));
     }
 
     /** The level that counts for this player and piece: creative mode - always MAX. */
