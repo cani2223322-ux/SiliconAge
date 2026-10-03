@@ -307,13 +307,18 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
      * The tanks follow the modules. Taking a Tank Extension out pours nothing away: a tank then
      * holding more than it can takes nothing in until it has been used down (as a machine's).
      */
-    private void syncTankCapacity() {
-        int c = tankCapacity();
-        if (tanks[0].getCapacity() != c) {
-            for (FluidTank t : tanks) {
-                t.setCapacity(c);
+    protected void syncTankCapacity() {
+        for (Gas g : Gas.values()) {
+            int c = tankCapacity(g);
+            if (tanks[g.ordinal()].getCapacity() != c) {
+                tanks[g.ordinal()].setCapacity(c);
             }
         }
+    }
+
+    /** One gas's tank size: tankCapacity() for every gas here (the Singular station's singular matter tank is smaller). */
+    public int tankCapacity(Gas g) {
+        return tankCapacity();
     }
 
     public FluidTank getTank(Gas g) {
@@ -364,8 +369,8 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     /** The windows' levels now: 0 empty, 1..WINDOW_LEVELS (any gas at all shows at least 1). */
     public byte[] currentWindowLevels() {
         byte[] out = new byte[GASES];
-        int cap = Math.max(1, tankCapacity());
         for (Gas g : Gas.values()) {
+            int cap = Math.max(1, tankCapacity(g));
             int a = tankAmount(g);
             out[g.ordinal()] = (byte) (a <= 0 ? 0 : Math.max(1, Math.min(WINDOW_LEVELS, (int) (((long) a * WINDOW_LEVELS + cap - 1) / cap))));
         }

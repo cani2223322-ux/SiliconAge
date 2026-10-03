@@ -74,6 +74,9 @@ public final class ModBlocks {
     public static com.sc.block.BlockChargePadSC chargePadSC;
     /** The Armour Service Station (MV): gases and EU for the energy suits. */
     public static com.sc.block.BlockArmorStationSC armorStation;
+    /** The Singular Service Station (SV) and its Gravitational Stabiliser. */
+    public static com.sc.block.BlockSingularStationSC singularStation;
+    public static com.sc.block.BlockGravStabiliserSC gravStabiliser;
     /** The krypton searchlight's moving light (ArmorLogicSC.searchlight). */
     public static com.sc.block.BlockLightSC lightSC;
 
@@ -154,7 +157,13 @@ public final class ModBlocks {
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityArmorStationSC.class, "SiliconAge.armorStation");
         // the helmet's krypton searchlight: an invisible light that goes out by itself (no item in any tab)
         lightSC = new com.sc.block.BlockLightSC();
-        GameRegistry.registerBlock(lightSC, "lightSC");   // with its item: a world that knew the item refuses to load without it ("dangling"); hidden from creative
+        GameRegistry.registerBlock(lightSC, "lightSC");
+        singularStation = new com.sc.block.BlockSingularStationSC();
+        GameRegistry.registerBlock(singularStation, com.sc.block.ItemBlockSingularStationSC.class, "singularStation");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntitySingularStationSC.class, "SiliconAge.singularStation");
+        gravStabiliser = new com.sc.block.BlockGravStabiliserSC();
+        GameRegistry.registerBlock(gravStabiliser, com.sc.block.ItemBlockGravStabiliserSC.class, "gravStabiliser");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityGravStabiliserSC.class, "SiliconAge.gravStabiliser");   // with its item: a world that knew the item refuses to load without it ("dangling"); hidden from creative
 
         GameRegistry.registerTileEntity(TileEntityCableSC.class, "SiliconAge.cable");
         GameRegistry.registerTileEntity(TileEntityPipeSC.class, "SiliconAge.pipe");

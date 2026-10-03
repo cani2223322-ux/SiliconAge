@@ -63,6 +63,7 @@ public final class SelfTestSC {
             singularFunctions();
             singularFunctions2b();
             singularLevels();
+            singularStation();
             bladeFunctions();
             chargePad();
             batteries();
@@ -2166,6 +2167,223 @@ public final class SelfTestSC {
             }
         }
         check(missing.isEmpty(), "Singular levels: chat, K menu and tooltip texts in en_US and ru_RU" + missing);
+    }
+
+    /**
+     * Stage 4, the Singular Service Station (docs/plan-singular-armor.md §7): the cost formula (ПР3,
+     * resonance), the speed multipliers, the draw / pause / refund math, the process NBT round trip,
+     * the transfer / sync / branch costs, the scheme cycling, the station itself without a world
+     * (start, lock, cancel by the 50% rule, the catalyst, the branch change, NBT), the texts.
+     */
+    private static void singularStation() {
+        long[] set3 = com.sc.util.SingularStationMath.moderniseCost(new int[]{3, 3, 3, 3}, false);
+        long[] one3 = com.sc.util.SingularStationMath.moderniseCost(new int[]{0, 3, 0, 0}, false);
+        long[] two1 = com.sc.util.SingularStationMath.moderniseCost(new int[]{1, 1, 0, 0}, false);
+        long[] res3 = com.sc.util.SingularStationMath.moderniseCost(new int[]{3, 3, 3, 3}, true);
+        long[] mixed = com.sc.util.SingularStationMath.moderniseCost(new int[]{1, 2, 0, 0}, false);
+        long[] four4 = com.sc.util.SingularStationMath.moderniseCost(new int[]{4, 4, 4, 4}, false);
+        boolean cost = java.util.Arrays.equals(set3, new long[]{800000000L, 400, 6400, 1600, 800})
+                && java.util.Arrays.equals(one3, new long[]{250000000L, 125, 2000, 500, 250})
+                && java.util.Arrays.equals(two1, new long[]{25000000L, 50, 1000, 250, 0})
+                && res3[0] == 720000000L && res3[1] == 400
+                && java.util.Arrays.equals(mixed, new long[]{62500000L, 88, 1500, 375, 125})
+                && four4[0] == 3200000000L && four4[1] == 800
+                && com.sc.util.SingularStationMath.moderniseTicks(new int[]{1, 2, 0, 0}) == 3600
+                && com.sc.util.SingularStationMath.moderniseTicks(new int[]{4, 0, 0, 0}) == 12000
+                && com.sc.util.SingularStationMath.needsCatalyst(new int[]{0, 4, 0, 0}) && !com.sc.util.SingularStationMath.needsCatalyst(new int[]{3, 3, 3, 3})
+                && com.sc.util.SingularStationMath.pieces(new int[]{0, 3, 5, 1}) == 2;
+        check(cost, "Singular station cost: the set of 4 x0.8 (3->4: 800 M EU, SM 400), one piece a quarter, resonance EU x0.9, mixed levels summed "
+                + java.util.Arrays.toString(set3) + " " + java.util.Arrays.toString(mixed));
+
+        boolean speed = Math.abs(com.sc.util.SingularStationMath.speed(0, false) - 1.0) < 1e-9
+                && Math.abs(com.sc.util.SingularStationMath.speed(3, false) - 1.75) < 1e-9
+                && Math.abs(com.sc.util.SingularStationMath.speed(4, true) - 2.6) < 1e-9
+                && Math.abs(com.sc.util.SingularStationMath.speed(9, false) - 2.0) < 1e-9
+                && Math.abs(com.sc.util.SingularStationMath.speed(0, true) - 1.3) < 1e-9
+                && com.sc.util.SingularStationMath.duration(12000, 2.6) == 4616 && com.sc.util.SingularStationMath.duration(1200, 2.0) == 600
+                && com.sc.util.SingularStationMath.duration(1200, 1.0) == 1200;
+        check(speed, "Singular station speed: +25% a stabiliser (4 at most), resonance x1.3; 10 min with 4 + resonance = 4616 ticks");
+
+        long[] c = {100, 10, 0, 7, 0};
+        long[] need = com.sc.util.SingularStationMath.needFor(c, new long[5], 0.5);
+        double prog = com.sc.util.SingularStationMath.progressOf(c, new long[]{50, 2, 0, 4, 0}, 0.5);
+        double full = com.sc.util.SingularStationMath.progressOf(c, new long[]{100, 10, 0, 7, 0}, 1.0);
+        double none = com.sc.util.SingularStationMath.progressOf(new long[5], new long[5], 0.3);
+        boolean math = java.util.Arrays.equals(need, new long[]{50, 5, 0, 4, 0})
+                && Math.abs(prog - 0.2) < 1e-9 && full == 1.0 && Math.abs(none - 0.3) < 1e-9
+                && java.util.Arrays.equals(com.sc.util.SingularStationMath.needFor(c, new long[]{60, 10, 0, 7, 0}, 0.5), new long[5])
+                && com.sc.util.SingularStationMath.refund(7) == 3 && com.sc.util.SingularStationMath.refund(-5) == 0
+                && com.sc.util.SingularStationMath.refund(4000000000L) == 2000000000L;
+        check(math, "Singular station process math: draw what progress p needs, a short resource holds the progress (0.2), refund half");
+
+        com.sc.tileentity.SingularProcessSC p = new com.sc.tileentity.SingularProcessSC();
+        p.kind = com.sc.tileentity.SingularProcessSC.KIND_TRANSFER;
+        p.mask = 0x13;
+        p.progress = 0.4375;
+        p.baseTicks = 6000;
+        p.cost[0] = 3200000000L;
+        p.drawn[0] = 2900000000L;
+        p.cost[2] = 16000;
+        p.drawn[2] = 999;
+        p.catalystEu = 1500000000L;
+        p.levels[4] = 4;
+        p.target = 2;
+        p.starter = "Steve";
+        p.resonance = true;
+        net.minecraft.nbt.NBTTagCompound pt = new net.minecraft.nbt.NBTTagCompound();
+        p.writeToNBT(pt);
+        com.sc.tileentity.SingularProcessSC q = com.sc.tileentity.SingularProcessSC.readFromNBT(pt);
+        boolean nbt = q != null && q.kind == p.kind && q.mask == 0x13 && q.progress == 0.4375 && q.baseTicks == 6000
+                && q.cost[0] == 3200000000L && q.drawn[0] == 2900000000L && q.drawn[2] == 999 && q.catalystEu == 1500000000L
+                && q.levels[4] == 4 && q.target == 2 && "Steve".equals(q.starter) && q.resonance && q.locks(0) && q.locks(4) && !q.locks(2)
+                && com.sc.tileentity.SingularProcessSC.readFromNBT(new net.minecraft.nbt.NBTTagCompound()) == null;
+        check(nbt, "Singular station process NBT round trip (longs past 2^31, mask, levels, starter)");
+
+        long[] tr3 = com.sc.util.SingularStationMath.transferCost(3);
+        long[] sync = com.sc.util.SingularStationMath.syncCost(new int[]{3, 1, 0, 2});
+        boolean more = java.util.Arrays.equals(tr3, new long[]{31250000L, 44, 750, 188, 63})
+                && com.sc.util.SingularStationMath.transferTicks(3) == 2400
+                && java.util.Arrays.equals(com.sc.util.SingularStationMath.transferCost(1), new long[5])
+                && java.util.Arrays.equals(sync, new long[]{112500000L, 150, 2500, 625, 250})
+                && com.sc.util.SingularStationMath.syncTicks(new int[]{3, 1, 0, 2}) == 4800
+                && java.util.Arrays.equals(com.sc.util.SingularStationMath.syncCost(new int[]{2, 2, 0, 2}), new long[5])
+                && com.sc.util.SingularStationMath.BRANCH_SM == 100
+                && com.sc.item.ItemBatterySC.TIERS[com.sc.util.SingularStationMath.CORE_META] == com.sc.energy.Tier.SV;
+        check(more, "Singular station transfer (50% of the rows / 4), sync (per-piece rows, no set discount), branch 100 mB, the core is the SV battery "
+                + java.util.Arrays.toString(tr3) + " " + java.util.Arrays.toString(sync));
+
+        com.sc.util.SingularScheme sa = com.sc.util.SingularScheme.A, sk = com.sc.util.SingularScheme.K;
+        boolean cyc = com.sc.util.SingularStationMath.cycle(sa, 1) == com.sc.util.SingularScheme.B && com.sc.util.SingularStationMath.cycle(sa, -1) == sk
+                && com.sc.util.SingularStationMath.cycle(sk, 1) == sa && com.sc.util.SingularStationMath.cycle(null, 1) == com.sc.util.SingularScheme.B;
+        check(cyc, "Singular station scheme cycling wraps (A < K, K > A)");
+
+        // the station itself, no world
+        com.sc.item.ItemArmorSC[] sg = ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR);
+        com.sc.tileentity.TileEntitySingularStationSC st = new com.sc.tileentity.TileEntitySingularStationSC();
+        ItemStack chest = new ItemStack(sg[1]), helm = new ItemStack(sg[0]), legs = new ItemStack(sg[2]);
+        com.sc.util.SingularLevel.setLevel(chest, 3);
+        com.sc.util.SingularLevel.setLevel(helm, 1);
+        st.setInventorySlotContents(1, chest);
+        st.setInventorySlotContents(0, helm);
+        st.setInventorySlotContents(2, legs);
+        com.sc.util.ArmorGasSC.Gas smG = com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER;
+        boolean base = st.getTier() == com.sc.energy.Tier.SV && st.tankCapacity(smG) == com.sc.tileentity.TileEntitySingularStationSC.SM_TANK
+                && st.tankCapacity(com.sc.util.ArmorGasSC.Gas.HELIUM) == com.sc.tileentity.TileEntityArmorStationSC.TANK_CAPACITY
+                && st.getSizeInventory() == com.sc.tileentity.TileEntitySingularStationSC.SING_SLOTS
+                && st.isItemValidForSlot(com.sc.tileentity.TileEntitySingularStationSC.DONOR_SLOT, new ItemStack(sg[3]))
+                && !st.isItemValidForSlot(com.sc.tileentity.TileEntitySingularStationSC.DONOR_SLOT, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[3]))
+                && st.isItemValidForSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, new ItemStack(ModItems.battery, 1, 6))
+                && !st.isItemValidForSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, new ItemStack(ModItems.battery, 1, 5));
+        st.fillTank(smG, 4500, true);
+        boolean smCap = st.tankAmount(smG) == 4000;
+        String e1 = st.changeBranch(3, com.sc.util.SingularLevel.BRANCH_B);
+        String e2 = st.changeBranch(3, com.sc.util.SingularLevel.BRANCH_B);
+        String e3 = st.changeBranch(5, com.sc.util.SingularLevel.BRANCH_A);
+        boolean branch = e1 == null && com.sc.util.SingularLevel.branchChoice(chest, 3) == com.sc.util.SingularLevel.BRANCH_B
+                && st.tankAmount(smG) == 3900 && "sc.singStation.err.samebranch".equals(e2) && "sc.singStation.err.branchlevel".equals(e3);
+        check(base && smCap && branch, "Singular station: SV, SM tank 4000 mB, donor / catalyst slots take only their items, branch change for 100 mB SM ("
+                + e1 + "/" + e2 + "/" + e3 + ")");
+
+        boolean scheme = st.cycleScheme(1) && com.sc.util.SingularScheme.of(chest) == com.sc.util.SingularScheme.B
+                && com.sc.util.SingularScheme.of(helm) == com.sc.util.SingularScheme.B && st.cycleScheme(-1)
+                && com.sc.util.SingularScheme.of(legs) == sa;
+        check(scheme, "Singular station scheme buttons: every Singular piece in the slots takes the next / previous scheme");
+
+        // a modernisation started by hand (readiness is the player's), some of it drawn, then cancelled: half back, slots unlocked
+        st.setScanForTest(4, false);
+        String start = st.startModerniseFor(new int[]{1, 3, 0, 0}, "tester");
+        com.sc.tileentity.SingularProcessSC run = st.getProcess();
+        boolean started = start == null && run != null && run.locks(0) && run.locks(1) && !run.locks(2)
+                && st.isLocked(0) && !st.isLocked(2) && !st.isItemValidForSlot(1, new ItemStack(sg[1])) && !st.canExtractItem(1, chest, 0)
+                && run.cost[0] == (50000000L + 1000000000L) / 4 && run.baseTicks == 5 * 1200
+                && "sc.singStation.err.busy".equals(st.startSync(null));
+        run.drawn[0] = 2000001;
+        run.drawn[2] = 301;
+        st.cancelProcess();
+        boolean cancel = st.getProcess() == null && st.getEnergyStored() == 1000000 && st.tankAmount(com.sc.util.ArmorGasSC.Gas.HELIUM) == 150 && !st.isLocked(0);
+        check(started && cancel, "Singular station: start locks the ready pieces' slots, cancel gives half of the drawn EU / gas back and unlocks ("
+                + start + ", EU " + st.getEnergyStored() + ")");
+
+        // 4 -> 5 needs the core; it is consumed, its charge counts, a cancel gives back a core with half of it
+        ItemStack boots = new ItemStack(sg[3]);
+        com.sc.util.SingularLevel.setLevel(boots, 4);
+        st.setInventorySlotContents(3, boots);
+        String noCore = st.startModerniseFor(new int[]{0, 0, 0, 4}, "tester");
+        ItemStack core = new ItemStack(ModItems.battery, 1, 6);
+        com.sc.item.ItemBatterySC.setCharge(core, 600000000L);
+        st.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, core);
+        String withCore = st.startModerniseFor(new int[]{0, 0, 0, 4}, "tester");
+        com.sc.tileentity.SingularProcessSC cat = st.getProcess();
+        boolean catOk = "sc.singStation.err.nocatalyst".equals(noCore) && withCore == null && cat != null
+                && cat.catalystEu == 600000000L && cat.drawn[0] == 600000000L && cat.cost[0] == 1000000000L
+                && st.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT) == null
+                && st.isLocked(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
+        // the station saves the process and reads it back
+        net.minecraft.nbt.NBTTagCompound saved = new net.minecraft.nbt.NBTTagCompound();
+        st.writeToNBT(saved);
+        com.sc.tileentity.TileEntitySingularStationSC back = new com.sc.tileentity.TileEntitySingularStationSC();
+        back.readFromNBT(saved);
+        boolean reload = back.getProcess() != null && back.getProcess().catalystEu == 600000000L && back.getProcess().locks(3)
+                && back.getStackInSlot(1) != null && back.tankAmount(smG) == 3900 && back.getTier() == com.sc.energy.Tier.SV;
+        st.cancelProcess();
+        ItemStack coreBack = st.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
+        catOk &= coreBack != null && com.sc.tileentity.TileEntitySingularStationSC.isCore(coreBack)
+                && com.sc.item.ItemBatterySC.chargeOf(coreBack) == 300000000L;
+        check(catOk && reload, "Singular station catalyst: 4 -> 5 without a core refused, the core consumed and its charge counted, the process saved "
+                + "and read back, a cancel returns a core with half (" + noCore + ")");
+
+        // Ф4 transfer on two pieces, Ф4 / Ф5 starts
+        ItemStack donor = new ItemStack(sg[1]), fresh = new ItemStack(sg[1]);
+        com.sc.util.SingularLevel.setLevel(donor, 4);
+        com.sc.util.SingularLevel.setPoints(donor, 1234);
+        com.sc.util.SingularLevel.setBranch(donor, 3, com.sc.util.SingularLevel.BRANCH_A);
+        com.sc.tileentity.TileEntitySingularStationSC.transferLevel(donor, fresh);
+        boolean tr = com.sc.util.SingularLevel.levelOf(fresh) == 4 && com.sc.util.SingularLevel.points(fresh) == 1234
+                && com.sc.util.SingularLevel.branchChoice(fresh, 3) == com.sc.util.SingularLevel.BRANCH_A
+                && com.sc.util.SingularLevel.levelOf(donor) == 1 && com.sc.util.SingularLevel.points(donor) == 0
+                && com.sc.util.SingularLevel.branchChoice(donor, 3) == com.sc.util.SingularLevel.BRANCH_NONE;
+        com.sc.tileentity.TileEntitySingularStationSC t2 = new com.sc.tileentity.TileEntitySingularStationSC();
+        ItemStack lv1 = new ItemStack(sg[1]), old = new ItemStack(sg[1]);
+        com.sc.util.SingularLevel.setLevel(old, 3);
+        t2.setInventorySlotContents(1, lv1);
+        t2.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.DONOR_SLOT, old);
+        String trStart = t2.startTransfer(null);
+        boolean trProc = trStart == null && t2.getProcess().kind == com.sc.tileentity.SingularProcessSC.KIND_TRANSFER
+                && t2.getProcess().locks(1) && t2.isLocked(com.sc.tileentity.TileEntitySingularStationSC.DONOR_SLOT)
+                && t2.getProcess().cost[0] == 31250000L;
+        t2.cancelProcess();
+        ItemStack h3 = new ItemStack(sg[0]);
+        com.sc.util.SingularLevel.setLevel(h3, 3);
+        t2.setInventorySlotContents(0, h3);
+        String syncStart = t2.startSync(null);
+        boolean syncProc = syncStart == null && t2.getProcess().kind == com.sc.tileentity.SingularProcessSC.KIND_SYNC
+                && t2.getProcess().target == 3 && t2.getProcess().locks(1) && !t2.getProcess().locks(0)
+                && t2.getProcess().cost[0] == (50000000L + 200000000L) / 4;
+        check(tr && trProc && syncProc, "Singular station: transfer moves level / points / branches and resets the donor; transfer and sync start ("
+                + trStart + "/" + syncStart + ")");
+
+        String missing = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Set<String> keys = langKeys(lang);
+            java.util.List<String> want = new java.util.ArrayList<String>();
+            java.util.Collections.addAll(want, "tile.siliconage.singularStation.name", "tile.siliconage.gravStabiliser.name",
+                    "sc.singStation.tooltip", "sc.singStation.details", "sc.singStation.details2", "sc.singStation.howto",
+                    "sc.gravStabiliser.tooltip", "sc.gravStabiliser.details", "sc.gravStabiliser.howto",
+                    "sc.singStation.err.busy", "sc.singStation.err.noready", "sc.singStation.err.nocatalyst", "sc.singStation.err.nosync",
+                    "sc.singStation.err.notransfer", "sc.singStation.err.nochest", "sc.singStation.err.branchlevel", "sc.singStation.err.samebranch",
+                    "sc.singStation.err.nosm", "sc.singStation.done.sync", "sc.singStation.done.transfer", "sc.singStation.proc.0",
+                    "sc.singStation.proc.1", "sc.singStation.proc.2", "sc.waila.singStation.proc.0", "sc.waila.singStation.proc.1",
+                    "sc.waila.singStation.proc.2", "sc.waila.singStation.idle", "sc.waila.singStation.paused", "sc.waila.singStation.speed",
+                    "sc.waila.gravStabiliser.none", "sc.waila.gravStabiliser.linked", "sc.waila.gravStabiliser.work",
+                    "sc.manual.singstation.1", "sc.manual.singstation.row", "sc.manual.singstation.stab", "sc.singStation.time.min",
+                    "sc.singStation.time.sec", "sc.singStation.unit.m");
+            for (String k : want) {
+                if (!keys.contains(k)) {
+                    missing += " " + lang + ":" + k;
+                }
+            }
+        }
+        check(missing.isEmpty(), "Singular station: names, tooltips, chat, WAILA and handbook texts in en_US and ru_RU" + missing);
     }
 
     /** The keys of one of the mod's lang files. */

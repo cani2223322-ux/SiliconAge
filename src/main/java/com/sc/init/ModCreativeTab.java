@@ -75,6 +75,8 @@ public class ModCreativeTab extends CreativeTabs {
             }
         }
         order.addAll(ModItems.WEAPONS.values());
+        // the suits' service: the stations, the Singular station's stabiliser
+        add(order, ModBlocks.armorStation, ModBlocks.singularStation, ModBlocks.gravStabiliser);
 
         Set<Item> seen = new HashSet<Item>();
         for (Object o : order) {

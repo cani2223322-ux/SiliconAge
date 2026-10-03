@@ -75,9 +75,14 @@ public class BlockArmorStationSC extends Block {
             return true;
         }
         if (!world.isRemote) {
-            player.openGui(SCMod.instance, GuiHandlerSC.ARMOR_STATION_GUI_ID, world, x, y, z);
+            player.openGui(SCMod.instance, guiId(), world, x, y, z);
         }
         return true;
+    }
+
+    /** The screen this station opens (GuiHandlerSC). */
+    protected int guiId() {
+        return GuiHandlerSC.ARMOR_STATION_GUI_ID;
     }
 
     /** A full container of one of the suit gases (an empty one, or any other fluid, opens the screen instead). */

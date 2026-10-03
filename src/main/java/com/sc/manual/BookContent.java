@@ -851,6 +851,7 @@ public final class BookContent {
         list.add(fn);
         armorGases(list, c);
         singularArmor(list, c);
+        singularStation(list, c);
         BookEntry weapons = new BookEntry("weapons", c, new ItemStack(ModItems.WEAPONS.get(WeaponType.values()[0])), Lang.tr("sc.manual.armor.weapons"));
         weapons.add(BookEl.title(Lang.tr("sc.manual.armor.weapons")));
         for (WeaponType type : WeaponType.values()) {
@@ -897,6 +898,33 @@ public final class BookContent {
      * The Singular suit (docs/plan-singular-armor.md, stage 1): its numbers from ArmorSuit / ArmorGasSC,
      * singular matter, the colour schemes (SingularScheme); levels and its own functions come later.
      */
+    /** The Singular Service Station and the Gravitational Stabiliser (docs/plan-singular-armor.md §7). */
+    private static void singularStation(List<BookEntry> list, BookChapter c) {
+        ItemStack st = new ItemStack(ModBlocks.singularStation), stab = new ItemStack(ModBlocks.gravStabiliser);
+        BookEntry e = new BookEntry("singularstation", c, st, st.getDisplayName());
+        e.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st, stab))).addAll(paras("sc.manual.singstation"));
+        e.add(BookEl.head(Lang.tr("sc.manual.singstation.costhead")));
+        e.add(BookEl.para(Lang.tr("sc.manual.singstation.cost", 100 - com.sc.util.SingularStationMath.SET_PERCENT)));
+        for (int lvl = 1; lvl <= 4; lvl++) {
+            long[] r = com.sc.util.SingularStationMath.row(lvl);
+            e.add(BookEl.dim(Lang.tr("sc.manual.singstation.row", lvl, lvl + 1, com.sc.util.SingularStationMath.shortAmount(r[0], Lang.tr("sc.singStation.unit.k"), Lang.tr("sc.singStation.unit.m"), Lang.tr("sc.singStation.unit.b")),
+                    r[1], r[2], r[3], r[4], com.sc.util.SingularStationMath.minutes(lvl))));
+        }
+        e.add(BookEl.para(Lang.tr("sc.manual.singstation.process")));
+        e.add(BookEl.head(Lang.tr("sc.manual.singstation.morehead")));
+        e.add(BookEl.para(Lang.tr("sc.manual.singstation.more", com.sc.util.SingularStationMath.BRANCH_SM,
+                com.sc.util.SingularStationMath.TRANSFER_PERCENT)));
+        e.add(BookEl.head(stab.getDisplayName(), stab));
+        e.add(BookEl.para(Lang.tr("sc.manual.singstation.stab", com.sc.tileentity.TileEntitySingularStationSC.STAB_RADIUS,
+                com.sc.util.SingularStationMath.STABILISER_PERCENT, com.sc.util.SingularStationMath.MAX_STABILISERS,
+                com.sc.tileentity.TileEntitySingularStationSC.RES_RADIUS, com.sc.util.SingularStationMath.RESONANCE_SPEED_PERCENT,
+                100 - com.sc.util.SingularStationMath.RESONANCE_EU_PERCENT)));
+        e.add(BookEl.para(Lang.tr("sc.manual.singstation.tanks", com.sc.tileentity.TileEntityArmorStationSC.TANK_CAPACITY,
+                com.sc.tileentity.TileEntitySingularStationSC.SM_TANK, com.sc.tileentity.TileEntitySingularStationSC.SM_PER_EXTENSION)));
+        e.about(st, stab);
+        list.add(e);
+    }
+
     private static void singularArmor(List<BookEntry> list, BookChapter c) {
         ArmorSuit s = ArmorSuit.SINGULAR;
         com.sc.item.ItemArmorSC[] pieces = ModItems.ARMOR.get(s);

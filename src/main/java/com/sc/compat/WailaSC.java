@@ -41,6 +41,8 @@ public class WailaSC implements IWailaDataProvider {
         registrar.registerNBTProvider(provider, TileEntityConduitBundleSC.class);
         registrar.registerBodyProvider(provider, com.sc.tileentity.TileEntityTankSC.class);
         registrar.registerNBTProvider(provider, com.sc.tileentity.TileEntityTankSC.class);
+        registrar.registerBodyProvider(provider, com.sc.tileentity.TileEntityGravStabiliserSC.class);
+        registrar.registerNBTProvider(provider, com.sc.tileentity.TileEntityGravStabiliserSC.class);
     }
 
     @Override
@@ -125,10 +127,29 @@ public class WailaSC implements IWailaDataProvider {
             NBTTagCompound tanks = t.getCompoundTag("scStationTanks");        // the inner tanks, only those with gas
             for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
                 if (tanks.getInteger(g.key()) > 0) {
-                    tip.add(Lang.tr("sc.waila.armorStation.tank", Lang.tr("sc.armorStation.gas." + g.key()), tanks.getInteger(g.key()),
-                            t.getInteger("scStationTankCap")));
+                    int cap = t.getCompoundTag("scStationTankCaps").hasKey(g.key()) ? t.getCompoundTag("scStationTankCaps").getInteger(g.key())
+                            : t.getInteger("scStationTankCap");
+                    tip.add(Lang.tr("sc.waila.armorStation.tank", Lang.tr("sc.armorStation.gas." + g.key()), tanks.getInteger(g.key()), cap));
                 }
             }
+        }
+        if (t.hasKey("scSingProc")) {                                // the Singular station: its process and speed
+            int k = t.getInteger("scSingProc");
+            if (k > 0) {
+                tip.add(Lang.tr("sc.waila.singStation.proc." + (k - 1), t.getInteger("scSingPct"),
+                        com.sc.tileentity.TileEntitySingularStationSC.timeText(t.getInteger("scSingLeft"))));
+                if (t.getBoolean("scSingPaused")) {
+                    tip.add(Lang.tr("sc.waila.singStation.paused"));
+                }
+            } else {
+                tip.add(Lang.tr("sc.waila.singStation.idle"));
+            }
+            tip.add(Lang.tr("sc.waila.singStation.speed", t.getInteger("scSingStab"), com.sc.util.SingularStationMath.MAX_STABILISERS,
+                    Lang.tr(t.getBoolean("scSingRes") ? "sc.singStation.yes" : "sc.singStation.no")));
+        }
+        if (t.hasKey("scStabLinked")) {                              // a Gravitational Stabiliser
+            tip.add(Lang.tr(!t.getBoolean("scStabLinked") ? "sc.waila.gravStabiliser.none"
+                    : t.getBoolean("scStabWork") ? "sc.waila.gravStabiliser.work" : "sc.waila.gravStabiliser.linked"));
         }
         if (t.hasKey("scShowerSt")) {
             tip.add(Lang.tr("sc.shower.status." + t.getInteger("scShowerSt")));
@@ -283,7 +304,7 @@ public class WailaSC implements IWailaDataProvider {
                 pieces += st.getStackInSlot(i) != null ? 1 : 0;
             }
             int modules = 0;
-            for (int i = com.sc.tileentity.TileEntityArmorStationSC.FIRST_UPGRADE_SLOT; i < st.getSizeInventory(); i++) {
+            for (int i = com.sc.tileentity.TileEntityArmorStationSC.FIRST_UPGRADE_SLOT; i < com.sc.tileentity.TileEntityArmorStationSC.ALL_SLOTS; i++) {
                 ItemStack s = st.getStackInSlot(i);
                 modules += s == null ? 0 : s.stackSize;
             }
@@ -300,6 +321,28 @@ public class WailaSC implements IWailaDataProvider {
             }
             tag.setTag("scStationTanks", tanks);
             tag.setInteger("scStationTankCap", st.tankCapacity());
+            NBTTagCompound caps = new NBTTagCompound();
+            for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+                caps.setInteger(g.key(), st.tankCapacity(g));
+            }
+            tag.setTag("scStationTankCaps", caps);
+            if (te instanceof com.sc.tileentity.TileEntitySingularStationSC) {
+                com.sc.tileentity.TileEntitySingularStationSC ss = (com.sc.tileentity.TileEntitySingularStationSC) te;
+                com.sc.tileentity.SingularProcessSC p = ss.getProcess();
+                tag.setInteger("scSingProc", p == null ? 0 : p.kind + 1);
+                if (p != null) {
+                    tag.setInteger("scSingPct", (int) Math.round(p.progress * 100));
+                    tag.setInteger("scSingLeft", ss.ticksLeft());
+                    tag.setBoolean("scSingPaused", ss.isPausedOff() || ss.getShortMask() != 0);
+                }
+                tag.setInteger("scSingStab", ss.getStabilisers());
+                tag.setBoolean("scSingRes", ss.hasResonance());
+            }
+        }
+        if (te instanceof com.sc.tileentity.TileEntityGravStabiliserSC) {
+            com.sc.tileentity.TileEntitySingularStationSC ss = ((com.sc.tileentity.TileEntityGravStabiliserSC) te).station();
+            tag.setBoolean("scStabLinked", ss != null);
+            tag.setBoolean("scStabWork", ss != null && ss.isWorking());
         }
         if (te instanceof com.sc.tileentity.TileEntityShowerSC) {
             com.sc.tileentity.TileEntityShowerSC sh = (com.sc.tileentity.TileEntityShowerSC) te;

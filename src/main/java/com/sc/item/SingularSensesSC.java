@@ -408,7 +408,7 @@ public final class SingularSensesSC {
     }
 
     /** The best resonance source within `r` of (x, y, z) in loaded chunks (resonanceKind). */
-    static int sourceNear(World w, int x, int y, int z, int r) {
+    public static int sourceNear(World w, int x, int y, int z, int r) {
         int best = 0;
         for (int chX = (x - r) >> 4; chX <= (x + r) >> 4; chX++) {
             for (int chZ = (z - r) >> 4; chZ <= (z + r) >> 4; chZ++) {
