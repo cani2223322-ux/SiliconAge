@@ -79,25 +79,41 @@ public final class GuiPowerSC {
 
     /** The buttons' tooltips (screen-local coordinates), or null. */
     public List<String> tooltip(int mx, int my) {
-        List<String> lines = new ArrayList<String>();
         if (GuiGaugeSC.isOver(bx, by, POWER_W, H, mx, my)) {
-            boolean on = te.isPowerOn();
-            lines.add(Lang.tr(on ? "sc.gui.power.on" : "sc.gui.power.off"));
-            lines.add(Lang.tr(on ? "sc.gui.power.hint.on" : "sc.gui.power.hint.off"));
-            if (!on && te.lineTooStrong()) {
-                lines.add(Lang.tr("sc.gui.power.danger", te.lineTier().name(), te.inputTier().name()));
-                lines.add(Lang.tr(armed() ? "sc.gui.power.armed" : "sc.gui.power.double"));
-            }
-            ownerOnly(powerButton, lines);
-            return lines;
+            return powerTip();
         }
         if (GuiGaugeSC.isOver(rsX, by, rsW, H, mx, my)) {
-            lines.add(Lang.tr("sc.gui.redstone." + te.getRedstoneMode()));
-            lines.add(Lang.tr("sc.gui.redstone.hint"));
-            ownerOnly(redstoneButton, lines);
-            return lines;
+            return redstoneTip();
         }
         return null;
+    }
+
+    /** The power switch's tooltip (also for a screen that draws its own power button with powerId). */
+    public List<String> powerTip() {
+        List<String> lines = new ArrayList<String>();
+        boolean on = te.isPowerOn();
+        lines.add(Lang.tr(on ? "sc.gui.power.on" : "sc.gui.power.off"));
+        lines.add(Lang.tr(on ? "sc.gui.power.hint.on" : "sc.gui.power.hint.off"));
+        if (!on && te.lineTooStrong()) {
+            lines.add(Lang.tr("sc.gui.power.danger", te.lineTier().name(), te.inputTier().name()));
+            lines.add(Lang.tr(armed() ? "sc.gui.power.armed" : "sc.gui.power.double"));
+        }
+        ownerOnly(powerButton, lines);
+        return lines;
+    }
+
+    /** The redstone mode button's tooltip. */
+    public List<String> redstoneTip() {
+        List<String> lines = new ArrayList<String>();
+        lines.add(Lang.tr("sc.gui.redstone." + te.getRedstoneMode()));
+        lines.add(Lang.tr("sc.gui.redstone.hint"));
+        ownerOnly(redstoneButton, lines);
+        return lines;
+    }
+
+    /** The first click of a dangerous switch-on was made, the second one is awaited. */
+    public boolean isArmed() {
+        return armed();
     }
 
     private static void ownerOnly(GuiButton button, List<String> lines) {

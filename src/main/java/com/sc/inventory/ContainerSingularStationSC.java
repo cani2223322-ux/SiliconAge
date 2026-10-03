@@ -19,6 +19,8 @@ import net.minecraft.util.ChatComponentTranslation;
  * the four armour slots, the module row, the donor and catalyst slots, the six conversion material
  * slots (Б-1, 3 x 2), the player's inventory; the
  * station's numbers and its running process synced. A slot a process holds can't be taken (ПР6).
+ * The positions here are the compact layout's start; the screen moves every slot to its layout and tab
+ * (the slots of the other tabs off screen - they take nothing then, see slotInTab).
  */
 public class ContainerSingularStationSC extends Container {
 
@@ -26,7 +28,13 @@ public class ContainerSingularStationSC extends Container {
     public static final int BTN_POWER = ContainerArmorStationSC.BTN_POWER, BTN_REDSTONE = ContainerArmorStationSC.BTN_REDSTONE,
             BTN_FILL = ContainerArmorStationSC.BTN_FILL, BTN_GAS = ContainerArmorStationSC.BTN_GAS, BTN_CHARGE = 14,
             BTN_MODERNISE = 40, BTN_CANCEL = 41, BTN_SYNC = 42, BTN_TRANSFER = 43, BTN_SCHEME_PREV = 44, BTN_SCHEME_NEXT = 45,
-            BTN_CONVERT = 46, BTN_BRANCH = 50;
+            BTN_CONVERT = 46, BTN_BRANCH = 50, BTN_CLEAR = ContainerArmorStationSC.BTN_CLEAR, BTN_HELIUM = ContainerArmorStationSC.BTN_HELIUM,
+            BTN_TAB = 60;
+    /**
+     * The screen's tabs (GuiSingularStationSC); the client tells the server which one is open (BTN_TAB + tab), the
+     * slots of the other tabs then take nothing (shift-click included) - what lies in them stays there.
+     */
+    public static final int TAB_MODERN = 0, TAB_CONVERT = 1, TAB_TRANSFER = 2, TAB_SYNC = 3, TAB_BRANCH = 4, TABS = 5;
     public static final int W = 320, H = 236;
     /** The armour column: rows ROW_STEP apart from ROW_Y; slot (item coordinates) at PIECE_X, row + 3. */
     public static final int ROW_Y = 17, ROW_STEP = 22, PIECE_X = 7;
@@ -55,6 +63,41 @@ public class ContainerSingularStationSC extends Container {
             BASE = PROG + 1, TARGET = BASE + 1, COST = TARGET + 1, DRAWN = COST + 2 * R, CAT = DRAWN + 2 * R, COUNT = CAT + 2;
     private final TileEntitySingularStationSC te;
     private final IntSyncSC sync = new IntSyncSC(COUNT);
+    /** The tab the screen shows (-1: not told yet - every slot takes its items, as before the tabs). */
+    private int tab = -1;
+
+    public int getTab() {
+        return tab;
+    }
+
+    /** The client's screen: the tab it shows now. */
+    public void setTab(int t) {
+        tab = t >= 0 && t < TABS ? t : -1;
+    }
+
+    /** Whether the station's slot `slot` belongs to tab `tab` (the armour and module slots: every tab; -1: all). */
+    public static boolean slotInTab(int tab, int slot) {
+        if (tab < 0 || slot < TileEntitySingularStationSC.DONOR_SLOT) {
+            return true;
+        }
+        if (slot == TileEntitySingularStationSC.DONOR_SLOT) {
+            return tab == TAB_TRANSFER;
+        }
+        if (slot == TileEntitySingularStationSC.CATALYST_SLOT) {
+            return tab == TAB_MODERN || tab == TAB_CONVERT;
+        }
+        return tab == TAB_CONVERT;
+    }
+
+    /** The tab a process kind belongs to. */
+    public static int tabOf(int kind) {
+        switch (kind) {
+            case SingularProcessSC.KIND_TRANSFER: return TAB_TRANSFER;
+            case SingularProcessSC.KIND_SYNC: return TAB_SYNC;
+            case SingularProcessSC.KIND_CONVERT: return TAB_CONVERT;
+            default: return TAB_MODERN;
+        }
+    }
 
     public ContainerSingularStationSC(InventoryPlayer playerInv, TileEntitySingularStationSC te) {
         this.te = te;
@@ -64,10 +107,10 @@ public class ContainerSingularStationSC extends Container {
         for (int i = 0; i < TileEntityArmorStationSC.UPGRADE_SLOTS; i++) {
             addSlotToContainer(new ContainerArmorStationSC.SlotModule(te, TileEntityArmorStationSC.FIRST_UPGRADE_SLOT + i, UPG_X + i * 18, UPG_Y));
         }
-        addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.DONOR_SLOT, DONOR_X, EXTRA_Y));
-        addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.CATALYST_SLOT, CATALYST_X, CATALYST_Y));
+        addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.DONOR_SLOT, DONOR_X, EXTRA_Y).in(this));
+        addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.CATALYST_SLOT, CATALYST_X, CATALYST_Y).in(this));
         for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
-            addSlotToContainer(new SlotMaterial(te, TileEntitySingularStationSC.MATERIAL_SLOT + i, matX(i), matY(i)));
+            addSlotToContainer(new SlotMaterial(te, TileEntitySingularStationSC.MATERIAL_SLOT + i, matX(i), matY(i)).in(this));
         }
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
@@ -105,15 +148,21 @@ public class ContainerSingularStationSC extends Container {
     /** The donor (a Singular piece) or the catalyst (a Singular core): one item, locked during a process. */
     public static class SlotExtra extends Slot {
         private final TileEntitySingularStationSC st;
+        private ContainerSingularStationSC owner;
 
         public SlotExtra(IInventory inv, int index, int x, int y) {
             super(inv, index, x, y);
             this.st = (TileEntitySingularStationSC) inv;
         }
 
+        SlotExtra in(ContainerSingularStationSC c) {
+            owner = c;
+            return this;
+        }
+
         @Override
         public boolean isItemValid(ItemStack stack) {
-            return st.isItemValidForSlot(getSlotIndex(), stack);
+            return (owner == null || slotInTab(owner.tab, getSlotIndex())) && st.isItemValidForSlot(getSlotIndex(), stack);
         }
 
         @Override
@@ -129,13 +178,20 @@ public class ContainerSingularStationSC extends Container {
 
     /** A conversion material slot (Б-1): the materials only, stacks as usual. */
     public static class SlotMaterial extends Slot {
+        private ContainerSingularStationSC owner;
+
         public SlotMaterial(IInventory inv, int index, int x, int y) {
             super(inv, index, x, y);
         }
 
+        SlotMaterial in(ContainerSingularStationSC c) {
+            owner = c;
+            return this;
+        }
+
         @Override
         public boolean isItemValid(ItemStack stack) {
-            return inventory.isItemValidForSlot(getSlotIndex(), stack);
+            return (owner == null || slotInTab(owner.tab, getSlotIndex())) && inventory.isItemValidForSlot(getSlotIndex(), stack);
         }
     }
 
@@ -153,6 +209,14 @@ public class ContainerSingularStationSC extends Container {
             te.toggleGas(Gas.values()[id - BTN_GAS]);
             return true;
         }
+        if (id >= BTN_TAB && id < BTN_TAB + TABS) {
+            setTab(id - BTN_TAB);
+            return true;
+        }
+        if (id >= BTN_CLEAR && id < BTN_CLEAR + GASES) {
+            te.clearTank(Gas.values()[id - BTN_CLEAR]);
+            return true;
+        }
         if (id >= BTN_BRANCH && id < BTN_BRANCH + 4) {
             int k = id - BTN_BRANCH;
             say(player, te.changeBranch(k < 2 ? 3 : 5, k % 2 + 1));
@@ -165,6 +229,7 @@ public class ContainerSingularStationSC extends Container {
                 return true;
             case BTN_REDSTONE: te.setRedstoneMode((te.getRedstoneMode() + 1) % 3); return true;
             case BTN_FILL: te.toggleFillGases(); return true;
+            case BTN_HELIUM: te.toggleHeliumOnly(); return true;
             case BTN_CHARGE: te.toggleCharge(); return true;
             case BTN_MODERNISE: say(player, te.startModernise(player)); return true;
             case BTN_CONVERT: say(player, te.startConvert(player)); return true;
