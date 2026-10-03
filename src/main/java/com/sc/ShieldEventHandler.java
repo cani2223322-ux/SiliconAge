@@ -86,6 +86,17 @@ public class ShieldEventHandler {
             net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) event.entityLiving;
             event.ammount = com.sc.item.BladeLogicSC.onHurt(p, event.source, event.ammount);
             event.ammount = com.sc.item.ArmorLogicSC.argonLava(p, event.source, event.ammount);   // argon: lava hurts half
+            event.ammount = com.sc.item.ArmorLogicSC.voidDamage(p, event.source, event.ammount);  // К9: the void hurts half
+            event.ammount = com.sc.item.ArmorLogicSC.horizonHurt(p, event.source, event.ammount); // Н2: 30% into EU
+            com.sc.item.ArmorLogicSC.anchorHit(p, event.source);                                  // П3: no knockback from this hit
+        }
+    }
+
+    /** What a player throws is marked (the Singular magnet leaves it alone a moment, ArmorLogicSC.magnetPulls). */
+    @SubscribeEvent
+    public void onToss(net.minecraftforge.event.entity.item.ItemTossEvent event) {
+        if (event.player != null && event.entityItem != null && !event.entityItem.worldObj.isRemote) {
+            event.entityItem.getEntityData().setString(com.sc.item.ArmorLogicSC.TOSSED_BY, event.player.getUniqueID().toString());
         }
     }
 
@@ -97,8 +108,9 @@ public class ShieldEventHandler {
         }
         net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) event.entityLiving;
         // stuck in a block: the helmet's oxygen keeps the wearer breathing (paid once a second, ArmorLogicSC)
-        if (com.sc.item.ArmorLogicSC.stopsSuffocation(p, event.source) || com.sc.item.ArmorLogicSC.exoStops(p, event.source, event.ammount)) {
-            event.setCanceled(true);
+        if (com.sc.item.ArmorLogicSC.stopsSuffocation(p, event.source) || com.sc.item.ArmorLogicSC.witherStops(p, event.source)
+                || com.sc.item.ArmorLogicSC.horizonStops(p, event.source) || com.sc.item.ArmorLogicSC.exoStops(p, event.source, event.ammount)) {
+            event.setCanceled(true);       // К9 takes the wither off, Н2 swallows the projectile, the Exo shield stops the rest
         }
     }
 
@@ -109,8 +121,9 @@ public class ShieldEventHandler {
             for (Iterator<net.minecraft.entity.Entity> it = event.getAffectedEntities().iterator(); it.hasNext(); ) {
                 net.minecraft.entity.Entity e = it.next();
                 if (e instanceof net.minecraft.entity.player.EntityPlayer
-                        && com.sc.item.ArmorLogicSC.explosionProof((net.minecraft.entity.player.EntityPlayer) e)) {
-                    it.remove();
+                        && (com.sc.item.ArmorLogicSC.explosionProof((net.minecraft.entity.player.EntityPlayer) e)
+                        || com.sc.item.ArmorLogicSC.anchorExplosion((net.minecraft.entity.player.EntityPlayer) e, event.explosion))) {
+                    it.remove();                    // П3: the anchor did the damage itself - no push
                 }
             }
         }

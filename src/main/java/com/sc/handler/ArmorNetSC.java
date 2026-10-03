@@ -44,6 +44,8 @@ public final class ArmorNetSC {
      * server walks the inventory itself (same rules as GAS_FILL, slot by slot) and answers with ONE chat line.
      */
     public static final byte GAS_FILL_ALL = 13;
+    /** Singular leggings: the phase dash (ArmorLogicSC.phaseDash). */
+    public static final byte PHASE_DASH = 14;
     /** GAS_FILL_ALL: at most this many single pours per press, and the press at most once per this many ticks. */
     private static final int FILL_ALL_MAX = 64, FILL_ALL_COOLDOWN = 10;
     private static final String FILL_ALL_TIME_TAG = "ScGasFillAllT";
@@ -53,6 +55,44 @@ public final class ArmorNetSC {
 
     public static void init() {
         CHANNEL.registerMessage(Handler.class, Message.class, 0, Side.SERVER);
+        CHANNEL.registerMessage(CooldownHandler.class, CooldownMessage.class, 1, Side.CLIENT);
+    }
+
+    /**
+     * Server -> client: a function's cooldown ends at world tick `end` (0: none); feature -1 clears them
+     * all (login). The client keeps it in SingularCooldowns (no client classes here: safe on a server).
+     */
+    public static class CooldownMessage implements IMessage {
+        public int feature;
+        public long end;
+
+        public CooldownMessage() {
+        }
+
+        public CooldownMessage(int feature, long end) {
+            this.feature = feature;
+            this.end = end;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            feature = buf.readByte();
+            end = buf.readLong();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeByte(feature);
+            buf.writeLong(end);
+        }
+    }
+
+    public static class CooldownHandler implements IMessageHandler<CooldownMessage, IMessage> {
+        @Override
+        public IMessage onMessage(CooldownMessage msg, MessageContext ctx) {
+            com.sc.util.SingularCooldowns.clientSet(msg.feature, msg.end);
+            return null;
+        }
     }
 
     public static class Message implements IMessage {
@@ -100,7 +140,8 @@ public final class ArmorNetSC {
                 case TOGGLE: {
                     ArmorFeature f = ArmorFeature.of(msg.feature);
                     ItemStack piece = f == null ? null : ArmorLogicSC.piece(p, f.piece);
-                    if (piece != null && f.availableIn(ArmorLogicSC.suitOf(piece), f.piece)) {
+                    if (piece != null && f.availableIn(ArmorLogicSC.suitOf(piece), f.piece)
+                            && (!msg.value || com.sc.util.SingularLevel.unlocked(p, f, piece))) {    // a locked function can't be switched on
                         ItemArmorSC.setEnabled(piece, f, msg.value);
                         p.inventoryContainer.detectAndSendChanges();
                     }
@@ -170,6 +211,9 @@ public final class ArmorNetSC {
                     break;
                 case com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION:   // hydrogen: a second jump in mid-air
                     com.sc.item.ArmorLogicSC.airJump(p);
+                    break;
+                case PHASE_DASH:
+                    com.sc.item.ArmorLogicSC.phaseDash(p);
                     break;
                 default:
                     break;

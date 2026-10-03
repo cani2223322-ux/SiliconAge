@@ -1164,6 +1164,21 @@ public class GuiArmorSC extends GuiScreen {
         return piece != null && ItemArmorSC.isEnabled(piece, a);
     }
 
+    /** The level a locked Singular function opens at (SingularLevel; creative: nothing locked), 0 when it's open. */
+    private int lockedLevel(Enum<?> f) {
+        if (!(f instanceof ArmorFeature)) {
+            return 0;
+        }
+        ArmorFeature a = (ArmorFeature) f;
+        ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, a.piece);
+        return piece == null || com.sc.util.SingularLevel.unlocked(mc.thePlayer, a, piece) ? 0 : com.sc.util.SingularLevel.requiredLevel(a);
+    }
+
+    /** The shield of a Singular chestplate while Н2 (the event horizon) works in its place. */
+    private boolean replacedByHorizon(Enum<?> f) {
+        return f == ArmorFeature.SHIELD && ArmorLogicSC.active(mc.thePlayer, ArmorFeature.EVENT_HORIZON);
+    }
+
     /**
      * Why an armour function can't work for the gases (ArmorLogicSC.gasAllows): "Нужен газ: X" or the
      * emergency mode line; null when it can (or it isn't an armour function).
@@ -1231,6 +1246,22 @@ public class GuiArmorSC extends GuiScreen {
         EntityPlayer p = mc.thePlayer;
         tip.add(nameOf(a));
         tip.add("§7" + Lang.tr("sc.armorfn." + a.name().toLowerCase(Locale.ROOT) + ".desc"));
+        int lock = lockedLevel(a);
+        if (lock > 0) {
+            tip.add("§c" + Lang.tr("sc.armorgui.tip.locked", lock));
+        } else if (com.sc.util.SingularLevel.requiredLevel(a) > 1) {
+            tip.add("§d" + Lang.tr("sc.armorgui.tip.level", com.sc.util.SingularLevel.requiredLevel(a)));
+        }
+        if (replacedByHorizon(a)) {
+            tip.add("§d" + Lang.tr("sc.armorgui.tip.replaced"));
+        }
+        if (a.offOnLowCharge()) {
+            tip.add("§7" + Lang.tr("sc.armorgui.tip.lowcharge", Math.round(ArmorFeature.SING_LOW_CHARGE * 100)));
+        }
+        int cd = com.sc.util.SingularCooldowns.get(p, a);
+        if (cd > 0) {
+            tip.add("§6" + Lang.tr("sc.armorgui.tip.cooldown", (cd + 19) / 20));
+        }
         String why = gasBlock(a);
         if (why != null) {
             tip.add("§c" + why);
@@ -1295,7 +1326,12 @@ public class GuiArmorSC extends GuiScreen {
                 Enum<?> f = featureOf(b.id);
                 boolean on = isOn(f);
                 String why = gasBlock(f);                          // no gas of its own / emergency mode: grey
-                if (why != null) {
+                int lock = lockedLevel(f);
+                if (lock > 0) {                                    // a Singular function above the piece's level
+                    b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.row.locked", lock);
+                } else if (replacedByHorizon(f)) {                 // the Singular chestplate: Н2 does the shield's work
+                    b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.row.replaced");
+                } else if (why != null) {
                     boolean emergency = f instanceof ArmorFeature
                             && ArmorLogicSC.pieceEmergency(ArmorGasSC.wornSet(mc.thePlayer), ArmorLogicSC.suitOf(ArmorLogicSC.piece(mc.thePlayer, ((ArmorFeature) f).piece)));
                     b.displayString = "§8" + nameOf(f) + ": " + Lang.tr(emergency ? "sc.armorgui.row.emergency" : "sc.armorgui.row.needgas");
@@ -1377,7 +1413,7 @@ public class GuiArmorSC extends GuiScreen {
         } else if (featureOf(b.id) instanceof ArmorFeature) {
             ArmorFeature f = (ArmorFeature) featureOf(b.id);
             ItemStack piece = ArmorLogicSC.piece(mc.thePlayer, f.piece);
-            if (piece != null) {
+            if (piece != null && lockedLevel(f) == 0) {
                 boolean want = !ItemArmorSC.isEnabled(piece, f);
                 ItemArmorSC.setEnabled(piece, f, want);
                 ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.TOGGLE, f.ordinal(), want));

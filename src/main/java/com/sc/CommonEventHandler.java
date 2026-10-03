@@ -159,6 +159,10 @@ public class CommonEventHandler {
         heliumWarning(player, worn, heat + heatGen - suit.heatDissipation > 0);
         heat = Math.min(suit.heatCapacity, excess);
         int pct = heat * 100 / suit.heatCapacity;
+        if (pct >= 100 && !shutDown && com.sc.item.ArmorLogicSC.heatVent(player)) {
+            heat = com.sc.item.ArmorLogicSC.ventedHeat(heat);         // Н11: a wave and half the heat out instead of the overheat
+            pct = heat * 100 / suit.heatCapacity;
+        }
         if (pct >= HEAT_WARN_CHAT_PCT) {
             com.sc.item.ArmorLogicSC.warn(player, "sc.gas.warn.heat", 600);
         } else if (pct < HEAT_WARN_CHAT_PCT - 10) {
@@ -250,6 +254,7 @@ public class CommonEventHandler {
         if (p == null || p.worldObj.isRemote) {
             return;
         }
+        com.sc.util.SingularCooldowns.syncAll(p);   // the client's copy of the function cooldowns (K menu)
         NBTTagCompound entityData = p.getEntityData();
         NBTTagCompound data = entityData.getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG);
         ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(p);

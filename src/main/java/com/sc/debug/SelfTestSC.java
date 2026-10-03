@@ -60,6 +60,7 @@ public final class SelfTestSC {
             armorFunctions();
             armorGases();
             singularArmor();
+            singularFunctions();
             bladeFunctions();
             chargePad();
             batteries();
@@ -1400,7 +1401,7 @@ public final class SelfTestSC {
                 && com.sc.item.ArmorLogicSC.worksIn(w, com.sc.util.ArmorFeature.ANNIHILATION)
                 && com.sc.item.ArmorLogicSC.worksIn(w, com.sc.util.ArmorFeature.NIGHT_VISION)
                 && ((com.sc.item.ItemArmorSC) w[1].getItem()).protectionIn(w) == 10;
-        check(inherits && exoFns == 25 && sgFns == exoFns && strict,
+        check(inherits && exoFns == 25 && sgFns == exoFns + SINGULAR_OWN && strict,
                 "Singular suit: every Exo function (" + sgFns + "), strict gas rules, emergency mode without helium (iron plating)");
         // tanks (plan §4), singular matter only in the Singular chestplate
         com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, o2 = com.sc.util.ArmorGasSC.Gas.OXYGEN,
@@ -1551,6 +1552,212 @@ public final class SelfTestSC {
             w[t] = on[t] ? new ItemStack(a[t]) : null;
         }
         return w;
+    }
+
+    /** The Singular suit's own functions (stage 2a): Н1, Н7, П3, П7, Б3, Б4, Б1, К9, Ш8, Н11, Н2, П1. */
+    private static final int SINGULAR_OWN = 12;
+
+    /**
+     * The Singular functions, stage 2a (docs/plan-singular-armor.md §3-§5): appended after the 25 old
+     * ones, Singular only, the plan's pieces / levels / gases; the switch bits past 32 in a second
+     * int (old pieces keep theirs); the level hook; the cooldown API; the phase dash's path on a mock
+     * world; the plan's gas numbers without the K10 discount; О2.
+     */
+    private static void singularFunctions() {
+        com.sc.util.ArmorFeature[] v = com.sc.util.ArmorFeature.values();
+        com.sc.util.ArmorSuit sg = com.sc.util.ArmorSuit.SINGULAR, exo = com.sc.util.ArmorSuit.EXO;
+        String[] order = {"GRAV_FLIGHT", "MAGNET", "GRAV_ANCHOR", "STABILIZER", "ANTIGRAV", "VOID_RESCUE", "GRAV_STRIKE",
+                "WITHER_VOID", "CLEAR_SIGHT", "HEAT_VENT", "EVENT_HORIZON", "PHASE_DASH"};
+        int[] pieces = {1, 1, 2, 2, 3, 3, 3, 1, 0, 1, 1, 2};
+        int[] levels = {1, 1, 1, 1, 1, 1, 2, 1, 1, 3, 2, 2};
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, h2 = com.sc.util.ArmorGasSC.Gas.HYDROGEN,
+                ar = com.sc.util.ArmorGasSC.Gas.ARGON, kr = com.sc.util.ArmorGasSC.Gas.KRYPTON, o2 = com.sc.util.ArmorGasSC.Gas.OXYGEN,
+                d2o = com.sc.util.ArmorGasSC.Gas.HEAVY_WATER;
+        com.sc.util.ArmorGasSC.Gas[] gases = {he, he, d2o, ar, h2, he, h2, o2, kr, ar, he, h2};
+        float[] use = {1F, 1F, 1F, 0.5F, 0.5F, 500F, 1F, 2F, 1F, 200F, 5F, 50F};
+        boolean layout = v.length == 25 + SINGULAR_OWN && v.length <= 64;
+        String bad = "";
+        for (int i = 0; i < order.length; i++) {
+            com.sc.util.ArmorFeature f = com.sc.util.ArmorFeature.valueOf(order[i]);
+            boolean ok = f.ordinal() == 25 + i && f.minSuit == sg && f.piece == pieces[i] && f.availableIn(sg, pieces[i])
+                    && !f.availableIn(exo, pieces[i]) && com.sc.util.SingularLevel.requiredLevel(f) == levels[i]
+                    && f.gas() == gases[i] && Math.abs(f.gasUse() - use[i]) < 1e-6 && f.isAction() == (f == com.sc.util.ArmorFeature.PHASE_DASH);
+            if (!ok) {
+                bad += " " + order[i];
+            }
+            layout &= ok;
+        }
+        layout &= com.sc.util.ArmorFeature.GRAV_FLIGHT.euPerSecond == 2000 && com.sc.util.ArmorFeature.MAGNET.euPerSecond == 20
+                && com.sc.util.ArmorFeature.CLEAR_SIGHT.euPerSecond == 40 && com.sc.util.ArmorFeature.ANTIGRAV.euPerSecond == 100
+                && com.sc.util.ArmorFeature.MAGNET.gasUseKind() == com.sc.util.ArmorFeature.USE_MINUTE
+                && com.sc.util.ArmorFeature.GRAV_FLIGHT.gasUseKind() == com.sc.util.ArmorFeature.USE_SECOND
+                && com.sc.util.ArmorFeature.GRAV_STRIKE.gasPerPoint() && com.sc.util.ArmorFeature.PHASE_DASH.gasMin() == 50
+                && com.sc.util.ArmorFeature.HEAT_VENT.gasMin() == 200 && com.sc.util.ArmorFeature.WITHER_VOID.needsFullSet()
+                && com.sc.util.ArmorFeature.GRAV_FLIGHT.offOnLowCharge() && com.sc.util.ArmorFeature.EVENT_HORIZON.offOnLowCharge()
+                && com.sc.util.ArmorFeature.GRAV_ANCHOR.offOnLowCharge() && !com.sc.util.ArmorFeature.MAGNET.offOnLowCharge()
+                && com.sc.util.SingularLevel.requiredLevel(com.sc.util.ArmorFeature.FLIGHT) == 1;
+        check(layout, "Singular functions: 12 appended (25..36), Singular only, the plan's pieces, levels, gases and rates" + bad);
+
+        // the switch bits: an old piece keeps its "FnToggled", bits 32+ go to "FnToggled2"
+        ItemStack chest = new ItemStack(ModItems.ARMOR.get(sg)[1]), helmet = new ItemStack(ModItems.ARMOR.get(sg)[0]);
+        helmet.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        helmet.getTagCompound().setInteger("FnToggled", (1 << com.sc.util.ArmorFeature.THERMAL.ordinal())
+                | (1 << com.sc.util.ArmorFeature.NIGHT_VISION.ordinal()));            // as saved before stage 2a
+        boolean bits = com.sc.item.ItemArmorSC.isEnabled(helmet, com.sc.util.ArmorFeature.THERMAL)
+                && !com.sc.item.ItemArmorSC.isEnabled(helmet, com.sc.util.ArmorFeature.NIGHT_VISION)
+                && !com.sc.item.ItemArmorSC.isEnabled(helmet, com.sc.util.ArmorFeature.CLEAR_SIGHT);
+        com.sc.item.ItemArmorSC.setEnabled(helmet, com.sc.util.ArmorFeature.CLEAR_SIGHT, true);         // ordinal 33
+        bits &= com.sc.item.ItemArmorSC.isEnabled(helmet, com.sc.util.ArmorFeature.CLEAR_SIGHT)
+                && helmet.getTagCompound().getInteger("FnToggled2") == 1 << (33 - 32)
+                && helmet.getTagCompound().getInteger("FnToggled") == ((1 << 6) | 1)
+                && com.sc.item.ItemArmorSC.isEnabled(helmet, com.sc.util.ArmorFeature.THERMAL);
+        com.sc.item.ItemArmorSC.setEnabled(helmet, com.sc.util.ArmorFeature.CLEAR_SIGHT, false);
+        bits &= !helmet.getTagCompound().hasKey("FnToggled2") && !com.sc.item.ItemArmorSC.isEnabled(helmet, com.sc.util.ArmorFeature.CLEAR_SIGHT);
+        com.sc.item.ItemArmorSC.setEnabled(chest, com.sc.util.ArmorFeature.GRAV_STRIKE, false);         // ordinal 31: the sign bit
+        ItemStack boots = new ItemStack(ModItems.ARMOR.get(sg)[3]);
+        com.sc.item.ItemArmorSC.setEnabled(boots, com.sc.util.ArmorFeature.GRAV_STRIKE, false);
+        bits &= !com.sc.item.ItemArmorSC.isEnabled(boots, com.sc.util.ArmorFeature.GRAV_STRIKE)
+                && boots.getTagCompound().getInteger("FnToggled") == Integer.MIN_VALUE
+                && com.sc.item.ItemArmorSC.isEnabled(boots, com.sc.util.ArmorFeature.ANTIGRAV)
+                && com.sc.item.ItemArmorSC.isEnabled(chest, com.sc.util.ArmorFeature.EVENT_HORIZON)
+                && !com.sc.item.ItemArmorSC.isEnabled(chest, com.sc.util.ArmorFeature.MAGNET)
+                && !com.sc.item.ItemArmorSC.isEnabled(new ItemStack(ModItems.ARMOR.get(exo)[1]), com.sc.util.ArmorFeature.GRAV_FLIGHT)
+                && com.sc.item.ItemArmorSC.toggled(null, 40) == false;
+        check(bits, "Singular functions: switch bits 0..31 in FnToggled as before (old pieces keep theirs), 32+ in FnToggled2, bit 31 works");
+
+        // the level hook: default 1, clamped 1..5, creative counts as 5
+        ItemStack legs = new ItemStack(ModItems.ARMOR.get(sg)[2]);
+        boolean levels2 = com.sc.util.SingularLevel.levelOf(legs) == 1 && com.sc.util.SingularLevel.levelOf(null) == 1
+                && !com.sc.util.SingularLevel.unlocked(com.sc.util.ArmorFeature.PHASE_DASH, 1, false)
+                && com.sc.util.SingularLevel.unlocked(com.sc.util.ArmorFeature.PHASE_DASH, 1, true)
+                && com.sc.util.SingularLevel.unlocked(com.sc.util.ArmorFeature.GRAV_ANCHOR, 1, false)
+                && com.sc.util.SingularLevel.unlocked(com.sc.util.ArmorFeature.DASH, 1, false);
+        com.sc.util.SingularLevel.setLevel(legs, 2);
+        levels2 &= com.sc.util.SingularLevel.levelOf(legs) == 2 && com.sc.util.SingularLevel.unlocked(null, com.sc.util.ArmorFeature.PHASE_DASH, legs)
+                && !com.sc.util.SingularLevel.unlocked(com.sc.util.ArmorFeature.HEAT_VENT, 2, false);
+        legs.getTagCompound().setInteger("SingLevel", 9);
+        levels2 &= com.sc.util.SingularLevel.levelOf(legs) == 5;
+        legs.getTagCompound().setInteger("SingLevel", -3);
+        levels2 &= com.sc.util.SingularLevel.levelOf(legs) == 1;
+        ItemStack[] w = gasSuit(sg, true, true, true, true);
+        for (ItemStack s : w) {
+            com.sc.item.ItemArmorSC.setCharge(s, com.sc.item.ItemArmorSC.capacityOf(s));
+        }
+        fillSuit(w, 50);
+        levels2 &= com.sc.item.ArmorLogicSC.worksIn(w, com.sc.util.ArmorFeature.GRAV_FLIGHT)
+                && com.sc.item.ArmorLogicSC.worksIn(w, com.sc.util.ArmorFeature.PHASE_DASH)          // the gases allow it (the level: active())
+                && com.sc.item.ArmorLogicSC.missingGas(w, com.sc.util.ArmorFeature.HEAT_VENT) == null;
+        com.sc.util.ArmorGasSC.setAmount(w[1], ar, 150);                                              // under a vent's 200 mB of argon
+        levels2 &= com.sc.item.ArmorLogicSC.missingGas(w, com.sc.util.ArmorFeature.HEAT_VENT) == ar
+                && com.sc.item.ArmorLogicSC.missingGas(w, com.sc.util.ArmorFeature.STABILIZER) == null;
+        fillSuit(w, 0);
+        levels2 &= com.sc.item.ArmorLogicSC.emergency(w) && !com.sc.item.ArmorLogicSC.gasAllows(w, com.sc.util.ArmorFeature.GRAV_FLIGHT)
+                && com.sc.item.ArmorLogicSC.flightCutByGas(w);                                       // no helium: Н1 cut with the soft descent
+        check(levels2, "Singular levels: NBT SingLevel default 1, clamped 1..5, the plan's level per function, creative = 5; "
+                + "H1 / P1 / H11 by their gases, emergency cuts H1");
+
+        // cooldowns: the pure part and the client's copy
+        com.sc.util.SingularCooldowns.clientSet(-1, 0);
+        boolean cool = com.sc.util.SingularCooldowns.left(1000, 940) == 60 && com.sc.util.SingularCooldowns.left(1000, 1000) == 0
+                && com.sc.util.SingularCooldowns.left(0, 5) == 0 && com.sc.util.SingularCooldowns.clientEnd(35) == 0;
+        com.sc.util.SingularCooldowns.clientSet(com.sc.util.ArmorFeature.PHASE_DASH.ordinal(), 12345L);
+        cool &= com.sc.util.SingularCooldowns.clientEnd(com.sc.util.ArmorFeature.PHASE_DASH.ordinal()) == 12345L;
+        com.sc.util.SingularCooldowns.clientSet(-1, 0);
+        cool &= com.sc.util.SingularCooldowns.clientEnd(com.sc.util.ArmorFeature.PHASE_DASH.ordinal()) == 0
+                && com.sc.util.ArmorFeature.PHASE_DASH_COOLDOWN == 60 && com.sc.util.ArmorFeature.VOID_RESCUE_COOLDOWN == 6000
+                && com.sc.util.ArmorFeature.HEAT_VENT_COOLDOWN == 1200 && !com.sc.item.ArmorLogicSC.timeSlowActive(null);
+        check(cool, "Singular cooldowns: ticks left, the client's copy set / cleared; P1 3 s, B4 5 min, H11 1 min; C3 hook off");
+
+        // the phase dash's path: a wall at x = 5 (a body 0.6 wide), open space, a thin wall with room behind it
+        com.sc.item.ArmorLogicSC.SpaceCheck wall = new com.sc.item.ArmorLogicSC.SpaceCheck() {
+            @Override
+            public boolean free(double x, double y, double z) {
+                return x + 0.3 < 5.0 || x - 0.3 >= 5.5;            // the wall is x 5..5.5; free beyond it
+            }
+        };
+        com.sc.item.ArmorLogicSC.SpaceCheck open = new com.sc.item.ArmorLogicSC.SpaceCheck() {
+            @Override
+            public boolean free(double x, double y, double z) {
+                return y >= 0;
+            }
+        };
+        double toWall = com.sc.item.ArmorLogicSC.phaseDistance(wall, 0.5, 64, 0.5, 1, 0, 0, 16);
+        double far = com.sc.item.ArmorLogicSC.phaseDistance(open, 0.5, 64, 0.5, 3, 0, 4, 16);
+        double down = com.sc.item.ArmorLogicSC.phaseDistance(open, 0.5, 2, 0.5, 0, -1, 0, 16);
+        double none = com.sc.item.ArmorLogicSC.phaseDistance(wall, 4.6, 64, 0.5, 1, 0, 0, 16);
+        double still = com.sc.item.ArmorLogicSC.phaseDistance(open, 0.5, 64, 0.5, 0, 0, 0, 16);
+        check(Math.abs(toWall - 4.0) < 1e-9 && Math.abs(far - 16.0) < 1e-9 && Math.abs(down - 2.0) < 1e-9 && none == 0 && still == 0,
+                "phase dash path: stops before a wall (" + toWall + ", never behind it), 16 blocks in the open (" + far + "), "
+                        + "the ground (" + down + "), blocked (" + none + ")");
+
+        // the plan's gas numbers, without the -20% of the Exo legacy; О2; the magnet's grace; the vent
+        ItemStack[] g = gasSuit(sg, true, true, true, true);
+        fillSuit(g, 100);
+        int he0 = com.sc.util.ArmorGasSC.amountOf(g, he), ar0 = com.sc.util.ArmorGasSC.amountOf(g, ar), h20 = com.sc.util.ArmorGasSC.amountOf(g, h2);
+        for (int i = 0; i < 60; i++) {
+            com.sc.util.ArmorGasSC.drainFraction(g, he, com.sc.util.ArmorFeature.SING_HE_FLIGHT_PER_SECOND);     // a minute of Н1
+            com.sc.util.ArmorGasSC.drainFraction(g, ar, com.sc.util.ArmorFeature.SING_AR_STABILIZER_PER_SECOND); // a minute in a web
+        }
+        com.sc.util.ArmorGasSC.drainExact(g, h2, com.sc.util.ArmorFeature.SING_H2_PHASE);
+        boolean nums = he0 - com.sc.util.ArmorGasSC.amountOf(g, he) == 60 && ar0 - com.sc.util.ArmorGasSC.amountOf(g, ar) == 30
+                && h20 - com.sc.util.ArmorGasSC.amountOf(g, h2) == 50
+                && com.sc.item.ArmorLogicSC.lowCharge(6399999, 64000000) && !com.sc.item.ArmorLogicSC.lowCharge(6400000, 64000000)
+                && !com.sc.item.ArmorLogicSC.lowCharge(0, 0)
+                && com.sc.item.ArmorLogicSC.ventedHeat(1000) == 500 && com.sc.item.ArmorLogicSC.ventedHeat(999) == 499
+                && !com.sc.item.ArmorLogicSC.magnetPulls("a", "a", 5) && com.sc.item.ArmorLogicSC.magnetPulls("a", "a", 20)
+                && com.sc.item.ArmorLogicSC.magnetPulls("a", "b", 0) && com.sc.item.ArmorLogicSC.magnetPulls("a", "", 0)
+                && com.sc.util.ArmorFeature.HORIZON_SHARE == 0.3F && com.sc.util.ArmorFeature.SING_HE_PER_PROJECTILE == 5
+                && com.sc.util.ArmorFeature.SING_H2_AIR_JUMP == 10 && com.sc.util.ArmorFeature.ANTIGRAV_AIR_JUMP_EU == 5000
+                && com.sc.util.ArmorFeature.PHASE_DASH_EU == 50000 && com.sc.util.ArmorFeature.PHASE_DASH_RANGE == 16.0
+                && com.sc.util.ArmorFeature.SING_HE_VOID_RESCUE == 500 && com.sc.util.ArmorFeature.VOID_RESCUE_CHARGE == 0.10F
+                && com.sc.util.ArmorFeature.GRAV_FLIGHT_SPEED_MUL == 3F && com.sc.util.ArmorFeature.MAGNET_RADIUS == 8.0;
+        check(nums, "Singular gas: H1 flight 60 mB of helium a minute, P7 30 mB of argon, P1 50 mB of hydrogen (no -20%); "
+                + "O2 under 10% charge; magnet leaves a just-thrown item; vent halves the heat (used " + (he0 - com.sc.util.ArmorGasSC.amountOf(g, he))
+                + "/" + (ar0 - com.sc.util.ArmorGasSC.amountOf(g, ar)) + "/" + (h20 - com.sc.util.ArmorGasSC.amountOf(g, h2)) + ")");
+
+        // every new function named and described in both languages, the new chat / screen lines too
+        String missing = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Set<String> keys = langKeys(lang);
+            java.util.List<String> want = new java.util.ArrayList<String>();
+            for (String n : order) {
+                String k = "sc.armorfn." + n.toLowerCase(java.util.Locale.ROOT);
+                want.add(k);
+                want.add(k + ".desc");
+            }
+            java.util.Collections.addAll(want, "sc.armor.cooldown", "sc.armor.voidrescue", "sc.armor.voidrescue.spawn", "sc.armor.voidrescue.cant",
+                    "sc.armor.heatvent", "sc.armor.phase.cant", "sc.armor.phase.blocked", "sc.armorkey.locked", "sc.armorgui.row.locked",
+                    "sc.armorgui.row.replaced", "sc.armorgui.tip.locked", "sc.armorgui.tip.cooldown", "sc.tooltip.armor.singular.level",
+                    "sc.tooltip.armor.singular.at", "sc.manual.singular.fnhead", "sc.manual.singular.fnline");
+            for (String k : want) {
+                if (!keys.contains(k)) {
+                    missing += " " + lang + ":" + k;
+                }
+            }
+        }
+        check(missing.isEmpty(), "Singular functions: names, descriptions, chat and screen texts in en_US and ru_RU" + missing);
+    }
+
+    /** The keys of one of the mod's lang files. */
+    private static java.util.Set<String> langKeys(String lang) {
+        java.util.Set<String> keys = new java.util.HashSet<String>();
+        java.io.InputStream in = SelfTestSC.class.getResourceAsStream("/assets/siliconage/lang/" + lang + ".lang");
+        if (in == null) {
+            return keys;
+        }
+        try {
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
+            for (String line; (line = r.readLine()) != null; ) {
+                int eq = line.indexOf('=');
+                if (eq > 0) {
+                    keys.add(line.substring(0, eq));
+                }
+            }
+            r.close();
+        } catch (java.io.IOException e) {
+            // an empty set: every key missing
+        }
+        return keys;
     }
 
     /** Fills every tank of the set to `pct` percent. */

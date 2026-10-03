@@ -936,6 +936,16 @@ public final class BookContent {
             names.append(names.length() > 0 ? ", " : "").append(sc.name()).append(" - ").append(Lang.tr(sc.langKey()));
         }
         e.add(BookEl.dim(names.toString()));
+        // its own functions (stage 2a on): each with its piece and the level it opens at
+        e.add(BookEl.head(Lang.tr("sc.manual.singular.fnhead"))).addAll(paras("sc.manual.singular.fn"));
+        for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
+            if (f.minSuit != s) {
+                continue;
+            }
+            String key = "sc.armorfn." + f.name().toLowerCase(Locale.ROOT);
+            e.add(BookEl.item(new ItemStack(pieces[f.piece]), Lang.tr(key), Lang.tr("sc.manual.singular.fnline",
+                    Lang.tr("sc.armorhud.piece." + f.piece), com.sc.util.SingularLevel.requiredLevel(f), Lang.tr(key + ".desc"))));
+        }
         e.add(BookEl.gap()).add(BookEl.warn(Lang.tr("sc.manual.singular.next")));
         list.add(e);
     }

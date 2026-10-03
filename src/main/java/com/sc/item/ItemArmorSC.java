@@ -191,17 +191,46 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         if (!f.availableIn(item.suit, item.armorType)) {
             return false;
         }
-        boolean toggled = stack.hasTagCompound() && (stack.getTagCompound().getInteger("FnToggled") & (1 << f.ordinal())) != 0;
-        return f.onByDefault != toggled;
+        return f.onByDefault != toggled(stack.getTagCompound(), f.ordinal());
     }
 
     public static void setEnabled(ItemStack stack, com.sc.util.ArmorFeature f, boolean on) {
         if (!stack.hasTagCompound()) {
             stack.setTagCompound(new NBTTagCompound());
         }
-        int bits = stack.getTagCompound().getInteger("FnToggled");
-        bits = on != f.onByDefault ? bits | (1 << f.ordinal()) : bits & ~(1 << f.ordinal());
-        stack.getTagCompound().setInteger("FnToggled", bits);
+        setToggled(stack.getTagCompound(), f.ordinal(), on != f.onByDefault);
+    }
+
+    /**
+     * The functions switched away from their default: bits 0..31 in "FnToggled" (as always - old
+     * pieces keep their switches as they are), 32..63 in "FnToggled2" (the Singular functions pushed
+     * ArmorFeature past 32). Nothing to migrate: a piece without "FnToggled2" has every function from
+     * 32 on at its default.
+     */
+    public static final String TOGGLED = "FnToggled", TOGGLED2 = "FnToggled2";
+
+    /** Whether bit `ordinal` is set in the piece's switch fields (null tag: no). */
+    public static boolean toggled(NBTTagCompound tag, int ordinal) {
+        if (tag == null || ordinal < 0 || ordinal >= 64) {
+            return false;
+        }
+        int bits = tag.getInteger(ordinal < 32 ? TOGGLED : TOGGLED2);
+        return (bits & (1 << (ordinal & 31))) != 0;
+    }
+
+    /** Sets or clears bit `ordinal` (0..63) of the piece's switch fields; the second field is only written once it's needed. */
+    public static void setToggled(NBTTagCompound tag, int ordinal, boolean set) {
+        if (tag == null || ordinal < 0 || ordinal >= 64) {
+            return;
+        }
+        String key = ordinal < 32 ? TOGGLED : TOGGLED2;
+        int bits = tag.getInteger(key);
+        bits = set ? bits | (1 << (ordinal & 31)) : bits & ~(1 << (ordinal & 31));
+        if (bits == 0 && key.equals(TOGGLED2)) {
+            tag.removeTag(TOGGLED2);
+        } else {
+            tag.setInteger(key, bits);
+        }
     }
 
     /** Spends `amount` EU if the piece has it all. */
@@ -250,6 +279,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         if (suit.hasSchemes()) {
             list.add(Lang.tr("sc.tooltip.armor.scheme", Lang.tr(com.sc.util.SingularScheme.of(stack).langKey())));
         }
+        if (suit == ArmorSuit.SINGULAR) {
+            list.add(Lang.tr("sc.tooltip.armor.singular.level", com.sc.util.SingularLevel.levelOf(stack), com.sc.util.SingularLevel.MAX));
+        }
         if (!powered(stack)) {
             list.add(Lang.tr("sc.tooltip.armor.empty"));
         }
@@ -258,7 +290,11 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         int lit = 0;
         for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
             if (f.availableIn(suit, armorType)) {
-                names.add(Lang.tr("sc.armorfn." + f.name().toLowerCase(java.util.Locale.ROOT)));
+                String n = Lang.tr("sc.armorfn." + f.name().toLowerCase(java.util.Locale.ROOT));
+                if (!com.sc.util.SingularLevel.unlocked(player, f, stack)) {    // opens at a higher level
+                    n += " \u00a78" + Lang.tr("sc.tooltip.armor.singular.at", com.sc.util.SingularLevel.requiredLevel(f));
+                }
+                names.add(n);
                 on.add(isEnabled(stack, f));
                 lit += isEnabled(stack, f) ? 1 : 0;
             }

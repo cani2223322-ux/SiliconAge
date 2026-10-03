@@ -5,7 +5,7 @@ package com.sc.util;
  * GuiArmorSC). A function belongs to one piece (ItemArmor.armorType: 0 helmet, 1 chestplate,
  * 2 leggings, 3 boots) and comes with that suit tier and every tier above it. While it works it
  * costs EU from its own piece and heats the suit (chestplate heat, §16).
- * Ordinals are the bits of the piece's "FnToggled" NBT (switched away from the default) - only ever append.
+ * Ordinals are the bits of the piece's "FnToggled" NBT (switched away from the default; 32 and up in "FnToggled2") - only ever append.
  *
  * TODO(not in the design doc): the whole list and all the numbers are this mod's own.
  */
@@ -41,7 +41,21 @@ public enum ArmorFeature {
     // life support (docs/plan-armor-gases.md), appended: these run on their gas, never on EU alone
     BOOSTER(1, ArmorSuit.QUANTUM, 0, 1, true),      // hydrogen: flight x2 speed, a longer dash, an air jump, a soft landing
     SEARCHLIGHT(0, ArmorSuit.QUANTUM, 0, 0, false), // krypton: a moving light 12 blocks ahead
-    FUSION_CELL(1, ArmorSuit.EXO, 0, 6, false);     // deuterium + helium: 256 EU/t into the suit, heats hard
+    FUSION_CELL(1, ArmorSuit.EXO, 0, 6, false),     // deuterium + helium: 256 EU/t into the suit, heats hard
+    // the Singular suit's own functions (docs/plan-singular-armor.md §3, stage 2a), appended: Singular only,
+    // each opens at its level (SingularLevel.requiredLevel)
+    GRAV_FLIGHT(1, ArmorSuit.SINGULAR, 2000, 3, true),   // Н1: flight x3 the Exo speed, no inertia, hovering; helium instead of hydrogen
+    MAGNET(1, ArmorSuit.SINGULAR, 20, 0, false),        // Н7: items and experience within 8 blocks fly to the wearer
+    GRAV_ANCHOR(2, ArmorSuit.SINGULAR, 0, 0, true),     // П3: no knockback, explosions don't push (heavy water per push)
+    STABILIZER(2, ArmorSuit.SINGULAR, 0, 0, true),      // П7: cobwebs and soul sand don't slow (argon while in them)
+    ANTIGRAV(3, ArmorSuit.SINGULAR, 100, 0, true),      // Б3: slow fall (sneak: fall freely) and a jump in mid-air
+    VOID_RESCUE(3, ArmorSuit.SINGULAR, 0, 0, true),     // Б4: fallen into the void - back to the last safe place
+    GRAV_STRIKE(3, ArmorSuit.SINGULAR, 0, 0, true),     // Б1: the fall the boots absorb hits the mobs around
+    WITHER_VOID(1, ArmorSuit.SINGULAR, 0, 0, true),     // К9: full set - wither taken off, the void hurts half
+    CLEAR_SIGHT(0, ArmorSuit.SINGULAR, 40, 1, false),   // Ш8: night vision that goes out in bright light (no glare)
+    HEAT_VENT(1, ArmorSuit.SINGULAR, 0, 0, true),       // Н11: at 100% heat a wave throws mobs back and half the heat goes
+    EVENT_HORIZON(1, ArmorSuit.SINGULAR, 0, 2, true),   // Н2: projectiles swallowed, 30% of other damage into EU (replaces the shield)
+    PHASE_DASH(2, ArmorSuit.SINGULAR, 0, 10, true);     // П1: on its key - a jump through space up to 16 blocks along the look
 
     public final int piece;
     public final ArmorSuit minSuit;
@@ -91,6 +105,44 @@ public enum ArmorFeature {
     public static final int RAD_QUANTUM_EU = 20, RAD_EXO_EU = 25;
     public static final float RAD_HEAT_PER_LEVEL = 0.4F;
 
+    // ------------------------------------------------------------------ the Singular functions' numbers (docs/plan-singular-armor.md §4, draft)
+
+    /** Н1 flight: helium a second, the speed against the Exo flight. Н7 magnet: helium a minute, its reach. */
+    public static final float SING_HE_FLIGHT_PER_SECOND = 1F, SING_HE_MAGNET_PER_MIN = 1F;
+    public static final float GRAV_FLIGHT_SPEED_MUL = 3F;
+    public static final double MAGNET_RADIUS = 8.0;
+    /** Н7: an item the wearer threw is left alone this many ticks (so things can be dropped). */
+    public static final int MAGNET_THROWN_GRACE = 20;
+    /** П3 heavy water per push stopped; П7 argon a second while slowed; Б3 hydrogen a second while falling slowly. */
+    public static final float SING_D2O_ANCHOR = 1F, SING_AR_STABILIZER_PER_SECOND = 0.5F, SING_H2_SLOWFALL_PER_SECOND = 0.5F;
+    /** Б3: the fastest fall (motionY) while it holds the wearer; its air jump - hydrogen and EU. */
+    public static final double ANTIGRAV_FALL_SPEED = -0.12;
+    public static final int SING_H2_AIR_JUMP = 10, ANTIGRAV_AIR_JUMP_EU = 5000;
+    /** Б4: helium, the cooldown (ticks), heat, the share of the suit's charge. */
+    public static final int SING_HE_VOID_RESCUE = 500, VOID_RESCUE_COOLDOWN = 5 * 60 * 20, VOID_RESCUE_HEAT = 50;
+    public static final float VOID_RESCUE_CHARGE = 0.10F;
+    /** Б1: hydrogen and heat per damage point turned into the wave, its reach, the damage per point. */
+    public static final float SING_H2_STRIKE_PER_POINT = 1F, STRIKE_DAMAGE_PER_POINT = 1F;
+    public static final double STRIKE_RADIUS = 4.0;
+    public static final int STRIKE_HEAT_PER_POINT = 1;
+    /** К9: oxygen per wither effect taken off; the void's damage multiplied. */
+    public static final float SING_O2_WITHER = 2F, VOID_DAMAGE_MUL = 0.5F;
+    /** Ш8: krypton a minute; the light (0..15) at the eyes from which the night vision goes out. */
+    public static final float SING_KR_SIGHT_PER_MIN = 1F;
+    public static final int CLEAR_SIGHT_BRIGHT = 12;
+    /** Н11: argon, the cooldown (ticks), the wave's reach, the share of heat thrown out. */
+    public static final int SING_AR_HEAT_VENT = 200, HEAT_VENT_COOLDOWN = 60 * 20;
+    public static final double HEAT_VENT_RADIUS = 5.0;
+    public static final float HEAT_VENT_SHARE = 0.5F;
+    /** Н2: helium per projectile swallowed (heat: EVENT_HORIZON.heat), the share of other damage turned into EU, EU and helium per point. */
+    public static final int SING_HE_PER_PROJECTILE = 5, HORIZON_EU_PER_POINT = 8000;
+    public static final float HORIZON_SHARE = 0.3F, SING_HE_PER_DAMAGE_POINT = 1F;
+    /** П1: hydrogen, EU, the reach (blocks), the cooldown (ticks); heat: PHASE_DASH.heat. */
+    public static final int SING_H2_PHASE = 50, PHASE_DASH_EU = 50000, PHASE_DASH_COOLDOWN = 3 * 20;
+    public static final double PHASE_DASH_RANGE = 16.0;
+    /** О2: under this share of its piece's charge flight, the event horizon and the anchor switch off. */
+    public static final float SING_LOW_CHARGE = 0.10F;
+
     /** Runs on its gas: needs no EU in its piece to be active (the gas is checked where it's spent). */
     public boolean gasPowered() {
         return this == BOOSTER || this == SEARCHLIGHT || this == FUSION_CELL;
@@ -122,6 +174,18 @@ public enum ArmorFeature {
                 return ArmorGasSC.Gas.HEAVY_WATER;
             case FUSION_CELL:
                 return ArmorGasSC.Gas.DEUTERIUM;
+            case GRAV_FLIGHT: case MAGNET: case VOID_RESCUE: case EVENT_HORIZON:
+                return ArmorGasSC.Gas.HELIUM;
+            case GRAV_ANCHOR:
+                return ArmorGasSC.Gas.HEAVY_WATER;
+            case STABILIZER: case HEAT_VENT:
+                return ArmorGasSC.Gas.ARGON;
+            case ANTIGRAV: case GRAV_STRIKE: case PHASE_DASH:
+                return ArmorGasSC.Gas.HYDROGEN;
+            case WITHER_VOID:
+                return ArmorGasSC.Gas.OXYGEN;
+            case CLEAR_SIGHT:
+                return ArmorGasSC.Gas.KRYPTON;
             default:
                 return null;
         }
@@ -131,8 +195,9 @@ public enum ArmorFeature {
     public char gasUseKind() {
         switch (this) {
             case DASH: case JUMP: case FALL_DAMPING: case CLEANSE:
+            case GRAV_ANCHOR: case VOID_RESCUE: case GRAV_STRIKE: case WITHER_VOID: case HEAT_VENT: case EVENT_HORIZON: case PHASE_DASH:
                 return USE_ONCE;
-            case NIGHT_VISION: case ORE_SCANNER: case THERMAL: case SEARCHLIGHT:
+            case NIGHT_VISION: case ORE_SCANNER: case THERMAL: case SEARCHLIGHT: case MAGNET: case CLEAR_SIGHT:
                 return USE_MINUTE;
             case SHIELD: case ANNIHILATION: case EXPLOSION_PROOF: case REGENERATION: case CHARGER:
                 return USE_COOLING;
@@ -158,6 +223,19 @@ public enum ArmorFeature {
             case FIRE_PROOF: return ArmorGasSC.ARGON_FIRE_PROOF_PER_SECOND;
             case WATER_WALK: return ArmorGasSC.ARGON_WATER_WALK_PER_SECOND;
             case FUSION_CELL: return ArmorGasSC.FUSION_D_PER_TICK * 20;
+            // the Singular functions: the plan's own numbers (no K10 discount - that's for the Exo legacy)
+            case GRAV_FLIGHT: return SING_HE_FLIGHT_PER_SECOND;
+            case MAGNET: return SING_HE_MAGNET_PER_MIN;
+            case GRAV_ANCHOR: return SING_D2O_ANCHOR;
+            case STABILIZER: return SING_AR_STABILIZER_PER_SECOND;
+            case ANTIGRAV: return SING_H2_SLOWFALL_PER_SECOND;
+            case VOID_RESCUE: return SING_HE_VOID_RESCUE;
+            case GRAV_STRIKE: return SING_H2_STRIKE_PER_POINT;
+            case WITHER_VOID: return SING_O2_WITHER;
+            case CLEAR_SIGHT: return SING_KR_SIGHT_PER_MIN;
+            case HEAT_VENT: return SING_AR_HEAT_VENT;
+            case EVENT_HORIZON: return SING_HE_PER_PROJECTILE;
+            case PHASE_DASH: return SING_H2_PHASE;
             default: return 0F;
         }
     }
@@ -167,17 +245,33 @@ public enum ArmorFeature {
      * landing: ArmorGasSC.fallDampingGas) - the texts say "mB per damage point" for it.
      */
     public boolean gasPerPoint() {
-        return this == FALL_DAMPING;
+        return this == FALL_DAMPING || this == GRAV_STRIKE;
     }
 
     /** The least of its gas the function needs in the suit to switch on (the dash: a whole dash's worth). */
     public int gasMin() {
-        return this == DASH ? ArmorGasSC.H2_DASH : 1;
+        switch (this) {
+            case DASH: return ArmorGasSC.H2_DASH;
+            case PHASE_DASH: return SING_H2_PHASE;
+            case HEAT_VENT: return SING_AR_HEAT_VENT;
+            case VOID_RESCUE: return SING_HE_VOID_RESCUE;
+            default: return 1;
+        }
     }
 
     /** Fired by its key (once, then off again) instead of switched on and off. */
     public boolean isAction() {
-        return this == DASH || this == ANNIHILATION;
+        return this == DASH || this == ANNIHILATION || this == PHASE_DASH;
+    }
+
+    /** Switched off below SING_LOW_CHARGE of its piece's charge (plan §5, О2: flight, the event horizon, the anchor). */
+    public boolean offOnLowCharge() {
+        return this == GRAV_FLIGHT || this == EVENT_HORIZON || this == GRAV_ANCHOR;
+    }
+
+    /** Works only with all four Singular pieces worn (К9); its row and its level are the chestplate's. */
+    public boolean needsFullSet() {
+        return this == WITHER_VOID;
     }
 
     ArmorFeature(int piece, ArmorSuit minSuit, int euPerSecond, int heat, boolean onByDefault) {

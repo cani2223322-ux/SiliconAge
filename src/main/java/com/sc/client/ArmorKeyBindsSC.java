@@ -245,6 +245,18 @@ public final class ArmorKeyBindsSC {
             mc.ingameGUI.func_110326_a(Lang.tr("sc.armorkey.unavailable", name), false);
             return;
         }
+        if (!com.sc.util.SingularLevel.unlocked(mc.thePlayer, f, piece)) {        // a Singular function above the piece's level
+            mc.ingameGUI.func_110326_a(Lang.tr("sc.armorkey.locked", name, com.sc.util.SingularLevel.requiredLevel(f)), false);
+            return;
+        }
+        if (f == ArmorFeature.PHASE_DASH) {                                         // the server checks the cooldown and the gas, and says why not
+            if (ArmorLogicSC.active(mc.thePlayer, f)) {
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.PHASE_DASH, 0));
+            } else {
+                mc.ingameGUI.func_110326_a(Lang.tr(ItemArmorSC.isEnabled(piece, f) ? "sc.armorkey.unavailable" : "sc.armorkey.off", name), false);
+            }
+            return;
+        }
         boolean want = !ItemArmorSC.isEnabled(piece, f);
         ItemArmorSC.setEnabled(piece, f, want);
         ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.TOGGLE, f.ordinal(), want));
