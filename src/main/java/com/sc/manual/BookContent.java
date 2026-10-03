@@ -68,6 +68,7 @@ public final class BookContent {
             silicon(list);
             machines(list);
             generators(list);
+            bridge(list);
             energy(list);
             armor(list);
             field(list);
@@ -1346,5 +1347,85 @@ public final class BookContent {
             case IRON: return new ItemStack(Items.iron_pickaxe);
             default: return new ItemStack(Items.diamond_pickaxe);
         }
+    }
+
+    // ------------------------------------------------------------------ the Ground / Space Bridge (stage 1)
+
+    /** The Ground and Space Bridge (docs/plan-ground-bridge.md, stage 1): the builds, resources, opening, own coordinates. */
+    private static void bridge(List<BookEntry> list) {
+        ItemStack ctrl = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1);
+        BookEntry e = new BookEntry("bridge", BookChapter.GENERATORS, ctrl, Lang.tr("sc.manual.bridge.title"));
+        List<ItemStack> parts = new ArrayList<ItemStack>();
+        for (int i = 0; i < com.sc.block.BlockBridgeSC.parts(); i++) {
+            parts.add(com.sc.block.BlockBridgeSC.stack(i, 1));
+        }
+        parts.add(new ItemStack(ModBlocks.gravityCoil));
+        parts.add(new ItemStack(ModBlocks.gravStabiliser));
+        e.add(BookEl.title(Lang.tr("sc.manual.bridge.title"))).add(BookEl.items(parts)).addAll(paras("sc.manual.bridge.about"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.groundhead"))).add(BookEl.layers(bridgeLayers(5), new String[]{Lang.tr("sc.manual.bridge.front")}))
+                .addAll(paras("sc.manual.bridge.ground"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.spacehead"))).add(BookEl.layers(bridgeLayers(7), new String[]{Lang.tr("sc.manual.bridge.front")}))
+                .addAll(paras("sc.manual.bridge.space"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.calibhead")))
+                .add(BookEl.para(Lang.tr("sc.manual.bridge.calib", com.sc.bridge.BridgeMathSC.CALIB_KR,
+                        com.sc.bridge.BridgeMathSC.CALIB_EU / 1000000)));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.reshead")));
+        com.sc.bridge.BridgeMathSC.Cost g = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.GROUND, new long[]{0}, false, false, 0);
+        com.sc.bridge.BridgeMathSC.Cost s = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.SPACE, new long[]{0}, false, false, 0);
+        com.sc.bridge.BridgeMathSC.Cost sa = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.SPACE, new long[]{0}, false, true, 0);
+        BookEl t = BookEl.table("", Lang.tr("sc.manual.bridge.t.ground"), Lang.tr("sc.manual.bridge.t.space"));
+        String m = Lang.tr("sc.bridge.unit.m");
+        t.row(null, Lang.tr("sc.manual.bridge.t.burst"), Lang.tr("sc.manual.bridge.t.burstg", g.eu / 1000000, com.sc.bridge.BridgeMathSC.GROUND_PER_1000 / 1000000),
+                Lang.tr("sc.manual.bridge.t.bursts", sa.eu / 1000000, s.eu / 1000000));
+        t.row(null, Lang.tr("sc.bridge.res.gas.singular_matter"), Lang.tr("sc.manual.bridge.t.smg", g.sm), Lang.tr("sc.manual.bridge.t.sms", s.sm, sa.sm));
+        t.row(null, Lang.tr("sc.bridge.res.gas.deuterium"), String.valueOf(g.d), String.valueOf(s.d));
+        t.row(null, Lang.tr("sc.bridge.res.gas.krypton"), Lang.tr("sc.manual.bridge.t.krg", g.kr), Lang.tr("sc.manual.bridge.t.krs", s.kr, sa.kr));
+        t.row(null, Lang.tr("sc.bridge.res.gas.argon"), String.valueOf(g.ar), String.valueOf(s.ar));
+        t.row(null, Lang.tr("sc.manual.bridge.t.hold"), com.sc.bridge.BridgeMathSC.group(g.holdEu) + " EU/t", com.sc.bridge.BridgeMathSC.group(s.holdEu) + " EU/t");
+        t.row(null, Lang.tr("sc.manual.bridge.t.gases"), Lang.tr("sc.manual.bridge.t.gasesg", g.heSec, g.arSec), Lang.tr("sc.manual.bridge.t.gasess", s.heSec, s.arSec, s.d2oSec));
+        t.row(null, Lang.tr("sc.manual.bridge.t.life"), Lang.tr("sc.manual.bridge.t.lifev", g.lifeTicks / 20, g.lifeTicks / 10),
+                Lang.tr("sc.manual.bridge.t.lifev", s.lifeTicks / 20, s.lifeTicks / 10));
+        e.add(t);
+        StringBuilder tanks = new StringBuilder();
+        for (int i = 0; i < com.sc.bridge.BridgeMathSC.GASES.length; i++) {
+            tanks.append(i > 0 ? ", " : "").append(Lang.tr("sc.bridge.res.gas." + com.sc.bridge.BridgeMathSC.GASES[i].key())).append(' ')
+                    .append(com.sc.bridge.BridgeMathSC.group(com.sc.bridge.BridgeMathSC.BASE_TANK[i]));
+        }
+        e.add(BookEl.para(Lang.tr("sc.manual.bridge.tanks", tanks.toString(), com.sc.bridge.BridgeMathSC.EXTRA_PORT_PERCENT,
+                com.sc.bridge.BridgeMathSC.shortEu(com.sc.bridge.BridgeMathSC.CAPACITOR_EU, m, Lang.tr("sc.bridge.unit.g")))));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.openhead"))).addAll(paras("sc.manual.bridge.open"));
+        e.add(BookEl.para(Lang.tr("sc.manual.bridge.cool", com.sc.bridge.BridgeMathSC.COOL_S, com.sc.bridge.BridgeMathSC.COOL_S / com.sc.bridge.BridgeMathSC.COOLER_SPEED)));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.coordhead"))).addAll(paras("sc.manual.bridge.coord"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.modhead"))).addAll(paras("sc.manual.bridge.mod"));
+        e.add(BookEl.dim(Lang.tr("sc.manual.bridge.later")));
+        e.about(parts.subList(0, com.sc.block.BlockBridgeSC.parts()).toArray(new ItemStack[0]));
+        list.add(e);
+    }
+
+    /** The bridge seen from the front (one layer): the ring, the focusers (7x7), the controller row with its parts. */
+    public static ItemStack[][][] bridgeLayers(int size) {
+        int h = (size - 1) / 2, g = size + 2;
+        ItemStack coil = new ItemStack(ModBlocks.gravityCoil);
+        ItemStack[][][] l = new ItemStack[1][g][g];
+        for (int r = 0; r < g; r++) {
+            for (int c = 0; c < g; c++) {
+                int u = c - h - 1, v = g - 1 - r;
+                if (com.sc.bridge.BridgeStructureSC.isRing(size, u, v)) {
+                    l[0][r][c] = coil;
+                } else if (size == 7 && com.sc.bridge.BridgeStructureSC.isFocuser(size, u, v)) {
+                    l[0][r][c] = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.FOCUSER, 1);
+                }
+            }
+        }
+        int row = g - 1, mid = h + 1;
+        l[0][row][mid] = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1);
+        l[0][row][mid - 1] = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CAPACITOR, 1);
+        l[0][row][mid - 2] = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CAPACITOR, 1);
+        l[0][row][mid + 1] = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.ENERGY_PORT, 1);
+        l[0][row][mid + 2] = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.GAS_PORT, 1);
+        if (size == 7) {
+            l[0][row][mid + 3] = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CAPACITOR, 1);
+        }
+        return l;
     }
 }

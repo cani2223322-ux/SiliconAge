@@ -77,6 +77,9 @@ public final class ModBlocks {
     /** The Singular Service Station (SV) and its Gravitational Stabiliser. */
     public static com.sc.block.BlockSingularStationSC singularStation;
     public static com.sc.block.BlockGravStabiliserSC gravStabiliser;
+    /** The Ground / Space Bridge: its parts (metadata, BlockBridgeSC) and the vortex of an open portal. */
+    public static com.sc.block.BlockBridgeSC bridge;
+    public static com.sc.block.BlockBridgeVortexSC bridgeVortex;
     /** The krypton searchlight's moving light (ArmorLogicSC.searchlight). */
     public static com.sc.block.BlockLightSC lightSC;
 
@@ -164,6 +167,16 @@ public final class ModBlocks {
         gravStabiliser = new com.sc.block.BlockGravStabiliserSC();
         GameRegistry.registerBlock(gravStabiliser, com.sc.block.ItemBlockGravStabiliserSC.class, "gravStabiliser");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityGravStabiliserSC.class, "SiliconAge.gravStabiliser");   // with its item: a world that knew the item refuses to load without it ("dangling"); hidden from creative
+
+        bridge = new com.sc.block.BlockBridgeSC();
+        GameRegistry.registerBlock(bridge, com.sc.block.ItemBlockBridgeSC.class, "bridge");
+        bridgeVortex = new com.sc.block.BlockBridgeVortexSC();
+        GameRegistry.registerBlock(bridgeVortex, "bridgeVortex");       // no item in any tab
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityBridgeControllerSC.class, "SiliconAge.bridgeController");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityBridgeCapacitorSC.class, "SiliconAge.bridgeCapacitor");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityBridgeEnergyPortSC.class, "SiliconAge.bridgeEnergyPort");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityBridgeGasPortSC.class, "SiliconAge.bridgeGasPort");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityBridgeVortexSC.class, "SiliconAge.bridgeVortex");
 
         GameRegistry.registerTileEntity(TileEntityCableSC.class, "SiliconAge.cable");
         GameRegistry.registerTileEntity(TileEntityPipeSC.class, "SiliconAge.pipe");

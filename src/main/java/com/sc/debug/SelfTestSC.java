@@ -82,6 +82,7 @@ public final class SelfTestSC {
             electrolysisAndHeavyWater();
             drills();
             fieldExtras();
+            bridge();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -4086,5 +4087,236 @@ public final class SelfTestSC {
         loaded.readFromNBT(saved);
         check(loaded.acceptsAnyVoltage() && loaded.upgradeCount(com.sc.machine.UpgradeType.OVERCLOCKER) == 4,
                 "station modules: saved with the world");
+    }
+
+    // ------------------------------------------------------------------ the Ground / Space Bridge (stage 1)
+
+    /** A fake world of bridge block kinds (everything else air). */
+    private static final class FakeBridge implements com.sc.bridge.BridgeStructureSC.View {
+        final java.util.Map<Long, Integer> m = new java.util.HashMap<Long, Integer>();
+
+        static long k(int x, int y, int z) {
+            return ((long) (x & 0x3FFFFFF) << 38) | ((long) (z & 0x3FFFFFF) << 12) | (y & 0xFFF);
+        }
+
+        FakeBridge put(int x, int y, int z, int kind) {
+            m.put(k(x, y, z), kind);
+            return this;
+        }
+
+        @Override
+        public int kind(int x, int y, int z) {
+            Integer v = m.get(k(x, y, z));
+            return v == null ? com.sc.bridge.BridgeStructureSC.K_AIR : v;
+        }
+
+        /** A ring of `size` along `axis` on the controller at 0 64 0, the controller, an energy and a gas port, a capacitor. */
+        static FakeBridge ring(int size, int axis) {
+            FakeBridge f = new FakeBridge();
+            int h = (size - 1) / 2;
+            for (int v = 1; v <= size; v++) {
+                for (int u = -h; u <= h; u++) {
+                    if (com.sc.bridge.BridgeStructureSC.isRing(size, u, v)) {
+                        int[] p = com.sc.bridge.BridgeStructureSC.at(0, 64, 0, axis, u, v, 0);
+                        f.put(p[0], p[1], p[2], com.sc.bridge.BridgeStructureSC.K_COIL);
+                    }
+                }
+            }
+            f.put(0, 64, 0, com.sc.bridge.BridgeStructureSC.K_CONTROLLER);
+            int[] e = com.sc.bridge.BridgeStructureSC.at(0, 64, 0, axis, 1, 0, 0), g = com.sc.bridge.BridgeStructureSC.at(0, 64, 0, axis, 2, 0, 0),
+                    c = com.sc.bridge.BridgeStructureSC.at(0, 64, 0, axis, -1, 0, 0);
+            f.put(e[0], e[1], e[2], com.sc.bridge.BridgeStructureSC.K_ENERGY_PORT);
+            f.put(g[0], g[1], g[2], com.sc.bridge.BridgeStructureSC.K_GAS_PORT);
+            f.put(c[0], c[1], c[2], com.sc.bridge.BridgeStructureSC.K_CAPACITOR);
+            if (size == 7) {
+                for (int[] uv : new int[][]{{-4, 0}, {4, 0}, {-4, 8}, {4, 8}}) {
+                    int[] p = com.sc.bridge.BridgeStructureSC.at(0, 64, 0, axis, uv[0], uv[1], 0);
+                    f.put(p[0], p[1], p[2], com.sc.bridge.BridgeStructureSC.K_FOCUSER);
+                }
+            }
+            return f;
+        }
+    }
+
+    /** A fake world of place-check cells: stone below y 64, air above, with exceptions. */
+    private static final class FakeCells implements com.sc.bridge.BridgeSpaceSC.Cells {
+        final java.util.Map<Long, Integer> m = new java.util.HashMap<Long, Integer>();
+        final java.util.Map<Long, Integer> tops = new java.util.HashMap<Long, Integer>();
+        int ground = 64;
+
+        FakeCells put(int x, int y, int z, int c) {
+            m.put(FakeBridge.k(x, y, z), c);
+            long col = ((long) x << 32) ^ (z & 0xFFFFFFFFL);
+            Integer t = tops.get(col);
+            if (c != com.sc.bridge.BridgeSpaceSC.AIR && (t == null || y > t)) {
+                tops.put(col, y);
+            }
+            return this;
+        }
+
+        @Override
+        public int cell(int x, int y, int z) {
+            Integer v = m.get(FakeBridge.k(x, y, z));
+            return v != null ? v : y < ground ? com.sc.bridge.BridgeSpaceSC.SOLID : com.sc.bridge.BridgeSpaceSC.AIR;
+        }
+
+        @Override
+        public int top(int x, int z) {
+            Integer t = tops.get(((long) x << 32) ^ (z & 0xFFFFFFFFL));
+            return t == null ? ground - 1 : Math.max(ground - 1, t);
+        }
+
+        @Override
+        public int height() {
+            return 256;
+        }
+    }
+
+    private static void bridge() {
+        // the build check
+        FakeBridge f = FakeBridge.ring(5, 0);
+        f.put(-1, 63, 0, com.sc.bridge.BridgeStructureSC.K_NAV);                // a module under the capacitor (the chain)
+        f.put(-3, 66, 0, com.sc.bridge.BridgeStructureSC.K_STABILISER);         // beside the ring: counts
+        f.put(9, 64, 0, com.sc.bridge.BridgeStructureSC.K_STABILISER);          // too far: doesn't
+        f.put(6, 64, 0, com.sc.bridge.BridgeStructureSC.K_CAPACITOR);           // not touching anything: doesn't
+        com.sc.bridge.BridgeStructureSC.Scan s = com.sc.bridge.BridgeStructureSC.scan(f, 0, 64, 0);
+        check(s.valid && s.kind == com.sc.bridge.BridgeMathSC.GROUND && s.axis == 0 && s.size == 5 && s.coils == 16 && s.coilsNeeded == 16,
+                "bridge: a 5x5 ring along X is a valid Ground bridge (" + s.problems.size() + " problems)");
+        check(s.capacitors.size() == 1 && s.energyPorts.size() == 1 && s.gasPorts.size() == 1 && s.nav && !s.mass && s.stabCount() == 1,
+                "bridge: parts by the chain of contacts - 1 capacitor, the ports, the nav module; 1 stabiliser in range");
+        com.sc.bridge.BridgeStructureSC.Scan z = com.sc.bridge.BridgeStructureSC.scan(FakeBridge.ring(5, 1), 0, 64, 0);
+        check(z.valid && z.axis == 1 && s.signature != z.signature && s.signature != 0,
+                "bridge: the ring along Z is valid too, with another calibration signature");
+        com.sc.bridge.BridgeStructureSC.Scan again = com.sc.bridge.BridgeStructureSC.scan(f, 0, 64, 0);
+        check(again.signature == s.signature, "bridge: the same ring - the same signature (calibration kept)");
+        FakeBridge miss = FakeBridge.ring(5, 0).put(2, 67, 0, com.sc.bridge.BridgeStructureSC.K_AIR);
+        com.sc.bridge.BridgeStructureSC.Scan ms = com.sc.bridge.BridgeStructureSC.scan(miss, 0, 64, 0);
+        com.sc.bridge.BridgeStructureSC.Problem p0 = ms.problems.isEmpty() ? null : ms.problems.get(0);
+        check(!ms.valid && ms.coils == 15 && p0 != null && "sc.bridge.problem.coil".equals(p0.key) && p0.hasPos && p0.x == 2 && p0.y == 67 && p0.z == 0
+                && ms.cells[3 * 7 + 5] == com.sc.bridge.BridgeStructureSC.C_COIL_MISSING && ms.signature != s.signature,
+                "bridge: a missing coil is reported with its block (highlight) and red on the schematic");
+        com.sc.bridge.BridgeStructureSC.Scan junk = com.sc.bridge.BridgeStructureSC.scan(FakeBridge.ring(5, 0).put(0, 66, 0, com.sc.bridge.BridgeStructureSC.K_OTHER), 0, 64, 0);
+        com.sc.bridge.BridgeStructureSC.Scan side = com.sc.bridge.BridgeStructureSC.scan(FakeBridge.ring(5, 0).put(0, 66, 2, com.sc.bridge.BridgeStructureSC.K_OTHER), 0, 64, 0);
+        check(!junk.valid && junk.junk == 1 && !side.valid && side.sideBlocked == 1 && "sc.bridge.problem.side".equals(side.problems.get(0).key),
+                "bridge: a block inside the ring / in the 2 blocks in front of it is a problem");
+        FakeBridge noPort = FakeBridge.ring(5, 0).put(1, 64, 0, com.sc.bridge.BridgeStructureSC.K_AIR).put(5, 64, 0, com.sc.bridge.BridgeStructureSC.K_ENERGY_PORT);
+        com.sc.bridge.BridgeStructureSC.Scan np = com.sc.bridge.BridgeStructureSC.scan(noPort, 0, 64, 0);
+        boolean noEp = false;
+        for (com.sc.bridge.BridgeStructureSC.Problem p : np.problems) {
+            noEp |= "sc.bridge.problem.noenergyport".equals(p.key);
+        }
+        check(!np.valid && noEp, "bridge: an energy port not touching the chain doesn't count");
+        com.sc.bridge.BridgeStructureSC.Scan sp = com.sc.bridge.BridgeStructureSC.scan(FakeBridge.ring(7, 0), 0, 64, 0);
+        com.sc.bridge.BridgeStructureSC.Scan spf = com.sc.bridge.BridgeStructureSC.scan(FakeBridge.ring(7, 0).put(4, 72, 0, com.sc.bridge.BridgeStructureSC.K_AIR), 0, 64, 0);
+        check(sp.valid && sp.kind == com.sc.bridge.BridgeMathSC.SPACE && sp.coils == 24 && sp.focusers == 4 && !spf.valid && spf.focusers == 3
+                && "sc.bridge.problem.focuser".equals(spf.problems.get(0).key) && sp.signature != s.signature,
+                "bridge: a 7x7 ring with 4 focusers is a Space bridge; a missing focuser is a problem");
+        com.sc.bridge.BridgeStructureSC.Scan none = com.sc.bridge.BridgeStructureSC.scan(new FakeBridge(), 0, 64, 0);
+        check(!none.found && !none.valid && "sc.bridge.problem.noring".equals(none.problems.get(0).key), "bridge: no coils - no ring");
+        // the cost (§4-§5)
+        com.sc.bridge.BridgeMathSC.Cost g = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.GROUND, new long[]{1000}, false, false, 0);
+        com.sc.bridge.BridgeMathSC.Cost gb = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.GROUND, new long[]{1000}, true, false, 4);
+        com.sc.bridge.BridgeMathSC.Cost two = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.GROUND, new long[]{1000, 3000}, false, false, 0);
+        check(g.eu == 220000000L && g.sm == 60 && g.kr == 25 && g.d == 100 && g.ar == 50 && g.holdEu == 50000 && g.heSec == 10 && g.arSec == 2
+                && g.d2oSec == 0 && g.lifeTicks == 600, "bridge cost, Ground 1000 blocks: 220 M EU, SM 60, Kr 25, D 100, Ar 50; hold 50 000 EU/t; 30 s");
+        check(gb.eu == 132000000L && gb.sm == 36 && gb.kr == 15 && gb.lifeTicks == 1200 && two.eu == 280000000L && two.kr == 40,
+                "bridge cost: a beacon -40%, 4 stabilisers - 60 s; two projected ends pay both distances");
+        com.sc.bridge.BridgeMathSC.Cost sn = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.SPACE, new long[]{50000}, false, false, 2);
+        com.sc.bridge.BridgeMathSC.Cost sa = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.SPACE, new long[]{50000}, false, true, 4);
+        check(sn.eu == 4000000000L && sn.sm == 500 && sn.kr == 200 && sn.d == 1000 && sn.ar == 300 && sn.d2oSec == 5 && sn.holdEu == 200000
+                && sn.lifeTicks == 600 && sa.eu == 2000000000L && sa.sm == 200 && sa.kr == 0 && sa.lifeTicks == 800,
+                "bridge cost, Space: 4 G EU without an anchor (2 G with), SM 500 / 200, Kr 200 / 0, D2O 5/s; 20 s (+25% a stabiliser)");
+        // capacitors
+        long[] cap = new long[2];
+        long in = com.sc.bridge.BridgeMathSC.charge(cap, 700000000L);
+        boolean over = com.sc.bridge.BridgeMathSC.charge(cap, 600000000L) == 300000000L;
+        boolean d1 = com.sc.bridge.BridgeMathSC.drain(cap, 600000000L);
+        boolean d2 = com.sc.bridge.BridgeMathSC.drain(cap, 500000000L);
+        check(in == 700000000L && over && d1 && cap[0] == 400000000L && cap[1] == 0 && !d2 && com.sc.bridge.BridgeMathSC.total(cap) == 400000000L,
+                "bridge capacitors: 500 M each, charged first to last, drained last to first, all-or-nothing");
+        check(com.sc.bridge.BridgeMathSC.tankCapacity(com.sc.bridge.BridgeMathSC.HE, 1) == 32000
+                && com.sc.bridge.BridgeMathSC.tankCapacity(com.sc.bridge.BridgeMathSC.HE, 3) == 64000
+                && com.sc.bridge.BridgeMathSC.tankCapacity(com.sc.bridge.BridgeMathSC.KR, 0) == 8000,
+                "bridge tanks: He 32 000, +50% for each gas port beyond the first");
+        check(com.sc.bridge.BridgeMathSC.stabilityStep(100, 100, true) == 85 && com.sc.bridge.BridgeMathSC.stabilityStep(50, 90, false) == 55
+                && com.sc.bridge.BridgeMathSC.baseStability(2) == 90 && com.sc.bridge.BridgeMathSC.shortEu(1040000000L, "M", "G").equals("1,04 G")
+                && com.sc.bridge.BridgeMathSC.group(-3880).equals("-3 880"), "bridge stability steps and the screen's numbers");
+        // the place check (§7а) on a mock world
+        FakeCells c = new FakeCells();
+        com.sc.bridge.BridgeSpaceSC.Result free = com.sc.bridge.BridgeSpaceSC.check(c, 0, 64, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result small = com.sc.bridge.BridgeSpaceSC.check(new FakeCells().put(1, 66, 1, com.sc.bridge.BridgeSpaceSC.SOLID), 0, 64, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result lava = com.sc.bridge.BridgeSpaceSC.check(new FakeCells().put(1, 63, 0, com.sc.bridge.BridgeSpaceSC.LAVA), 0, 64, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result water = com.sc.bridge.BridgeSpaceSC.check(new FakeCells().put(0, 64, 1, com.sc.bridge.BridgeSpaceSC.WATER), 0, 64, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result inside = com.sc.bridge.BridgeSpaceSC.check(c, 0, 60, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result air = com.sc.bridge.BridgeSpaceSC.check(c, 0, 70, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result voidR = com.sc.bridge.BridgeSpaceSC.check(c, 0, 0, 0, 3, 0);
+        check(free.free && !small.free && "sc.bridge.place.small".equals(small.reason) && "sc.bridge.place.overlava".equals(lava.reason)
+                && "sc.bridge.place.water".equals(water.reason) && "sc.bridge.place.inside".equals(inside.reason)
+                && "sc.bridge.place.nofloor".equals(air.reason) && "sc.bridge.place.void".equals(voidR.reason),
+                "bridge place check: free 3x3x2 on a floor; too small, over lava, water, inside a block, no floor, the Void refused");
+        FakeCells tower = new FakeCells().put(0, 80, 0, com.sc.bridge.BridgeSpaceSC.SOLID);
+        int ay = com.sc.bridge.BridgeSpaceSC.autoY(tower, 0, 0, 3, 0, com.sc.bridge.BridgeSpaceSC.AUTO_DEPTH);
+        com.sc.bridge.BridgeSpaceSC.Result auto = com.sc.bridge.BridgeSpaceSC.probe(c, 5, Integer.MIN_VALUE, 5, 3, 0, 16);
+        check(ay == 64 && auto.free && auto.y == 64, "bridge «Y авто»: the topmost free floor (a lone block on top is no room) - y " + ay);
+        FakeCells wall = new FakeCells();
+        for (int x = -3; x <= 3; x++) {
+            for (int y = 64; y <= 70; y++) {
+                wall.put(x, y, 0, com.sc.bridge.BridgeSpaceSC.SOLID);
+            }
+        }
+        com.sc.bridge.BridgeSpaceSC.Result near = com.sc.bridge.BridgeSpaceSC.probe(wall, 0, 64, 0, 3, 0, 16);
+        com.sc.bridge.BridgeSpaceSC.Result nearOk = near.hasNearest ? com.sc.bridge.BridgeSpaceSC.check(wall, near.nx, near.ny, near.nz, 3, 0) : null;
+        check(!near.free && near.hasNearest && nearOk != null && nearOk.free && near.nDist <= 2,
+                "bridge: inside a wall - the nearest free place found (" + near.nx + " " + near.ny + " " + near.nz + ", " + near.nDist + " blocks)");
+        // NBT round-trips
+        com.sc.tileentity.TileEntityBridgeControllerSC a = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        a.setOwner("Tester");
+        a.setTarget(1240, com.sc.tileentity.TileEntityBridgeControllerSC.AUTO_Y, -3880, 0);
+        a.putTankForTest(com.sc.bridge.BridgeMathSC.SM, 4200);
+        a.putTankForTest(com.sc.bridge.BridgeMathSC.HE, 777);
+        a.action(null, com.sc.tileentity.TileEntityBridgeControllerSC.A_BM_ADD, new int[]{1, 2, 3, 0}, "Дом");
+        a.action(null, com.sc.tileentity.TileEntityBridgeControllerSC.A_BM_ADD, new int[]{10, 20, 30, -1}, "Крепость");
+        a.action(null, com.sc.tileentity.TileEntityBridgeControllerSC.A_BM_RENAME, new int[]{1}, "Крепость Нижнего");
+        net.minecraft.nbt.NBTTagCompound tag = new net.minecraft.nbt.NBTTagCompound();
+        a.writeToNBT(tag);
+        com.sc.tileentity.TileEntityBridgeControllerSC b = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        b.readFromNBT(tag);
+        int[] bt = b.getTarget();
+        check("Tester".equals(b.getOwner()) && bt[0] == 1240 && bt[1] == com.sc.tileentity.TileEntityBridgeControllerSC.AUTO_Y && bt[2] == -3880
+                && b.tankAmount(com.sc.bridge.BridgeMathSC.SM) == 4200 && b.tankAmount(com.sc.bridge.BridgeMathSC.HE) == 777
+                && b.getBookmarks().size() == 2 && "Крепость Нижнего".equals(b.getBookmarks().get(1).getString("n")) && !b.isOpen(),
+                "bridge controller NBT: owner, target («авто»), tanks, bookmarks kept");
+        net.minecraft.nbt.NBTTagCompound item = a.writeToItem();
+        com.sc.tileentity.TileEntityBridgeControllerSC fromItem = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        fromItem.readFromItem(item);
+        check(fromItem.tankAmount(com.sc.bridge.BridgeMathSC.SM) == 4200 && fromItem.getBookmarks().size() == 2 && "".equals(fromItem.getOwner()),
+                "bridge controller item: keeps the tanks and bookmarks (not the owner)");
+        com.sc.tileentity.TileEntityBridgeCapacitorSC ca = new com.sc.tileentity.TileEntityBridgeCapacitorSC();
+        ca.setEnergy(123456789L);
+        ca.link(new int[]{4, 5, 6});
+        net.minecraft.nbt.NBTTagCompound ct = new net.minecraft.nbt.NBTTagCompound();
+        ca.writeToNBT(ct);
+        com.sc.tileentity.TileEntityBridgeCapacitorSC cb = new com.sc.tileentity.TileEntityBridgeCapacitorSC();
+        cb.readFromNBT(ct);
+        com.sc.tileentity.TileEntityBridgeCapacitorSC cc = new com.sc.tileentity.TileEntityBridgeCapacitorSC();
+        cc.setEnergy(com.sc.bridge.BridgeMathSC.CAPACITOR_EU * 3);
+        check(cb.getEnergy() == 123456789L && cb.controllerPos() != null && cb.controllerPos()[1] == 5 && cc.getEnergy() == com.sc.bridge.BridgeMathSC.CAPACITOR_EU,
+                "bridge capacitor NBT: charge and link kept; never over 500 M");
+        com.sc.bridge.BridgeMsgSC msg = new com.sc.bridge.BridgeMsgSC("sc.bridge.refuse.missing").part("sc.bridge.need.cap", "1 200").part("sc.bridge.need.gas", "@gas.krypton", 40, 2);
+        com.sc.bridge.BridgeMsgSC back = com.sc.bridge.BridgeMsgSC.read(msg.write());
+        check(back.key.equals(msg.key) && back.parts.size() == 2 && back.parts.get(1).args.length == 3 && "@gas.krypton".equals(back.parts.get(1).args[0]),
+                "bridge messages: key, arguments and parts through NBT (journal, screen)");
+        com.sc.bridge.BridgeMarksSC marks = new com.sc.bridge.BridgeMarksSC(com.sc.bridge.BridgeMarksSC.NAME);
+        marks.add(com.sc.bridge.BridgeMarksSC.BEACON, 0, 100, 64, 100);
+        marks.add(com.sc.bridge.BridgeMarksSC.ANCHOR, -1, 0, 64, 0);
+        net.minecraft.nbt.NBTTagCompound mt = new net.minecraft.nbt.NBTTagCompound();
+        marks.writeToNBT(mt);
+        com.sc.bridge.BridgeMarksSC m2 = new com.sc.bridge.BridgeMarksSC(com.sc.bridge.BridgeMarksSC.NAME);
+        m2.readFromNBT(mt);
+        check(m2.count() == 2 && m2.near(com.sc.bridge.BridgeMarksSC.BEACON, 0, 104, 64, 104, 8) && !m2.near(com.sc.bridge.BridgeMarksSC.BEACON, 0, 120, 64, 100, 8)
+                && m2.near(com.sc.bridge.BridgeMarksSC.BEACON, 0, 105, Integer.MIN_VALUE, 100, 8) && m2.any(com.sc.bridge.BridgeMarksSC.ANCHOR, -1)
+                && !m2.any(com.sc.bridge.BridgeMarksSC.ANCHOR, 1), "bridge beacons / anchors: kept, found near a target or in a dimension");
+        check(com.sc.block.BlockBridgeSC.parts() == 11 && com.sc.block.BlockBridgeSC.kindOf(com.sc.block.BlockBridgeSC.FOCUSER)
+                == com.sc.bridge.BridgeStructureSC.K_FOCUSER, "bridge blocks: 11 parts in metadata order");
     }
 }

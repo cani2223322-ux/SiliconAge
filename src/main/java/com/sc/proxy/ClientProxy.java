@@ -18,6 +18,7 @@ public class ClientProxy extends CommonProxy {
         com.sc.client.RainShieldClientSC.register();
         com.sc.client.RadiationClientSC.register();
         com.sc.client.BookKeySC.register();
+        com.sc.client.BridgeHighlightSC.register();
         BlockConduitSC.renderId = RenderingRegistry.getNextAvailableRenderId();
         RenderingRegistry.registerBlockHandler(new ConduitRenderer(BlockConduitSC.renderId));
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
@@ -32,6 +33,19 @@ public class ClientProxy extends CommonProxy {
                 com.sc.tileentity.TileEntitySingularStationSC.class, new com.sc.client.SingularStationRendererSC());
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
                 com.sc.tileentity.TileEntityGravStabiliserSC.class, new com.sc.client.GravStabiliserRendererSC());
+    }
+
+    @Override
+    public void openBridge(int x, int y, int z) {
+        Minecraft.getMinecraft().displayGuiScreen(new com.sc.client.GuiBridgeControllerSC(x, y, z));
+    }
+
+    @Override
+    public void bridgeState(int x, int y, int z, net.minecraft.nbt.NBTTagCompound state) {
+        net.minecraft.client.gui.GuiScreen s = Minecraft.getMinecraft().currentScreen;
+        if (s instanceof com.sc.client.GuiBridgeControllerSC && ((com.sc.client.GuiBridgeControllerSC) s).isFor(x, y, z)) {
+            ((com.sc.client.GuiBridgeControllerSC) s).setState(state);
+        }
     }
 
     @Override

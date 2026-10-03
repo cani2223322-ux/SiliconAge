@@ -21,7 +21,15 @@ public class ChunkLoaderSC implements ForgeChunkManager.LoadingCallback {
         for (ForgeChunkManager.Ticket t : tickets) {
             int x = t.getModData().getInteger("x"), y = t.getModData().getInteger("y"), z = t.getModData().getInteger("z");
             TileEntity te = world.getTileEntity(x, y, z);
-            if ("quarry".equals(t.getModData().getString("Kind"))) {
+            if ("bridge".equals(t.getModData().getString("Kind"))) {
+                // the controller's own world: it takes its ticket back while its portal is open; the far end's
+                // ticket goes - the open controller asks for a new one on its next tick
+                if (te instanceof com.sc.tileentity.TileEntityBridgeControllerSC && t.getModData().getInteger("dim") == world.provider.dimensionId) {
+                    ((com.sc.tileentity.TileEntityBridgeControllerSC) te).adoptTicket(t);
+                } else {
+                    ForgeChunkManager.releaseTicket(t);
+                }
+            } else if ("quarry".equals(t.getModData().getString("Kind"))) {
                 if (te instanceof TileEntityQuarrySC) {
                     ((TileEntityQuarrySC) te).adoptTicket(t);
                 } else {

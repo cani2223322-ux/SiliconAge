@@ -25,6 +25,14 @@ public class CommonProxy {
     public void toggleBlade() {
     }
 
+    /** Opens the Bridge Controller's screen at x y z (client only; the block's click on the client calls it). */
+    public void openBridge(int x, int y, int z) {
+    }
+
+    /** The server's answer to the bridge screen: its state (client only). */
+    public void bridgeState(int x, int y, int z, net.minecraft.nbt.NBTTagCompound state) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

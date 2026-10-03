@@ -43,6 +43,11 @@ public class WailaSC implements IWailaDataProvider {
         registrar.registerNBTProvider(provider, com.sc.tileentity.TileEntityTankSC.class);
         registrar.registerBodyProvider(provider, com.sc.tileentity.TileEntityGravStabiliserSC.class);
         registrar.registerNBTProvider(provider, com.sc.tileentity.TileEntityGravStabiliserSC.class);
+        for (Class<?> c : new Class<?>[]{com.sc.tileentity.TileEntityBridgeControllerSC.class, com.sc.tileentity.TileEntityBridgeCapacitorSC.class,
+                com.sc.tileentity.TileEntityBridgeGasPortSC.class, com.sc.tileentity.TileEntityBridgeVortexSC.class}) {
+            registrar.registerBodyProvider(provider, c);
+            registrar.registerNBTProvider(provider, c);
+        }
     }
 
     @Override
@@ -204,6 +209,12 @@ public class WailaSC implements IWailaDataProvider {
                 tip.add(Lang.tr("sc.tank.output.on"));
             }
         }
+        if (t.hasKey("scBridge")) {                                    // the bridge's blocks: their lines, built on the server
+            net.minecraft.nbt.NBTTagList l = t.getTagList("scBridge", 10);
+            for (int i = 0; i < l.tagCount(); i++) {
+                tip.add(com.sc.bridge.BridgeMsgSC.read(l.getCompoundTagAt(i)).text());
+            }
+        }
         return tip;
     }
 
@@ -215,6 +226,14 @@ public class WailaSC implements IWailaDataProvider {
     /** Server side: just the numbers the body needs, not the whole tile. */
     @Override
     public NBTTagCompound getNBTData(EntityPlayerMP player, TileEntity te, NBTTagCompound tag, World world, int x, int y, int z) {
+        java.util.List<com.sc.bridge.BridgeMsgSC> bridge = com.sc.bridge.BridgeWailaSC.lines(te);
+        if (bridge != null) {
+            net.minecraft.nbt.NBTTagList l = new net.minecraft.nbt.NBTTagList();
+            for (com.sc.bridge.BridgeMsgSC m : bridge) {
+                l.appendTag(m.write());
+            }
+            tag.setTag("scBridge", l);
+        }
         if (te instanceof TileEntityEnergyBase) {
             TileEntityEnergyBase e = (TileEntityEnergyBase) te;
             tag.setInteger("scEnergy", e.getEnergyStored());

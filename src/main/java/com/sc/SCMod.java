@@ -59,6 +59,7 @@ public class SCMod {
         com.sc.handler.ArmorNetSC.init();
         com.sc.handler.FieldNetSC.init();
         com.sc.handler.QuarryNetSC.init();
+        com.sc.bridge.BridgeNetSC.init();
         com.sc.handler.ConfigSyncSC.init();             // the server's config to joining clients
         com.sc.radiation.RadiationNetSC.init();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.sc.radiation.RadiationEventsSC());
@@ -130,6 +131,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSingularSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSingStationSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSingConvertSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestBridgeSC());
         }
     }
 }
