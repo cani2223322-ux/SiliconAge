@@ -64,6 +64,7 @@ public final class SelfTestSC {
             singularFunctions2b();
             singularLevels();
             singularStation();
+            singularStage5();
             bladeFunctions();
             chargePad();
             batteries();
@@ -2167,6 +2168,225 @@ public final class SelfTestSC {
             }
         }
         check(missing.isEmpty(), "Singular levels: chat, K menu and tooltip texts in en_US and ru_RU" + missing);
+    }
+
+    /**
+     * Stage 5 (docs/plan-singular-armor.md §6 "Отображение"): М4 the function profiles (store, apply with
+     * locked functions left off, an empty one taking the current switches, cycling), М3 the cooldown
+     * HUD's pure rules (what a function needs, which icons show), the new message ids / bytes and the texts.
+     */
+    private static void singularStage5() {
+        com.sc.util.ArmorSuit sg = com.sc.util.ArmorSuit.SINGULAR;
+        com.sc.util.ArmorFeature dash = com.sc.util.ArmorFeature.PHASE_DASH, press = com.sc.util.ArmorFeature.GRAV_PRESS,
+                grab = com.sc.util.ArmorFeature.GRAV_GRAB, magnet = com.sc.util.ArmorFeature.MAGNET, flight = com.sc.util.ArmorFeature.GRAV_FLIGHT,
+                sight = com.sc.util.ArmorFeature.CLEAR_SIGHT, anchor = com.sc.util.ArmorFeature.GRAV_ANCHOR;
+        // a set: helmet 1, chestplate 3 with the press side of level 3, leggings 1 (П1 locked), boots 2
+        ItemStack[] w = gasSuit(sg, true, true, true, true);
+        com.sc.util.SingularLevel.setLevel(w[1], 3);
+        com.sc.util.SingularLevel.setBranch(w[1], 3, com.sc.util.SingularLevel.BRANCH_A);
+        com.sc.util.SingularLevel.setLevel(w[3], 2);
+        boolean prof = com.sc.util.SingularProfiles.active(w[1]) == -1 && !com.sc.util.SingularProfiles.has(w[1], 0)
+                && com.sc.util.SingularProfiles.holder(w) == w[1];
+        // profile 0 "Combat": magnet on, flight off, sight on, the press on, the grab on, the dash on, the anchor off
+        com.sc.item.ItemArmorSC.setEnabled(w[1], magnet, true);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], flight, false);
+        com.sc.item.ItemArmorSC.setEnabled(w[0], sight, true);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], press, true);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], grab, true);
+        com.sc.item.ItemArmorSC.setEnabled(w[2], dash, true);
+        com.sc.item.ItemArmorSC.setEnabled(w[2], anchor, false);
+        prof &= com.sc.util.SingularProfiles.select(w, 0, false) == com.sc.util.SingularProfiles.CAPTURED   // empty: takes the current switches
+                && com.sc.util.SingularProfiles.active(w[1]) == 0 && com.sc.util.SingularProfiles.has(w[1], 0);
+        // everything the other way round, then profile 0 again
+        com.sc.item.ItemArmorSC.setEnabled(w[1], magnet, false);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], flight, true);
+        com.sc.item.ItemArmorSC.setEnabled(w[0], sight, false);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], press, false);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], grab, false);
+        com.sc.item.ItemArmorSC.setEnabled(w[2], dash, false);
+        com.sc.item.ItemArmorSC.setEnabled(w[2], anchor, true);
+        int[] r = com.sc.util.SingularProfiles.apply(w, 0, false);
+        prof &= r != null && com.sc.item.ItemArmorSC.isEnabled(w[1], magnet) && !com.sc.item.ItemArmorSC.isEnabled(w[1], flight)
+                && com.sc.item.ItemArmorSC.isEnabled(w[0], sight) && com.sc.item.ItemArmorSC.isEnabled(w[1], press)
+                && !com.sc.item.ItemArmorSC.isEnabled(w[2], anchor)
+                && !com.sc.item.ItemArmorSC.isEnabled(w[1], grab)          // Р2: the grab side isn't chosen - not switched on
+                && !com.sc.item.ItemArmorSC.isEnabled(w[2], dash)          // П1 opens at level 2 - leggings at 1: not switched on
+                && r[1] == 2 && r[0] >= 5;
+        // creative: the locked ones too
+        r = com.sc.util.SingularProfiles.apply(w, 0, true);
+        prof &= r != null && r[0] == 2 && com.sc.item.ItemArmorSC.isEnabled(w[1], grab) && com.sc.item.ItemArmorSC.isEnabled(w[2], dash);
+        // a stored profile picked again: applied (not overwritten); save current into it; a piece not stored is left alone
+        com.sc.item.ItemArmorSC.setEnabled(w[1], magnet, false);
+        prof &= com.sc.util.SingularProfiles.select(w, 0, false) == com.sc.util.SingularProfiles.APPLIED
+                && com.sc.item.ItemArmorSC.isEnabled(w[1], magnet);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], magnet, false);
+        prof &= com.sc.util.SingularProfiles.capture(w, 0);
+        com.sc.item.ItemArmorSC.setEnabled(w[1], magnet, true);
+        com.sc.util.SingularProfiles.apply(w, 0, false);
+        prof &= !com.sc.item.ItemArmorSC.isEnabled(w[1], magnet);
+        // the profile survives the chestplate's NBT round trip
+        ItemStack copy = ItemStack.loadItemStackFromNBT(w[1].writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+        prof &= com.sc.util.SingularProfiles.active(copy) == 0 && com.sc.util.SingularProfiles.has(copy, 0) && !com.sc.util.SingularProfiles.has(copy, 1);
+        // no Singular chestplate: no profiles
+        ItemStack[] noChest = gasSuit(sg, true, false, true, true);
+        ItemStack[] exo = gasSuit(com.sc.util.ArmorSuit.EXO, true, true, true, true);
+        prof &= com.sc.util.SingularProfiles.holder(noChest) == null && com.sc.util.SingularProfiles.select(noChest, 0, false) == com.sc.util.SingularProfiles.NONE
+                && com.sc.util.SingularProfiles.holder(exo) == null && !com.sc.util.SingularProfiles.capture(exo, 1)
+                && com.sc.util.SingularProfiles.apply(w, 2, false) == null && com.sc.util.SingularProfiles.select(w, 3, false) == com.sc.util.SingularProfiles.NONE;
+        // the pure bits: a function's state from the two switch fields, ordinals past 32 in the second
+        prof &= com.sc.util.SingularProfiles.wantsOn(0, 0, sight) == sight.onByDefault && sight.ordinal() >= 32
+                && com.sc.util.SingularProfiles.wantsOn(0, 1 << (sight.ordinal() & 31), sight) != sight.onByDefault
+                && com.sc.util.SingularProfiles.wantsOn(1 << (sight.ordinal() & 31), 0, sight) == sight.onByDefault
+                && com.sc.util.SingularProfiles.wantsOn(1 << com.sc.util.ArmorFeature.HUD.ordinal(), 0, com.sc.util.ArmorFeature.HUD) != com.sc.util.ArmorFeature.HUD.onByDefault;
+        check(prof, "Singular profiles (M4): an empty profile takes the current switches; applied back exactly, a function locked by level / branch never"
+                + " switched on (creative: all); save current; kept in the chestplate's NBT; none without a Singular chestplate");
+
+        // cycling: none -> 0 -> 1 -> 2 -> 0
+        boolean cyc = com.sc.util.SingularProfiles.next(-1) == 0 && com.sc.util.SingularProfiles.next(0) == 1
+                && com.sc.util.SingularProfiles.next(1) == 2 && com.sc.util.SingularProfiles.next(2) == 0 && com.sc.util.SingularProfiles.COUNT == 3;
+        ItemStack[] w2 = gasSuit(sg, true, true, true, true);
+        int a = com.sc.util.SingularProfiles.active(w2[1]);
+        for (int i = 0; i < 4; i++) {
+            a = com.sc.util.SingularProfiles.next(a);
+            com.sc.util.SingularProfiles.select(w2, a, false);
+        }
+        cyc &= com.sc.util.SingularProfiles.active(w2[1]) == 0 && com.sc.util.SingularProfiles.has(w2[1], 0)
+                && com.sc.util.SingularProfiles.has(w2[1], 1) && com.sc.util.SingularProfiles.has(w2[1], 2);
+        com.sc.util.SingularProfiles.setActive(w2[1], -1);
+        cyc &= com.sc.util.SingularProfiles.active(w2[1]) == -1;
+        check(cyc, "Singular profiles (M4): the key steps Combat -> Mining -> Flight -> Combat, each empty one filled on the way");
+
+        // М3: what a function needs, who has it, the icon states, the list
+        long now = 100000L;
+        com.sc.util.ArmorFeature slow = com.sc.util.ArmorFeature.TIME_SLOW, hole = com.sc.util.ArmorFeature.BLACK_HOLE,
+                boost = com.sc.util.ArmorFeature.SINGULARITY, rescue = com.sc.util.ArmorFeature.VOID_RESCUE;
+        boolean hud = com.sc.util.SingularHud.FEATURES.length == 9 && com.sc.util.SingularHud.automatic(rescue)
+                && com.sc.util.SingularHud.automatic(com.sc.util.ArmorFeature.HEAT_VENT) && !com.sc.util.SingularHud.automatic(dash);
+        for (com.sc.util.ArmorFeature f : com.sc.util.SingularHud.FEATURES) {
+            hud &= com.sc.util.SingularHud.gases(f).length == com.sc.util.SingularHud.amounts(f).length && com.sc.util.SingularHud.gases(f).length > 0
+                    && com.sc.util.SingularHud.cooldownTicks(f) > 1 && java.util.Arrays.asList(com.sc.util.SingularHud.gases(f)).contains(f.gas());
+        }
+        ItemStack[] dry = gasSuit(sg, true, true, true, true);
+        ItemStack[] full = gasSuit(sg, true, true, true, true);
+        fillSuit(full, 100);
+        hud &= com.sc.util.SingularHud.missingGas(dry, slow, 1F) == com.sc.util.ArmorGasSC.Gas.KRYPTON
+                && com.sc.util.SingularHud.missingGas(full, slow, 1F) == null && com.sc.util.SingularHud.missingGas(full, hole, 2F) == null
+                && com.sc.util.SingularHud.missingGas(dry, rescue, 1F) == com.sc.util.ArmorGasSC.Gas.HELIUM;
+        com.sc.util.ArmorGasSC.setAmount(full[1], com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER, 60);   // enough for Н4 (50), not twice (К1 boost)
+        hud &= com.sc.util.SingularHud.missingGas(full, slow, 1F) == null
+                && com.sc.util.SingularHud.missingGas(full, slow, 2F) == com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER;
+        // who has what: levels and branches (w: chestplate 3 + press, leggings 1, boots 2)
+        hud &= com.sc.util.SingularHud.has(w, press, false) && !com.sc.util.SingularHud.has(w, grab, false) && !com.sc.util.SingularHud.has(w, dash, false)
+                && !com.sc.util.SingularHud.has(w, slow, false) && com.sc.util.SingularHud.has(w, rescue, false)
+                && com.sc.util.SingularHud.has(w, com.sc.util.ArmorFeature.HEAT_VENT, false)
+                && com.sc.util.SingularHud.has(w, boost, true) && com.sc.util.SingularHud.has(w, dash, true)
+                && !com.sc.util.SingularHud.has(noChest, boost, true) && !com.sc.util.SingularHud.has(exo, dash, true);
+        // states
+        int H = com.sc.util.SingularHud.HIDDEN;
+        hud &= com.sc.util.SingularHud.stateOf(dash, false, now + 50, now, false, true, 0, 0) == H
+                && com.sc.util.SingularHud.stateOf(dash, true, now + 50, now, true, true, 0, 0) == com.sc.util.SingularHud.COOLING
+                && com.sc.util.SingularHud.stateOf(dash, true, now - 10, now, false, true, 0, 0) == com.sc.util.SingularHud.READY
+                && com.sc.util.SingularHud.stateOf(dash, true, now - 10, now, true, false, 0, 0) == com.sc.util.SingularHud.NOGAS
+                && com.sc.util.SingularHud.stateOf(dash, true, now - com.sc.util.SingularHud.READY_TICKS, now, false, true, 0, 0) == H
+                && com.sc.util.SingularHud.stateOf(dash, true, 0, now, false, true, 0, 0) == H
+                && com.sc.util.SingularHud.stateOf(dash, true, 0, now, true, true, 0, 0) == com.sc.util.SingularHud.NOGAS
+                && com.sc.util.SingularHud.stateOf(dash, true, 0, now, true, false, 0, 0) == H
+                && com.sc.util.SingularHud.stateOf(boost, true, now + 9000, now, false, true, now + 100, now + 1300) == com.sc.util.SingularHud.BOOST
+                && com.sc.util.SingularHud.stateOf(boost, true, now + 9000, now, false, true, now - 1, now + 1300) == com.sc.util.SingularHud.WEAK
+                && com.sc.util.SingularHud.stateOf(boost, true, now + 9000, now, false, true, now - 1, now - 1) == com.sc.util.SingularHud.COOLING
+                && com.sc.util.SingularHud.stateOf(slow, true, now + 3000, now, false, true, now + 40, 0) == com.sc.util.SingularHud.RUNNING
+                && com.sc.util.SingularHud.stateOf(dash, true, now + 50, now, false, true, now + 40, 0) == com.sc.util.SingularHud.COOLING;
+        java.util.List<Integer> shown = com.sc.util.SingularHud.shown(new int[]{H, com.sc.util.SingularHud.COOLING, H, com.sc.util.SingularHud.NOGAS,
+                com.sc.util.SingularHud.READY});
+        hud &= shown.size() == 3 && shown.get(0) == 1 && shown.get(1) == 3 && shown.get(2) == 4 && com.sc.util.SingularHud.shown(null).isEmpty();
+        hud &= Math.abs(com.sc.util.SingularHud.sweep(now + 30, now, 60) - 0.5F) < 1e-4 && com.sc.util.SingularHud.sweep(now, now, 60) == 0F
+                && com.sc.util.SingularHud.sweep(now + 999, now, 60) == 1F
+                && "18s".equals(com.sc.util.SingularHud.time(18 * 20 - 5, "%ss")) && "2:33".equals(com.sc.util.SingularHud.time(153 * 20, "%ss"))
+                && "1:00".equals(com.sc.util.SingularHud.time(1200, "%ss")) && "0s".equals(com.sc.util.SingularHud.time(-4, "%ss"));
+        check(hud, "Singular cooldown HUD (M3): gases per use (x2 boosted) from the synced tanks, only functions the pieces have,"
+                + " states cooling / ready / no gas / boost / weak / running, the icon list, the sweep and the time");
+
+        // network: pseudo ids past every function, the profile bytes, the messages read back
+        io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
+        new com.sc.handler.ArmorNetSC.CooldownMessage(com.sc.util.SingularCooldowns.P_SLOW, 123456789012L).toBytes(buf);
+        com.sc.handler.ArmorNetSC.CooldownMessage cm = new com.sc.handler.ArmorNetSC.CooldownMessage();
+        cm.fromBytes(buf);
+        buf = io.netty.buffer.Unpooled.buffer();
+        new com.sc.handler.ArmorNetSC.Message(com.sc.handler.ArmorNetSC.PROFILE_SAVE, -1).toBytes(buf);
+        com.sc.handler.ArmorNetSC.Message mm = new com.sc.handler.ArmorNetSC.Message();
+        mm.fromBytes(buf);
+        java.util.Set<Byte> bytes = new java.util.HashSet<Byte>();
+        for (byte b : new byte[]{com.sc.handler.ArmorNetSC.TOGGLE, com.sc.handler.ArmorNetSC.POWER_MODE, com.sc.handler.ArmorNetSC.DASH,
+                com.sc.handler.ArmorNetSC.ANNIHILATE, com.sc.handler.ArmorNetSC.BLADE_TOGGLE, com.sc.handler.ArmorNetSC.BLADE_SWEEP,
+                com.sc.handler.ArmorNetSC.BLADE_WAVE, com.sc.handler.ArmorNetSC.BLADE_LUNGE, com.sc.handler.ArmorNetSC.REMOVE_CHIPS,
+                com.sc.handler.ArmorNetSC.DRILL_TOGGLE, com.sc.handler.ArmorNetSC.DRILL_LASER, com.sc.handler.ArmorNetSC.GLOW_COLOR,
+                com.sc.handler.ArmorNetSC.GAS_FILL, com.sc.handler.ArmorNetSC.GAS_FILL_ALL, com.sc.handler.ArmorNetSC.PHASE_DASH,
+                com.sc.handler.ArmorNetSC.GRAV_PRESS, com.sc.handler.ArmorNetSC.GRAV_GRAB, com.sc.handler.ArmorNetSC.TIME_SLOW,
+                com.sc.handler.ArmorNetSC.BLACK_HOLE, com.sc.handler.ArmorNetSC.GRAV_DOME, com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION,
+                com.sc.handler.ArmorNetSC.SINGULARITY, com.sc.handler.ArmorNetSC.BRANCH, com.sc.handler.ArmorNetSC.PROFILE_SELECT,
+                com.sc.handler.ArmorNetSC.PROFILE_SAVE, com.sc.handler.ArmorNetSC.PROFILE_NEXT}) {
+            bytes.add(b);
+        }
+        boolean net = cm.feature == com.sc.util.SingularCooldowns.P_SLOW && cm.end == 123456789012L
+                && mm.action == com.sc.handler.ArmorNetSC.PROFILE_SAVE && mm.feature == -1
+                && com.sc.handler.ArmorNetSC.PROFILE_SELECT == 23 && com.sc.handler.ArmorNetSC.PROFILE_SAVE == 24
+                && com.sc.handler.ArmorNetSC.PROFILE_NEXT == 25 && bytes.size() == 26
+                && com.sc.handler.ArmorNetSC.featureOfAction(com.sc.handler.ArmorNetSC.PROFILE_NEXT) == null
+                && com.sc.util.ArmorFeature.values().length <= com.sc.util.SingularCooldowns.P_FIRST
+                && com.sc.util.SingularCooldowns.P_RES < 64 && com.sc.item.SingularPowersSC.STATE_KEYS.length == 3;
+        // the client's copy: a pseudo id kept apart from the functions, cleared with them
+        com.sc.util.SingularCooldowns.clientSet(com.sc.util.SingularCooldowns.P_BOOST, 777L);
+        com.sc.util.SingularCooldowns.clientSet(com.sc.util.SingularCooldowns.P_RES, 1L);
+        net &= com.sc.util.SingularCooldowns.clientEnd(com.sc.util.SingularCooldowns.P_BOOST) == 777L
+                && com.sc.util.SingularCooldowns.clientEnd(com.sc.util.SingularCooldowns.P_RES) == 1L
+                && com.sc.util.SingularCooldowns.clientEnd(com.sc.util.ArmorFeature.SINGULARITY.ordinal()) != 777L;
+        com.sc.util.SingularCooldowns.clientSet(-1, 0L);
+        net &= com.sc.util.SingularCooldowns.clientEnd(com.sc.util.SingularCooldowns.P_BOOST) == 0L
+                && com.sc.util.SingularCooldowns.clientEnd(com.sc.util.SingularCooldowns.P_RES) == 0L;
+        check(net, "Singular stage 5 network: PROFILE_SELECT / SAVE / NEXT = 23 / 24 / 25 (no clash), the HUD state ids 60-63 past every function,"
+                + " the messages read back as written");
+
+        // texts
+        String missing = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Set<String> keys = langKeys(lang);
+            java.util.List<String> want = new java.util.ArrayList<String>();
+            java.util.Collections.addAll(want, "key.sc.profile", "sc.levelgui.tab", "sc.levelgui.pieces", "sc.levelgui.sync.yes", "sc.levelgui.sync.no",
+                    "sc.levelgui.sync.notall", "sc.levelgui.sync.one", "sc.levelgui.tasks", "sc.levelgui.ready", "sc.levelgui.needpoints",
+                    "sc.levelgui.needtask", "sc.levelgui.cost.ready", "sc.levelgui.cost.next", "sc.levelgui.branches", "sc.levelgui.profiles",
+                    "sc.levelgui.profile.save", "sc.levelgui.profile.key", "sc.levelgui.profile.nokey", "sc.levelgui.hud", "sc.levelgui.bonus.head",
+                    "sc.levelgui.page.next", "sc.levelgui.page.back", "sc.armor.sing.profile.on", "sc.armor.sing.profile.captured",
+                    "sc.armor.sing.profile.saved", "sc.armor.sing.profile.locked", "sc.armor.sing.profile.nochest", "sc.armorhud.sing.level",
+                    "sc.armorhud.sing.profile", "sc.armorhud.sing.ready", "sc.armorhud.sing.ready2", "sc.singhud.sec", "sc.singhud.ready",
+                    "sc.singhud.nogas", "sc.singhud.boost", "sc.singhud.weak", "sc.singhud.res", "sc.manual.singular.levelhead",
+                    "sc.manual.singular.level.1", "sc.manual.singular.level.2", "sc.manual.singular.level.3");
+            for (int i = 0; i < com.sc.util.SingularProfiles.COUNT; i++) {
+                want.add("sc.armor.sing.profile.name." + i);
+            }
+            for (String pos : new String[]{"off", "hotbar", "top", "right", "left"}) {   // ArmorKeyBindsSC.HUD_POS (client)
+                want.add("sc.levelgui.hud." + pos);
+            }
+            for (int t = 2; t <= 5; t++) {
+                for (int i = 0; i < 3; i++) {
+                    want.add("sc.levelgui.task." + t + "." + i);
+                }
+            }
+            for (com.sc.util.ArmorFeature f : com.sc.util.SingularHud.FEATURES) {
+                want.add("sc.singhud.code." + f.name().toLowerCase(java.util.Locale.ROOT));
+                want.add("sc.singhud.name." + f.name().toLowerCase(java.util.Locale.ROOT));
+            }
+            for (int bl : new int[]{3, 5}) {
+                for (int c = 1; c <= 2; c++) {
+                    want.add("sc.levelgui.branch.short." + com.sc.util.SingularLevel.branchFeature(bl, c).name().toLowerCase(java.util.Locale.ROOT));
+                }
+            }
+            for (String k : want) {
+                if (!keys.contains(k)) {
+                    missing += " " + lang + ":" + k;
+                }
+            }
+        }
+        check(missing.isEmpty(), "Singular stage 5: Level tab, profiles, HUD and handbook texts in en_US and ru_RU" + missing);
     }
 
     /**

@@ -43,6 +43,8 @@ public class ArmorClientSC {
 
     public static final KeyBinding KEY_ARMOR = new KeyBinding("key.sc.armor", Keyboard.KEY_K, "key.categories.sc");
     public static final KeyBinding KEY_DASH = new KeyBinding("key.sc.dash", Keyboard.KEY_R, "key.categories.sc");
+    /** М4: the next Singular function profile - P by default when nothing else has P, else unbound (set in Controls). */
+    public static KeyBinding KEY_PROFILE;
 
     private static final int SCAN_RADIUS = 8, SCAN_EVERY = 40, THERMAL_RANGE = 24;
     private final List<int[]> ores = new ArrayList<int[]>();
@@ -55,6 +57,9 @@ public class ArmorClientSC {
         ClientRegistry.registerKeyBinding(KEY_ARMOR);
         ClientRegistry.registerKeyBinding(KEY_DASH);
         ArmorKeyBindsSC.load(cpw.mods.fml.common.Loader.instance().getConfigDir());
+        KEY_PROFILE = new KeyBinding("key.sc.profile", profileKeyDefault(), "key.categories.sc");
+        ClientRegistry.registerKeyBinding(KEY_PROFILE);
+        SingularHudSC.register();                                                    // М3: the cooldown icons
         ArmorClientSC instance = new ArmorClientSC();
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(instance);   // ClientTickEvent
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(instance);       // overlay, world render
@@ -62,6 +67,25 @@ public class ArmorClientSC {
     }
 
     // ---- keys ----
+
+    /** P, unless a key binding (vanilla, another mod's registered so far, or a suit function's own key) already uses it. */
+    private static int profileKeyDefault() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null && mc.gameSettings != null && mc.gameSettings.keyBindings != null) {
+            for (KeyBinding kb : mc.gameSettings.keyBindings) {
+                if (kb != null && (kb.getKeyCode() == Keyboard.KEY_P || kb.getKeyCodeDefault() == Keyboard.KEY_P)) {
+                    return Keyboard.KEY_NONE;
+                }
+            }
+        }
+        for (Enum<?> f : ArmorFeature.values()) {
+            int[] b = ArmorKeyBindsSC.get(f);
+            if (b != null && b[0] == Keyboard.KEY_P) {
+                return Keyboard.KEY_NONE;
+            }
+        }
+        return Keyboard.KEY_P;
+    }
 
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent event) {
@@ -75,6 +99,13 @@ public class ArmorClientSC {
         }
         if (KEY_DASH.isPressed() && mc.currentScreen == null && ArmorLogicSC.active(mc.thePlayer, ArmorFeature.DASH)) {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DASH, 0));
+        }
+        if (KEY_PROFILE != null && KEY_PROFILE.isPressed() && mc.currentScreen == null) {
+            if (com.sc.util.SingularProfiles.holder(ArmorGasSC.wornSet(mc.thePlayer)) != null) {
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.PROFILE_NEXT, 0));   // the server applies it and says which
+            } else {
+                mc.ingameGUI.func_110326_a(Lang.tr("sc.armor.sing.profile.nochest"), false);
+            }
         }
         if (mc.currentScreen == null && mc.inGameHasFocus) {
             ArmorKeyBindsSC.tick(mc);                       // each function's own key
@@ -140,6 +171,7 @@ public class ArmorClientSC {
         int y = 4;
         if (ArmorLogicSC.active(p, ArmorFeature.HUD)) {
             y = drawSuit(mc, p, y);
+            drawLevelReady(mc, p, event.resolution.getScaledWidth());
         }
         // Quantum / Exo with no helium in the loop: emergency mode, shown with or without the HUD
         if (ArmorLogicSC.emergency(ArmorGasSC.wornSet(p))) {
@@ -173,6 +205,7 @@ public class ArmorClientSC {
             mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.set." + set.name().toLowerCase(Locale.ROOT)), 4, y, 0x80FF80);
             y += 10;
         }
+        y = drawSingular(mc, p, y);
         int chargeTop = y, chargeW = 0;
         for (int type = 0; type < 4; type++) {
             ItemStack s = ArmorLogicSC.piece(p, type);
@@ -209,6 +242,49 @@ public class ArmorClientSC {
         }
         // the gases, in a column to the right of the charge lines
         return Math.max(y, drawGases(mc, p, 4 + chargeW + 10, chargeTop));
+    }
+
+    /** The Singular lines: «Сингулярная · ур. N» (or «ур. 2-3» while the pieces differ) and the active profile. @return the y under them */
+    private static int drawSingular(Minecraft mc, EntityPlayer p, int y) {
+        ItemStack[] w = ArmorGasSC.wornSet(p);
+        int lo = 9, hi = 0;
+        for (ItemStack s : w) {
+            if (com.sc.util.SingularLevel.isSingular(s)) {
+                lo = Math.min(lo, com.sc.util.SingularLevel.levelOf(s));
+                hi = Math.max(hi, com.sc.util.SingularLevel.levelOf(s));
+            }
+        }
+        if (hi == 0) {
+            return y;
+        }
+        String lv = lo == hi ? String.valueOf(hi) : lo + "-" + hi;
+        mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.sing.level", lv), 4, y, 0xC080FF);
+        y += 10;
+        int prof = com.sc.util.SingularProfiles.active(com.sc.util.SingularProfiles.holder(w));
+        if (prof >= 0) {
+            mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.sing.profile", Lang.tr("sc.armor.sing.profile.name." + prof)), 4, y, 0xB0B0B0);
+            y += 10;
+        }
+        return y;
+    }
+
+    /** Top right: a worn Singular piece is ready for its next level - «Уровень N: готово к модернизации» and where. */
+    private static void drawLevelReady(Minecraft mc, EntityPlayer p, int width) {
+        int next = 0, piece = -1;
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = ArmorGasSC.worn(p, t);
+            if (com.sc.util.SingularLevel.readyToUpgrade(p, s) && (next == 0 || com.sc.util.SingularLevel.levelOf(s) + 1 < next)) {
+                next = com.sc.util.SingularLevel.levelOf(s) + 1;
+                piece = t;
+            }
+        }
+        if (next == 0) {
+            return;
+        }
+        String a = Lang.tr("sc.armorhud.sing.ready", next, Lang.tr("sc.armorhud.piece." + piece).toLowerCase(Locale.ROOT));
+        String b = Lang.tr("sc.armorhud.sing.ready2");
+        mc.fontRenderer.drawStringWithShadow(a, width - 4 - mc.fontRenderer.getStringWidth(a), 4, 0x60FF60);
+        mc.fontRenderer.drawStringWithShadow(b, width - 4 - mc.fontRenderer.getStringWidth(b), 14, 0xB0B0B0);
     }
 
     private static final int GAS_BAR_W = 34, GAS_LABEL_W = 22;

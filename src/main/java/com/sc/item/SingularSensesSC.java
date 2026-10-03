@@ -58,7 +58,9 @@ public final class SingularSensesSC {
     public static final int ANALYZE_EVERY = 10;
 
     private static final String SCAN_AT = "scScanAt", THREAT_SENT = "scThreatSent", ANALYZE_TARGET = "scAnalyzeTarget",
-            RES_CHECK = "scResCheck", RES_NEAR = "scResNear", RES_ON = "scResOn", RES_D_FRAC = "scResDFrac";
+            RES_CHECK = "scResCheck", RES_NEAR = "scResNear", RES_D_FRAC = "scResDFrac";
+    /** Player entity data: К2 works now (the client is told - SingularCooldowns.P_RES, the HUD). */
+    public static final String RES_ON = "scResOn";
     /** Persisted counters for stage 3's tasks: seconds of resonance with a Singular reactor; spawners the scanner has found. */
     public static final String RESONANCE_REACTOR_SECONDS = "scResReactorSec", SPAWNERS_SCANNED = "scSpawnersScanned";
     private static final int SPAWNERS_KEPT = 64;
@@ -453,6 +455,9 @@ public final class SingularSensesSC {
         NBTTagCompound data = p.getEntityData();
         if (!resonanceOn(p)) {
             data.removeTag(RES_CHECK);
+            if (data.getBoolean(RES_ON)) {
+                com.sc.util.SingularCooldowns.sendState(p, com.sc.util.SingularCooldowns.P_RES, 0L);
+            }
             data.removeTag(RES_ON);
             return;
         }
@@ -469,6 +474,7 @@ public final class SingularSensesSC {
         boolean was = data.getBoolean(RES_ON);
         if ((kind > 0) != was) {
             data.setBoolean(RES_ON, kind > 0);
+            com.sc.util.SingularCooldowns.sendState(p, com.sc.util.SingularCooldowns.P_RES, kind > 0 ? 1L : 0L);
             p.addChatComponentMessage(new ChatComponentTranslation(kind > 0 ? "sc.armor.resonance" : "sc.armor.resonance.lost"));
         }
         if (kind <= 0) {

@@ -59,6 +59,8 @@ public final class SingularPowersSC {
     /** Player entity data: К1's boost and weakness end ticks, its state (for the chat lines), Н4's end tick, the key's last press. */
     static final String BOOST_END = "scSingBoostEnd", WEAK_END = "scSingWeakEnd", BOOST_STATE = "scSingBoostState",
             SLOW_END = "scTimeSlowEnd", KEY_AT = "scSingKeyAt";
+    /** BOOST_END, WEAK_END, SLOW_END - for SingularCooldowns.syncAll (the client's HUD after a relog). */
+    public static final String[] STATE_KEYS = {BOOST_END, WEAK_END, SLOW_END};
     /** Persisted with the player (stage 3's task "30 mobs by the black hole"): mobs the black hole has killed. */
     public static final String HOLE_KILLS = "scHoleKills";
     /** Entity data of a projectile Н4 has slowed (only once). */
@@ -502,6 +504,7 @@ public final class SingularPowersSC {
         payAll(p, f, g, mb, 0, ArmorFeature.SLOW_CHARGE);
         long now = p.worldObj.getTotalWorldTime();
         p.getEntityData().setLong(SLOW_END, now + ArmorFeature.SLOW_TICKS);
+        SingularCooldowns.sendState(p, SingularCooldowns.P_SLOW, now + ArmorFeature.SLOW_TICKS);
         FIELDS.add(new Field(KIND_SLOW, p.worldObj, p, p.posX, p.posY, p.posZ, ArmorFeature.SLOW_RADIUS, now, now + ArmorFeature.SLOW_TICKS));
         aggro(p);
         SingularCooldowns.set(p, f, ArmorFeature.SLOW_COOLDOWN);
@@ -816,6 +819,8 @@ public final class SingularPowersSC {
         data.setLong(BOOST_END, now + ArmorFeature.BOOST_TICKS);
         data.setLong(WEAK_END, now + ArmorFeature.BOOST_TICKS + ArmorFeature.WEAK_TICKS);
         data.setInteger(BOOST_STATE, 1);
+        SingularCooldowns.sendState(p, SingularCooldowns.P_BOOST, now + ArmorFeature.BOOST_TICKS);
+        SingularCooldowns.sendState(p, SingularCooldowns.P_WEAK, now + ArmorFeature.BOOST_TICKS + ArmorFeature.WEAK_TICKS);
         SingularCooldowns.set(p, f, ArmorFeature.BOOST_COOLDOWN);
         particles(p.worldObj, "portal", p.posX, p.posY + 1, p.posZ, 150, 1.0, 1.5);
         p.worldObj.playSoundEffect(p.posX, p.posY, p.posZ, "mob.wither.spawn", 0.5F, 1.6F);

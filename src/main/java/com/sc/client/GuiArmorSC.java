@@ -55,6 +55,10 @@ public class GuiArmorSC extends GuiScreen {
 
     /** The blade's tab (after the four armour pieces). */
     private static final int BLADE_TAB = 4, MODE_TAB = 5, DRILL_TAB = 6, LIFE_TAB = 7;
+    /** Stage 5: the Singular levels, branches, profiles and HUD (any Singular piece worn). */
+    private static final int LEVEL_TAB = 8;
+    /** Level tab: branch buttons (level 3 A / B, level 5 A / B), profiles 0..2, "save current", the page switch, the HUD place. */
+    private static final int LV_BR = 1020, LV_PROF = 1024, LV_SAVE = 1027, LV_PAGE = 1028, LV_HUD = 1029;
     private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002,
             FILL_ALL_ID = 1003, BIND_BASE = 2000;
     /** Chestplate tab: the free branch choice (Р2) - the first / the second side of the lowest level not chosen yet. */
@@ -136,6 +140,10 @@ public class GuiArmorSC extends GuiScreen {
     }
 
     private int selectedPiece = -1;
+    // ---- level tab layout (set by initLevel) ----
+    /** Two columns, or one with two pages (levelPage 0: the levels, 1: branches / profiles / bonuses). */
+    private boolean lvTwo;
+    private int levelPage, lvLx, lvLw, lvRx, lvRw, lvPageW, lvBranchY = -1, lvBranchRows, lvNoteY = -1, lvProfHeadY = -1, lvKeyY = -1, lvBonusY = -1;
     /** The "remove chips" button is on screen (rebuilt when the chips come or go). */
     private boolean chipsShown;
     /** The function (ArmorFeature, BladeFeature or PowerModeKey) whose key is being set (waiting for a key press), or null. */
@@ -203,10 +211,13 @@ public class GuiArmorSC extends GuiScreen {
         if (anyPieceWorn()) {
             tabs.add(LIFE_TAB);
         }
+        if (com.sc.util.SingularLevel.wearsSingular(mc.thePlayer)) {
+            tabs.add(LEVEL_TAB);
+        }
         if (selectedPiece < 0 || !tabs.contains(selectedPiece)) {
             selectedPiece = tabs.isEmpty() ? -1 : tabs.get(0);
         }
-        layoutSig = selectedPiece == LIFE_TAB ? lifeSignature() : wornSignature();
+        layoutSig = signature();
 
         winW = Math.min(WIN_W, width - 8);
         winX = (width - winW) / 2;
@@ -219,7 +230,7 @@ public class GuiArmorSC extends GuiScreen {
         int tabW = n == 0 ? 70 : Math.max(24, Math.min(80, (winW - 8) / n - 2));   // eight tabs on a narrow screen
         int tx = width / 2 - n * (tabW + 2) / 2 + 1;
         for (int type : tabs) {
-            String label = type == LIFE_TAB ? Lang.tr("sc.lifegui.tab.short") : type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
+            String label = type == LEVEL_TAB ? Lang.tr("sc.levelgui.tab") : type == LIFE_TAB ? Lang.tr("sc.lifegui.tab.short") : type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
                     : type == DRILL_TAB ? Lang.tr("sc.drillgui.tab") : Lang.tr("sc.armorhud.piece." + type);
             GuiButton tab = new TextFitSC.Button(TAB_BASE + type, tx, top + 15, tabW, 16, label);
             tab.enabled = type != selectedPiece;                // the pressed-in one is the open tab
@@ -233,6 +244,8 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (selectedPiece == LIFE_TAB) {
             initLife();
+        } else if (selectedPiece == LEVEL_TAB) {
+            initLevel();
         } else if (selectedPiece == MODE_TAB) {
             int[] r = chooseRows(PowerModeKey.values().length, 130, 0);
             int btnW = Math.max(110, Math.min(150, contentW - KEY_W - GAP - 6 - 100));
@@ -706,6 +719,448 @@ public class GuiArmorSC extends GuiScreen {
             y += pitch;
         }
         refreshFills();
+    }
+
+    // ------------------------------------------------------------------ level tab (stage 5: М3 / М4, plan §6 "Отображение")
+
+    /** What the open tab was laid out for - rebuilt when it changes. */
+    private String signature() {
+        return selectedPiece == LIFE_TAB ? lifeSignature() : selectedPiece == LEVEL_TAB ? levelSignature() : wornSignature();
+    }
+
+    /** The worn pieces plus what the level tab's buttons show: the branch choices, the profiles, the page. */
+    private String levelSignature() {
+        StringBuilder sb = new StringBuilder(wornSignature());
+        ItemStack chest = com.sc.util.SingularProfiles.holder(ArmorGasSC.wornSet(mc.thePlayer));
+        sb.append('|').append(com.sc.util.SingularLevel.branchChoice(chest, 3)).append(com.sc.util.SingularLevel.branchChoice(chest, 5))
+                .append('|').append(com.sc.util.SingularProfiles.active(chest));
+        for (int i = 0; i < com.sc.util.SingularProfiles.COUNT; i++) {
+            sb.append(com.sc.util.SingularProfiles.has(chest, i) ? 'p' : '-');
+        }
+        sb.append('|').append(levelPage).append(mc.thePlayer.capabilities.isCreativeMode ? 'c' : 's');
+        return sb.toString();
+    }
+
+    private static String fkey(ArmorFeature f) {
+        return f.name().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Two columns (the levels | branches, profiles, bonuses) where they fit - the left panel goes first;
+     * a narrow window: one column, two pages switched by a button at the top right.
+     */
+    private void initLevel() {
+        boolean two = false;
+        for (int mode = 2; mode >= 0 && !two; mode--) {
+            if (layoutPanel(mode)) {
+                setPanel(mode);
+                two = contentW >= 330;
+            }
+        }
+        if (!two) {
+            setPanel(0);
+            two = contentW >= 290;
+        }
+        lvTwo = two;
+        pitch = 16;
+        btnH = 14;
+        lvBranchY = lvNoteY = lvProfHeadY = lvKeyY = lvBonusY = -1;
+        lvBranchRows = 0;
+        if (two) {
+            levelPage = 0;
+            lvPageW = 0;
+            lvLx = contentX;
+            lvLw = (contentW - COL_GAP) * 54 / 100;
+            lvRx = lvLx + lvLw + COL_GAP;
+            lvRw = contentX + contentW - lvRx;
+        } else {
+            lvLx = lvRx = contentX;
+            lvLw = lvRw = contentW;
+            lvPageW = Math.min(96, contentW / 3);
+            buttonList.add(new TextFitSC.Button(LV_PAGE, contentX + contentW - lvPageW, contentY - 3, lvPageW, 12,
+                    Lang.tr(levelPage == 0 ? "sc.levelgui.page.next" : "sc.levelgui.page.back")));
+            if (levelPage == 0) {
+                return;
+            }
+        }
+        EntityPlayer p = mc.thePlayer;
+        boolean creative = p.capabilities.isCreativeMode;
+        ItemStack chest = com.sc.util.SingularProfiles.holder(ArmorGasSC.wornSet(p));
+        int bottom = footY - 2;
+        int y = contentY;
+        lvBranchY = y;
+        y += 11;
+        int labW = 30, bw = (lvRw - labW - 4) / 2;
+        for (int bl : new int[]{3, 5}) {
+            if (y + 14 > bottom) {
+                break;
+            }
+            for (int c = 1; c <= 2; c++) {
+                GuiButton b = new TextFitSC.Button(LV_BR + (bl == 3 ? 0 : 2) + c - 1, lvRx + labW + (c - 1) * (bw + 4), y, bw, 14, branchLabel(chest, bl, c));
+                b.enabled = chest != null && !creative && com.sc.util.SingularLevel.branchPending(chest, bl);
+                buttonList.add(b);
+            }
+            lvBranchRows++;
+            y += 16;
+        }
+        lvNoteY = y;
+        y += 13;
+        if (y + 10 + 14 <= bottom) {
+            lvProfHeadY = y;
+            y += 11;
+            int act = com.sc.util.SingularProfiles.active(chest);
+            int pw = (lvRw - 8) / 3;
+            for (int i = 0; i < com.sc.util.SingularProfiles.COUNT; i++) {
+                String n = Lang.tr("sc.armor.sing.profile.name." + i);
+                String label = i == act ? "§d" + n : com.sc.util.SingularProfiles.has(chest, i) ? n : "§7" + n;
+                GuiButton b = new TextFitSC.Button(LV_PROF + i, lvRx + i * (pw + 4), y, pw, 14, label);
+                b.enabled = chest != null;
+                buttonList.add(b);
+            }
+            y += 16;
+            if (y + 14 <= bottom) {
+                int sw = (lvRw - 4) * 52 / 100;
+                GuiButton save = new TextFitSC.Button(LV_SAVE, lvRx, y, sw, 14, Lang.tr("sc.levelgui.profile.save"));
+                save.enabled = chest != null && act >= 0;
+                buttonList.add(save);
+                buttonList.add(new TextFitSC.Button(LV_HUD, lvRx + sw + 4, y, lvRw - sw - 4, 14, hudLabel()));
+                y += 16;
+            }
+            lvKeyY = y;
+            y += 13;
+        }
+        lvBonusY = y;
+    }
+
+    private static String hudLabel() {
+        return Lang.tr("sc.levelgui.hud", Lang.tr("sc.levelgui.hud." + ArmorKeyBindsSC.HUD_POS[ArmorKeyBindsSC.hudPos()]));
+    }
+
+    /** A branch button: the chosen side green between > <, the other dark; a free pick violet; not reached yet grey. */
+    private String branchLabel(ItemStack chest, int bl, int c) {
+        ArmorFeature f = com.sc.util.SingularLevel.branchFeature(bl, c);
+        String n = Lang.tr("sc.levelgui.branch.short." + fkey(f));
+        if (mc.thePlayer.capabilities.isCreativeMode) {
+            return "§a" + n;
+        }
+        if (chest == null) {
+            return "§8" + n;
+        }
+        int ch = com.sc.util.SingularLevel.branchChoice(chest, bl);
+        if (ch == c) {
+            return "§a> " + n + " <";
+        }
+        if (ch != com.sc.util.SingularLevel.BRANCH_NONE) {
+            return "§8" + n;
+        }
+        return com.sc.util.SingularLevel.levelOf(chest) >= bl ? "§d" + n : "§7" + n;
+    }
+
+    private void levelAction(GuiButton b) {
+        if (b.id == LV_PAGE) {
+            levelPage = 1 - levelPage;
+            initGui();
+            return;
+        }
+        if (b.id == LV_HUD) {
+            ArmorKeyBindsSC.cycleHudPos();
+            b.displayString = hudLabel();
+            return;
+        }
+        if (b.id == LV_SAVE) {
+            int act = com.sc.util.SingularProfiles.activeOf(mc.thePlayer);
+            if (act >= 0) {
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.PROFILE_SAVE, act));
+            }
+            return;
+        }
+        if (b.id >= LV_PROF && b.id < LV_PROF + com.sc.util.SingularProfiles.COUNT) {   // the server applies it and sends the pieces back
+            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.PROFILE_SELECT, b.id - LV_PROF));
+            return;
+        }
+        if (b.id >= LV_BR && b.id < LV_BR + 4) {                // Р2: the free first choice, as on the chestplate's tab
+            int bl = b.id - LV_BR < 2 ? 3 : 5, c = (b.id - LV_BR) % 2 + 1;
+            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BRANCH, ArmorNetSC.branchFeature(bl, c)));
+            b.enabled = false;
+        }
+    }
+
+    /** The level the tasks are shown for: the Singular chestplate's next one, else the lowest worn piece's; 0: all at the top. */
+    private static int focusTarget(ItemStack[] w) {
+        ItemStack chest = w[ArmorGasSC.CHEST];
+        if (com.sc.util.SingularLevel.isSingular(chest) && com.sc.util.SingularLevel.levelOf(chest) < com.sc.util.SingularLevel.MAX) {
+            return com.sc.util.SingularLevel.levelOf(chest) + 1;
+        }
+        int lo = 0;
+        for (ItemStack s : w) {
+            if (com.sc.util.SingularLevel.isSingular(s) && com.sc.util.SingularLevel.levelOf(s) < com.sc.util.SingularLevel.MAX) {
+                lo = lo == 0 ? com.sc.util.SingularLevel.levelOf(s) : Math.min(lo, com.sc.util.SingularLevel.levelOf(s));
+            }
+        }
+        return lo == 0 ? 0 : lo + 1;
+    }
+
+    private static String mmss(int s) {
+        return s / 60 + ":" + (s % 60 < 10 ? "0" : "") + s % 60;
+    }
+
+    /** A task's progress: times as m:ss, gases in mB, the rest as numbers. */
+    private static String taskProgress(int target, int i, int[] pr) {
+        int code = target * 10 + i;
+        if (code == 31 || code == 41) {
+            return mmss(pr[0]) + " / " + mmss(pr[1]);
+        }
+        if (code == 22 || code == 52) {
+            return pr[0] + " / " + pr[1] + " " + Lang.tr("sc.levelgui.mb");
+        }
+        return pr[0] + " / " + pr[1];
+    }
+
+    private static String amount(long v) {
+        return com.sc.util.SingularStationMath.shortAmount(v, Lang.tr("sc.singStation.unit.k"), Lang.tr("sc.singStation.unit.m"), Lang.tr("sc.singStation.unit.b"));
+    }
+
+    private void drawLevel() {
+        EntityPlayer p = mc.thePlayer;
+        ItemStack[] w = ArmorGasSC.wornSet(p);
+        if (lvTwo || levelPage == 0) {
+            drawLevelLeft(p, w);
+        }
+        if (lvTwo || levelPage == 1) {
+            drawLevelRight(p, w);
+        }
+    }
+
+    /** The left column: each piece's level and points, the sync, the next level's tasks, the readiness and the cost. */
+    private void drawLevelLeft(EntityPlayer p, ItemStack[] w) {
+        int x = lvLx, cw = lvLw, bottom = footY - 1, y = contentY;
+        fit(Lang.tr("sc.levelgui.pieces"), x, y, lvTwo ? cw : cw - lvPageW - 4, HEAD);
+        y += 11;
+        int nameW = Math.min(58, cw / 4), lvW = 26, numW = Math.min(70, cw / 3);
+        int barX = x + nameW + lvW, barW = cw - nameW - lvW - numW - 4;
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = w[t];
+            boolean sing = com.sc.util.SingularLevel.isSingular(s);
+            fit(Lang.tr("sc.armorhud.piece." + t), x, y, nameW - 2, sing ? 0xE0E0E0 : 0x707070);
+            if (!sing) {
+                fit(Lang.tr(s == null ? "sc.levelgui.piece.none" : "sc.levelgui.piece.other"), x + nameW, y, cw - nameW, 0x707070);
+                y += 11;
+                continue;
+            }
+            int lvl = com.sc.util.SingularLevel.levelOf(s), need = com.sc.util.SingularLevel.threshold(lvl), pts = com.sc.util.SingularLevel.points(s);
+            boolean top = lvl >= com.sc.util.SingularLevel.MAX, full = com.sc.util.SingularLevel.pointsFull(s);
+            fit(Lang.tr("sc.singStation.lv", lvl), x + nameW, y, lvW - 2, 0xC080FF);
+            if (barW >= 16) {
+                bar(barX, y + 1, barW, 7, top ? 1 : pts, top ? 1 : need, 0xB060FF, false);
+            }
+            int nx = barX + Math.max(0, barW) + 4;
+            fit(top ? Lang.tr("sc.levelgui.max") : full ? Lang.tr("sc.levelgui.points.full", pts, need) : pts + " / " + need, nx, y, x + cw - nx,
+                    top || full ? 0x60FF60 : 0xA0A0A0);
+            List<String> tip = new ArrayList<String>();
+            tip.add(s.getDisplayName());
+            tip.add("§d" + Lang.tr("sc.tooltip.armor.singular.level", lvl, com.sc.util.SingularLevel.MAX));
+            if (!top) {
+                tip.add((full ? "§a" : "§7") + Lang.tr(full ? "sc.tooltip.armor.singular.points.ready" : "sc.tooltip.armor.singular.points", pts, need));
+                tip.add(com.sc.util.SingularLevel.readyToUpgrade(p, s) ? "§a" + Lang.tr("sc.levelgui.ready") : "§7" + Lang.tr("sc.levelgui.piece.tip"));
+            }
+            TextFitSC.hover(x, y - 1, cw, 11, tip);
+            y += 11;
+        }
+        // Р4: the sync
+        int synced = com.sc.util.SingularLevel.syncedLevel(w);
+        String sync;
+        int syncColor = 0x909090;
+        boolean all = true;
+        int hi = 0;
+        for (int t = 0; t < 4; t++) {
+            all &= com.sc.util.SingularLevel.isSingular(w[t]);
+            hi = Math.max(hi, com.sc.util.SingularLevel.isSingular(w[t]) ? com.sc.util.SingularLevel.levelOf(w[t]) : 0);
+        }
+        if (synced > 0) {
+            sync = Lang.tr("sc.levelgui.sync.yes", synced, com.sc.util.SingularLevel.SYNC_PCT);
+            syncColor = 0x60FF60;
+        } else if (!all) {
+            sync = Lang.tr("sc.levelgui.sync.notall", com.sc.util.SingularLevel.SYNC_PCT);
+        } else if (hi <= 1) {
+            sync = Lang.tr("sc.levelgui.sync.one", com.sc.util.SingularLevel.SYNC_PCT);
+        } else {
+            StringBuilder lag = new StringBuilder();
+            for (int t = 0; t < 4; t++) {
+                if (com.sc.util.SingularLevel.levelOf(w[t]) < hi) {
+                    lag.append(lag.length() > 0 ? ", " : "").append(Lang.tr("sc.armorhud.piece." + t).toLowerCase(Locale.ROOT));
+                }
+            }
+            sync = Lang.tr("sc.levelgui.sync.no", com.sc.util.SingularLevel.SYNC_PCT, lag);
+        }
+        fit(sync, x, y + 1, cw, syncColor);
+        y += 14;
+        if (y + 9 > bottom) {
+            return;
+        }
+        int target = focusTarget(w);
+        if (target == 0) {
+            fit(Lang.tr("sc.levelgui.allmax"), x, y, cw, 0x60FF60);
+            return;
+        }
+        fit(Lang.tr("sc.levelgui.tasks", target), x, y, cw, HEAD);
+        TextFitSC.hover(x, y - 1, cw, 10, Lang.tr("sc.levelgui.tasks.tip"));
+        y += 11;
+        boolean done = com.sc.util.SingularLevel.taskDone(p, target);
+        for (int i = 0; i < com.sc.util.SingularLevel.TASKS && y + 9 <= bottom; i++) {
+            int[] pr = com.sc.util.SingularLevel.taskProgress(p, target, i);
+            boolean ok = pr[1] > 0 && pr[0] >= pr[1];
+            drawRect(x, y, x + 7, y + 7, ok ? 0xFF50E050 : 0xFF3A3A44);
+            String prog = taskProgress(target, i, pr);
+            int pw = Math.min(fontRendererObj.getStringWidth(prog), cw / 2);
+            fit(Lang.tr("sc.levelgui.task." + target + "." + i), x + 11, y, cw - 11 - pw - 6, ok ? 0xFFFFFF : done ? 0x808080 : 0xC0C0C0);
+            fit(prog, x + cw - pw, y, pw, ok ? 0x60FF60 : 0xA0A0A0);
+            y += 10;
+        }
+        y += 2;
+        if (y + 9 > bottom) {
+            return;
+        }
+        int ready = 0;
+        int[] levels = new int[4];
+        for (int t = 0; t < 4; t++) {
+            if (com.sc.util.SingularLevel.readyToUpgrade(p, w[t])) {
+                ready++;
+                levels[t] = com.sc.util.SingularLevel.levelOf(w[t]);
+            }
+        }
+        if (ready > 0) {
+            fit(Lang.tr("sc.levelgui.ready"), x, y, cw, 0x60FF60);
+        } else {
+            fit(Lang.tr(done ? "sc.levelgui.needpoints" : "sc.levelgui.needtask"), x, y, cw, done ? 0xFFC040 : 0x909090);
+            for (int t = 0; t < 4; t++) {                       // not ready yet: what the whole set would cost next
+                levels[t] = com.sc.util.SingularLevel.isSingular(w[t]) && com.sc.util.SingularLevel.levelOf(w[t]) < com.sc.util.SingularLevel.MAX
+                        ? com.sc.util.SingularLevel.levelOf(w[t]) : 0;
+            }
+        }
+        y += 11;
+        int n = com.sc.util.SingularStationMath.pieces(levels);
+        if (n <= 0 || y + 9 > bottom) {
+            return;
+        }
+        long[] cost = com.sc.util.SingularStationMath.moderniseCost(levels, false);
+        int minutes = com.sc.util.SingularStationMath.moderniseTicks(levels) / com.sc.util.SingularStationMath.TICKS_PER_MINUTE;
+        List<String> tip = new ArrayList<String>();
+        tip.add(Lang.tr(ready > 0 ? "sc.levelgui.cost.ready" : "sc.levelgui.cost.next", n, amount(cost[com.sc.util.SingularStationMath.R_EU]),
+                Lang.tr("sc.singStation.time.min", minutes)));
+        StringBuilder gases = new StringBuilder();
+        for (int r = 1; r < com.sc.util.SingularStationMath.RESOURCES; r++) {
+            if (cost[r] > 0) {
+                gases.append(gases.length() > 0 ? " · " : "").append(GasUiSC.shortName(com.sc.util.SingularStationMath.GAS[r])).append(' ').append(cost[r]);
+                tip.add("§7" + GasUiSC.name(com.sc.util.SingularStationMath.GAS[r]) + ": " + cost[r] + " " + Lang.tr("sc.levelgui.mb"));
+            }
+        }
+        tip.add("§7" + Lang.tr(n >= 4 ? "sc.singStation.mul.set" : "sc.singStation.mul.noset", n));
+        if (com.sc.util.SingularStationMath.needsCatalyst(levels)) {
+            tip.add("§d" + Lang.tr("sc.singStation.catalyst.hint"));
+        }
+        tip.add("§7" + Lang.tr("sc.levelgui.cost.tip"));
+        fit(tip.get(0), x, y, cw, 0xB0B0B0);
+        TextFitSC.hover(x, y - 1, cw, 21, tip);
+        y += 10;
+        if (y + 9 <= bottom && gases.length() > 0) {
+            fit(gases.toString(), x, y, cw, 0x909090);
+        }
+    }
+
+    /** The right column: the branches, the profiles (buttons from initLevel), the level bonuses and what opens next. */
+    private void drawLevelRight(EntityPlayer p, ItemStack[] w) {
+        int x = lvRx, cw = lvRw, bottom = footY - 1;
+        boolean creative = p.capabilities.isCreativeMode;
+        ItemStack chest = com.sc.util.SingularProfiles.holder(w);
+        if (lvBranchY >= 0) {
+            fit(Lang.tr("sc.levelgui.branches"), x, lvBranchY, lvTwo ? cw : cw - lvPageW - 4, HEAD);
+            int[] bls = {3, 5};
+            for (int k = 0; k < lvBranchRows; k++) {
+                int ry = lvBranchY + 11 + k * 16;
+                boolean reached = creative || chest != null && com.sc.util.SingularLevel.levelOf(chest) >= bls[k];
+                fit(Lang.tr("sc.levelgui.branch.lv", bls[k]), x, ry + 3, 28, reached ? 0xE0E0E0 : 0x707070);
+            }
+        }
+        if (lvNoteY >= 0 && lvNoteY + 9 <= bottom) {
+            String note = creative ? Lang.tr("sc.levelgui.branch.creative") : chest == null ? Lang.tr("sc.levelgui.nochest")
+                    : Lang.tr("sc.levelgui.branch.note", com.sc.util.SingularStationMath.BRANCH_SM);
+            fit(note, x, lvNoteY, cw, 0x808080);
+        }
+        if (lvProfHeadY >= 0) {
+            fit(Lang.tr("sc.levelgui.profiles"), x, lvProfHeadY, cw, HEAD);
+        }
+        if (lvKeyY >= 0 && lvKeyY + 9 <= bottom) {
+            int code = ArmorClientSC.KEY_PROFILE == null ? 0 : ArmorClientSC.KEY_PROFILE.getKeyCode();
+            fit(code == 0 ? Lang.tr("sc.levelgui.profile.nokey")
+                    : Lang.tr("sc.levelgui.profile.key", net.minecraft.client.settings.GameSettings.getKeyDisplayString(code)), x, lvKeyY, cw, 0x808080);
+        }
+        int y = lvBonusY;
+        if (y < 0 || y + 9 > bottom) {
+            return;
+        }
+        ItemStack ref = chest;
+        for (ItemStack s : w) {
+            if (ref == null && com.sc.util.SingularLevel.isSingular(s)) {
+                ref = s;
+            }
+        }
+        int lvl = com.sc.util.SingularLevel.levelOf(ref);
+        boolean sync = com.sc.util.SingularLevel.synced(ref);
+        fit(Lang.tr("sc.levelgui.bonus.head", lvl), x, y, cw, HEAD);
+        y += 11;
+        if (y + 9 > bottom) {
+            return;
+        }
+        String bonus = lvl > 1 ? Lang.tr("sc.tooltip.armor.singular.bonus", com.sc.util.SingularLevel.bonusPercent(lvl, sync, com.sc.util.SingularLevel.TANK_PCT),
+                com.sc.util.SingularLevel.bonusPercent(lvl, sync, com.sc.util.SingularLevel.PROTECT_PCT),
+                com.sc.util.SingularLevel.bonusPercent(lvl, sync, com.sc.util.SingularLevel.EU_PCT)) + (sync ? " " + Lang.tr("sc.tooltip.armor.singular.sync") : "")
+                : Lang.tr("sc.levelgui.bonus.none");
+        fit(bonus, x, y, cw, 0xE0E0E0);
+        y += 10;
+        if (lvl >= com.sc.util.SingularLevel.MAX || y + 9 > bottom) {
+            return;
+        }
+        StringBuilder opens = new StringBuilder();
+        for (ArmorFeature f : ArmorFeature.values()) {
+            if (f.minSuit == ArmorSuit.SINGULAR && com.sc.util.SingularLevel.requiredLevel(f) == lvl + 1) {
+                opens.append(opens.length() > 0 ? ", " : "").append(nameOf(f));
+            }
+        }
+        fit(Lang.tr("sc.tooltip.armor.singular.opens", lvl + 1, opens), x, y, cw, 0xA0A0A0);
+    }
+
+    /** Hover texts of the level tab's buttons (registered last: over the buttons' own cut-label ones). */
+    private void levelButtonTips() {
+        ItemStack chest = com.sc.util.SingularProfiles.holder(ArmorGasSC.wornSet(mc.thePlayer));
+        boolean creative = mc.thePlayer.capabilities.isCreativeMode;
+        for (Object o : buttonList) {
+            GuiButton b = (GuiButton) o;
+            List<String> tip = new ArrayList<String>();
+            if (b.id >= LV_BR && b.id < LV_BR + 4) {
+                int bl = b.id - LV_BR < 2 ? 3 : 5, c = (b.id - LV_BR) % 2 + 1;
+                ArmorFeature f = com.sc.util.SingularLevel.branchFeature(bl, c);
+                tip.add(nameOf(f));
+                tip.add("§7" + Lang.tr("sc.armorfn." + fkey(f) + ".desc"));
+                int ch = com.sc.util.SingularLevel.branchChoice(chest, bl);
+                tip.add(creative ? "§a" + Lang.tr("sc.levelgui.branch.creative") : chest == null ? "§c" + Lang.tr("sc.levelgui.nochest")
+                        : ch == c ? "§a" + Lang.tr("sc.levelgui.branch.tip.chosen", com.sc.util.SingularStationMath.BRANCH_SM)
+                        : ch != 0 ? "§7" + Lang.tr("sc.levelgui.branch.tip.other", com.sc.util.SingularStationMath.BRANCH_SM)
+                        : com.sc.util.SingularLevel.levelOf(chest) >= bl ? "§d" + Lang.tr("sc.levelgui.branch.tip.pick")
+                        : "§7" + Lang.tr("sc.levelgui.branch.tip.later", bl));
+            } else if (b.id >= LV_PROF && b.id < LV_PROF + com.sc.util.SingularProfiles.COUNT) {
+                int i = b.id - LV_PROF;
+                tip.add(Lang.tr("sc.armor.sing.profile.name." + i));
+                tip.add("§7" + Lang.tr(com.sc.util.SingularProfiles.has(chest, i) ? "sc.levelgui.profile.tip" : "sc.levelgui.profile.tip.empty"));
+                tip.add("§7" + Lang.tr("sc.levelgui.profile.tip2"));
+            } else if (b.id == LV_SAVE) {
+                tip.add(Lang.tr("sc.levelgui.profile.save.tip"));
+            } else if (b.id == LV_HUD) {
+                tip.add(Lang.tr("sc.levelgui.hud.tip"));
+            } else {
+                continue;
+            }
+            TextFitSC.hover(b.xPosition, b.yPosition, b.width, b.height, tip);
+        }
     }
 
     // ------------------------------------------------------------------ drawing helpers
@@ -1420,6 +1875,10 @@ public class GuiArmorSC extends GuiScreen {
             b.enabled = false;
             return;
         }
+        if (b.id >= LV_BR && b.id <= LV_HUD) {
+            levelAction(b);
+            return;
+        }
         if (b.id == CHIPS_ID) {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.REMOVE_CHIPS, 0));   // the button goes once the chestplate comes back without them
             return;
@@ -1532,8 +1991,9 @@ public class GuiArmorSC extends GuiScreen {
         if (fillAllWait > 0) {
             fillAllWait--;
         }
-        String sig = selectedPiece == LIFE_TAB ? lifeSignature() : wornSignature();
-        if (selectedPiece == BLADE_TAB && blade() == null || selectedPiece == DRILL_TAB && drill() == null || selectedPiece == MODE_TAB && ArmorLogicSC.piece(mc.thePlayer, 1) == null
+        String sig = signature();
+        if (selectedPiece == LEVEL_TAB && !com.sc.util.SingularLevel.wearsSingular(mc.thePlayer)
+                || selectedPiece == BLADE_TAB && blade() == null || selectedPiece == DRILL_TAB && drill() == null || selectedPiece == MODE_TAB && ArmorLogicSC.piece(mc.thePlayer, 1) == null
                 || selectedPiece == 1 && chipsShown != ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1))) {
             initGui();                                           // the blade left the hand / the chips came out
         } else if (selectedPiece == LIFE_TAB && !anyPieceWorn() || !layoutSig.equals(sig)) {
@@ -1573,6 +2033,8 @@ public class GuiArmorSC extends GuiScreen {
             drawPanel();
             if (selectedPiece == LIFE_TAB) {
                 drawLife();
+            } else if (selectedPiece == LEVEL_TAB) {
+                drawLevel();
             } else {
                 drawRows();
             }
@@ -1599,6 +2061,9 @@ public class GuiArmorSC extends GuiScreen {
             }
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
+        if (selectedPiece == LEVEL_TAB) {
+            levelButtonTips();                                   // over the buttons' own cut-label hovers
+        }
         if (capturing != null) {                                 // over the strip: what to press
             List<?> lines = fontRendererObj.listFormattedStringToWidth(Lang.tr("sc.armorgui.bind.wait"), winW - 20);
             int bh = lines.size() * 10 + 6, by = top + 34;

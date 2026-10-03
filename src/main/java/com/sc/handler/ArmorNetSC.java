@@ -53,6 +53,12 @@ public final class ArmorNetSC {
      * choice (31 / 32 at level 3, 51 / 52 at level 5); the server checks the level and that nothing is chosen.
      */
     public static final byte BRANCH = 22;
+    /**
+     * М4, the Singular function profiles (SingularProfiles, kept in the worn Singular chestplate):
+     * pick profile `feature` (0..2; an empty one takes the current switches), save the current switches
+     * into profile `feature` (-1: the active one), step to the next profile (the key).
+     */
+    public static final byte PROFILE_SELECT = 23, PROFILE_SAVE = 24, PROFILE_NEXT = 25;
 
     /** BRANCH's feature byte for a level (3 / 5) and a choice (1 / 2). */
     public static int branchFeature(int level, int choice) {
@@ -483,6 +489,15 @@ public final class ArmorNetSC {
                                 new ChatComponentTranslation("sc.armorfn." + com.sc.util.SingularLevel.branchFeature(msg.feature / 10, msg.feature % 10)
                                         .name().toLowerCase(java.util.Locale.ROOT))));
                     }
+                    break;
+                case PROFILE_SELECT:
+                    com.sc.util.SingularProfiles.serverAction(p, 0, msg.feature);
+                    break;
+                case PROFILE_SAVE:
+                    com.sc.util.SingularProfiles.serverAction(p, 1, msg.feature);
+                    break;
+                case PROFILE_NEXT:
+                    com.sc.util.SingularProfiles.serverAction(p, 2, -1);
                     break;
                 default:
                     break;

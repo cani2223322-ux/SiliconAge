@@ -974,6 +974,8 @@ public final class BookContent {
             e.add(BookEl.item(new ItemStack(pieces[f.piece]), Lang.tr(key), Lang.tr("sc.manual.singular.fnline",
                     Lang.tr("sc.armorhud.piece." + f.piece), com.sc.util.SingularLevel.requiredLevel(f), Lang.tr(key + ".desc"))));
         }
+        // stage 5: the K menu's Level tab, the function profiles (M4), the cooldown HUD (M3)
+        e.add(BookEl.head(Lang.tr("sc.manual.singular.levelhead"))).addAll(paras("sc.manual.singular.level"));
         e.add(BookEl.gap()).add(BookEl.warn(Lang.tr("sc.manual.singular.next")));
         list.add(e);
     }

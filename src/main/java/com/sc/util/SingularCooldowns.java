@@ -18,6 +18,11 @@ public final class SingularCooldowns {
     private static final String TAG = "scCooldowns";
     /** The client's copy: the end tick of each function by ordinal (0: none). Written by the network thread. */
     private static final AtomicLongArray CLIENT = new AtomicLongArray(64);
+    /**
+     * Stage 5 (the HUD): pseudo ids in the same message, past every ArmorFeature ordinal - К1's boost
+     * end, its weakness end, Н4's end (world ticks) and К2's resonance (1 on, 0 off).
+     */
+    public static final int P_BOOST = 60, P_WEAK = 61, P_SLOW = 62, P_RES = 63, P_FIRST = P_BOOST;
 
     private SingularCooldowns() {
     }
@@ -87,6 +92,23 @@ public final class SingularCooldowns {
             if (end > now) {
                 send(p, f.ordinal(), end);
             }
+        }
+        NBTTagCompound d = p.getEntityData();             // К1 / Н4 still running after a relog, the resonance
+        for (int[] k : new int[][]{{P_BOOST, 0}, {P_WEAK, 1}, {P_SLOW, 2}}) {
+            long end = d.getLong(com.sc.item.SingularPowersSC.STATE_KEYS[k[1]]);
+            if (end > now) {
+                send(p, k[0], end);
+            }
+        }
+        if (d.getBoolean(com.sc.item.SingularSensesSC.RES_ON)) {
+            send(p, P_RES, 1L);
+        }
+    }
+
+    /** Server: a pseudo id (P_BOOST .. P_RES) to the player's client. */
+    public static void sendState(EntityPlayer p, int pseudo, long value) {
+        if (p != null && p.worldObj != null && !p.worldObj.isRemote && pseudo >= P_FIRST && pseudo < CLIENT.length()) {
+            send(p, pseudo, value);
         }
     }
 

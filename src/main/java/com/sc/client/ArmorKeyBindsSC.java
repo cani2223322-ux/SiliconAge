@@ -69,7 +69,33 @@ public final class ArmorKeyBindsSC {
                 BINDS.put(f, b);
             }
         }
+        String pos = config.get("hud", "singularCooldowns", HUD_POS[HUD_HOTBAR],
+                "Singular suit cooldown icons (M3): off, hotbar (above the hotbar), top, right, left").getString();
+        hudPos = HUD_HOTBAR;
+        for (int i = 0; i < HUD_POS.length; i++) {
+            if (HUD_POS[i].equalsIgnoreCase(pos.trim())) {
+                hudPos = i;
+            }
+        }
         if (config.hasChanged()) {
+            config.save();
+        }
+    }
+
+    /** М3: where the Singular cooldown icons go (the K menu's Level tab cycles it; kept in this file, "hud"). */
+    public static final String[] HUD_POS = {"off", "hotbar", "top", "right", "left"};
+    public static final int HUD_OFF = 0, HUD_HOTBAR = 1, HUD_TOP = 2, HUD_RIGHT = 3, HUD_LEFT = 4;
+    private static int hudPos = HUD_HOTBAR;
+
+    public static int hudPos() {
+        return hudPos;
+    }
+
+    /** The next place (off - above the hotbar - top - right - left), saved. */
+    public static void cycleHudPos() {
+        hudPos = (hudPos + 1) % HUD_POS.length;
+        if (config != null) {
+            config.get("hud", "singularCooldowns", HUD_POS[HUD_HOTBAR]).set(HUD_POS[hudPos]);
             config.save();
         }
     }
