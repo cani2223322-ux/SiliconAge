@@ -30,13 +30,18 @@ import net.minecraft.util.AxisAlignedBB;
  *    donor slot to a level-1 piece of the same type, Ф5 sync of lagging pieces, the colour scheme;
  *  - speed: gravitational stabilisers within STAB_RADIUS (same Y +-1; up to 4, +25% each) and a
  *    running Singular reactor within RES_RADIUS (+30%, -10% EU).
+ *  - Б-1 conversion: the Exo pieces in the armour slots become Singular pieces of level 1, for the
+ *    materials in the four material slots (and a Singular core in the catalyst slot) - taken whole at
+ *    the start, given back whole on «Отменить» - and the resources of SingularStationMath.convertCost,
+ *    drawn as the progress grows like the modernisation (the cores' charge counts toward the EU).
  * Charging can be switched off. Placed switched off; the item keeps energy, modules, tanks, settings;
  * breaking it (or the wrench) cancels a running process first by the 50% rule.
  */
 public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
-    /** The two extra slots after the module slots: the donor piece (Ф4) and the catalyst (Singular core). */
-    public static final int DONOR_SLOT = ALL_SLOTS, CATALYST_SLOT = ALL_SLOTS + 1, SING_SLOTS = ALL_SLOTS + 2;
+    /** The extra slots after the module slots: the donor piece (Ф4), the catalyst (Singular core), the four conversion materials (Б-1). */
+    public static final int DONOR_SLOT = ALL_SLOTS, CATALYST_SLOT = ALL_SLOTS + 1, MATERIAL_SLOT = ALL_SLOTS + 2, MATERIAL_SLOTS = 4,
+            SING_SLOTS = MATERIAL_SLOT + MATERIAL_SLOTS;
     /** The donor slot's bit in a process mask. */
     public static final int DONOR_BIT = 4;
     /** Singular matter's tank, mB (+SM_PER_EXTENSION per Tank Extension). */
@@ -44,7 +49,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
     /** Stabilisers count within this many blocks across, at the station's Y +- STAB_DY. Resonance: a running reactor within RES_RADIUS. */
     public static final int STAB_RADIUS = 3, STAB_DY = 1, RES_RADIUS = 16, SCAN_EVERY = 20;
 
-    private final ItemStack[] extra = new ItemStack[2];
+    private final ItemStack[] extra = new ItemStack[SING_SLOTS - ALL_SLOTS];
     private boolean chargeOn = true;
     private SingularProcessSC proc;
     /** Last scan: stabilisers counted (offsets dx, dy, dz each), resonance. */
@@ -180,12 +185,64 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return s != null && s.getItem() instanceof com.sc.item.ItemBatterySC && s.getItemDamage() == SingularStationMath.CORE_META;
     }
 
-    /** What the donor slot takes: a Singular piece; the catalyst slot: a Singular core. */
+    /** What the donor slot takes: a Singular piece; the catalyst slot: a Singular core; a material slot: a conversion material. */
     public static boolean fitsExtra(int slot, ItemStack s) {
         if (slot == DONOR_SLOT) {
             return SingularLevel.isSingular(s);
         }
+        if (slot >= MATERIAL_SLOT && slot < SING_SLOTS) {
+            return materialKind(s) >= 0;
+        }
         return slot == CATALYST_SLOT && isCore(s);
+    }
+
+    /** The conversion material kind (SingularStationMath.M_*) of a stack, or -1. */
+    public static int materialKind(ItemStack s) {
+        if (s == null || s.getItem() == null) {
+            return -1;
+        }
+        if (s.getItem() instanceof com.sc.item.ItemBatterySC) {
+            return s.getItemDamage() == SingularStationMath.CORE_META ? SingularStationMath.M_SING_CORE
+                    : s.getItemDamage() == SingularStationMath.EXO_CORE_META ? SingularStationMath.M_EXO_CORE : -1;
+        }
+        if (s.getItem() == com.sc.init.ModItems.component("matterCapsule")) {
+            return SingularStationMath.M_CAPSULE;
+        }
+        if (s.getItem() == com.sc.init.ModItems.component("focusLens")) {
+            return SingularStationMath.M_LENS;
+        }
+        if (s.getItem() == com.sc.init.ModItems.component("nb3SnPlate")) {
+            return SingularStationMath.M_NB3SN;
+        }
+        if (s.getItem() == com.sc.init.ModItems.component("fusionCore")) {
+            return SingularStationMath.M_FUSION;
+        }
+        ItemStack hf = com.sc.init.ModItems.ingot == null ? null : com.sc.init.ModItems.ingot.stackOf(com.sc.util.Material.HAFNIUM);
+        if (hf != null && s.getItem() == hf.getItem() && s.getItemDamage() == hf.getItemDamage()) {
+            return SingularStationMath.M_HAFNIUM;
+        }
+        return -1;
+    }
+
+    /** One stack of material kind `kind` (count `n`) - for the screen, NEI and the book. */
+    public static ItemStack materialStack(int kind, int n) {
+        ItemStack s;
+        switch (kind) {
+            case SingularStationMath.M_CAPSULE: s = new ItemStack(com.sc.init.ModItems.component("matterCapsule")); break;
+            case SingularStationMath.M_LENS: s = new ItemStack(com.sc.init.ModItems.component("focusLens")); break;
+            case SingularStationMath.M_NB3SN: s = new ItemStack(com.sc.init.ModItems.component("nb3SnPlate")); break;
+            case SingularStationMath.M_FUSION: s = new ItemStack(com.sc.init.ModItems.component("fusionCore")); break;
+            case SingularStationMath.M_HAFNIUM: s = com.sc.init.ModItems.ingot.stackOf(com.sc.util.Material.HAFNIUM); break;
+            case SingularStationMath.M_EXO_CORE: s = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.EXO_CORE_META); break;
+            default: s = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META); break;
+        }
+        s.stackSize = Math.max(1, n);
+        return s;
+    }
+
+    /** An Exo piece (any charge) - the conversion's input. */
+    public static boolean isExo(ItemStack s) {
+        return s != null && s.getItem() instanceof ItemArmorSC && ((ItemArmorSC) s.getItem()).getSuit() == com.sc.util.ArmorSuit.EXO;
     }
 
     @Override
@@ -483,6 +540,173 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return null;
     }
 
+    // ------------------------------------------------------------------ Б-1 conversion
+
+    /** The armour slots holding an Exo piece (bit per slot). */
+    public int convertMask() {
+        int mask = 0;
+        for (int i = 0; i < SLOTS; i++) {
+            if (isExo(getStackInSlot(i))) {
+                mask |= 1 << i;
+            }
+        }
+        return mask;
+    }
+
+    /** The materials there now, per kind: the four material slots and the catalyst slot (a Singular core). */
+    public int[] materialsHave() {
+        int[] have = new int[SingularStationMath.MATERIALS];
+        for (int slot = CATALYST_SLOT; slot < SING_SLOTS; slot++) {
+            ItemStack s = getStackInSlot(slot);
+            int k = materialKind(s);
+            if (k >= 0) {
+                have[k] += s.stackSize;
+            }
+        }
+        return have;
+    }
+
+    /** EU the cores the conversion of `mask` would use carry (the first ones found, as startConvert takes them). */
+    public long coreChargeFor(int mask) {
+        int[] need = SingularStationMath.convertMaterials(mask);
+        long eu = 0;
+        int[] left = {need[SingularStationMath.M_EXO_CORE], need[SingularStationMath.M_SING_CORE]};
+        for (int slot = CATALYST_SLOT; slot < SING_SLOTS; slot++) {
+            ItemStack s = getStackInSlot(slot);
+            int k = materialKind(s);
+            int j = k == SingularStationMath.M_EXO_CORE ? 0 : k == SingularStationMath.M_SING_CORE ? 1 : -1;
+            if (j >= 0 && left[j] > 0) {
+                left[j]--;
+                eu += com.sc.item.ItemBatterySC.chargeOf(s);
+            }
+        }
+        return eu;
+    }
+
+    /** Б-1: the button «Преобразовать». @return null when it started, else the lang key of why not */
+    public String startConvert(EntityPlayer p) {
+        return startConvertFor(p == null ? "" : p.getCommandSenderName());
+    }
+
+    public String startConvertFor(String starter) {
+        if (proc != null) {
+            return "sc.singStation.err.busy";
+        }
+        int mask = convertMask();
+        if (mask == 0) {
+            return "sc.singStation.err.noexo";
+        }
+        int[] need = SingularStationMath.convertMaterials(mask), have = materialsHave();
+        for (int k = 0; k < need.length; k++) {
+            if (have[k] < need[k]) {
+                return "sc.singStation.err.nomaterials";
+            }
+        }
+        SingularProcessSC q = new SingularProcessSC();
+        q.kind = SingularProcessSC.KIND_CONVERT;
+        q.mask = mask;
+        long[] cost = SingularStationMath.convertCost(mask);
+        System.arraycopy(cost, 0, q.cost, 0, cost.length);
+        q.baseTicks = Math.max(1, SingularStationMath.convertTicks(mask));
+        q.starter = starter == null ? "" : starter;
+        long coreEu = 0;
+        int[] left = need.clone();
+        for (int slot = CATALYST_SLOT; slot < SING_SLOTS; slot++) {      // the materials leave the slots now, whole
+            ItemStack s = getStackInSlot(slot);
+            int k = materialKind(s);
+            if (k < 0 || left[k] <= 0) {
+                continue;
+            }
+            ItemStack taken = decrStackSize(slot, Math.min(left[k], s.stackSize));
+            if (taken == null) {
+                continue;
+            }
+            left[k] -= taken.stackSize;
+            if (k == SingularStationMath.M_EXO_CORE || k == SingularStationMath.M_SING_CORE) {
+                coreEu += com.sc.item.ItemBatterySC.chargeOf(taken);
+            }
+            q.items.add(taken);
+        }
+        long eu = Math.min(coreEu, q.cost[SingularStationMath.R_EU]);   // the cores' charge pays the EU first
+        q.catalystEu = eu;
+        q.drawn[SingularStationMath.R_EU] = eu;
+        begin(q);
+        return null;
+    }
+
+    /** Б-1 on one piece: the Singular piece of its type, level 1, scheme A, with the Exo piece's charge, gases (clamped), chips and switches. */
+    public static ItemStack convertPiece(ItemStack exo) {
+        if (!isExo(exo)) {
+            return exo;
+        }
+        int t = ((ItemArmorSC) exo.getItem()).armorType;
+        ItemStack out = new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[t]);
+        NBTTagCompound tag = exo.hasTagCompound() ? (NBTTagCompound) exo.getTagCompound().copy() : new NBTTagCompound();
+        for (String k : new String[]{SingularLevel.NBT, SingularLevel.PTS, SingularLevel.BRANCH3, SingularLevel.BRANCH5, SingularLevel.SYNC,
+                SingularScheme.NBT}) {
+            tag.removeTag(k);
+        }
+        int[] gas = new int[Gas.values().length];
+        for (Gas g : Gas.values()) {
+            gas[g.ordinal()] = com.sc.util.ArmorGasSC.amount(exo, g);
+            tag.removeTag(com.sc.util.ArmorGasSC.nbtKey(g));
+        }
+        out.setTagCompound(tag);
+        ItemArmorSC.setCharge(out, ItemArmorSC.chargeOf(exo));
+        for (Gas g : Gas.values()) {                         // what the Singular tank holds of it, at most
+            if (gas[g.ordinal()] > 0) {
+                com.sc.util.ArmorGasSC.setAmount(out, g, gas[g.ordinal()]);
+            }
+        }
+        SingularLevel.setLevel(out, SingularLevel.MIN);
+        SingularLevel.setPoints(out, 0);
+        SingularScheme.setScheme(out, SingularScheme.DEFAULT);
+        return out;
+    }
+
+    /** Gives a stack back to the slots it can go to (a core: the catalyst slot first; then the material slots), the rest drops. */
+    private void putBack(ItemStack s) {
+        if (s == null || s.stackSize <= 0) {
+            return;
+        }
+        if (isCore(s) && extra[CATALYST_SLOT - ALL_SLOTS] == null) {
+            extra[CATALYST_SLOT - ALL_SLOTS] = s;
+            return;
+        }
+        for (int slot = MATERIAL_SLOT; slot < SING_SLOTS && s.stackSize > 0; slot++) {
+            ItemStack in = extra[slot - ALL_SLOTS];
+            if (in != null && in.isItemEqual(s) && ItemStack.areItemStackTagsEqual(in, s) && in.isStackable()) {
+                int n = Math.min(s.stackSize, Math.min(in.getMaxStackSize(), getInventoryStackLimit()) - in.stackSize);
+                if (n > 0) {
+                    in.stackSize += n;
+                    s.stackSize -= n;
+                }
+            }
+        }
+        for (int slot = MATERIAL_SLOT; slot < SING_SLOTS && s.stackSize > 0; slot++) {
+            if (extra[slot - ALL_SLOTS] == null) {
+                extra[slot - ALL_SLOTS] = s.copy();
+                s.stackSize = 0;
+            }
+        }
+        if (s.stackSize > 0 && worldObj != null && !worldObj.isRemote) {
+            worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, s.copy()));
+        }
+    }
+
+    /** Test hook: the process stands at `p` with its resources paid for that far (the rest is drawn as usual). */
+    public void fastForwardForTest(double p) {
+        if (proc == null) {
+            return;
+        }
+        double q = Math.max(proc.progress, Math.min(0.999, p));
+        long[] need = SingularStationMath.needFor(proc.cost, proc.drawn, q);
+        for (int r = 0; r < SingularStationMath.RESOURCES; r++) {
+            proc.drawn[r] += need[r];
+        }
+        proc.progress = q;
+    }
+
     private void begin(SingularProcessSC p) {
         proc = p;
         shortMask = 0;
@@ -502,6 +726,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         }
         SingularProcessSC p = proc;
         proc = null;
+        boolean convert = p.kind == SingularProcessSC.KIND_CONVERT;
         long gridEu = p.drawn[SingularStationMath.R_EU] - p.catalystEu;
         long back = SingularStationMath.refund(gridEu);
         if (back > 0) {
@@ -513,7 +738,11 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 fillTank(SingularStationMath.GAS[r], (int) Math.min(Integer.MAX_VALUE, g), true);
             }
         }
-        if (p.catalystEu > 0 && com.sc.init.ModItems.battery != null) {
+        if (convert) {                                      // Б-1: the materials come back whole, the cores with their charge
+            for (ItemStack s : p.items) {
+                putBack(s.copy());
+            }
+        } else if (p.catalystEu > 0 && com.sc.init.ModItems.battery != null) {
             ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
             com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
             if (extra[1] == null) {
@@ -560,6 +789,18 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             }
             if (who != null) {
                 who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.done.sync", String.valueOf(p.target)));
+            }
+        } else if (p.kind == SingularProcessSC.KIND_CONVERT) {
+            int n = 0;
+            for (int i = 0; i < SLOTS; i++) {
+                ItemStack s = getStackInSlot(i);
+                if (p.locks(i) && isExo(s)) {
+                    super.setInventorySlotContents(i, convertPiece(s));
+                    n++;
+                }
+            }
+            if (who != null && n > 0) {
+                who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.done.convert", String.valueOf(n)));
             }
         } else if (p.kind == SingularProcessSC.KIND_TRANSFER) {
             ItemStack donor = extra[0], target = p.target >= 0 && p.target < SLOTS ? getStackInSlot(p.target) : null;

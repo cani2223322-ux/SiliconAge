@@ -53,6 +53,9 @@ public class ItemBlockMachineSC extends ItemBlock {
         if (matter > 0) {                                                       // a Matter Compressor's mass counter
             list.add(com.sc.manual.Lang.tr("sc.machine.tooltip.matter", matter, com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE));
         }
+        if (stack.hasTagCompound() && stack.getTagCompound().getBoolean(com.sc.tileentity.TileEntityMachineSC.ITEM_LIQUID_KEY)) {
+            list.add(com.sc.manual.Lang.tr("sc.machine.tooltip.liquid"));            // СМ1: set to «жидкая материя»
+        }
         if (stack.hasTagCompound() && stack.getTagCompound().hasKey(com.sc.tileentity.TileEntityMachineSC.ITEM_UPGRADES_KEY)) {
             for (ItemStack up : com.sc.tileentity.TileEntityMachineSC.upgradesOf(
                     stack.getTagCompound().getCompoundTag(com.sc.tileentity.TileEntityMachineSC.ITEM_UPGRADES_KEY))) {

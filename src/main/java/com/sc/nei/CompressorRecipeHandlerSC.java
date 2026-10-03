@@ -108,7 +108,10 @@ public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
     @Override
     public void loadCraftingRecipes(ItemStack result) {
         ItemStack capsule = TileEntityMachineSC.capsuleStack();
-        if (capsule != null && NEIServerUtils.areStacksSameTypeCrafting(capsule, result)) {
+        net.minecraftforge.fluids.FluidStack asFluid = result == null ? null : MachineRecipeHandlerSC.fluidFor(result);
+        boolean sm = com.sc.init.ModFluids.singularMatter != null && (asFluid != null && asFluid.getFluid() == com.sc.init.ModFluids.singularMatter
+                || result != null && result.getItem() instanceof com.sc.item.ItemSingularCellSC);
+        if (capsule != null && NEIServerUtils.areStacksSameTypeCrafting(capsule, result) || sm) {   // СМ1: singular matter comes from here too
             loadCraftingRecipes(ownId());
         }
     }
@@ -173,6 +176,9 @@ public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
         if (guiRecipe.isMouseOver(r.in, recipe)) {
             currenttip.add("§c" + Lang.tr("sc.nei.comp.tip", r.mass));
             currenttip.add("§8" + Lang.tr("sc.nei.comp.any"));
+        }
+        if (guiRecipe.isMouseOver(r.out, recipe)) {
+            currenttip.add("§d" + Lang.tr("sc.nei.comp.liquid", TileEntityMachineSC.SM_PER_CAPSULE));
         }
         return super.handleItemTooltip(guiRecipe, stack, currenttip, recipe);
     }

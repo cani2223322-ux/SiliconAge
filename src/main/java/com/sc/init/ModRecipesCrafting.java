@@ -37,6 +37,8 @@ public final class ModRecipesCrafting {
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         net.minecraftforge.oredict.RecipeSorter.register("siliconage:battery", BatteryRecipeSC.class,
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:chargecarry", ChargeCarryRecipeSC.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         cablesAndPipes();
         baseMaterials();
         passiveComponents();
@@ -534,6 +536,27 @@ public final class ModRecipesCrafting {
                 'K', new ItemStack(Blocks.piston), 'P', new ItemStack(ModBlocks.chargePadSC, 1, com.sc.energy.Tier.MV.ordinal()),
                 'T', new ItemStack(ModBlocks.tankSC, 1, 0), 'X', silicon(SiliconMaterial.CONTROLLER), 'I', new ItemStack(Items.iron_ingot),
                 'C', cable(cableOf(com.sc.energy.Tier.MV)));
+        singularCrafts();
+    }
+
+    /**
+     * The Singular armour's blocks and cell (docs/plan-singular-armor.md, СС1 / ГС1 / item 7):
+     *  - the Singular Service Station round an Armour Service Station: gravity coils, an Exo core (its
+     *    charge goes into the station's buffer - ChargeCarryRecipeSC), Singular cable, a fusion core, hafnium;
+     *  - the Gravitational Stabiliser: hafnium round a gravity coil, a Compressed Matter Capsule, Singular cable;
+     *  - the Singular Matter cell (empty): titanium plates and glass round a hafnium ingot.
+     * The Singular suit itself comes from the station (Б-1: an Exo piece converted), not from the grid.
+     */
+    private static void singularCrafts() {
+        ItemStack coil = new ItemStack(ModBlocks.gravityCoil), hf = ingot(Material.HAFNIUM);
+        int stationMax = new com.sc.tileentity.TileEntitySingularStationSC().getMaxEnergyStored();
+        GameRegistry.addRecipe(new ChargeCarryRecipeSC(new ItemStack(ModBlocks.singularStation), stationMax, "GXG", "CAC", "HFH",
+                'G', coil, 'X', new ItemStack(ModItems.battery, 1, com.sc.util.SingularStationMath.EXO_CORE_META),
+                'C', cable(CableType.SINGULAR), 'A', new ItemStack(ModBlocks.armorStation), 'F', comp("fusionCore"), 'H', hf));
+        OreRecipes.shaped(new ItemStack(ModBlocks.gravStabiliser), "HMH", " G ", "HCH",
+                'H', hf, 'M', comp("matterCapsule"), 'G', coil, 'C', cable(CableType.SINGULAR));
+        OreRecipes.shaped(new ItemStack(ModItems.singularCell), " T ", "GHG", " T ",
+                'T', comp("tiPlate"), 'G', new ItemStack(Blocks.glass_pane), 'H', hf);
     }
 
     /**

@@ -47,6 +47,10 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         GeneratorRecipeHandlerSC generators = new GeneratorRecipeHandlerSC();
         API.registerRecipeHandler(generators);
         API.registerUsageHandler(generators);
+        // the Singular Station's Б-1 conversion: Exo piece + materials -> Singular piece
+        SingularConvertHandlerSC convert = new SingularConvertHandlerSC();
+        API.registerRecipeHandler(convert);
+        API.registerUsageHandler(convert);
         // Clicking the progress bar of any machine screen opens that machine's recipe page.
         List<Class<? extends GuiContainer>> guis = new ArrayList<Class<? extends GuiContainer>>();
         guis.add(GuiMachineSC.class);

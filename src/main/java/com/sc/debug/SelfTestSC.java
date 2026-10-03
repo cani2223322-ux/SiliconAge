@@ -65,6 +65,7 @@ public final class SelfTestSC {
             singularLevels();
             singularStation();
             singularStage5();
+            singularCrafts();
             bladeFunctions();
             chargePad();
             batteries();
@@ -2175,6 +2176,215 @@ public final class SelfTestSC {
      * locked functions left off, an empty one taking the current switches, cycling), М3 the cooldown
      * HUD's pure rules (what a function needs, which icons show), the new message ids / bytes and the texts.
      */
+    /** The Singular armour's crafts: recipes, the Б-1 conversion, the compressor's liquid mode, the reactor's by-product, the SM cell. */
+    private static void singularCrafts() {
+        net.minecraft.item.Item stationItem = net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.singularStation);
+        // СС1 / ГС1 / the cell: recipes there, with the right parts
+        java.util.List<net.minecraft.item.crafting.IRecipe> stR = com.sc.manual.BookContent.craftingFor(new ItemStack(com.sc.init.ModBlocks.singularStation));
+        java.util.List<net.minecraft.item.crafting.IRecipe> gsR = com.sc.manual.BookContent.craftingFor(new ItemStack(com.sc.init.ModBlocks.gravStabiliser));
+        java.util.List<net.minecraft.item.crafting.IRecipe> cellR = com.sc.manual.BookContent.craftingFor(new ItemStack(ModItems.singularCell));
+        boolean stHasParts = !stR.isEmpty() && stR.get(0) instanceof com.sc.init.ChargeCarryRecipeSC
+                && inputsHave(stR.get(0), new ItemStack(com.sc.init.ModBlocks.armorStation))
+                && inputsHave(stR.get(0), new ItemStack(ModItems.battery, 1, 5)) && inputsHave(stR.get(0), new ItemStack(com.sc.init.ModBlocks.gravityCoil));
+        boolean gsHasParts = !gsR.isEmpty() && inputsHave(gsR.get(0), new ItemStack(ModItems.component("matterCapsule")))
+                && inputsHave(gsR.get(0), new ItemStack(com.sc.init.ModBlocks.gravityCoil));
+        // the Exo core's charge goes into the station's buffer
+        net.minecraft.inventory.InventoryCrafting grid = new net.minecraft.inventory.InventoryCrafting(new net.minecraft.inventory.Container() {
+            @Override
+            public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer p) {
+                return true;
+            }
+        }, 3, 3);
+        ItemStack coil = new ItemStack(com.sc.init.ModBlocks.gravityCoil), cab = new ItemStack(com.sc.init.ModBlocks.cableSC, 1, com.sc.energy.CableType.SINGULAR.ordinal()),
+                hf = ModItems.ingot.stackOf(com.sc.util.Material.HAFNIUM), core5 = new ItemStack(ModItems.battery, 1, 5);
+        com.sc.item.ItemBatterySC.setCharge(core5, 1000000L);
+        ItemStack[] pattern = {coil, core5, coil, cab, new ItemStack(com.sc.init.ModBlocks.armorStation), cab, hf, new ItemStack(ModItems.component("fusionCore")), hf};
+        for (int i = 0; i < 9; i++) {
+            grid.setInventorySlotContents(i, pattern[i].copy());
+        }
+        ItemStack made = !stR.isEmpty() && stR.get(0).matches(grid, null) ? stR.get(0).getCraftingResult(grid) : null;
+        boolean carried = made != null && made.getItem() == stationItem && made.hasTagCompound() && made.getTagCompound().getInteger("EnergySC") == 1000000;
+        check(stHasParts && gsHasParts && !cellR.isEmpty() && carried, "Singular crafts: the station (Armour Station + Exo core + gravity coils + Singular cable),"
+                + " the stabiliser (capsule + gravity coil), the SM cell have recipes; the Exo core's charge goes into the station item (" + stHasParts + "/"
+                + gsHasParts + "/" + !cellR.isEmpty() + "/" + carried + ")");
+
+        // Б-1 cost math
+        long[] one = com.sc.util.SingularStationMath.convertCost(1), set = com.sc.util.SingularStationMath.convertCost(15);
+        boolean math = java.util.Arrays.equals(one, new long[]{50000000L, 100, 2000, 0, 0})
+                && java.util.Arrays.equals(com.sc.util.SingularStationMath.convertCost(2), new long[]{150000000L, 250, 4000, 1000, 0})
+                && java.util.Arrays.equals(set, new long[]{350000000L, 600, 10000, 1000, 0})
+                && com.sc.util.SingularStationMath.convertTicks(15) == 4800 && com.sc.util.SingularStationMath.convertTicks(9) == 2400
+                && com.sc.util.SingularStationMath.convertTicks(4) == 3600
+                && java.util.Arrays.equals(com.sc.util.SingularStationMath.convertMaterials(15), new int[]{11, 1, 8, 1, 2, 1, 1})
+                && java.util.Arrays.equals(com.sc.util.SingularStationMath.convertMaterials(1), new int[]{2, 1, 2, 0, 0, 0, 0});
+        check(math, "Singular conversion cost: helmet 50 M EU / SM 100 / He 2000, chest 150 M / 250 / 4000 / D 1000, the set summed "
+                + java.util.Arrays.toString(set) + ", time the longest piece (4 min), materials summed");
+
+        // Б-1 in a station: start takes the materials, cancel gives them back whole; the new piece keeps charge / gases / chips
+        com.sc.tileentity.TileEntitySingularStationSC st = new com.sc.tileentity.TileEntitySingularStationSC();
+        int M = com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOT;
+        ItemStack exoHelm = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[0]);
+        com.sc.item.ItemArmorSC.setCharge(exoHelm, 12345);
+        int heCapExo = com.sc.util.ArmorGasSC.capacity(exoHelm, com.sc.util.ArmorGasSC.Gas.HELIUM);
+        com.sc.util.ArmorGasSC.setAmount(exoHelm, com.sc.util.ArmorGasSC.Gas.HELIUM, 300);
+        com.sc.item.ItemArmorSC.chipsTag(exoHelm).setInteger("NIGHT_VISION", 2);
+        String noExo = st.startConvertFor("");
+        st.setInventorySlotContents(0, exoHelm.copy());
+        st.setInventorySlotContents(M, new ItemStack(ModItems.component("matterCapsule"), 3));
+        st.setInventorySlotContents(M + 1, new ItemStack(ModItems.component("focusLens")));
+        String noMat = st.startConvertFor("");
+        st.setInventorySlotContents(M + 2, new ItemStack(ModItems.component("nb3SnPlate"), 2));
+        boolean valid = st.isItemValidForSlot(M + 3, hf) && st.isItemValidForSlot(M + 3, new ItemStack(ModItems.battery, 1, 5))
+                && !st.isItemValidForSlot(M + 3, new ItemStack(net.minecraft.init.Blocks.stone));
+        String started = st.startConvertFor("");
+        com.sc.tileentity.SingularProcessSC p = st.getProcess();
+        boolean took = started == null && p != null && p.kind == com.sc.tileentity.SingularProcessSC.KIND_CONVERT && p.mask == 1 && st.isLocked(0)
+                && p.cost[0] == 50000000L && p.baseTicks == 2400 && st.getStackInSlot(M) != null && st.getStackInSlot(M).stackSize == 1
+                && st.getStackInSlot(M + 1) == null && st.getStackInSlot(M + 2) == null && p.items.size() == 3;
+        net.minecraft.nbt.NBTTagCompound pn = new net.minecraft.nbt.NBTTagCompound();
+        if (p != null) {
+            p.writeToNBT(pn);
+        }
+        com.sc.tileentity.SingularProcessSC p2 = com.sc.tileentity.SingularProcessSC.readFromNBT(pn);
+        boolean procNbt = p2 != null && p2.kind == com.sc.tileentity.SingularProcessSC.KIND_CONVERT && p2.items.size() == 3 && p2.cost[2] == 2000;
+        st.cancelProcess();
+        int caps = 0, lens = 0, plates = 0;
+        for (int i = 0; i < com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
+            ItemStack s = st.getStackInSlot(M + i);
+            int k = com.sc.tileentity.TileEntitySingularStationSC.materialKind(s);
+            caps += k == com.sc.util.SingularStationMath.M_CAPSULE ? s.stackSize : 0;
+            lens += k == com.sc.util.SingularStationMath.M_LENS ? s.stackSize : 0;
+            plates += k == com.sc.util.SingularStationMath.M_NB3SN ? s.stackSize : 0;
+        }
+        boolean back = st.getProcess() == null && caps == 3 && lens == 1 && plates == 2 && !st.isLocked(0)
+                && com.sc.tileentity.TileEntitySingularStationSC.isExo(st.getStackInSlot(0));
+        ItemStack sing = com.sc.tileentity.TileEntitySingularStationSC.convertPiece(exoHelm);
+        boolean piece = com.sc.util.SingularLevel.isSingular(sing) && ((com.sc.item.ItemArmorSC) sing.getItem()).armorType == 0
+                && com.sc.util.SingularLevel.levelOf(sing) == 1 && com.sc.util.SingularLevel.points(sing) == 0
+                && com.sc.util.SingularScheme.of(sing) == com.sc.util.SingularScheme.A && com.sc.item.ItemArmorSC.chargeOf(sing) == 12345
+                && com.sc.util.ArmorGasSC.amount(sing, com.sc.util.ArmorGasSC.Gas.HELIUM) == Math.min(300, heCapExo)
+                && sing.getTagCompound().getCompoundTag("ChipsSC").getInteger("NIGHT_VISION") == 2;
+        // the chest: its Singular core's charge pays the EU first; cancelled - the core comes back with all of it
+        com.sc.tileentity.TileEntitySingularStationSC sc = new com.sc.tileentity.TileEntitySingularStationSC();
+        sc.setInventorySlotContents(1, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[1]));
+        ItemStack core6 = new ItemStack(ModItems.battery, 1, 6);
+        com.sc.item.ItemBatterySC.setCharge(core6, 100000000L);
+        sc.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, core6);
+        sc.setInventorySlotContents(M, new ItemStack(ModItems.component("matterCapsule"), 4));
+        sc.setInventorySlotContents(M + 1, new ItemStack(ModItems.component("fusionCore")));
+        sc.setInventorySlotContents(M + 2, new ItemStack(ModItems.component("nb3SnPlate"), 2));
+        String chestStart = sc.startConvertFor("");
+        boolean coreEu = chestStart == null && sc.getProcess() != null && sc.getProcess().drawn[0] == 100000000L && sc.getProcess().catalystEu == 100000000L
+                && sc.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT) == null;
+        sc.cancelProcess();
+        ItemStack coreBack = sc.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
+        coreEu &= coreBack != null && com.sc.item.ItemBatterySC.chargeOf(coreBack) == 100000000L && sc.getEnergyStored() == 0;
+        check("sc.singStation.err.noexo".equals(noExo) && "sc.singStation.err.nomaterials".equals(noMat) && valid && took && procNbt && back && piece && coreEu,
+                "Singular conversion: refused without Exo / materials, starts taking the materials whole (slot locked), the process with its items survives NBT,"
+                        + " «Отменить» gives them back whole, the new piece is level 1 / scheme A with the charge, helium and chips; the chest's core pays the EU"
+                        + " and comes back whole (" + noExo + "/" + noMat + "/" + valid + "/" + took + "/" + procNbt + "/" + back + "/" + piece + "/" + coreEu + ")");
+
+        // СМ1: the compressor's liquid mode - 100 mB per capsule's worth, no capsule; the mode in NBT; a full tank waits
+        com.sc.tileentity.TileEntityMachineSC c = new com.sc.tileentity.TileEntityMachineSC();
+        c.setMachineType(com.sc.machine.MachineType.MATTER_COMPRESSOR);
+        c.setPowerOn(true);
+        c.setMatterLiquid(true);
+        c.loadEnergyFromItem(c.getMaxEnergyStored());
+        c.setMatterForTest(2 * com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE);
+        for (int i = 0; i < 2 * c.compressTicks(); i++) {
+            c.loadEnergyFromItem(c.getMaxEnergyStored());
+            c.compressorTickForTest();
+        }
+        net.minecraftforge.fluids.FluidStack inTank = c.getTank(2).getFluid();
+        boolean liquid = inTank != null && inTank.getFluid() == com.sc.init.ModFluids.singularMatter && inTank.amount == 200 && c.getMatter() == 0
+                && c.getStackInSlot(com.sc.tileentity.TileEntityMachineSC.INPUT_SLOTS) == null
+                && com.sc.tileentity.TileEntityMachineSC.liquidFor(1152) == 200 && com.sc.tileentity.TileEntityMachineSC.liquidFor(575) == 0
+                && c.getTank(2).getCapacity() == com.sc.tileentity.TileEntityMachineSC.SM_TANK;
+        net.minecraft.nbt.NBTTagCompound cn = new net.minecraft.nbt.NBTTagCompound();
+        c.writeToNBT(cn);
+        com.sc.tileentity.TileEntityMachineSC c2 = new com.sc.tileentity.TileEntityMachineSC();
+        c2.readFromNBT(cn);
+        net.minecraft.nbt.NBTTagCompound oldN = (net.minecraft.nbt.NBTTagCompound) cn.copy();
+        oldN.removeTag("MatterLiquid");
+        com.sc.tileentity.TileEntityMachineSC c3 = new com.sc.tileentity.TileEntityMachineSC();
+        c3.readFromNBT(oldN);
+        boolean modeNbt = c2.isMatterLiquid() && c2.getTank(2).getFluidAmount() == 200 && !c3.isMatterLiquid();
+        net.minecraftforge.fluids.FluidStack out = c.drain(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 150, true);
+        boolean drained = out != null && out.amount == 150 && c.getTank(2).getFluidAmount() == 50;
+        c.getTank(2).fill(new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.singularMatter, com.sc.tileentity.TileEntityMachineSC.SM_TANK), true);
+        c.setMatterForTest(com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE);
+        c.compressorTickForTest();
+        boolean full = c.getStatus() == com.sc.machine.MachineStatus.OUTPUT_FULL && c.getMatter() == com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE;
+        check(liquid && modeNbt && drained && full, "Matter compressor «жидкая материя»: 2 capsules' mass -> 200 mB SM, no capsule; the mode saved (old ones: capsules);"
+                + " pipes drain it; a full tank waits (" + liquid + "/" + modeNbt + "/" + drained + "/" + full + ")");
+
+        // СМ2: the reactor's by-product - 1 mB/s up to 4000, drained at its block, kept in NBT
+        boolean rate = com.sc.tileentity.SingularReactorSC.byProductAfter(0, 60) == 60 && com.sc.tileentity.SingularReactorSC.byProductAfter(3990, 60) == 4000
+                && com.sc.tileentity.SingularReactorSC.SM_PER_SECOND == 1 && com.sc.tileentity.SingularReactorSC.SM_TANK == 4000;
+        com.sc.tileentity.TileEntityGeneratorSC g = new com.sc.tileentity.TileEntityGeneratorSC();
+        g.setGeneratorType(com.sc.energy.GeneratorType.SINGULAR_REACTOR);
+        g.getSingular().setSmForTest(250);
+        net.minecraftforge.fluids.FluidStack gd = g.drain(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 100, true);
+        boolean gDrain = gd != null && gd.amount == 100 && gd.getFluid() == com.sc.init.ModFluids.singularMatter
+                && g.canDrain(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, com.sc.init.ModFluids.singularMatter) && g.getSingular().getSmStored() == 150;
+        net.minecraft.nbt.NBTTagCompound gn = new net.minecraft.nbt.NBTTagCompound();
+        g.writeToNBT(gn);
+        com.sc.tileentity.TileEntityGeneratorSC g2 = new com.sc.tileentity.TileEntityGeneratorSC();
+        g2.readFromNBT(gn);
+        boolean gNbt = g2.singular() && g2.getSingular().getSmStored() == 150;
+        check(rate && gDrain && gNbt, "Singular reactor by-product: 1 mB/s up to 4000 mB, drained as singular matter at the block, kept in NBT ("
+                + rate + "/" + gDrain + "/" + gNbt + ")");
+
+        // the SM cell: fills to 1000 with singular matter only, drains, its fluid is the suit's 8th gas
+        ItemStack cell = new ItemStack(ModItems.singularCell);
+        com.sc.item.ItemSingularCellSC ci = ModItems.singularCell;
+        int f1 = ci.fill(cell, new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.singularMatter, 600), true);
+        int f2 = ci.fill(cell, new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.singularMatter, 600), true);
+        int f3 = ci.fill(cell, new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.hydrogen, 100), true);
+        net.minecraftforge.fluids.FluidStack d1 = ci.drain(cell, 300, true);
+        boolean cellOk = f1 == 600 && f2 == 400 && f3 == 0 && d1 != null && d1.amount == 300 && com.sc.item.ItemSingularCellSC.amountOf(cell) == 700
+                && com.sc.util.ArmorGasSC.Gas.of(com.sc.init.ModFluids.singularMatter) == com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER
+                && com.sc.util.FluidHandSC.isContainer(cell);
+        ci.drain(cell, 1000, true);
+        cellOk &= com.sc.item.ItemSingularCellSC.amountOf(cell) == 0 && !cell.hasTagCompound();
+        // into the Singular Station's 8th tank, as the cell's right-click pours it
+        com.sc.tileentity.TileEntitySingularStationSC sst = new com.sc.tileentity.TileEntitySingularStationSC();
+        int intoStation = sst.fill(net.minecraftforge.common.util.ForgeDirection.UNKNOWN,
+                new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.singularMatter, 1000), true);
+        cellOk &= intoStation == 1000 && sst.tankAmount(com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER) == 1000;
+        check(cellOk, "Singular Matter cell: fills to 1000 mB of singular matter only, drains, empties clean; the suit and the station take its fluid");
+
+        String missing = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Set<String> keys = langKeys(lang);
+            for (String k : new String[]{"item.siliconage.singularMatterCell.name", "sc.singStation.btn.convert", "sc.singStation.head.convert",
+                    "sc.singStation.proc.3", "sc.waila.singStation.proc.3", "sc.singStation.err.noexo", "sc.singStation.err.nomaterials",
+                    "sc.singStation.done.convert", "sc.singStation.materials", "sc.gui.comp.mode.liquid", "sc.gui.comp.mode.capsule",
+                    "sc.waila.sm", "sc.waila.comp.liquid", "sc.cell.sm.amount", "sc.nei.conv.title", "sc.manual.singstation.conv.1",
+                    "sc.manual.generator.sing.byproduct", "sc.manual.comp.liquid", "sc.manual.singular.get.1", "sc.tooltip.armor.exo.convert"}) {
+                if (!keys.contains(k)) {
+                    missing += lang + ":" + k + " ";
+                }
+            }
+        }
+        check(missing.isEmpty(), "Singular crafts: lang keys in both languages" + (missing.isEmpty() ? "" : " - missing " + missing));
+    }
+
+    /** Whether a shaped (ore) recipe's inputs hold this exact item (item + damage). */
+    private static boolean inputsHave(net.minecraft.item.crafting.IRecipe r, ItemStack want) {
+        Object[] in = r instanceof net.minecraftforge.oredict.ShapedOreRecipe ? ((net.minecraftforge.oredict.ShapedOreRecipe) r).getInput() : new Object[0];
+        for (Object o : in) {
+            java.util.List<?> options = o instanceof ItemStack ? java.util.Collections.singletonList(o) : o instanceof java.util.List ? (java.util.List<?>) o
+                    : java.util.Collections.emptyList();
+            for (Object x : options) {
+                if (x instanceof ItemStack && ((ItemStack) x).getItem() == want.getItem() && ((ItemStack) x).getItemDamage() == want.getItemDamage()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static void singularStage5() {
         com.sc.util.ArmorSuit sg = com.sc.util.ArmorSuit.SINGULAR;
         com.sc.util.ArmorFeature dash = com.sc.util.ArmorFeature.PHASE_DASH, press = com.sc.util.ArmorFeature.GRAV_PRESS,

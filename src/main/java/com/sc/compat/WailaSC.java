@@ -103,6 +103,12 @@ public class WailaSC implements IWailaDataProvider {
                 tip.add(Lang.tr("sc.waila.upgrades", t.getInteger("scUpgrades")));
             }
         }
+        if (t.hasKey("scCompLiquid")) {                              // the Matter Compressor: its mode, its singular matter
+            tip.add(Lang.tr(t.getBoolean("scCompLiquid") ? "sc.waila.comp.liquid" : "sc.waila.comp.capsules"));
+            if (t.getInteger("scCompSm") > 0) {
+                tip.add(Lang.tr("sc.waila.sm", t.getInteger("scCompSm"), t.getInteger("scCompSmCap")));
+            }
+        }
         if (t.hasKey("scCable")) {
             int c = t.getInteger("scCable");
             if (c >= 0 && c < com.sc.energy.CableType.values().length) {   // a newer server's cable on an older client: skip
@@ -167,6 +173,9 @@ public class WailaSC implements IWailaDataProvider {
                 tip.add(Lang.tr("sc.waila.sing.event." + t.getInteger("scSingEvent")));
             } else if (ph == com.sc.tileentity.SingularReactorSC.PHASE_IDLE) {
                 tip.add(Lang.tr(t.getBoolean("scSingReady") ? "sc.waila.sing.ready" : "sc.waila.sing.notready"));
+            }
+            if (ph == com.sc.tileentity.SingularReactorSC.PHASE_RUN || t.getInteger("scSingSm") > 0) {   // СМ2: the by-product
+                tip.add(Lang.tr("sc.waila.sm", t.getInteger("scSingSm"), com.sc.tileentity.SingularReactorSC.SM_TANK));
             }
         }
         if (t.hasKey("scBig")) {
@@ -248,6 +257,11 @@ public class WailaSC implements IWailaDataProvider {
                 upgrades += s == null ? 0 : s.stackSize;
             }
             tag.setInteger("scUpgrades", upgrades);
+            if (m.getMachineType().isCompressor()) {
+                tag.setBoolean("scCompLiquid", m.isMatterLiquid());
+                tag.setInteger("scCompSm", m.getTank(2).getFluidAmount());
+                tag.setInteger("scCompSmCap", m.getTank(2).getCapacity());
+            }
         }
         if (te instanceof TileEntityConduitBundleSC) {
             TileEntityConduitBundleSC b = (TileEntityConduitBundleSC) te;
@@ -291,6 +305,7 @@ public class WailaSC implements IWailaDataProvider {
             tag.setInteger("scSingOut", s.outputNow());
             tag.setInteger("scSingEvent", s.getEvent());
             tag.setBoolean("scSingReady", s.isReady());
+            tag.setInteger("scSingSm", s.getSmStored());
         }
         if (te instanceof com.sc.tileentity.TileEntityArmorStationSC) {
             com.sc.tileentity.TileEntityArmorStationSC st = (com.sc.tileentity.TileEntityArmorStationSC) te;

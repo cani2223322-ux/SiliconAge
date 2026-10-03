@@ -45,6 +45,8 @@ public final class ModItems {
     public static ItemSimpleSC alFoil;
     public static ItemSimpleSC liquidHeCell;
     public static ItemSimpleSC deuteriumCell;
+    /** The Singular Matter cell (a tank-in-an-item, 1000 mB). */
+    public static com.sc.item.ItemSingularCellSC singularCell;
     public static com.sc.item.ItemWearPartSC windRotor, isotopeCapsule;
     public static com.sc.item.ItemQuarryModuleSC quarryModule;
     public static final java.util.List<com.sc.item.ItemDrillHeadSC> DRILL_HEADS = new java.util.ArrayList<com.sc.item.ItemDrillHeadSC>();
@@ -277,6 +279,9 @@ public final class ModItems {
         ItemSimpleSC capsule = new MatterCapsule();
         GameRegistry.registerItem(capsule, "matterCapsule");
         COMPONENTS.put("matterCapsule", capsule);
+        // the Singular Matter cell (appended)
+        singularCell = new com.sc.item.ItemSingularCellSC();
+        GameRegistry.registerItem(singularCell, "singularMatterCell");
     }
 
     /** The Compressed Matter Capsule: a plain component with a TooltipSC tooltip. */

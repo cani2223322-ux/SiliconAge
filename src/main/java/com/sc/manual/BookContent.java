@@ -421,6 +421,14 @@ public final class BookContent {
                 ItemStack cap = new ItemStack(ModItems.component("matterCapsule"));
                 e.about(cap).add(BookEl.head(cap.getDisplayName(), cap))
                         .add(BookEl.para(Lang.tr("sc.manual.matterCapsule"))).add(BookEl.para(Lang.tr("sc.manual.matterCapsule.2")));
+                // СМ1: the liquid mode - singular matter instead of capsules
+                ItemStack cell = com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, com.sc.item.ItemSingularCellSC.CAPACITY);
+                e.about(new ItemStack(ModItems.singularCell, 1, OreDictionary.WILDCARD_VALUE))
+                        .add(BookEl.head(Lang.tr("sc.manual.comp.liquidhead"), cell))
+                        .add(BookEl.para(Lang.tr("sc.manual.comp.liquid", com.sc.tileentity.TileEntityMachineSC.SM_PER_CAPSULE,
+                                com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE, com.sc.tileentity.TileEntityMachineSC.SM_TANK)))
+                        .add(BookEl.para(Lang.tr("sc.manual.comp.cell", com.sc.item.ItemSingularCellSC.CAPACITY)));
+                crafting(e, new ItemStack(ModItems.singularCell));
             }
             if (!recipes.isEmpty()) {
                 e.add(BookEl.head(Lang.tr("sc.book.recipes")));
@@ -538,6 +546,9 @@ public final class BookContent {
      * table), accidents, radiation - the texts under sc.manual.generator.sing.*.
      */
     private static void singular(BookEntry e) {
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.byproducthead")))      // СМ2: singular matter while it runs
+                .add(BookEl.para(Lang.tr("sc.manual.generator.sing.byproduct", com.sc.tileentity.SingularReactorSC.SM_PER_SECOND,
+                        com.sc.tileentity.SingularReactorSC.SM_TANK)));
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.buildhead"))).add(singularBuild())
                 .add(BookEl.items(materials(singularLayers()))).addAll(paras("sc.manual.generator.sing.build"));
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.fuelhead"))).addAll(paras("sc.manual.generator.sing.fuel"));
@@ -921,8 +932,34 @@ public final class BookContent {
                 100 - com.sc.util.SingularStationMath.RESONANCE_EU_PERCENT)));
         e.add(BookEl.para(Lang.tr("sc.manual.singstation.tanks", com.sc.tileentity.TileEntityArmorStationSC.TANK_CAPACITY,
                 com.sc.tileentity.TileEntitySingularStationSC.SM_TANK, com.sc.tileentity.TileEntitySingularStationSC.SM_PER_EXTENSION)));
+        // Б-1: the conversion Exo -> Singular
+        e.add(BookEl.head(Lang.tr("sc.manual.singstation.convhead"))).addAll(paras("sc.manual.singstation.conv"));
+        convertCards(e);
+        crafting(e, st);
+        crafting(e, stab);
         e.about(st, stab);
         list.add(e);
+    }
+
+    /** Б-1 in the book: per piece Exo -> (the station) -> Singular, its materials, EU / gases and time. */
+    private static void convertCards(BookEntry e) {
+        ItemStack station = new ItemStack(ModBlocks.singularStation);
+        for (int t = 0; t < 4; t++) {
+            List<ItemStack> pair = listOf(new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[t]), new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[t]));
+            e.add(BookEl.chain(pair, listOf(station)));
+            int[] need = com.sc.util.SingularStationMath.convertMaterials(1 << t);
+            List<ItemStack> mats = new ArrayList<ItemStack>();
+            for (int k = 0; k < need.length; k++) {
+                if (need[k] > 0) {
+                    mats.add(com.sc.tileentity.TileEntitySingularStationSC.materialStack(k, need[k]));
+                }
+            }
+            e.add(BookEl.items(mats));
+            long[] c = com.sc.util.SingularStationMath.convertCost(1 << t);
+            e.add(BookEl.dim(Lang.tr("sc.manual.singstation.convrow", Lang.tr("sc.armorhud.piece." + t),
+                    com.sc.util.SingularStationMath.shortAmount(c[0], Lang.tr("sc.singStation.unit.k"), Lang.tr("sc.singStation.unit.m"), Lang.tr("sc.singStation.unit.b")),
+                    c[1], c[2], c[3], com.sc.util.SingularStationMath.convertTicks(1 << t) / com.sc.util.SingularStationMath.TICKS_PER_MINUTE)));
+        }
     }
 
     private static void singularArmor(List<BookEntry> list, BookChapter c) {
@@ -936,6 +973,11 @@ public final class BookContent {
             e.about(new ItemStack(piece, 1, OreDictionary.WILDCARD_VALUE));
         }
         e.add(BookEl.items(shown)).addAll(paras("sc.manual.singular.intro"));
+        // how to get it (Б-1): an Exo piece converted in the Singular Station
+        e.add(BookEl.head(Lang.tr("sc.manual.singular.gethead"))).addAll(paras("sc.manual.singular.get"));
+        e.add(BookEl.chain(listOf(new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[1]), new ItemStack(pieces[1])),
+                listOf(new ItemStack(ModBlocks.singularStation))));
+        e.add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()));
         e.add(BookEl.head(Lang.tr("sc.manual.singular.statshead")));
         e.add(BookEl.para(Lang.tr("sc.manual.singular.stats", s.material.getDamageReductionAmount(0), s.material.getDamageReductionAmount(1),
                 s.material.getDamageReductionAmount(2), s.material.getDamageReductionAmount(3), s.maxCharge, s.chargeTier.name(),
@@ -958,6 +1000,8 @@ public final class BookContent {
             }
         }
         e.add(BookEl.head(Lang.tr("sc.armorStation.gas.singular_matter"))).addAll(paras("sc.manual.singular.matter"));
+        e.add(BookEl.items(listOf(com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, com.sc.item.ItemSingularCellSC.CAPACITY),
+                machineStack(com.sc.machine.MachineType.MATTER_COMPRESSOR), ModBlocks.generatorStack(com.sc.energy.GeneratorType.SINGULAR_REACTOR, 1))));
         e.add(BookEl.head(Lang.tr("sc.manual.singular.schemeshead"))).addAll(paras("sc.manual.singular.schemes"));
         StringBuilder names = new StringBuilder();
         for (com.sc.util.SingularScheme sc : com.sc.util.SingularScheme.values()) {

@@ -88,6 +88,8 @@ public class ContainerMachineSC extends Container {
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_BATTERY_MODE = 12;
     /** Smelters: take the stored experience; the induction furnace: keep warm on / off. */
     public static final int BTN_XP = 13, BTN_KEEP_WARM = 14;
+    /** The Matter Compressor: capsules / «жидкая материя» (СМ1). */
+    public static final int BTN_MATTER_MODE = 15;
 
     @Override
     public boolean enchantItem(EntityPlayer player, int id) {
@@ -119,6 +121,10 @@ public class ContainerMachineSC extends Container {
             machine.toggleKeepWarm();
             return true;
         }
+        if (id == BTN_MATTER_MODE && machine.getMachineType().isCompressor()) {
+            machine.toggleMatterLiquid();
+            return true;
+        }
         return false;
     }
 
@@ -147,8 +153,10 @@ public class ContainerMachineSC extends Container {
     private static final int ID_SMELT2 = TANK_ID_BASE + TANK_COUNT * 2, ID_XP = ID_SMELT2 + 1, ID_WARM = ID_SMELT2 + 2;
     /** The Matter Compressor's mass counter. */
     private static final int ID_MATTER = ID_WARM + 1;
+    /** Its liquid mode (СМ1). */
+    private static final int ID_LIQUID = ID_MATTER + 1;
 
-    private final IntSyncSC sync = new IntSyncSC(ID_MATTER + 1);
+    private final IntSyncSC sync = new IntSyncSC(ID_LIQUID + 1);
 
     private int currentValue(int id) {
         if (id == ID_SMELT2) {
@@ -162,6 +170,9 @@ public class ContainerMachineSC extends Container {
         }
         if (id == ID_MATTER) {
             return machine.getMatter();
+        }
+        if (id == ID_LIQUID) {
+            return machine.isMatterLiquid() ? 1 : 0;
         }
         if (id >= TANK_ID_BASE) {
             FluidStack fluid = machine.getTank((id - TANK_ID_BASE) / 2).getFluid();
@@ -211,6 +222,10 @@ public class ContainerMachineSC extends Container {
         }
         if (id == ID_MATTER) {
             machine.setMatterClient(data);
+            return;
+        }
+        if (id == ID_LIQUID) {
+            machine.setMatterLiquid(data != 0);
             return;
         }
         if (id >= TANK_ID_BASE) {

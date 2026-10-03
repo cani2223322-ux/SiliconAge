@@ -212,6 +212,9 @@ public class BlockMachineSC extends Block {
                 && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_MATTER_KEY)) {
             ((TileEntityMachineSC) te).loadMatterFromItem(stack.getTagCompound().getInteger(TileEntityMachineSC.ITEM_MATTER_KEY));
         }
+        if (te instanceof TileEntityMachineSC && stack.hasTagCompound() && stack.getTagCompound().getBoolean(TileEntityMachineSC.ITEM_LIQUID_KEY)) {
+            ((TileEntityMachineSC) te).setMatterLiquid(true);   // СМ1: the compressor's liquid mode
+        }
         // the charge last: the upgrades above set how much the buffer holds
         if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
                 && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_ENERGY_KEY)) {
@@ -252,7 +255,8 @@ public class BlockMachineSC extends Block {
         int redstone = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getRedstoneMode() : 0;
         int energy = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getEnergyStored() : 0;
         int matter = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getMatter() : 0;
-        if (tanks != null || ups != null || redstone != 0 || energy > 0 || matter > 0) {
+        boolean liquid = te instanceof TileEntityMachineSC && ((TileEntityMachineSC) te).isMatterLiquid();
+        if (tanks != null || ups != null || redstone != 0 || energy > 0 || matter > 0 || liquid) {
             net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
             if (redstone != 0) {
                 nbt.setInteger(TileEntityMachineSC.ITEM_REDSTONE_KEY, redstone);
@@ -265,6 +269,9 @@ public class BlockMachineSC extends Block {
             }
             if (matter > 0) {                                        // the compressor's mass counter
                 nbt.setInteger(TileEntityMachineSC.ITEM_MATTER_KEY, matter);
+            }
+            if (liquid) {                                            // and its liquid mode
+                nbt.setBoolean(TileEntityMachineSC.ITEM_LIQUID_KEY, true);
             }
             if (ups != null) {
                 nbt.setTag(TileEntityMachineSC.ITEM_UPGRADES_KEY, ups);

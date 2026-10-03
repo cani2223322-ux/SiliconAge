@@ -2416,6 +2416,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     @Override
     public FluidStack drain(ForgeDirection from, FluidStack resource, boolean doDrain) {
+        if (singular()) {                                    // СМ2: the Singular Reactor's by-product
+            return resource != null && resource.getFluid() == com.sc.init.ModFluids.singularMatter ? drainSingularMatter(resource.amount, doDrain) : null;
+        }
         if (resource == null || outTank.getFluid() == null || !resource.isFluidEqual(outTank.getFluid())) {
             return null;
         }
@@ -2424,7 +2427,15 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     @Override
     public FluidStack drain(ForgeDirection from, int maxDrain, boolean doDrain) {
+        if (singular()) {
+            return drainSingularMatter(maxDrain, doDrain);
+        }
         return generatorType == GeneratorType.FUEL_CELL ? outTank.drain(maxDrain, doDrain) : null;
+    }
+
+    private FluidStack drainSingularMatter(int max, boolean doDrain) {
+        int n = com.sc.init.ModFluids.singularMatter == null ? 0 : getSingular().drainSm(max, doDrain);
+        return n > 0 ? new FluidStack(com.sc.init.ModFluids.singularMatter, n) : null;
     }
 
     /**
@@ -2438,11 +2449,16 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     @Override
     public boolean canDrain(ForgeDirection from, Fluid fluid) {
-        return generatorType == GeneratorType.FUEL_CELL;
+        return generatorType == GeneratorType.FUEL_CELL || singular() && fluid == com.sc.init.ModFluids.singularMatter;
     }
 
     @Override
     public FluidTankInfo[] getTankInfo(ForgeDirection from) {
+        if (singular()) {
+            int sm = getSingular().getSmStored();
+            return new FluidTankInfo[]{fuelTank.getInfo(), new FluidTankInfo(sm > 0 && com.sc.init.ModFluids.singularMatter != null
+                    ? new FluidStack(com.sc.init.ModFluids.singularMatter, sm) : null, SingularReactorSC.SM_TANK)};
+        }
         switch (generatorType.kind) {
             case DUAL_FLUID:
                 return generatorType == GeneratorType.FUEL_CELL

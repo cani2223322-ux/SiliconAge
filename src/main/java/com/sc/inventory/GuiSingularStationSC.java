@@ -25,7 +25,8 @@ import net.minecraft.item.ItemStack;
 /**
  * The Singular Service Station's screen (docs/singular-armor/sing_2_station_gui.png), compact to fit
  * a 320 x 240 screen: left the four pieces with their level and points bar, the donor and catalyst
- * slots; centre the modernisation panel (target level, the checklist - points, task, EU and each
+ * slots and the four conversion material slots (Б-1); centre the modernisation panel (target level,
+ * or «Преобразование» while Exo pieces lie in the armour slots; the checklist - points, task, EU and each
  * gas, have / need in colour -, the multipliers: set discount, resonance, stabilisers; the button,
  * the progress, the time left, «Отменить (50%)», «Ветки» - the branch panel in its place); right
  * the eight tank gauges with their gas switches, the SV energy bar, the modules; under it the
@@ -43,7 +44,7 @@ public class GuiSingularStationSC extends GuiContainer {
             EN_LABEL_Y = 84, EN_Y = 92, EN_W = 89, EN_TEXT_Y = 100, MOD_LABEL_Y = 108, MOD_TEXT_Y = 137;
     /** The service area right of the inventory. */
     private static final int SX = 172, SW = 144, ROW1 = 153, ROW2 = 167, ROW3 = 182, STATUS_Y = 197;
-    private static final int SEPARATOR_Y = 150;
+    private static final int SEPARATOR_Y = 152;
     /** Colours (the A scheme: base (34,22,48), accent (190,110,255)). */
     private static final int BG = 0xFF140E1C, PANEL = 0xFF1E1629, EDGE = 0xFF4A3466, EDGE_HI = 0xFF7A56A8, ACCENT = 0xFFBE6EFF,
             TITLE = 0xD9A8FF, TEXT = 0xE8E0F4, LABEL = 0xA898C0, DIM = 0x6E6280, OK = 0x5AE66E, BAD = 0xFF5A50, WARN = 0xFFB040,
@@ -75,6 +76,10 @@ public class GuiSingularStationSC extends GuiContainer {
         int ticks, ready, candidates, pointsFull, taskLevel;
         boolean taskDone, process, catalystNeeded, catalystOk, setDiscount;
         int[] readyLv = new int[4];
+        /** Б-1: Exo pieces in the slots (or a conversion running) - the panel is the conversion's. */
+        boolean convert, matOk;
+        int convMask;
+        int[] matNeed = new int[SingularStationMath.MATERIALS], matHave = new int[SingularStationMath.MATERIALS];
     }
 
     private EntityPlayer me() {
@@ -93,6 +98,10 @@ public class GuiSingularStationSC extends GuiContainer {
                 p.header = Lang.tr("sc.singStation.head.sync", proc.target);
             } else if (proc.kind == SingularProcessSC.KIND_TRANSFER) {
                 p.header = Lang.tr("sc.singStation.head.transfer");
+            } else if (proc.kind == SingularProcessSC.KIND_CONVERT) {
+                p.header = Lang.tr("sc.singStation.head.convert");
+                p.convert = true;
+                p.convMask = proc.mask & 15;
             } else {
                 int lo = 9, hi = 0;
                 for (int i = 0; i < 4; i++) {
@@ -106,6 +115,26 @@ public class GuiSingularStationSC extends GuiContainer {
                 p.header = levelHeader(lo, hi);
             }
             p.setDiscount = proc.kind == SingularProcessSC.KIND_MODERNISE && Integer.bitCount(proc.mask & 15) == 4;
+            return p;
+        }
+        int cm = te.convertMask();
+        if (cm != 0) {                                     // Б-1: Exo pieces in the slots - the conversion's checklist
+            p.convert = true;
+            p.convMask = cm;
+            p.header = Lang.tr("sc.singStation.head.convert");
+            p.candidates = Integer.bitCount(cm);
+            p.cost = SingularStationMath.convertCost(cm);
+            p.ticks = SingularStationMath.duration(SingularStationMath.convertTicks(cm), te.speed());
+            p.matNeed = SingularStationMath.convertMaterials(cm);
+            p.matHave = te.materialsHave();
+            p.matOk = true;
+            for (int k = 0; k < p.matNeed.length; k++) {
+                p.matOk &= p.matHave[k] >= p.matNeed[k];
+            }
+            p.have[SingularStationMath.R_EU] = te.getEnergyStored() + te.coreChargeFor(cm);
+            for (int r = 1; r < R; r++) {
+                p.have[r] = te.tankAmount(SingularStationMath.GAS[r]);
+            }
             return p;
         }
         int[] cand = new int[4];
@@ -193,6 +222,10 @@ public class GuiSingularStationSC extends GuiContainer {
             branchView = !branchView;
             return;
         }
+        if (button == modernise && te.getProcess() == null && te.convertMask() != 0) {
+            mc.playerController.sendEnchantPacket(inventorySlots.windowId, ContainerSingularStationSC.BTN_CONVERT);
+            return;
+        }
         if (button == modernise && te.getProcess() != null) {
             long now = System.currentTimeMillis();
             if (now - cancelArmed > ARM_MS) {              // «Отменить» loses half: a second click within 1.5 s
@@ -216,9 +249,9 @@ public class GuiSingularStationSC extends GuiContainer {
     private void refreshButtons(Plan p) {
         boolean running = te.getProcess() != null;
         modernise.displayString = running ? Lang.tr(armed() ? "sc.singStation.btn.cancel.sure" : "sc.singStation.btn.cancel")
-                : Lang.tr("sc.singStation.btn.modernise");
-        modernise.color = running ? 0xFFFF8A80 : ACCENT;
-        modernise.enabled = running || (p.ready > 0 && (!p.catalystNeeded || p.catalystOk));
+                : Lang.tr(p.convert ? "sc.singStation.btn.convert" : "sc.singStation.btn.modernise");
+        modernise.color = running ? 0xFFFF8A80 : p.convert ? YELLOW : ACCENT;
+        modernise.enabled = running || (p.convert ? p.matOk : p.ready > 0 && (!p.catalystNeeded || p.catalystOk));
         branches.displayString = Lang.tr(branchView ? "sc.singStation.btn.back" : "sc.singStation.btn.branches");
         ItemStack chest = te.getStackInSlot(com.sc.util.ArmorGasSC.CHEST);
         for (int k = 0; k < 4; k++) {
@@ -318,8 +351,11 @@ public class GuiSingularStationSC extends GuiContainer {
             }
         }
         pocket(x + ContainerSingularStationSC.DONOR_X, y + ContainerSingularStationSC.EXTRA_Y, te.isLocked(TileEntitySingularStationSC.DONOR_SLOT) ? ACCENT : EDGE);
-        pocket(x + ContainerSingularStationSC.CATALYST_X, y + ContainerSingularStationSC.EXTRA_Y,
+        pocket(x + ContainerSingularStationSC.CATALYST_X, y + ContainerSingularStationSC.CATALYST_Y,
                 te.isLocked(TileEntitySingularStationSC.CATALYST_SLOT) ? ACCENT : 0xFF6A4A20);
+        for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {   // Б-1: the materials, 2 x 2
+            pocket(x + ContainerSingularStationSC.MAT_X + (i % 2) * 18, y + ContainerSingularStationSC.MAT_Y + (i / 2) * 18, 0xFF8A7020);
+        }
         // the centre panel
         frame(x + PX, y + PY, PW, PH, PANEL, proc != null ? ACCENT : EDGE_HI);
         Plan p = plan();
@@ -364,6 +400,9 @@ public class GuiSingularStationSC extends GuiContainer {
         if (line < 2) {
             if (p.process) {
                 return ACCENT & 0xFFFFFF;
+            }
+            if (p.convert) {
+                return line == 0 ? OK : p.matOk ? OK : BAD;
             }
             if (p.candidates == 0) {
                 return DIM;
@@ -434,12 +473,16 @@ public class GuiSingularStationSC extends GuiContainer {
                 int need = SingularLevel.threshold(SingularLevel.levelOf(s));
                 small(need > 0 ? SingularLevel.points(s) + " / " + need : Lang.tr("sc.singStation.maxlevel"), 26, ry + 17, 70,
                         need > 0 && SingularLevel.points(s) >= need ? OK : LABEL);
+            } else if (TileEntitySingularStationSC.isExo(s)) {
+                small(Lang.tr("sc.singStation.exo"), 26, ry + 11, 70, YELLOW);
             } else if (s != null) {
                 small(Lang.tr("sc.singStation.notsingular"), 26, ry + 11, 70, DIM);
             }
         }
-        small(Lang.tr("sc.singStation.donor"), 6, ContainerSingularStationSC.EXTRA_Y - 9, 44, LABEL);
-        small(Lang.tr("sc.singStation.catalyst"), 50, ContainerSingularStationSC.EXTRA_Y - 9, 46, LABEL);
+        small(Lang.tr("sc.singStation.donor"), 26, ContainerSingularStationSC.EXTRA_Y + 5, 24, LABEL);
+        small(Lang.tr("sc.singStation.catalyst.short"), 26, ContainerSingularStationSC.CATALYST_Y + 5, 24, LABEL);
+        small(Lang.tr("sc.singStation.materials"), ContainerSingularStationSC.MAT_X - 1, ContainerSingularStationSC.MAT_Y - 9, 46,
+                p.convert && !p.matOk && te.getProcess() == null ? WARN : LABEL);
         // the centre panel
         TextFitSC.drawCentered(fontRendererObj, branchView ? Lang.tr("sc.singStation.branches.head") : p.header, PX + 3, HEAD_Y, PW - 6, TEXT, false, guiLeft, guiTop);
         if (branchView) {
@@ -506,6 +549,13 @@ public class GuiSingularStationSC extends GuiContainer {
         if (p.process) {
             fit(Lang.tr("sc.singStation.line.pieces", piecesOf(proc)), x, LINE_Y, w, TEXT);
             fit(Lang.tr("sc.singStation.line.progress", Math.round(proc.progress * 100)), x, LINE_Y + LINE, w, TEXT);
+        } else if (p.convert) {
+            fit(Lang.tr("sc.singStation.line.pieces", piecesOfMask(p.convMask)), x, LINE_Y, w, TEXT);
+            int missing = 0;
+            for (int k = 0; k < p.matNeed.length; k++) {
+                missing += p.matHave[k] < p.matNeed[k] ? 1 : 0;
+            }
+            fit(p.matOk ? Lang.tr("sc.singStation.line.mat.ok") : Lang.tr("sc.singStation.line.mat.short", missing), x, LINE_Y + LINE, w, TEXT);
         } else if (p.candidates == 0) {
             fit(Lang.tr("sc.singStation.line.nopieces"), x, LINE_Y, w, DIM);
             fit(Lang.tr("sc.singStation.line.task.none"), x, LINE_Y + LINE, w, DIM);
@@ -519,19 +569,23 @@ public class GuiSingularStationSC extends GuiContainer {
         }
         // the multipliers
         int k = p.process ? Integer.bitCount(proc.mask & 15) : p.ready > 0 ? p.ready : p.candidates;
-        boolean modern = !p.process || proc.kind == SingularProcessSC.KIND_MODERNISE;
+        boolean modern = !p.convert && (!p.process || proc.kind == SingularProcessSC.KIND_MODERNISE);
         small(modern ? (p.setDiscount ? Lang.tr("sc.singStation.mul.set") : Lang.tr("sc.singStation.mul.noset", k)) : Lang.tr("sc.singStation.mul.other"),
                 PX + 4, MUL_Y, PW - 8, p.setDiscount ? BLUE : DIM);
-        small(te.hasResonance() ? Lang.tr("sc.singStation.mul.res") : Lang.tr("sc.singStation.mul.nores"), PX + 4, MUL_Y + MUL_STEP, PW - 8,
-                te.hasResonance() ? BLUE : DIM);
+        small(te.hasResonance() ? Lang.tr(p.convert ? "sc.singStation.mul.res.speed" : "sc.singStation.mul.res") : Lang.tr("sc.singStation.mul.nores"),
+                PX + 4, MUL_Y + MUL_STEP, PW - 8, te.hasResonance() ? BLUE : DIM);
         small(Lang.tr("sc.singStation.mul.stab", te.getStabilisers(), SingularStationMath.MAX_STABILISERS,
                 te.getStabilisers() * SingularStationMath.STABILISER_PERCENT), PX + 4, MUL_Y + 2 * MUL_STEP, PW - 8, te.getStabilisers() > 0 ? BLUE : DIM);
     }
 
     private String piecesOf(SingularProcessSC proc) {
+        return piecesOfMask(proc.mask & 15);
+    }
+
+    private static String piecesOfMask(int mask) {
         StringBuilder b = new StringBuilder();
         for (int i = 0; i < 4; i++) {
-            if (proc.locks(i)) {
+            if ((mask & 1 << i) != 0) {
                 b.append(b.length() > 0 ? ", " : "").append(Lang.tr("sc.armorhud.piece." + i));
             }
         }
@@ -586,19 +640,28 @@ public class GuiSingularStationSC extends GuiContainer {
         List<String> tip = new ArrayList<String>();
         // the armour rows (not over the slot itself: the item's own tooltip)
         for (int i = 0; i < 4; i++) {
-            if (over(25, rowY(i), 72, 24, mx, my)) {
+            if (over(25, rowY(i), 72, ContainerSingularStationSC.ROW_STEP, mx, my)) {
                 return pieceTip(i);
             }
         }
-        if (over(4, ContainerSingularStationSC.EXTRA_Y - 10, 44, 9, mx, my)) {
+        if (over(25, ContainerSingularStationSC.EXTRA_Y, 25, 16, mx, my)) {
             tip.add(Lang.tr("sc.singStation.donor"));
             tip.add(Lang.tr("sc.singStation.donor.hint"));
             return tip;
         }
-        if (over(48, ContainerSingularStationSC.EXTRA_Y - 10, 48, 9, mx, my)) {
+        if (over(25, ContainerSingularStationSC.CATALYST_Y, 25, 16, mx, my)) {
             tip.add(Lang.tr("sc.singStation.catalyst"));
             tip.add(Lang.tr("sc.singStation.catalyst.hint"));
+            tip.add("§7" + Lang.tr("sc.singStation.catalyst.convert"));
             return tip;
+        }
+        boolean emptyMat = false;
+        for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
+            emptyMat |= te.getStackInSlot(TileEntitySingularStationSC.MATERIAL_SLOT + i) == null
+                    && over(ContainerSingularStationSC.MAT_X + (i % 2) * 18 - 1, ContainerSingularStationSC.MAT_Y + (i / 2) * 18 - 1, 18, 18, mx, my);
+        }
+        if (emptyMat || over(ContainerSingularStationSC.MAT_X - 1, ContainerSingularStationSC.MAT_Y - 10, 46, 9, mx, my)) {
+            return materialsTip(p);
         }
         if (over(SX, STATUS_Y + 26, SW, 8, mx, my) && lagging() != 0) {
             tip.add(Lang.tr("sc.singStation.lagging"));
@@ -628,6 +691,15 @@ public class GuiSingularStationSC extends GuiContainer {
             return tip;
         }
         if (modernise.func_146115_a()) {
+            if (te.getProcess() == null && p.convert) {
+                tip.add(Lang.tr("sc.singStation.btn.convert"));
+                tip.add(Lang.tr("sc.singStation.convert.hint"));
+                costLines(tip, p.cost, SingularStationMath.convertTicks(p.convMask));
+                if (!p.matOk) {
+                    tip.add("§c" + Lang.tr("sc.singStation.err.nomaterials"));
+                }
+                return tip;
+            }
             if (te.getProcess() != null) {
                 tip.add(Lang.tr("sc.singStation.btn.cancel"));
                 tip.add(Lang.tr("sc.singStation.cancel.hint"));
@@ -638,7 +710,9 @@ public class GuiSingularStationSC extends GuiContainer {
                         tip.add("§7" + resName(r) + ": +" + amount(back));
                     }
                 }
-                if (proc.catalystEu > 0) {
+                if (proc.kind == SingularProcessSC.KIND_CONVERT) {
+                    tip.add("§7" + Lang.tr("sc.singStation.cancel.materials"));
+                } else if (proc.catalystEu > 0) {
                     tip.add("§7" + Lang.tr("sc.singStation.cancel.core", amount(SingularStationMath.refund(proc.catalystEu))));
                 }
                 tip.add("§e" + Lang.tr("sc.singStation.cancel.twice"));
@@ -740,6 +814,13 @@ public class GuiSingularStationSC extends GuiContainer {
             return tip;
         }
         tip.add("§7" + s.getDisplayName());
+        if (TileEntitySingularStationSC.isExo(s)) {
+            tip.add("§e" + Lang.tr("sc.singStation.exo.hint"));
+            if (te.isLocked(i)) {
+                tip.add("§d" + Lang.tr("sc.singStation.locked"));
+            }
+            return tip;
+        }
         if (!SingularLevel.isSingular(s)) {
             tip.add("§7" + Lang.tr("sc.singStation.notsingular.hint"));
             return tip;
@@ -761,8 +842,35 @@ public class GuiSingularStationSC extends GuiContainer {
         return tip;
     }
 
+    /** Б-1: what the conversion of the Exo pieces in the slots takes, have / need per material. */
+    private List<String> materialsTip(Plan p) {
+        List<String> tip = new ArrayList<String>();
+        tip.add(Lang.tr("sc.singStation.materials"));
+        tip.add("§7" + Lang.tr("sc.singStation.materials.hint"));
+        if (!p.convert || p.process) {
+            tip.add("§7" + Lang.tr("sc.singStation.materials.none"));
+            return tip;
+        }
+        for (int k = 0; k < SingularStationMath.MATERIALS; k++) {
+            if (p.matNeed[k] > 0) {
+                tip.add((p.matHave[k] >= p.matNeed[k] ? "§a" : "§c") + TileEntitySingularStationSC.materialStack(k, 1).getDisplayName()
+                        + ": " + Math.min(p.matHave[k], 999) + " / " + p.matNeed[k]);
+            }
+        }
+        return tip;
+    }
+
     private List<String> lineTip(Plan p, int line) {
         List<String> tip = new ArrayList<String>();
+        if (p.convert && line < 2) {
+            if (line == 1 && !p.process) {
+                return materialsTip(p);
+            }
+            tip.add(Lang.tr("sc.singStation.head.convert"));
+            tip.add(Lang.tr("sc.singStation.line.pieces", piecesOfMask(p.convMask)));
+            tip.add("§7" + Lang.tr("sc.singStation.convert.hint"));
+            return tip;
+        }
         if (line == 0) {
             tip.add(Lang.tr("sc.singStation.tip.points"));
             for (int i = 0; i < 4; i++) {
@@ -804,6 +912,9 @@ public class GuiSingularStationSC extends GuiContainer {
         } else {
             tip.add(Lang.tr("sc.singStation.tip.need", amount(p.cost[r]), amount(p.have[r])));
             tip.add("§7" + Lang.tr("sc.singStation.tip.gradual"));
+            if (r == 0 && p.convert) {
+                tip.add("§7" + Lang.tr("sc.singStation.tip.cores"));
+            }
             if (r == 0 && p.catalystNeeded) {
                 tip.add((p.catalystOk ? "§a" : "§c") + Lang.tr(p.catalystOk ? "sc.singStation.tip.core" : "sc.singStation.tip.nocore"));
             }

@@ -92,6 +92,8 @@ public class GuiMachineSC extends GuiContainer {
     /** The Matter Compressor: the press with its hopper, the mass gauge (two capsules long, a mark at one), the numbers. */
     private final boolean comp;
     private static final int COMP_X = 88, COMP_Y = 36, COMP_W = 74, COMP_H = 44, COMP_INFO_X = 166, COMP_BAR_Y = 86, COMP_BAR_H = 5;
+    /** СМ1 «жидкая материя»: a narrower press, the numbers between it and the singular matter tank (machine gauge), the mode button. */
+    private static final int COMP_W_L = 56, COMP_INFO_X_L = 147, COMP_RIGHT_L = 171, COMP_TANK_X = 174, COMP_BTN_Y = 103;
     private static final int SM_X = 90, SM_W = 116, SM_SCENE_Y = 36, SM_SCENE_H = 40, SM_BTN_Y = 103;
     private static final int BOIL_X = 140, BOIL_W = 33, BOIL_Y = 36, BOIL_H = 56, BOIL_BADGE_W = 31;
     private static final int FILL_Y = 36, FILL_H = 42, FILL_ROW_Y = 81, FILL_BADGE_W = 40;
@@ -210,6 +212,10 @@ public class GuiMachineSC extends GuiContainer {
         }
         power.addButtons(buttonList, guiLeft, guiTop);
         battery.addButton(buttonList, guiLeft, guiTop);
+        if (comp) {
+            buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerMachineSC.BTN_MATTER_MODE, guiLeft + COMP_X, guiTop + COMP_BTN_Y,
+                    GuiBigSC.SCREEN_RIGHT - COMP_X, 10, ""));
+        }
         if (smelter) {
             boolean induction = machine.getMachineType() == com.sc.machine.MachineType.INDUCTION_FURNACE;
             buttonList.add(new GuiFieldGeneratorSC.HoloButton(ContainerMachineSC.BTN_XP, guiLeft + SM_X, guiTop + SM_BTN_Y,
@@ -236,6 +242,16 @@ public class GuiMachineSC extends GuiContainer {
                 }
             }
         }
+        if (comp) {
+            for (Object o : buttonList) {
+                net.minecraft.client.gui.GuiButton b = (net.minecraft.client.gui.GuiButton) o;
+                if (b.id == ContainerMachineSC.BTN_MATTER_MODE) {
+                    b.width = (compLiquid() ? COMP_RIGHT_L : GuiBigSC.SCREEN_RIGHT) - COMP_X;
+                    b.displayString = (machine.isMatterLiquid() ? "§d" : "§b") + Lang.tr(machine.isMatterLiquid()
+                            ? "sc.gui.comp.mode.liquid" : "sc.gui.comp.mode.capsule");
+                }
+            }
+        }
         collectTanks();
         for (Object o : buttonList) {
             if (!(o instanceof GuiBigSC.ClearButton)) {
@@ -246,6 +262,8 @@ public class GuiMachineSC extends GuiContainer {
             int gx = -1;
             if (washer || blast || saw || oxid || coat || step || ion || sput || fill) {
                 gx = tank == 0 ? WATER_X : -1;
+            } else if (comp) {
+                gx = tank == 2 && compLiquid() ? COMP_TANK_X : -1;      // СМ1: the singular matter tank
             } else if (ownTanks != null) {
                 for (int k = 0; k < ownTanks.length; k++) {
                     if (ownTanks[k] == tank) {
@@ -321,9 +339,14 @@ public class GuiMachineSC extends GuiContainer {
         return machine.getMachineType().heatCapable;
     }
 
+    /** СМ1: the compressor shows its singular matter tank (the liquid mode, or matter still in the tank). */
+    private boolean compLiquid() {
+        return comp && (machine.isMatterLiquid() || machine.getTank(2).getFluidAmount() > 0);
+    }
+
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast || saw || oxid || coat || step || ion || sput || fill || ownTanks != null) {
+        if (washer || blast || saw || oxid || coat || step || ion || sput || fill || comp || ownTanks != null) {
             return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -655,8 +678,9 @@ public class GuiMachineSC extends GuiContainer {
         } else if (comp) {                                              // the press, the mass gauge
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             float fill = (float) machine.getMatter() / TileEntityMachineSC.MATTER_MAX;
-            GuiSceneSC.matterPress(x + COMP_X, y + COMP_Y, COMP_W, COMP_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress, fill);
-            int bw = GuiBigSC.SCREEN_RIGHT - COMP_X;
+            boolean liq = compLiquid();
+            GuiSceneSC.matterPress(x + COMP_X, y + COMP_Y, liq ? COMP_W_L : COMP_W, COMP_H, t, machine.getStatus() == MachineStatus.PROCESSING, progress, fill);
+            int bw = (liq ? COMP_RIGHT_L : GuiBigSC.SCREEN_RIGHT) - COMP_X;
             boolean ready = machine.getMatter() >= TileEntityMachineSC.MATTER_PER_CAPSULE;
             GuiHoloSC.bar(x + COMP_X, y + COMP_BAR_Y, bw, COMP_BAR_H, Math.min(1F, fill), 16,
                     ready ? GuiSceneSC.SV_MAIN : GuiSceneSC.SV_DARK);
@@ -707,6 +731,10 @@ public class GuiMachineSC extends GuiContainer {
                 FluidTank tank = machine.getTank(ownTanks[k]);
                 GuiTankGaugeSC.draw(mc, x + ownTankX[k], y + TANK_Y, tank.getFluid(), tank.getCapacity(), null, false);
             }
+        }
+        if (compLiquid()) {                                            // СМ1: the singular matter tank
+            FluidTank tank = machine.getTank(2);
+            GuiTankGaugeSC.draw(mc, x + COMP_TANK_X, y + TANK_Y, tank.getFluid(), tank.getCapacity(), null, false);
         }
         for (int k = 0; k < shownCount; k++) {
             FluidTank tank = machine.getTank(shownTanks[k]);
@@ -1708,17 +1736,23 @@ public class GuiMachineSC extends GuiContainer {
 
     /** The Matter Compressor: caption, the capsules in the counter, time and EU/t beside the press, the mass under its gauge. */
     private void drawCompText() {
-        fit(Lang.tr("sc.gui.comp.cap"), COMP_X, CAPTION_Y, GuiBigSC.SCREEN_RIGHT - COMP_X, GuiHoloSC.CYAN & 0xFFFFFF);
-        int room = GuiBigSC.SCREEN_RIGHT - COMP_INFO_X;
+        boolean liq = compLiquid();
+        int right = liq ? COMP_RIGHT_L : GuiBigSC.SCREEN_RIGHT, ix = liq ? COMP_INFO_X_L : COMP_INFO_X;
+        fit(Lang.tr("sc.gui.comp.cap"), COMP_X, CAPTION_Y, (liq ? COMP_TANK_X - 2 : GuiBigSC.SCREEN_RIGHT) - COMP_X, GuiHoloSC.CYAN & 0xFFFFFF);
+        int room = right - ix;
         int matter = machine.getMatter(), per = TileEntityMachineSC.MATTER_PER_CAPSULE;
-        smallFit(Lang.tr("sc.gui.comp.ready"), COMP_INFO_X, COMP_Y + 1, room, GuiHoloSC.LABEL);
-        fit(String.valueOf(matter / per), COMP_INFO_X, COMP_Y + 8, room, matter >= per ? 0xFF9AA4 : GuiHoloSC.VALUE);
-        smallFit(Lang.tr("sc.gui.comp.time"), COMP_INFO_X, COMP_Y + 20, room, GuiHoloSC.LABEL);
-        smallFit(String.format(java.util.Locale.ROOT, "%.1f s", machine.compressTicks() / 20F), COMP_INFO_X, COMP_Y + 27, room, GuiHoloSC.VALUE);
-        smallFit(Lang.tr("sc.gui.big.col.energy"), COMP_INFO_X, COMP_Y + 35, room, GuiHoloSC.LABEL);
-        smallFit(machine.effectiveEuPerTick() + " EU/t", COMP_INFO_X, COMP_Y + 42, room, GuiHoloSC.VALUE);
-        smallFit(Lang.tr("sc.gui.comp.mass", matter, per), COMP_X, COMP_BAR_Y + COMP_BAR_H + 3, GuiBigSC.SCREEN_RIGHT - COMP_X,
+        smallFit(Lang.tr(liq ? "sc.gui.comp.ready.mb" : "sc.gui.comp.ready"), ix, COMP_Y + 1, room, GuiHoloSC.LABEL);
+        fit(String.valueOf(liq ? TileEntityMachineSC.liquidFor(matter) : matter / per), ix, COMP_Y + 8, room, matter >= per ? 0xFF9AA4 : GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.comp.time"), ix, COMP_Y + 20, room, GuiHoloSC.LABEL);
+        smallFit(String.format(java.util.Locale.ROOT, "%.1f s", machine.compressTicks() / 20F), ix, COMP_Y + 27, room, GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.big.col.energy"), ix, COMP_Y + 35, room, GuiHoloSC.LABEL);
+        smallFit(machine.effectiveEuPerTick() + " EU/t", ix, COMP_Y + 42, room, GuiHoloSC.VALUE);
+        smallFit(Lang.tr("sc.gui.comp.mass", matter, per), COMP_X, COMP_BAR_Y + COMP_BAR_H + 3, right - COMP_X,
                 matter >= per ? 0xFF9AA4 : GuiHoloSC.VALUE);
+        if (liq) {
+            TextFitSC.drawCentered(fontRendererObj, Lang.tr("sc.gui.comp.tank"), COMP_TANK_X, TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
+                    GuiHoloSC.LABEL, false, guiLeft, guiTop);
+        }
     }
 
     /** The Wire Saw's key, or the Dicing Saw's own wording of it. */
@@ -2138,7 +2172,22 @@ public class GuiMachineSC extends GuiContainer {
             lines.add(Lang.tr("sc.gui.cent.hint"));
             return lines;
         }
-        if (comp && GuiGaugeSC.isOver(COMP_X, COMP_Y, GuiBigSC.SCREEN_RIGHT - COMP_X, COMP_BAR_Y + COMP_BAR_H + 12 - COMP_Y, mouseX, mouseY)) {
+        if (comp && compLiquid() && GuiGaugeSC.isOver(COMP_TANK_X, TANK_Y, GuiTankGaugeSC.WIDTH, GuiTankGaugeSC.HEIGHT, mouseX, mouseY)) {
+            FluidTank tank = machine.getTank(2);
+            lines.add(Lang.tr("sc.gui.comp.tank.title"));
+            lines.add(GuiGaugeSC.fluidLabel(tank.getFluid(), tank.getCapacity()));
+            lines.add(GuiTankGaugeSC.percentLine(tank.getFluid(), tank.getCapacity()));
+            lines.add(Lang.tr("sc.gui.comp.tank.hint"));
+            return lines;
+        }
+        if (comp && GuiGaugeSC.isOver(COMP_X, COMP_BTN_Y, (compLiquid() ? COMP_RIGHT_L : GuiBigSC.SCREEN_RIGHT) - COMP_X, 10, mouseX, mouseY)) {
+            lines.add(Lang.tr("sc.gui.comp.mode.title"));
+            lines.add(Lang.tr(machine.isMatterLiquid() ? "sc.gui.comp.mode.liquid" : "sc.gui.comp.mode.capsule"));
+            lines.add(Lang.tr("sc.gui.comp.mode.hint", TileEntityMachineSC.SM_PER_CAPSULE));
+            return lines;
+        }
+        if (comp && GuiGaugeSC.isOver(COMP_X, COMP_Y, (compLiquid() ? COMP_RIGHT_L : GuiBigSC.SCREEN_RIGHT) - COMP_X,
+                COMP_BAR_Y + COMP_BAR_H + 12 - COMP_Y, mouseX, mouseY)) {
             lines.add(Lang.tr("sc.gui.comp.title"));
             lines.add(Lang.tr("sc.gui.comp.mass", machine.getMatter(), TileEntityMachineSC.MATTER_PER_CAPSULE));
             lines.add(Lang.tr("sc.gui.comp.rule", TileEntityMachineSC.MASS_BLOCK, TileEntityMachineSC.MASS_ITEM, TileEntityMachineSC.MASS_HEAVY));

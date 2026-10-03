@@ -126,6 +126,11 @@ public class WorldTestSingularSC {
             float hard = rb.getBlockHardness(w, AX, Y, Z);
             boolean locked = hard < 0 && rb.getExplosionResistance(null, w, AX, Y, Z, AX, Y, Z) >= 6000000F;
             System.out.println("[SC-WORLDTEST] " + (locked ? "PASS" : "FAIL") + " singular reactor with its hole is unbreakable: hardness " + hard);
+            int sm = s.getSmStored();                                     // СМ2: 1 mB/s while it runs, taken at the block
+            net.minecraftforge.fluids.FluidStack smOut = a.drain(ForgeDirection.UNKNOWN, 1000, false);
+            boolean by = sm >= 1 && sm <= 5 && smOut != null && smOut.amount == sm && smOut.getFluid() == com.sc.init.ModFluids.singularMatter;
+            System.out.println("[SC-WORLDTEST] " + (by ? "PASS" : "FAIL") + " singular by-product: " + sm + " mB of singular matter after a few seconds of running,"
+                    + " the block gives " + (smOut == null ? 0 : smOut.amount));
             s.stop();
         }
         if (ticks == 201) {

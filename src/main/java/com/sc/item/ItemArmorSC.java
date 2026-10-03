@@ -375,6 +375,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
                 if (suit.hasSchemes()) {
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.more"), "\u00a77");
                 }
+                if (suit == ArmorSuit.EXO) {                     // \u0411-1: the way to the Singular suit
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.exo.convert"), "\u00a7d");
+                }
                 break;
             default:
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));

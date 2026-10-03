@@ -16,7 +16,8 @@ import net.minecraft.util.ChatComponentTranslation;
 
 /**
  * The Singular Service Station's screen (GuiSingularStationSC, W x H - fits a 320 x 240 screen):
- * the four armour slots, the module row, the donor and catalyst slots, the player's inventory; the
+ * the four armour slots, the module row, the donor and catalyst slots, the four conversion material
+ * slots (Б-1), the player's inventory; the
  * station's numbers and its running process synced. A slot a process holds can't be taken (ПР6).
  */
 public class ContainerSingularStationSC extends Container {
@@ -24,12 +25,13 @@ public class ContainerSingularStationSC extends Container {
     /** The armour station's buttons, then the Singular ones (BTN_BRANCH + (level 5 ? 2 : 0) + side - 1). */
     public static final int BTN_POWER = ContainerArmorStationSC.BTN_POWER, BTN_REDSTONE = ContainerArmorStationSC.BTN_REDSTONE,
             BTN_FILL = ContainerArmorStationSC.BTN_FILL, BTN_GAS = ContainerArmorStationSC.BTN_GAS, BTN_CHARGE = 14,
-            BTN_MODERNISE = 40, BTN_CANCEL = 41, BTN_SYNC = 42, BTN_TRANSFER = 43, BTN_SCHEME_PREV = 44, BTN_SCHEME_NEXT = 45, BTN_BRANCH = 50;
+            BTN_MODERNISE = 40, BTN_CANCEL = 41, BTN_SYNC = 42, BTN_TRANSFER = 43, BTN_SCHEME_PREV = 44, BTN_SCHEME_NEXT = 45,
+            BTN_CONVERT = 46, BTN_BRANCH = 50;
     public static final int W = 320, H = 236;
     /** The armour column: rows ROW_STEP apart from ROW_Y; slot (item coordinates) at PIECE_X, row + 3. */
-    public static final int ROW_Y = 19, ROW_STEP = 25, PIECE_X = 7;
-    /** The donor and the catalyst (item coordinates). */
-    public static final int DONOR_X = 7, CATALYST_X = 52, EXTRA_Y = 131;
+    public static final int ROW_Y = 17, ROW_STEP = 22, PIECE_X = 7;
+    /** The donor and the catalyst (item coordinates); the four material slots 2 x 2 from MAT_X, MAT_Y (Б-1). */
+    public static final int DONOR_X = 7, CATALYST_X = 7, EXTRA_Y = 116, CATALYST_Y = 134, MAT_X = 52, MAT_Y = 116;
     /** The module row, the player's inventory. */
     public static final int UPG_X = 227, UPG_Y = 117, INV_X = 7, INV_Y = 155, HOTBAR_Y = 213;
 
@@ -49,7 +51,10 @@ public class ContainerSingularStationSC extends Container {
             addSlotToContainer(new ContainerArmorStationSC.SlotModule(te, TileEntityArmorStationSC.FIRST_UPGRADE_SLOT + i, UPG_X + i * 18, UPG_Y));
         }
         addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.DONOR_SLOT, DONOR_X, EXTRA_Y));
-        addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.CATALYST_SLOT, CATALYST_X, EXTRA_Y));
+        addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.CATALYST_SLOT, CATALYST_X, CATALYST_Y));
+        for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
+            addSlotToContainer(new SlotMaterial(te, TileEntitySingularStationSC.MATERIAL_SLOT + i, MAT_X + (i % 2) * 18, MAT_Y + (i / 2) * 18));
+        }
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, INV_X + col * 18, INV_Y + row * 18));
@@ -108,6 +113,18 @@ public class ContainerSingularStationSC extends Container {
         }
     }
 
+    /** A conversion material slot (Б-1): the materials only, stacks as usual. */
+    public static class SlotMaterial extends Slot {
+        public SlotMaterial(IInventory inv, int index, int x, int y) {
+            super(inv, index, x, y);
+        }
+
+        @Override
+        public boolean isItemValid(ItemStack stack) {
+            return inventory.isItemValidForSlot(getSlotIndex(), stack);
+        }
+    }
+
     @Override
     public boolean canInteractWith(EntityPlayer player) {
         return te.isUseableByPlayer(player);
@@ -136,6 +153,7 @@ public class ContainerSingularStationSC extends Container {
             case BTN_FILL: te.toggleFillGases(); return true;
             case BTN_CHARGE: te.toggleCharge(); return true;
             case BTN_MODERNISE: say(player, te.startModernise(player)); return true;
+            case BTN_CONVERT: say(player, te.startConvert(player)); return true;
             case BTN_CANCEL: te.cancelProcess(); return true;
             case BTN_SYNC: say(player, te.startSync(player)); return true;
             case BTN_TRANSFER: say(player, te.startTransfer(player)); return true;
@@ -253,6 +271,9 @@ public class ContainerSingularStationSC extends Container {
                     target.putStack(original.splitStack(1));
                     moved = true;
                 }
+            }
+            if (!moved && TileEntitySingularStationSC.materialKind(original) >= 0) {   // a conversion material: into the material slots
+                moved = SlotMergeSC.mergeValid(inventorySlots, original, TileEntitySingularStationSC.MATERIAL_SLOT, TileEntitySingularStationSC.SING_SLOTS);
             }
             if (!moved && !mergeItemStack(original, index < hotbar ? hotbar : own, index < hotbar ? end : hotbar, false)) {
                 return null;

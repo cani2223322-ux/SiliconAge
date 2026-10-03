@@ -89,6 +89,18 @@ public class SingularReactorSC {
     public static final int PHASE_IDLE = 0, PHASE_CHARGE = 1, PHASE_COMPRESS = 2, PHASE_RUN = 3, PHASE_DRAIN = 4, PHASE_PULL = 5;
     /** What ended the last run (kept until "Allow lighting"): put out safely, lost containment, evaporated. */
     public static final int EVENT_NONE = 0, EVENT_SOFT = 1, EVENT_EJECT = 2, EVENT_EVAP = 3;
+    /**
+     * СМ2 by-product: while the hole runs (PHASE_RUN) SM_PER_SECOND mB of singular matter a second
+     * gather in an inner tank of SM_TANK mB; each second it goes on into the wall's port tanks that
+     * hold (or last held) singular matter, and pipes / a bucket / a cell take it from the reactor block.
+     */
+    public static final int SM_TANK = 4000, SM_PER_SECOND = 1;
+    public static final String SM = "singularmatter";
+
+    /** The inner tank after `seconds` of running from `have` mB (pure, for the self-test). */
+    public static int byProductAfter(int have, int seconds) {
+        return (int) Math.min(SM_TANK, (long) Math.max(0, have) + (long) Math.max(0, seconds) * SM_PER_SECOND);
+    }
 
     // ------------------------------------------------------------------ pure logic (the self-test checks these)
 
@@ -208,6 +220,49 @@ public class SingularReactorSC {
     private final TileEntityGeneratorSC g;
 
     private int phase = PHASE_IDLE, phaseTicks, event = EVENT_NONE;
+    /** СМ2: singular matter in the inner tank, mB; the port tanks that take it (coordinates). */
+    private int smStored;
+    private final List<int[]> smPorts = new ArrayList<int[]>();
+
+    public int getSmStored() {
+        return smStored;
+    }
+
+    /** Pipes / a bucket at the reactor block: up to `max` mB of the by-product. @return what came (or would come) out */
+    public int drainSm(int max, boolean doDrain) {
+        int n = Math.max(0, Math.min(max, smStored));
+        if (doDrain && n > 0) {
+            smStored -= n;
+            g.markDirty();
+        }
+        return n;
+    }
+
+    public void setSmForTest(int mb) {
+        smStored = Math.max(0, Math.min(SM_TANK, mb));
+    }
+
+    /** One second of the by-product: into the inner tank, then on into the singular matter port tanks. */
+    private void byProduct() {
+        smStored = byProductAfter(smStored, 1);
+        net.minecraftforge.fluids.Fluid f = com.sc.init.ModFluids.singularMatter;
+        World w = g.getWorldObj();
+        for (int[] p : smPorts) {
+            if (smStored <= 0 || f == null) {
+                break;
+            }
+            TileEntity te = w.blockExists(p[0], p[1], p[2]) ? w.getTileEntity(p[0], p[1], p[2]) : null;
+            if (te instanceof TileEntityTankSC) {
+                FluidTank t = ((TileEntityTankSC) te).getTank();
+                int put = t.fill(new FluidStack(f, smStored), true);
+                if (put > 0) {
+                    smStored -= put;
+                    te.markDirty();
+                }
+            }
+        }
+        g.markDirty();
+    }
     private double mass, capsuleLeft, drainFrom;
     private float containment = 100F;
     private int feedMode = MODE_NORMAL;
@@ -672,6 +727,9 @@ public class SingularReactorSC {
     }
 
     private int tickRun(boolean switchedOn, long time) {
+        if (time % 20 == 0) {
+            byProduct();
+        }
         drainHelium();
         drainDeuterium();
         feed();
@@ -943,6 +1001,7 @@ public class SingularReactorSC {
         List<int[]> tankPorts = g.tankPortsSC(), storePorts = g.storePortsSC();
         tankPorts.clear();
         storePorts.clear();
+        smPorts.clear();
         int caps = 0, coilBits = 0, nTanks = 0, nStores = 0, nWeak = 0, free = 0;
         long top = 0, bottom = 0;
         int[] wl = new int[3], pt = new int[3], jk = new int[3], cap3 = new int[3], cnt3 = new int[3];
@@ -1000,6 +1059,9 @@ public class SingularReactorSC {
                         FluidStack f = t.getFluid();
                         if (f != null && f.amount > 0 && f.getFluid() != null) {
                             portMem[cell] = f.getFluid().getName();
+                        }
+                        if (SM.equals(portMem[cell])) {
+                            smPorts.add(new int[]{x, y, z});           // СМ2: the by-product goes here
                         }
                         int gas = portMem[cell] == null ? -1 : java.util.Arrays.asList(GASES).indexOf(portMem[cell]);
                         if (gas >= 0) {
@@ -1065,7 +1127,7 @@ public class SingularReactorSC {
     // ------------------------------------------------------------------ the screen's sync
 
     /** Ints the screen gets (see sync / setClient). */
-    public static final int SYNC = 58;
+    public static final int SYNC = 59;
 
     public int[] sync() {
         int[] v = new int[SYNC];
@@ -1107,6 +1169,7 @@ public class SingularReactorSC {
         v[55] = Math.min(255, capMissing);
         v[56] = (int) Math.round(drainFrom * 1000000);
         v[57] = warnedAt;
+        v[58] = smStored;
         return v;
     }
 
@@ -1164,6 +1227,7 @@ public class SingularReactorSC {
         capMissing = v[55];
         drainFrom = v[56] / 1000000.0;
         warnedAt = v[57];
+        smStored = v[58];
     }
 
     // ------------------------------------------------------------------ NBT
@@ -1185,6 +1249,9 @@ public class SingularReactorSC {
         t.setDouble("HeDebt", heDebt);
         t.setDouble("DDebt", dDebt);
         t.setInteger("WarnedAt", warnedAt);
+        if (smStored > 0) {
+            t.setInteger("SmStored", smStored);
+        }
         NBTTagCompound mem = new NBTTagCompound();
         for (int i = 0; i < WALL_CELLS; i++) {
             if (portMem[i] != null) {
@@ -1212,6 +1279,7 @@ public class SingularReactorSC {
         heDebt = t.getDouble("HeDebt");
         dDebt = t.getDouble("DDebt");
         warnedAt = t.hasKey("WarnedAt") ? t.getInteger("WarnedAt") : 100;
+        smStored = Math.max(0, Math.min(SM_TANK, t.getInteger("SmStored")));
         NBTTagCompound mem = t.getCompoundTag("PortMem");
         for (int i = 0; i < WALL_CELLS; i++) {
             portMem[i] = mem.hasKey("w" + i) ? mem.getString("w" + i) : null;

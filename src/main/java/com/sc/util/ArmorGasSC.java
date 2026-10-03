@@ -186,7 +186,7 @@ public final class ArmorGasSC {
     private ArmorGasSC() {
     }
 
-    private static String nbtKey(Gas g) {
+    public static String nbtKey(Gas g) {
         return "Gas_" + g.key();
     }
 

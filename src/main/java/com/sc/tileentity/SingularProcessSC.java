@@ -2,10 +2,13 @@ package com.sc.tileentity;
 
 import com.sc.util.SingularStationMath;
 
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 
 /**
- * A running process of the Singular Service Station (modernisation, level transfer or sync): what
+ * A running process of the Singular Service Station (modernisation, level transfer, sync or the
+ * Б-1 conversion of Exo pieces): what
  * it costs, what has been drawn so far, how far it is, which slots it locked and who started it.
  * Saved with the station (NBT "SingProc"), so it survives a reload. The resources are drawn as the
  * progress grows (ПР4): progress = min over the resources of drawn / cost, so a missing resource
@@ -13,7 +16,7 @@ import net.minecraft.nbt.NBTTagCompound;
  */
 public class SingularProcessSC {
 
-    public static final int KIND_MODERNISE = 0, KIND_TRANSFER = 1, KIND_SYNC = 2;
+    public static final int KIND_MODERNISE = 0, KIND_TRANSFER = 1, KIND_SYNC = 2, KIND_CONVERT = 3;
 
     public int kind;
     /** Locked station slots: bits 0..3 the armour slots, bit 4 the donor (TileEntitySingularStationSC.DONOR_BIT). */
@@ -33,6 +36,8 @@ public class SingularProcessSC {
     public String starter = "";
     /** Resonance counted when it started (the EU discount). */
     public boolean resonance;
+    /** Б-1: the materials taken out of the slots at the start (cores with their charge) - given back whole on «Отменить». */
+    public final java.util.List<ItemStack> items = new java.util.ArrayList<ItemStack>();
 
     public boolean locks(int slot) {
         return slot >= 0 && slot < 31 && (mask & (1 << slot)) != 0;
@@ -52,6 +57,15 @@ public class SingularProcessSC {
         t.setInteger("Target", target);
         t.setString("Starter", starter == null ? "" : starter);
         t.setBoolean("Res", resonance);
+        if (!items.isEmpty()) {
+            NBTTagList list = new NBTTagList();
+            for (ItemStack s : items) {
+                if (s != null) {
+                    list.appendTag(s.writeToNBT(new NBTTagCompound()));
+                }
+            }
+            t.setTag("Items", list);
+        }
     }
 
     public static SingularProcessSC readFromNBT(NBTTagCompound t) {
@@ -59,7 +73,7 @@ public class SingularProcessSC {
             return null;
         }
         SingularProcessSC p = new SingularProcessSC();
-        p.kind = Math.max(KIND_MODERNISE, Math.min(KIND_SYNC, t.getInteger("Kind")));
+        p.kind = Math.max(KIND_MODERNISE, Math.min(KIND_CONVERT, t.getInteger("Kind")));
         p.mask = t.getInteger("Mask");
         p.progress = Math.max(0.0, Math.min(1.0, t.getDouble("Progress")));
         p.baseTicks = Math.max(1, t.getInteger("Base"));
@@ -75,6 +89,13 @@ public class SingularProcessSC {
         p.target = t.getInteger("Target");
         p.starter = t.getString("Starter");
         p.resonance = t.getBoolean("Res");
+        NBTTagList list = t.getTagList("Items", 10);
+        for (int i = 0; i < list.tagCount(); i++) {
+            ItemStack s = ItemStack.loadItemStackFromNBT(list.getCompoundTagAt(i));
+            if (s != null) {
+                p.items.add(s);
+            }
+        }
         return p;
     }
 }

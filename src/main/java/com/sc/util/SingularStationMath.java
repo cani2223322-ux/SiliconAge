@@ -18,6 +18,11 @@ package com.sc.util;
  * their sum. Ф5 sync: each lagging piece pays the per-piece row of every level it lacks (no ПР3);
  * time the longest lagging piece's sum. Ф3 branch change: BRANCH_SM mB of singular matter.
  * Cancelling returns half of what was drawn (refund).
+ *
+ * Б-1 conversion: an Exo piece -> a Singular piece of level 1, per piece CONVERT (EU, SM, He, D)
+ * and CONVERT_MATERIALS (items, taken whole at the start and given back whole on «Отменить»);
+ * several pieces at once - summed, the longest time. No set discount, no resonance EU discount
+ * (stabilisers and resonance only speed it up).
  */
 public final class SingularStationMath {
 
@@ -48,6 +53,66 @@ public final class SingularStationMath {
     public static final int TRANSFER_PERCENT = 50;
     /** The Singular core (ItemBatterySC damage) - the 4 -> 5 catalyst. */
     public static final int CORE_META = 6;
+    /** The Exo core (ItemBatterySC damage) - the Exo leggings' conversion material. */
+    public static final int EXO_CORE_META = 5;
+
+    // ------------------------------------------------------------------ Б-1 conversion Exo -> Singular
+
+    /** Conversion of one Exo piece (helmet, chestplate, leggings, boots) to a Singular piece of level 1: [EU, SM, He, D, Kr]. */
+    private static final long[][] CONVERT = {
+        {50000000L, 100, 2000, 0, 0},
+        {150000000L, 250, 4000, 1000, 0},
+        {100000000L, 150, 2000, 0, 0},
+        {50000000L, 100, 2000, 0, 0},
+    };
+    /** Minutes per piece's conversion; several pieces at once take the longest. */
+    private static final int[] CONVERT_MINUTES = {2, 4, 3, 2};
+    /** The conversion's materials (M_* kinds). */
+    public static final int M_CAPSULE = 0, M_LENS = 1, M_NB3SN = 2, M_FUSION = 3, M_HAFNIUM = 4, M_EXO_CORE = 5, M_SING_CORE = 6, MATERIALS = 7;
+    /** Per piece type: how many of each material kind (capsules, focus lens, Nb3Sn plates, fusion core, hafnium ingots, Exo core, Singular core). */
+    private static final int[][] CONVERT_MATERIALS = {
+        {2, 1, 2, 0, 0, 0, 0},
+        {4, 0, 2, 1, 0, 0, 1},
+        {3, 0, 2, 0, 0, 1, 0},
+        {2, 0, 2, 0, 2, 0, 0},
+    };
+
+    /** Б-1: the cost of converting the Exo pieces of `mask` (bit per armour type) at once - the pieces' rows summed. */
+    public static long[] convertCost(int mask) {
+        long[] out = new long[RESOURCES];
+        for (int t = 0; t < 4; t++) {
+            if ((mask & 1 << t) != 0) {
+                for (int i = 0; i < RESOURCES; i++) {
+                    out[i] += CONVERT[t][i];
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Ticks at speed 1: the longest piece. */
+    public static int convertTicks(int mask) {
+        int m = 0;
+        for (int t = 0; t < 4; t++) {
+            if ((mask & 1 << t) != 0) {
+                m = Math.max(m, CONVERT_MINUTES[t]);
+            }
+        }
+        return m * TICKS_PER_MINUTE;
+    }
+
+    /** The materials the pieces of `mask` need, summed: count per M_* kind. */
+    public static int[] convertMaterials(int mask) {
+        int[] out = new int[MATERIALS];
+        for (int t = 0; t < 4; t++) {
+            if ((mask & 1 << t) != 0) {
+                for (int i = 0; i < MATERIALS; i++) {
+                    out[i] += CONVERT_MATERIALS[t][i];
+                }
+            }
+        }
+        return out;
+    }
 
     private SingularStationMath() {
     }

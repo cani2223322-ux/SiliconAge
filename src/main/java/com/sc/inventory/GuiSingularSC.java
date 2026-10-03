@@ -1045,6 +1045,8 @@ public class GuiSingularSC extends GuiContainer {
             t.add(Lang.tr("sc.gui.sing.tip.cont", Math.round(sing.getContainment())));
             t.add("§7" + Lang.tr("sc.gui.sing.tip.cont.1"));
             t.add("§7" + Lang.tr("sc.gui.sing.tip.hawking"));
+            t.add(Lang.tr("sc.gui.sing.tip.sm", sing.getSmStored(), SingularReactorSC.SM_TANK));
+            t.add("§7" + Lang.tr("sc.gui.sing.tip.sm.1", SingularReactorSC.SM_PER_SECOND));
             return t;
         }
         if (!shownHole() && GuiGaugeSC.isOver(C1, 112, 110, 10, mx, my)) {

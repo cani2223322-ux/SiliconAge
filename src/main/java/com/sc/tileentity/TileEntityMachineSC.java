@@ -220,9 +220,10 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         return outputTankB;
     }
 
-    /** Every tank's size: 4000 mB + 8000 per Tank Extension upgrade (up to 4). */
+    /** Every tank's size: 4000 mB (the Matter Compressor: SM_TANK) + 8000 per Tank Extension upgrade (up to 4). */
     public int tankCapacity() {
-        return TANK_CAPACITY + Math.min(UpgradeType.MAX_TANK_UPGRADES, upgradeCount(UpgradeType.TANK_EXTENSION)) * UpgradeType.TANK_PER_UPGRADE;
+        return (machineType.isCompressor() ? SM_TANK : TANK_CAPACITY)
+                + Math.min(UpgradeType.MAX_TANK_UPGRADES, upgradeCount(UpgradeType.TANK_EXTENSION)) * UpgradeType.TANK_PER_UPGRADE;
     }
 
     /**
@@ -760,8 +761,34 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     private static final String[] HEAVY_METALS = {"Lead", "Tungsten", "Hafnium", "Tantalum", "Iron", "Gold"};
     /** NBT key the compressor's item carries its mass under (BlockMachineSC drops / placement). */
     public static final String ITEM_MATTER_KEY = "MatterSC";
+    /** СМ1 «жидкая материя»: singular matter per capsule's worth of mass, mB; the tank (output tank 1) without Tank Extensions. */
+    public static final int SM_PER_CAPSULE = 100, SM_TANK = 8000;
+    /** NBT key of the liquid mode in the compressor's item. */
+    public static final String ITEM_LIQUID_KEY = "MatterLiquidSC";
     /** The mass in the counter (Matter Compressor only). */
     private int matter;
+    /** СМ1: the compressor pours singular matter into its tank instead of pressing capsules (old compressors: capsules). */
+    private boolean matterLiquid;
+
+    public boolean isMatterLiquid() {
+        return matterLiquid;
+    }
+
+    /** The screen's mode button. A capsule half-pressed is kept: the progress goes on in the new mode. */
+    public void toggleMatterLiquid() {
+        matterLiquid = !matterLiquid;
+        markDirty();
+    }
+
+    /** Client-side sync, the item on placement, tests. */
+    public void setMatterLiquid(boolean on) {
+        matterLiquid = on;
+    }
+
+    /** mB of singular matter `mass` of the counter makes in the liquid mode (whole capsules' worth only). */
+    public static int liquidFor(int mass) {
+        return Math.max(0, mass) / MATTER_PER_CAPSULE * SM_PER_CAPSULE;
+    }
 
     public int getMatter() {
         return matter;
@@ -885,12 +912,14 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
         currentRecipeTicks = compressTicks();
         ItemStack capsule = capsuleStack();
-        if (matter < MATTER_PER_CAPSULE || capsule == null) {
+        boolean liquid = matterLiquid && com.sc.init.ModFluids.singularMatter != null;
+        if (matter < MATTER_PER_CAPSULE || capsule == null && !liquid) {
             progressTicks = 0;
             status = MachineStatus.IDLE;
             return;
         }
-        if (!canInsertAll(new ItemStack[]{capsule})) {
+        FluidStack sm = liquid ? new FluidStack(com.sc.init.ModFluids.singularMatter, SM_PER_CAPSULE) : null;
+        if (liquid ? safeFill(getTank(2), sm, false) < SM_PER_CAPSULE : !canInsertAll(new ItemStack[]{capsule})) {
             status = MachineStatus.OUTPUT_FULL;
             return;
         }
@@ -904,7 +933,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (++progressTicks >= currentRecipeTicks) {
             progressTicks = 0;
             matter -= MATTER_PER_CAPSULE;
-            insertOutput(capsule);
+            if (liquid) {
+                getTank(2).fill(sm, true);                     // СМ1: a capsule's worth as singular matter
+            } else {
+                insertOutput(capsule);
+            }
             markDirty();
         }
     }
@@ -1604,6 +1637,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         storedXp = nbt.getDouble("StoredXp");                 // (an older float tag reads as well)
         keepWarm = nbt.getBoolean("KeepWarm");
         matter = nbt.getInteger("Matter");
+        matterLiquid = nbt.getBoolean("MatterLiquid");
         coolingDown = nbt.getBoolean("CoolingDown");
         overheatedThisRun = nbt.getBoolean("OverheatedRun");
         tankA.readFromNBT(nbt.getCompoundTag("TankA"));
@@ -1638,6 +1672,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         nbt.setBoolean("KeepWarm", keepWarm);
         if (matter > 0) {
             nbt.setInteger("Matter", matter);
+        }
+        if (matterLiquid) {
+            nbt.setBoolean("MatterLiquid", true);
         }
         nbt.setBoolean("CoolingDown", coolingDown);
         nbt.setBoolean("OverheatedRun", overheatedThisRun);

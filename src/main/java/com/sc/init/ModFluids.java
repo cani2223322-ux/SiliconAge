@@ -42,7 +42,7 @@ public final class ModFluids {
     public static Fluid ticl4;
     /** Heavy water (D2O): enriched out of water in the chemical reactor, electrolysed into deuterium. */
     public static Fluid heavyWater;
-    /** Singular matter (docs/plan-singular-armor.md §4): the Singular suit's 8th tank; its source (the Matter Compressor) comes later. */
+    /** Singular matter (docs/plan-singular-armor.md §4): the Singular suit's 8th tank; made by the Matter Compressor's liquid mode and the Singular Reactor's by-product. */
     public static Fluid singularMatter;
 
     /** Fluids this mod actually registered - only these get our icons (see register()). */
