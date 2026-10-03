@@ -16,8 +16,8 @@ import net.minecraft.util.ChatComponentTranslation;
 
 /**
  * The Singular Service Station's screen (GuiSingularStationSC, W x H - fits a 320 x 240 screen):
- * the four armour slots, the module row, the donor and catalyst slots, the four conversion material
- * slots (Б-1), the player's inventory; the
+ * the four armour slots, the module row, the donor and catalyst slots, the six conversion material
+ * slots (Б-1, 3 x 2), the player's inventory; the
  * station's numbers and its running process synced. A slot a process holds can't be taken (ПР6).
  */
 public class ContainerSingularStationSC extends Container {
@@ -30,8 +30,22 @@ public class ContainerSingularStationSC extends Container {
     public static final int W = 320, H = 236;
     /** The armour column: rows ROW_STEP apart from ROW_Y; slot (item coordinates) at PIECE_X, row + 3. */
     public static final int ROW_Y = 17, ROW_STEP = 22, PIECE_X = 7;
-    /** The donor and the catalyst (item coordinates); the four material slots 2 x 2 from MAT_X, MAT_Y (Б-1). */
-    public static final int DONOR_X = 7, CATALYST_X = 7, EXTRA_Y = 116, CATALYST_Y = 134, MAT_X = 52, MAT_Y = 116;
+    /**
+     * The donor and the catalyst (item coordinates); the six material slots MAT_COLS x 2 from MAT_X, MAT_Y (Б-1).
+     * Left column, x: donor / catalyst 6..23 (frame), their labels 25..42, materials 43..96; the centre panel from 98.
+     * y: the labels' line 107..113 (under the last armour row's text, ..106), the slots 115..150, the separator 152.
+     */
+    public static final int DONOR_X = 7, CATALYST_X = 7, EXTRA_Y = 116, CATALYST_Y = 134, MAT_X = 44, MAT_Y = 116, MAT_COLS = 3,
+            EXTRA_LABEL_X = 25, EXTRA_LABEL_W = 18;
+
+    /** Material slot i's position (item coordinates): [x, y]. */
+    public static int matX(int i) {
+        return MAT_X + (i % MAT_COLS) * 18;
+    }
+
+    public static int matY(int i) {
+        return MAT_Y + (i / MAT_COLS) * 18;
+    }
     /** The module row, the player's inventory. */
     public static final int UPG_X = 227, UPG_Y = 117, INV_X = 7, INV_Y = 155, HOTBAR_Y = 213;
 
@@ -53,7 +67,7 @@ public class ContainerSingularStationSC extends Container {
         addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.DONOR_SLOT, DONOR_X, EXTRA_Y));
         addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.CATALYST_SLOT, CATALYST_X, CATALYST_Y));
         for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
-            addSlotToContainer(new SlotMaterial(te, TileEntitySingularStationSC.MATERIAL_SLOT + i, MAT_X + (i % 2) * 18, MAT_Y + (i / 2) * 18));
+            addSlotToContainer(new SlotMaterial(te, TileEntitySingularStationSC.MATERIAL_SLOT + i, matX(i), matY(i)));
         }
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {

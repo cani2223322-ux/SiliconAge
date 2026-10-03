@@ -2284,6 +2284,99 @@ public final class SelfTestSC {
                         + " «Отменить» gives them back whole, the new piece is level 1 / scheme A with the charge, helium and chips; the chest's core pays the EU"
                         + " and comes back whole (" + noExo + "/" + noMat + "/" + valid + "/" + took + "/" + procNbt + "/" + back + "/" + piece + "/" + coreEu + ")");
 
+        // Б-1, six material slots: a whole Exo set in one process; one kind spread over several slots; the two new slots in NBT
+        final int TS = com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOT;
+        final int CAT = com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT;
+        com.sc.tileentity.TileEntitySingularStationSC fs = new com.sc.tileentity.TileEntitySingularStationSC();
+        for (int t = 0; t < 4; t++) {
+            fs.setInventorySlotContents(t, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[t]));
+        }
+        fs.setInventorySlotContents(CAT, new ItemStack(ModItems.battery, 1, 6));
+        fs.setInventorySlotContents(TS, new ItemStack(ModItems.component("matterCapsule"), 13));   // capsules stack to 16
+        fs.setInventorySlotContents(TS + 1, new ItemStack(ModItems.component("focusLens")));
+        fs.setInventorySlotContents(TS + 2, new ItemStack(ModItems.component("nb3SnPlate"), 64));
+        fs.setInventorySlotContents(TS + 3, new ItemStack(ModItems.component("fusionCore")));
+        fs.setInventorySlotContents(TS + 4, new ItemStack(ModItems.battery, 1, 5));
+        ItemStack hf1 = hf.copy();
+        hf1.stackSize = 1;
+        fs.setInventorySlotContents(TS + 5, hf1);
+        String fsShort = fs.startConvertFor("");
+        ItemStack hf2 = hf.copy();
+        hf2.stackSize = 2;
+        fs.setInventorySlotContents(TS + 5, hf2.copy());
+        int[] fsHave = fs.materialsHave();
+        String fsStart = fs.startConvertFor("");
+        com.sc.tileentity.SingularProcessSC fp = fs.getProcess();
+        boolean fullSet = com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOTS == 6 && fs.getSizeInventory() == 16 && TS == 10 && CAT == 9
+                && fs.isItemValidForSlot(TS + 5, hf) && fs.isItemValidForSlot(TS + 4, new ItemStack(ModItems.component("focusLens")))
+                && fs.getAccessibleSlotsFromSide(1).length == 4
+                && "sc.singStation.err.nomaterials".equals(fsShort) && java.util.Arrays.equals(fsHave, new int[]{13, 1, 64, 1, 2, 1, 1})
+                && fsStart == null && fp != null && fp.mask == 15 && fp.items.size() == 7 && fp.cost[0] == 350000000L
+                && fs.getStackInSlot(TS) != null && fs.getStackInSlot(TS).stackSize == 2 && fs.getStackInSlot(TS + 2) != null
+                && fs.getStackInSlot(TS + 2).stackSize == 56 && fs.getStackInSlot(TS + 1) == null && fs.getStackInSlot(TS + 3) == null
+                && fs.getStackInSlot(TS + 4) == null && fs.getStackInSlot(TS + 5) == null && fs.getStackInSlot(CAT) == null;
+        fs.cancelProcess();
+        int[] fsBack = fs.materialsHave();
+        fullSet &= fs.getProcess() == null && java.util.Arrays.equals(fsBack, new int[]{13, 1, 64, 1, 2, 1, 1})
+                && com.sc.tileentity.TileEntitySingularStationSC.isCore(fs.getStackInSlot(CAT));
+        // helmet + boots: the capsules in slots 10 and 14, the plates in 11 and 15
+        com.sc.tileentity.TileEntitySingularStationSC sp = new com.sc.tileentity.TileEntitySingularStationSC();
+        sp.setInventorySlotContents(0, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[0]));
+        sp.setInventorySlotContents(3, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[3]));
+        sp.setInventorySlotContents(TS, new ItemStack(ModItems.component("matterCapsule"), 3));
+        sp.setInventorySlotContents(TS + 1, new ItemStack(ModItems.component("nb3SnPlate"), 3));
+        sp.setInventorySlotContents(TS + 2, new ItemStack(ModItems.component("focusLens")));
+        sp.setInventorySlotContents(TS + 3, hf2.copy());
+        sp.setInventorySlotContents(TS + 4, new ItemStack(ModItems.component("matterCapsule"), 1));
+        sp.setInventorySlotContents(TS + 5, new ItemStack(ModItems.component("nb3SnPlate"), 1));
+        int[] spHave = sp.materialsHave();
+        String spStart = sp.startConvertFor("");
+        boolean spread = spHave[com.sc.util.SingularStationMath.M_CAPSULE] == 4 && spHave[com.sc.util.SingularStationMath.M_NB3SN] == 4
+                && spStart == null && sp.getProcess() != null && sp.getProcess().mask == 9;
+        for (int i = 0; i < 6; i++) {
+            spread &= sp.getStackInSlot(TS + i) == null;
+        }
+        sp.cancelProcess();
+        int[] spBack = sp.materialsHave();
+        spread &= spBack[com.sc.util.SingularStationMath.M_CAPSULE] == 4 && spBack[com.sc.util.SingularStationMath.M_NB3SN] == 4
+                && spBack[com.sc.util.SingularStationMath.M_LENS] == 1 && spBack[com.sc.util.SingularStationMath.M_HAFNIUM] == 2;
+        // NBT: slots 14 / 15 round-trip; an old save (SingItems Slot 0..5 = slots 8..13) loads as it was, 14 / 15 empty
+        com.sc.tileentity.TileEntitySingularStationSC ns = new com.sc.tileentity.TileEntitySingularStationSC();
+        ns.setInventorySlotContents(TS + 4, hf2.copy());
+        ns.setInventorySlotContents(TS + 5, new ItemStack(ModItems.component("nb3SnPlate"), 7));
+        ns.setInventorySlotContents(TS, new ItemStack(ModItems.component("matterCapsule"), 5));
+        net.minecraft.nbt.NBTTagCompound nsTag = new net.minecraft.nbt.NBTTagCompound();
+        ns.writeToNBT(nsTag);
+        com.sc.tileentity.TileEntitySingularStationSC ns2 = new com.sc.tileentity.TileEntitySingularStationSC();
+        ns2.readFromNBT(nsTag);
+        boolean nbt6 = ns2.getStackInSlot(TS + 4) != null && com.sc.tileentity.TileEntitySingularStationSC.materialKind(ns2.getStackInSlot(TS + 4))
+                == com.sc.util.SingularStationMath.M_HAFNIUM && ns2.getStackInSlot(TS + 4).stackSize == 2
+                && ns2.getStackInSlot(TS + 5) != null && ns2.getStackInSlot(TS + 5).stackSize == 7
+                && ns2.getStackInSlot(TS) != null && ns2.getStackInSlot(TS).stackSize == 5 && ns2.getStackInSlot(TS + 1) == null;
+        net.minecraft.nbt.NBTTagCompound oldTag = new net.minecraft.nbt.NBTTagCompound();
+        new com.sc.tileentity.TileEntitySingularStationSC().writeToNBT(oldTag);
+        net.minecraft.nbt.NBTTagList oldList = new net.minecraft.nbt.NBTTagList();
+        ItemStack[] oldItems = {new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[2]), new ItemStack(ModItems.battery, 1, 6),
+                new ItemStack(ModItems.component("matterCapsule"), 4), new ItemStack(ModItems.component("focusLens")),
+                new ItemStack(ModItems.component("nb3SnPlate"), 2), new ItemStack(ModItems.component("fusionCore"))};
+        for (int i = 0; i < oldItems.length; i++) {
+            net.minecraft.nbt.NBTTagCompound t = oldItems[i].writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+            t.setByte("Slot", (byte) i);
+            oldList.appendTag(t);
+        }
+        oldTag.setTag("SingItems", oldList);
+        ns2.readFromNBT(oldTag);                              // over a station that had 14 / 15 filled: they go empty
+        boolean oldNbt = com.sc.util.SingularLevel.isSingular(ns2.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.DONOR_SLOT))
+                && com.sc.tileentity.TileEntitySingularStationSC.isCore(ns2.getStackInSlot(CAT))
+                && ns2.getStackInSlot(TS) != null && ns2.getStackInSlot(TS).stackSize == 4
+                && com.sc.tileentity.TileEntitySingularStationSC.materialKind(ns2.getStackInSlot(TS + 1)) == com.sc.util.SingularStationMath.M_LENS
+                && ns2.getStackInSlot(TS + 2) != null && ns2.getStackInSlot(TS + 2).stackSize == 2
+                && com.sc.tileentity.TileEntitySingularStationSC.materialKind(ns2.getStackInSlot(TS + 3)) == com.sc.util.SingularStationMath.M_FUSION
+                && ns2.getStackInSlot(TS + 4) == null && ns2.getStackInSlot(TS + 5) == null;
+        check(fullSet && spread && nbt6 && oldNbt, "Singular conversion, 6 material slots: a whole Exo set in one process (11 capsules / 8 plates out of"
+                + " 13 / 64, the core from the catalyst slot, 1 hafnium short refused), a kind spread over two slots counts and is taken,"
+                + " slots 14 / 15 survive NBT, an old 4-slot save loads (" + fsShort + "/" + fsStart + "/" + fullSet + "/" + spread + "/" + nbt6 + "/" + oldNbt + ")");
+
         // СМ1: the compressor's liquid mode - 100 mB per capsule's worth, no capsule; the mode in NBT; a full tank waits
         com.sc.tileentity.TileEntityMachineSC c = new com.sc.tileentity.TileEntityMachineSC();
         c.setMachineType(com.sc.machine.MachineType.MATTER_COMPRESSOR);

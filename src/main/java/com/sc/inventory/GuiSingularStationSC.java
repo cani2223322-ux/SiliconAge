@@ -25,7 +25,7 @@ import net.minecraft.item.ItemStack;
 /**
  * The Singular Service Station's screen (docs/singular-armor/sing_2_station_gui.png), compact to fit
  * a 320 x 240 screen: left the four pieces with their level and points bar, the donor and catalyst
- * slots and the four conversion material slots (Б-1); centre the modernisation panel (target level,
+ * slots and the six conversion material slots (Б-1, 3 x 2); centre the modernisation panel (target level,
  * or «Преобразование» while Exo pieces lie in the armour slots; the checklist - points, task, EU and each
  * gas, have / need in colour -, the multipliers: set discount, resonance, stabilisers; the button,
  * the progress, the time left, «Отменить (50%)», «Ветки» - the branch panel in its place); right
@@ -45,6 +45,8 @@ public class GuiSingularStationSC extends GuiContainer {
     /** The service area right of the inventory. */
     private static final int SX = 172, SW = 144, ROW1 = 153, ROW2 = 167, ROW3 = 182, STATUS_Y = 197;
     private static final int SEPARATOR_Y = 152;
+    /** The materials' label / grid width: 3 slots of 18 (frames 43..96, the panel at 98). */
+    private static final int MAT_W = ContainerSingularStationSC.MAT_COLS * 18;
     /** Colours (the A scheme: base (34,22,48), accent (190,110,255)). */
     private static final int BG = 0xFF140E1C, PANEL = 0xFF1E1629, EDGE = 0xFF4A3466, EDGE_HI = 0xFF7A56A8, ACCENT = 0xFFBE6EFF,
             TITLE = 0xD9A8FF, TEXT = 0xE8E0F4, LABEL = 0xA898C0, DIM = 0x6E6280, OK = 0x5AE66E, BAD = 0xFF5A50, WARN = 0xFFB040,
@@ -353,8 +355,8 @@ public class GuiSingularStationSC extends GuiContainer {
         pocket(x + ContainerSingularStationSC.DONOR_X, y + ContainerSingularStationSC.EXTRA_Y, te.isLocked(TileEntitySingularStationSC.DONOR_SLOT) ? ACCENT : EDGE);
         pocket(x + ContainerSingularStationSC.CATALYST_X, y + ContainerSingularStationSC.CATALYST_Y,
                 te.isLocked(TileEntitySingularStationSC.CATALYST_SLOT) ? ACCENT : 0xFF6A4A20);
-        for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {   // Б-1: the materials, 2 x 2
-            pocket(x + ContainerSingularStationSC.MAT_X + (i % 2) * 18, y + ContainerSingularStationSC.MAT_Y + (i / 2) * 18, 0xFF8A7020);
+        for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {   // Б-1: the materials, 3 x 2
+            pocket(x + ContainerSingularStationSC.matX(i), y + ContainerSingularStationSC.matY(i), 0xFF8A7020);
         }
         // the centre panel
         frame(x + PX, y + PY, PW, PH, PANEL, proc != null ? ACCENT : EDGE_HI);
@@ -423,6 +425,21 @@ public class GuiSingularStationSC extends GuiContainer {
         TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop);
     }
 
+    /** Small text that shrinks (75% down to 60%) to fit maxW before it is cut (a short label in a narrow gap). */
+    private void smallFit(String text, int x, int y, int maxW, int color) {
+        int w = fontRendererObj.getStringWidth(text) - 1;               // no trailing gap after the last letter
+        float k = w * 0.75F <= maxW ? 0.75F : Math.max(0.6F, maxW / (float) Math.max(1, w));
+        if (w * k > maxW + 0.01F) {
+            small(text, x, y, maxW, color);
+            return;
+        }
+        GL11.glPushMatrix();
+        GL11.glTranslatef(x, y + (0.75F - k) * 4F, 0F);
+        GL11.glScalef(k, k, 1F);
+        fontRendererObj.drawString(text, 0, 0, color);
+        GL11.glPopMatrix();
+    }
+
     /** Small (75%) text, cut to maxW GUI pixels; the full text as a tooltip when cut. */
     private void small(String text, int x, int y, int maxW, int color) {
         float k = 0.75F;
@@ -479,9 +496,11 @@ public class GuiSingularStationSC extends GuiContainer {
                 small(Lang.tr("sc.singStation.notsingular"), 26, ry + 11, 70, DIM);
             }
         }
-        small(Lang.tr("sc.singStation.donor"), 26, ContainerSingularStationSC.EXTRA_Y + 5, 24, LABEL);
-        small(Lang.tr("sc.singStation.catalyst.short"), 26, ContainerSingularStationSC.CATALYST_Y + 5, 24, LABEL);
-        small(Lang.tr("sc.singStation.materials"), ContainerSingularStationSC.MAT_X - 1, ContainerSingularStationSC.MAT_Y - 9, 46,
+        smallFit(Lang.tr("sc.singStation.donor"), ContainerSingularStationSC.EXTRA_LABEL_X, ContainerSingularStationSC.EXTRA_Y + 5,
+                ContainerSingularStationSC.EXTRA_LABEL_W, LABEL);
+        smallFit(Lang.tr("sc.singStation.catalyst.short"), ContainerSingularStationSC.EXTRA_LABEL_X, ContainerSingularStationSC.CATALYST_Y + 5,
+                ContainerSingularStationSC.EXTRA_LABEL_W, LABEL);
+        small(Lang.tr("sc.singStation.materials"), ContainerSingularStationSC.MAT_X - 1, ContainerSingularStationSC.MAT_Y - 9, MAT_W,
                 p.convert && !p.matOk && te.getProcess() == null ? WARN : LABEL);
         // the centre panel
         TextFitSC.drawCentered(fontRendererObj, branchView ? Lang.tr("sc.singStation.branches.head") : p.header, PX + 3, HEAD_Y, PW - 6, TEXT, false, guiLeft, guiTop);
@@ -644,12 +663,12 @@ public class GuiSingularStationSC extends GuiContainer {
                 return pieceTip(i);
             }
         }
-        if (over(25, ContainerSingularStationSC.EXTRA_Y, 25, 16, mx, my)) {
+        if (over(ContainerSingularStationSC.EXTRA_LABEL_X, ContainerSingularStationSC.EXTRA_Y, ContainerSingularStationSC.EXTRA_LABEL_W, 16, mx, my)) {
             tip.add(Lang.tr("sc.singStation.donor"));
             tip.add(Lang.tr("sc.singStation.donor.hint"));
             return tip;
         }
-        if (over(25, ContainerSingularStationSC.CATALYST_Y, 25, 16, mx, my)) {
+        if (over(ContainerSingularStationSC.EXTRA_LABEL_X, ContainerSingularStationSC.CATALYST_Y, ContainerSingularStationSC.EXTRA_LABEL_W, 16, mx, my)) {
             tip.add(Lang.tr("sc.singStation.catalyst"));
             tip.add(Lang.tr("sc.singStation.catalyst.hint"));
             tip.add("§7" + Lang.tr("sc.singStation.catalyst.convert"));
@@ -658,9 +677,9 @@ public class GuiSingularStationSC extends GuiContainer {
         boolean emptyMat = false;
         for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
             emptyMat |= te.getStackInSlot(TileEntitySingularStationSC.MATERIAL_SLOT + i) == null
-                    && over(ContainerSingularStationSC.MAT_X + (i % 2) * 18 - 1, ContainerSingularStationSC.MAT_Y + (i / 2) * 18 - 1, 18, 18, mx, my);
+                    && over(ContainerSingularStationSC.matX(i) - 1, ContainerSingularStationSC.matY(i) - 1, 18, 18, mx, my);
         }
-        if (emptyMat || over(ContainerSingularStationSC.MAT_X - 1, ContainerSingularStationSC.MAT_Y - 10, 46, 9, mx, my)) {
+        if (emptyMat || over(ContainerSingularStationSC.MAT_X - 1, ContainerSingularStationSC.MAT_Y - 10, MAT_W, 9, mx, my)) {
             return materialsTip(p);
         }
         if (over(SX, STATUS_Y + 26, SW, 8, mx, my) && lagging() != 0) {

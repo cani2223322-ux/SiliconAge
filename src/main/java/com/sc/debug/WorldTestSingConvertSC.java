@@ -23,11 +23,12 @@ import net.minecraftforge.common.DimensionManager;
  * leave the slots, the slot locks), is fast-forwarded to 97% (the rest is drawn as usual) and ends
  * with a Singular helmet of level 1, scheme A, the same charge and helium, the tanks paying the rest
  * of the row. Station B starts the same and is cancelled: the materials come back whole, the helmet
- * stays Exo. The blocks are removed afterwards.
+ * stays Exo. Station C gets a whole Exo set and its materials in the six material slots (the Singular
+ * core in the catalyst slot) and converts all four pieces in one process. The blocks are removed afterwards.
  */
 public class WorldTestSingConvertSC {
 
-    private static final int AX = 270, BX = 280, Y = 200, Z = 90, SM = 300, HE = 4000, CHARGE = 5000;
+    private static final int AX = 270, BX = 280, CX = 290, Y = 200, Z = 90, SM = 300, HE = 4000, CHARGE = 5000;
     private int ticks;
     private int heInHelm = -1;
     private long smLeftToDraw = -1, heLeftToDraw = -1;
@@ -45,6 +46,7 @@ public class WorldTestSingConvertSC {
         if (ticks == 50) {
             build(w, AX);
             build(w, BX);
+            buildSet(w, CX);
         }
         if (ticks == 60) {
             TileEntitySingularStationSC a = st(w, AX), b = st(w, BX);
@@ -59,6 +61,20 @@ public class WorldTestSingConvertSC {
                     && p.cost[0] == 50000000L && p.cost[1] == 100 && p.cost[2] == 2000 && p.items.size() == 3;
             System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " singular conversion starts (" + sa + "/" + sb
                     + "): the materials taken, the helmet slot locked, cost " + (p == null ? "-" : p.cost[0] + " EU / SM " + p.cost[1] + " / He " + p.cost[2]));
+            TileEntitySingularStationSC c = st(w, CX);
+            String sc = c == null ? "no tile" : c.startConvertFor("");
+            SingularProcessSC pc = c == null ? null : c.getProcess();
+            boolean cEmpty = c != null && c.getStackInSlot(TileEntitySingularStationSC.CATALYST_SLOT) == null;
+            for (int i = 0; c != null && i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
+                ItemStack m = c.getStackInSlot(TileEntitySingularStationSC.MATERIAL_SLOT + i);
+                cEmpty &= i == 0 ? m != null && m.stackSize == 5 : i == 2 ? m != null && m.stackSize == 4 : m == null;
+            }
+            boolean cOk = sc == null && pc != null && pc.mask == 15 && pc.items.size() == 7 && pc.cost[0] == 350000000L && cEmpty;
+            System.out.println("[SC-WORLDTEST] " + (cOk ? "PASS" : "FAIL") + " singular conversion of a whole Exo set starts in one process (" + sc
+                    + "): 6 material slots + the core, mask " + (pc == null ? "-" : pc.mask) + ", items " + (pc == null ? "-" : pc.items.size()));
+            if (pc != null) {
+                c.fastForwardForTest(0.97);
+            }
             if (p != null) {
                 a.fastForwardForTest(0.97);
                 smLeftToDraw = p.cost[1] - p.drawn[1];
@@ -90,6 +106,17 @@ public class WorldTestSingConvertSC {
                     + (h == null ? -1 : ArmorGasSC.amount(h, Gas.HELIUM)) + "/" + heInHelm + ", SM / He left "
                     + (a == null ? "-" : a.tankAmount(Gas.SINGULAR_MATTER) + " / " + a.tankAmount(Gas.HELIUM)) + ", finished " + (a == null ? 0 : a.completedCount()));
             w.setBlockToAir(AX, Y, Z);
+            TileEntitySingularStationSC c = st(w, CX);
+            boolean cOk = c != null && c.getProcess() == null && c.completedCount() == 1;
+            StringBuilder lv = new StringBuilder();
+            for (int t = 0; t < 4; t++) {
+                ItemStack s = c == null ? null : c.getStackInSlot(t);
+                cOk &= SingularLevel.isSingular(s) && ((ItemArmorSC) s.getItem()).armorType == t && SingularLevel.levelOf(s) == 1;
+                lv.append(SingularLevel.isSingular(s) ? "S" + SingularLevel.levelOf(s) : s == null ? "-" : "X");
+            }
+            System.out.println("[SC-WORLDTEST] " + (cOk ? "PASS" : "FAIL") + " singular conversion of a whole Exo set done in one process: " + lv
+                    + ", finished " + (c == null ? 0 : c.completedCount()));
+            w.setBlockToAir(CX, Y, Z);
         }
     }
 
@@ -105,6 +132,39 @@ public class WorldTestSingConvertSC {
     private static TileEntitySingularStationSC st(World w, int x) {
         net.minecraft.tileentity.TileEntity te = w.getTileEntity(x, Y, Z);
         return te instanceof TileEntitySingularStationSC ? (TileEntitySingularStationSC) te : null;
+    }
+
+    /** Station C: a whole Exo set, a Singular core in the catalyst slot, the six kinds in the six material slots (with spare capsules and plates). */
+    private static void buildSet(World w, int x) {
+        w.setBlock(x, Y, Z, ModBlocks.singularStation);
+        TileEntitySingularStationSC s = st(w, x);
+        if (s == null) {
+            return;
+        }
+        s.setPowerOn(true);
+        if (s.isChargeOn()) {
+            s.toggleCharge();
+        }
+        if (s.isFillGases()) {
+            s.toggleFillGases();
+        }
+        s.setEnergyStoredClient(13000000);
+        s.fillTank(Gas.SINGULAR_MATTER, 1000, true);
+        s.fillTank(Gas.HELIUM, HE, true);
+        s.fillTank(Gas.DEUTERIUM, 1000, true);
+        for (int t = 0; t < 4; t++) {
+            s.setInventorySlotContents(t, new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[t]));
+        }
+        int m = TileEntitySingularStationSC.MATERIAL_SLOT;
+        ItemStack hf = ModItems.ingot.stackOf(com.sc.util.Material.HAFNIUM);
+        hf.stackSize = 2;
+        s.setInventorySlotContents(TileEntitySingularStationSC.CATALYST_SLOT, new ItemStack(ModItems.battery, 1, 6));
+        s.setInventorySlotContents(m, new ItemStack(ModItems.component("matterCapsule"), 16));
+        s.setInventorySlotContents(m + 1, new ItemStack(ModItems.component("focusLens")));
+        s.setInventorySlotContents(m + 2, new ItemStack(ModItems.component("nb3SnPlate"), 12));
+        s.setInventorySlotContents(m + 3, new ItemStack(ModItems.component("fusionCore")));
+        s.setInventorySlotContents(m + 4, new ItemStack(ModItems.battery, 1, 5));
+        s.setInventorySlotContents(m + 5, hf);
     }
 
     /** A switched-on station (charging and filling off) with a full buffer, SM and helium, a charged Exo helmet and its materials. */

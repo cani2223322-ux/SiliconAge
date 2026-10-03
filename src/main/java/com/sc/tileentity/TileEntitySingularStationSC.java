@@ -31,7 +31,7 @@ import net.minecraft.util.AxisAlignedBB;
  *  - speed: gravitational stabilisers within STAB_RADIUS (same Y +-1; up to 4, +25% each) and a
  *    running Singular reactor within RES_RADIUS (+30%, -10% EU).
  *  - Б-1 conversion: the Exo pieces in the armour slots become Singular pieces of level 1, for the
- *    materials in the four material slots (and a Singular core in the catalyst slot) - taken whole at
+ *    materials in the six material slots - a whole Exo set in one go - (and a Singular core in the catalyst slot) - taken whole at
  *    the start, given back whole on «Отменить» - and the resources of SingularStationMath.convertCost,
  *    drawn as the progress grows like the modernisation (the cores' charge counts toward the EU).
  * Charging can be switched off. Placed switched off; the item keeps energy, modules, tanks, settings;
@@ -39,8 +39,13 @@ import net.minecraft.util.AxisAlignedBB;
  */
 public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
-    /** The extra slots after the module slots: the donor piece (Ф4), the catalyst (Singular core), the four conversion materials (Б-1). */
-    public static final int DONOR_SLOT = ALL_SLOTS, CATALYST_SLOT = ALL_SLOTS + 1, MATERIAL_SLOT = ALL_SLOTS + 2, MATERIAL_SLOTS = 4,
+    /**
+     * The extra slots after the module slots: the donor piece (Ф4), the catalyst (Singular core), the six conversion
+     * materials (Б-1) - 8 donor, 9 catalyst, 10..15 materials. They are saved by index ("SingItems", Slot 0..7 =
+     * index - ALL_SLOTS); the materials were 4 (10..13) before, the last two (14, 15) were added at the end, so an
+     * older station loads as it was.
+     */
+    public static final int DONOR_SLOT = ALL_SLOTS, CATALYST_SLOT = ALL_SLOTS + 1, MATERIAL_SLOT = ALL_SLOTS + 2, MATERIAL_SLOTS = 6,
             SING_SLOTS = MATERIAL_SLOT + MATERIAL_SLOTS;
     /** The donor slot's bit in a process mask. */
     public static final int DONOR_BIT = 4;
@@ -553,7 +558,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return mask;
     }
 
-    /** The materials there now, per kind: the four material slots and the catalyst slot (a Singular core). */
+    /** The materials there now, per kind (a kind may lie in several slots): the six material slots and the catalyst slot (a Singular core). */
     public int[] materialsHave() {
         int[] have = new int[SingularStationMath.MATERIALS];
         for (int slot = CATALYST_SLOT; slot < SING_SLOTS; slot++) {
@@ -920,8 +925,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         super.readFromNBT(nbt);
         setTier(Tier.SV);
         chargeOn = !nbt.getBoolean("ChargeOff");
-        extra[0] = null;
-        extra[1] = null;
+        java.util.Arrays.fill(extra, null);
         NBTTagList list = nbt.getTagList("SingItems", 10);
         for (int i = 0; i < list.tagCount(); i++) {
             NBTTagCompound t = list.getCompoundTagAt(i);
