@@ -6,7 +6,7 @@ import net.minecraft.item.ItemArmor;
 import net.minecraftforge.common.util.EnumHelper;
 
 /**
- * The 3 armor suits from §6/§16 - damage reduction per piece, in ArmorMaterial's index order
+ * The armor suits (Nano, Quantum, Exo, and the appended Singular) from §6/§16 - damage reduction per piece, in ArmorMaterial's index order
  * (helmet, chestplate, leggings, boots - ItemArmor.armorType). Nano is vanilla Diamond exactly
  * (§16: "Nano ≈ уровень Diamond-брони", 20 points = 80% reduction).
  *
@@ -23,9 +23,16 @@ import net.minecraftforge.common.util.EnumHelper;
  */
 public enum ArmorSuit {
 
-    NANO("nano", 33, new int[]{3, 8, 6, 3}, 10, 100000, 500, Tier.MV),
-    QUANTUM("quantum", 40, new int[]{3, 9, 7, 3}, 14, 1000000, 2000, Tier.HV),
-    EXO("exo", 50, new int[]{4, 9, 7, 4}, 18, 4000000, 4000, Tier.EV);
+    NANO("nano", 33, new int[]{3, 8, 6, 3}, 10, 100000, 500, Tier.MV, 100, 2),
+    QUANTUM("quantum", 40, new int[]{3, 9, 7, 3}, 14, 1000000, 2000, Tier.HV, 200, 1),
+    EXO("exo", 50, new int[]{4, 9, 7, 4}, 18, 4000000, 4000, Tier.EV, 400, 2),
+    /**
+     * The 4th suit (docs/plan-singular-armor.md, appended - ordinals are saved): 5/10/8/5 (28 points:
+     * over Forge's 25-point cap, so a charged suit stops everything blockable - like the full Exo set's
+     * energy shield), 64M EU a piece charged at SV, heat 1000. Every Exo function (K10 "Exo legacy")
+     * on 20% less gas (ArmorGasSC.gasUseMul). Its levels and own functions come in later stages.
+     */
+    SINGULAR("singular", 66, new int[]{5, 10, 8, 5}, 22, 64000000, 8000, Tier.SV, 1000, 2);
 
     /** EU a chip draws from the chestplate per second, per chip tier (TODO: not in the design doc). */
     public static final int CHIP_EU_PER_TIER_SECOND = 20;
@@ -48,13 +55,28 @@ public enum ArmorSuit {
     public final Tier chargeTier;
 
     ArmorSuit(String textureName, int durabilityFactor, int[] reductionAmounts, int enchantability,
-              int maxCharge, int euPerDamage, Tier chargeTier) {
+              int maxCharge, int euPerDamage, Tier chargeTier, int heatCapacity, int heatDissipation) {
         this.textureName = textureName;
         this.material = EnumHelper.addArmorMaterial(name() + "_SC", durabilityFactor, reductionAmounts, enchantability);
-        this.heatCapacity = 100 << ordinal(); // 100, 200, 400
-        this.heatDissipation = new int[]{2, 1, 2}[ordinal()];
+        this.heatCapacity = heatCapacity;       // 100, 200, 400, 1000
+        this.heatDissipation = heatDissipation;
         this.maxCharge = maxCharge;
         this.euPerDamage = euPerDamage;
         this.chargeTier = chargeTier;
+    }
+
+    /** This suit is `other` or one above it. */
+    public boolean atLeast(ArmorSuit other) {
+        return other == null || ordinal() >= other.ordinal();
+    }
+
+    /** Exo or above (the Singular suit keeps every Exo function and bonus, K10). Null-safe. */
+    public static boolean exoClass(ArmorSuit s) {
+        return s != null && s.atLeast(EXO);
+    }
+
+    /** The suit has colour schemes (SingularScheme, kept in the piece's NBT): the icon and the worn texture follow it. */
+    public boolean hasSchemes() {
+        return this == SINGULAR;
     }
 }

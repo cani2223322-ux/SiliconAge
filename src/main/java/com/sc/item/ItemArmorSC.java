@@ -42,6 +42,8 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     private final ArmorSuit suit;
     private final String pieceName;
     private IIcon icon;
+    /** Suits with colour schemes (Singular): an icon per scheme, by SingularScheme ordinal. */
+    private IIcon[] schemeIcons;
     private Object ic2Manager;
 
     public ItemArmorSC(ArmorSuit suit, int armorType, String pieceName) {
@@ -59,7 +61,43 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
 
     @Override
     public void registerIcons(IIconRegister register) {
+        if (suit.hasSchemes()) {                         // armorSingularHelmet_a ... _k: one per colour scheme
+            com.sc.util.SingularScheme[] all = com.sc.util.SingularScheme.values();
+            schemeIcons = new IIcon[all.length];
+            for (com.sc.util.SingularScheme s : all) {
+                schemeIcons[s.ordinal()] = register.registerIcon(Reference.ASSETS + ":armor" + cap(suit.textureName) + cap(pieceName) + "_" + s.key());
+            }
+            icon = schemeIcons[com.sc.util.SingularScheme.DEFAULT.ordinal()];
+            return;
+        }
         icon = register.registerIcon(Reference.ASSETS + ":armor" + cap(suit.textureName) + cap(pieceName));
+    }
+
+    /** The icon of this stack: its colour scheme's (Singular), else the suit's one icon. */
+    private IIcon iconOf(ItemStack stack) {
+        if (schemeIcons != null) {
+            return schemeIcons[com.sc.util.SingularScheme.of(stack).ordinal()];
+        }
+        return icon;
+    }
+
+    @Override
+    public IIcon getIconIndex(ItemStack stack) {
+        return iconOf(stack);
+    }
+
+    @Override
+    public IIcon getIcon(ItemStack stack, int pass) {
+        return iconOf(stack);
+    }
+
+    /**
+     * The worn textures' name start (models/armor/<base>_layer_N.png and the glow layers): the suit's
+     * texture name, with the colour scheme for the Singular suit ("singular_a").
+     */
+    public static String textureBase(ItemStack stack) {
+        ArmorSuit s = ((ItemArmorSC) stack.getItem()).suit;
+        return s.hasSchemes() ? s.textureName + "_" + com.sc.util.SingularScheme.of(stack).key() : s.textureName;
     }
 
     private static String cap(String s) {
@@ -84,7 +122,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
      */
     @Override
     public String getArmorTexture(ItemStack stack, Entity entity, int slot, String type) {
-        return Reference.ASSETS + ":textures/models/armor/" + suit.textureName + "_layer_" + (slot == 2 ? 2 : 1) + ".png";
+        return Reference.ASSETS + ":textures/models/armor/" + textureBase(stack) + "_layer_" + (slot == 2 ? 2 : 1) + ".png";
     }
 
     /** The worn model: the armour, then its lit parts full-bright by the charge (ModelArmorGlowSC). */
@@ -209,6 +247,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add(Lang.tr("sc.tooltip.armor.charge", chargeOf(stack), cap()));
+        if (suit.hasSchemes()) {
+            list.add(Lang.tr("sc.tooltip.armor.scheme", Lang.tr(com.sc.util.SingularScheme.of(stack).langKey())));
+        }
         if (!powered(stack)) {
             list.add(Lang.tr("sc.tooltip.armor.empty"));
         }
@@ -227,6 +268,10 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.pairs(list, names, on);
                 gasLines(stack, list);
+                if (suit == ArmorSuit.SINGULAR) {               // K10: the Exo functions on less gas; levels come later
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.legacy",
+                            Math.round((1F - com.sc.util.ArmorGasSC.SINGULAR_GAS_MUL) * 100)), "\u00a7d");
+                }
                 if (ArmorLogicSC.strict(suit)) {
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.strict"), "§6");
                     // С-3: the helium loop is in the chestplate - a piece worn without one is always in emergency mode
@@ -237,6 +282,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             case 2:
                 com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.howto", suit.chargeTier.name())
                         + " " + Lang.tr("sc.tooltip.armor.keys"), "\u00a77");
+                if (suit.hasSchemes()) {
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.more"), "\u00a77");
+                }
                 break;
             default:
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
@@ -275,13 +323,22 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         return 1.0 - (double) chargeOf(stack) / cap();
     }
 
-    /** Creative tab: an empty and a fully charged piece, like IC2. */
+    /** Creative tab: an empty and a fully charged piece, like IC2; the Singular suit also charged in each other colour scheme. */
     @Override
     public void getSubItems(Item item, CreativeTabs tab, List list) {
         list.add(new ItemStack(item));
         ItemStack full = new ItemStack(item);
         setCharge(full, cap());
         list.add(full);
+        if (suit.hasSchemes()) {
+            for (com.sc.util.SingularScheme s : com.sc.util.SingularScheme.values()) {
+                if (s != com.sc.util.SingularScheme.DEFAULT) {
+                    ItemStack v = full.copy();
+                    com.sc.util.SingularScheme.setScheme(v, s);
+                    list.add(v);
+                }
+            }
+        }
     }
 
     /**

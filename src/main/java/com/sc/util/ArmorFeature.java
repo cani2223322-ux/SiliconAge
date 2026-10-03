@@ -67,9 +67,14 @@ public enum ArmorFeature {
     public static final double ANNIHILATION_DRAIN = 0.95, ANNIHILATION_MIN_CHARGE = 0.95;
     /** Annihilation pulse: what a boss (dragon, wither) takes instead of dying on the spot - a heavy but normal blow. */
     public static final float ANNIHILATION_BOSS_DAMAGE = 100F;
-    /** Regeneration (combat mode): the suit's energy use multiplied while it's on; HP healed per second by Nano / Quantum / Exo. */
+    /** Regeneration (combat mode): the suit's energy use multiplied while it's on; HP healed per second by Nano / Quantum / Exo / Singular. */
     public static final float REGEN_COST_MUL = 3F;
-    public static final float[] REGEN_HEAL = {0.5F, 1F, 2F};
+    public static final float[] REGEN_HEAL = {0.5F, 1F, 2F, 3F};
+
+    /** HP regeneration heals a second with a chestplate of this suit. */
+    public static float regenHeal(ArmorSuit suit) {
+        return suit == null ? 0F : REGEN_HEAL[Math.min(REGEN_HEAL.length - 1, suit.ordinal())];
+    }
     /**
      * Full Exo set: with the energy shield on nothing gets through (but the void) - each point of
      * damage stopped costs this much from the chestplate (x power mode / regeneration); explosion

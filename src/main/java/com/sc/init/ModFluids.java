@@ -42,6 +42,8 @@ public final class ModFluids {
     public static Fluid ticl4;
     /** Heavy water (D2O): enriched out of water in the chemical reactor, electrolysed into deuterium. */
     public static Fluid heavyWater;
+    /** Singular matter (docs/plan-singular-armor.md §4): the Singular suit's 8th tank; its source (the Matter Compressor) comes later. */
+    public static Fluid singularMatter;
 
     /** Fluids this mod actually registered - only these get our icons (see register()). */
     public static final List<Fluid> OWNED = new ArrayList<Fluid>();
@@ -82,6 +84,7 @@ public final class ModFluids {
         COLORS.put("deuterium", 0xFFA0A8F0);
         COLORS.put("ticl4", 0xFFE8E4C8);
         COLORS.put("heavywater", 0xFF3A62C0);
+        COLORS.put("singularmatter", 0xFFC85AFF);
         hcl = register("hcl");
         sihcl3 = register("sihcl3");
         hydrogen = register("hydrogen", true);
@@ -105,6 +108,7 @@ public final class ModFluids {
         deuterium = register("deuterium");
         ticl4 = register("ticl4", false);
         heavyWater = register("heavywater");
+        singularMatter = register("singularmatter");
     }
 
     private static Fluid register(String name) {

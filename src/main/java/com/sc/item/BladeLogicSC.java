@@ -53,7 +53,8 @@ public final class BladeLogicSC {
     }
 
     private static boolean fullSetOf(EntityPlayer p, BladeType type) {
-        return ArmorLogicSC.bonusSet(p) == type.suit;           // none in emergency mode (no helium)
+        com.sc.util.ArmorSuit set = ArmorLogicSC.bonusSet(p);  // none in emergency mode (no helium)
+        return set == type.suit || type.suit == com.sc.util.ArmorSuit.EXO && set == com.sc.util.ArmorSuit.SINGULAR;   // Singular keeps the Exo bonuses
     }
 
     /** EU the blade's hits and functions really cost: a quarter less with the full Nano suit. */

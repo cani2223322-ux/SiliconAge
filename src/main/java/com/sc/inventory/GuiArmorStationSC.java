@@ -19,7 +19,7 @@ import net.minecraft.item.ItemStack;
 /**
  * The Armour Service Station's screen (its own wide layout, ContainerArmorStationSC.W x H): one
  * holo screen with the four armour slots down the left - each with its name and a thin bar per gas
- * that piece holds - the station's seven tanks in the middle (the machines' tank gauge, the gas's
+ * that piece holds - the station's eight tanks in the middle (one per gas, singular matter the 8th) (the machines' tank gauge, the gas's
  * short name over it with the x that pours it out, the "fill with this gas" box under it), then
  * "filled / still to go" and the status; right of the screen the power switch, the redstone mode,
  * a tall energy gauge and the Fill / Helium only switches; under it the module row with the
@@ -30,20 +30,18 @@ public class GuiArmorStationSC extends GuiContainer {
     private static final int GASES = Gas.values().length;
     private static final int W = ContainerArmorStationSC.W, H = ContainerArmorStationSC.H;
     /** The holo screen. */
-    private static final int SCREEN_X = 8, SCREEN_Y = 22, SCREEN_W = 330, SCREEN_H = 140, SCREEN_RIGHT = SCREEN_X + SCREEN_W - 3;
+    private static final int SCREEN_X = 8, SCREEN_Y = 22, SCREEN_W = 344, SCREEN_H = 140, SCREEN_RIGHT = SCREEN_X + SCREEN_W - 3;
     /** The armour column: slot, then the piece's name and its gas bars. */
     private static final int PART_TEXT_X = 36, PART_TEXT_W = 50, DIVIDER_X = 89;
     /** The tanks: gauges TANK_STEP apart, the short name and x over them, the check box under them. */
-    private static final int TANK_X = 94, TANK_STEP = 34, HEAD_Y = 25, NAME_Y = 36, TANK_Y = 46, CHECK_Y = 120, CHECK = 9,
+    private static final int TANK_X = 94, TANK_STEP = 32, HEAD_Y = 25, NAME_Y = 36, TANK_Y = 46, CHECK_Y = 120, CHECK = 9,
             SUM_Y = 133, STATUS_Y = 145, TEXT_W = SCREEN_RIGHT - TANK_X;
     /** Right of the screen: power + redstone over the energy gauge, the two switches under it. */
-    private static final int GAUGE_X = 347, GAUGE_W = 30, POWER_Y = 22, GAUGE_Y = 36, GAUGE_H = 106, BTN_X = 341, BTN_W = 42,
+    private static final int GAUGE_X = 361, GAUGE_W = 30, POWER_Y = 22, GAUGE_Y = 36, GAUGE_H = 106, BTN_X = 355, BTN_W = 42,
             FILL_Y = 146, HELIUM_Y = 158, BTN_H = 10;
     /** Under the screen: the module row's caption and text, the separator. */
     private static final int UPG_X = ContainerArmorStationSC.UPG_X, UPG_Y = ContainerArmorStationSC.UPG_Y, UPG_LABEL_X = 8,
             UPG_TEXT_X = UPG_X + 4 * 18 + 4, UPG_TEXT_W = W - 8 - UPG_TEXT_X, SEPARATOR_Y = 168;
-    /** The gases' short names (chemical symbols), by Gas.ordinal(). */
-    private static final String[] SHORT = {"He", "O2", "H2", "Ar", "Kr", "D2O", "D"};
 
     private static final int PANEL = 0xFFB9C1CC, TITLE_BAR = 0xFF2E3642;
 
@@ -210,7 +208,7 @@ public class GuiArmorStationSC extends GuiContainer {
         fit(Lang.tr("sc.armorStation.tanks.head", te.tankCapacity()), TANK_X, HEAD_Y, TEXT_W, GuiHoloSC.LABEL);
         for (Gas g : Gas.values()) {
             boolean on = te.isFillGases() && te.gasEnabled(g);
-            TextFitSC.drawCentered(fontRendererObj, SHORT[g.ordinal()], tankX(g), NAME_Y, GuiTankGaugeSC.WIDTH - 7,
+            TextFitSC.drawCentered(fontRendererObj, com.sc.client.GasUiSC.shortName(g), tankX(g), NAME_Y, GuiTankGaugeSC.WIDTH - 7,
                     on ? g.color : 0x4A5A6A, false, guiLeft, guiTop);
         }
         long have = 0, room = 0;

@@ -67,7 +67,12 @@ public class ModCreativeTab extends CreativeTabs {
             if (pieces != null) {
                 add(order, (Object[]) pieces);
             }
-            add(order, ModItems.BLADES.get(BladeType.values()[tier]), ModItems.DRILLS.get(DrillType.values()[tier]));
+            if (tier < BladeType.values().length) {               // the Singular suit has no blade / drill (yet)
+                add(order, ModItems.BLADES.get(BladeType.values()[tier]));
+            }
+            if (tier < DrillType.values().length) {
+                add(order, ModItems.DRILLS.get(DrillType.values()[tier]));
+            }
         }
         order.addAll(ModItems.WEAPONS.values());
 

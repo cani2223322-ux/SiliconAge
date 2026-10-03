@@ -56,7 +56,8 @@ public class ModelArmorGlowSC extends ModelBiped {
     private final Map<String, List<ModelRenderer>> parts = new HashMap<String, List<ModelRenderer>>();
 
     private ItemStack stack;
-    private String suit;
+    /** The suit's name (which add-on parts), and its textures' name start (with the Singular colour scheme). */
+    private String suit, tex;
     private int layer;
 
     private ModelArmorGlowSC(float scale) {
@@ -68,6 +69,7 @@ public class ModelArmorGlowSC extends ModelBiped {
             parts.put("nano", knees);
             parts.put("quantum", knees);
             parts.put("exo", knees);
+            parts.put("singular", knees);
             return;
         }
         List<ModelRenderer> nano = new ArrayList<ModelRenderer>();
@@ -94,6 +96,8 @@ public class ModelArmorGlowSC extends ModelBiped {
         exo.add(part(bipedLeftLeg, 32, 8, true, -3F, 11.5F, -3F, 6, 1, 6, 0.5F));
         exo.add(part(bipedBody, 56, 16, false, -1.5F, 1.5F, 3F, 3, 6, 1, 0F));          // radiator
         parts.put("exo", exo);
+        // Singular: the Exo silhouette (its textures carry the parts' nets in the same places) - its own look is in the textures
+        parts.put("singular", exo);
     }
 
     private ModelRenderer part(ModelRenderer parent, int u, int v, boolean mirror, float x, float y, float z,
@@ -110,9 +114,11 @@ public class ModelArmorGlowSC extends ModelBiped {
         ModelArmorGlowSC m = slot == 2 ? INNER : OUTER;
         m.stack = stack;
         m.suit = ((ItemArmorSC) stack.getItem()).getSuit().textureName;
+        m.tex = ItemArmorSC.textureBase(stack);
         m.layer = slot == 2 ? 2 : 1;
+        List<ModelRenderer> own = m.parts.get(m.suit);
         for (Map.Entry<String, List<ModelRenderer>> e : m.parts.entrySet()) {
-            if (!e.getKey().equals(m.suit)) {
+            if (!e.getKey().equals(m.suit) && e.getValue() != own) {      // two suits may share one list (Exo / Singular)
                 for (ModelRenderer r : e.getValue()) {
                     r.showModel = false;
                 }
@@ -171,13 +177,13 @@ public class ModelArmorGlowSC extends ModelBiped {
         boolean lit = true;
         float r = 1F, g = 1F, b = 1F, a = 1F;
         if (color != 0) {
-            tex = suit + "_gloww_" + layer;             // a chosen colour: the white glow, tinted, breathing
+            tex = this.tex + "_gloww_" + layer;             // a chosen colour: the white glow, tinted, breathing
             float breath = 0.85F + 0.15F * (float) Math.sin(time * 0.15);
             r = (color >> 16 & 255) / 255F * breath;
             g = (color >> 8 & 255) / 255F * breath;
             b = (color & 255) / 255F * breath;
         } else {
-            tex = suit + "_glow_" + layer + "_" + (int) (time / 3 % FRAMES);
+            tex = this.tex + "_glow_" + layer + "_" + (int) (time / 3 % FRAMES);
         }
         float k = 1F;
         if (!functionsOn()) {
@@ -185,7 +191,7 @@ public class ModelArmorGlowSC extends ModelBiped {
             r = g = b = 0.16F;
             k = 1F;
         } else if (charge <= 0F) {
-            tex = suit + "_glowred_" + layer;           // empty: a slow red pulse
+            tex = this.tex + "_glowred_" + layer;           // empty: a slow red pulse
             r = g = b = 1F;
             a = 0.35F + 0.35F * (float) Math.sin(time * 0.12);
         } else if (charge < 0.15F) {                    // almost empty: flickering
@@ -214,7 +220,7 @@ public class ModelArmorGlowSC extends ModelBiped {
         }
         GL11.glPopAttrib();
         // the renderer carries on with this piece's texture bound (a later pass may draw it again)
-        Minecraft.getMinecraft().getTextureManager().bindTexture(texture(suit + "_layer_" + layer));
+        Minecraft.getMinecraft().getTextureManager().bindTexture(texture(this.tex + "_layer_" + layer));
     }
 
     /** Is the piece's own function (any of them available to it) switched on? */

@@ -56,7 +56,8 @@ public final class DrillLogicSC {
     }
 
     private static boolean fullSetOf(EntityPlayer p, DrillType type) {
-        return ArmorLogicSC.bonusSet(p) == type.suit;           // none in emergency mode (no helium)
+        com.sc.util.ArmorSuit set = ArmorLogicSC.bonusSet(p);  // none in emergency mode (no helium)
+        return set == type.suit || type.suit == com.sc.util.ArmorSuit.EXO && set == com.sc.util.ArmorSuit.SINGULAR;   // Singular keeps the Exo bonuses
     }
 
     /** Worn energy armour feeding the drill: the chestplate, any suit - not while it's overheated. */

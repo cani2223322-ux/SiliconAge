@@ -817,7 +817,7 @@ public final class BookContent {
             }
             ItemStack chest = new ItemStack(ModItems.ARMOR.get(suit)[1]);
             suits.add(BookEl.item(chest, Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)),
-                    Lang.tr("sc.manual.armor.suitline", points, points * 4, suit.heatCapacity, suit.heatDissipation)));
+                    Lang.tr("sc.manual.armor.suitline", points, Math.min(100, points * 4), suit.heatCapacity, suit.heatDissipation)));
             for (com.sc.item.ItemArmorSC piece : ModItems.ARMOR.get(suit)) {
                 suits.about(new ItemStack(piece, 1, OreDictionary.WILDCARD_VALUE));
             }
@@ -850,6 +850,7 @@ public final class BookContent {
         }
         list.add(fn);
         armorGases(list, c);
+        singularArmor(list, c);
         BookEntry weapons = new BookEntry("weapons", c, new ItemStack(ModItems.WEAPONS.get(WeaponType.values()[0])), Lang.tr("sc.manual.armor.weapons"));
         weapons.add(BookEl.title(Lang.tr("sc.manual.armor.weapons")));
         for (WeaponType type : WeaponType.values()) {
@@ -890,6 +891,53 @@ public final class BookContent {
             drills.add(BookEl.dim(Lang.tr("sc.drillgui.set." + type.key())));
         }
         list.add(drills);
+    }
+
+    /**
+     * The Singular suit (docs/plan-singular-armor.md, stage 1): its numbers from ArmorSuit / ArmorGasSC,
+     * singular matter, the colour schemes (SingularScheme); levels and its own functions come later.
+     */
+    private static void singularArmor(List<BookEntry> list, BookChapter c) {
+        ArmorSuit s = ArmorSuit.SINGULAR;
+        com.sc.item.ItemArmorSC[] pieces = ModItems.ARMOR.get(s);
+        BookEntry e = new BookEntry("singulararmor", c, new ItemStack(pieces[1]), Lang.tr("sc.manual.singular.head"));
+        e.add(BookEl.title(Lang.tr("sc.manual.singular.head")));
+        List<ItemStack> shown = new ArrayList<ItemStack>();
+        for (com.sc.item.ItemArmorSC piece : pieces) {
+            shown.add(new ItemStack(piece));
+            e.about(new ItemStack(piece, 1, OreDictionary.WILDCARD_VALUE));
+        }
+        e.add(BookEl.items(shown)).addAll(paras("sc.manual.singular.intro"));
+        e.add(BookEl.head(Lang.tr("sc.manual.singular.statshead")));
+        e.add(BookEl.para(Lang.tr("sc.manual.singular.stats", s.material.getDamageReductionAmount(0), s.material.getDamageReductionAmount(1),
+                s.material.getDamageReductionAmount(2), s.material.getDamageReductionAmount(3), s.maxCharge, s.chargeTier.name(),
+                s.chargeTier.getVoltage())));
+        e.add(BookEl.para(Lang.tr("sc.manual.singular.heat", s.heatCapacity, s.heatDissipation,
+                (int) com.sc.util.ArmorGasSC.HELIUM_HEAT_PER_MB_SINGULAR, (int) com.sc.util.ArmorGasSC.HELIUM_HEAT_PER_MB,
+                Math.round(com.sc.util.ArmorGasSC.RADIATOR_BONUS_SINGULAR * 100), Math.round(com.sc.util.ArmorGasSC.RADIATOR_BONUS * 100))));
+        e.add(BookEl.para(Lang.tr("sc.manual.singular.legacy", Math.round((1F - com.sc.util.ArmorGasSC.SINGULAR_GAS_MUL) * 100))));
+        e.add(BookEl.head(Lang.tr("sc.manual.singular.tankshead")));
+        for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+            StringBuilder tanks = new StringBuilder();
+            for (int t = 0; t < 4; t++) {
+                int cap = com.sc.util.ArmorGasSC.baseCapacity(new ItemStack(pieces[t]), g);
+                if (cap > 0) {
+                    tanks.append(tanks.length() > 0 ? ", " : "").append(Lang.tr("sc.armorhud.piece." + t)).append(' ').append(cap);
+                }
+            }
+            if (tanks.length() > 0) {
+                e.add(BookEl.dim(Lang.tr("sc.armorStation.gas." + g.key()) + ": " + tanks + " mB"));
+            }
+        }
+        e.add(BookEl.head(Lang.tr("sc.armorStation.gas.singular_matter"))).addAll(paras("sc.manual.singular.matter"));
+        e.add(BookEl.head(Lang.tr("sc.manual.singular.schemeshead"))).addAll(paras("sc.manual.singular.schemes"));
+        StringBuilder names = new StringBuilder();
+        for (com.sc.util.SingularScheme sc : com.sc.util.SingularScheme.values()) {
+            names.append(names.length() > 0 ? ", " : "").append(sc.name()).append(" - ").append(Lang.tr(sc.langKey()));
+        }
+        e.add(BookEl.dim(names.toString()));
+        e.add(BookEl.gap()).add(BookEl.warn(Lang.tr("sc.manual.singular.next")));
+        list.add(e);
     }
 
     /**

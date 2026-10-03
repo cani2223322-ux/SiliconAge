@@ -16,7 +16,7 @@ import net.minecraft.entity.player.EntityPlayer;
 public final class GasUiSC {
 
     /** Chemical labels, used when the lang file has no "sc.gas.<key>.short". */
-    private static final String[] SHORT = {"He", "O2", "H2", "Ar", "Kr", "D2O", "D"};
+    private static final String[] SHORT = {"He", "O2", "H2", "Ar", "Kr", "D2O", "D", "SM"};
 
     /** Samples: once a second, up to a minute back. */
     private static final int EVERY = 20, KEEP = 61, MIN_SPAN = 100;
@@ -31,7 +31,7 @@ public final class GasUiSC {
     }
 
     public static String shortName(Gas g) {
-        return Lang.trOr("sc.gas." + g.key() + ".short", SHORT[g.ordinal()]);
+        return Lang.trOr("sc.gas." + g.key() + ".short", g.ordinal() < SHORT.length ? SHORT[g.ordinal()] : g.key());
     }
 
     public static String name(Gas g) {

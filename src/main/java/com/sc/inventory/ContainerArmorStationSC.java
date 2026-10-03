@@ -20,11 +20,11 @@ public class ContainerArmorStationSC extends Container {
     /** BTN_GAS + gas: its check box; BTN_CLEAR + gas: pour its tank out for EU. */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_FILL = 12, BTN_HELIUM = 13, BTN_GAS = 20, BTN_CLEAR = 30;
     /** The screen's size (the station's own layout, wider than GuiBigSC's). */
-    public static final int W = 386, H = 292;
+    public static final int W = 400, H = 292;
     /** The armour slots (item coordinates): a column at the left of the screen, helmet on top. */
     public static final int PIECE_X = 15, PIECE_Y = 30, PIECE_STEP = 32;
     /** The module row (item coordinates of the first) and the player's inventory, centred. */
-    public static final int UPG_X = 48, UPG_Y = 176, INV_X = 112, INV_Y = 210, HOTBAR_Y = 268;
+    public static final int UPG_X = 48, UPG_Y = 176, INV_X = 119, INV_Y = 210, HOTBAR_Y = 268;
 
     private static final int GASES = Gas.values().length;
     private final TileEntityArmorStationSC te;

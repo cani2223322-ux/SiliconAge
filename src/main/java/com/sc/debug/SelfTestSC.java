@@ -59,6 +59,7 @@ public final class SelfTestSC {
             portableTanks();
             armorFunctions();
             armorGases();
+            singularArmor();
             bladeFunctions();
             chargePad();
             batteries();
@@ -1355,6 +1356,191 @@ public final class SelfTestSC {
                 && com.sc.item.ItemArmorSC.pay(chest, 60) && com.sc.item.ItemArmorSC.chargeOf(chest) == 40;
         check(defaults && flipped && mode && pay,
                 "functions: defaults (thermal off), each switched on its own, only in pieces that have them; power mode; all-or-nothing payment");
+    }
+
+    /**
+     * The Singular suit, stage 1 (docs/plan-singular-armor.md): its numbers, every Exo function, the
+     * tanks (singular matter too), helium and radiators, 20% less gas than Exo, the colour schemes
+     * and their textures, the station's 8th tank and old stations' gas switches.
+     */
+    private static void singularArmor() {
+        com.sc.util.ArmorSuit sg = com.sc.util.ArmorSuit.SINGULAR, exo = com.sc.util.ArmorSuit.EXO;
+        com.sc.util.ArmorSuit[] suits = com.sc.util.ArmorSuit.values();
+        com.sc.item.ItemArmorSC[] p = ModItems.ARMOR.get(sg);
+        check(suits[suits.length - 1] == sg && sg.ordinal() == 3 && p != null && p.length == 4
+                        && sg.material.getDamageReductionAmount(0) == 5 && sg.material.getDamageReductionAmount(1) == 10
+                        && sg.material.getDamageReductionAmount(2) == 8 && sg.material.getDamageReductionAmount(3) == 5
+                        && sg.maxCharge == 64000000 && sg.chargeTier == com.sc.energy.Tier.SV && sg.heatCapacity == 1000
+                        && sg.heatDissipation == 2 && exo.heatCapacity == 400 && com.sc.util.ArmorSuit.NANO.heatCapacity == 100
+                        && sg.material.getDurability(1) > exo.material.getDurability(1) && sg.material.getEnchantability() > exo.material.getEnchantability()
+                        && p[1].getSuit() == sg && p[2].armorType == 2
+                        && ItemStackName(p[0]).equals("item.siliconage.armor.singular.helmet")
+                        && com.sc.item.ItemArmorSC.capacityOf(new ItemStack(p[1])) == com.sc.util.ConfigSC.scale(64000000, com.sc.util.ConfigSC.armorCapacity, 1)
+                        && p[0].getTier(new ItemStack(p[0])) == com.sc.energy.Tier.SV.toIc2Tier(),
+                "Singular suit: appended 4th, 5/10/8/5, 64M EU at SV, heat 1000 / 2 a second, four pieces registered");
+        int exoFns = 0, sgFns = 0;
+        boolean inherits = true;
+        for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
+            for (int t = 0; t < 4; t++) {
+                exoFns += f.availableIn(exo, t) ? 1 : 0;
+                sgFns += f.availableIn(sg, t) ? 1 : 0;
+                inherits &= !f.availableIn(exo, t) || f.availableIn(sg, t);
+            }
+        }
+        ItemStack[] w = gasSuit(sg, true, true, true, true);
+        for (ItemStack s : w) {
+            com.sc.item.ItemArmorSC.setCharge(s, 1000);
+        }
+        boolean strict = com.sc.item.ArmorLogicSC.strict(sg) && com.sc.item.ArmorLogicSC.emergency(w)
+                && ((com.sc.item.ItemArmorSC) w[1].getItem()).protectionIn(w) == 6
+                && com.sc.item.ArmorLogicSC.fullSetOf(w) == sg && com.sc.util.ArmorSuit.exoClass(sg) && sg.atLeast(exo) && !exo.atLeast(sg)
+                && com.sc.util.ArmorFeature.regenHeal(sg) == 3F;
+        fillSuit(w, 50);
+        strict &= !com.sc.item.ArmorLogicSC.emergency(w) && com.sc.item.ArmorLogicSC.worksIn(w, com.sc.util.ArmorFeature.FLIGHT)
+                && com.sc.item.ArmorLogicSC.worksIn(w, com.sc.util.ArmorFeature.ANNIHILATION)
+                && com.sc.item.ArmorLogicSC.worksIn(w, com.sc.util.ArmorFeature.NIGHT_VISION)
+                && ((com.sc.item.ItemArmorSC) w[1].getItem()).protectionIn(w) == 10;
+        check(inherits && exoFns == 25 && sgFns == exoFns && strict,
+                "Singular suit: every Exo function (" + sgFns + "), strict gas rules, emergency mode without helium (iron plating)");
+        // tanks (plan §4), singular matter only in the Singular chestplate
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM, o2 = com.sc.util.ArmorGasSC.Gas.OXYGEN,
+                h2 = com.sc.util.ArmorGasSC.Gas.HYDROGEN, ar = com.sc.util.ArmorGasSC.Gas.ARGON, kr = com.sc.util.ArmorGasSC.Gas.KRYPTON,
+                d2o = com.sc.util.ArmorGasSC.Gas.HEAVY_WATER, d = com.sc.util.ArmorGasSC.Gas.DEUTERIUM,
+                sm = com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER;
+        int[][] want = {   // [gas][piece]
+            {4000, 24000, 4000, 4000}, {12000, 0, 0, 0}, {0, 6000, 0, 8000}, {0, 4000, 0, 0},
+            {4000, 0, 0, 0}, {0, 0, 12000, 0}, {0, 8000, 0, 0}, {0, 1000, 0, 0}};
+        boolean tanks = com.sc.util.ArmorGasSC.Gas.values().length == 8 && sm.ordinal() == 7 && sm.color == 0xC85AFF
+                && "singularmatter".equals(sm.fluid);
+        for (com.sc.util.ArmorGasSC.Gas g : com.sc.util.ArmorGasSC.Gas.values()) {
+            for (int t = 0; t < 4; t++) {
+                tanks &= com.sc.util.ArmorGasSC.baseCapacity(new ItemStack(p[t]), g) == want[g.ordinal()][t];
+            }
+        }
+        for (com.sc.util.ArmorSuit other : new com.sc.util.ArmorSuit[]{com.sc.util.ArmorSuit.NANO, com.sc.util.ArmorSuit.QUANTUM, exo}) {
+            for (int t = 0; t < 4; t++) {
+                tanks &= com.sc.util.ArmorGasSC.baseCapacity(new ItemStack(ModItems.ARMOR.get(other)[t]), sm) == 0;
+            }
+        }
+        ItemStack[] full = gasSuit(sg, true, true, true, true);
+        fillSuit(full, 100);
+        tanks &= com.sc.util.ArmorGasSC.capacityOf(full, he) == 36000 && com.sc.util.ArmorGasSC.capacityOf(full, h2) == 14000
+                && com.sc.util.ArmorGasSC.amountOf(full, sm) == 1000 && com.sc.util.ArmorGasSC.levelBonusPercent(full[1]) == 0
+                && com.sc.util.ArmorGasSC.capacity(full[1], d) == 8000 && com.sc.util.ArmorGasSC.capacity(full[2], d2o) == 12000;
+        net.minecraftforge.fluids.Fluid smFluid = FluidRegistry.getFluid("singularmatter");
+        tanks &= smFluid != null && sm.fluidOf() == smFluid && com.sc.util.ArmorGasSC.Gas.of(smFluid) == sm
+                && java.util.Arrays.asList(com.sc.item.ItemFluidBucketSC.FLUIDS).indexOf("singularmatter") >= 0
+                && com.sc.init.ModFluids.COLORS.containsKey("singularmatter");
+        check(tanks, "Singular tanks: He 24000 + 3 x 4000, O2 12000, H2 6000 + 8000, Ar 4000, Kr 4000, D2O 12000, D 8000, "
+                + "singular matter 1000 (chestplate only, its own fluid and bucket); level hook 0%");
+        // helium: 25 heat a mB, radiators +20% (full set x1.6), pump 32
+        ItemStack[] exoFull = gasSuit(exo, true, true, true, true);
+        fillSuit(exoFull, 100);
+        int heBefore = com.sc.util.ArmorGasSC.amountOf(full, he);
+        int removed = com.sc.util.ArmorGasSC.heliumCool(full, 1000, false);
+        float frac = full[1].getTagCompound().getFloat("GasFrac_helium");
+        float used = heBefore - com.sc.util.ArmorGasSC.amountOf(full, he) + frac;
+        boolean cool = com.sc.util.ArmorGasSC.heliumHeatPerMb(sg) == 25F && com.sc.util.ArmorGasSC.heliumHeatPerMb(exo) == 20F
+                && com.sc.util.ArmorGasSC.radiatorBonus(sg) == 0.20F && com.sc.util.ArmorGasSC.radiatorBonus(exo) == 0.15F
+                && Math.abs(com.sc.util.ArmorGasSC.coolingFactorOf(full) - 1.6F) < 1e-4
+                && Math.abs(com.sc.util.ArmorGasSC.coolingFactorOf(exoFull) - 1.45F) < 1e-4
+                && removed == (int) (com.sc.util.ArmorGasSC.HELIUM_PUMP[sg.ordinal()] * 1.6F) && removed == 51
+                && Math.abs(used - removed / (25F * 1.6F)) < 0.01F;
+        check(cool, "Singular helium: 1 mB per 25 heat (Exo 20), radiators +20% (x1.6 full set, Exo x1.45), pump " + removed + "/s for "
+                + used + " mB");
+        // gas -20% for the Exo functions (K10): ten dashes' hydrogen, a minute of krypton
+        ItemStack[] sgGas = gasSuit(sg, true, true, true, true), exoGas = gasSuit(exo, true, true, true, true);
+        fillSuit(sgGas, 100);
+        fillSuit(exoGas, 100);
+        int sgH2 = com.sc.util.ArmorGasSC.amountOf(sgGas, h2), exoH2 = com.sc.util.ArmorGasSC.amountOf(exoGas, h2);
+        int sgKr = com.sc.util.ArmorGasSC.amountOf(sgGas, kr), exoKr = com.sc.util.ArmorGasSC.amountOf(exoGas, kr);
+        boolean dashes = true;
+        for (int i = 0; i < 10; i++) {
+            dashes &= com.sc.util.ArmorGasSC.drainExactUse(sgGas, h2, com.sc.util.ArmorGasSC.H2_DASH)
+                    && com.sc.util.ArmorGasSC.drainExactUse(exoGas, h2, com.sc.util.ArmorGasSC.H2_DASH);
+        }
+        for (int i = 0; i < 600; i++) {
+            com.sc.util.ArmorGasSC.drainFractionUse(sgGas, kr, 1F / 6F);
+            com.sc.util.ArmorGasSC.drainFractionUse(exoGas, kr, 1F / 6F);
+        }
+        int sgUsed = sgH2 - com.sc.util.ArmorGasSC.amountOf(sgGas, h2), exoUsed = exoH2 - com.sc.util.ArmorGasSC.amountOf(exoGas, h2);
+        int sgKrUsed = sgKr - com.sc.util.ArmorGasSC.amountOf(sgGas, kr), exoKrUsed = exoKr - com.sc.util.ArmorGasSC.amountOf(exoGas, kr);
+        check(dashes && exoUsed == 500 && sgUsed == 400 && Math.abs(exoKrUsed - 100) <= 1 && Math.abs(sgKrUsed - 80) <= 1
+                        && com.sc.util.ArmorGasSC.gasUseMul(sgGas[1]) == 0.8F && com.sc.util.ArmorGasSC.gasUseMul(exoGas[1]) == 1F,
+                "Singular gas -20%: 10 dashes " + sgUsed + " mB of hydrogen (Exo " + exoUsed + "), krypton " + sgKrUsed + " (Exo " + exoKrUsed + ")");
+        // colour schemes: default A, set / get, an unknown value falls back to A; 11 schemes
+        com.sc.util.SingularScheme[] all = com.sc.util.SingularScheme.values();
+        ItemStack piece = new ItemStack(p[1]);
+        boolean schemes = all.length == 11 && com.sc.util.SingularScheme.DEFAULT == com.sc.util.SingularScheme.A
+                && com.sc.util.SingularScheme.of(piece) == com.sc.util.SingularScheme.A
+                && com.sc.item.ItemArmorSC.textureBase(piece).equals("singular_a")
+                && com.sc.item.ItemArmorSC.textureBase(new ItemStack(ModItems.ARMOR.get(exo)[1])).equals("exo")
+                && sg.hasSchemes() && !exo.hasSchemes();
+        com.sc.util.SingularScheme.setScheme(piece, com.sc.util.SingularScheme.D);
+        schemes &= com.sc.util.SingularScheme.of(piece) == com.sc.util.SingularScheme.D && piece.getTagCompound().getInteger("SingScheme") == 3
+                && com.sc.item.ItemArmorSC.textureBase(piece).equals("singular_d");
+        piece.getTagCompound().setInteger("SingScheme", 99);
+        schemes &= com.sc.util.SingularScheme.of(piece) == com.sc.util.SingularScheme.A && com.sc.util.SingularScheme.of(-1) == com.sc.util.SingularScheme.A
+                && com.sc.util.SingularScheme.K.ordinal() == 10 && com.sc.util.SingularScheme.A.accent == 0xBE6EFF;
+        com.sc.util.SingularScheme.setScheme(null, com.sc.util.SingularScheme.B);
+        java.util.List<ItemStack> sub = new java.util.ArrayList<ItemStack>();
+        p[0].getSubItems(p[0], null, sub);
+        schemes &= sub.size() == 2 + all.length - 1;
+        // every scheme's textures are there: 4 icons, 2 layers and their glow layers (8 frames, white, red)
+        StringBuilder missing = new StringBuilder();
+        String[] names = {"Helmet", "Chestplate", "Leggings", "Boots"};
+        for (com.sc.util.SingularScheme s : all) {
+            java.util.List<String> files = new java.util.ArrayList<String>();
+            for (String n : names) {
+                files.add("items/armorSingular" + n + "_" + s.key() + ".png");
+            }
+            for (int l = 1; l <= 2; l++) {
+                String b = "models/armor/singular_" + s.key();
+                files.add(b + "_layer_" + l + ".png");
+                files.add(b + "_gloww_" + l + ".png");
+                files.add(b + "_glowred_" + l + ".png");
+                for (int f = 0; f < com.sc.client.ModelArmorGlowSC.FRAMES; f++) {
+                    files.add(b + "_glow_" + l + "_" + f + ".png");
+                }
+            }
+            for (String f : files) {
+                if (SelfTestSC.class.getResource("/assets/siliconage/textures/" + f) == null) {
+                    missing.append(' ').append(f);
+                }
+            }
+        }
+        for (String f : new String[]{"blocks/fluids/singularmatter_still.png", "blocks/fluids/singularmatter_flow.png"}) {
+            if (SelfTestSC.class.getResource("/assets/siliconage/textures/" + f) == null) {
+                missing.append(' ').append(f);
+            }
+        }
+        check(schemes && missing.length() == 0, "Singular colour schemes: " + all.length + ", default A, set / get by NBT, unknown -> A, "
+                + "creative tab has each; textures of every scheme" + (missing.length() > 0 ? " MISSING:" + missing : ""));
+        // the station: an 8th tank, and an old station's gas switches turn the new gas on
+        net.minecraftforge.common.util.ForgeDirection any = net.minecraftforge.common.util.ForgeDirection.UNKNOWN;
+        com.sc.tileentity.TileEntityArmorStationSC st = new com.sc.tileentity.TileEntityArmorStationSC();
+        boolean station = st.getTankInfo(any).length == 8 && smFluid != null
+                && st.fill(any, new FluidStack(smFluid, 500), true) == 500 && st.tankAmount(sm) == 500
+                && com.sc.tileentity.TileEntityArmorStationSC.ALL_GASES == 255
+                && com.sc.tileentity.TileEntityArmorStationSC.migrateMask(127, 7) == 255
+                && com.sc.tileentity.TileEntityArmorStationSC.migrateMask(5, 7) == (5 | 128)
+                && com.sc.tileentity.TileEntityArmorStationSC.migrateMask(5, 8) == 5;
+        net.minecraft.nbt.NBTTagCompound tag = new net.minecraft.nbt.NBTTagCompound();
+        st.writeToNBT(tag);
+        station &= tag.getInteger("GasMaskN") == 8 && tag.getCompoundTag(com.sc.tileentity.TileEntityArmorStationSC.TANKS_KEY).getInteger(sm.key()) == 500;
+        tag.setInteger("GasMask", 1 | 4);
+        tag.removeTag("GasMaskN");                                   // saved before singular matter existed
+        com.sc.tileentity.TileEntityArmorStationSC old = new com.sc.tileentity.TileEntityArmorStationSC();
+        old.readFromNBT(tag);
+        station &= old.getGasMask() == (1 | 4 | 128) && old.gasEnabled(sm) && !old.gasEnabled(o2) && old.tankAmount(sm) == 500;
+        ItemStack[] slotsSuit = gasSuit(sg, false, true, false, false);
+        old.setInventorySlotContents(1, slotsSuit[1]);
+        station &= old.putGas(sm, 300, null) == 300 && com.sc.util.ArmorGasSC.amount(slotsSuit[1], sm) == 300;
+        check(station, "station: 8 tanks (singular matter fills its own), saved with the gas count; an old station's switches turn the new gas on");
+    }
+
+    private static String ItemStackName(net.minecraft.item.Item item) {
+        return item.getUnlocalizedName();
     }
 
     private static ItemStack[] gasSuit(com.sc.util.ArmorSuit suit, boolean helmet, boolean chest, boolean legs, boolean boots) {

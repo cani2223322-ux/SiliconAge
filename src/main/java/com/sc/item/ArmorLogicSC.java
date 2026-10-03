@@ -126,7 +126,7 @@ public final class ArmorLogicSC {
 
     /** Quantum and Exo: every function on its own gas (ArmorFeature.gas()), and emergency mode without helium. Nano is soft. */
     public static boolean strict(ArmorSuit suit) {
-        return suit == ArmorSuit.QUANTUM || suit == ArmorSuit.EXO;
+        return suit != null && suit.atLeast(ArmorSuit.QUANTUM);         // Quantum, Exo, Singular
     }
 
     /** A piece of this suit is in emergency mode with the set `worn`: Quantum / Exo without helium in the loop (no chestplate too). */
@@ -189,7 +189,7 @@ public final class ArmorLogicSC {
         if (g == null || g == Gas.HELIUM || mb <= 0 || worn[f.piece] == null || !strict(suitOf(worn[f.piece]))) {
             return;
         }
-        ArmorGasSC.drainFraction(worn, g, mb);
+        ArmorGasSC.drainFraction(worn, g, mb * ArmorGasSC.gasUseMul(worn[f.piece]));   // Singular: 20% less (K10)
     }
 
     /** Spends a function's own rate (ArmorFeature.gasUse) for one second / one use; per-minute rates a 60th. */
@@ -255,7 +255,7 @@ public final class ArmorLogicSC {
     public static boolean breathe(ItemStack[] worn) {
         ItemStack helmet = worn[ArmorGasSC.HELMET];
         return helmet != null && ItemArmorSC.isEnabled(helmet, ArmorFeature.AIR)
-                && ArmorGasSC.drainExact(worn, Gas.OXYGEN, ArmorGasSC.OXYGEN_PER_SECOND);
+                && ArmorGasSC.drainExactUse(worn, Gas.OXYGEN, ArmorGasSC.OXYGEN_PER_SECOND);
     }
 
     /** The helmet's breathing can work right now (switched on, not overheated, charge, oxygen left). */
@@ -291,7 +291,7 @@ public final class ArmorLogicSC {
     /** The ore scanner's reach: an Exo helmet with krypton sees half as far again. Used by the client's scanner. */
     public static int oreScanRadius(EntityPlayer p, int base) {
         ItemStack helmet = piece(p, 0);
-        return suitOf(helmet) == ArmorSuit.EXO && ArmorGasSC.amount(helmet, Gas.KRYPTON) > 0
+        return ArmorSuit.exoClass(suitOf(helmet)) && ArmorGasSC.amount(helmet, Gas.KRYPTON) > 0
                 ? Math.round(base * ArmorGasSC.KRYPTON_SCAN_MUL) : base;
     }
 
@@ -469,7 +469,7 @@ public final class ArmorLogicSC {
                 || (data.hasKey(AIR_JUMP_AT) && now - data.getLong(AIR_JUMP_AT) < 10 && now >= data.getLong(AIR_JUMP_AT))) {
             return;
         }
-        if (!airJumpReady(p) || !ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_AIR_JUMP)) {
+        if (!airJumpReady(p) || !ArmorGasSC.drainExactUse(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_AIR_JUMP)) {
             return;
         }
         data.setBoolean(AIR_JUMPED, true);
@@ -500,7 +500,7 @@ public final class ArmorLogicSC {
         if (data.hasKey(ARGON_AT) && now - data.getLong(ARGON_AT) < 20 && now >= data.getLong(ARGON_AT)) {
             return;
         }
-        if (ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.ARGON, ArmorGasSC.ARGON_EXTINGUISH)) {
+        if (ArmorGasSC.drainExactUse(ArmorGasSC.wornSet(p), Gas.ARGON, ArmorGasSC.ARGON_EXTINGUISH)) {
             data.setLong(ARGON_AT, now);
             p.extinguish();
             p.worldObj.playSoundAtEntity(p, "random.fizz", 0.7F, 1.4F);
@@ -531,7 +531,7 @@ public final class ArmorLogicSC {
                     if (p.worldObj.getBlock(px + dx, py + dy, pz + dz) != net.minecraft.init.Blocks.fire) {
                         continue;
                     }
-                    if (!ArmorGasSC.drainExact(worn, Gas.ARGON, ArmorGasSC.ARGON_PER_FIRE)) {
+                    if (!ArmorGasSC.drainExactUse(worn, Gas.ARGON, ArmorGasSC.ARGON_PER_FIRE)) {
                         return spent;
                     }
                     spent += ArmorGasSC.ARGON_PER_FIRE;
@@ -680,7 +680,7 @@ public final class ArmorLogicSC {
         if (can) {
             // the Quantum chestplate flies at half the speed, the Exo one (and creative) as in creative;
             // the engine boost on hydrogen doubles it
-            float speed = p.capabilities.isCreativeMode || suitOf(piece(p, 1)) == ArmorSuit.EXO ? VANILLA_FLY_SPEED : QUANTUM_FLY_SPEED;
+            float speed = p.capabilities.isCreativeMode || ArmorSuit.exoClass(suitOf(piece(p, 1))) ? VANILLA_FLY_SPEED : QUANTUM_FLY_SPEED;
             if (!p.capabilities.isCreativeMode && boostedFlight(p)) {
                 speed *= 2F;
             }
@@ -883,7 +883,7 @@ public final class ArmorLogicSC {
         // regeneration (combat mode): heals while hurt, paid from the chestplate at the tripled rate
         if (regenOn(p) && p.getHealth() < p.getMaxHealth() && !p.isDead
                 && pay(p, ArmorFeature.REGENERATION, ArmorFeature.REGENERATION.euPerSecond)) {
-            p.heal(ArmorFeature.REGEN_HEAL[suitOf(piece(p, 1)).ordinal()]);
+            p.heal(ArmorFeature.regenHeal(suitOf(piece(p, 1))));
             heat += ArmorFeature.REGENERATION.heat;
         }
         return heat + perSecondRest(p, mode);
@@ -930,7 +930,7 @@ public final class ArmorLogicSC {
         }
         if (active(p, ArmorFeature.FLIGHT) && p.capabilities.isFlying && !p.capabilities.isCreativeMode) {
             if (boostedFlight(p)) {                               // the engine boost: hydrogen instead of EU
-                ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_FLIGHT_PER_SECOND);
+                ArmorGasSC.drainExactUse(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_FLIGHT_PER_SECOND);
                 heat += ArmorFeature.FLIGHT.heat + ArmorFeature.BOOSTER.heat;
                 hydrogenWarning(p, ArmorGasSC.H2_FLIGHT_PER_SECOND);
             } else if (pay(p, ArmorFeature.FLIGHT, ArmorFeature.FLIGHT.euPerSecond)) {
@@ -950,7 +950,7 @@ public final class ArmorLogicSC {
             if (pay(p, ArmorFeature.FIRE_PROOF, eu)) {
                 // ARGON_EXO_PER_SECOND with the bonus (half the EU, the fire round put out) - it covers the
                 // function's own ARGON_FIRE_PROOF_PER_SECOND; with less argon left just that
-                argon = argon && ArmorGasSC.drainExact(worn, Gas.ARGON, ArmorGasSC.ARGON_EXO_PER_SECOND);
+                argon = argon && ArmorGasSC.drainExactUse(worn, Gas.ARGON, ArmorGasSC.ARGON_EXO_PER_SECOND);
                 if (!argon) {
                     spendGas(p, ArmorFeature.FIRE_PROOF);
                 }
@@ -963,18 +963,18 @@ public final class ArmorLogicSC {
             }
         }
         if (p.handleLavaMovement() && !active(p, ArmorFeature.FIRE_PROOF) && !fireHarmless(p) && ArmorGasSC.suitAmount(p, Gas.ARGON) > 0) {
-            ArmorGasSC.suitDrain(p, Gas.ARGON, ArmorGasSC.ARGON_LAVA_PER_SECOND, false);   // half the lava's damage meanwhile
+            ArmorGasSC.drainFractionUse(ArmorGasSC.wornSet(p), Gas.ARGON, ArmorGasSC.ARGON_LAVA_PER_SECOND);   // half the lava's damage meanwhile
         }
         ArmorSuit legs = suitOf(piece(p, 2));
         if (active(p, ArmorFeature.SPEED) && p.isSprinting() && pay(p, ArmorFeature.SPEED, ArmorFeature.SPEED.euPerSecond)) {
-            int level = Math.max(0, (legs == ArmorSuit.EXO ? 2 : 1) - (mode == 0 ? 1 : 0));
+            int level = Math.max(0, (ArmorSuit.exoClass(legs) ? 2 : 1) - (mode == 0 ? 1 : 0));
             p.addPotionEffect(new PotionEffect(Potion.moveSpeed.id, 30, level, true));
             spendGas(p, ArmorFeature.SPEED);                      // hydrogen while sprinting
             heat += ArmorFeature.SPEED.heat;
         }
         ArmorSuit boots = suitOf(piece(p, 3));
         if (active(p, ArmorFeature.JUMP) && pay(p, ArmorFeature.JUMP, ArmorFeature.JUMP.euPerSecond)) {
-            int level = Math.max(0, (boots == ArmorSuit.EXO ? 2 : 1) - (mode == 0 ? 1 : 0));
+            int level = Math.max(0, (ArmorSuit.exoClass(boots) ? 2 : 1) - (mode == 0 ? 1 : 0));
             p.addPotionEffect(new PotionEffect(Potion.jump.id, 30, level, true));
             heat += ArmorFeature.JUMP.heat;
         }
@@ -1015,7 +1015,7 @@ public final class ArmorLogicSC {
         }
         // oxygen regenerator chip (Exo): under water the helmet's oxygen comes back, for EU
         int regen = ArmorGasSC.chipTier(chest, ChipType.OXYGEN_REGEN);
-        if (regen > 0 && !overheated(p) && !emergency(worn) && suitOf(chest) == ArmorSuit.EXO && p.isInWater()
+        if (regen > 0 && !overheated(p) && !emergency(worn) && ArmorSuit.exoClass(suitOf(chest)) && p.isInWater()
                 && ArmorGasSC.capacityOf(worn, Gas.OXYGEN) > ArmorGasSC.amountOf(worn, Gas.OXYGEN)
                 && ItemArmorSC.pay(chest, (int) Math.ceil(ArmorGasSC.OXYGEN_REGEN_EU * costMul(p)))) {
             ArmorGasSC.fillOf(worn, Gas.OXYGEN, ArmorGasSC.OXYGEN_REGEN_BASE + ArmorGasSC.OXYGEN_REGEN_PER_TIER * regen, false);
@@ -1024,7 +1024,7 @@ public final class ArmorLogicSC {
         // the Exo scanner's longer reach comes with the scanner's krypton)
         boolean light = active(p, ArmorFeature.SEARCHLIGHT) && data.getBoolean(LIGHT_ON);
         if (light && ArmorGasSC.amountOf(worn, Gas.KRYPTON) > 0) {
-            ArmorGasSC.drainFraction(worn, Gas.KRYPTON, ArmorGasSC.KRYPTON_PER_MIN / 60F);
+            ArmorGasSC.drainFractionUse(worn, Gas.KRYPTON, ArmorGasSC.KRYPTON_PER_MIN / 60F);
         }
         return heat;
     }
@@ -1042,7 +1042,7 @@ public final class ArmorLogicSC {
 
     /** One second of the fusion cell: deuterium burnt, if there is deuterium and helium. @return whether it ran */
     public static boolean fusionStep(ItemStack[] worn) {
-        float use = ArmorGasSC.FUSION_D_PER_TICK * 20;
+        float use = ArmorGasSC.FUSION_D_PER_TICK * 20 * ArmorGasSC.gasUseMul(worn, Gas.DEUTERIUM);   // Singular: 20% less
         if (!heliumReady(worn) || ArmorGasSC.amountOf(worn, Gas.DEUTERIUM) < (int) Math.ceil(use)) {
             return false;
         }
@@ -1139,7 +1139,7 @@ public final class ArmorLogicSC {
     private static void setBonuses(EntityPlayer p) {
         ArmorSuit set = overheated(p) ? null : bonusSet(p);     // an overheated suit (or emergency mode) gives no set bonus
         // Exo: never hungry - the chestplate's energy stands in for food
-        if (set == ArmorSuit.EXO) {
+        if (ArmorSuit.exoClass(set)) {                           // Exo and Singular
             ItemStack chest = piece(p, 1);
             while (p.getFoodStats().getFoodLevel() < 20 && ItemArmorSC.pay(chest, ArmorFeature.FOOD_POINT_COST)) {
                 p.getFoodStats().addStats(1, 0.6F);
@@ -1170,7 +1170,7 @@ public final class ArmorLogicSC {
         // the engine boost: what the boots' EU didn't soften, a hydrogen burst does - no damage at all
         PotionEffect jump = p.getActivePotionEffect(Potion.jump);
         if (left - 3 - (jump == null ? 0 : jump.getAmplifier() + 1) > 0 && boosterOn(p)
-                && ArmorGasSC.drainExact(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_SOFT_LANDING)) {
+                && ArmorGasSC.drainExactUse(ArmorGasSC.wornSet(p), Gas.HYDROGEN, ArmorGasSC.H2_SOFT_LANDING)) {
             p.worldObj.playSoundAtEntity(p, "fire.ignite", 0.6F, 1.5F);
             return 0F;
         }
@@ -1182,7 +1182,7 @@ public final class ArmorLogicSC {
             return distance;
         }
         ArmorSuit boots = suitOf(piece(p, 3));
-        float share = boots == ArmorSuit.EXO ? 1F : boots == ArmorSuit.QUANTUM ? 0.75F : 0.5F;
+        float share = ArmorSuit.exoClass(boots) ? 1F : boots == ArmorSuit.QUANTUM ? 0.75F : 0.5F;
         PotionEffect jump = p.getActivePotionEffect(Potion.jump);
         float points = distance - 3 - (jump == null ? 0 : jump.getAmplifier() + 1);   // vanilla already takes that off
         if (points <= 0) {
@@ -1217,7 +1217,7 @@ public final class ArmorLogicSC {
         if (now - data.getLong("scAnnihilated") < 20) {
             return;
         }
-        if (fullSet(p) != ArmorSuit.EXO) {
+        if (!ArmorSuit.exoClass(fullSet(p))) {                       // a full Exo or Singular set
             p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.armor.annihilate.low"));
             return;
         }
@@ -1280,7 +1280,7 @@ public final class ArmorLogicSC {
      */
     public static boolean exoStops(EntityPlayer p, net.minecraft.util.DamageSource src, float amount) {
         if (p.worldObj.isRemote || src == net.minecraft.util.DamageSource.outOfWorld || amount <= 0
-                || fullSet(p) != ArmorSuit.EXO || p.capabilities.disableDamage || p.isEntityInvulnerable()) {
+                || !ArmorSuit.exoClass(fullSet(p)) || p.capabilities.disableDamage || p.isEntityInvulnerable()) {
             return false;
         }
         if (src == com.sc.radiation.RadiationSC.DAMAGE || src == net.minecraft.util.DamageSource.wither) {
@@ -1316,7 +1316,7 @@ public final class ArmorLogicSC {
 
     /** An explosion about to push / hurt entities: a player it can't touch (explosion proofing) is taken off its list. */
     public static boolean explosionProof(EntityPlayer p) {
-        return !p.worldObj.isRemote && fullSet(p) == ArmorSuit.EXO && active(p, ArmorFeature.EXPLOSION_PROOF)
+        return !p.worldObj.isRemote && ArmorSuit.exoClass(fullSet(p)) && active(p, ArmorFeature.EXPLOSION_PROOF)
                 && pay(p, ArmorFeature.EXPLOSION_PROOF, ArmorFeature.EXPLOSION_PROOF_COST)
                 && addHeatAnd(p, ArmorFeature.EXPLOSION_PROOF.heat);
     }
@@ -1346,7 +1346,7 @@ public final class ArmorLogicSC {
         }
         // the engine boost: half as far again, on hydrogen instead of EU
         ItemStack[] worn = ArmorGasSC.wornSet(p);
-        boolean boost = boosterOn(p) && ArmorGasSC.drainExact(worn, Gas.HYDROGEN, ArmorGasSC.H2_DASH);
+        boolean boost = boosterOn(p) && ArmorGasSC.drainExactUse(worn, Gas.HYDROGEN, ArmorGasSC.H2_DASH);
         if (!boost) {
             // no boost: the EU as before, and (Quantum / Exo) the same hydrogen all the same
             boolean h2 = strict(suitOf(piece(p, ArmorFeature.DASH.piece)));
@@ -1354,7 +1354,7 @@ public final class ArmorLogicSC {
                 return;
             }
             if (h2) {
-                ArmorGasSC.drainExact(worn, Gas.HYDROGEN, ArmorGasSC.H2_DASH);
+                ArmorGasSC.drainExactUse(worn, Gas.HYDROGEN, ArmorGasSC.H2_DASH);
             }
         }
         double push = boost ? 1.8 * 1.5 : 1.8;

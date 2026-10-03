@@ -28,7 +28,9 @@ public final class ArmorGasSC {
         ARGON("argon", 0xB27CFF),
         KRYPTON("krypton", 0xFFE14D),
         HEAVY_WATER("heavywater", 0x3C6CFF),
-        DEUTERIUM("deuterium", 0x5CE07A);
+        DEUTERIUM("deuterium", 0x5CE07A),
+        /** Singular matter (docs/plan-singular-armor.md §4, appended - ordinals are saved): the Singular chestplate only. */
+        SINGULAR_MATTER("singularmatter", 0xC85AFF);
 
         /** The mod's fluid name (ModFluids). */
         public final String fluid;
@@ -63,21 +65,86 @@ public final class ArmorGasSC {
     }
 
     /**
-     * Tank sizes, mB: [gas][suit NANO, QUANTUM, EXO][piece HELMET, CHEST, LEGS, BOOTS]. 0 - no tank.
+     * Tank sizes, mB: [gas][suit NANO, QUANTUM, EXO, SINGULAR][piece HELMET, CHEST, LEGS, BOOTS]. 0 - no tank.
      * Helium on the other pieces is the radiators' volume added to the chestplate's loop.
+     * Singular: docs/plan-singular-armor.md §4 (level 1; levelBonusPercent adds to it later).
      */
     private static final int[][][] CAP = {
-        /* HELIUM      */ {{0, 2000, 0, 0}, {1000, 6000, 1000, 1000}, {2000, 12000, 2000, 2000}},
-        /* OXYGEN      */ {{2000, 0, 0, 0}, {4000, 0, 0, 0}, {8000, 0, 0, 0}},
-        /* HYDROGEN    */ {{0, 0, 0, 0}, {0, 4000, 0, 2000}, {0, 8000, 0, 4000}},
-        /* ARGON       */ {{0, 0, 0, 0}, {0, 1000, 0, 0}, {0, 2000, 0, 0}},
-        /* KRYPTON     */ {{0, 0, 0, 0}, {1000, 0, 0, 0}, {1000, 0, 0, 0}},
-        /* HEAVY_WATER */ {{0, 0, 0, 0}, {0, 0, 4000, 0}, {0, 0, 8000, 0}},
-        /* DEUTERIUM   */ {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 4000, 0, 0}},
+        /* HELIUM      */ {{0, 2000, 0, 0}, {1000, 6000, 1000, 1000}, {2000, 12000, 2000, 2000}, {4000, 24000, 4000, 4000}},
+        /* OXYGEN      */ {{2000, 0, 0, 0}, {4000, 0, 0, 0}, {8000, 0, 0, 0}, {12000, 0, 0, 0}},
+        /* HYDROGEN    */ {{0, 0, 0, 0}, {0, 4000, 0, 2000}, {0, 8000, 0, 4000}, {0, 6000, 0, 8000}},
+        /* ARGON       */ {{0, 0, 0, 0}, {0, 1000, 0, 0}, {0, 2000, 0, 0}, {0, 4000, 0, 0}},
+        /* KRYPTON     */ {{0, 0, 0, 0}, {1000, 0, 0, 0}, {1000, 0, 0, 0}, {4000, 0, 0, 0}},
+        /* HEAVY_WATER */ {{0, 0, 0, 0}, {0, 0, 4000, 0}, {0, 0, 8000, 0}, {0, 0, 12000, 0}},
+        /* DEUTERIUM   */ {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 4000, 0, 0}, {0, 8000, 0, 0}},
+        /* SING_MATTER */ {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 1000, 0, 0}},
     };
 
-    /** Helium cooling: each worn radiator piece (helmet, leggings, boots) adds this much cooling. */
+    /** Helium cooling: each worn radiator piece (helmet, leggings, boots) adds this much cooling (Nano / Quantum / Exo). */
     public static final float RADIATOR_BONUS = 0.15F;
+    /** ...and a Singular radiator piece this much (the full Singular set x1.6). */
+    public static final float RADIATOR_BONUS_SINGULAR = 0.20F;
+    /** Singular (K10 "Exo legacy"): the Exo-era functions spend this share of their gas. */
+    public static final float SINGULAR_GAS_MUL = 0.8F;
+
+    /** The cooling a worn radiator piece of this suit adds. */
+    public static float radiatorBonus(ArmorSuit suit) {
+        return suit == ArmorSuit.SINGULAR ? RADIATOR_BONUS_SINGULAR : RADIATOR_BONUS;
+    }
+
+    private static ArmorSuit suitOf(ItemStack piece) {
+        return piece != null && piece.getItem() instanceof ItemArmorSC ? ((ItemArmorSC) piece.getItem()).getSuit() : null;
+    }
+
+    /** The share of its gas an Exo-era function of this piece spends: SINGULAR_GAS_MUL for Singular, else 1. */
+    public static float gasUseMul(ItemStack piece) {
+        return suitOf(piece) == ArmorSuit.SINGULAR ? SINGULAR_GAS_MUL : 1F;
+    }
+
+    /** gasUseMul of the gas's home piece in the set (the first worn piece with a tank of it, chestplate first). */
+    public static float gasUseMul(ItemStack[] w, Gas g) {
+        return gasUseMul(home(w, g));
+    }
+
+    /** The first worn piece (chestplate, helmet, leggings, boots) with a tank of `g`, or null. */
+    private static ItemStack home(ItemStack[] w, Gas g) {
+        for (int t : new int[]{CHEST, HELMET, LEGS, BOOTS}) {
+            if (baseCapacity(at(w, t), g) > 0) {
+                return at(w, t);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * drainExact for an Exo-era function: `mb` x gasUseMul (the Singular suit spends 20% less; the
+     * part under a whole mB kept until it adds up). Takes all of it or nothing.
+     */
+    public static boolean drainExactUse(ItemStack[] w, Gas g, int mb) {
+        float mul = gasUseMul(w, g);
+        if (mul >= 1F || mb <= 0) {
+            return drainExact(w, g, mb);
+        }
+        float use = mb * mul;
+        if (amountOf(w, g) < (int) Math.ceil(use)) {
+            return false;
+        }
+        drainFraction(w, g, use);
+        return true;
+    }
+
+    /** drainFraction for an Exo-era function: `mb` x gasUseMul. @return whole mB taken now */
+    public static int drainFractionUse(ItemStack[] w, Gas g, float mb) {
+        return drainFraction(w, g, mb * gasUseMul(w, g));
+    }
+
+    /**
+     * Tank growth by the piece's level (Singular levels, plan §6 R3: +10% a level) - a hook for the
+     * level stage: always 0 for now.
+     */
+    public static int levelBonusPercent(ItemStack piece) {
+        return 0;
+    }
 
     private ArmorGasSC() {
     }
@@ -102,7 +169,8 @@ public final class ArmorGasSC {
     /** The piece's tank of `g`, mB (the armour logic may raise it with chips through capacityBonus). */
     public static int capacity(ItemStack piece, Gas g) {
         int base = baseCapacity(piece, g);
-        return base <= 0 ? 0 : (int) Math.min(Integer.MAX_VALUE, (long) base * (100 + capacityBonusPercent(piece)) / 100L);
+        return base <= 0 ? 0 : (int) Math.min(Integer.MAX_VALUE,
+                (long) base * (100 + capacityBonusPercent(piece) + levelBonusPercent(piece)) / 100L);
     }
 
     /** Extra tank volume in percent from the piece's chips (the Cryo Tank chip): set by the armour logic, read here. */
@@ -209,26 +277,22 @@ public final class ArmorGasSC {
         return mb - left;
     }
 
-    /** Helium cooling strength: 0 without a chestplate, else 1 + RADIATOR_BONUS per worn helmet / leggings / boots. */
+    /** Helium cooling strength: 0 without a chestplate, else 1 + radiatorBonus per worn helmet / leggings / boots. */
     public static float coolingFactor(EntityPlayer p) {
-        if (worn(p, CHEST) == null) {
-            return 0F;
-        }
-        float f = 1F;
-        for (int t : new int[]{HELMET, LEGS, BOOTS}) {
-            if (worn(p, t) != null) {
-                f += RADIATOR_BONUS;
-            }
-        }
-        return f;
+        return coolingFactorOf(wornSet(p));
     }
 
     // ------------------------------------------------------------------ rates (the armour logic, read by the HUD too)
 
-    /** Liquid helium: heat units one mB takes away (x coolingFactor x the Cryo Loop chip). */
-    public static final float HELIUM_HEAT_PER_MB = 20F;
-    /** Liquid helium: heat the pump can move per second, by the chestplate's suit (Nano, Quantum, Exo), x coolingFactor. */
-    public static final int[] HELIUM_PUMP = {4, 8, 16};
+    /** Liquid helium: heat units one mB takes away (x coolingFactor x the Cryo Loop chip); a Singular chestplate's loop more. */
+    public static final float HELIUM_HEAT_PER_MB = 20F, HELIUM_HEAT_PER_MB_SINGULAR = 25F;
+    /** Liquid helium: heat the pump can move per second, by the chestplate's suit (Nano, Quantum, Exo, Singular), x coolingFactor. */
+    public static final int[] HELIUM_PUMP = {4, 8, 16, 32};
+
+    /** Heat one mB of helium takes away in a loop of this (chestplate's) suit. */
+    public static float heliumHeatPerMb(ArmorSuit chestSuit) {
+        return chestSuit == ArmorSuit.SINGULAR ? HELIUM_HEAT_PER_MB_SINGULAR : HELIUM_HEAT_PER_MB;
+    }
     /** Liquid helium boiling away in the worn chestplate's loop, mB a minute (always, even at rest). */
     public static final float HELIUM_BOIL_PER_MIN = 1F;
     /** The fusion cell running: the loop burns helium this many times as fast. */
@@ -412,7 +476,7 @@ public final class ArmorGasSC {
         float f = 1F;
         for (int t : new int[]{HELMET, LEGS, BOOTS}) {
             if (at(w, t) != null) {
-                f += RADIATOR_BONUS;
+                f += radiatorBonus(suitOf(at(w, t)));
             }
         }
         return f;
@@ -423,13 +487,7 @@ public final class ArmorGasSC {
      * "GasFrac_<key>") until it adds up. @return whole mB taken now (0 also when the suit has none - check amountOf first)
      */
     public static int drainFraction(ItemStack[] w, Gas g, float mb) {
-        ItemStack home = null;
-        for (int t : new int[]{CHEST, HELMET, LEGS, BOOTS}) {
-            if (baseCapacity(at(w, t), g) > 0) {
-                home = at(w, t);
-                break;
-            }
-        }
+        ItemStack home = home(w, g);
         if (home == null || mb <= 0 || (g == Gas.HELIUM && at(w, CHEST) == null)) {
             return 0;
         }
@@ -521,10 +579,10 @@ public final class ArmorGasSC {
             return 0;
         }
         float cf = coolingFactorOf(w);
-        int suit = ((ItemArmorSC) chest.getItem()).getSuit().ordinal();
-        int removed = Math.min(excessHeat, (int) (HELIUM_PUMP[suit] * cf));
+        ArmorSuit chestSuit = ((ItemArmorSC) chest.getItem()).getSuit();
+        int removed = Math.min(excessHeat, (int) (HELIUM_PUMP[Math.min(HELIUM_PUMP.length - 1, chestSuit.ordinal())] * cf));
         int loop = chipTier(chest, ChipType.CRYO_LOOP);
-        float perMb = HELIUM_HEAT_PER_MB * cf * (loop > 0 ? 1F + CRYO_LOOP_PCT[loop - 1] / 100F : 1F);
+        float perMb = heliumHeatPerMb(chestSuit) * cf * (loop > 0 ? 1F + CRYO_LOOP_PCT[loop - 1] / 100F : 1F);
         // what the tank holds limits it too (the fraction already spent counts as spent)
         int have = amountOf(w, Gas.HELIUM);
         removed = Math.min(removed, (int) (have * perMb));

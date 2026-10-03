@@ -37,7 +37,7 @@ import net.minecraftforge.fluids.IFluidHandler;
  * each - and the charge rate follows the input voltage), Universal Transformer (any voltage),
  * Energy Storage (+10 000 EU of buffer), Tank Extension (+8 000 mB to every tank, up to 4). Nothing
  * else goes in. The modules ride in the item.
- * Seven inner tanks, one per gas (TANK_CAPACITY each): pipes push into them (fill), the station
+ * Eight inner tanks, one per gas - singular matter the 8th (TANK_CAPACITY each): pipes push into them (fill), the station
  * pulls into them from the containers beside it, and the armour is filled out of them. A tank
  * takes only its own gas; pipes can't drain the station. The screen's x pours a tank out for EU
  * (as a machine's). The tanks ride in the item; the sides of the block show their levels.
@@ -61,6 +61,19 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     /** All gases switched on. */
     public static final int ALL_GASES = (1 << Gas.values().length) - 1;
     private static final int GASES = Gas.values().length;
+    /** NBT: how many gases there were when the mask was saved (none saved: the first 7). */
+    private static final String MASK_GASES_KEY = "GasMaskN";
+    private static final int OLD_GASES = 7;
+
+    /**
+     * Pure: a gas mask saved when there were `known` gases - the gases added since then come
+     * switched on (an old station fills singular matter too), the rest as saved.
+     */
+    public static int migrateMask(int saved, int known) {
+        int k = Math.max(0, Math.min(GASES, known));
+        int added = ALL_GASES & ~((1 << k) - 1);
+        return (saved & ALL_GASES) | added;
+    }
     /** Each gas's inner tank, mB (+ UpgradeType.TANK_PER_UPGRADE per Tank Extension, up to MAX_TANK_UPGRADES). */
     public static final int TANK_CAPACITY = 16000;
     public static final int MAX_TANK_CAPACITY = TANK_CAPACITY + UpgradeType.MAX_TANK_UPGRADES * UpgradeType.TANK_PER_UPGRADE;
@@ -852,7 +865,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         return false;
     }
 
-    /** The seven tanks (read-only for pipes: the station is a consumer, drain gives nothing). */
+    /** The tanks, one per gas (read-only for pipes: the station is a consumer, drain gives nothing). */
     @Override
     public FluidTankInfo[] getTankInfo(ForgeDirection from) {
         FluidTankInfo[] out = new FluidTankInfo[GASES];
@@ -949,6 +962,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         if (!fillGases || gasMask != ALL_GASES) {
             nbt.setBoolean("NoGases", !fillGases);
             nbt.setInteger("GasMask", gasMask);
+            nbt.setInteger(MASK_GASES_KEY, GASES);
         }
         NBTTagCompound t = tanksTag();
         tanksInItem = !t.hasNoTags();
@@ -973,7 +987,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         }
         if (nbt.hasKey("GasMask")) {
             fillGases = !nbt.getBoolean("NoGases");
-            gasMask = nbt.getInteger("GasMask") & ALL_GASES;
+            gasMask = migrateMask(nbt.getInteger("GasMask"), nbt.hasKey(MASK_GASES_KEY) ? nbt.getInteger(MASK_GASES_KEY) : OLD_GASES);
         }
         if (nbt.hasKey(ITEM_TANKS_KEY)) {                 // after the modules: a Tank Extension sizes the tanks first
             syncTankCapacity();
@@ -992,7 +1006,8 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             facing = ForgeDirection.NORTH;
         }
         fillGases = !nbt.getBoolean("NoGases");
-        gasMask = nbt.hasKey("GasMask") ? nbt.getInteger("GasMask") & ALL_GASES : ALL_GASES;
+        gasMask = nbt.hasKey("GasMask")
+                ? migrateMask(nbt.getInteger("GasMask"), nbt.hasKey(MASK_GASES_KEY) ? nbt.getInteger(MASK_GASES_KEY) : OLD_GASES) : ALL_GASES;
         active = nbt.getBoolean("StationActive");
         for (int i = 0; i < ALL_SLOTS; i++) {
             slots[i] = null;
@@ -1016,6 +1031,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         nbt.setInteger("Facing", facing.ordinal());
         nbt.setBoolean("NoGases", !fillGases);
         nbt.setInteger("GasMask", gasMask);
+        nbt.setInteger(MASK_GASES_KEY, GASES);
         nbt.setBoolean("StationActive", active);
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < ALL_SLOTS; i++) {

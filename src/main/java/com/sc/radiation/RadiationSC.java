@@ -321,7 +321,7 @@ public final class RadiationSC {
         if (suit == null || suit.ordinal() < ArmorSuit.QUANTUM.ordinal()) {
             return 0;
         }
-        int pct = suit == ArmorSuit.EXO ? ArmorFeature.RAD_EXO_PCT : ArmorFeature.RAD_QUANTUM_PCT;
+        int pct = ArmorSuit.exoClass(suit) ? ArmorFeature.RAD_EXO_PCT : ArmorFeature.RAD_QUANTUM_PCT;
         return ArmorLogicSC.powerMode(p) == 0 ? pct - ArmorFeature.RAD_ECO_PCT_LESS : pct;
     }
 
@@ -360,9 +360,9 @@ public final class RadiationSC {
         boolean heavy = left > 0.01F && !p.capabilities.isCreativeMode
                 && com.sc.util.ArmorGasSC.amountOf(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER) > 0;
         if (heavy) {
-            com.sc.util.ArmorGasSC.drainFraction(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER,
+            com.sc.util.ArmorGasSC.drainFractionUse(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER,
                     left * com.sc.util.ArmorGasSC.HEAVY_WATER_PER_LEVEL_MIN / 60F);
-            if (left > 0.01F && ArmorLogicSC.suitOf(worn[com.sc.util.ArmorGasSC.LEGS]) == ArmorSuit.EXO) {
+            if (left > 0.01F && ArmorSuit.exoClass(ArmorLogicSC.suitOf(worn[com.sc.util.ArmorGasSC.LEGS]))) {
                 float pierce = Math.min(left, piercingAt(p));
                 if (pierce > 0F) {
                     left -= pierce;
@@ -374,7 +374,7 @@ public final class RadiationSC {
         ItemStack chest = ArmorLogicSC.piece(p, 1);
         boolean shieldOn = chest != null && com.sc.item.ItemArmorSC.isEnabled(chest, ArmorFeature.RAD_SHIELD) && armorSharePct(p) > 0;
         if (left > 0.01F && shieldOn) {
-            boolean exo = ArmorLogicSC.suitOf(chest) == ArmorSuit.EXO;
+            boolean exo = ArmorSuit.exoClass(ArmorLogicSC.suitOf(chest));
             float absorbed = left * armorSharePct(p) / 100F;
             int eu = (int) Math.ceil(absorbed * (exo ? ArmorFeature.RAD_EXO_EU : ArmorFeature.RAD_QUANTUM_EU));
             if (ArmorLogicSC.active(p, ArmorFeature.RAD_SHIELD) && ArmorLogicSC.pay(p, ArmorFeature.RAD_SHIELD, eu)) {

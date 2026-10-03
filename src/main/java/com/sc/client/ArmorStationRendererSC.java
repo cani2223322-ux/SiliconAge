@@ -11,7 +11,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraftforge.common.util.ForgeDirection;
 
 /**
- * The Armour Service Station's "live windows": on the two sides beside its front, seven narrow
+ * The Armour Service Station's "live windows": on the two sides beside its front, eight narrow
  * windows (drawn into armorStationSide.png) each show its inner tank's level in the gas's colour.
  * The levels (0..15) come with the description packet, only when they change (at most once a
  * second) - the renderer just draws a few flat quads, no textures.
@@ -19,7 +19,7 @@ import net.minecraftforge.common.util.ForgeDirection;
 public class ArmorStationRendererSC extends TileEntitySpecialRenderer {
 
     /** Texture pixels of armorStationSide.png (32 x 32): window k spans x WIN_X + k * WIN_STEP .. + WIN_W, y WIN_TOP .. WIN_BOTTOM. */
-    private static final int TEX = 32, WIN_X = 6, WIN_STEP = 3, WIN_W = 2, WIN_TOP = 7, WIN_BOTTOM = 25;
+    private static final int TEX = 32, WIN_X = 4, WIN_STEP = 3, WIN_W = 2, WIN_TOP = 7, WIN_BOTTOM = 25;
     /** Just outside the face, against z-fighting. */
     private static final double OUT = 0.002;
 

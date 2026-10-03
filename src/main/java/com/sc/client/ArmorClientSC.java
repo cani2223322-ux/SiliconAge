@@ -115,6 +115,7 @@ public class ArmorClientSC {
         java.util.Random rnd = p.worldObj.rand;
         if (c == 0) {
             c = set == com.sc.util.ArmorSuit.NANO ? 0x5CFF6A : set == com.sc.util.ArmorSuit.QUANTUM ? 0x3FD6FF
+                    : set == com.sc.util.ArmorSuit.SINGULAR ? com.sc.util.SingularScheme.of(chest).accent   // the scheme's accent
                     : new int[]{0xB35CFF, 0xFF5AB8, 0x5A7CFF}[rnd.nextInt(3)];
         }
         float r = Math.max(0.01F, (c >> 16 & 255) / 255F), g = (c >> 8 & 255) / 255F, b = (c & 255) / 255F;
@@ -268,7 +269,7 @@ public class ArmorClientSC {
 
     private void scanOres(EntityPlayer p) {
         ores.clear();
-        boolean all = ArmorLogicSC.suitOf(ArmorLogicSC.piece(p, 0)) == ArmorSuit.EXO;
+        boolean all = ArmorSuit.exoClass(ArmorLogicSC.suitOf(ArmorLogicSC.piece(p, 0)));
         int cx = MathHelper.floor_double(p.posX), cy = MathHelper.floor_double(p.posY), cz = MathHelper.floor_double(p.posZ);
         int r = ArmorLogicSC.oreScanRadius(p, SCAN_RADIUS);   // krypton in the helmet: x1.5
         for (int x = cx - r; x <= cx + r; x++) {

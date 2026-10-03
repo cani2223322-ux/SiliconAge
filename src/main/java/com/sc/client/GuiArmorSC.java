@@ -1111,7 +1111,8 @@ public class GuiArmorSC extends GuiScreen {
         List<String> tip = new ArrayList<String>();
         if (mouseX >= tableX && mouseX < tableX + tableW && mouseY >= coolY && mouseY < coolY + 9) {
             tip.add(Lang.tr("sc.lifegui.cool.tip"));
-            tip.add("§7" + Lang.tr("sc.lifegui.cool.tip2", Math.round(ArmorGasSC.RADIATOR_BONUS * 100)));
+            ItemStack coolChest = ArmorGasSC.worn(p, ArmorGasSC.CHEST);       // a Singular suit's radiators cool more
+            tip.add("§7" + Lang.tr("sc.lifegui.cool.tip2", Math.round(ArmorGasSC.radiatorBonus(ArmorLogicSC.suitOf(coolChest)) * 100)));
             return tip;
         }
         for (Object o : buttonList) {
