@@ -238,6 +238,11 @@ public class GuiRemoteSC extends GuiBridgeFarSC {
         // the cost
         int proj = b == null ? BridgeMathSC.projections(mode, toMe) : b.getInteger("proj");
         text(Lang.tr("sc.bridge.far.cost", proj), 6, 179, LABEL);
+        String fam = famLine();
+        if (fam.length() > 0) {
+            int fw = Math.min(140, (int) Math.ceil(fontRendererObj.getStringWidth(fam) * 0.75F));
+            small(fam, W - 6 - fw, 181, 140, famColor());
+        }
         int y = drawCost(10, 189, 232, 3);
         costRow(10, y, 232, Lang.tr("sc.bridge.far.signal"), eu(BridgeMathSC.REMOTE_SIGNAL_EU) + " EU", it.getLong("charge") >= BridgeMathSC.REMOTE_SIGNAL_EU);
         // the bridge's state and the last answer

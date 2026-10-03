@@ -49,7 +49,9 @@ import net.minecraftforge.common.ForgeChunkManager;
  * hold (EU a tick, He/Ar/D2O a second) is paid; its time runs out, «Закрыть», a resource short for 3 s or
  * stability under 10% fold it; then the ring cools 60 s (20 s with the Ring Cooler). Nothing else gates it.
  *
- * Stage 2/3 data already has its place: mode (ДР1-ДР5), the access mode, wear (С2).
+ * Stage 2: remotes, the armour, the modes ДР1-ДР5, access. Stage 3 (§9): wear and «Ремонт» (С2), the stability from its factors
+ * and turbulence (С3), the mass of a pass (С4), familiar places and scatter (С5), interference and resonance (С6), scouting (С7),
+ * the shortage warning (С11), heat and the overheat lock (С12); §11 the birth, the coils' heat colours, the shaking vortex, the hologram.
  */
 public class TileEntityBridgeControllerSC extends TileEntity {
 
@@ -103,6 +105,15 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     private int openMode;
     private String opener = "";
     private boolean openPrecise;
+    // stage 3 (§9): the ring's heat (tenths of a percent) and its overheat lock (С12); the argon shortage (С3); what
+    // this opening has done so far (С2 wear at the close): its distance, the mass through it, its peak heat; the
+    // far end's scatter (С5 / С7)
+    private int heat, heatAtClose;
+    private boolean overheatLock, heatWarned;
+    private int argonDeficit;
+    private long openDist;
+    private boolean openOtherDim;
+    private int massTotal, peakHeat, openScatter, openShift;
 
     // ------------------------------------------------------------------ transient
 
@@ -117,6 +128,15 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     private BridgeMsgSC lastMsg;
     private long lastMsgAt;
     private int coolHeDebt;
+    /** С4: the mass that passed lately - {until (world time), tenths}. */
+    private final List<long[]> massLoad = new ArrayList<long[]>();
+    /** С6, looked at once a second: another bridge near, a thunderstorm at an end, a running Singular reactor near the ring. */
+    private boolean envInterf, envStorm, envRes, envKnown;
+    /** С3: the vortex shakes (its cells are told); the coils' colour now. */
+    private boolean turbulent;
+    private int coilsMeta = -1;
+    /** Client: the hologram over the ring while the portal is open {x, y, z, dim, ring size}, or null. */
+    private int[] holo;
 
     // ------------------------------------------------------------------ getters
 
@@ -171,6 +191,33 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     public int getStability() {
         return stability;
+    }
+
+    public int getWear() {
+        return wear;
+    }
+
+    /** The ring's heat, tenths of a percent (С12). */
+    public int getHeat() {
+        return heat;
+    }
+
+    public boolean isOverheatLocked() {
+        return overheatLock;
+    }
+
+    public boolean isTurbulent() {
+        return turbulent;
+    }
+
+    /** The far end's scatter radius of the open portal and how far it was really shifted (С5 / С7). */
+    public int[] getOpenScatter() {
+        return new int[]{openScatter, openShift};
+    }
+
+    /** Client: the hologram over the ring {x, y, z, dim, ring size}, or null. */
+    public int[] getHolo() {
+        return holo;
     }
 
     public boolean isCalibrated() {
@@ -482,8 +529,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         partKeys.addAll(keys);
     }
 
-    /** The ring's coils glow (metadata 1) while a portal is open. */
+    /** The ring's coils glow while a portal is open and show its heat (metadata BridgeMathSC.coilMeta: 0 dark ... 3 hot). */
     private void litCoils(BridgeStructureSC.Scan s, boolean lit) {
+        setCoils(s, BridgeMathSC.coilMeta(lit, heat));
+    }
+
+    private void setCoils(BridgeStructureSC.Scan s, int meta) {
         if (s == null || !s.found) {
             return;
         }
@@ -492,13 +543,14 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             for (int u = -h; u <= h; u++) {
                 if (BridgeStructureSC.isRing(s.size, u, v)) {
                     int[] p = s.at(u, v);
-                    if (worldObj.getBlock(p[0], p[1], p[2]) == ModBlocks.gravityCoil && worldObj.getBlockMetadata(p[0], p[1], p[2]) != (lit ? 1 : 0)) {
-                        worldObj.setBlockMetadataWithNotify(p[0], p[1], p[2], lit ? 1 : 0, 3);
+                    if (worldObj.getBlock(p[0], p[1], p[2]) == ModBlocks.gravityCoil && worldObj.getBlockMetadata(p[0], p[1], p[2]) != meta) {
+                        worldObj.setBlockMetadataWithNotify(p[0], p[1], p[2], meta, 3);
                     }
                 }
             }
         }
-        coilsLit = lit;
+        coilsLit = meta > 0;
+        coilsMeta = meta;
     }
 
     /** A coil at x y z was broken: if it was one of this ring's, the calibration is gone (an open portal folds). */
@@ -520,6 +572,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         if (!mine) {
             return;
+        }
+        if (wear > 0) {
+            wear = Math.max(0, wear - BridgeMathSC.COIL_SWAP_WEAR);  // С2: a fresh coil goes in (the ring needs calibrating again)
+            markDirty();
         }
         if (open) {
             shortWhat = "";
@@ -728,14 +784,282 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         return BridgeMathSC.distance(c[0], 0, c[2], tx, 0, tz);
     }
 
-    /** What opening to the target would take now. */
+    /** What opening to the target would take now (the server itself: no familiar-place price). */
     public BridgeMathSC.Cost previewCost() {
+        return previewCost(null);
+    }
+
+    /** What opening to the target would take now for `viewer` (С5 his familiar places, С6 the resonance). */
+    public BridgeMathSC.Cost previewCost(EntityPlayer viewer) {
         int kind = bridgeKind();
         BridgeMarksSC marks = worldObj == null ? null : BridgeMarksSC.get(worldObj);
         int dim = targetDim();
         boolean beacon = kind == BridgeMathSC.GROUND && marks != null && marks.near(BridgeMarksSC.BEACON, dim, tx, ty, tz, BridgeMathSC.BEACON_RADIUS);
         boolean anchor = kind == BridgeMathSC.SPACE && marks != null && marks.any(BridgeMarksSC.ANCHOR, dim);
-        return BridgeMathSC.cost(kind, new long[]{targetDistance()}, beacon, anchor, scan == null ? 0 : scan.stabCount());
+        BridgeMathSC.Cost c = BridgeMathSC.cost(kind, new long[]{targetDistance()}, beacon, anchor, scan == null ? 0 : scan.stabCount());
+        int[] f = famInfo(viewer, dim, tx, tz, beacon, anchor, false);
+        if (!envKnown) {
+            refreshEnv();
+        }
+        return BridgeMathSC.adjust(c, f[1], envRes);
+    }
+
+    /**
+     * С5 / С7 for a target point: {familiar (1 / 0; -1 the server itself - neutral), the price percent, the scatter
+     * radius, scouting (1 / 0)}. A Receiver Beacon makes a place familiar.
+     */
+    public int[] famInfo(EntityPlayer p, int dim, int x, int z, boolean beacon, boolean anchor, boolean preciseFind) {
+        if (p == null) {
+            return new int[]{-1, 0, 0, 0};
+        }
+        BridgeFamiliarSCRef f = new BridgeFamiliarSCRef(worldObj);
+        String me = p.getCommandSenderName();
+        boolean familiar = beacon || f.familiar(me, dim, x, z);
+        boolean scouting = bridgeKind() == BridgeMathSC.SPACE && dim != ownDim() && !anchor && !f.scouted(me, dim);
+        int r = BridgeMathSC.scatterRadius(familiar, beacon, scan != null && scan.nav, preciseFind, scouting);
+        return new int[]{familiar ? 1 : 0, familiar ? BridgeMathSC.FAMILIAR_PCT : BridgeMathSC.UNFAMILIAR_PCT, r, scouting ? 1 : 0};
+    }
+
+    /** The familiar-places store (null-safe). */
+    private static final class BridgeFamiliarSCRef {
+        final com.sc.bridge.BridgeFamiliarSC f;
+
+        BridgeFamiliarSCRef(World w) {
+            f = com.sc.bridge.BridgeFamiliarSC.get(w);
+        }
+
+        boolean familiar(String p, int dim, int x, int z) {
+            return f != null && f.familiar(p, dim, x, z);
+        }
+
+        boolean scouted(String p, int dim) {
+            return f != null && f.scouted(p, dim);
+        }
+    }
+
+    // ------------------------------------------------------------------ stage 3: the environment, stability, mass, heat
+
+    /** С6, once a second: another bridge controller within 64 blocks, a thunderstorm at an end, a running Singular reactor within 32. */
+    private void refreshEnv() {
+        if (worldObj == null || worldObj.isRemote) {
+            return;
+        }
+        int[] c = ringCentre();
+        envInterf = BridgeMathSC.interferers(xCoord, yCoord, zCoord, controllersNear(worldObj, xCoord, zCoord, BridgeMathSC.INTERFERENCE_RADIUS),
+                BridgeMathSC.INTERFERENCE_RADIUS) > 0;
+        boolean storm = stormAt(worldObj, c[0], c[2]);
+        if (open) {
+            World wb = DimensionManager.getWorld(bDim);
+            storm |= wb != null && stormAt(wb, bx, bz);
+            if (aProj) {
+                World wa = DimensionManager.getWorld(aDim);
+                storm |= wa != null && stormAt(wa, ax, az);
+            }
+        }
+        envStorm = storm || stormForTest;
+        envRes = com.sc.item.SingularSensesSC.sourceNear(worldObj, c[0], c[1], c[2], BridgeMathSC.RESONANCE_RADIUS) == 2;
+        envKnown = true;
+    }
+
+    /** Test hook: a thunderstorm at an end. */
+    private boolean stormForTest;
+
+    public void setStormForTest(boolean s) {
+        stormForTest = s;
+    }
+
+    private static boolean stormAt(World w, int x, int z) {
+        return w.isThundering() && w.blockExists(x, 64, z) && w.getBiomeGenForCoords(x, z).canSpawnLightningBolt();
+    }
+
+    /** The bridge controllers in the loaded chunks within `r` blocks across (this one too). */
+    private static List<int[]> controllersNear(World w, int x, int z, int r) {
+        List<int[]> l = new ArrayList<int[]>();
+        for (int chX = (x - r) >> 4; chX <= (x + r) >> 4; chX++) {
+            for (int chZ = (z - r) >> 4; chZ <= (z + r) >> 4; chZ++) {
+                if (!w.getChunkProvider().chunkExists(chX, chZ)) {
+                    continue;
+                }
+                for (Object o : w.getChunkFromChunkCoords(chX, chZ).chunkTileEntityMap.values()) {
+                    if (o instanceof TileEntityBridgeControllerSC && !((TileEntity) o).isInvalid()) {
+                        TileEntity te = (TileEntity) o;
+                        l.add(new int[]{te.xCoord, te.yCoord, te.zCoord});
+                    }
+                }
+            }
+        }
+        return l;
+    }
+
+    /** С4: the mass that passed in the last MASS_TICKS (tenths). */
+    private int massNow() {
+        long now = worldObj == null ? 0 : worldObj.getTotalWorldTime();
+        int t = 0;
+        for (int i = massLoad.size() - 1; i >= 0; i--) {
+            if (massLoad.get(i)[0] <= now) {
+                massLoad.remove(i);
+            } else {
+                t += (int) massLoad.get(i)[1];
+            }
+        }
+        return t;
+    }
+
+    /** С3: the stability now with each factor (closed: what a vortex would start at). */
+    public BridgeMathSC.Stab stabNow() {
+        if (!envKnown) {
+            refreshEnv();
+        }
+        return BridgeMathSC.stability(scan == null ? 0 : scan.stabCount(), wear, massNow(), scan != null && scan.mass, envInterf, envStorm,
+                open ? argonDeficit : 0);
+    }
+
+    /** С4 mass of one pass, tenths of a unit. */
+    public static int massOf(Entity e) {
+        if (e instanceof EntityPlayer) {
+            return BridgeMathSC.MASS_PLAYER;
+        }
+        if (e instanceof EntityMinecart) {
+            return BridgeMathSC.MASS_CART;
+        }
+        if (e instanceof EntityLiving) {
+            return BridgeMathSC.MASS_MOB;
+        }
+        return BridgeMathSC.MASS_ITEM;
+    }
+
+    /** «Ремонт» (С2): the wear back to 0 for helium and EU, at once. */
+    public BridgeMsgSC repair(EntityPlayer p) {
+        if (!allowed(p)) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+        }
+        if (open) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.open"));
+        }
+        if (wear <= 0) {
+            BridgeMsgSC m = new BridgeMsgSC("sc.bridge.msg.noWear");
+            lastMsg = m;
+            lastMsgAt = worldObj == null ? 0 : worldObj.getTotalWorldTime();
+            tell(p, m);
+            return m;
+        }
+        int he = BridgeMathSC.repairHe(wear);
+        long eu = BridgeMathSC.repairEu(wear);
+        BridgeMsgSC miss = new BridgeMsgSC("sc.bridge.refuse.repairmissing");
+        if (tanks[BridgeMathSC.HE] < he) {
+            miss.part("sc.bridge.need.gas", gasName(BridgeMathSC.HE), he, tanks[BridgeMathSC.HE]);
+        }
+        long have = portEnergy() + capacitorEnergy();
+        if (have < eu) {
+            miss.part("sc.bridge.need.eu", BridgeMathSC.group(eu - have));
+        }
+        if (!miss.parts.isEmpty()) {
+            return refuse(p, miss);
+        }
+        tanks[BridgeMathSC.HE] -= he;
+        drawAny(eu);
+        int was = wear;
+        wear = 0;
+        markDirty();
+        BridgeMsgSC m = new BridgeMsgSC("sc.bridge.journal.repaired", was, he, BridgeMathSC.group(eu));
+        log(m, nameOf(p), false);
+        tell(p, m);
+        return m;
+    }
+
+    /** С12: 100% heat - the portal shuts down, the ring is locked for 2 min and wears +10%; nothing in the world breaks. */
+    private void overheat() {
+        shortWhat = "";
+        EntityPlayer q = playerByName(opener);
+        closePortal("sc.bridge.journal.overheat");
+        coolTotal = BridgeMathSC.OVERHEAT_LOCK_S * 20;
+        coolTicks = coolTotal;
+        overheatLock = true;
+        wear = Math.min(BridgeMathSC.MAX_WEAR, wear + BridgeMathSC.OVERHEAT_WEAR);
+        heatAtClose = BridgeMathSC.HEAT_MAX;
+        int[] c = ringCentre();
+        worldObj.playSoundEffect(c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, "random.fizz", 1.5F, 0.6F);
+        tell(q, new BridgeMsgSC("sc.bridge.msg.overheat", BridgeMathSC.OVERHEAT_LOCK_S, BridgeMathSC.OVERHEAT_WEAR));
+        markDirty();
+    }
+
+    /** С3: the vortex's cells are told whether it shakes (their clients draw it jittering). */
+    private void applyTurbulence(boolean t) {
+        turbulent = t;
+        for (int end = 0; end < 2; end++) {
+            World w = endWorld(end);
+            if (w == null) {
+                continue;
+            }
+            for (int[] c : endCells(end)) {
+                if (w.blockExists(c[0], c[1], c[2])) {
+                    TileEntity te = w.getTileEntity(c[0], c[1], c[2]);
+                    if (te instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) te).getOpenId() == openId) {
+                        ((TileEntityBridgeVortexSC) te).setUnstable(t);
+                    }
+                }
+            }
+        }
+    }
+
+    /** §11: a shaking vortex crackles at both ends. */
+    private void crackle() {
+        for (int end = 0; end < 2; end++) {
+            World w = endWorld(end);
+            List<int[]> cells = endCells(end);
+            if (w == null || cells.isEmpty()) {
+                continue;
+            }
+            int[] c = cells.get(cells.size() / 2);
+            w.playSoundEffect(c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, "fire.fire", 1.2F, 1.4F + worldObj.rand.nextFloat() * 0.4F);
+            if (worldObj.rand.nextInt(3) == 0) {
+                w.playSoundEffect(c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, "random.fizz", 0.5F, 1.6F);
+            }
+        }
+    }
+
+    /** С3 turbulence: an arrival lands up to TURB_SHIFT blocks off, on the nearest place one can stand; null - as planned. */
+    private int[] turbulentSpot(int dim, double x, double y, double z) {
+        World w = DimensionManager.getWorld(dim);
+        if (w == null) {
+            return null;
+        }
+        int[] off = BridgeMathSC.scatterOffset(worldObj.rand, BridgeMathSC.TURB_SHIFT);
+        int px = (int) Math.floor(x) + off[0], py = (int) Math.floor(y), pz = (int) Math.floor(z) + off[1];
+        if (!w.blockExists(px, py, pz)) {
+            return null;
+        }
+        return BridgeSpaceSC.standSpot(BridgeSpaceSC.of(w), px, py, pz, 4, 6);
+    }
+
+    /** С5 / С7: the far end moved up to `radius` blocks, to the nearest free place (never into a block); null - it stays. */
+    private int[] scatterEnd(End e, int radius, EntityPlayer p) {
+        WorldServer ws = worldFor(e.dim);
+        if (ws == null || radius <= 0) {
+            return null;
+        }
+        int[] off = BridgeMathSC.scatterOffset(worldObj.rand, radius);
+        if (off[0] == 0 && off[1] == 0) {
+            return null;
+        }
+        int x = e.x + off[0], z = e.z + off[1];
+        int near = scan != null && scan.nav ? BridgeSpaceSC.NEAR_RADIUS_NAV : BridgeSpaceSC.NEAR_RADIUS;
+        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), x, e.y, z, e.w, e.axis, near);
+        int[] at = r.free ? new int[]{r.x, r.y, r.z} : r.hasNearest ? new int[]{r.nx, r.ny, r.nz} : null;
+        if (at == null) {
+            r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), x, AUTO_Y, z, e.w, e.axis, near);
+            at = r.free ? new int[]{r.x, r.y, r.z} : r.hasNearest ? new int[]{r.nx, r.ny, r.nz} : null;
+        }
+        if (at == null || ShieldEventHandlerPrivate.foreignField(ws, p, at[0], at[1], at[2])) {
+            return null;
+        }
+        if (bridgeKind() == BridgeMathSC.GROUND && e.dim == ownDim()) {
+            int[] c = ringCentre();
+            if (BridgeMathSC.distance(c[0], 0, c[2], at[0], 0, at[2]) < MIN_DISTANCE) {
+                return null;
+            }
+        }
+        return at;
     }
 
     private WorldServer worldFor(int dim) {
@@ -977,6 +1301,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         public int[] pct = new int[0];
         public BridgeMathSC.Cost cost;
         public boolean beacon, anchor;
+        /** Stage 3 for the target point's end: famInfo ({familiar, percent, scatter, scouting}; all 0 / -1 without a point). */
+        public int[] fam = {-1, 0, 0, 0};
     }
 
     /** Test hook: players by name the world test makes (fake players are not on the server's list). */
@@ -1172,6 +1498,14 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 && marks.near(BridgeMarksSC.BEACON, pl.b.dim, pl.b.x, pl.b.y, pl.b.z, BridgeMathSC.BEACON_RADIUS);
         pl.anchor = kind == BridgeMathSC.SPACE && marks != null && marks.any(BridgeMarksSC.ANCHOR, farDim);
         pl.cost = BridgeMathSC.cost(kind, pl.dists, pl.pct, pl.beacon, pl.anchor, scan == null ? 0 : scan.stabCount());
+        End pt = pl.b.kind == BridgeMathSC.END_POINT ? pl.b : pl.a.kind == BridgeMathSC.END_POINT ? pl.a : null;
+        if (pt != null) {
+            pl.fam = famInfo(p, pt.dim, pt.x, pt.z, pl.beacon, pl.anchor, o.fromFind && o.precise);
+        }
+        if (!envKnown) {
+            refreshEnv();
+        }
+        BridgeMathSC.adjust(pl.cost, pl.fam[1], envRes);
         return pl;
     }
 
@@ -1228,7 +1562,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.calib"));
         }
         if (coolTicks > 0) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.cooling", (coolTicks + 19) / 20));
+            return refuse(p, new BridgeMsgSC(overheatLock ? "sc.bridge.refuse.overheat" : "sc.bridge.refuse.cooling", (coolTicks + 19) / 20));
         }
         Plan pl = plan(p, o);
         if (pl.refuse != null) {
@@ -1241,6 +1575,18 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         BridgeMsgSC miss = missing(c);
         if (!miss.parts.isEmpty()) {
             return refuse(p, miss);
+        }
+        // С5 / С7: an unfamiliar point (or a first trip into a dimension) scatters the far end to a free place near it
+        int shift = 0;
+        End pt = pl.b.kind == BridgeMathSC.END_POINT ? pl.b : pl.a.kind == BridgeMathSC.END_POINT ? pl.a : null;
+        if (pt != null && pl.fam[2] > 0) {
+            int[] at = scatterEnd(pt, pl.fam[2], p);
+            if (at != null) {
+                shift = (int) BridgeMathSC.distance(pt.x, 0, pt.z, at[0], 0, at[2]);
+                pt.x = at[0];
+                pt.y = at[1];
+                pt.z = at[2];
+            }
         }
         // everything is there: the singularity is born now
         drawCapacitors(c.eu);
@@ -1257,7 +1603,19 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         hold = c;
         lifeTotal = c.lifeTicks;
         lifeLeft = c.lifeTicks;
-        stability = BridgeMathSC.baseStability(s.stabCount());
+        argonDeficit = 0;
+        heat = 0;
+        heatWarned = false;
+        massTotal = 0;
+        peakHeat = 0;
+        openScatter = pl.fam[2];
+        openShift = shift;
+        long farthest = 0;
+        for (long x : pl.dists) {
+            farthest = Math.max(farthest, x);
+        }
+        openDist = farthest;
+        openOtherDim = pl.a.dim != ownDim() || pl.b.dim != ownDim();
         shortTicks = -1;
         shortWhat = "";
         aAxis = s.axis;
@@ -1279,9 +1637,24 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         opener = nameOf(p);
         openPrecise = o.precise;                                     // stage 3: an imprecise far end scatters on unknown ground
         opens++;
+        refreshEnv();
+        stability = stabNow().total;
+        turbulent = false;
         placeEnds();
         litCoils(s, true);
         loadChunks();
+        // С5: both ends are familiar places for whoever opened them now; С7: this dimension is scouted
+        com.sc.bridge.BridgeFamiliarSC fam = p == null ? null : com.sc.bridge.BridgeFamiliarSC.get(worldObj);
+        if (fam != null) {
+            for (End e : new End[]{pl.a, pl.b}) {
+                fam.markBlock(nameOf(p), e.dim, e.x, e.z, 0);
+                if (e.dim != ownDim()) {
+                    fam.scout(nameOf(p), e.dim);
+                }
+            }
+        }
+        birth();
+        worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);           // the hologram over the ring
         float pitch = s.kind == BridgeMathSC.SPACE ? 0.7F : 1.0F;
         World wa = endWorld(0), wb = endWorld(1);
         int[] ce = aProj ? new int[]{ax, ay + 1, az} : s.centre();
@@ -1302,6 +1675,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         BridgeMsgSC m = o.mode == BridgeMathSC.MODE_BASE
                 ? new BridgeMsgSC(bDim == ownDim() ? "sc.bridge.journal.opened" : "sc.bridge.journal.openedDim", bx, by, bz, BridgeMathSC.group(d), bDim)
                 : new BridgeMsgSC("sc.bridge.journal.openedMode", "@mode." + o.mode, bx, by, bz, BridgeMathSC.group(d));
+        if (shift > 0) {
+            m.part("sc.bridge.msg.scattered", shift, pl.fam[2]);
+        }
         log(m, nameOf(p), false);
         tell(p, m);
         for (End e : new End[]{pl.a, pl.b}) {
@@ -1340,12 +1716,34 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         return needTank;
     }
 
-    /** The opener's HUD line (§8): the bridge, the time left, the stability - or that it closed. */
+    /** The opener's HUD line (§8): the bridge, the time left, the stability, the heat, a fold coming - or that it closed. */
     private void sendHud() {
         EntityPlayer q = playerByName(opener);
         if (q instanceof net.minecraft.entity.player.EntityPlayerMP && !(q instanceof net.minecraftforge.common.util.FakePlayer)) {
-            com.sc.bridge.BridgeNetSC.CHANNEL.sendTo(new com.sc.bridge.BridgeNetSC.Hud(open, name, lifeLeft, lifeTotal, stability, openKind),
-                    (net.minecraft.entity.player.EntityPlayerMP) q);
+            com.sc.bridge.BridgeNetSC.CHANNEL.sendTo(new com.sc.bridge.BridgeNetSC.Hud(open, name, lifeLeft, lifeTotal, stability, openKind,
+                    heat / 10, shortTicks >= 0 ? (shortTicks + 19) / 20 : -1, shortWhat), (net.minecraft.entity.player.EntityPlayerMP) q);
+        }
+    }
+
+    /** §11: the singularity is born - a flash and an implosion, then the vortex unfolds (the clients near each end). */
+    private void birth() {
+        for (int end = 0; end < 2; end++) {
+            List<int[]> cells = endCells(end);
+            if (cells.isEmpty()) {
+                continue;
+            }
+            double x = 0, y = 0, z = 0;
+            for (int[] c : cells) {
+                x += c[0] + 0.5;
+                y += c[1] + 0.5;
+                z += c[2] + 0.5;
+            }
+            x /= cells.size();
+            y /= cells.size();
+            z /= cells.size();
+            int dim = end == 0 ? (aProj ? aDim : ownDim()) : bDim;
+            com.sc.bridge.BridgeNetSC.CHANNEL.sendToAllAround(new com.sc.bridge.BridgeNetSC.Birth(x, y, z, openKind),
+                    new cpw.mods.fml.common.network.NetworkRegistry.TargetPoint(dim, x, y, z, 64));
         }
     }
 
@@ -1446,11 +1844,18 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         removeEnds();
         open = false;
+        turbulent = false;
+        shortTicks = -1;
         sendHud();
+        // С2: the opening wore the ring 1-3% (far, heavy, hot)
+        wear = Math.min(BridgeMathSC.MAX_WEAR, wear + BridgeMathSC.wearPerOpen(openDist, openOtherDim, massTotal, peakHeat / 10));
+        heatAtClose = heat;
+        massLoad.clear();
         litCoils(scan, false);
         releaseChunks();
         coolTotal = BridgeMathSC.coolTicks();
         coolTicks = coolTotal;
+        worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);           // the hologram goes
         int[] c = scan == null ? new int[]{xCoord, yCoord + 3, zCoord} : scan.centre();
         worldObj.playSoundEffect(c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, "mob.endermen.portal", 1.0F, 0.5F);
         if (why != null) {
@@ -1470,7 +1875,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             what = "eu";
         }
         if (tick % 20 == 0) {
-            boolean arShort = false;
+            boolean arShort = false, heShort = false;
             int[] per = new int[tanks.length];
             per[BridgeMathSC.HE] = hold.heSec;
             per[BridgeMathSC.AR] = hold.arSec;
@@ -1488,13 +1893,39 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     if (i == BridgeMathSC.AR) {
                         arShort = true;
                     }
+                    if (i == BridgeMathSC.HE) {
+                        heShort = true;
+                    }
                 }
             }
-            stability = BridgeMathSC.stabilityStep(stability, BridgeMathSC.baseStability(scan == null ? 0 : scan.stabCount()), arShort);
+            // С3 stability, С6 interference, С12 heat
+            argonDeficit = BridgeMathSC.argonStep(argonDeficit, arShort);
+            refreshEnv();
+            stability = stabNow().total;
+            heat = BridgeMathSC.heatStep(heat, wear, stability, heShort);
+            peakHeat = Math.max(peakHeat, heat);
+            if (heat >= BridgeMathSC.HEAT_MAX) {
+                overheat();
+                return;
+            }
+            if (heat >= BridgeMathSC.HEAT_WARN && !heatWarned) {
+                heatWarned = true;
+                tell(playerByName(opener), new BridgeMsgSC("sc.bridge.msg.hot", heat / 10));
+                log(new BridgeMsgSC("sc.bridge.msg.hot", heat / 10), "", true);
+            }
             if (stability < BridgeMathSC.STAB_FOLD) {
                 shortWhat = "";
                 closePortal("sc.bridge.journal.unstable");
                 return;
+            }
+            boolean turb = stability < BridgeMathSC.TURBULENCE;
+            applyTurbulence(turb);
+            if (turb) {
+                crackle();
+            }
+            int cm = BridgeMathSC.coilMeta(true, heat);
+            if (cm != coilsMeta && scan != null) {
+                setCoils(scan, cm);
             }
             if (scan != null && !scan.valid) {
                 shortWhat = "";
@@ -1511,7 +1942,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             if (shortTicks < 0) {
                 shortTicks = BridgeMathSC.SHORT_GRACE_S * 20;
                 shortWhat = what;
-                log(new BridgeMsgSC("sc.bridge.journal.short", "@" + what, BridgeMathSC.SHORT_GRACE_S), "", true);
+                BridgeMsgSC warn = new BridgeMsgSC("sc.bridge.journal.short", "@" + what, BridgeMathSC.SHORT_GRACE_S);
+                log(warn, "", true);
+                tell(playerByName(opener), new BridgeMsgSC("sc.bridge.msg.shortWarn", "@" + what, BridgeMathSC.SHORT_GRACE_S));    // С11
+                sendHud();
             } else if (--shortTicks <= 0) {
                 shortWhat = what;
                 closePortal("sc.bridge.journal.shortClosed");
@@ -1582,6 +2016,27 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             yaw = aAxis == 0 ? (d > 0 ? 0F : 180F) : (d > 0 ? -90F : 90F);
         }
         data.setLong("scBridgeCd", now + BridgeMathSC.TELEPORT_COOLDOWN);
+        // С4: the pass costs EU by its mass and weighs on the stability for 10 s (the Mass Compensator halves both)
+        int pm = massOf(e);
+        if (!drawAny(BridgeMathSC.massEu(pm, scan != null && scan.mass))) {
+            if (player) {
+                tell((EntityPlayer) e, new BridgeMsgSC("sc.bridge.msg.massEu", BridgeMathSC.group(BridgeMathSC.massEu(pm, scan != null && scan.mass))));
+            }
+            return;
+        }
+        massLoad.add(new long[]{worldObj.getTotalWorldTime() + BridgeMathSC.MASS_TICKS, pm});
+        massTotal += pm;
+        // С3: a shaking vortex throws the arrival off - up to 8 blocks, to the nearest place one can stand - with a push
+        boolean shaken = false;
+        if (stability < BridgeMathSC.TURBULENCE) {
+            int[] spot = turbulentSpot(dim, x, y, z);
+            if (spot != null) {
+                x = spot[0] + 0.5;
+                y = spot[1];
+                z = spot[2] + 0.5;
+                shaken = true;
+            }
+        }
         World from = e.worldObj;
         double fx = e.posX, fy = e.posY, fz = e.posZ;
         Entity moved = BridgeTeleportSC.teleport(e, dim, x, y, z, yaw);
@@ -1589,6 +2044,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             moved.getEntityData().setLong("scBridgeCd", now + BridgeMathSC.TELEPORT_COOLDOWN);
             from.playSoundEffect(fx, fy, fz, "mob.endermen.portal", 0.8F, 1.0F);
             moved.worldObj.playSoundEffect(x, y, z, "mob.endermen.portal", 0.8F, 1.0F);
+            if (shaken) {
+                moved.addVelocity((worldObj.rand.nextDouble() - 0.5) * 0.8, 0.35, (worldObj.rand.nextDouble() - 0.5) * 0.8);
+                moved.velocityChanged = true;
+                moved.worldObj.playSoundEffect(x, y, z, "random.fizz", 0.7F, 1.5F);
+                lastShift = new int[]{(int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)};
+            }
         }
     }
 
@@ -1746,9 +2207,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (powerOn) {
             chargeTick();
         }
+        if (!open && tick % 100 == 0) {
+            refreshEnv();                                    // С6 for the screen while closed
+        }
         if (!open && coolTicks > 0) {
             int step = 1;
-            if (scan != null && scan.cooler) {
+            if (scan != null && scan.cooler && !overheatLock) {
                 if (tick % 20 == 0) {
                     coolHeDebt += BridgeMathSC.COOLER_HE_PER_S;
                 }
@@ -1761,10 +2225,18 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 }
             }
             coolTicks = Math.max(0, coolTicks - step);
+            heat = BridgeMathSC.coolingHeat(heatAtClose, coolTicks, coolTotal);
             if (coolTicks == 0) {
                 coolHeDebt = 0;
+                heat = 0;
+                if (overheatLock) {
+                    overheatLock = false;
+                    log(new BridgeMsgSC("sc.bridge.journal.overheatEnd"), "", false);
+                }
                 markDirty();
             }
+        } else if (!open && heat > 0) {
+            heat = 0;
         }
         if (tick % 20 == 0) {
             chargeRate = chargedThisSecond;
@@ -1799,6 +2271,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     /** Stage 2: the name, friends, access, «Дистанционный режим» (owner); bind the worn helmet; the coordinators in the inventory. */
     public static final int A_NAME = 16, A_FRIEND_ADD = 17, A_FRIEND_DEL = 18, A_ACCESS = 19, A_REMOTE_MODE = 20, A_BIND_HELMET = 21,
             A_FROM_COORD = 22, A_TO_COORD = 23, A_COPY_COORD = 24;
+    /** Stage 3: «Ремонт» (С2). */
+    public static final int A_REPAIR = 25;
 
     public void action(EntityPlayer p, int a, int[] v, String s) {
         switch (a) {
@@ -1859,6 +2333,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 return;
             case A_CALIBRATE:
                 calibrate(p);
+                return;
+            case A_REPAIR:
+                repair(p);
                 return;
             case A_OPEN:
                 if (v.length >= 4 && allowed(p)) {
@@ -2055,8 +2532,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         t.setBoolean("open", open);
         t.setBoolean("remoteMode", remoteMode);
         t.setIntArray("time", new int[]{lifeLeft, lifeTotal, coolTicks, coolTotal, stability, shortTicks});
-        t.setInteger("baseStab", BridgeMathSC.baseStability(scan == null ? 0 : scan.stabCount()));
+        t.setInteger("baseStab", stabNow().total);
         t.setInteger("wear", wear);
+        stage3State(t);
         t.setLong("capEu", capacitorEnergy());
         t.setLong("capMax", capacitorMax());
         int[] caps = new int[tanks.length];
@@ -2096,6 +2574,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     pct = Math.max(pct, x);
                 }
                 t.setInteger("pct", pct);
+                t.setIntArray("fam", pl.fam);
+                t.setInteger("famPct", c.famPct);
                 BridgeMsgSC miss = missing(c);
                 if (!miss.parts.isEmpty()) {
                     t.setTag("missing", miss.write());
@@ -2113,6 +2593,18 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             t.setTag("dims", dimList());
         }
         return t;
+    }
+
+    /** Stage 3 for the screens: heat, the overheat lock, the stability's factors, the environment, the repair's price, the scatter. */
+    private void stage3State(NBTTagCompound t) {
+        t.setInteger("heat", heat);
+        t.setBoolean("overheat", overheatLock);
+        t.setIntArray("stab", stabNow().parts());
+        t.setIntArray("env", new int[]{envInterf ? 1 : 0, envStorm ? 1 : 0, envRes ? 1 : 0});
+        t.setInteger("repairHe", BridgeMathSC.repairHe(wear));
+        t.setLong("repairEu", BridgeMathSC.repairEu(wear));
+        t.setIntArray("scatter", new int[]{openScatter, openShift});
+        t.setBoolean("turb", turbulent);
     }
 
     /** The registered dimensions with their names (the Space bridge's choice). */
@@ -2226,8 +2718,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         t.setIntArray("tankCaps", caps);
         t.setIntArray("target", new int[]{tx, ty, tz, targetDim()});
         t.setBoolean("targetSet", targetSet);
-        BridgeMathSC.Cost c = previewCost();
+        BridgeMathSC.Cost c = previewCost(viewer);
         t.setLong("costEu", c.eu);
+        t.setIntArray("fam", famInfo(viewer, targetDim(), tx, tz, c.beacon, c.anchor, false));
+        t.setInteger("famPct", c.famPct);
+        stage3State(t);
         t.setIntArray("cost", new int[]{c.sm, c.d, c.kr, c.ar, c.holdEu, c.heSec, c.arSec, c.d2oSec, c.lifeTicks, c.beacon ? 1 : 0, c.anchor ? 1 : 0});
         t.setLong("dist", targetDistance());
         if (place != null) {
@@ -2333,6 +2828,19 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         openMode = nbt.getInteger("OpenMode");
         opener = nbt.getString("Opener");
         openPrecise = nbt.getBoolean("Precise");
+        int[] s3 = nbt.getIntArray("Stage3");
+        if (s3.length == 10) {
+            heat = s3[0];
+            heatAtClose = s3[1];
+            overheatLock = s3[2] != 0;
+            argonDeficit = s3[3];
+            openDist = s3[4];
+            openOtherDim = s3[5] != 0;
+            massTotal = s3[6];
+            peakHeat = s3[7];
+            openScatter = s3[8];
+            openShift = s3[9];
+        }
         name = nbt.getString("Name");
         friends.clear();
         NBTTagList fl = nbt.getTagList("Friends", 8);
@@ -2403,6 +2911,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         nbt.setInteger("OpenMode", openMode);
         nbt.setString("Opener", opener);
         nbt.setBoolean("Precise", openPrecise);
+        nbt.setIntArray("Stage3", new int[]{heat, heatAtClose, overheatLock ? 1 : 0, argonDeficit, (int) Math.min(Integer.MAX_VALUE, openDist),
+                openOtherDim ? 1 : 0, massTotal, peakHeat, openScatter, openShift});
         nbt.setString("Name", name);
         NBTTagList fl = new NBTTagList();
         for (String f : friends) {
@@ -2452,12 +2962,24 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     public Packet getDescriptionPacket() {
         NBTTagCompound nbt = new NBTTagCompound();
         nbt.setInteger("Facing", facing);
+        if (open) {
+            nbt.setIntArray("Holo", new int[]{bx, by, bz, bDim, aSize});      // §11: the target over the ring
+        }
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 0, nbt);
+    }
+
+    /** The hologram stands over the ring: drawn from further than the block. */
+    @Override
+    @cpw.mods.fml.relauncher.SideOnly(cpw.mods.fml.relauncher.Side.CLIENT)
+    public net.minecraft.util.AxisAlignedBB getRenderBoundingBox() {
+        return holo != null ? INFINITE_EXTENT_AABB : super.getRenderBoundingBox();
     }
 
     @Override
     public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
         facing = pkt.func_148857_g().getInteger("Facing");
+        int[] h = pkt.func_148857_g().getIntArray("Holo");
+        holo = h.length == 5 ? h : null;
         if (worldObj != null) {
             worldObj.markBlockRangeForRenderUpdate(xCoord, yCoord, zCoord, xCoord, yCoord, zCoord);
         }
@@ -2468,11 +2990,32 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     /** World test: the ring cooled at once. */
     public void setCoolForTest(int t) {
         coolTicks = Math.max(0, t);
+        if (coolTicks == 0) {
+            overheatLock = false;
+            heat = 0;
+        }
     }
 
     /** «Дистанционный режим» holds its chunk ticket now. */
     public boolean hasRemoteTicket() {
         return ticketR != null;
+    }
+
+    /** World test: the wear set directly. */
+    public void setWearForTest(int w) {
+        wear = Math.max(0, Math.min(BridgeMathSC.MAX_WEAR, w));
+    }
+
+    /** World test: the heat set directly (tenths). */
+    public void setHeatForTest(int h) {
+        heat = Math.max(0, Math.min(BridgeMathSC.HEAT_MAX, h));
+    }
+
+    /** Where the last shaken arrival landed (С3), or null. */
+    private int[] lastShift;
+
+    public int[] getLastShift() {
+        return lastShift;
     }
 
     /** World test: fill a tank directly. */

@@ -85,6 +85,10 @@ public class ItemCoordinatorSC extends Item {
         int f = MathHelper.floor_double(player.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;
         boolean safe = BridgeSpaceSC.check(BridgeSpaceSC.of(world), x, y, z, BridgeMathSC.vortexSize(BridgeMathSC.GROUND), f % 2 == 0 ? 0 : 1).free;
         BridgeItemDataSC.setPoint(stack, x, y, z, world.provider.dimensionId, safe);
+        com.sc.bridge.BridgeFamiliarSC fam = com.sc.bridge.BridgeFamiliarSC.get(world);
+        if (fam != null && !world.isRemote) {
+            fam.markBlock(player.getCommandSenderName(), world.provider.dimensionId, x, z, 0);      // С5: a recorded point is a familiar place
+        }
         player.addChatComponentMessage(new ChatComponentTranslation(safe ? "sc.coordinator.recorded.safe" : "sc.coordinator.recorded.unsafe",
                 String.valueOf(x), String.valueOf(y), String.valueOf(z)));
     }
@@ -106,6 +110,14 @@ public class ItemCoordinatorSC extends Item {
             }
         }
         return stack;
+    }
+
+    /** С5: the chunk a player stands in while holding a Coordinator becomes familiar (once a second). */
+    @Override
+    public void onUpdate(ItemStack stack, World world, net.minecraft.entity.Entity e, int slot, boolean held) {
+        if (held && !world.isRemote && e instanceof EntityPlayer && world.getTotalWorldTime() % 20 == 0) {
+            com.sc.bridge.BridgeFamiliarSC.visit((EntityPlayer) e, 0);
+        }
     }
 
     @Override

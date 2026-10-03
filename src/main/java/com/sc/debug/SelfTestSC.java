@@ -84,6 +84,7 @@ public final class SelfTestSC {
             fieldExtras();
             bridge();
             bridge2();
+            bridge3();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -4249,13 +4250,143 @@ public final class SelfTestSC {
         com.sc.bridge.BridgeNetSC.Far fm = new com.sc.bridge.BridgeNetSC.Far();
         fm.fromBytes(buf);
         buf.clear();
-        new com.sc.bridge.BridgeNetSC.Hud(true, "База", 340, 600, 92, 1).toBytes(buf);
+        new com.sc.bridge.BridgeNetSC.Hud(true, "База", 340, 600, 92, 1, 77, 2, "gas.helium").toBytes(buf);
         com.sc.bridge.BridgeNetSC.Hud hm = new com.sc.bridge.BridgeNetSC.Hud();
         hm.fromBytes(buf);
         check(fm.src == 1 && fm.slot == 2 && fm.action == com.sc.bridge.BridgeFarSC.F_OPEN && java.util.Arrays.equals(fm.values, new int[]{4, 0, -5, 70, 9, -1, 1})
-                && "Pal\nДом".equals(fm.text) && hm.open && "База".equals(hm.name) && hm.left == 340 && hm.total == 600 && hm.stability == 92 && hm.kind == 1
+                && "Pal\nДом".equals(fm.text) && hm.open && "База".equals(hm.name) && hm.left == 340 && hm.total == 600 && hm.stability == 92 && hm.kind == 1 && hm.heat == 77 && hm.warn == 2 && "gas.helium".equals(hm.shortWhat)
                 && com.sc.inventory.ContainerSingularStationSC.TABS == 6 && com.sc.inventory.ContainerSingularStationSC.TAB_LINK == 5,
                 "bridge messages: a remote / armour command and the HUD line through bytes; the Singular Station's «Связь» tab");
+    }
+
+    // ------------------------------------------------------------------ the Ground / Space Bridge (stage 3)
+
+    /**
+     * Stage 3 (docs/plan-ground-bridge.md §9): the stability formula and its factors, wear per opening and the repair's
+     * price, the mass of a pass, the familiar-chunk memory (LRU, NBT), the scatter rules and offsets, the turbulent
+     * arrival's standing spot, interference on fake layouts, the heat / overheat machine and the coils' colour.
+     */
+    private static void bridge3() {
+        // С3 stability
+        com.sc.bridge.BridgeMathSC.Stab full = com.sc.bridge.BridgeMathSC.stability(4, 0, 0, false, false, false, 0);
+        com.sc.bridge.BridgeMathSC.Stab mix = com.sc.bridge.BridgeMathSC.stability(2, 40, 20, false, true, true, 15);
+        com.sc.bridge.BridgeMathSC.Stab zero = com.sc.bridge.BridgeMathSC.stability(0, 100, 400, false, true, true, 100);
+        check(full.total == 100 && mix.missing == 10 && mix.wear == 10 && mix.mass == 4 && mix.interference == 20 && mix.storm == 15
+                && mix.argon == 15 && mix.total == 26 && mix.parts().length == 7 && mix.parts()[6] == 26 && zero.total == 0
+                && com.sc.bridge.BridgeMathSC.argonStep(0, true) == 15 && com.sc.bridge.BridgeMathSC.argonStep(15, false) == 10
+                && com.sc.bridge.BridgeMathSC.argonStep(3, false) == 0,
+                "bridge stability: 100 - stabilisers - wear - mass - interference - storm - argon (26% for a mixed case), clamped; argon deficit +15 / -5 a second");
+        // С2 wear and repair
+        check(com.sc.bridge.BridgeMathSC.wearPerOpen(100, false, 0, 0) == 1 && com.sc.bridge.BridgeMathSC.wearPerOpen(2500, false, 0, 0) == 2
+                && com.sc.bridge.BridgeMathSC.wearPerOpen(0, true, 120, 0) == 3 && com.sc.bridge.BridgeMathSC.wearPerOpen(0, false, 0, 65) == 2
+                && com.sc.bridge.BridgeMathSC.wearPerOpen(99999, true, 999, 100) == 3
+                && com.sc.bridge.BridgeMathSC.wearStab(20) == 0 && com.sc.bridge.BridgeMathSC.wearStab(30) == 5 && com.sc.bridge.BridgeMathSC.wearStab(100) == 40
+                && com.sc.bridge.BridgeMathSC.repairHe(25) == 1000 && com.sc.bridge.BridgeMathSC.repairEu(25) == 50000000L
+                && com.sc.bridge.BridgeMathSC.repairEu(0) == 0,
+                "bridge wear: 1-3% an opening (far / another dimension, heavy or hot), free up to 20% then -1% stability per 2%; repair 40 mB He + 2 M EU per 1%");
+        // С4 mass
+        check(com.sc.bridge.BridgeMathSC.massEu(com.sc.bridge.BridgeMathSC.MASS_PLAYER, false) == 1000000L
+                && com.sc.bridge.BridgeMathSC.massEu(com.sc.bridge.BridgeMathSC.MASS_MOB, true) == 1000000L
+                && com.sc.bridge.BridgeMathSC.massEu(com.sc.bridge.BridgeMathSC.MASS_ITEM, false) == 100000L
+                && com.sc.bridge.BridgeMathSC.massEu(com.sc.bridge.BridgeMathSC.MASS_CART, true) == 2000000L
+                && com.sc.bridge.BridgeMathSC.massStab(com.sc.bridge.BridgeMathSC.MASS_PLAYER, false) == 2
+                && com.sc.bridge.BridgeMathSC.massStab(com.sc.bridge.BridgeMathSC.MASS_PLAYER, true) == 1
+                && com.sc.bridge.BridgeMathSC.massStab(com.sc.bridge.BridgeMathSC.MASS_CART + com.sc.bridge.BridgeMathSC.MASS_MOB, false) == 12,
+                "bridge mass: player 1 / mob 2 / item 0.1 / minecart 4 units, 1 M EU and 2% stability a unit, halved by the compensator");
+        // С5 familiar chunks: the LRU store and the saved data
+        com.sc.bridge.BridgeFamiliarSC.Store lru = new com.sc.bridge.BridgeFamiliarSC.Store(3);
+        boolean n1 = lru.mark(0, 1, 1), n2 = lru.mark(0, -2, 5), n3 = lru.mark(-1, 1, 1), again = lru.mark(0, 1, 1);
+        boolean hadA = lru.has(0, 1, 1);
+        lru.mark(0, 9, 9);                                           // the 4th: the one looked at longest ago (0, -2, 5) goes
+        boolean lruOk = n1 && n2 && n3 && !again && hadA && lru.size() == 3 && !lru.has(0, -2, 5) && lru.has(0, 1, 1) && lru.has(-1, 1, 1)
+                && lru.has(0, 9, 9) && !lru.has(1, 1, 1) && lru.scout(7) && !lru.scout(7) && lru.scouted(7) && !lru.scouted(0);
+        com.sc.bridge.BridgeFamiliarSC fs = new com.sc.bridge.BridgeFamiliarSC("t");
+        fs.markBlock("Alice", -1, -100, 50, 1);
+        fs.scout("Alice", 7);
+        net.minecraft.nbt.NBTTagCompound ft = new net.minecraft.nbt.NBTTagCompound();
+        fs.writeToNBT(ft);
+        com.sc.bridge.BridgeFamiliarSC fs2 = new com.sc.bridge.BridgeFamiliarSC("t");
+        fs2.readFromNBT(ft);
+        boolean famOk = fs2.familiar("alice", -1, -100, 50) && fs2.familiar("ALICE", -1, -100 + 16, 50 - 16) && !fs2.familiar("Alice", -1, -100 + 48, 50)
+                && !fs2.familiar("Alice", 0, -100, 50) && !fs2.familiar("Bob", -1, -100, 50) && fs2.of("Alice").size() == 9 && fs2.scouted("alice", 7)
+                && !fs2.scouted("Alice", 1) && new com.sc.bridge.BridgeFamiliarSC.Store(com.sc.bridge.BridgeMathSC.FAMILIAR_CAP).cap() == 4096;
+        com.sc.bridge.BridgeFamiliarSC.Store big = new com.sc.bridge.BridgeFamiliarSC.Store(com.sc.bridge.BridgeMathSC.FAMILIAR_CAP);
+        for (int i = 0; i < 5000; i++) {
+            big.mark(0, i, -i);
+        }
+        check(lruOk && famOk && big.size() == 4096 && !big.has(0, 0, 0) && big.has(0, 4999, -4999) && big.has(0, 904, -904) && !big.has(0, 903, -903),
+                "bridge familiar places: per player (any case), 3x3 chunks round a scanner, kept in NBT, scouted dimensions; at most 4096 - the oldest forgotten");
+        // С5 / С7 scatter rules
+        boolean rules = com.sc.bridge.BridgeMathSC.scatterRadius(true, false, false, false, false) == 0
+                && com.sc.bridge.BridgeMathSC.scatterRadius(false, false, false, false, false) == 30
+                && com.sc.bridge.BridgeMathSC.scatterRadius(false, false, true, false, false) == 10
+                && com.sc.bridge.BridgeMathSC.scatterRadius(false, true, false, false, false) == 0
+                && com.sc.bridge.BridgeMathSC.scatterRadius(false, false, false, true, false) == 0
+                && com.sc.bridge.BridgeMathSC.scatterRadius(true, false, true, false, true) == 100
+                && com.sc.bridge.BridgeMathSC.scatterRadius(false, false, true, true, true) == 0;
+        java.util.Random rnd = new java.util.Random(42);
+        boolean inside = true, moved = false;
+        for (int i = 0; i < 300; i++) {
+            int[] o = com.sc.bridge.BridgeMathSC.scatterOffset(rnd, 30);
+            inside &= o[0] * o[0] + o[1] * o[1] <= 900;
+            moved |= o[0] != 0 || o[1] != 0;
+        }
+        int[] none = com.sc.bridge.BridgeMathSC.scatterOffset(rnd, 0);
+        com.sc.bridge.BridgeMathSC.Cost famC = com.sc.bridge.BridgeMathSC.adjust(com.sc.bridge.BridgeMathSC.cost(0, new long[]{0}, false, false, 0), -25, false);
+        com.sc.bridge.BridgeMathSC.Cost unC = com.sc.bridge.BridgeMathSC.adjust(com.sc.bridge.BridgeMathSC.cost(0, new long[]{0}, false, false, 0), 50, true);
+        com.sc.bridge.BridgeMathSC.Cost spC = com.sc.bridge.BridgeMathSC.adjust(com.sc.bridge.BridgeMathSC.cost(1, new long[]{0}, false, false, 0), 0, false);
+        check(rules && inside && moved && none[0] == 0 && none[1] == 0 && famC.eu == 150000000L && famC.sm == 37 && famC.kr == 15 && famC.famPct == -25
+                && unC.eu == 240000000L && unC.sm == 75 && unC.resonance && spC.eu == 4000000000L,
+                "bridge scatter: familiar / beacon / level-5 find precise, unfamiliar 30 (Navigation Computer 10), scouting 100; offsets in the circle; "
+                        + "familiar -25%, unfamiliar +50%, resonance -20% EU; Space without an anchor stays x2 (4 G)");
+        // С3 turbulence: where a shaken arrival stands
+        FakeCells fc = new FakeCells();
+        int[] open = com.sc.bridge.BridgeSpaceSC.standSpot(fc, 0, 64, 0, 4, 6);
+        fc.put(0, 64, 0, com.sc.bridge.BridgeSpaceSC.SOLID).put(0, 65, 0, com.sc.bridge.BridgeSpaceSC.SOLID);
+        int[] up = com.sc.bridge.BridgeSpaceSC.standSpot(fc, 0, 64, 0, 0, 6);
+        FakeCells lava = new FakeCells();
+        lava.ground = 0;
+        int[] noneSpot = com.sc.bridge.BridgeSpaceSC.standSpot(lava, 0, 64, 0, 2, 3);
+        check(java.util.Arrays.equals(open, new int[]{0, 64, 0}) && java.util.Arrays.equals(up, new int[]{0, 66, 0}) && noneSpot == null,
+                "bridge turbulence: a shaken arrival stands on the nearest floor with two free cells (none over the void)");
+        // С6 interference on fake layouts
+        java.util.List<int[]> others = new java.util.ArrayList<int[]>();
+        others.add(new int[]{0, 64, 0});
+        others.add(new int[]{30, 64, 30});
+        others.add(new int[]{70, 64, 0});
+        others.add(new int[]{0, 64, -64});
+        java.util.List<int[]> alone = new java.util.ArrayList<int[]>();
+        alone.add(new int[]{0, 64, 0});
+        check(com.sc.bridge.BridgeMathSC.interferers(0, 64, 0, others, 64) == 2 && com.sc.bridge.BridgeMathSC.interferers(0, 64, 0, alone, 64) == 0
+                && com.sc.bridge.BridgeMathSC.interferers(70, 64, 0, others, 64) == 1,
+                "bridge interference: other controllers within 64 blocks counted (itself not)");
+        // С12 heat and overheat
+        int heat = 0, secs = 0;
+        while (heat < com.sc.bridge.BridgeMathSC.HEAT_MAX && secs < 1000) {
+            heat = com.sc.bridge.BridgeMathSC.heatStep(heat, 50, 25, false);
+            secs++;
+        }
+        int calm = 0;
+        for (int i = 0; i < 60; i++) {
+            calm = com.sc.bridge.BridgeMathSC.heatStep(calm, 0, 90, false);
+        }
+        int dry = com.sc.bridge.BridgeMathSC.heatStep(0, 0, 90, true);
+        check(secs == 20 && heat == com.sc.bridge.BridgeMathSC.HEAT_MAX && calm == 600 && dry == 60
+                && com.sc.bridge.BridgeMathSC.coolingHeat(1000, 1200, 2400) == 500 && com.sc.bridge.BridgeMathSC.coolingHeat(800, 0, 1200) == 0
+                && com.sc.bridge.BridgeMathSC.coilMeta(true, 0) == 1 && com.sc.bridge.BridgeMathSC.coilMeta(true, 500) == 2
+                && com.sc.bridge.BridgeMathSC.coilMeta(false, 800) == 3 && com.sc.bridge.BridgeMathSC.coilMeta(false, 100) == 0
+                && com.sc.bridge.BridgeMathSC.OVERHEAT_LOCK_S == 120,
+                "bridge heat: 1%/s (60 s - 60%), wear 50% + a shaking vortex overheat in 20 s, no helium +5%/s; cools with the ring; coils blue / orange / red");
+        // the controller keeps stage 3 in NBT
+        com.sc.tileentity.TileEntityBridgeControllerSC a = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        a.setWearForTest(37);
+        a.setHeatForTest(420);
+        net.minecraft.nbt.NBTTagCompound t = new net.minecraft.nbt.NBTTagCompound();
+        a.writeToNBT(t);
+        com.sc.tileentity.TileEntityBridgeControllerSC b = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        b.readFromNBT(t);
+        check(b.getWear() == 37 && b.getHeat() == 420 && !b.isOverheatLocked() && t.getIntArray("Stage3").length == 10,
+                "bridge stage 3 NBT: wear, heat, the overheat lock and the opening's stats saved");
     }
 
     // ------------------------------------------------------------------ the Ground / Space Bridge (stage 1)

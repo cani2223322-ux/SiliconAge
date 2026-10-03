@@ -25,6 +25,25 @@ public final class BridgeHudDataSC {
         at = System.currentTimeMillis();
     }
 
+    /** Stage 3: the ring's heat (%), seconds to a fold for a shortage (-1 none), what is short. */
+    public static volatile int heat, warn = -1;
+    public static volatile String shortWhat = "";
+
+    public static void setStage3(int h, int w, String what) {
+        heat = h;
+        warn = w;
+        shortWhat = what == null ? "" : what;
+    }
+
+    /** §11 births heard (x, y, z, kind) - the client's tick takes them (the network thread spawns nothing). */
+    public static final java.util.concurrent.ConcurrentLinkedQueue<double[]> BIRTHS = new java.util.concurrent.ConcurrentLinkedQueue<double[]>();
+
+    public static void birth(double x, double y, double z, int kind) {
+        if (BIRTHS.size() < 16) {
+            BIRTHS.add(new double[]{x, y, z, kind});
+        }
+    }
+
     /** Shown: open and heard from within the last 3 s. */
     public static boolean shown() {
         return open && System.currentTimeMillis() - at < 3000;

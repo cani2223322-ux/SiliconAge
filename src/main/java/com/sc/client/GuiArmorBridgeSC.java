@@ -327,8 +327,11 @@ public class GuiArmorBridgeSC extends GuiBridgeFarSC {
         if (b != null && b.hasKey("cost")) {
             int[] c = ints(b, "cost", 11);
             small(Lang.tr(space() ? "sc.bridge.gui.hold.space" : "sc.bridge.gui.hold.ground", g(c[4]), c[5], c[6], c[7], c[8] / 20), x, y + 2, w, DIM);
+            String fam = famLine();
             if (b.getInteger("pct") > 0) {
-                small(Lang.tr("sc.bridge.armour.discount", b.getInteger("pct")), x, y + 11, w, OK);
+                small(Lang.tr("sc.bridge.armour.discount", b.getInteger("pct")) + (fam.length() > 0 ? " · " + fam : ""), x, y + 11, w, OK);
+            } else if (fam.length() > 0) {
+                small(fam, x, y + 11, w, famColor());
             }
         }
         String n = b == null ? "" : b.getString("name").length() == 0 ? Lang.tr("sc.bridge.res.noname") : b.getString("name");

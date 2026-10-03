@@ -36,6 +36,7 @@ public final class BridgeNetSC {
         CHANNEL.registerMessage(FarHandler.class, Far.class, 2, Side.SERVER);
         CHANNEL.registerMessage(FarStateHandler.class, FarState.class, 3, Side.CLIENT);
         CHANNEL.registerMessage(HudHandler.class, Hud.class, 4, Side.CLIENT);
+        CHANNEL.registerMessage(BirthHandler.class, Birth.class, 5, Side.CLIENT);
     }
 
     /** A remote / the armour / a coordinator: one command (BridgeFarSC.F_*), no distance limit - the server checks the link. */
@@ -238,22 +239,28 @@ public final class BridgeNetSC {
         }
     }
 
-    /** Server -> client: the opener's HUD line (the bridge's name, time left / total, stability, kind; open false - gone). */
+    /**
+     * Server -> client: the opener's HUD line (the bridge's name, time left / total, stability, kind; open false - gone);
+     * stage 3: the ring's heat (%), the seconds to a fold for a shortage (-1 none) and what is short.
+     */
     public static class Hud implements IMessage {
         public boolean open;
-        public String name = "";
-        public int left, total, stability, kind;
+        public String name = "", shortWhat = "";
+        public int left, total, stability, kind, heat, warn = -1;
 
         public Hud() {
         }
 
-        public Hud(boolean open, String name, int left, int total, int stability, int kind) {
+        public Hud(boolean open, String name, int left, int total, int stability, int kind, int heat, int warn, String shortWhat) {
             this.open = open;
             this.name = name == null ? "" : name;
             this.left = left;
             this.total = total;
             this.stability = stability;
             this.kind = kind;
+            this.heat = heat;
+            this.warn = warn;
+            this.shortWhat = shortWhat == null ? "" : shortWhat;
         }
 
         @Override
@@ -264,6 +271,9 @@ public final class BridgeNetSC {
             total = buf.readInt();
             stability = buf.readByte();
             kind = buf.readByte();
+            heat = buf.readByte();
+            warn = buf.readByte();
+            shortWhat = ByteBufUtils.readUTF8String(buf);
         }
 
         @Override
@@ -274,6 +284,9 @@ public final class BridgeNetSC {
             buf.writeInt(total);
             buf.writeByte(stability);
             buf.writeByte(kind);
+            buf.writeByte(Math.max(0, Math.min(100, heat)));
+            buf.writeByte(Math.max(-1, Math.min(100, warn)));
+            ByteBufUtils.writeUTF8String(buf, shortWhat.length() > 32 ? shortWhat.substring(0, 32) : shortWhat);
         }
     }
 
@@ -281,6 +294,47 @@ public final class BridgeNetSC {
         @Override
         public IMessage onMessage(Hud msg, MessageContext ctx) {
             BridgeHudDataSC.set(msg.open, msg.name, msg.left, msg.total, msg.stability, msg.kind);
+            BridgeHudDataSC.setStage3(msg.heat, msg.warn, msg.shortWhat);
+            return null;
+        }
+    }
+
+    /** Server -> clients near an end: §11 the singularity is born here (a flash, an implosion, then the vortex). */
+    public static class Birth implements IMessage {
+        public double x, y, z;
+        public int kind;
+
+        public Birth() {
+        }
+
+        public Birth(double x, double y, double z, int kind) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.kind = kind;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            x = buf.readDouble();
+            y = buf.readDouble();
+            z = buf.readDouble();
+            kind = buf.readByte();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeDouble(x);
+            buf.writeDouble(y);
+            buf.writeDouble(z);
+            buf.writeByte(kind);
+        }
+    }
+
+    public static class BirthHandler implements IMessageHandler<Birth, IMessage> {
+        @Override
+        public IMessage onMessage(Birth msg, MessageContext ctx) {
+            BridgeHudDataSC.birth(msg.x, msg.y, msg.z, msg.kind);
             return null;
         }
     }

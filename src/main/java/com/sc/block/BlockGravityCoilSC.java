@@ -17,7 +17,8 @@ import net.minecraft.world.World;
  * Gravity Coil: 16 of them - two rings of 8 round the axis, above and below the Singular
  * Reactor (levels 2 and 4 of its 7x7x5 build) - hold its black hole. The Ground / Space Bridge's ring is
  * made of them too (16 / 24 in a square standing on its edge): while its portal is open its coils glow
- * (metadata 1, set by the bridge controller). A coil taken out of a bridge ring loses that bridge its calibration.
+ * (metadata 1, set by the bridge controller) and show the ring's heat - 1 cold blue, 2 warm orange, 3 hot red (a
+ * tint; a hot ring keeps its glow while it cools). A coil taken out of a bridge ring loses that bridge its calibration.
  */
 public class BlockGravityCoilSC extends Block {
 
@@ -94,7 +95,20 @@ public class BlockGravityCoilSC extends Block {
 
     @Override
     public int getLightValue(IBlockAccess w, int x, int y, int z) {
-        return w.getBlockMetadata(x, y, z) == 1 ? 9 : 0;
+        int m = w.getBlockMetadata(x, y, z);
+        return m == 1 ? 9 : m == 2 ? 10 : m == 3 ? 12 : 0;
+    }
+
+    /** The bridge ring's heat (§11): cold blue, warm orange, hot red. */
+    @Override
+    @SideOnly(Side.CLIENT)
+    public int colorMultiplier(IBlockAccess w, int x, int y, int z) {
+        switch (w.getBlockMetadata(x, y, z)) {
+            case 1: return 0xB4D2FF;
+            case 2: return 0xFFB45A;
+            case 3: return 0xFF5A40;
+            default: return 0xFFFFFF;
+        }
     }
 
     @Override
@@ -107,6 +121,6 @@ public class BlockGravityCoilSC extends Block {
     @Override
     @SideOnly(Side.CLIENT)
     public IIcon getIcon(int face, int meta) {
-        return meta == 1 ? lit : blockIcon;
+        return meta >= 1 && meta <= 3 ? lit : blockIcon;
     }
 }

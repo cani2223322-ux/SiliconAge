@@ -106,6 +106,11 @@ public class BlockBridgeVortexSC extends Block {
     @Override
     @SideOnly(Side.CLIENT)
     public boolean shouldSideBeRendered(IBlockAccess w, int x, int y, int z, int side) {
+        TileEntity own = w.getTileEntity(x - net.minecraft.util.Facing.offsetsXForSide[side], y - net.minecraft.util.Facing.offsetsYForSide[side],
+                z - net.minecraft.util.Facing.offsetsZForSide[side]);
+        if (own instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) own).isUnstable()) {
+            return false;                                  // С3: a shaking cell is drawn by its renderer (jittering)
+        }
         return w.getBlock(x, y, z) != this && super.shouldSideBeRendered(w, x, y, z, side);
     }
 
@@ -130,6 +135,13 @@ public class BlockBridgeVortexSC extends Block {
         }
         if (sp && rand.nextInt(4) == 0) {
             world.spawnParticle("fireworksSpark", x + rand.nextDouble(), y + rand.nextDouble(), z + rand.nextDouble(), 0, 0.01, 0);
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) te).isUnstable()) {
+            for (int i = 0; i < 3; i++) {                  // С3: sparks fly off a shaking vortex
+                world.spawnParticle(rand.nextBoolean() ? "magicCrit" : "crit", x + rand.nextDouble(), y + rand.nextDouble(), z + rand.nextDouble(),
+                        (rand.nextDouble() - 0.5) * 0.8, rand.nextDouble() * 0.4, (rand.nextDouble() - 0.5) * 0.8);
+            }
         }
         if (rand.nextInt(120) == 0) {
             world.playSound(x + 0.5, y + 0.5, z + 0.5, "portal.portal", 0.35F, rand.nextFloat() * 0.4F + (sp ? 1.2F : 0.8F), false);

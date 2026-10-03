@@ -91,6 +91,19 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         return st != null && st.hasKey("bridge") ? st.getCompoundTag("bridge") : null;
     }
 
+    /** С5 / С7 for the order's target point: «знакомое место: -25%» / «незнакомое: +50%, разброс до 30 бл.»; "" - no point. */
+    protected String famLine() {
+        NBTTagCompound b = bridge();
+        return b == null || !b.hasKey("fam") ? "" : GuiBridgeControllerSC.famText(b.getIntArray("fam"));
+    }
+
+    /** The colour of famLine: familiar - green, unfamiliar or scouting - yellow. */
+    protected int famColor() {
+        NBTTagCompound b = bridge();
+        int[] f = b == null ? new int[0] : b.getIntArray("fam");
+        return f.length < 4 ? DIM : f[0] == 1 && f[3] == 0 ? OK : WARN;
+    }
+
     protected boolean space() {
         NBTTagCompound b = bridge();
         return b != null && b.getInteger("kind") == BridgeMathSC.SPACE;
@@ -588,7 +601,11 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
                 : Lang.tr("sc.bridge.far.ringready");
         int stab = b.getBoolean("open") ? t[4] : b.getInteger("baseStab");
         String l2 = Lang.tr(low == 0 ? "sc.bridge.far.tanksok" : "sc.bridge.far.tankslow", low) + " · " + ring + " · "
-                + Lang.tr("sc.bridge.far.stab", stab);
+                + Lang.tr("sc.bridge.far.stab", stab) + " · " + Lang.tr("sc.bridge.armour.wear", b.getInteger("wear"));
+        if (b.getBoolean("overheat")) {
+            l2 = Lang.tr(low == 0 ? "sc.bridge.far.tanksok" : "sc.bridge.far.tankslow", low) + " · "
+                    + Lang.tr("sc.bridge.gui.overheat", t.length > 2 ? (t[2] + 19) / 20 : 0);
+        }
         return new String[]{l1, l2};
     }
 

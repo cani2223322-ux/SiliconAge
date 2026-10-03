@@ -88,6 +88,7 @@ public final class SingularSensesSC {
         float mul = SingularPowersSC.costMul(p);
         ItemStack[] worn = ArmorGasSC.wornSet(p);
         ArmorGasSC.drainFraction(worn, Gas.KRYPTON, ArmorFeature.SING_KR_SCANNER_PER_MIN / 60F * mul);
+        com.sc.bridge.BridgeFamiliarSC.visit(p, 1);                     // bridge С5: the scanned land round the wearer becomes familiar
         NBTTagCompound data = p.getEntityData();
         long now = p.worldObj.getTotalWorldTime(), at = data.getLong(SCAN_AT);
         if (!data.hasKey(SCAN_AT) || now - at >= ArmorFeature.SCANNER_EVERY || now < at) {

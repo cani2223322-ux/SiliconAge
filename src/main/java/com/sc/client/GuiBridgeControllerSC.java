@@ -48,6 +48,8 @@ public class GuiBridgeControllerSC extends GuiScreen {
             B_OPEN = 9, B_CLOSE = 10, B_DIM = 11, B_MODE = 20, B_CLEAR = 30, B_ACCESS = 40;
     /** Stage 2: friends, «Дистанционный режим», «Привязать шлем», the name, the coordinators in the inventory. */
     private static final int B_FRIEND_ADD = 41, B_REMOTE = 42, B_BIND = 43, B_RENAME = 44, B_FROM_COORD = 45, B_TO_COORD = 46;
+    /** Stage 3: «Ремонт» (С2). */
+    private static final int B_REPAIR = 47;
     private static final int MODES = 6;
     private static final int BM_ROWS = 4, BM_Y = 131, BM_ROW_H = 9;
 
@@ -131,6 +133,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
         btns.add(new Btn(B_CHECK, 8, 162, 44, 12, "sc.bridge.gui.check"));
         btns.add(new Btn(B_CALIB, 56, 162, 44, 12, "sc.bridge.gui.calibrate"));
         btns.add(new Btn(B_POWER, 8, 216, 92, 12, ""));
+        btns.add(new Btn(B_REPAIR, 8, 230, 92, 11, "sc.bridge.gui.repair"));
         for (int i = 0; i < MODES; i++) {
             btns.add(new Btn(B_MODE + i, 110 + (i % 3) * 64, 33 + (i / 3) * 13, 62, 11, "sc.bridge.gui.mode." + i));
         }
@@ -313,6 +316,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
         switch (id) {
             case B_CHECK: act(TileEntityBridgeControllerSC.A_CHECK, null, null); return;
             case B_CALIB: act(TileEntityBridgeControllerSC.A_CALIBRATE, null, null); return;
+            case B_REPAIR: act(TileEntityBridgeControllerSC.A_REPAIR, null, null); return;
             case B_POWER: act(TileEntityBridgeControllerSC.A_POWER, null, null); return;
             case B_PROBE:
                 if (t != null) {
@@ -693,6 +697,11 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 b.color = WARN;
             } else if (b.id == B_CALIB) {
                 b.color = has() && st.getBoolean("calibrated") ? TEXT : WARN;
+            } else if (b.id == B_REPAIR) {
+                int wear = has() ? st.getInteger("wear") : 0;
+                b.enabled = a && !open && wear > 0;
+                b.label = wear > 0 ? Lang.tr("sc.bridge.gui.repair.n", wear) : Lang.tr("sc.bridge.gui.repair");
+                b.color = wear > BridgeMathSC.WEAR_FREE ? WARN : TEXT;
             }
         }
     }
@@ -789,14 +798,18 @@ public class GuiBridgeControllerSC extends GuiScreen {
         text(Lang.tr("sc.bridge.gui.ring"), 8, 180, LABEL);
         int[] t = ints("time", 6);
         boolean open = st.getBoolean("open");
-        float heat = open ? 1F - t[0] / (float) Math.max(1, t[1]) : t[2] / (float) Math.max(1, t[3]);
+        int heatPct = st.getInteger("heat") / 10, wear = st.getInteger("wear");
+        float heat = heatPct / 100F;
         small(Lang.tr("sc.bridge.gui.heat"), 8, 190, 30, LABEL);
-        bar(40, 189, 60, 6, heat, heat > 0.7F ? 0xFFE04830 : 0xFFF0A040);
+        bar(36, 189, 46, 6, heat, heatPct >= 75 ? 0xFFE04830 : heatPct >= 40 ? 0xFFF0A040 : 0xFF6AA8FF);
+        smallRight(heatPct + "%", 100, 189, heatPct * 10 >= BridgeMathSC.HEAT_WARN ? BAD : TEXT);
         small(Lang.tr("sc.bridge.gui.wear"), 8, 199, 30, LABEL);
-        bar(40, 198, 60, 6, 1F - st.getInteger("wear") / 100F, 0xFF5AE66E);
-        String cool = open ? Lang.tr("sc.bridge.gui.cool.open") : t[2] > 0 ? Lang.tr("sc.bridge.gui.cool.left", (t[2] + 19) / 20)
-                : Lang.tr("sc.bridge.gui.cool.ready");
-        small(cool, 8, 207, 92, open ? BLUE : t[2] > 0 ? WARN : OK);
+        bar(36, 198, 46, 6, 1F - wear / 100F, wear > BridgeMathSC.WEAR_FREE ? 0xFFF0A040 : 0xFF5AE66E);
+        smallRight(wear + "%", 100, 198, wear > BridgeMathSC.WEAR_FREE ? WARN : TEXT);
+        boolean oh = st.getBoolean("overheat");
+        String cool = open ? Lang.tr("sc.bridge.gui.cool.open") : oh ? Lang.tr("sc.bridge.gui.cool.overheat", (t[2] + 19) / 20)
+                : t[2] > 0 ? Lang.tr("sc.bridge.gui.cool.left", (t[2] + 19) / 20) : Lang.tr("sc.bridge.gui.cool.ready");
+        small(cool, 8, 207, 92, open ? BLUE : oh ? BAD : t[2] > 0 ? WARN : OK);
     }
 
     private void drawCentre() {
@@ -867,7 +880,11 @@ public class GuiBridgeControllerSC extends GuiScreen {
         long dist = st.getLong("dist");
         String sum = space() ? Lang.tr(c[10] != 0 ? "sc.bridge.gui.sum.anchor" : "sc.bridge.gui.sum.noanchor", dimName(ints("target", 4)[3]))
                 : Lang.tr("sc.bridge.gui.sum.ground", g(dist)) + (c[9] != 0 ? "  " + Lang.tr("sc.bridge.gui.beacon", BridgeMathSC.BEACON_DISCOUNT) : "");
-        small(sum, 110, 170, 192, c[9] != 0 || c[10] != 0 ? OK : LABEL);
+        String fam = famText(ints("fam", 4));
+        if (fam.length() > 0) {
+            sum += "  " + fam;
+        }
+        small(sum, 110, 170, 192, ints("fam", 4)[0] == 0 ? WARN : c[9] != 0 || c[10] != 0 ? OK : LABEL);
         text(Lang.tr("sc.bridge.gui.cost"), 110, 178, LABEL);
         long capEu = st.getLong("capEu"), costEu = st.getLong("costEu");
         int[] tk = ints("tanks", BridgeMathSC.GASES.length);
@@ -914,9 +931,10 @@ public class GuiBridgeControllerSC extends GuiScreen {
         text(Lang.tr("sc.bridge.gui.stability"), 312, 176, LABEL);
         int[] t = ints("time", 6);
         boolean open = st.getBoolean("open");
-        int stab = open ? t[4] : BridgeMathSC.baseStability(n[7]);
-        bar(312, 186, 80, 6, stab / 100F, stab >= 70 ? 0xFF5AE66E : stab >= 30 ? 0xFFF0A040 : 0xFFE04830);
-        smallRight(stab + "%", 412, 186, TEXT);
+        int stab = open ? t[4] : ints("stab", 7)[6];
+        boolean shake = open && st.getBoolean("turb") && (System.currentTimeMillis() / 90) % 2 == 0;
+        bar(312, 186 + (shake ? 1 : 0), 80, 6, stab / 100F, stab >= 70 ? 0xFF5AE66E : stab >= BridgeMathSC.TURBULENCE ? 0xFFF0A040 : 0xFFE04830);
+        smallRight(stab + "%", 412, 186, stab < BridgeMathSC.TURBULENCE ? BAD : TEXT);
         int mods = st.getInteger("modules");
         StringBuilder m = new StringBuilder();
         String[] mk = {"nav", "mass", "cooler", "shield"};
@@ -925,17 +943,32 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 m.append(m.length() > 0 ? ", " : "").append(Lang.tr("sc.bridge.gui.mod." + mk[i]));
             }
         }
-        small(Lang.tr("sc.bridge.gui.stabs", n[7], BridgeMathSC.MAX_STABILISERS), 312, 196, 100, LABEL);
-        small(Lang.tr("sc.bridge.gui.modules", m.length() == 0 ? Lang.tr("sc.bridge.gui.none") : m.toString()), 312, 204, 100, LABEL);
+        small(Lang.tr("sc.bridge.gui.stabs", n[7], BridgeMathSC.MAX_STABILISERS), 312, 195, 100, LABEL);
+        small(Lang.tr("sc.bridge.gui.modules", m.length() == 0 ? Lang.tr("sc.bridge.gui.none") : m.toString()), 312, 202, 100, LABEL);
+        int[] env = ints("env", 3);
+        StringBuilder e = new StringBuilder();
+        if (env[2] != 0) {
+            e.append(Lang.tr("sc.bridge.gui.env.res", BridgeMathSC.RESONANCE_PCT));
+        }
+        if (env[1] != 0) {
+            e.append(e.length() > 0 ? " · " : "").append(Lang.tr("sc.bridge.gui.env.storm", BridgeMathSC.STORM_STAB));
+        }
+        if (env[0] != 0) {
+            e.append(e.length() > 0 ? " · " : "").append(Lang.tr("sc.bridge.gui.env.interf", BridgeMathSC.INTERFERENCE_STAB));
+        }
+        small(e.length() == 0 ? Lang.tr("sc.bridge.gui.env.none") : e.toString(), 312, 209, 100, env[0] != 0 || env[1] != 0 ? WARN : env[2] != 0 ? OK : DIM);
         if (open) {
-            small(Lang.tr("sc.bridge.gui.openleft", (t[0] + 19) / 20), 312, 213, 100, BLUE);
+            small(Lang.tr("sc.bridge.gui.openleft", (t[0] + 19) / 20), 312, 217, 100, BLUE);
             int[] b = ints("endB", 4);
-            small(Lang.tr("sc.bridge.gui.endb", b[1], b[2], b[3]), 312, 221, 100, LABEL);
+            int[] sc = ints("scatter", 2);
+            small(Lang.tr("sc.bridge.gui.endb", b[1], b[2], b[3]) + (sc[1] > 0 ? " " + Lang.tr("sc.bridge.gui.shifted", sc[1]) : ""), 312, 224, 100, LABEL);
             if (t[5] >= 0) {
-                small(Lang.tr("sc.bridge.gui.short", (t[5] + 19) / 20), 312, 229, 100, BAD);
+                small(Lang.tr("sc.bridge.gui.short", (t[5] + 19) / 20), 312, 231, 100, BAD);
+            } else if (st.getBoolean("turb")) {
+                small(Lang.tr("sc.bridge.gui.turb", BridgeMathSC.TURB_SHIFT), 312, 231, 100, BAD);
             }
-        } else {
-            small(Lang.tr("sc.bridge.gui.interference"), 312, 213, 100, DIM);
+        } else if (st.getBoolean("overheat")) {
+            small(Lang.tr("sc.bridge.gui.overheat", (t[2] + 19) / 20), 312, 217, 100, BAD);
         }
     }
 
@@ -986,6 +1019,20 @@ public class GuiBridgeControllerSC extends GuiScreen {
         }
     }
 
+    /** С5 / С7: «знакомое место: -25%» / «незнакомое: +50%, разброс до 30 бл.» / «разведка: разброс до 100 бл.»; "" for the server. */
+    static String famText(int[] f) {
+        if (f == null || f.length < 4 || f[0] < 0) {
+            return "";
+        }
+        if (f[3] != 0) {
+            return Lang.tr("sc.bridge.fam.scout", f[2]);
+        }
+        if (f[0] != 0) {
+            return Lang.tr(f[2] > 0 ? "sc.bridge.fam.knownScatter" : "sc.bridge.fam.known", -BridgeMathSC.FAMILIAR_PCT, f[2]);
+        }
+        return Lang.tr(f[2] > 0 ? "sc.bridge.fam.unknown" : "sc.bridge.fam.unknownPrecise", BridgeMathSC.UNFAMILIAR_PCT, f[2]);
+    }
+
     // ------------------------------------------------------------------ tooltips
 
     private boolean over(int x, int y, int w, int h) {
@@ -1005,6 +1052,15 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 } else if (b.id >= B_CLEAR && b.id < B_CLEAR + BridgeMathSC.GASES.length) {
                     t.add(Lang.tr("sc.bridge.gui.clear"));
                     t.add("§7" + Lang.tr("sc.bridge.gui.clear.hint"));
+                } else if (b.id == B_REPAIR) {
+                    int wear = st.getInteger("wear");
+                    t.add(Lang.tr("sc.bridge.gui.repair.hint", wear));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.repair.cost", g(st.getInteger("repairHe")), eu(st.getLong("repairEu"))));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.repair.hint2", BridgeMathSC.REPAIR_HE_PER_WEAR, eu(BridgeMathSC.REPAIR_EU_PER_WEAR),
+                            BridgeMathSC.COIL_SWAP_WEAR));
+                    if (st.getBoolean("open")) {
+                        t.add("§c" + Lang.tr("sc.bridge.refuse.open"));
+                    }
                 } else if (b.id == B_CALIB) {
                     t.add(Lang.tr("sc.bridge.gui.calibrate"));
                     t.add("§7" + Lang.tr("sc.bridge.gui.calibrate.hint", BridgeMathSC.CALIB_KR, eu(BridgeMathSC.CALIB_EU)));
@@ -1062,18 +1118,43 @@ public class GuiBridgeControllerSC extends GuiScreen {
             t.add("§7" + Lang.tr("sc.bridge.gui.cap.hint", eu(BridgeMathSC.CAPACITOR_EU)));
             return t;
         }
-        if (over(312, 176, 100, 18)) {
-            t.add(Lang.tr("sc.bridge.gui.stability"));
+        if (over(312, 176, 100, 40)) {
+            int[] sp = ints("stab", 7);
+            boolean open = st.getBoolean("open");
+            t.add(Lang.tr("sc.bridge.gui.stability") + ": " + (open ? ints("time", 6)[4] : sp[6]) + "%");
+            t.add("§7" + Lang.tr("sc.bridge.gui.stab.base"));
+            String[] keys = {"missing", "wear", "mass", "interf", "storm", "argon"};
+            for (int i = 0; i < keys.length; i++) {
+                t.add((sp[i] > 0 ? "§c" : "§8") + Lang.tr("sc.bridge.gui.stab." + keys[i], sp[i]));
+            }
+            int[] env = ints("env", 3);
+            if (env[2] != 0) {
+                t.add("§a" + Lang.tr("sc.bridge.gui.stab.res", BridgeMathSC.RESONANCE_PCT));
+            }
             t.add("§7" + Lang.tr("sc.bridge.gui.stab.hint", BridgeMathSC.STAB_MISSING_PERCENT, BridgeMathSC.STAB_FOLD));
+            t.add("§7" + Lang.tr("sc.bridge.gui.stab.hint2", BridgeMathSC.TURBULENCE, BridgeMathSC.TURB_SHIFT));
             return t;
         }
         if (over(206, 268, 206, 18) && !chips.isEmpty()) {
             t.add(Lang.tr("sc.bridge.gui.friends.hint"));
             return t;
         }
-        if (over(8, 189, 92, 16)) {
-            t.add(Lang.tr("sc.bridge.gui.heat.hint", BridgeMathSC.COOL_S, BridgeMathSC.COOL_S / BridgeMathSC.COOLER_SPEED));
-            t.add("§6" + Lang.tr("sc.bridge.gui.wear.stage3"));
+        if (over(8, 189, 92, 8)) {
+            t.add(Lang.tr("sc.bridge.gui.heat") + ": " + st.getInteger("heat") / 10 + "%");
+            t.add("§7" + Lang.tr("sc.bridge.gui.heat.hint", BridgeMathSC.COOL_S, BridgeMathSC.COOL_S / BridgeMathSC.COOLER_SPEED));
+            t.add("§7" + Lang.tr("sc.bridge.gui.heat.hint2", BridgeMathSC.OVERHEAT_LOCK_S / 60, BridgeMathSC.OVERHEAT_WEAR));
+            return t;
+        }
+        if (over(8, 197, 92, 8)) {
+            t.add(Lang.tr("sc.bridge.gui.wear") + ": " + st.getInteger("wear") + "%");
+            t.add("§7" + Lang.tr("sc.bridge.gui.wear.hint", BridgeMathSC.WEAR_FREE));
+            t.add("§7" + Lang.tr("sc.bridge.gui.wear.hint2", BridgeMathSC.COIL_SWAP_WEAR));
+            return t;
+        }
+        if (over(110, 168, 192, 8)) {
+            t.add(Lang.tr("sc.bridge.gui.fam.hint"));
+            t.add("§7" + Lang.tr("sc.bridge.gui.fam.hint2", -BridgeMathSC.FAMILIAR_PCT, BridgeMathSC.UNFAMILIAR_PCT, BridgeMathSC.SCATTER_UNFAMILIAR,
+                    BridgeMathSC.SCATTER_NAV));
             return t;
         }
         if (over(8, 30, 92, 92)) {

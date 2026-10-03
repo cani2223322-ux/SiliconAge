@@ -19,6 +19,28 @@ public class TileEntityBridgeVortexSC extends TileEntity {
     private int cdim, cx, cy, cz, end, tileU, tileV;
     private long openId;
     private int age;
+    /** С3: the vortex shakes (stability under 30%) - the client draws this cell jittering (BridgeVortexRendererSC). */
+    private boolean unstable;
+
+    public boolean isUnstable() {
+        return unstable;
+    }
+
+    /** Server: the controller tells it once a second; the clients hear of a change. */
+    public void setUnstable(boolean u) {
+        if (u != unstable) {
+            unstable = u;
+            if (worldObj != null) {
+                worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            }
+        }
+    }
+
+    /** The shaking cell is drawn by its renderer in the translucent pass. */
+    @Override
+    public boolean shouldRenderInPass(int pass) {
+        return pass == 1;
+    }
 
     public void setup(int dim, int x, int y, int z, int end, long openId, int tileU, int tileV) {
         this.cdim = dim;
@@ -109,6 +131,7 @@ public class TileEntityBridgeVortexSC extends TileEntity {
     public Packet getDescriptionPacket() {
         NBTTagCompound nbt = new NBTTagCompound();
         nbt.setIntArray("Tile", new int[]{tileU, tileV});
+        nbt.setBoolean("U", unstable);
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 0, nbt);
     }
 
@@ -118,6 +141,7 @@ public class TileEntityBridgeVortexSC extends TileEntity {
         if (t.length == 2) {
             tileU = t[0];
             tileV = t[1];
+            unstable = pkt.func_148857_g().getBoolean("U");
             if (worldObj != null) {
                 worldObj.markBlockRangeForRenderUpdate(xCoord, yCoord, zCoord, xCoord, yCoord, zCoord);
             }

@@ -34,6 +34,10 @@ public class ClientProxy extends CommonProxy {
                 com.sc.tileentity.TileEntitySingularStationSC.class, new com.sc.client.SingularStationRendererSC());
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
                 com.sc.tileentity.TileEntityGravStabiliserSC.class, new com.sc.client.GravStabiliserRendererSC());
+        cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+                com.sc.tileentity.TileEntityBridgeVortexSC.class, new com.sc.client.BridgeVortexRendererSC());
+        cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
+                com.sc.tileentity.TileEntityBridgeControllerSC.class, new com.sc.client.BridgeHoloRendererSC());
     }
 
     @Override

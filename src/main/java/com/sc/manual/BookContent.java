@@ -1351,7 +1351,7 @@ public final class BookContent {
 
     // ------------------------------------------------------------------ the Ground / Space Bridge (stage 1)
 
-    /** The Ground and Space Bridge (docs/plan-ground-bridge.md, stage 1): the builds, resources, opening, own coordinates. */
+    /** The Ground and Space Bridge (docs/plan-ground-bridge.md, stages 1-3): the builds, resources, opening, own coordinates, remotes, wear, stability, familiar places. */
     private static void bridge(List<BookEntry> list) {
         ItemStack ctrl = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1);
         BookEntry e = new BookEntry("bridge", BookChapter.GENERATORS, ctrl, Lang.tr("sc.manual.bridge.title"));
@@ -1410,7 +1410,12 @@ public final class BookContent {
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.accesshead"))).addAll(paras("sc.manual.bridge.access"));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.armourhead"))).add(BookEl.items(listOf(new ItemStack(com.sc.init.ModItems.bridgeLinkModule))))
                 .addAll(paras("sc.manual.bridge.armour"));
-        e.add(BookEl.dim(Lang.tr("sc.manual.bridge.later")));
+        // stage 3 (§9, §11): wear and repair, stability (mass, interference), heat and overheating, familiar places and scouting, the look
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.wearhead"))).addAll(paras("sc.manual.bridge.wear"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.stabhead"))).addAll(paras("sc.manual.bridge.stab"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.heathead"))).addAll(paras("sc.manual.bridge.heat"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.famhead"))).addAll(paras("sc.manual.bridge.fam"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.lookhead"))).addAll(paras("sc.manual.bridge.look"));
         e.about(parts.subList(0, com.sc.block.BlockBridgeSC.parts()).toArray(new ItemStack[0]));
         list.add(e);
     }

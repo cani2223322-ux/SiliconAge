@@ -119,6 +119,9 @@ public final class BridgeMathSC {
         public int lifeTicks;
         /** The beacon / anchor discounts that were applied (for the screen). */
         public boolean beacon, anchor;
+        /** Stage 3: the familiar / unfamiliar percent and the reactor's resonance that were applied (adjust). */
+        public int famPct;
+        public boolean resonance;
 
         public int resource(int tank) {
             switch (tank) {
@@ -308,6 +311,174 @@ public final class BridgeMathSC {
             return charge;
         }
         return charge >= REMOTE_SIGNAL_EU ? charge - REMOTE_SIGNAL_EU : -1;
+    }
+
+    // ------------------------------------------------------------------ stage 3: wear, stability, mass, heat, familiar places (§9)
+
+    /** С2 wear: free up to this much; above it -1% stability per 2% of wear; a coil swap -10%, an overheat +10%; the cap. */
+    public static final int WEAR_FREE = 20, WEAR_STAB_DIV = 2, COIL_SWAP_WEAR = 10, OVERHEAT_WEAR = 10, MAX_WEAR = 100;
+    /** «Ремонт»: helium and EU per 1% of wear (instant). */
+    public static final int REPAIR_HE_PER_WEAR = 40;
+    public static final long REPAIR_EU_PER_WEAR = 2000000L;
+    /** An opening wears the ring more from this far (blocks, or another dimension), this much mass (tenths) or this peak heat (%). */
+    public static final int WEAR_FAR = 2000, WEAR_MASS_TENTHS = 100, WEAR_HOT = 60;
+    /** С4 mass of a pass, tenths of a unit: player 1, mob 2, item 0.1, minecart 4. */
+    public static final int MASS_PLAYER = 10, MASS_MOB = 20, MASS_ITEM = 1, MASS_CART = 40;
+    /** Each unit of mass: EU and stability (for MASS_TICKS); the Mass Compensator halves both. */
+    public static final long MASS_EU_PER_UNIT = 1000000L;
+    public static final int MASS_STAB_PER_UNIT = 2, MASS_TICKS = 200;
+    /** С6 interference: another bridge controller within INTERFERENCE_RADIUS; a thunderstorm at an end; a running Singular reactor near the ring. */
+    public static final int INTERFERENCE_RADIUS = 64, INTERFERENCE_STAB = 20, STORM_STAB = 15, RESONANCE_RADIUS = 32, RESONANCE_PCT = 20;
+    /** С3: under this the vortex is turbulent - an arrival is shifted up to TURB_SHIFT blocks and knocked back. */
+    public static final int TURBULENCE = 30, TURB_SHIFT = 8;
+    /** С5 familiar places: the price, the scatter of an unfamiliar point (with the Navigation Computer), С7 scouting. */
+    public static final int FAMILIAR_PCT = -25, UNFAMILIAR_PCT = 50, SCATTER_UNFAMILIAR = 30, SCATTER_NAV = 10, SCATTER_SCOUT = 100;
+    /** Familiar chunks a player remembers (the oldest forgotten first). */
+    public static final int FAMILIAR_CAP = 4096;
+    /** С12 heat, tenths of a percent: 1%/s while open (+2% of that per 1% of wear), turbulence +3%/s, no helium +5%/s; the warning; 2 min lock. */
+    public static final int HEAT_MAX = 1000, HEAT_BASE = 10, HEAT_TURB = 30, HEAT_NO_HE = 50, HEAT_WARN = 850, OVERHEAT_LOCK_S = 120;
+
+    /** The stability of an open vortex and what took it down (each part as a positive percent). */
+    public static final class Stab {
+        public int missing, wear, mass, interference, storm, argon, total;
+
+        public int[] parts() {
+            return new int[]{missing, wear, mass, interference, storm, argon, total};
+        }
+    }
+
+    /** Stability lost to wear: nothing up to WEAR_FREE, then 0.5% per 1%. */
+    public static int wearStab(int wear) {
+        return Math.max(0, Math.min(MAX_WEAR, wear) - WEAR_FREE) / WEAR_STAB_DIV;
+    }
+
+    /** Stability lost to the mass that passed in the last MASS_TICKS (tenths of a unit). */
+    public static int massStab(int tenths, boolean compensator) {
+        return Math.max(0, tenths) * MASS_STAB_PER_UNIT / (10 * (compensator ? 2 : 1));
+    }
+
+    /** EU one pass of `tenths` mass costs. */
+    public static long massEu(int tenths, boolean compensator) {
+        return Math.max(0, tenths) * MASS_EU_PER_UNIT / 10 / (compensator ? 2 : 1);
+    }
+
+    /**
+     * С3: the vortex's stability now - 100 minus the missing stabilisers, the wear, the mass load, another bridge
+     * near, a thunderstorm at an end and the argon shortage (argonDeficit, argonStep).
+     */
+    public static Stab stability(int stabilisers, int wear, int massTenths, boolean compensator, boolean interference, boolean storm, int argonDeficit) {
+        Stab s = new Stab();
+        s.missing = 100 - baseStability(stabilisers);
+        s.wear = wearStab(wear);
+        s.mass = massStab(massTenths, compensator);
+        s.interference = interference ? INTERFERENCE_STAB : 0;
+        s.storm = storm ? STORM_STAB : 0;
+        s.argon = Math.max(0, argonDeficit);
+        s.total = Math.max(0, Math.min(100, 100 - s.missing - s.wear - s.mass - s.interference - s.storm - s.argon));
+        return s;
+    }
+
+    /** One second of argon: short - the deficit grows ARGON_LOSS, back - it shrinks STAB_RECOVER. */
+    public static int argonStep(int deficit, boolean argonShort) {
+        return argonShort ? Math.min(100, deficit + ARGON_LOSS) : Math.max(0, deficit - STAB_RECOVER);
+    }
+
+    /** С2: what one opening wears (1-3%): +1 far (or another dimension), +1 heavy (mass) or hot. */
+    public static int wearPerOpen(long distance, boolean otherDim, int massTenths, int peakHeatPct) {
+        int w = 1;
+        if (otherDim || distance >= WEAR_FAR) {
+            w++;
+        }
+        if (massTenths >= WEAR_MASS_TENTHS || peakHeatPct >= WEAR_HOT) {
+            w++;
+        }
+        return Math.min(3, w);
+    }
+
+    public static int repairHe(int wear) {
+        return Math.max(0, wear) * REPAIR_HE_PER_WEAR;
+    }
+
+    public static long repairEu(int wear) {
+        return Math.max(0, wear) * REPAIR_EU_PER_WEAR;
+    }
+
+    /** С12: one second of heat while open (tenths). */
+    public static int heatStep(int heat, int wear, int stability, boolean heliumShort) {
+        int rate = HEAT_BASE * (100 + 2 * Math.max(0, wear)) / 100 + (stability < TURBULENCE ? HEAT_TURB : 0) + (heliumShort ? HEAT_NO_HE : 0);
+        return Math.min(HEAT_MAX, Math.max(0, heat) + rate);
+    }
+
+    /** The heat (tenths) while the ring cools: down with the cooling left. */
+    public static int coolingHeat(int heatAtClose, int coolLeft, int coolTotal) {
+        return coolTotal <= 0 ? 0 : (int) ((long) Math.max(0, heatAtClose) * Math.max(0, coolLeft) / coolTotal);
+    }
+
+    /** The ring's coils: 0 dark, 1 glowing cold (blue), 2 warm (orange), 3 hot (red). */
+    public static int coilMeta(boolean open, int heat) {
+        int pct = heat / 10;
+        if (pct >= 75) {
+            return 3;
+        }
+        if (pct >= 40) {
+            return 2;
+        }
+        return open ? 1 : 0;
+    }
+
+    /** С5 / С7: how far a target point's end may scatter. */
+    public static int scatterRadius(boolean familiar, boolean beacon, boolean nav, boolean preciseFind, boolean scouting) {
+        if (preciseFind || beacon) {
+            return 0;
+        }
+        if (scouting) {
+            return SCATTER_SCOUT;
+        }
+        if (familiar) {
+            return 0;
+        }
+        return nav ? SCATTER_NAV : SCATTER_UNFAMILIAR;
+    }
+
+    /** A random offset {dx, dz} within `radius` blocks (round), {0, 0} for 0. */
+    public static int[] scatterOffset(java.util.Random r, int radius) {
+        if (radius <= 0) {
+            return new int[]{0, 0};
+        }
+        for (int i = 0; i < 64; i++) {
+            int dx = r.nextInt(2 * radius + 1) - radius, dz = r.nextInt(2 * radius + 1) - radius;
+            if (dx * dx + dz * dz <= radius * radius) {
+                return new int[]{dx, dz};
+            }
+        }
+        return new int[]{0, 0};
+    }
+
+    /** С5 / С6: the price of a familiar (-25%) or unfamiliar (+50%) target and the reactor's resonance (-20% EU). */
+    public static Cost adjust(Cost c, int famPct, boolean resonance) {
+        c.famPct = famPct;
+        c.resonance = resonance;
+        int k = 100 + famPct;
+        c.eu = c.eu * k / 100;
+        if (resonance) {
+            c.eu = c.eu * (100 - RESONANCE_PCT) / 100;
+        }
+        c.sm = (int) ((long) c.sm * k / 100);
+        c.kr = (int) ((long) c.kr * k / 100);
+        return c;
+    }
+
+    /** С6: how many of `others` ({x, y, z}) stand within `radius` of x y z (the same place not counted). */
+    public static int interferers(int x, int y, int z, java.util.List<int[]> others, int radius) {
+        int n = 0;
+        long r2 = (long) radius * radius;
+        for (int[] o : others) {
+            long dx = o[0] - x, dy = o[1] - y, dz = o[2] - z;
+            if ((dx != 0 || dy != 0 || dz != 0) && dx * dx + dy * dy + dz * dz <= r2) {
+                n++;
+            }
+        }
+        return n;
     }
 
     // ------------------------------------------------------------------ capacitors

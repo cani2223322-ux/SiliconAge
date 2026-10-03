@@ -228,6 +228,33 @@ public final class BridgeSpaceSC {
         return r;
     }
 
+    /**
+     * С3 turbulence: the nearest place a body can stand to (x, y, z) - a solid floor and two free cells - within
+     * `radius` blocks across and `dy` up or down; {x, y, z} or null.
+     */
+    public static int[] standSpot(Cells c, int x, int y, int z, int radius, int dy) {
+        for (int ring = 0; ring <= radius; ring++) {
+            for (int dx = -ring; dx <= ring; dx++) {
+                for (int dz = -ring; dz <= ring; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) {
+                        continue;
+                    }
+                    for (int k = 0; k <= 2 * dy; k++) {
+                        int py = y + (k + 1) / 2 * (k % 2 == 0 ? 1 : -1);
+                        if (py < 1 || py + 2 > c.height()) {
+                            continue;
+                        }
+                        int f = c.cell(x + dx, py - 1, z + dz), a = c.cell(x + dx, py, z + dz), b = c.cell(x + dx, py + 1, z + dz);
+                        if (f == SOLID && (a == AIR || a == PASS) && (b == AIR || b == PASS)) {
+                            return new int[]{x + dx, py, z + dz};
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     // ------------------------------------------------------------------ a real world
 
     /** The cells of a real world (loads the chunks it reads - server side, on a button press). */
