@@ -74,6 +74,9 @@ public final class BookContent {
             armor(list);
             field(list);
             safety(list);
+            BookMaterialsSC.materials(list);
+            BookReferenceSC.reference(list);
+            BookPathSC.path(list);                      // last: its steps link to (and name) the other articles
             list.add(new BookEntry("recipes", BookChapter.RECIPES, new ItemStack(Blocks.crafting_table), Lang.tr("sc.book.recipes.title"))
                     .add(BookEl.dim(Lang.tr("sc.manual.recipes.hint"))));
             byId = new HashMap<String, BookEntry>();
@@ -123,7 +126,7 @@ public final class BookContent {
         return e != null ? e : byStack.get(Item.itemRegistry.getNameForObject(s.getItem()) + ":*");
     }
 
-    private static String key(ItemStack s) {
+    static String key(ItemStack s) {
         String name = String.valueOf(Item.itemRegistry.getNameForObject(s.getItem()));
         return name + ":" + (s.getItemDamage() == OreDictionary.WILDCARD_VALUE ? "*" : String.valueOf(s.getItemDamage()));
     }
@@ -139,6 +142,10 @@ public final class BookContent {
             case ARMOR: return new ItemStack(ModItems.ARMOR.get(ArmorSuit.values()[ArmorSuit.values().length - 1])[1]);
             case FIELD: return new ItemStack(ModBlocks.fieldGeneratorSC);
             case SAFETY: return new ItemStack(ModItems.dosimeter);
+            case PATH: return new ItemStack(Items.compass);
+            case BRIDGE: return com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1);
+            case MATERIALS: return new ItemStack(ModItems.component("capacitor"));
+            case REFERENCE: return new ItemStack(Blocks.bookshelf);
             default: return new ItemStack(Blocks.crafting_table);
         }
     }
@@ -181,6 +188,8 @@ public final class BookContent {
             start.add(BookEl.check(STEPS[i], stepItems(i)[0], Lang.tr("sc.book.step." + STEPS[i])));
         }
         start.add(BookEl.gap()).addAll(paras("sc.manual.intro.start"));
+        start.add(BookEl.head(Lang.tr("sc.book.start.nexthead"))).add(BookEl.para(Lang.tr("sc.book.start.next")))
+                .add(BookEl.link("path.after", Lang.tr("sc.book.path_after"))).add(BookEl.link("path", Lang.tr("sc.book.path.title")));
         list.add(start);
         BookEl tiers = BookEl.table(Lang.tr("sc.book.t.tier"), Lang.tr("sc.book.t.voltage"), Lang.tr("sc.book.t.buffer"));
         for (Tier t : Tier.values()) {
@@ -459,11 +468,25 @@ public final class BookContent {
                 .addAll(paras("sc.manual.machines.vent", new Object[]{clear})));
         list.add(simple("wrench", c, new ItemStack(ModItems.WRENCHES.get(0)), "sc.manual.machines.wrenchhead", "sc.manual.machines.wrench")
                 .about(new ItemStack(ModItems.WRENCHES.get(0), 1, OreDictionary.WILDCARD_VALUE)));
-        BookEntry quarry = simple("quarry", c, new ItemStack(ModBlocks.quarrySC), "sc.manual.machines.quarryhead", "sc.manual.machines.quarry");
-        quarry.about(new ItemStack(ModBlocks.quarrySC, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModItems.quarryModule, 1, OreDictionary.WILDCARD_VALUE),
-                new ItemStack(ModItems.areaCard), new ItemStack(ModItems.oreLens, 1, OreDictionary.WILDCARD_VALUE));
+        // К8: the quarry in three articles - the quarry itself, its modules, the Exo Drilling Rig
+        BookEntry quarry = new BookEntry("quarry", c, new ItemStack(ModBlocks.quarrySC), Lang.tr("sc.manual.machines.quarryhead"));
+        quarry.add(BookEl.title(Lang.tr("sc.manual.machines.quarryhead")));
+        List<BookEl> qp = paras("sc.manual.machines.quarry");
+        quarry.add(qp.get(0)).add(qp.get(2)).add(BookEl.head(Lang.tr("sc.book.quarry.menuhead"))).add(qp.get(1));
+        quarry.add(BookEl.link("quarry.modules", Lang.tr("sc.book.quarry.modules"))).add(BookEl.link("quarry.exo", Lang.tr("sc.book.quarry.exo")));
+        quarry.about(new ItemStack(ModBlocks.quarrySC, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModItems.areaCard));
         crafting(quarry, new ItemStack(ModBlocks.quarrySC));
         list.add(quarry);
+        BookEntry qm = new BookEntry("quarry.modules", c, new ItemStack(ModItems.quarryModule), Lang.tr("sc.book.quarry.modules"));
+        qm.add(BookEl.title(Lang.tr("sc.book.quarry.modules"))).add(qp.get(3)).add(qp.get(4));
+        for (com.sc.item.ItemQuarryModuleSC.Kind k : com.sc.item.ItemQuarryModuleSC.Kind.values()) {
+            ItemStack s = ModItems.quarryModule.stackOf(k);
+            qm.add(BookEl.item(s, s.getDisplayName(), BookReferenceSC.quarryModuleLine(k)));
+        }
+        qm.about(new ItemStack(ModItems.quarryModule, 1, OreDictionary.WILDCARD_VALUE));
+        list.add(qm);
+        list.add(BookReferenceSC.exoRig(c));
+        list.add(BookReferenceSC.defects(c));
         int perTank = com.sc.machine.UpgradeType.TANK_PER_UPGRADE, maxTank = com.sc.machine.UpgradeType.MAX_TANK_UPGRADES;
         BookEntry up = simple("upgrades", c, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE), "sc.manual.machines.upgradeshead")
                 .addAll(paras("sc.manual.machines.upgrades", new Object[]{TileEntityMachineSC.UPGRADE_SLOTS, com.sc.machine.UpgradeType.MAX_EFFECTIVE,
@@ -487,7 +510,7 @@ public final class BookContent {
     }
 
     /** The crafting-table recipes that make this stack. */
-    private static void crafting(BookEntry e, ItemStack out) {
+    static void crafting(BookEntry e, ItemStack out) {
         List<IRecipe> found = craftingFor(out);
         if (!found.isEmpty()) {
             e.add(BookEl.head(Lang.tr("sc.book.craft")));
@@ -554,20 +577,33 @@ public final class BookContent {
             }
             crafting(e, st);
             list.add(e);
+            if (type == GeneratorType.SINGULAR_REACTOR) {            // К8: the fuel and the cycle, the accidents - their own articles
+                list.add(singularFuel(c, st));
+                list.add(singularSafety(c, st));
+            }
         }
     }
 
     /**
-     * The Singular Reactor's article: the build by layer, fuel, the cycle, mass and its window (a
-     * table), accidents, radiation - the texts under sc.manual.generator.sing.*.
+     * The Singular Reactor's main article: what it makes, the build by layer (a picture and the
+     * layers); the fuel and cycle, the accidents - singularFuel / singularSafety (sc.manual.generator.sing.*).
      */
     private static void singular(BookEntry e) {
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.byproducthead")))      // СМ2: singular matter while it runs
                 .add(BookEl.para(Lang.tr("sc.manual.generator.sing.byproduct", com.sc.tileentity.SingularReactorSC.SM_PER_SECOND,
                         com.sc.tileentity.SingularReactorSC.SM_TANK)));
-        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.buildhead"))).add(singularBuild())
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.buildhead"))).add(BookEl.image("singular_build", 300, 112))
+                .add(BookEl.dim(Lang.tr("sc.book.sing.buildimg"))).add(singularBuild())
                 .add(BookEl.items(materials(singularLayers()))).addAll(paras("sc.manual.generator.sing.build", null, null,
                         new Object[]{com.sc.tileentity.SingularReactorSC.TANKS_MAX, com.sc.tileentity.SingularReactorSC.STORES_MAX}));
+        e.add(BookEl.link("gen.singular_reactor.fuel", Lang.tr("sc.book.sing.fuel"))).add(BookEl.link("gen.singular_reactor.safety", Lang.tr("sc.book.sing.safety")));
+        e.about(new ItemStack(ModBlocks.gravityCoil));
+    }
+
+    /** The Singular Reactor's fuel, the cycle, the mass and its window. */
+    private static BookEntry singularFuel(BookChapter c, ItemStack st) {
+        BookEntry e = new BookEntry("gen.singular_reactor.fuel", c, new ItemStack(ModItems.component("matterCapsule")), Lang.tr("sc.book.sing.fuel"));
+        e.add(BookEl.title(Lang.tr("sc.book.sing.fuel")));
         // К14: the numbers of the fuel and the cycle straight from SingularReactorSC
         long ignition = com.sc.tileentity.SingularReactorSC.IGNITION_EU;
         int charge = com.sc.tileentity.SingularReactorSC.CHARGE_PER_TICK;
@@ -596,10 +632,19 @@ public final class BookContent {
         }
         e.add(t);
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.feedhead"))).addAll(paras("sc.manual.generator.sing.feed"));
+        e.add(BookEl.link("gen.singular_reactor", st.getDisplayName())).add(BookEl.link("gen.singular_reactor.safety", Lang.tr("sc.book.sing.safety")));
+        return e;
+    }
+
+    /** The Singular Reactor's accidents, radiation and its screen. */
+    private static BookEntry singularSafety(BookChapter c, ItemStack st) {
+        BookEntry e = new BookEntry("gen.singular_reactor.safety", c, new ItemStack(ModItems.dosimeter), Lang.tr("sc.book.sing.safety"));
+        e.add(BookEl.title(Lang.tr("sc.book.sing.safety")));
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.accidenthead"))).addAll(paras("sc.manual.generator.sing.accident"));
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.radhead"))).addAll(paras("sc.manual.generator.sing.rad"));
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.screenhead"))).addAll(paras("sc.manual.generator.sing.screen"));
-        e.about(new ItemStack(ModBlocks.gravityCoil));
+        e.add(BookEl.link("gen.singular_reactor", st.getDisplayName())).add(BookEl.link("radiation", Lang.tr("sc.manual.safety.radiationhead")));
+        return e;
     }
 
     /** The 7x7x5, floor to cap: lead floor; coil ring and walls with ports; the reactor, walls and ports; coils again; the cap with a window. */
@@ -633,7 +678,7 @@ public final class BookContent {
         return BookEl.layers(singularLayers(), names);
     }
 
-    private static String fuel(GeneratorType type) {
+    static String fuel(GeneratorType type) {
         switch (type.kind) {
             case PASSIVE: return Lang.tr("sc.manual.machines.passive");
             case FUSION: return Lang.tr("sc.manual.machines.fusioninfo", String.valueOf(type.ignitionThreshold()), TileEntityGeneratorSC.CELL_BURN_TICKS / 1200);
@@ -713,10 +758,15 @@ public final class BookContent {
             cables.row(s, s.getDisplayName(), type.tier.name(), String.valueOf(type.maxAmps), String.valueOf(type.maxThroughput()), String.valueOf(type.lossPerBlock));
         }
         ce.add(BookEl.title(Lang.tr("sc.manual.energy.cables"))).add(cables).addAll(paras("sc.manual.energy.rules"))
-                .add(BookEl.head(Lang.tr("sc.manual.energy.bundlehead"))).addAll(paras("sc.manual.energy.bundle"))
-                .addAll(paras("sc.manual.energy.cablesv"))
-                .about(new ItemStack(ModBlocks.cableSC, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModBlocks.conduitBundle, 1, OreDictionary.WILDCARD_VALUE));
+                .addAll(paras("sc.manual.energy.cablesv")).add(BookEl.link("bundles", Lang.tr("sc.manual.energy.bundlehead")))
+                .about(new ItemStack(ModBlocks.cableSC, 1, OreDictionary.WILDCARD_VALUE));
         list.add(ce);
+        // К8: the conduit bundles - their own article
+        list.add(new BookEntry("bundles", c, new ItemStack(ModBlocks.conduitBundle), Lang.tr("sc.manual.energy.bundlehead"))
+                .add(BookEl.title(Lang.tr("sc.manual.energy.bundlehead"))).addAll(paras("sc.manual.energy.bundle"))
+                .add(BookEl.link("cables", Lang.tr("sc.manual.energy.cables"))).add(BookEl.link("pipes", Lang.tr("sc.manual.energy.pipes")))
+                .add(BookEl.link("tube", new ItemStack(ModBlocks.tubeItemPneumatic).getDisplayName()))
+                .about(new ItemStack(ModBlocks.conduitBundle, 1, OreDictionary.WILDCARD_VALUE)));
         BookEntry st = new BookEntry("storage", c, new ItemStack(ModBlocks.energyStorageSC, 1, 2), Lang.tr("sc.manual.energy.storagehead"));
         st.add(BookEl.title(Lang.tr("sc.manual.energy.storagehead")));
         for (Tier tier : Tier.values()) {
@@ -741,12 +791,16 @@ public final class BookContent {
         // the two storage-only modules: the Output Splitter and the Adaptive Transformer
         ItemStack splitter = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OUTPUT_SPLITTER);
         ItemStack adaptive = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ADAPTIVE_TRANSFORMER);
-        st.add(BookEl.head(Lang.tr("sc.manual.energy.storagemodshead")))
-                .add(BookEl.item(splitter, splitter.getDisplayName(), Lang.tr("sc.manual.energy.storagemod.splitter")))
-                .add(BookEl.item(adaptive, adaptive.getDisplayName(), Lang.tr("sc.manual.energy.storagemod.adaptive")))
-                .addAll(paras("sc.manual.energy.storagemods"))
+        st.add(BookEl.link("storagemods", Lang.tr("sc.manual.energy.storagemodshead")))
                 .about(new ItemStack(ModBlocks.energyStorageSC, 1, OreDictionary.WILDCARD_VALUE));
         list.add(st);
+        // К8: the storage-only modules - their own article
+        list.add(new BookEntry("storagemods", c, splitter, Lang.tr("sc.manual.energy.storagemodshead"))
+                .add(BookEl.title(Lang.tr("sc.manual.energy.storagemodshead")))
+                .add(BookEl.item(splitter, splitter.getDisplayName(), Lang.tr("sc.manual.energy.storagemod.splitter")))
+                .add(BookEl.item(adaptive, adaptive.getDisplayName(), Lang.tr("sc.manual.energy.storagemod.adaptive")))
+                .addAll(paras("sc.manual.energy.storagemods")).add(BookEl.link("storage", Lang.tr("sc.manual.energy.storagehead")))
+                .add(BookEl.link("modules", Lang.tr("sc.book.modules.title"))));
         StringBuilder padSuits = new StringBuilder();         // "Nano Suit from MV, ... Singular Suit from SV" from ArmorSuit.chargeTier
         for (ArmorSuit suit : ArmorSuit.values()) {
             padSuits.append(padSuits.length() == 0 ? "" : ", ").append(Lang.tr("sc.book.suitfrom",
@@ -955,7 +1009,7 @@ public final class BookContent {
     private static void singularStation(List<BookEntry> list, BookChapter c) {
         ItemStack st = new ItemStack(ModBlocks.singularStation), stab = new ItemStack(ModBlocks.gravStabiliser);
         BookEntry e = new BookEntry("singularstation", c, st, st.getDisplayName());
-        e.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st, stab)))
+        e.add(BookEl.title(st.getDisplayName())).add(BookEl.image("singular_station", 300, 117)).add(BookEl.items(listOf(st, stab)))
                 .addAll(paras("sc.manual.singstation", new Object[]{com.sc.util.ArmorGasSC.Gas.values().length}));
         e.add(BookEl.head(Lang.tr("sc.manual.singstation.costhead")));
         e.add(BookEl.para(Lang.tr("sc.manual.singstation.cost", 100 - com.sc.util.SingularStationMath.SET_PERCENT)));
@@ -1048,12 +1102,21 @@ public final class BookContent {
                 com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER.ordinal() + 1}));
         e.add(BookEl.items(listOf(com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, com.sc.item.ItemSingularCellSC.CAPACITY),
                 machineStack(com.sc.machine.MachineType.MATTER_COMPRESSOR), ModBlocks.generatorStack(com.sc.energy.GeneratorType.SINGULAR_REACTOR, 1))));
-        e.add(BookEl.head(Lang.tr("sc.manual.singular.schemeshead"))).addAll(paras("sc.manual.singular.schemes"));
+        e.add(BookEl.link("singulararmor.fn", Lang.tr("sc.book.singfn.title"))).add(BookEl.link("singulararmor.schemes", Lang.tr("sc.manual.singular.schemeshead")))
+                .add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()));
+        list.add(e);
+        // К8: the colour schemes (with the picture) and the functions / levels - their own articles
+        BookEntry sch = new BookEntry("singulararmor.schemes", c, new ItemStack(pieces[0]), Lang.tr("sc.manual.singular.schemeshead"));
+        sch.add(BookEl.title(Lang.tr("sc.manual.singular.schemeshead"))).add(BookEl.image("singular_schemes", 300, 166))
+                .addAll(paras("sc.manual.singular.schemes"));
         StringBuilder names = new StringBuilder();
         for (com.sc.util.SingularScheme sc : com.sc.util.SingularScheme.values()) {
             names.append(names.length() > 0 ? ", " : "").append(sc.name()).append(" - ").append(Lang.tr(sc.langKey()));
         }
-        e.add(BookEl.dim(names.toString()));
+        sch.add(BookEl.dim(names.toString())).add(BookEl.link("singulararmor", Lang.tr("sc.manual.singular.head")));
+        list.add(sch);
+        e = new BookEntry("singulararmor.fn", c, new ItemStack(pieces[2]), Lang.tr("sc.book.singfn.title"));
+        e.add(BookEl.title(Lang.tr("sc.book.singfn.title")));
         // its own functions (stage 2a on): each with its piece and the level it opens at
         e.add(BookEl.head(Lang.tr("sc.manual.singular.fnhead"))).addAll(paras("sc.manual.singular.fn"));
         for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
@@ -1067,7 +1130,8 @@ public final class BookContent {
         // stage 5: the K menu's Level tab, the function profiles (M4), the cooldown HUD (M3)
         e.add(BookEl.head(Lang.tr("sc.manual.singular.levelhead"))).addAll(paras("sc.manual.singular.level"));
         e.add(BookEl.gap()).add(BookEl.para(Lang.tr("sc.manual.singular.next")))
-                .add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()));
+                .add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()))
+                .add(BookEl.link("singulararmor", Lang.tr("sc.manual.singular.head"))).add(BookEl.link("bridge.armour", Lang.tr("sc.book.bridge_armour.title")));
         list.add(e);
     }
 
@@ -1281,7 +1345,7 @@ public final class BookContent {
     // ------------------------------------------------------------------ shared
 
     /** A title and the paragraphs of one or more lang blocks. */
-    private static BookEntry simple(String id, BookChapter c, ItemStack icon, String titleKey, String... paraKeys) {
+    static BookEntry simple(String id, BookChapter c, ItemStack icon, String titleKey, String... paraKeys) {
         BookEntry e = new BookEntry(id, c, icon, Lang.tr(titleKey));
         e.add(BookEl.title(Lang.tr(titleKey)));
         for (String k : paraKeys) {
@@ -1380,7 +1444,7 @@ public final class BookContent {
         return "ru".equals(Lang.trOr("sc.book.lang", "en")) ? s : s.replace(' ', ',');
     }
 
-    private static List<ItemStack> listOf(ItemStack... s) {
+    static List<ItemStack> listOf(ItemStack... s) {
         List<ItemStack> l = new ArrayList<ItemStack>();
         for (ItemStack x : s) {
             l.add(x);
@@ -1422,99 +1486,188 @@ public final class BookContent {
         }
     }
 
-    // ------------------------------------------------------------------ the Ground / Space Bridge (stage 1)
+    // ------------------------------------------------------------------ the Ground / Space Bridge (its own chapter, К4)
 
-    /** The Ground and Space Bridge (docs/plan-ground-bridge.md, stages 1-3): the builds, resources, opening, own coordinates, remotes, wear, stability, familiar places. */
+    private static ItemStack bridgePart(int part) {
+        return com.sc.block.BlockBridgeSC.stack(part, 1);
+    }
+
+    /** The crafting cards of these stacks, under one "Craft" heading. */
+    static void crafts(BookEntry e, ItemStack... stacks) {
+        boolean head = false;
+        for (ItemStack s : stacks) {
+            for (IRecipe r : craftingFor(s)) {
+                if (!head) {
+                    e.add(BookEl.head(Lang.tr("sc.book.craft")));
+                    head = true;
+                }
+                e.add(BookEl.craft(r));
+            }
+        }
+    }
+
+    /** The links to the bridge chapter's other articles (their titles: sc.book.bridge_*.title). */
+    private static void bridgeLinks(BookEntry e, String... ids) {
+        for (String id : ids) {
+            e.add(BookEl.link(id, Lang.tr("sc.book." + id.replace('.', '_') + ".title")));
+        }
+    }
+
+    /**
+     * The Ground and Space Bridge (docs/plan-ground-bridge.md): six articles - the build, resources and
+     * opening, remotes / modes / access, the Singular armour link, wear / stability / heat, familiar
+     * places and the modules. Each part's and item's G key opens the article about it.
+     */
     private static void bridge(List<BookEntry> list) {
-        ItemStack ctrl = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1);
-        BookEntry e = new BookEntry("bridge", BookChapter.GENERATORS, ctrl, Lang.tr("sc.manual.bridge.title"));
+        BookChapter ch = BookChapter.BRIDGE;
+        final int ctrl = com.sc.block.BlockBridgeSC.CONTROLLER;
+        ItemStack ground = new ItemStack(ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND);
+        ItemStack space = new ItemStack(ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE);
+        ItemStack coord = new ItemStack(ModItems.coordinator), link = new ItemStack(ModItems.bridgeLinkModule);
+        ItemStack coil = new ItemStack(ModBlocks.gravityCoil);
+        // 1. the build
+        BookEntry b = new BookEntry("bridge", ch, bridgePart(ctrl), Lang.tr("sc.book.bridge.title"));
         List<ItemStack> parts = new ArrayList<ItemStack>();
         for (int i = 0; i < com.sc.block.BlockBridgeSC.parts(); i++) {
-            parts.add(com.sc.block.BlockBridgeSC.stack(i, 1));
+            parts.add(bridgePart(i));
         }
-        parts.add(new ItemStack(ModBlocks.gravityCoil));
+        parts.add(coil);
         parts.add(new ItemStack(ModBlocks.gravStabiliser));
-        parts.add(new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND));
-        parts.add(new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE));
-        parts.add(new ItemStack(com.sc.init.ModItems.coordinator));
-        parts.add(new ItemStack(com.sc.init.ModItems.bridgeLinkModule));
-        e.add(BookEl.title(Lang.tr("sc.manual.bridge.title"))).add(BookEl.items(parts)).addAll(paras("sc.manual.bridge.about"));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.groundhead"))).add(BookEl.layers(bridgeLayers(5), new String[]{Lang.tr("sc.manual.bridge.front")}))
+        parts.add(ground);
+        parts.add(space);
+        parts.add(coord);
+        parts.add(link);
+        b.add(BookEl.title(Lang.tr("sc.manual.bridge.title"))).add(BookEl.items(parts)).addAll(paras("sc.manual.bridge.about"));
+        b.add(BookEl.head(Lang.tr("sc.manual.bridge.groundhead"))).add(BookEl.image("bridge_ground", 300, 194))
+                .add(BookEl.layers(bridgeLayers(5), new String[]{Lang.tr("sc.manual.bridge.front")}))
                 .addAll(paras("sc.manual.bridge.ground", null, null, new Object[]{com.sc.bridge.BridgeStructureSC.SIDE_CLEAR, BridgeMathSC.MAX_STABILISERS,
                         BridgeMathSC.STAB_RANGE, BridgeMathSC.STAB_LIFE_PERCENT}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.spacehead"))).add(BookEl.layers(bridgeLayers(7), new String[]{Lang.tr("sc.manual.bridge.front")}))
-                .addAll(paras("sc.manual.bridge.space"));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.calibhead")))
-                .add(BookEl.para(Lang.tr("sc.manual.bridge.calib", com.sc.bridge.BridgeMathSC.CALIB_KR,
-                        com.sc.bridge.BridgeMathSC.CALIB_EU / 1000000)));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.reshead")));
-        com.sc.bridge.BridgeMathSC.Cost g = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.GROUND, new long[]{0}, false, false, 0);
-        com.sc.bridge.BridgeMathSC.Cost s = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.SPACE, new long[]{0}, false, false, 0);
-        com.sc.bridge.BridgeMathSC.Cost sa = com.sc.bridge.BridgeMathSC.cost(com.sc.bridge.BridgeMathSC.SPACE, new long[]{0}, false, true, 0);
+        b.add(BookEl.head(Lang.tr("sc.manual.bridge.spacehead"))).add(BookEl.image("bridge_space", 300, 239))
+                .add(BookEl.layers(bridgeLayers(7), new String[]{Lang.tr("sc.manual.bridge.front")})).addAll(paras("sc.manual.bridge.space"));
+        b.add(BookEl.head(Lang.tr("sc.manual.bridge.calibhead")))
+                .add(BookEl.para(Lang.tr("sc.manual.bridge.calib", BridgeMathSC.CALIB_KR, BridgeMathSC.CALIB_EU / 1000000)));
+        crafts(b, bridgePart(ctrl), bridgePart(com.sc.block.BlockBridgeSC.CAPACITOR), bridgePart(com.sc.block.BlockBridgeSC.ENERGY_PORT),
+                bridgePart(com.sc.block.BlockBridgeSC.GAS_PORT), bridgePart(com.sc.block.BlockBridgeSC.FOCUSER), coil);
+        b.add(BookEl.dim(Lang.tr("sc.book.bridge.stabcraft"))).add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()));
+        bridgeLinks(b, "bridge.res", "bridge.remote", "bridge.armour", "bridge.wear", "bridge.places");
+        b.about(bridgePart(ctrl), bridgePart(com.sc.block.BlockBridgeSC.CAPACITOR), bridgePart(com.sc.block.BlockBridgeSC.ENERGY_PORT),
+                bridgePart(com.sc.block.BlockBridgeSC.GAS_PORT), bridgePart(com.sc.block.BlockBridgeSC.FOCUSER));
+        list.add(b);
+
+        // 2. resources and opening, own coordinates (in the air too, the soft landing)
+        BookEntry r = new BookEntry("bridge.res", ch, bridgePart(com.sc.block.BlockBridgeSC.CAPACITOR), Lang.tr("sc.book.bridge_res.title"));
+        r.add(BookEl.title(Lang.tr("sc.book.bridge_res.title"))).add(BookEl.head(Lang.tr("sc.manual.bridge.reshead")));
+        BridgeMathSC.Cost g = BridgeMathSC.cost(BridgeMathSC.GROUND, new long[]{0}, false, false, 0);
+        BridgeMathSC.Cost s = BridgeMathSC.cost(BridgeMathSC.SPACE, new long[]{0}, false, false, 0);
+        BridgeMathSC.Cost sa = BridgeMathSC.cost(BridgeMathSC.SPACE, new long[]{0}, false, true, 0);
         BookEl t = BookEl.table("", Lang.tr("sc.manual.bridge.t.ground"), Lang.tr("sc.manual.bridge.t.space"));
         String m = Lang.tr("sc.bridge.unit.m");
-        t.row(null, Lang.tr("sc.manual.bridge.t.burst"), Lang.tr("sc.manual.bridge.t.burstg", g.eu / 1000000, com.sc.bridge.BridgeMathSC.GROUND_PER_1000 / 1000000),
+        t.row(null, Lang.tr("sc.manual.bridge.t.burst"), Lang.tr("sc.manual.bridge.t.burstg", g.eu / 1000000, BridgeMathSC.GROUND_PER_1000 / 1000000),
                 Lang.tr("sc.manual.bridge.t.bursts", sa.eu / 1000000, s.eu / 1000000));
         t.row(null, Lang.tr("sc.bridge.res.gas.singular_matter"), Lang.tr("sc.manual.bridge.t.smg", g.sm), Lang.tr("sc.manual.bridge.t.sms", s.sm, sa.sm));
         t.row(null, Lang.tr("sc.bridge.res.gas.deuterium"), String.valueOf(g.d), String.valueOf(s.d));
         t.row(null, Lang.tr("sc.bridge.res.gas.krypton"), Lang.tr("sc.manual.bridge.t.krg", g.kr), Lang.tr("sc.manual.bridge.t.krs", s.kr, sa.kr));
         t.row(null, Lang.tr("sc.bridge.res.gas.argon"), String.valueOf(g.ar), String.valueOf(s.ar));
-        t.row(null, Lang.tr("sc.manual.bridge.t.hold"), com.sc.bridge.BridgeMathSC.group(g.holdEu) + " EU/t", com.sc.bridge.BridgeMathSC.group(s.holdEu) + " EU/t");
+        t.row(null, Lang.tr("sc.manual.bridge.t.hold"), BridgeMathSC.group(g.holdEu) + " EU/t", BridgeMathSC.group(s.holdEu) + " EU/t");
         t.row(null, Lang.tr("sc.manual.bridge.t.gases"), Lang.tr("sc.manual.bridge.t.gasesg", g.heSec, g.arSec), Lang.tr("sc.manual.bridge.t.gasess", s.heSec, s.arSec, s.d2oSec));
         t.row(null, Lang.tr("sc.manual.bridge.t.life"), Lang.tr("sc.manual.bridge.t.lifev", g.lifeTicks / 20, g.lifeTicks / 10),
                 Lang.tr("sc.manual.bridge.t.lifev", s.lifeTicks / 20, s.lifeTicks / 10));
-        e.add(t);
+        r.add(t);
         StringBuilder tanks = new StringBuilder();
-        for (int i = 0; i < com.sc.bridge.BridgeMathSC.GASES.length; i++) {
-            tanks.append(i > 0 ? ", " : "").append(Lang.tr("sc.bridge.res.gas." + com.sc.bridge.BridgeMathSC.GASES[i].key())).append(' ')
-                    .append(com.sc.bridge.BridgeMathSC.group(com.sc.bridge.BridgeMathSC.BASE_TANK[i]));
+        for (int i = 0; i < BridgeMathSC.GASES.length; i++) {
+            tanks.append(i > 0 ? ", " : "").append(Lang.tr("sc.bridge.res.gas." + BridgeMathSC.GASES[i].key())).append(' ')
+                    .append(BridgeMathSC.group(BridgeMathSC.BASE_TANK[i]));
         }
-        e.add(BookEl.para(Lang.tr("sc.manual.bridge.tanks", tanks.toString(), com.sc.bridge.BridgeMathSC.EXTRA_PORT_PERCENT,
-                com.sc.bridge.BridgeMathSC.shortEu(com.sc.bridge.BridgeMathSC.CAPACITOR_EU, m, Lang.tr("sc.bridge.unit.g")))));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.openhead"))).addAll(paras("sc.manual.bridge.open", null, new Object[]{BridgeMathSC.SHORT_GRACE_S, BridgeMathSC.STAB_FOLD}));
-        e.add(BookEl.para(Lang.tr("sc.manual.bridge.cool", com.sc.bridge.BridgeMathSC.COOL_S, com.sc.bridge.BridgeMathSC.COOL_S / com.sc.bridge.BridgeMathSC.COOLER_SPEED)));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.coordhead"))).addAll(paras("sc.manual.bridge.coord", null, new Object[]{BridgeMathSC.BEACON_DISCOUNT},
+        r.add(BookEl.para(Lang.tr("sc.manual.bridge.tanks", tanks.toString(), BridgeMathSC.EXTRA_PORT_PERCENT,
+                BridgeMathSC.shortEu(BridgeMathSC.CAPACITOR_EU, m, Lang.tr("sc.bridge.unit.g")))));
+        List<ItemStack> gases = new ArrayList<ItemStack>();
+        gases.add(com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, com.sc.item.ItemSingularCellSC.CAPACITY));
+        for (String f : new String[]{"krypton", "liquidhelium", "argon", "deuterium", "heavywater"}) {
+            gases.add(new ItemStack(ModItems.fluidBucket, 1, java.util.Arrays.asList(com.sc.item.ItemFluidBucketSC.FLUIDS).indexOf(f)));
+        }
+        r.add(BookEl.items(gases)).add(BookEl.link("fluidlist", Lang.tr("sc.book.fluidlist.title")));
+        r.add(BookEl.head(Lang.tr("sc.manual.bridge.openhead"))).addAll(paras("sc.manual.bridge.open", null, new Object[]{BridgeMathSC.SHORT_GRACE_S, BridgeMathSC.STAB_FOLD}));
+        r.add(BookEl.para(Lang.tr("sc.manual.bridge.cool", BridgeMathSC.COOL_S, BridgeMathSC.COOL_S / BridgeMathSC.COOLER_SPEED)));
+        r.add(BookEl.head(Lang.tr("sc.manual.bridge.coordhead"))).addAll(paras("sc.manual.bridge.coord", null, new Object[]{BridgeMathSC.BEACON_DISCOUNT},
                 new Object[]{com.sc.bridge.BridgeSoftLandSC.MAX_TICKS / 20}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.modhead"))).addAll(paras("sc.manual.bridge.mod"));
-        // stage 2: remotes, the coordinator, the modes, access and consent, the Singular armour link
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.remotehead"))).add(BookEl.items(listOf(
-                new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND),
-                new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE),
-                new ItemStack(com.sc.init.ModItems.coordinator)))).addAll(paras("sc.manual.bridge.remote", new Object[]{BridgeMathSC.REMOTE_SIGNAL_EU / 1000000},
-                new Object[]{BridgeMathSC.REMOTE_MODE_EU}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.modeshead"))).addAll(paras("sc.manual.bridge.modes", null, new Object[]{BridgeMathSC.PROJECTION_AHEAD}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.accesshead"))).addAll(paras("sc.manual.bridge.access", new Object[]{BridgeMathSC.MAX_FRIENDS},
+        bridgeLinks(r, "bridge.remote", "bridge.wear");
+        list.add(r);
+
+        // 3. remotes, the coordinator, the modes, access and consent
+        BookEntry rm = new BookEntry("bridge.remote", ch, ground, Lang.tr("sc.book.bridge_remote.title"));
+        rm.add(BookEl.title(Lang.tr("sc.book.bridge_remote.title"))).add(BookEl.head(Lang.tr("sc.manual.bridge.remotehead")))
+                .add(BookEl.items(listOf(ground, space, coord)))
+                .addAll(paras("sc.manual.bridge.remote", new Object[]{BridgeMathSC.REMOTE_SIGNAL_EU / 1000000}, new Object[]{BridgeMathSC.REMOTE_MODE_EU}));
+        rm.add(BookEl.head(Lang.tr("sc.manual.bridge.modeshead"))).addAll(paras("sc.manual.bridge.modes", null, new Object[]{BridgeMathSC.PROJECTION_AHEAD}));
+        rm.add(BookEl.head(Lang.tr("sc.manual.bridge.accesshead"))).addAll(paras("sc.manual.bridge.access", new Object[]{BridgeMathSC.MAX_FRIENDS},
                 new Object[]{BridgeMathSC.CONSENT_RADIUS, BridgeMathSC.CONSENT_TICKS / 20}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.armourhead"))).add(BookEl.items(listOf(new ItemStack(com.sc.init.ModItems.bridgeLinkModule))))
-                .addAll(paras("sc.manual.bridge.armour", new Object[]{BridgeMathSC.MAX_LINKS}, new Object[]{BridgeMathSC.LOOK_RANGE, BridgeMathSC.PROBE_KR, BridgeMathSC.ARMOUR_DISCOUNT}));
-        // stage 3 (§9, §11): wear and repair, stability (mass, interference), heat and overheating, familiar places and scouting, the look
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.wearhead"))).addAll(paras("sc.manual.bridge.wear", new Object[]{BridgeMathSC.WEAR_FAR, BridgeMathSC.WEAR_FREE, BridgeMathSC.WEAR_STAB_DIV},
+        crafts(rm, ground, space, coord);
+        rm.add(BookEl.link("multiplayer", Lang.tr("sc.book.multiplayer.title")));
+        bridgeLinks(rm, "bridge.armour");
+        rm.about(ground, space, new ItemStack(ModItems.bridgeRemote, 1, OreDictionary.WILDCARD_VALUE), coord);
+        list.add(rm);
+
+        // 4. the Singular armour link
+        BookEntry ar = new BookEntry("bridge.armour", ch, link, Lang.tr("sc.book.bridge_armour.title"));
+        ar.add(BookEl.title(Lang.tr("sc.book.bridge_armour.title"))).add(BookEl.items(listOf(link, new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[0]))))
+                .addAll(paras("sc.manual.bridge.armour", new Object[]{BridgeMathSC.MAX_LINKS},
+                        new Object[]{BridgeMathSC.LOOK_RANGE, BridgeMathSC.PROBE_KR, BridgeMathSC.ARMOUR_DISCOUNT}));
+        crafts(ar, link);
+        ar.add(BookEl.link("singulararmor", Lang.tr("sc.manual.singular.head"))).add(BookEl.link("keys", Lang.tr("sc.book.keys.title")));
+        ar.about(link);
+        list.add(ar);
+
+        // 5. wear and repair, stability (mass, interference), heat and overheating, the look
+        BookEntry w = new BookEntry("bridge.wear", ch, coil, Lang.tr("sc.book.bridge_wear.title"));
+        w.add(BookEl.title(Lang.tr("sc.book.bridge_wear.title")));
+        w.add(BookEl.head(Lang.tr("sc.manual.bridge.wearhead"))).addAll(paras("sc.manual.bridge.wear", new Object[]{BridgeMathSC.WEAR_FAR, BridgeMathSC.WEAR_FREE, BridgeMathSC.WEAR_STAB_DIV},
                 new Object[]{BridgeMathSC.REPAIR_HE_PER_WEAR, BridgeMathSC.REPAIR_EU_PER_WEAR / 1000000, BridgeMathSC.COIL_SWAP_WEAR}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.stabhead"))).addAll(paras("sc.manual.bridge.stab", new Object[]{BridgeMathSC.STAB_MISSING_PERCENT},
+        w.add(BookEl.head(Lang.tr("sc.manual.bridge.stabhead"))).addAll(paras("sc.manual.bridge.stab", new Object[]{BridgeMathSC.STAB_MISSING_PERCENT},
                 new Object[]{BridgeMathSC.TURBULENCE, BridgeMathSC.TURB_SHIFT, BridgeMathSC.STAB_FOLD},
                 new Object[]{number(BridgeMathSC.MASS_PLAYER / 10F), number(BridgeMathSC.MASS_MOB / 10F), number(BridgeMathSC.MASS_ITEM / 10F), number(BridgeMathSC.MASS_CART / 10F),
                         BridgeMathSC.MASS_EU_PER_UNIT / 1000000, BridgeMathSC.MASS_STAB_PER_UNIT, BridgeMathSC.MASS_TICKS / 20},
                 new Object[]{BridgeMathSC.INTERFERENCE_RADIUS, BridgeMathSC.INTERFERENCE_STAB, BridgeMathSC.STORM_STAB, BridgeMathSC.RESONANCE_RADIUS, BridgeMathSC.RESONANCE_PCT}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.heathead"))).addAll(paras("sc.manual.bridge.heat", new Object[]{number(BridgeMathSC.HEAT_BASE / 10F)},
+        w.add(BookEl.head(Lang.tr("sc.manual.bridge.heathead"))).addAll(paras("sc.manual.bridge.heat", new Object[]{number(BridgeMathSC.HEAT_BASE / 10F)},
                 new Object[]{BridgeMathSC.OVERHEAT_LOCK_S / 60, BridgeMathSC.OVERHEAT_WEAR, BridgeMathSC.SHORT_GRACE_S}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.famhead"))).addAll(paras("sc.manual.bridge.fam", new Object[]{BridgeMathSC.FAMILIAR_CAP},
+        w.add(BookEl.head(Lang.tr("sc.manual.bridge.lookhead"))).addAll(paras("sc.manual.bridge.look"));
+        bridgeLinks(w, "bridge.places");
+        list.add(w);
+
+        // 6. familiar places, scouting, the modules (the beacon and the anchor among them)
+        BookEntry p = new BookEntry("bridge.places", ch, bridgePart(com.sc.block.BlockBridgeSC.NAV), Lang.tr("sc.book.bridge_places.title"));
+        p.add(BookEl.title(Lang.tr("sc.book.bridge_places.title")));
+        p.add(BookEl.head(Lang.tr("sc.manual.bridge.famhead"))).addAll(paras("sc.manual.bridge.fam", new Object[]{BridgeMathSC.FAMILIAR_CAP},
                 new Object[]{-BridgeMathSC.FAMILIAR_PCT, BridgeMathSC.UNFAMILIAR_PCT, BridgeMathSC.SCATTER_UNFAMILIAR, BridgeMathSC.SCATTER_NAV}, new Object[]{BridgeMathSC.SCATTER_SCOUT}));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.lookhead"))).addAll(paras("sc.manual.bridge.look"));
-        // the crafts (approved «все ★»): the parts, both gravity-coil recipes, the remotes, the coordinator and its copy, the link module
-        e.add(BookEl.head(Lang.tr("sc.book.craft")));
-        for (ItemStack p : parts) {
-            if (p.getItem() == Item.getItemFromBlock(ModBlocks.gravStabiliser)) {
-                continue;                                  // its recipe is in the Singular armour's article
-            }
-            for (IRecipe r : craftingFor(p)) {
-                e.add(BookEl.craft(r));
-            }
+        p.add(BookEl.head(Lang.tr("sc.manual.bridge.modhead"))).add(BookEl.dim(Lang.tr("sc.book.bridge.modrule")));
+        List<ItemStack> mods = new ArrayList<ItemStack>();
+        for (int i = com.sc.block.BlockBridgeSC.NAV; i < com.sc.block.BlockBridgeSC.parts(); i++) {
+            ItemStack mod = bridgePart(i);
+            mods.add(mod);
+            p.add(BookEl.item(mod, mod.getDisplayName(), bridgeModuleLine(i)));
         }
-        // the G key opens this article for every bridge part and item (the coil and the stabiliser have their own articles)
-        List<ItemStack> about = new ArrayList<ItemStack>(parts.subList(0, com.sc.block.BlockBridgeSC.parts()));
-        about.addAll(parts.subList(com.sc.block.BlockBridgeSC.parts() + 2, parts.size()));
-        e.about(about.toArray(new ItemStack[0]));
-        list.add(e);
+        crafts(p, mods.toArray(new ItemStack[0]));
+        bridgeLinks(p, "bridge");
+        p.about(mods.toArray(new ItemStack[0]));
+        list.add(p);
+    }
+
+    /** One bridge module's line (the numbers from BridgeMathSC, the controller and BridgeSpaceSC). */
+    static String bridgeModuleLine(int part) {
+        switch (part) {
+            case com.sc.block.BlockBridgeSC.NAV:
+                return Lang.tr("sc.book.bmod.navComputer", com.sc.tileentity.TileEntityBridgeControllerSC.BOOKMARKS_NAV,
+                        com.sc.tileentity.TileEntityBridgeControllerSC.BOOKMARKS, com.sc.bridge.BridgeSpaceSC.NEAR_RADIUS_NAV,
+                        com.sc.bridge.BridgeSpaceSC.NEAR_RADIUS, BridgeMathSC.SCATTER_NAV, BridgeMathSC.SCATTER_UNFAMILIAR);
+            case com.sc.block.BlockBridgeSC.COOLER:
+                return Lang.tr("sc.book.bmod.ringCooler", BridgeMathSC.COOLER_SPEED, BridgeMathSC.COOL_S / BridgeMathSC.COOLER_SPEED,
+                        BridgeMathSC.COOL_S, BridgeMathSC.COOLER_HE_PER_S);
+            case com.sc.block.BlockBridgeSC.BEACON:
+                return Lang.tr("sc.book.bmod.receiverBeacon", BridgeMathSC.BEACON_RADIUS, BridgeMathSC.BEACON_DISCOUNT);
+            case com.sc.block.BlockBridgeSC.ANCHOR:
+                return Lang.tr("sc.book.bmod.dimAnchor", BridgeMathSC.NO_ANCHOR_MUL, BridgeMathSC.SCATTER_SCOUT);
+            default:
+                return Lang.tr("sc.book.bmod." + com.sc.block.BlockBridgeSC.NAMES[part]);
+        }
     }
 
     /** The bridge seen from the front (one layer): the ring, the focusers (7x7), the controller row with its parts. */

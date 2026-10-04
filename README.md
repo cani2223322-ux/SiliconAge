@@ -54,7 +54,7 @@
 - **Меню-голоэкраны:** у каждой машины и генератора свой экран с анимированной сценой процесса (дробилка, CVD, степпер, турбины, реакторы, солнечные панели…), шкала энергии с процентами, полноразмерные баки с текстурой жидкости; тот же стиль у карьера, генератора поля и страниц NEI.
 - **Энергонакопители:** компаратор, выход поворачивается ключом, слот разрядки, модули (трансформатор, объём, форсаж, **расширитель выхода** — до 3 выходных граней, **адаптивный трансформатор** — повышает выход до уровня самого слабого потребителя, **универсальный трансформатор**), до 4 слотов зарядки на старших уровнях.
 - **Жидкости:** вёдра для всех 22 жидкостей мода, заливка и слив ведром или капсулой по машине, модуль расширенного бака и очистка баков за энергию.
-- **Иллюстрированный справочник инженера:** 10 разделов плитками, больше 130 статей с иконками предметов, сетками крафта, рецептами машин, картами руд, схемами мультиблоков и рисунками; поиск, закладки, «первые шаги» с галочками. Выдаётся при первом крафте любого предмета мода.
+- **Иллюстрированный справочник инженера:** 14 разделов плитками, больше 170 статей с иконками предметов, сетками крафта, рецептами машин, картами руд, схемами мультиблоков и рисунками; поиск, закладки, «первые шаги» с галочками. Выдаётся при первом крафте любого предмета мода.
 - **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое); на сервере настройки приходят игрокам с сервера. Блоки с содержимым ломаются только киркой — рукой ничего не потеряешь.
 
 ### Управление
@@ -134,7 +134,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 - **Holo-screen menus:** every machine and generator has its own screen with an animated scene of its process (crusher, CVD, stepper, turbines, reactors, solar panels...), an energy gauge with the percentage and full-size tank gauges in the fluid's texture; the quarry, the field generator and the NEI pages share the style.
 - **Energy storages:** comparator output, the output face turned with a wrench, a discharge slot, upgrades (transformer, capacity, overdrive, **output splitter** - up to 3 output faces, **adaptive transformer** - raises the output up to the weakest consumer's tier, **universal transformer**), up to 4 charge slots on the higher tiers.
 - **Fluids:** buckets for all 22 of the mod's fluids, filling and draining machines with a bucket or a cell, a tank extension upgrade and clearing tanks for energy.
-- **Illustrated engineer's handbook:** 10 chapter tiles, 130+ articles with item icons, crafting grids, machine recipes, ore cards, multiblock layouts and pictures; search, bookmarks, "first steps" with ticks. Given on the first craft of any item of the mod.
+- **Illustrated engineer's handbook:** 14 chapter tiles, 170+ articles with item icons, crafting grids, machine recipes, ore cards, multiblock layouts and pictures; search, bookmarks, "first steps" with ticks. Given on the first craft of any item of the mod.
 - **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more); on a server the players get the server's settings. Blocks that hold things break only with a pickaxe - nothing is lost by hand.
 
 ### Controls

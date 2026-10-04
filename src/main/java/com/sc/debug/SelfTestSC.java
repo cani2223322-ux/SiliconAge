@@ -281,18 +281,7 @@ public final class SelfTestSC {
      * Items and blocks that have no article (G finds nothing) yet - the next handbook task covers
      * them (components reference, new articles). Printed as INFO; shrink it as articles appear.
      */
-    private static final String[] BOOK_NOT_YET = {
-            "alFoil", "alFrame", "capacitor", "ceramicPackage", "ceramicRod", "coke", "combustionChamber", "compound", "copperCoil",
-            "crushedOreSC", "deuteriumCell", "dielectric", "drillHeadDiamond", "drillHeadExo", "drillHeadSteel", "drillHeadTungsten",
-            "dustSC", "dustTinySC", "energyCellHV", "energyCellLV", "energyCellMV", "focusLens", "fusionCore", "heLoopModule", "hfo2Die",
-            "ingotSC", "isotopeCapsule", "leadFrame16", "leadFrame3", "leadFrame40", "lens", "liBlanketModule", "limestoneSC",
-            "liquidHeCell", "nb3SnCoil", "nb3SnIngot", "nb3SnPlate", "oreScanner", "polymerHandle", "polymerPlate", "powerCoreFrame",
-            "ptfeSheet", "purifiedCrushedOreSC", "quartzChamber", "quartzEmitter", "resistor", "rubber", "rubberBlue", "rubberHeatResist",
-            "sensor", "sputterBacking", "steelCasing", "tantalumCapacitor", "tiCasing", "tiFrame", "tiPlate", "toolDIAMOND_BLADE",
-            "toolDIAMOND_WIRE", "toolMOLD_BLADE", "toolMOLD_COIL", "toolMOLD_LEAD_FRAME_16", "toolMOLD_LEAD_FRAME_3",
-            "toolMOLD_LEAD_FRAME_40", "toolMOLD_PLATE", "toolMOLD_TARGET", "toolPHOTOMASK", "toolSEED_CRYSTAL",
-            "toolSPUTTER_TARGET_ALUMINIUM", "toolSPUTTER_TARGET_COPPER", "toolSPUTTER_TARGET_TUNGSTEN", "turbineBladeTitanium",
-            "turbineBladeTungsten", "wBarrel", "wTiPlate", "windRotor"};
+    private static final String[] BOOK_NOT_YET = {};
 
     /**
      * К13: the handbook's texts - (a) every sc.manual.* / sc.book.* key in both en_US and ru_RU,
@@ -338,9 +327,13 @@ public final class SelfTestSC {
                 }
             }
         }
-        com.sc.manual.BookEntry be = com.sc.manual.BookContent.byId("bridge");
-        check(noBridge.length() == 0 && be != null && be.els.size() > 40, "book texts (c): the bridge article - " + bridge.length
-                + " keys in both languages, " + (be == null ? 0 : be.els.size()) + " elements" + noBridge);
+        java.util.List<com.sc.manual.BookEntry> bridgeChapter = com.sc.manual.BookContent.chapter(com.sc.manual.BookChapter.BRIDGE);
+        int bridgeEls = 0;
+        for (com.sc.manual.BookEntry e : bridgeChapter) {
+            bridgeEls += e.els.size();
+        }
+        check(noBridge.length() == 0 && bridgeChapter.size() == 6 && bridgeEls > 60, "book texts (c): the bridge chapter - " + bridge.length
+                + " keys in both languages, " + bridgeChapter.size() + " articles (6), " + bridgeEls + " elements" + noBridge);
         // (d) every item / block of the mod has an article (G opens it), or is listed as technical / not yet covered
         java.util.Set<String> covered = new java.util.HashSet<String>();
         for (com.sc.manual.BookEntry e : com.sc.manual.BookContent.all()) {
@@ -385,6 +378,59 @@ public final class SelfTestSC {
         check(mod > 50 && uncovered.isEmpty(), "book texts (d): " + mod + " items / blocks of the mod - " + withArticle
                 + " have an article, " + waiting.size() + " on the not-yet list, " + technical.size() + " technical"
                 + (uncovered.isEmpty() ? "" : "; with no article and on no list: " + uncovered));
+        bookPart2();
+    }
+
+    /**
+     * Handbook part 2: 14 chapters; the new articles (the Path, the Bridge chapter, the Components and Reference
+     * chapters, the split articles) build, have no raw keys; the pictures are in the jar; every item of the
+     * Components chapter opens an article with G; the quarry and the Exo rig have their own pages.
+     */
+    private static void bookPart2() {
+        String[] ids = {"path", "path.energy", "path.reactors", "path.suits", "path.radiation", "path.after", "bridge", "bridge.res", "bridge.remote",
+                "bridge.armour", "bridge.wear", "bridge.places", "materials", "mat.electronics", "mat.structure", "mat.power", "mat.ore", "mat.tools",
+                "mat.cells", "keys", "compat", "multiplayer", "fluidlist", "modules", "defects", "quarry.exo", "quarry.modules", "bundles", "storagemods",
+                "gen.singular_reactor.fuel", "gen.singular_reactor.safety", "singulararmor.schemes", "singulararmor.fn"};
+        StringBuilder bad = new StringBuilder();
+        for (String id : ids) {
+            com.sc.manual.BookEntry e = com.sc.manual.BookContent.byId(id);
+            if (e == null || e.els.size() < 3) {
+                bad.append(' ').append(id).append(e == null ? " missing" : " empty");
+            } else if (e.searchText().contains("sc.book.") || e.searchText().contains("sc.manual.") || e.searchText().contains("%s")
+                    || e.searchText().contains("%d")) {
+                bad.append(' ').append(id).append(" raw");
+            }
+        }
+        int images = 0;
+        StringBuilder noImage = new StringBuilder();
+        for (com.sc.manual.BookEntry e : com.sc.manual.BookContent.all()) {
+            for (com.sc.manual.BookEl el : e.els) {
+                if (el.kind == com.sc.manual.BookEl.Kind.IMAGE) {
+                    images++;
+                    if (SelfTestSC.class.getResource("/assets/siliconage/textures/gui/book/" + el.image + ".png") == null) {
+                        noImage.append(' ').append(el.image);
+                    }
+                }
+            }
+        }
+        StringBuilder noG = new StringBuilder();
+        for (com.sc.manual.BookEntry e : com.sc.manual.BookContent.chapter(com.sc.manual.BookChapter.MATERIALS)) {
+            for (ItemStack s : e.about) {
+                ItemStack probe = s.getItemDamage() == net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE ? new ItemStack(s.getItem(), 1, 0) : s;
+                if (com.sc.manual.BookContent.entryFor(probe) == null) {
+                    noG.append(' ').append(net.minecraft.item.Item.itemRegistry.getNameForObject(s.getItem()));
+                }
+            }
+        }
+        com.sc.manual.BookEntry rig = com.sc.manual.BookContent.entryFor(new ItemStack(com.sc.init.ModBlocks.quarrySC, 1, 4));
+        com.sc.manual.BookEntry lv = com.sc.manual.BookContent.entryFor(new ItemStack(com.sc.init.ModBlocks.quarrySC, 1, 0));
+        boolean quarries = rig != null && rig.id.equals("quarry.exo") && lv != null && lv.id.equals("quarry");
+        int chapters = com.sc.manual.BookChapter.values().length;
+        com.sc.manual.BookContent.invalidate();
+        check(chapters == 14 && bad.length() == 0 && images >= 9 && noImage.length() == 0 && noG.length() == 0 && quarries,
+                "book part 2: " + chapters + " chapters (14), " + ids.length + " new / split articles build with no raw keys, " + images
+                        + " pictures (>= 9) all in the jar, every component's G finds its page, the quarry / Exo rig pages ("
+                        + quarries + ")" + bad + (noImage.length() == 0 ? "" : "; no picture:" + noImage) + (noG.length() == 0 ? "" : "; no G:" + noG));
     }
 
     private static boolean isBookKey(String k) {
@@ -4967,22 +5013,30 @@ public final class SelfTestSC {
         check(copy && stays && twoEmpty && twoFilled && extra, "coordinator copy: filled + empty -> the point, name and safe flag copied, the filled one stays in the grid;"
                 + " two empty / two filled / anything extra - no recipe (" + copy + "/" + stays + "/" + twoEmpty + "/" + twoFilled + "/" + extra + ")");
 
-        // the book: the bridge article has the recipe cards, and the G key opens it for the remotes, the coordinator and the link module
+        // the book: the bridge chapter has the recipe cards, and the G key opens the article about each part and item
         com.sc.manual.BookContent.invalidate();
-        com.sc.manual.BookEntry be = com.sc.manual.BookContent.byId("bridge");
         int cards = 0;
-        for (com.sc.manual.BookEl el : be.els) {
-            if (el.kind == com.sc.manual.BookEl.Kind.CRAFT) {
-                cards++;
+        for (com.sc.manual.BookEntry e : com.sc.manual.BookContent.chapter(com.sc.manual.BookChapter.BRIDGE)) {
+            for (com.sc.manual.BookEl el : e.els) {
+                if (el.kind == com.sc.manual.BookEl.Kind.CRAFT) {
+                    cards++;
+                }
             }
         }
-        boolean keys = com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.bridgeRemote, 1, 0)) == be
-                && com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.bridgeRemote, 1, 1)) == be
-                && com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.coordinator)) == be
-                && com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.bridgeLinkModule)) == be
-                && com.sc.manual.BookContent.entryFor(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.ANCHOR, 1)) == be;
+        boolean keys = bridgePage(new ItemStack(ModItems.bridgeRemote, 1, 0), "bridge.remote") && bridgePage(new ItemStack(ModItems.bridgeRemote, 1, 1), "bridge.remote")
+                && bridgePage(new ItemStack(ModItems.coordinator), "bridge.remote") && bridgePage(new ItemStack(ModItems.bridgeLinkModule), "bridge.armour")
+                && bridgePage(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.ANCHOR, 1), "bridge.places");
+        for (int i = 0; i < com.sc.block.BlockBridgeSC.parts(); i++) {
+            com.sc.manual.BookEntry e = com.sc.manual.BookContent.entryFor(com.sc.block.BlockBridgeSC.stack(i, 1));
+            keys &= e != null && e.chapter == com.sc.manual.BookChapter.BRIDGE;
+        }
         String about2 = com.sc.manual.Lang.tr("sc.manual.bridge.about.2");
-        check(cards >= 18 && keys && !about2.contains("No recipes yet"), "bridge book: " + cards + " recipe cards (>= 18), G opens the article for the remotes,"
-                + " coordinator and link module (" + keys + "), no 'no recipes yet'");
+        check(cards >= 18 && keys && !about2.contains("No recipes yet"), "bridge book: " + cards + " recipe cards in the chapter (>= 18), G opens the right"
+                + " article for every part, the remotes, the coordinator and the link module (" + keys + "), no 'no recipes yet'");
+    }
+
+    private static boolean bridgePage(ItemStack s, String id) {
+        com.sc.manual.BookEntry e = com.sc.manual.BookContent.entryFor(s);
+        return e != null && e.id.equals(id);
     }
 }

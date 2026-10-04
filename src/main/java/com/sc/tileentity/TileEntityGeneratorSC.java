@@ -576,7 +576,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private int coilMask, wallMask, portMask, capMissing, portTanks, portStores, weakStores;
     /** What the port tanks hold, mB: helium, hydrogen, argon, deuterium (the screen's gauges). */
     private final int[] portFluid = new int[4];
-    private static final String[] PORT_FLUIDS = {"liquidhelium", "hydrogen", "argon", "deuterium"};
+    public static final String[] PORT_FLUIDS = {"liquidhelium", "hydrogen", "argon", "deuterium"};
     private final java.util.List<int[]> tankPorts = new java.util.ArrayList<int[]>(), storePorts = new java.util.ArrayList<int[]>();
 
     public boolean isBigReady() {

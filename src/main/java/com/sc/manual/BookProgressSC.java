@@ -135,6 +135,14 @@ public final class BookProgressSC {
                 changed = true;
             }
         }
+        String[] path = BookPathSC.stepIds();               // the "Path" chapter's steps, ticked the same way
+        for (int i = 0; i < path.length; i++) {
+            String key = w + "|" + path[i];
+            if (!done.contains(key) && has(mc.thePlayer.inventory.mainInventory, BookPathSC.stepItems(i))) {
+                done.add(key);
+                changed = true;
+            }
+        }
         if (changed) {
             save();
         }

@@ -1890,7 +1890,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return upgradeCount(com.sc.machine.UpgradeType.ENERGY_STORAGE);
     }
 
-    private static boolean isFieldUpgrade(ItemStack s) {
+    public static boolean isFieldUpgrade(ItemStack s) {
         if (s == null || !(s.getItem() instanceof com.sc.item.ItemUpgradeSC)) {
             return false;
         }
