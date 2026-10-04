@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.sc.bridge.BridgeMathSC;
 import com.sc.energy.CableType;
 import com.sc.energy.FieldMode;
 import com.sc.energy.GeneratorType;
@@ -185,14 +186,20 @@ public final class BookContent {
         for (Tier t : Tier.values()) {
             tiers.row(new ItemStack(ModBlocks.energyStorageSC, 1, t.ordinal()), t.name(), t.getVoltage() + " EU/t", String.valueOf(t.getBuffer()));
         }
+        StringBuilder steps = new StringBuilder();          // "MV x4, HV x4, ... QV x2, XV x2, SV x4" straight from the voltages
+        for (int i = 1; i < Tier.values().length; i++) {
+            Tier t = Tier.values()[i];
+            steps.append(i > 1 ? ", " : "").append(t.name()).append(" x").append(t.getVoltage() / Tier.values()[i - 1].getVoltage());
+        }
         list.add(new BookEntry("tiers", c, new ItemStack(ModBlocks.energyStorageSC, 1, 0), Lang.tr("sc.manual.intro.tiers"))
-                .add(BookEl.title(Lang.tr("sc.manual.intro.tiers"))).addAll(paras("sc.manual.intro.power")).add(tiers)
+                .add(BookEl.title(Lang.tr("sc.manual.intro.tiers"))).addAll(paras("sc.manual.intro.power", new Object[]{steps.toString()})).add(tiers)
                 .addAll(paras("sc.manual.intro.flow")).add(BookEl.gap())
                 .add(BookEl.warn(Lang.tr("sc.manual.intro.warninghead"))).addAll(paras("sc.manual.intro.warning")));
         list.add(new BookEntry("gui", c, machineStack(MachineType.CRUSHER), Lang.tr("sc.manual.intro.guihead"))
                 .add(BookEl.title(Lang.tr("sc.manual.intro.guihead"))).addAll(paras("sc.manual.intro.gui")));
         list.add(new BookEntry("controls", c, new ItemStack(ModItems.WRENCHES.get(0)), Lang.tr("sc.manual.intro.controlshead"))
-                .add(BookEl.title(Lang.tr("sc.manual.intro.controlshead"))).addAll(paras("sc.manual.intro.controls"))
+                .add(BookEl.title(Lang.tr("sc.manual.intro.controlshead")))
+                .addAll(paras("sc.manual.intro.controls", new Object[]{com.sc.machine.UpgradeType.CLEAR_MB_PER_EU}))
                 .add(BookEl.para(Lang.tr("sc.book.gkey"))));
     }
 
@@ -388,7 +395,7 @@ public final class BookContent {
     private static void machines(List<BookEntry> list) {
         BookChapter c = BookChapter.MACHINES;
         BookEntry all = new BookEntry("machines", c, machineStack(MachineType.CRUSHER), Lang.tr("sc.book.machines.all"));
-        all.add(BookEl.title(Lang.tr("sc.manual.machines.title"))).addAll(paras("sc.manual.machines.intro"));
+        all.add(BookEl.title(Lang.tr("sc.manual.machines.title"))).addAll(paras("sc.manual.machines.intro", new Object[]{TileEntityMachineSC.TANK_CAPACITY}));
         for (Tier tier : Tier.values()) {
             List<ItemStack> row = new ArrayList<ItemStack>();
             for (MachineType type : MachineType.values()) {
@@ -419,9 +426,13 @@ public final class BookContent {
             }
             e.add(stats).add(BookEl.para(Lang.tr("sc.manual.machine." + type.name().toLowerCase(Locale.ROOT))));
             if (type.isCompressor()) {                 // what it makes: the Singular Reactor's fuel
+                int perCapsule = TileEntityMachineSC.MATTER_PER_CAPSULE, block = TileEntityMachineSC.MASS_BLOCK, heavy = TileEntityMachineSC.MASS_HEAVY;
+                e.add(BookEl.para(Lang.tr("sc.manual.comp.mass", block, TileEntityMachineSC.MASS_ITEM, heavy, perCapsule,
+                        TileEntityMachineSC.COMPRESS_TICKS / 20, type.euPerTick, perCapsule / block, perCapsule / (block * heavy))));
                 ItemStack cap = new ItemStack(ModItems.component("matterCapsule"));
                 e.about(cap).add(BookEl.head(cap.getDisplayName(), cap))
-                        .add(BookEl.para(Lang.tr("sc.manual.matterCapsule"))).add(BookEl.para(Lang.tr("sc.manual.matterCapsule.2")));
+                        .add(BookEl.para(Lang.tr("sc.manual.matterCapsule", perCapsule)))
+                        .add(BookEl.para(Lang.tr("sc.manual.matterCapsule.2", perCapsule / block, perCapsule / (block * heavy))));
                 // СМ1: the liquid mode - singular matter instead of capsules
                 ItemStack cell = com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, com.sc.item.ItemSingularCellSC.CAPACITY);
                 e.about(new ItemStack(ModItems.singularCell, 1, OreDictionary.WILDCARD_VALUE))
@@ -443,7 +454,9 @@ public final class BookContent {
             crafting(e, st);
             list.add(e);
         }
-        list.add(simple("sides", c, new ItemStack(ModBlocks.pipeSC), "sc.manual.machines.sideshead", "sc.manual.machines.sides", "sc.manual.machines.vent"));
+        int clear = com.sc.machine.UpgradeType.CLEAR_MB_PER_EU;
+        list.add(simple("sides", c, new ItemStack(ModBlocks.pipeSC), "sc.manual.machines.sideshead", "sc.manual.machines.sides")
+                .addAll(paras("sc.manual.machines.vent", new Object[]{clear})));
         list.add(simple("wrench", c, new ItemStack(ModItems.WRENCHES.get(0)), "sc.manual.machines.wrenchhead", "sc.manual.machines.wrench")
                 .about(new ItemStack(ModItems.WRENCHES.get(0), 1, OreDictionary.WILDCARD_VALUE)));
         BookEntry quarry = simple("quarry", c, new ItemStack(ModBlocks.quarrySC), "sc.manual.machines.quarryhead", "sc.manual.machines.quarry");
@@ -451,8 +464,10 @@ public final class BookContent {
                 new ItemStack(ModItems.areaCard), new ItemStack(ModItems.oreLens, 1, OreDictionary.WILDCARD_VALUE));
         crafting(quarry, new ItemStack(ModBlocks.quarrySC));
         list.add(quarry);
-        BookEntry up = simple("upgrades", c, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE), "sc.manual.machines.upgradeshead",
-                "sc.manual.machines.upgrades");
+        int perTank = com.sc.machine.UpgradeType.TANK_PER_UPGRADE, maxTank = com.sc.machine.UpgradeType.MAX_TANK_UPGRADES;
+        BookEntry up = simple("upgrades", c, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE), "sc.manual.machines.upgradeshead")
+                .addAll(paras("sc.manual.machines.upgrades", new Object[]{TileEntityMachineSC.UPGRADE_SLOTS, com.sc.machine.UpgradeType.MAX_EFFECTIVE,
+                        num(perTank), maxTank, num(TileEntityMachineSC.TANK_CAPACITY), num(TileEntityMachineSC.TANK_CAPACITY + perTank * maxTank), clear}));
         for (com.sc.machine.UpgradeType type : com.sc.machine.UpgradeType.values()) {
             ItemStack s = ModItems.upgrade.stackOf(type);
             up.add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.upgrade.tooltip." + type.name().toLowerCase(Locale.ROOT))));
@@ -551,9 +566,23 @@ public final class BookContent {
                 .add(BookEl.para(Lang.tr("sc.manual.generator.sing.byproduct", com.sc.tileentity.SingularReactorSC.SM_PER_SECOND,
                         com.sc.tileentity.SingularReactorSC.SM_TANK)));
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.buildhead"))).add(singularBuild())
-                .add(BookEl.items(materials(singularLayers()))).addAll(paras("sc.manual.generator.sing.build"));
-        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.fuelhead"))).addAll(paras("sc.manual.generator.sing.fuel"));
-        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.cyclehead"))).addAll(paras("sc.manual.generator.sing.cycle"));
+                .add(BookEl.items(materials(singularLayers()))).addAll(paras("sc.manual.generator.sing.build", null, null,
+                        new Object[]{com.sc.tileentity.SingularReactorSC.TANKS_MAX, com.sc.tileentity.SingularReactorSC.STORES_MAX}));
+        // К14: the numbers of the fuel and the cycle straight from SingularReactorSC
+        long ignition = com.sc.tileentity.SingularReactorSC.IGNITION_EU;
+        int charge = com.sc.tileentity.SingularReactorSC.CHARGE_PER_TICK;
+        int[] feed = com.sc.tileentity.SingularReactorSC.FEED_TICKS;
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.fuelhead"))).addAll(paras("sc.manual.generator.sing.fuel",
+                new Object[]{number((float) com.sc.tileentity.SingularReactorSC.HE_PER_TICK), num(com.sc.tileentity.SingularReactorSC.HE_START),
+                        num(com.sc.tileentity.SingularReactorSC.D_IGNITION), number((float) com.sc.tileentity.SingularReactorSC.D_PER_TICK),
+                        num(com.sc.tileentity.SingularReactorSC.ARGON_STOP)},
+                new Object[]{Math.round(com.sc.tileentity.SingularReactorSC.CAPSULE_MASS * 100), feed[feed.length - 1] / 1200, feed[0] / 1200}));
+        e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.cyclehead"))).addAll(paras("sc.manual.generator.sing.cycle",
+                new Object[]{num(com.sc.tileentity.SingularReactorSC.HE_START), num(com.sc.tileentity.SingularReactorSC.D_IGNITION),
+                        ignition / 1000000, num(charge), Math.round(ignition / (double) charge / 20), com.sc.tileentity.SingularReactorSC.COMPRESS_TICKS / 20,
+                        Math.round(com.sc.tileentity.SingularReactorSC.START_MASS * 100)},
+                new Object[]{num(Tier.SV.getVoltage()), com.sc.tileentity.SingularReactorSC.DRAIN_TICKS / 20,
+                        Math.round(ignition * com.sc.tileentity.SingularReactorSC.RETURN_SHARE / 1000000)}));
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.masshead"))).addAll(paras("sc.manual.generator.sing.mass"));
         BookEl t = BookEl.table(Lang.tr("sc.manual.generator.sing.t.mass"), Lang.tr("sc.manual.generator.sing.t.power"),
                 Lang.tr("sc.manual.generator.sing.t.rad"), Lang.tr("sc.manual.generator.sing.t.risk"));
@@ -699,7 +728,15 @@ public final class BookContent {
         for (Tier tier : Tier.values()) {
             slots.append(slots.length() == 0 ? "" : ", ").append(tier.name()).append(" ").append(com.sc.tileentity.TileEntityEnergyStorageSC.chargeSlotsFor(tier));
         }
-        st.addAll(paras("sc.manual.energy.storage")).add(BookEl.para(Lang.tr("sc.manual.energy.chargeslots", slots.toString())))
+        StringBuilder highMachines = new StringBuilder();     // the machines above EV (the Matter Compressor)
+        for (MachineType t : MachineType.values()) {
+            if (t.tier.ordinal() > Tier.EV.ordinal()) {
+                highMachines.append(highMachines.length() == 0 ? "" : ", ").append(t.localizedName()).append(" (").append(t.tier.name()).append(')');
+            }
+        }
+        st.addAll(paras("sc.manual.energy.storage", null, null, new Object[]{num(Tier.IV.getVoltage()), num(Tier.QV.getVoltage()),
+                num(Tier.XV.getVoltage()), num(Tier.SV.getVoltage()), highMachines.toString()}))
+                .add(BookEl.para(Lang.tr("sc.manual.energy.chargeslots", slots.toString())))
                 .addAll(paras("sc.manual.energy.storage2")).addAll(paras("sc.manual.energy.storagesv"));
         // the two storage-only modules: the Output Splitter and the Adaptive Transformer
         ItemStack splitter = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OUTPUT_SPLITTER);
@@ -710,7 +747,13 @@ public final class BookContent {
                 .addAll(paras("sc.manual.energy.storagemods"))
                 .about(new ItemStack(ModBlocks.energyStorageSC, 1, OreDictionary.WILDCARD_VALUE));
         list.add(st);
-        list.add(simple("chargepad", c, new ItemStack(ModBlocks.chargePadSC, 1, 0), "sc.manual.energy.padhead", "sc.manual.energy.pad")
+        StringBuilder padSuits = new StringBuilder();         // "Nano Suit from MV, ... Singular Suit from SV" from ArmorSuit.chargeTier
+        for (ArmorSuit suit : ArmorSuit.values()) {
+            padSuits.append(padSuits.length() == 0 ? "" : ", ").append(Lang.tr("sc.book.suitfrom",
+                    Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)), suit.chargeTier.name()));
+        }
+        list.add(simple("chargepad", c, new ItemStack(ModBlocks.chargePadSC, 1, 0), "sc.manual.energy.padhead")
+                .addAll(paras("sc.manual.energy.pad", new Object[]{padSuits.toString()}))
                 .about(new ItemStack(ModBlocks.chargePadSC, 1, OreDictionary.WILDCARD_VALUE)));
         BookEntry tr = new BookEntry("transformers", c, new ItemStack(ModBlocks.transformerSC, 1, 0), Lang.tr("sc.manual.energy.transformerhead"));
         tr.add(BookEl.title(Lang.tr("sc.manual.energy.transformerhead")));
@@ -760,7 +803,9 @@ public final class BookContent {
             buckets.add(new ItemStack(ModItems.fluidBucket, 1, i));
         }
         list.add(new BookEntry("fluids", c, buckets.get(0), Lang.tr("sc.manual.energy.fluidshead")).add(BookEl.title(Lang.tr("sc.manual.energy.fluidshead")))
-                .add(BookEl.para(Lang.tr("sc.manual.energy.buckets", buckets.size()))).add(BookEl.items(buckets)).addAll(paras("sc.manual.energy.fluids"))
+                .add(BookEl.para(Lang.tr("sc.manual.energy.buckets", buckets.size()))).add(BookEl.items(buckets))
+                .addAll(paras("sc.manual.energy.fluids", null, new Object[]{num(com.sc.machine.UpgradeType.TANK_PER_UPGRADE),
+                        com.sc.machine.UpgradeType.MAX_TANK_UPGRADES, com.sc.machine.UpgradeType.CLEAR_MB_PER_EU}))
                 .about(new ItemStack(ModItems.fluidBucket, 1, OreDictionary.WILDCARD_VALUE)));
         BookEl wl = BookEl.table(Lang.tr("sc.book.t.tier"), Lang.tr("sc.book.t.range"), "EU/t", Lang.tr("sc.book.t.loss"));
         for (Tier tier : Tier.values()) {
@@ -906,15 +951,12 @@ public final class BookContent {
         list.add(drills);
     }
 
-    /**
-     * The Singular suit (docs/plan-singular-armor.md, stage 1): its numbers from ArmorSuit / ArmorGasSC,
-     * singular matter, the colour schemes (SingularScheme); levels and its own functions come later.
-     */
     /** The Singular Service Station and the Gravitational Stabiliser (docs/plan-singular-armor.md §7). */
     private static void singularStation(List<BookEntry> list, BookChapter c) {
         ItemStack st = new ItemStack(ModBlocks.singularStation), stab = new ItemStack(ModBlocks.gravStabiliser);
         BookEntry e = new BookEntry("singularstation", c, st, st.getDisplayName());
-        e.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st, stab))).addAll(paras("sc.manual.singstation"));
+        e.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st, stab)))
+                .addAll(paras("sc.manual.singstation", new Object[]{com.sc.util.ArmorGasSC.Gas.values().length}));
         e.add(BookEl.head(Lang.tr("sc.manual.singstation.costhead")));
         e.add(BookEl.para(Lang.tr("sc.manual.singstation.cost", 100 - com.sc.util.SingularStationMath.SET_PERCENT)));
         for (int lvl = 1; lvl <= 4; lvl++) {
@@ -1000,7 +1042,10 @@ public final class BookContent {
                 e.add(BookEl.dim(Lang.tr("sc.armorStation.gas." + g.key()) + ": " + tanks + " mB"));
             }
         }
-        e.add(BookEl.head(Lang.tr("sc.armorStation.gas.singular_matter"))).addAll(paras("sc.manual.singular.matter"));
+        e.add(BookEl.head(Lang.tr("sc.armorStation.gas.singular_matter"))).addAll(paras("sc.manual.singular.matter", new Object[]{
+                num(com.sc.util.ArmorGasSC.baseCapacity(new ItemStack(pieces[1]), com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER)),
+                TileEntityMachineSC.SM_PER_CAPSULE, com.sc.tileentity.SingularReactorSC.SM_PER_SECOND, num(com.sc.item.ItemSingularCellSC.CAPACITY),
+                com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER.ordinal() + 1}));
         e.add(BookEl.items(listOf(com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, com.sc.item.ItemSingularCellSC.CAPACITY),
                 machineStack(com.sc.machine.MachineType.MATTER_COMPRESSOR), ModBlocks.generatorStack(com.sc.energy.GeneratorType.SINGULAR_REACTOR, 1))));
         e.add(BookEl.head(Lang.tr("sc.manual.singular.schemeshead"))).addAll(paras("sc.manual.singular.schemes"));
@@ -1021,7 +1066,8 @@ public final class BookContent {
         }
         // stage 5: the K menu's Level tab, the function profiles (M4), the cooldown HUD (M3)
         e.add(BookEl.head(Lang.tr("sc.manual.singular.levelhead"))).addAll(paras("sc.manual.singular.level"));
-        e.add(BookEl.gap()).add(BookEl.warn(Lang.tr("sc.manual.singular.next")));
+        e.add(BookEl.gap()).add(BookEl.para(Lang.tr("sc.manual.singular.next")))
+                .add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()));
         list.add(e);
     }
 
@@ -1053,15 +1099,17 @@ public final class BookContent {
         list.add(gases);
         ItemStack st = new ItemStack(ModBlocks.armorStation);
         BookEntry station = new BookEntry("armorstation", c, st, st.getDisplayName());
-        station.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st))).addAll(paras("sc.manual.armor.station"));
+        int gasCount = com.sc.util.ArmorGasSC.Gas.values().length;
+        station.add(BookEl.title(st.getDisplayName())).add(BookEl.items(listOf(st)))
+                .addAll(paras("sc.manual.armor.station", null, null, null, new Object[]{gasCount}));
         station.add(BookEl.head(Lang.tr("sc.gui.big.upgrades")))
                 .add(BookEl.para(Lang.tr("sc.manual.armor.station.modules", com.sc.tileentity.TileEntityArmorStationSC.MAX_OVERCLOCKERS,
                         com.sc.machine.UpgradeType.STORAGE_PER_UPGRADE)));
         station.add(BookEl.head(Lang.tr("sc.manual.armor.station.tankshead")))
-                .add(BookEl.para(Lang.tr("sc.manual.armor.station.tanks", com.sc.tileentity.TileEntityArmorStationSC.TANK_CAPACITY,
+                .add(BookEl.para(Lang.tr("sc.manual.armor.station.tanks", gasCount, com.sc.tileentity.TileEntityArmorStationSC.TANK_CAPACITY,
                         com.sc.machine.UpgradeType.TANK_PER_UPGRADE, com.sc.machine.UpgradeType.MAX_TANK_UPGRADES,
                         com.sc.machine.UpgradeType.CLEAR_MB_PER_EU)))
-                .add(BookEl.para(Lang.tr("sc.manual.armor.station.windows")));
+                .add(BookEl.para(Lang.tr("sc.manual.armor.station.windows", gasCount)));
         crafting(station, st);
         station.about(st);
         list.add(station);
@@ -1124,7 +1172,8 @@ public final class BookContent {
         }
         list.add(new BookEntry("corrosive", c, new ItemStack(ModBlocks.pipeSC, 1, 0), Lang.tr("sc.manual.safety.corrosivehead"))
                 .add(BookEl.title(Lang.tr("sc.manual.safety.corrosivehead"))).add(BookEl.para(corrosive.toString())).addAll(paras("sc.manual.safety.corrosive")));
-        list.add(simple("explosions", c, new ItemStack(Blocks.tnt), "sc.manual.safety.explosionshead", "sc.manual.safety.explosions"));
+        list.add(simple("explosions", c, new ItemStack(Blocks.tnt), "sc.manual.safety.explosionshead")
+                .addAll(paras("sc.manual.safety.explosions", new Object[]{(int) com.sc.energy.ExplosionLogic.EXPLOSION_BASE_POWER})));
         list.add(simple("hazmat", c, new ItemStack(ModItems.leadSuit[1]), "sc.manual.safety.suithead", "sc.manual.safety.suit"));
         BookEntry rad = new BookEntry("radiation", c, new ItemStack(ModItems.dosimeter), Lang.tr("sc.manual.safety.radiationhead"));
         rad.add(BookEl.title(Lang.tr("sc.manual.safety.radiationhead"))).add(BookEl.image("radiation", 256, 112)).addAll(paras("sc.manual.safety.radiation"))
@@ -1242,7 +1291,7 @@ public final class BookContent {
     }
 
     /**
-     * The strict rules of the Quantum / Exo suits: the "function - gas - use" table straight from
+     * The strict rules of the Quantum / Exo / Singular suits: the "function - gas - use" table straight from
      * ArmorFeature.gas() / gasUse() (what the armour logic runs on), and the emergency mode.
      */
     private static void armorGasRules(BookEntry gases) {
@@ -1307,6 +1356,30 @@ public final class BookContent {
         return out;
     }
 
+    /**
+     * A block of prose key.1, key.2, ... where paragraph i is formatted with args[i - 1] - the numbers
+     * straight from the code constants (К14). A paragraph without args (null or past the end) is shown
+     * as it is; one with args writes a literal percent as %%.
+     */
+    static List<BookEl> paras(String baseKey, Object[]... args) {
+        List<BookEl> out = new ArrayList<BookEl>();
+        for (int i = 1; ; i++) {
+            String key = baseKey + "." + i;
+            String text = Lang.trOr(key, null);
+            if (text == null) {
+                break;
+            }
+            out.add(BookEl.para(i <= args.length && args[i - 1] != null ? Lang.tr(key, args[i - 1]) : text));
+        }
+        return out;
+    }
+
+    /** A big number in the language's style: "50 000" in Russian, "50,000" in English. */
+    static String num(long v) {
+        String s = BridgeMathSC.group(v);
+        return "ru".equals(Lang.trOr("sc.book.lang", "en")) ? s : s.replace(' ', ',');
+    }
+
     private static List<ItemStack> listOf(ItemStack... s) {
         List<ItemStack> l = new ArrayList<ItemStack>();
         for (ItemStack x : s) {
@@ -1367,7 +1440,8 @@ public final class BookContent {
         parts.add(new ItemStack(com.sc.init.ModItems.bridgeLinkModule));
         e.add(BookEl.title(Lang.tr("sc.manual.bridge.title"))).add(BookEl.items(parts)).addAll(paras("sc.manual.bridge.about"));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.groundhead"))).add(BookEl.layers(bridgeLayers(5), new String[]{Lang.tr("sc.manual.bridge.front")}))
-                .addAll(paras("sc.manual.bridge.ground"));
+                .addAll(paras("sc.manual.bridge.ground", null, null, new Object[]{com.sc.bridge.BridgeStructureSC.SIDE_CLEAR, BridgeMathSC.MAX_STABILISERS,
+                        BridgeMathSC.STAB_RANGE, BridgeMathSC.STAB_LIFE_PERCENT}));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.spacehead"))).add(BookEl.layers(bridgeLayers(7), new String[]{Lang.tr("sc.manual.bridge.front")}))
                 .addAll(paras("sc.manual.bridge.space"));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.calibhead")))
@@ -1397,24 +1471,34 @@ public final class BookContent {
         }
         e.add(BookEl.para(Lang.tr("sc.manual.bridge.tanks", tanks.toString(), com.sc.bridge.BridgeMathSC.EXTRA_PORT_PERCENT,
                 com.sc.bridge.BridgeMathSC.shortEu(com.sc.bridge.BridgeMathSC.CAPACITOR_EU, m, Lang.tr("sc.bridge.unit.g")))));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.openhead"))).addAll(paras("sc.manual.bridge.open"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.openhead"))).addAll(paras("sc.manual.bridge.open", null, new Object[]{BridgeMathSC.SHORT_GRACE_S, BridgeMathSC.STAB_FOLD}));
         e.add(BookEl.para(Lang.tr("sc.manual.bridge.cool", com.sc.bridge.BridgeMathSC.COOL_S, com.sc.bridge.BridgeMathSC.COOL_S / com.sc.bridge.BridgeMathSC.COOLER_SPEED)));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.coordhead"))).addAll(paras("sc.manual.bridge.coord"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.coordhead"))).addAll(paras("sc.manual.bridge.coord", null, new Object[]{BridgeMathSC.BEACON_DISCOUNT},
+                new Object[]{com.sc.bridge.BridgeSoftLandSC.MAX_TICKS / 20}));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.modhead"))).addAll(paras("sc.manual.bridge.mod"));
         // stage 2: remotes, the coordinator, the modes, access and consent, the Singular armour link
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.remotehead"))).add(BookEl.items(listOf(
                 new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND),
                 new ItemStack(com.sc.init.ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE),
-                new ItemStack(com.sc.init.ModItems.coordinator)))).addAll(paras("sc.manual.bridge.remote"));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.modeshead"))).addAll(paras("sc.manual.bridge.modes"));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.accesshead"))).addAll(paras("sc.manual.bridge.access"));
+                new ItemStack(com.sc.init.ModItems.coordinator)))).addAll(paras("sc.manual.bridge.remote", new Object[]{BridgeMathSC.REMOTE_SIGNAL_EU / 1000000},
+                new Object[]{BridgeMathSC.REMOTE_MODE_EU}));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.modeshead"))).addAll(paras("sc.manual.bridge.modes", null, new Object[]{BridgeMathSC.PROJECTION_AHEAD}));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.accesshead"))).addAll(paras("sc.manual.bridge.access", new Object[]{BridgeMathSC.MAX_FRIENDS},
+                new Object[]{BridgeMathSC.CONSENT_RADIUS, BridgeMathSC.CONSENT_TICKS / 20}));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.armourhead"))).add(BookEl.items(listOf(new ItemStack(com.sc.init.ModItems.bridgeLinkModule))))
-                .addAll(paras("sc.manual.bridge.armour"));
+                .addAll(paras("sc.manual.bridge.armour", new Object[]{BridgeMathSC.MAX_LINKS}, new Object[]{BridgeMathSC.LOOK_RANGE, BridgeMathSC.PROBE_KR, BridgeMathSC.ARMOUR_DISCOUNT}));
         // stage 3 (§9, §11): wear and repair, stability (mass, interference), heat and overheating, familiar places and scouting, the look
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.wearhead"))).addAll(paras("sc.manual.bridge.wear"));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.stabhead"))).addAll(paras("sc.manual.bridge.stab"));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.heathead"))).addAll(paras("sc.manual.bridge.heat"));
-        e.add(BookEl.head(Lang.tr("sc.manual.bridge.famhead"))).addAll(paras("sc.manual.bridge.fam"));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.wearhead"))).addAll(paras("sc.manual.bridge.wear", new Object[]{BridgeMathSC.WEAR_FAR, BridgeMathSC.WEAR_FREE, BridgeMathSC.WEAR_STAB_DIV},
+                new Object[]{BridgeMathSC.REPAIR_HE_PER_WEAR, BridgeMathSC.REPAIR_EU_PER_WEAR / 1000000, BridgeMathSC.COIL_SWAP_WEAR}));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.stabhead"))).addAll(paras("sc.manual.bridge.stab", new Object[]{BridgeMathSC.STAB_MISSING_PERCENT},
+                new Object[]{BridgeMathSC.TURBULENCE, BridgeMathSC.TURB_SHIFT, BridgeMathSC.STAB_FOLD},
+                new Object[]{number(BridgeMathSC.MASS_PLAYER / 10F), number(BridgeMathSC.MASS_MOB / 10F), number(BridgeMathSC.MASS_ITEM / 10F), number(BridgeMathSC.MASS_CART / 10F),
+                        BridgeMathSC.MASS_EU_PER_UNIT / 1000000, BridgeMathSC.MASS_STAB_PER_UNIT, BridgeMathSC.MASS_TICKS / 20},
+                new Object[]{BridgeMathSC.INTERFERENCE_RADIUS, BridgeMathSC.INTERFERENCE_STAB, BridgeMathSC.STORM_STAB, BridgeMathSC.RESONANCE_RADIUS, BridgeMathSC.RESONANCE_PCT}));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.heathead"))).addAll(paras("sc.manual.bridge.heat", new Object[]{number(BridgeMathSC.HEAT_BASE / 10F)},
+                new Object[]{BridgeMathSC.OVERHEAT_LOCK_S / 60, BridgeMathSC.OVERHEAT_WEAR, BridgeMathSC.SHORT_GRACE_S}));
+        e.add(BookEl.head(Lang.tr("sc.manual.bridge.famhead"))).addAll(paras("sc.manual.bridge.fam", new Object[]{BridgeMathSC.FAMILIAR_CAP},
+                new Object[]{-BridgeMathSC.FAMILIAR_PCT, BridgeMathSC.UNFAMILIAR_PCT, BridgeMathSC.SCATTER_UNFAMILIAR, BridgeMathSC.SCATTER_NAV}, new Object[]{BridgeMathSC.SCATTER_SCOUT}));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.lookhead"))).addAll(paras("sc.manual.bridge.look"));
         // the crafts (approved «все ★»): the parts, both gravity-coil recipes, the remotes, the coordinator and its copy, the link module
         e.add(BookEl.head(Lang.tr("sc.book.craft")));

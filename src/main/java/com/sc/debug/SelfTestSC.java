@@ -41,6 +41,7 @@ public final class SelfTestSC {
             guiSyncCarriesFullInts();
             handbookPagesBuild();
             bookBuilds();
+            bookTexts();
             fieldShapes();
             fluidDrops();
             energyStorage();
@@ -272,6 +273,144 @@ public final class SelfTestSC {
         check(bad.length() == 0 && found && recipes > 3 && all.size() > 80,
                 "book: " + all.size() + " articles in " + com.sc.manual.BookChapter.values().length + " chapters, items find their page " + found
                         + ", 'wafer' -> " + recipes + (bad.length() == 0 ? "" : " -> " + bad));
+    }
+
+    /** Technical blocks / items with no page of their own: placed by the mod itself, or a lookup stand-in for NEI. */
+    private static final String[] BOOK_TECHNICAL = {"bridgeVortex", "lightSC", "fluidDrop"};
+    /**
+     * Items and blocks that have no article (G finds nothing) yet - the next handbook task covers
+     * them (components reference, new articles). Printed as INFO; shrink it as articles appear.
+     */
+    private static final String[] BOOK_NOT_YET = {
+            "alFoil", "alFrame", "capacitor", "ceramicPackage", "ceramicRod", "coke", "combustionChamber", "compound", "copperCoil",
+            "crushedOreSC", "deuteriumCell", "dielectric", "drillHeadDiamond", "drillHeadExo", "drillHeadSteel", "drillHeadTungsten",
+            "dustSC", "dustTinySC", "energyCellHV", "energyCellLV", "energyCellMV", "focusLens", "fusionCore", "heLoopModule", "hfo2Die",
+            "ingotSC", "isotopeCapsule", "leadFrame16", "leadFrame3", "leadFrame40", "lens", "liBlanketModule", "limestoneSC",
+            "liquidHeCell", "nb3SnCoil", "nb3SnIngot", "nb3SnPlate", "oreScanner", "polymerHandle", "polymerPlate", "powerCoreFrame",
+            "ptfeSheet", "purifiedCrushedOreSC", "quartzChamber", "quartzEmitter", "resistor", "rubber", "rubberBlue", "rubberHeatResist",
+            "sensor", "sputterBacking", "steelCasing", "tantalumCapacitor", "tiCasing", "tiFrame", "tiPlate", "toolDIAMOND_BLADE",
+            "toolDIAMOND_WIRE", "toolMOLD_BLADE", "toolMOLD_COIL", "toolMOLD_LEAD_FRAME_16", "toolMOLD_LEAD_FRAME_3",
+            "toolMOLD_LEAD_FRAME_40", "toolMOLD_PLATE", "toolMOLD_TARGET", "toolPHOTOMASK", "toolSEED_CRYSTAL",
+            "toolSPUTTER_TARGET_ALUMINIUM", "toolSPUTTER_TARGET_COPPER", "toolSPUTTER_TARGET_TUNGSTEN", "turbineBladeTitanium",
+            "turbineBladeTungsten", "wBarrel", "wTiPlate", "windRotor"};
+
+    /**
+     * К13: the handbook's texts - (a) every sc.manual.* / sc.book.* key in both en_US and ru_RU,
+     * (b) no Cyrillic and no «» in the English ones, (c) the bridge article's keys, (d) every item and
+     * block of the mod is on some article's `about` list, or on BOOK_TECHNICAL / BOOK_NOT_YET.
+     */
+    private static void bookTexts() {
+        java.util.Map<String, String> en = langMap("en_US"), ru = langMap("ru_RU");
+        // (a) the same book keys in both languages
+        StringBuilder onlyOne = new StringBuilder();
+        int bookKeys = 0;
+        for (String[] pair : new String[][]{{"en_US", "ru_RU"}, {"ru_RU", "en_US"}}) {
+            java.util.Map<String, String> from = pair[0].equals("en_US") ? en : ru, to = pair[0].equals("en_US") ? ru : en;
+            for (String k : from.keySet()) {
+                if (isBookKey(k)) {
+                    bookKeys += pair[0].equals("en_US") ? 1 : 0;
+                    if (!to.containsKey(k)) {
+                        onlyOne.append(' ').append(pair[1]).append(" lacks ").append(k);
+                    }
+                }
+            }
+        }
+        check(bookKeys > 600 && onlyOne.length() == 0, "book texts (a): " + bookKeys + " sc.manual.* / sc.book.* keys, each in en_US and ru_RU" + onlyOne);
+        // (b) English is English
+        StringBuilder cyr = new StringBuilder();
+        for (java.util.Map.Entry<String, String> e : en.entrySet()) {
+            if (isBookKey(e.getKey()) && (e.getValue().matches(".*[\\u0400-\\u04FF].*") || e.getValue().contains("«") || e.getValue().contains("»"))) {
+                cyr.append(' ').append(e.getKey());
+            }
+        }
+        check(cyr.length() == 0, "book texts (b): no Cyrillic letters and no «» quotes in the en_US handbook texts" + cyr);
+        // (c) the bridge article: its headings and paragraphs in both languages
+        String[] bridge = {"title", "about.1", "about.2", "groundhead", "front", "ground.1", "ground.4", "spacehead", "space.1", "space.2", "calibhead",
+                "calib", "reshead", "t.ground", "t.space", "t.burst", "t.hold", "t.gases", "t.life", "tanks", "openhead", "open.1", "open.2", "cool",
+                "coordhead", "coord.1", "coord.3", "modhead", "mod.1", "remotehead", "remote.1", "remote.3", "modeshead", "modes.1", "modes.2",
+                "accesshead", "access.1", "access.2", "armourhead", "armour.1", "armour.3", "wearhead", "wear.1", "wear.2", "stabhead", "stab.1",
+                "stab.4", "heathead", "heat.1", "heat.2", "famhead", "fam.1", "fam.3", "lookhead", "look.1"};
+        StringBuilder noBridge = new StringBuilder();
+        for (String k : bridge) {
+            for (java.util.Map<String, String> m : new java.util.Map[]{en, ru}) {
+                if (!m.containsKey("sc.manual.bridge." + k)) {
+                    noBridge.append(' ').append(m == en ? "en_US:" : "ru_RU:").append(k);
+                }
+            }
+        }
+        com.sc.manual.BookEntry be = com.sc.manual.BookContent.byId("bridge");
+        check(noBridge.length() == 0 && be != null && be.els.size() > 40, "book texts (c): the bridge article - " + bridge.length
+                + " keys in both languages, " + (be == null ? 0 : be.els.size()) + " elements" + noBridge);
+        // (d) every item / block of the mod has an article (G opens it), or is listed as technical / not yet covered
+        java.util.Set<String> covered = new java.util.HashSet<String>();
+        for (com.sc.manual.BookEntry e : com.sc.manual.BookContent.all()) {
+            for (ItemStack s : e.about) {
+                covered.add(String.valueOf(net.minecraft.item.Item.itemRegistry.getNameForObject(s.getItem())));
+            }
+        }
+        java.util.Set<String> technical = new java.util.HashSet<String>(java.util.Arrays.asList(BOOK_TECHNICAL));
+        java.util.Set<String> notYet = new java.util.HashSet<String>(java.util.Arrays.asList(BOOK_NOT_YET));
+        String prefix = com.sc.Reference.MODID + ":";
+        java.util.List<String> uncovered = new java.util.ArrayList<String>(), waiting = new java.util.ArrayList<String>(),
+                nowCovered = new java.util.ArrayList<String>();
+        int mod = 0;
+        for (Object o : net.minecraft.item.Item.itemRegistry.getKeys()) {
+            String name = String.valueOf(o);
+            if (!name.startsWith(prefix)) {
+                continue;
+            }
+            mod++;
+            String id = name.substring(prefix.length());
+            if (covered.contains(name)) {
+                if (notYet.contains(id)) {
+                    nowCovered.add(id);
+                }
+            } else if (notYet.contains(id)) {
+                waiting.add(id);
+            } else if (!technical.contains(id)) {
+                uncovered.add(id);
+            }
+        }
+        java.util.Collections.sort(uncovered);
+        java.util.Collections.sort(waiting);
+        com.sc.manual.BookContent.invalidate();
+        System.out.println("[SC-TEST] INFO book: not yet covered by an article (" + waiting.size() + "): " + waiting);
+        if (!nowCovered.isEmpty()) {
+            System.out.println("[SC-TEST] INFO book: covered now - drop from BOOK_NOT_YET: " + nowCovered);
+        }
+        int withArticle = 0;
+        for (String c : covered) {
+            withArticle += c.startsWith(prefix) ? 1 : 0;
+        }
+        check(mod > 50 && uncovered.isEmpty(), "book texts (d): " + mod + " items / blocks of the mod - " + withArticle
+                + " have an article, " + waiting.size() + " on the not-yet list, " + technical.size() + " technical"
+                + (uncovered.isEmpty() ? "" : "; with no article and on no list: " + uncovered));
+    }
+
+    private static boolean isBookKey(String k) {
+        return k.startsWith("sc.manual.") || k.startsWith("sc.book.");
+    }
+
+    /** A .lang file of the jar as key -> value (the first one wins, as in the game). */
+    private static java.util.Map<String, String> langMap(String lang) {
+        java.util.Map<String, String> map = new java.util.HashMap<String, String>();
+        java.io.InputStream in = SelfTestSC.class.getResourceAsStream("/assets/siliconage/lang/" + lang + ".lang");
+        if (in == null) {
+            return map;
+        }
+        try {
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(in, "UTF-8"));
+            for (String line; (line = r.readLine()) != null; ) {
+                int eq = line.indexOf('=');
+                if (eq > 0 && !line.startsWith("#") && !map.containsKey(line.substring(0, eq))) {
+                    map.put(line.substring(0, eq), line.substring(eq + 1));
+                }
+            }
+            r.close();
+        } catch (java.io.IOException e) {
+            // an empty map: every key missing
+        }
+        return map;
     }
 
     /** Field Generator shapes: a square of 4 nodes 10 blocks apart, at y 64. */
