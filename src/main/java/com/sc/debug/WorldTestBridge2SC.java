@@ -95,6 +95,10 @@ public class WorldTestBridge2SC {
             owner = fake(w, "BridgeOwner", PX, PZ);
             friend = fake(w, "BridgeFriend", PX, FZ);
             stranger = fake(w, "BridgeStranger", PX + 3, PZ - 3);
+            com.sc.bridge.BridgeFamiliarSC fam = com.sc.bridge.BridgeFamiliarSC.get(w);
+            for (String n : new String[]{"BridgeOwner", "BridgeFriend", "BridgeStranger"}) {
+                fam.forget(n);                                     // a clean start, whatever a previous run left in world/data
+            }
         }
         if (ticks == 86) {
             TileEntityBridgeControllerSC c = ctrl(w);

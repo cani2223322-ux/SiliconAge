@@ -37,6 +37,7 @@ public final class BridgeNetSC {
         CHANNEL.registerMessage(FarStateHandler.class, FarState.class, 3, Side.CLIENT);
         CHANNEL.registerMessage(HudHandler.class, Hud.class, 4, Side.CLIENT);
         CHANNEL.registerMessage(BirthHandler.class, Birth.class, 5, Side.CLIENT);
+        CHANNEL.registerMessage(SoftLandHandler.class, SoftLand.class, 6, Side.CLIENT);
     }
 
     /** A remote / the armour / a coordinator: one command (BridgeFarSC.F_*), no distance limit - the server checks the link. */
@@ -335,6 +336,36 @@ public final class BridgeNetSC {
         @Override
         public IMessage onMessage(Birth msg, MessageContext ctx) {
             BridgeHudDataSC.birth(msg.x, msg.y, msg.z, msg.kind);
+            return null;
+        }
+    }
+
+    /** Server -> the player who came out of an end in the air: §7б the soft landing, `ticks` long (BridgeSoftLandSC). */
+    public static class SoftLand implements IMessage {
+        public int ticks;
+
+        public SoftLand() {
+        }
+
+        public SoftLand(int ticks) {
+            this.ticks = ticks;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            ticks = buf.readShort();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeShort(ticks);
+        }
+    }
+
+    public static class SoftLandHandler implements IMessageHandler<SoftLand, IMessage> {
+        @Override
+        public IMessage onMessage(SoftLand msg, MessageContext ctx) {
+            com.sc.SCMod.proxy.bridgeSoftLand(msg.ticks);
             return null;
         }
     }

@@ -64,6 +64,11 @@ public class ClientProxy extends CommonProxy {
     }
 
     @Override
+    public void bridgeSoftLand(int ticks) {
+        com.sc.bridge.BridgeSoftLandSC.startClient(Minecraft.getMinecraft().thePlayer, ticks);
+    }
+
+    @Override
     public void bridgeFarState(net.minecraft.nbt.NBTTagCompound state) {
         net.minecraft.client.gui.GuiScreen s = Minecraft.getMinecraft().currentScreen;
         if (s instanceof com.sc.client.GuiRemoteSC) {

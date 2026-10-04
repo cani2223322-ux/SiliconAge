@@ -80,6 +80,7 @@ public class WorldTestBridge3SC {
             build(w);
             walker = FakePlayerFactory.get(w, new GameProfile(java.util.UUID.nameUUIDFromBytes("Bridge3Walker".getBytes()), "Bridge3Walker"));
             walker.setLocationAndAngles(X + 0.5, Y + 1, Z + 3.5, 0F, 0F);
+            BridgeFamiliarSC.get(w).forget("Bridge3Walker");      // a previous run's memory (world/data) must not make the pad familiar
         }
         if (ticks == 106) {
             TileEntityBridgeControllerSC c = ctrl(w);
@@ -171,6 +172,7 @@ public class WorldTestBridge3SC {
             say(c.getWear() == 20 && !c.isCalibrated(), "bridge 3: a coil taken out (to be replaced) takes 10% wear off and the calibration: 30 -> " + c.getWear());
         }
         if (ticks == 630) {
+            BridgeFamiliarSC.get(w).forget("Bridge3Walker");
             for (int x = X - 3; x <= X + 3; x++) {
                 for (int y = Y - 1; y <= Y + 6; y++) {
                     for (int z = Z - 1; z <= Z + 1; z++) {

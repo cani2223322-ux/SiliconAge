@@ -153,6 +153,13 @@ public class BridgeFamiliarSC extends WorldSavedData {
         }
     }
 
+    /** Forgets everything a player knew (familiar chunks and scouted dimensions) - the world tests start clean with it. */
+    public void forget(String player) {
+        if (player != null && players.remove(player.toLowerCase(Locale.ROOT)) != null) {
+            markDirty();
+        }
+    }
+
     public boolean familiar(String player, int dim, int x, int z) {
         return player != null && player.length() > 0 && of(player).has(dim, x >> 4, z >> 4);
     }

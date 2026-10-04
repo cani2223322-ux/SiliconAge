@@ -11,6 +11,7 @@ import com.sc.bridge.BridgeMathSC;
 import com.sc.bridge.BridgeMsgSC;
 import com.sc.bridge.BridgeSpaceSC;
 import com.sc.bridge.BridgeStructureSC;
+import com.sc.bridge.BridgeSoftLandSC;
 import com.sc.bridge.BridgeTeleportSC;
 import com.sc.init.ModBlocks;
 
@@ -1018,7 +1019,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
     }
 
-    /** С3 turbulence: an arrival lands up to TURB_SHIFT blocks off, on the nearest place one can stand; null - as planned. */
+    /** С3 turbulence: an arrival lands up to TURB_SHIFT blocks off, at the nearest free place (§7б: the air too - a soft landing); null - as planned. */
     private int[] turbulentSpot(int dim, double x, double y, double z) {
         World w = DimensionManager.getWorld(dim);
         if (w == null) {
@@ -1029,7 +1030,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (!w.blockExists(px, py, pz)) {
             return null;
         }
-        return BridgeSpaceSC.standSpot(BridgeSpaceSC.of(w), px, py, pz, 4, 6);
+        return BridgeSpaceSC.freeSpot(BridgeSpaceSC.of(w), px, py, pz, 4, 6);
     }
 
     /** С5 / С7: the far end moved up to `radius` blocks, to the nearest free place (never into a block); null - it stays. */
@@ -1125,8 +1126,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         t.setString("reason", r.reason);
         t.setTag("args", new BridgeMsgSC("x", (Object[]) r.args).write());
         t.setIntArray("at", new int[]{r.x, r.y, r.z, d});
+        t.setBoolean("air", r.free && r.inAir);
+        t.setBoolean("void", r.free && r.voidBelow);
         if (r.free && ShieldEventHandlerPrivate.foreignField(w, p, r.x, r.y, r.z)) {
             t.setBoolean("free", false);
+            t.setBoolean("air", false);
+            t.setBoolean("void", false);
             t.setString("reason", "sc.bridge.place.field");
         }
         if (r.hasNearest) {
@@ -1140,7 +1145,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         t.setBoolean("beacon", bridgeKind() == BridgeMathSC.GROUND && marks != null
                 && marks.near(BridgeMarksSC.BEACON, d, x, y, z, BridgeMathSC.BEACON_RADIUS));
         t.setLong("time", worldObj.getTotalWorldTime());
-        BridgeMsgSC m = t.getBoolean("free") ? new BridgeMsgSC("sc.bridge.place.freeat", r.x, r.y, r.z)
+        BridgeMsgSC m = t.getBoolean("free") ? new BridgeMsgSC(t.getBoolean("air") ? "sc.bridge.place.freeairat" : "sc.bridge.place.freeat", r.x, r.y, r.z)
+                .part(t.getBoolean("void") ? new BridgeMsgSC("sc.bridge.place.voidbelow") : null)
                 : new BridgeMsgSC("sc.bridge.place.blockedat", r.x, r.y, r.z).part(new BridgeMsgSC(t.getString("reason"), (Object[]) r.args));
         t.setTag("msg", m.write());
         return t;
@@ -2026,7 +2032,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         massLoad.add(new long[]{worldObj.getTotalWorldTime() + BridgeMathSC.MASS_TICKS, pm});
         massTotal += pm;
-        // С3: a shaking vortex throws the arrival off - up to 8 blocks, to the nearest place one can stand - with a push
+        // С3: a shaking vortex throws the arrival off - up to 8 blocks, to the nearest free place - with a push
         boolean shaken = false;
         if (stability < BridgeMathSC.TURBULENCE) {
             int[] spot = turbulentSpot(dim, x, y, z);
@@ -2042,6 +2048,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         Entity moved = BridgeTeleportSC.teleport(e, dim, x, y, z, yaw);
         if (moved != null) {
             moved.getEntityData().setLong("scBridgeCd", now + BridgeMathSC.TELEPORT_COOLDOWN);
+            BridgeSoftLandSC.arrived(moved);                 // §7б: out into the air - a soft landing
             from.playSoundEffect(fx, fy, fz, "mob.endermen.portal", 0.8F, 1.0F);
             moved.worldObj.playSoundEffect(x, y, z, "mob.endermen.portal", 0.8F, 1.0F);
             if (shaken) {

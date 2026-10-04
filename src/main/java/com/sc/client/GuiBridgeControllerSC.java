@@ -830,9 +830,13 @@ public class GuiBridgeControllerSC extends GuiScreen {
             Object[] a = new Object[args.length];
             System.arraycopy(args, 0, a, 0, args.length);
             if (p.getBoolean("free") && at.length == 4) {
-                fit(Lang.tr("sc.bridge.gui.place.free", at[0], at[1], at[2]), 110, 101, 192, OK);
-                small(Lang.tr("sc.bridge.gui.place.freeinfo", p.getInteger("w"), g(p.getLong("dist")))
-                        + (p.getBoolean("beacon") ? "  " + Lang.tr("sc.bridge.gui.beacon", BridgeMathSC.BEACON_DISCOUNT) : ""), 110, 111, 192, LABEL);
+                fit(Lang.tr(p.getBoolean("air") ? "sc.bridge.gui.place.freeair" : "sc.bridge.gui.place.free", at[0], at[1], at[2]), 110, 101, 192, OK);
+                if (p.getBoolean("void")) {
+                    small(Lang.tr("sc.bridge.gui.place.void", g(p.getLong("dist"))), 110, 111, 192, WARN);
+                } else {
+                    small(Lang.tr("sc.bridge.gui.place.freeinfo", p.getInteger("w"), p.getInteger("w"), g(p.getLong("dist")))
+                            + (p.getBoolean("beacon") ? "  " + Lang.tr("sc.bridge.gui.beacon", BridgeMathSC.BEACON_DISCOUNT) : ""), 110, 111, 192, LABEL);
+                }
             } else {
                 String why = a.length == 0 ? Lang.tr(p.getString("reason")) : Lang.tr(p.getString("reason"), a);
                 fit(Lang.tr("sc.bridge.gui.place.blocked", why), 110, 101, 192, BAD);

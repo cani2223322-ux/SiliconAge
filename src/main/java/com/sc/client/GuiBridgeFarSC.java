@@ -516,9 +516,13 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         Object[] a = new Object[args.length];
         System.arraycopy(args, 0, a, 0, args.length);
         if (free && at.length == 4) {
-            fit(Lang.tr("sc.bridge.gui.place.free", at[0], at[1], at[2]), x + 4, y + 3, w - 8, OK);
-            small(Lang.tr("sc.bridge.gui.place.freeinfo", place.getInteger("w"), g(place.getLong("dist")))
-                    + (place.getBoolean("beacon") ? "  " + Lang.tr("sc.bridge.gui.beacon", BridgeMathSC.BEACON_DISCOUNT) : ""), x + 4, y + 13, w - 8, LABEL);
+            fit(Lang.tr(place.getBoolean("air") ? "sc.bridge.gui.place.freeair" : "sc.bridge.gui.place.free", at[0], at[1], at[2]), x + 4, y + 3, w - 8, OK);
+            if (place.getBoolean("void")) {
+                small(Lang.tr("sc.bridge.gui.place.void", g(place.getLong("dist"))), x + 4, y + 13, w - 8, WARN);
+            } else {
+                small(Lang.tr("sc.bridge.gui.place.freeinfo", place.getInteger("w"), place.getInteger("w"), g(place.getLong("dist")))
+                        + (place.getBoolean("beacon") ? "  " + Lang.tr("sc.bridge.gui.beacon", BridgeMathSC.BEACON_DISCOUNT) : ""), x + 4, y + 13, w - 8, LABEL);
+            }
         } else {
             String why = a.length == 0 ? Lang.tr(place.getString("reason")) : Lang.tr(place.getString("reason"), a);
             fit(Lang.tr("sc.bridge.gui.place.blocked", why), x + 4, y + 3, w - 8, BAD);

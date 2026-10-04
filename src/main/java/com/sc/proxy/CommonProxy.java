@@ -45,6 +45,10 @@ public class CommonProxy {
     public void bridgeFarState(net.minecraft.nbt.NBTTagCompound state) {
     }
 
+    /** §7б: this client's player came out of a bridge end in the air - the soft landing (client only). */
+    public void bridgeSoftLand(int ticks) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

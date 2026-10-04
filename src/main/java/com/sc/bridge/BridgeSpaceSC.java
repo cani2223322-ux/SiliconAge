@@ -5,10 +5,12 @@ import net.minecraft.block.material.Material;
 import net.minecraft.world.World;
 
 /**
- * «Проверить место» (docs/plan-ground-bridge.md §7а): is there room for a vortex end at a point - a floor
- * under it and a free w (wide) x w (high) x 2 (deep) volume (3 Ground, 5 Space), no lava, no water, not the
- * Void; «Y авто» finds the topmost such floor; the nearest free place within a radius. Pure over Cells, so
- * the self-test runs it on a mock world; Of(World) reads a real one.
+ * «Проверить место» (docs/plan-ground-bridge.md §7а, §7б): is there room for a vortex end at a point - a free
+ * w (wide) x w (high) x 2 (deep) volume (3 Ground, 5 Space), no lava, no water, 1 <= y, the top inside the world.
+ * A floor is not needed (§7б): the end may hang in the air - onGround / inAir say which, voidBelow that nothing
+ * at all is under it down to y = 0 (a warning); one comes out of an air end with a soft landing. «Y авто» finds
+ * the topmost such place standing on a floor; the nearest free place within a radius (at any height). Pure over
+ * Cells, so the self-test runs it on a mock world; Of(World) reads a real one.
  *
  * The end's plane: across u = -(w-1)/2..(w-1)/2 (along X for axis 0, along Z for axis 1), up v = 0..w-1 from
  * the floor (y), and depth d = 0 (the vortex) and 1 (where one steps out) along the normal.
@@ -42,7 +44,14 @@ public final class BridgeSpaceSC {
         public int x, y, z;
         public boolean hasNearest;
         public int nx, ny, nz, nDist;
+        /** Free and standing on a floor (the step-out cell of the middle column has a solid block under it) / hanging in the air. */
+        public boolean onGround, inAir;
+        /** In the air with nothing at all under the step-out cell down to y = 0 (the End's void): allowed, with a warning. */
+        public boolean voidBelow;
     }
+
+    /** Nearest-place search: each block of height difference counts this much extra (the same Y is preferred). */
+    public static final double Y_PENALTY = 1.0;
 
     private static int[] pos(int x, int y, int z, int axis, int u, int v, int d) {
         return axis == 0 ? new int[]{x + u, y + v, z + d} : new int[]{x + d, y + v, z + u};
@@ -55,8 +64,8 @@ public final class BridgeSpaceSC {
         r.y = y;
         r.z = z;
         int h = (w - 1) / 2;
-        if (y - 1 < 0) {
-            return no(r, "sc.bridge.place.void");
+        if (y < 1) {
+            return no(r, "sc.bridge.place.low");
         }
         if (y + w > c.height()) {
             return no(r, "sc.bridge.place.high");
@@ -87,22 +96,13 @@ public final class BridgeSpaceSC {
                 rows = v;
             }
         }
-        // the floor: under the middle column (both depths) solid; no lava / void under any of it
-        boolean floorLava = false, floorMiddle = true, floorWater = false;
+        // directly under the volume: lava there is refused (one would step out into it); a floor is optional (§7б)
+        boolean floorLava = false;
         for (int u = -h; u <= h; u++) {
             for (int d = 0; d < DEPTH; d++) {
                 int[] p = pos(x, y - 1, z, axis, u, 0, d);
-                int k = c.cell(p[0], p[1], p[2]);
-                if (k == LAVA) {
+                if (c.cell(p[0], p[1], p[2]) == LAVA) {
                     floorLava = true;
-                }
-                if (u == 0) {
-                    if (k == WATER) {
-                        floorWater = true;
-                    }
-                    if (k != SOLID) {
-                        floorMiddle = false;
-                    }
                 }
             }
         }
@@ -119,11 +119,22 @@ public final class BridgeSpaceSC {
             r.args = new String[]{String.valueOf(w), String.valueOf(Math.max(1, rows))};
             return no(r, "sc.bridge.place.small");
         }
-        if (!floorMiddle) {
-            return no(r, floorWater ? "sc.bridge.place.overwater" : "sc.bridge.place.nofloor");
-        }
         r.free = true;
+        int[] out = pos(x, y - 1, z, axis, 0, 0, 1);              // under the cell one steps out to
+        r.onGround = c.cell(out[0], out[1], out[2]) == SOLID;
+        r.inAir = !r.onGround;
+        r.voidBelow = r.inAir && nothingBelow(c, out[0], out[1], out[2]);
         return r;
+    }
+
+    /** Nothing but air in this column from y down to 0. */
+    public static boolean nothingBelow(Cells c, int x, int y, int z) {
+        for (int yy = y; yy >= 0; yy--) {
+            if (c.cell(x, yy, z) != AIR) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static Result no(Result r, String key) {
@@ -132,11 +143,12 @@ public final class BridgeSpaceSC {
         return r;
     }
 
-    /** «Y авто»: the topmost free floor in this column (within depth blocks under the surface), or -1. */
+    /** «Y авто»: the topmost free place standing on a floor in this column (within depth blocks under the surface), or -1. */
     public static int autoY(Cells c, int x, int z, int w, int axis, int depth) {
         int top = Math.min(c.height() - w, c.top(x, z) + 1);
         for (int y = top; y >= Math.max(1, top - depth); y--) {
-            if (check(c, x, y, z, w, axis).free) {
+            Result r = check(c, x, y, z, w, axis);
+            if (r.free && r.onGround) {
                 return y;
             }
         }
@@ -145,7 +157,8 @@ public final class BridgeSpaceSC {
 
     /**
      * The check with «Y авто» (y = Integer.MIN_VALUE) or an exact y, and when it isn't free the nearest free
-     * place within `radius` blocks (by straight distance).
+     * place within `radius` blocks (by straight distance; with an exact y at any height within NEAR_DY, a place at
+     * another height counting Y_PENALTY a block of the difference farther - the same Y is preferred).
      */
     public static Result probe(Cells c, int x, int y, int z, int w, int axis, int radius) {
         boolean auto = y == Integer.MIN_VALUE;
@@ -156,9 +169,8 @@ public final class BridgeSpaceSC {
                 r = check(c, x, ay, z, w, axis);
             } else {
                 r = check(c, x, Math.min(c.height() - w, c.top(x, z) + 1), z, w, axis);
-                if (r.free) {
-                    r.free = false;                       // can't happen (autoY would have found it) - stay safe
-                }
+                r.free = false;                           // free in the air maybe, but «авто» wants a surface
+                r.onGround = r.inAir = r.voidBelow = false;
                 if (r.reason.length() == 0) {
                     r.reason = "sc.bridge.place.nofloor";
                 }
@@ -170,7 +182,7 @@ public final class BridgeSpaceSC {
             return r;
         }
         int bx = 0, by = 0, bz = 0;
-        double best = Double.MAX_VALUE;
+        double best = Double.MAX_VALUE, bestDist = 0;
         int baseY = auto ? r.y : y;
         for (int ring = 0; ring <= radius; ring++) {
             if (ring > best) {
@@ -188,6 +200,7 @@ public final class BridgeSpaceSC {
                             double dist = Math.sqrt(dx * dx + dz * dz + (double) (ay - baseY) * (ay - baseY));
                             if (dist < best && (ring > 0 || ay != r.y)) {
                                 best = dist;
+                                bestDist = dist;
                                 bx = px;
                                 by = ay;
                                 bz = pz;
@@ -204,11 +217,13 @@ public final class BridgeSpaceSC {
                                 continue;
                             }
                             double dist = Math.sqrt(dx * dx + dz * dz + dy * dy);
-                            if (dist >= best) {
+                            double score = dist + Math.abs(dy) * Y_PENALTY;
+                            if (score >= best) {
                                 continue;
                             }
                             if (check(c, px, py, pz, w, axis).free) {
-                                best = dist;
+                                best = score;
+                                bestDist = dist;
                                 bx = px;
                                 by = py;
                                 bz = pz;
@@ -223,7 +238,7 @@ public final class BridgeSpaceSC {
             r.nx = bx;
             r.ny = by;
             r.nz = bz;
-            r.nDist = (int) Math.round(best);
+            r.nDist = (int) Math.round(bestDist);
         }
         return r;
     }
@@ -246,6 +261,33 @@ public final class BridgeSpaceSC {
                         }
                         int f = c.cell(x + dx, py - 1, z + dz), a = c.cell(x + dx, py, z + dz), b = c.cell(x + dx, py + 1, z + dz);
                         if (f == SOLID && (a == AIR || a == PASS) && (b == AIR || b == PASS)) {
+                            return new int[]{x + dx, py, z + dz};
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * С3 turbulence (§7б): the nearest place a body fits at (x, y, z) - two free cells, no lava under them; a floor
+     * is not needed (one comes out of the air with a soft landing) - within `radius` across and `dy` up or down; or null.
+     */
+    public static int[] freeSpot(Cells c, int x, int y, int z, int radius, int dy) {
+        for (int ring = 0; ring <= radius; ring++) {
+            for (int dx = -ring; dx <= ring; dx++) {
+                for (int dz = -ring; dz <= ring; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) {
+                        continue;
+                    }
+                    for (int k = 0; k <= 2 * dy; k++) {
+                        int py = y + (k + 1) / 2 * (k % 2 == 0 ? 1 : -1);
+                        if (py < 1 || py + 2 > c.height()) {
+                            continue;
+                        }
+                        int a = c.cell(x + dx, py, z + dz), b = c.cell(x + dx, py + 1, z + dz), f = c.cell(x + dx, py - 1, z + dz);
+                        if ((a == AIR || a == PASS) && (b == AIR || b == PASS) && f != LAVA) {
                             return new int[]{x + dx, py, z + dz};
                         }
                     }

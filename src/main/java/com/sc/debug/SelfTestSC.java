@@ -4350,6 +4350,37 @@ public final class SelfTestSC {
         int[] noneSpot = com.sc.bridge.BridgeSpaceSC.standSpot(lava, 0, 64, 0, 2, 3);
         check(java.util.Arrays.equals(open, new int[]{0, 64, 0}) && java.util.Arrays.equals(up, new int[]{0, 66, 0}) && noneSpot == null,
                 "bridge turbulence: a shaken arrival stands on the nearest floor with two free cells (none over the void)");
+        // §7б: the turbulence / scatter takes any free place - the air too (one comes out with a soft landing)
+        FakeCells sky = new FakeCells();
+        sky.ground = 0;
+        int[] inAir = com.sc.bridge.BridgeSpaceSC.freeSpot(sky, 0, 64, 0, 4, 6);
+        sky.put(0, 64, 0, com.sc.bridge.BridgeSpaceSC.SOLID);
+        int[] past = com.sc.bridge.BridgeSpaceSC.freeSpot(sky, 0, 64, 0, 4, 6);
+        FakeCells overLava = new FakeCells();
+        overLava.put(0, 63, 0, com.sc.bridge.BridgeSpaceSC.LAVA);
+        int[] noLava = com.sc.bridge.BridgeSpaceSC.freeSpot(overLava, 0, 64, 0, 4, 6);
+        check(java.util.Arrays.equals(inAir, new int[]{0, 64, 0}) && past != null && !(past[0] == 0 && past[1] == 64 && past[2] == 0)
+                        && past[1] == 65 && noLava != null && !(noLava[0] == 0 && noLava[1] == 64 && noLava[2] == 0),
+                "bridge turbulence (§7б): a shaken arrival may come out in the air - the nearest two free cells, not into a block, not over lava");
+        // §7б soft landing: the countdown (pure)
+        int sl = com.sc.bridge.BridgeSoftLandSC.MAX_TICKS, airTicks = 0;
+        while (sl > 0 && airTicks < 10000) {
+            sl = com.sc.bridge.BridgeSoftLandSC.next(sl, false);
+            airTicks++;
+        }
+        int g = com.sc.bridge.BridgeSoftLandSC.MAX_TICKS;
+        boolean grace = com.sc.bridge.BridgeSoftLandSC.next(g, true) == g - 1
+                && com.sc.bridge.BridgeSoftLandSC.next(g - com.sc.bridge.BridgeSoftLandSC.GRACE, true) == 0
+                && com.sc.bridge.BridgeSoftLandSC.next(300, true) == 0 && com.sc.bridge.BridgeSoftLandSC.next(300, false) == 299
+                && com.sc.bridge.BridgeSoftLandSC.next(0, false) == 0 && com.sc.bridge.BridgeSoftLandSC.next(-5, true) == 0;
+        boolean capOk = com.sc.bridge.BridgeSoftLandSC.cap(-0.8) == com.sc.bridge.BridgeSoftLandSC.FALL_CAP
+                && com.sc.bridge.BridgeSoftLandSC.cap(-0.1) == -0.1 && com.sc.bridge.BridgeSoftLandSC.cap(0.42) == 0.42
+                && com.sc.bridge.BridgeSoftLandSC.FALL_CAP == -0.15;
+        boolean need = com.sc.bridge.BridgeSoftLandSC.needed(com.sc.bridge.BridgeSpaceSC.AIR) && com.sc.bridge.BridgeSoftLandSC.needed(com.sc.bridge.BridgeSpaceSC.PASS)
+                && !com.sc.bridge.BridgeSoftLandSC.needed(com.sc.bridge.BridgeSpaceSC.SOLID) && !com.sc.bridge.BridgeSoftLandSC.needed(com.sc.bridge.BridgeSpaceSC.WATER);
+        check(airTicks == 600 && grace && capOk && need,
+                "bridge soft landing: lasts 30 s in the air at most (" + airTicks + " ticks), ends on touching the ground (not in the first "
+                        + com.sc.bridge.BridgeSoftLandSC.GRACE + " ticks - stale onGround), caps the fall at 0.15 b/t, only over air / grass");
         // С6 interference on fake layouts
         java.util.List<int[]> others = new java.util.ArrayList<int[]>();
         others.add(new int[]{0, 64, 0});
@@ -4551,14 +4582,57 @@ public final class SelfTestSC {
         com.sc.bridge.BridgeSpaceSC.Result inside = com.sc.bridge.BridgeSpaceSC.check(c, 0, 60, 0, 3, 0);
         com.sc.bridge.BridgeSpaceSC.Result air = com.sc.bridge.BridgeSpaceSC.check(c, 0, 70, 0, 3, 0);
         com.sc.bridge.BridgeSpaceSC.Result voidR = com.sc.bridge.BridgeSpaceSC.check(c, 0, 0, 0, 3, 0);
-        check(free.free && !small.free && "sc.bridge.place.small".equals(small.reason) && "sc.bridge.place.overlava".equals(lava.reason)
-                && "sc.bridge.place.water".equals(water.reason) && "sc.bridge.place.inside".equals(inside.reason)
-                && "sc.bridge.place.nofloor".equals(air.reason) && "sc.bridge.place.void".equals(voidR.reason),
-                "bridge place check: free 3x3x2 on a floor; too small, over lava, water, inside a block, no floor, the Void refused");
+        com.sc.bridge.BridgeSpaceSC.Result high = com.sc.bridge.BridgeSpaceSC.check(c, 0, 254, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result top = com.sc.bridge.BridgeSpaceSC.check(c, 0, 253, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result inLava = com.sc.bridge.BridgeSpaceSC.check(new FakeCells().put(0, 75, 1, com.sc.bridge.BridgeSpaceSC.LAVA), 0, 74, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result airWater = com.sc.bridge.BridgeSpaceSC.check(new FakeCells().put(-1, 76, 0, com.sc.bridge.BridgeSpaceSC.WATER), 0, 74, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result airPart = com.sc.bridge.BridgeSpaceSC.check(new FakeCells().put(1, 76, 1, com.sc.bridge.BridgeSpaceSC.SOLID), 0, 74, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result space = com.sc.bridge.BridgeSpaceSC.check(c, 0, 90, 0, 5, 1);
+        FakeCells voidW = new FakeCells();
+        voidW.ground = 0;
+        com.sc.bridge.BridgeSpaceSC.Result overVoid = com.sc.bridge.BridgeSpaceSC.check(voidW, 0, 100, 0, 3, 0);
+        check(free.free && free.onGround && !free.inAir && !free.voidBelow && !small.free && "sc.bridge.place.small".equals(small.reason)
+                && "sc.bridge.place.overlava".equals(lava.reason) && "sc.bridge.place.water".equals(water.reason) && "sc.bridge.place.inside".equals(inside.reason)
+                && air.free && air.inAir && !air.onGround && !air.voidBelow && "sc.bridge.place.low".equals(voidR.reason)
+                && "sc.bridge.place.high".equals(high.reason) && top.free && "sc.bridge.place.lava".equals(inLava.reason)
+                && "sc.bridge.place.water".equals(airWater.reason) && "sc.bridge.place.small".equals(airPart.reason) && space.free && space.inAir
+                && overVoid.free && overVoid.inAir && overVoid.voidBelow,
+                "bridge place check (§7б): free on the ground (onGround) and in the air (inAir, no floor needed); a block, lava, water in the volume, "
+                        + "y < 1, the top over the ceiling refused; 5x5x2 in the air free; over the Void free with the void warning");
         FakeCells tower = new FakeCells().put(0, 80, 0, com.sc.bridge.BridgeSpaceSC.SOLID);
         int ay = com.sc.bridge.BridgeSpaceSC.autoY(tower, 0, 0, 3, 0, com.sc.bridge.BridgeSpaceSC.AUTO_DEPTH);
         com.sc.bridge.BridgeSpaceSC.Result auto = com.sc.bridge.BridgeSpaceSC.probe(c, 5, Integer.MIN_VALUE, 5, 3, 0, 16);
         check(ay == 64 && auto.free && auto.y == 64, "bridge «Y авто»: the topmost free floor (a lone block on top is no room) - y " + ay);
+        FakeCells voidCol = new FakeCells();
+        voidCol.ground = 0;
+        com.sc.bridge.BridgeSpaceSC.Result autoVoid = com.sc.bridge.BridgeSpaceSC.probe(voidCol, 0, Integer.MIN_VALUE, 0, 3, 0, 4);
+        check(com.sc.bridge.BridgeSpaceSC.autoY(voidCol, 0, 0, 3, 0, com.sc.bridge.BridgeSpaceSC.AUTO_DEPTH) == -1 && !autoVoid.free
+                        && com.sc.bridge.BridgeSpaceSC.autoY(c, 0, 0, 3, 0, com.sc.bridge.BridgeSpaceSC.AUTO_DEPTH) == 64,
+                "bridge «Y авто» (§7б) still wants a surface: none over the Void, the ground's top otherwise");
+        // §7б: the nearest free place in the air - a floating rock 7x7x7: the same height beside it, not over it
+        FakeCells rock = new FakeCells();
+        rock.ground = 0;
+        for (int x = -3; x <= 3; x++) {
+            for (int y = 100; y <= 106; y++) {
+                for (int rz = -3; rz <= 3; rz++) {
+                    rock.put(x, y, rz, com.sc.bridge.BridgeSpaceSC.SOLID);
+                }
+            }
+        }
+        com.sc.bridge.BridgeSpaceSC.Result nearAir = com.sc.bridge.BridgeSpaceSC.probe(rock, 0, 100, 0, 3, 0, 16);
+        com.sc.bridge.BridgeSpaceSC.Result nearAirOk = nearAir.hasNearest ? com.sc.bridge.BridgeSpaceSC.check(rock, nearAir.nx, nearAir.ny, nearAir.nz, 3, 0) : null;
+        FakeCells slab = new FakeCells();
+        slab.ground = 0;
+        for (int x = -4; x <= 4; x++) {
+            for (int sz = -4; sz <= 4; sz++) {
+                slab.put(x, 50, sz, com.sc.bridge.BridgeSpaceSC.SOLID);
+            }
+        }
+        com.sc.bridge.BridgeSpaceSC.Result inSlab = com.sc.bridge.BridgeSpaceSC.probe(slab, 0, 50, 0, 3, 0, 16);
+        check(!nearAir.free && nearAirOk != null && nearAirOk.free && nearAirOk.inAir && nearAir.ny == 100 && nearAir.nDist <= 5
+                        && !inSlab.free && inSlab.hasNearest && inSlab.ny == 51 && inSlab.nx == 0 && inSlab.nz == 0 && inSlab.nDist == 1,
+                "bridge nearest free place (§7б): in the air at the same height beside a floating rock (" + nearAir.nx + " " + nearAir.ny + " " + nearAir.nz
+                        + ", " + nearAir.nDist + " blocks); inside a thin slab - one up, onto it (" + inSlab.nx + " " + inSlab.ny + " " + inSlab.nz + ")");
         FakeCells wall = new FakeCells();
         for (int x = -3; x <= 3; x++) {
             for (int y = 64; y <= 70; y++) {
