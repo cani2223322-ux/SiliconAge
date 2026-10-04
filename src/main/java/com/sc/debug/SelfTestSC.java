@@ -85,6 +85,7 @@ public final class SelfTestSC {
             bridge();
             bridge2();
             bridge3();
+            bridgeRecipes();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -4618,5 +4619,157 @@ public final class SelfTestSC {
                 && !m2.any(com.sc.bridge.BridgeMarksSC.ANCHOR, 1), "bridge beacons / anchors: kept, found near a target or in a dimension");
         check(com.sc.block.BlockBridgeSC.parts() == 11 && com.sc.block.BlockBridgeSC.kindOf(com.sc.block.BlockBridgeSC.FOCUSER)
                 == com.sc.bridge.BridgeStructureSC.K_FOCUSER, "bridge blocks: 11 parts in metadata order");
+    }
+    /** The first registered crafting recipe matching a 3x3 grid of `rows` (chars mapped by `map`), or null; result in out[0]. */
+    private static net.minecraft.item.crafting.IRecipe craft3(ItemStack[] out, String[] rows, Object... map) {
+        java.util.Map<Character, ItemStack> m = new java.util.HashMap<Character, ItemStack>();
+        for (int i = 0; i + 1 < map.length; i += 2) {
+            m.put((Character) map[i], (ItemStack) map[i + 1]);
+        }
+        net.minecraft.inventory.InventoryCrafting grid = new net.minecraft.inventory.InventoryCrafting(new net.minecraft.inventory.Container() {
+            @Override
+            public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer p) {
+                return true;
+            }
+        }, 3, 3);
+        for (int r = 0; r < 3 && r < rows.length; r++) {
+            for (int c = 0; c < 3 && c < rows[r].length(); c++) {
+                ItemStack st = m.get(rows[r].charAt(c));
+                grid.setInventorySlotContents(r * 3 + c, st == null ? null : st.copy());
+            }
+        }
+        out[0] = null;
+        for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+            net.minecraft.item.crafting.IRecipe rec = (net.minecraft.item.crafting.IRecipe) o;
+            boolean hit;
+            try {
+                hit = rec.matches(grid, null);
+            } catch (Throwable t) {
+                hit = false;
+            }
+            if (hit) {
+                out[0] = rec.getCraftingResult(grid);
+                return rec;
+            }
+        }
+        return null;
+    }
+
+    private static boolean made(ItemStack got, net.minecraft.item.Item item, int meta, int count) {
+        return got != null && got.getItem() == item && got.getItemDamage() == meta && got.stackSize == count;
+    }
+
+    /** The bridge's crafts (approved): each part and item, charge carried, the coordinator copy, the second gravity-coil recipe, the book. */
+    private static void bridgeRecipes() {
+        ItemStack X = ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.CONTROLLER), P = ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.MEMORY_CHIP),
+                T = new ItemStack(ModItems.component("tiPlate")), K = new ItemStack(ModItems.component("tiCasing")), G = ModItems.ingot.stackOf(Material.HAFNIUM),
+                E = new ItemStack(com.sc.init.ModBlocks.cableSC, 1, com.sc.energy.CableType.EXO.ordinal()),
+                S = new ItemStack(com.sc.init.ModBlocks.cableSC, 1, com.sc.energy.CableType.SINGULAR.ordinal()),
+                N = new ItemStack(ModItems.component("nb3SnPlate")), M = new ItemStack(ModItems.component("matterCapsule")),
+                D = new ItemStack(ModItems.component("sensor")), O = new ItemStack(net.minecraft.init.Items.ender_eye),
+                Z = new ItemStack(net.minecraft.init.Items.nether_star), B = new ItemStack(net.minecraft.init.Blocks.obsidian),
+                cmp = new ItemStack(net.minecraft.init.Items.compass), coil = new ItemStack(com.sc.init.ModBlocks.gravityCoil);
+        net.minecraft.item.Item br = net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.bridge);
+        ItemStack[] o = new ItemStack[1];
+        String bad = "";
+        craft3(o, new String[]{"XPX", "EOE", "GKG"}, 'X', X, 'P', P, 'E', E, 'O', O, 'G', G, 'K', K);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.CONTROLLER, 1) ? "" : " controller";
+        craft3(o, new String[]{"TET", "EXE", "TET"}, 'T', T, 'E', E, 'X', X);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.ENERGY_PORT, 1) ? "" : " energyPort";
+        craft3(o, new String[]{"TPT", "PBP", "TPT"}, 'T', T, 'P', new ItemStack(com.sc.init.ModBlocks.pipeSC, 1, com.sc.util.PipeType.TITANIUM.ordinal()),
+                'B', new ItemStack(com.sc.init.ModBlocks.tankSC, 1, 0));
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.GAS_PORT, 1) ? "" : " gasPort";
+        craft3(o, new String[]{"NZN", "SMS", "NZN"}, 'N', N, 'Z', Z, 'S', S, 'M', M);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.FOCUSER, 2) ? "" : " focuser";
+        craft3(o, new String[]{"PCP", "DXD", "TTT"}, 'P', P, 'C', cmp, 'D', D, 'X', X, 'T', T);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.NAV, 1) ? "" : " nav";
+        craft3(o, new String[]{"NGN", "GCG", "NGN"}, 'N', N, 'G', G, 'C', coil);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.MASS, 1) ? "" : " mass";
+        craft3(o, new String[]{"CLC", "LHL", "CLC"}, 'C', new ItemStack(ModItems.component("copperCoil")), 'L', new ItemStack(ModItems.component("ptfeSheet")),
+                'H', new ItemStack(ModItems.component("heLoopModule")));
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.COOLER, 1) ? "" : " cooler";
+        craft3(o, new String[]{"BFB", "DXD", "BBB"}, 'B', B, 'F', new ItemStack(ModItems.component("focusLens")), 'D', D, 'X', X);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.SHIELD, 1) ? "" : " shield";
+        craft3(o, new String[]{"LOL", "EXE", "TTT"}, 'L', new ItemStack(net.minecraft.init.Items.glowstone_dust), 'O', O, 'E', E, 'X', X, 'T', T);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.BEACON, 1) ? "" : " beacon";
+        craft3(o, new String[]{"BOB", "SMS", "BGB"}, 'B', B, 'O', O, 'S', S, 'M', M, 'G', G);
+        bad += made(o[0], br, com.sc.block.BlockBridgeSC.ANCHOR, 1) ? "" : " anchor";
+        craft3(o, new String[]{"TRT", "GCG", "TRT"}, 'T', T, 'R', new ItemStack(net.minecraft.init.Items.redstone),
+                'G', new ItemStack(net.minecraft.init.Blocks.glass_pane), 'C', cmp);
+        bad += made(o[0], ModItems.coordinator, 0, 1) && com.sc.bridge.BridgeItemDataSC.point(o[0]) == null ? "" : " coordinator";
+        craft3(o, new String[]{"GOG", "PXP", "GSG"}, 'G', G, 'O', O, 'P', P, 'X', X, 'S', S);
+        bad += made(o[0], ModItems.bridgeLinkModule, 0, 1) ? "" : " linkModule";
+        // G2: the gravity coil with Exo cable (1), the original with Singular cable still there (2)
+        ItemStack tc = new ItemStack(com.sc.init.ModBlocks.tokamakCoil), fc = new ItemStack(ModItems.component("fusionCore"));
+        craft3(o, new String[]{"HSH", "KFK", "HSH"}, 'H', G, 'S', E, 'K', tc, 'F', fc);
+        bad += made(o[0], coil.getItem(), 0, 1) ? "" : " coilExo";
+        craft3(o, new String[]{"HSH", "KFK", "HSH"}, 'H', G, 'S', S, 'K', tc, 'F', fc);
+        bad += made(o[0], coil.getItem(), 0, 2) ? "" : " coilSingular";
+        check(bad.isEmpty(), "bridge recipes: 10 parts, coordinator, link module and both gravity-coil recipes registered with the right result" + bad);
+
+        // the capacitor round a QV cell, the remotes round an EV cell / a Bridge Remote and an XV core: charge carried (capped)
+        ItemStack qv = new ItemStack(ModItems.battery, 1, 4), ev = new ItemStack(ModItems.battery, 1, 3), xv = new ItemStack(ModItems.battery, 1, 5),
+                tan = new ItemStack(ModItems.component("tantalumCapacitor"));
+        com.sc.item.ItemBatterySC.setCharge(qv, 123456789L);
+        craft3(o, new String[]{"GCG", "CQC", "GCG"}, 'G', G, 'C', tan, 'Q', qv);
+        boolean capOk = made(o[0], br, com.sc.block.BlockBridgeSC.CAPACITOR, 1) && o[0].hasTagCompound() && o[0].getTagCompound().getLong("BridgeEU") == 123456789L;
+        craft3(o, new String[]{"GCG", "CQC", "GCG"}, 'G', G, 'C', tan, 'Q', new ItemStack(ModItems.battery, 1, 4));
+        capOk &= made(o[0], br, com.sc.block.BlockBridgeSC.CAPACITOR, 1) && (!o[0].hasTagCompound() || o[0].getTagCompound().getLong("BridgeEU") == 0);
+        ItemStack L = new ItemStack(ModItems.component("polymerPlate")), I = new ItemStack(ModItems.component("quartzEmitter"));
+        com.sc.item.ItemBatterySC.setCharge(ev, 25000000L);
+        craft3(o, new String[]{"LIL", "TXT", "TVT"}, 'L', L, 'I', I, 'T', T, 'X', X, 'V', ev);
+        boolean remOk = made(o[0], ModItems.bridgeRemote, com.sc.item.ItemBridgeRemoteSC.GROUND, 1)
+                && com.sc.item.ItemBridgeRemoteSC.chargeOf(o[0]) == com.sc.bridge.BridgeMathSC.REMOTE_CAPACITY;
+        com.sc.item.ItemBatterySC.setCharge(ev, 3000000L);
+        craft3(o, new String[]{"LIL", "TXT", "TVT"}, 'L', L, 'I', I, 'T', T, 'X', X, 'V', ev);
+        remOk &= made(o[0], ModItems.bridgeRemote, com.sc.item.ItemBridgeRemoteSC.GROUND, 1) && com.sc.item.ItemBridgeRemoteSC.chargeOf(o[0]) == 3000000L;
+        ItemStack ground = new ItemStack(ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND);
+        com.sc.bridge.BridgeItemDataSC.setCharge(ground, 4000000L);
+        com.sc.bridge.BridgeItemDataSC.tag(ground).setIntArray("Br", new int[]{10, 64, -20, 0});
+        com.sc.item.ItemBatterySC.setCharge(xv, 5000000L);
+        craft3(o, new String[]{"SOS", "MRM", "SYS"}, 'S', S, 'O', O, 'M', M, 'R', ground, 'Y', xv);
+        boolean spaceOk = made(o[0], ModItems.bridgeRemote, com.sc.item.ItemBridgeRemoteSC.SPACE, 1) && com.sc.item.ItemBridgeRemoteSC.chargeOf(o[0]) == 9000000L
+                && java.util.Arrays.equals(com.sc.bridge.BridgeItemDataSC.remoteLink(o[0]), new int[]{10, 64, -20, 0});
+        com.sc.item.ItemBatterySC.setCharge(xv, 3000000000L);
+        craft3(o, new String[]{"SOS", "MRM", "SYS"}, 'S', S, 'O', O, 'M', M, 'R', ground, 'Y', xv);
+        spaceOk &= made(o[0], ModItems.bridgeRemote, com.sc.item.ItemBridgeRemoteSC.SPACE, 1)
+                && com.sc.item.ItemBridgeRemoteSC.chargeOf(o[0]) == com.sc.bridge.BridgeMathSC.SPACE_REMOTE_CAPACITY;
+        check(capOk && remOk && spaceOk, "bridge recipes: the QV cell's charge goes into the capacitor, the EV cell's into the Bridge Remote (capped 10 M),"
+                + " the Bridge Remote's binding and charge + the XV core's into the Space Remote (capped 20 M) (" + capOk + "/" + remOk + "/" + spaceOk + ")");
+
+        // the coordinator copy: filled + empty -> the point copied, the filled one stays in the grid; two empty / two filled - no
+        ItemStack filled = new ItemStack(ModItems.coordinator), empty = new ItemStack(ModItems.coordinator);
+        com.sc.bridge.BridgeItemDataSC.setPoint(filled, 100, 70, -300, 0, true);
+        com.sc.bridge.BridgeItemDataSC.setPointName(filled, "Home");
+        net.minecraft.item.crafting.IRecipe cr = craft3(o, new String[]{"F E", "", ""}, 'F', filled, 'E', empty);
+        boolean copy = cr instanceof com.sc.init.CoordinatorCopyRecipeSC && o[0] != null && o[0].getItem() == ModItems.coordinator
+                && java.util.Arrays.equals(com.sc.bridge.BridgeItemDataSC.point(o[0]), new int[]{100, 70, -300, 0})
+                && "Home".equals(com.sc.bridge.BridgeItemDataSC.pointName(o[0])) && com.sc.bridge.BridgeItemDataSC.safe(o[0]);
+        boolean stays = ModItems.coordinator.hasContainerItem(filled) && !ModItems.coordinator.doesContainerItemLeaveCraftingGrid(filled)
+                && java.util.Arrays.equals(com.sc.bridge.BridgeItemDataSC.point(ModItems.coordinator.getContainerItem(filled)), new int[]{100, 70, -300, 0})
+                && !ModItems.coordinator.hasContainerItem(empty);
+        boolean twoEmpty = craft3(o, new String[]{"EE", "", ""}, 'E', empty) == null;
+        boolean twoFilled = craft3(o, new String[]{"FF", "", ""}, 'F', filled) == null;
+        boolean extra = craft3(o, new String[]{"FEO", "", ""}, 'F', filled, 'E', empty, 'O', O) == null;
+        check(copy && stays && twoEmpty && twoFilled && extra, "coordinator copy: filled + empty -> the point, name and safe flag copied, the filled one stays in the grid;"
+                + " two empty / two filled / anything extra - no recipe (" + copy + "/" + stays + "/" + twoEmpty + "/" + twoFilled + "/" + extra + ")");
+
+        // the book: the bridge article has the recipe cards, and the G key opens it for the remotes, the coordinator and the link module
+        com.sc.manual.BookContent.invalidate();
+        com.sc.manual.BookEntry be = com.sc.manual.BookContent.byId("bridge");
+        int cards = 0;
+        for (com.sc.manual.BookEl el : be.els) {
+            if (el.kind == com.sc.manual.BookEl.Kind.CRAFT) {
+                cards++;
+            }
+        }
+        boolean keys = com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.bridgeRemote, 1, 0)) == be
+                && com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.bridgeRemote, 1, 1)) == be
+                && com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.coordinator)) == be
+                && com.sc.manual.BookContent.entryFor(new ItemStack(ModItems.bridgeLinkModule)) == be
+                && com.sc.manual.BookContent.entryFor(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.ANCHOR, 1)) == be;
+        String about2 = com.sc.manual.Lang.tr("sc.manual.bridge.about.2");
+        check(cards >= 18 && keys && !about2.contains("No recipes yet"), "bridge book: " + cards + " recipe cards (>= 18), G opens the article for the remotes,"
+                + " coordinator and link module (" + keys + "), no 'no recipes yet'");
     }
 }

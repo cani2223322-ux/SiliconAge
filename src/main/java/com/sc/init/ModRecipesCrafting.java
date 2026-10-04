@@ -39,6 +39,10 @@ public final class ModRecipesCrafting {
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         net.minecraftforge.oredict.RecipeSorter.register("siliconage:chargecarry", ChargeCarryRecipeSC.class,
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:bridgecharge", BridgeChargeRecipeSC.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:coordinatorcopy", CoordinatorCopyRecipeSC.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPELESS, "after:forge:shapelessore");
         cablesAndPipes();
         baseMaterials();
         passiveComponents();
@@ -55,6 +59,7 @@ public final class ModRecipesCrafting {
         tubeParts();
         tanks();
         manual();
+        bridge();
     }
 
     private static ItemStack cable(CableType type) {
@@ -267,6 +272,10 @@ public final class ModRecipesCrafting {
         // its gravity coils (16 in the build), two at a time: tokamak coils, hafnium, Singular cable, a fusion core
         OreRecipes.shaped(new ItemStack(ModBlocks.gravityCoil, 2), "HSH", "KFK", "HSH",
                 'H', ingot(Material.HAFNIUM), 'S', cable(CableType.SINGULAR), 'K', new ItemStack(ModBlocks.tokamakCoil),
+                'F', comp("fusionCore"));
+        // ... or one at a time with Exo cable in place of the Singular (Г2: the bridge's ring before a Singular reactor)
+        OreRecipes.shaped(new ItemStack(ModBlocks.gravityCoil, 1), "HSH", "KFK", "HSH",
+                'H', ingot(Material.HAFNIUM), 'S', cable(CableType.EXO), 'K', new ItemStack(ModBlocks.tokamakCoil),
                 'F', comp("fusionCore"));
         // generator upgrades
         ItemStack transistor = silicon(SiliconMaterial.TRANSISTOR);
@@ -784,5 +793,66 @@ public final class ModRecipesCrafting {
     private static void manual() {
         OreRecipes.shapeless(new ItemStack(ModItems.manual),
                 Items.book, comp("resistor"), cable(CableType.COPPER_BARE));
+    }
+
+    /**
+     * The Ground / Space Bridge (docs/plan-ground-bridge.md, recipes approved «все ★»): the eleven parts,
+     * the remotes, the coordinator (and its copy) and the Armour Link Module. The capacitor and the remotes
+     * take the charge of the battery (and of the Bridge Remote) built into them - BridgeChargeRecipeSC.
+     */
+    private static void bridge() {
+        ItemStack ctl = silicon(SiliconMaterial.CONTROLLER), mem = silicon(SiliconMaterial.MEMORY_CHIP), tp = comp("tiPlate"),
+                hf = ingot(Material.HAFNIUM), exo = cable(CableType.EXO), sing = cable(CableType.SINGULAR), nb = comp("nb3SnPlate"),
+                cap = comp("matterCapsule"), sen = comp("sensor"), eye = new ItemStack(Items.ender_eye), obs = new ItemStack(Blocks.obsidian);
+        // 1. the controller
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.CONTROLLER, 1), "XPX", "EOE", "GKG",
+                'X', ctl, 'P', mem, 'E', exo, 'O', eye, 'G', hf, 'K', comp("tiCasing"));
+        // 2. the Singularity Capacitor round a QV cell (its charge comes along)
+        GameRegistry.addRecipe(new BridgeChargeRecipeSC(part(com.sc.block.BlockBridgeSC.CAPACITOR, 1), "GCG", "CQC", "GCG",
+                'G', hf, 'C', comp("tantalumCapacitor"), 'Q', new ItemStack(ModItems.battery, 1, 4)));
+        // 3. the energy port
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.ENERGY_PORT, 1), "TET", "EXE", "TET", 'T', tp, 'E', exo, 'X', ctl);
+        // 4. the gas port: titanium pipes round a steel tank
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.GAS_PORT, 1), "TPT", "PBP", "TPT",
+                'T', tp, 'P', pipe(PipeType.TITANIUM), 'B', new ItemStack(ModBlocks.tankSC, 1, 0));
+        // 5. focusers, two at a time
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.FOCUSER, 2), "NZN", "SMS", "NZN",
+                'N', nb, 'Z', new ItemStack(Items.nether_star), 'S', sing, 'M', cap);
+        // 6. the navigation computer
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.NAV, 1), "PCP", "DXD", "TTT",
+                'P', mem, 'C', new ItemStack(Items.compass), 'D', sen, 'X', ctl, 'T', tp);
+        // 7. the mass compensator
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.MASS, 1), "NGN", "GOG", "NGN",
+                'N', nb, 'G', hf, 'O', new ItemStack(ModBlocks.gravityCoil));
+        // 8. the ring cooler
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.COOLER, 1), "CLC", "LHL", "CLC",
+                'C', comp("copperCoil"), 'L', comp("ptfeSheet"), 'H', comp("heLoopModule"));
+        // 9. the portal shield
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.SHIELD, 1), "OFO", "DXD", "OOO",
+                'O', obs, 'F', comp("focusLens"), 'D', sen, 'X', ctl);
+        // 10. the receiver beacon
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.BEACON, 1), "LOL", "EXE", "TTT",
+                'L', new ItemStack(Items.glowstone_dust), 'O', eye, 'E', exo, 'X', ctl, 'T', tp);
+        // 11. the interdimensional anchor
+        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.ANCHOR, 1), "BOB", "SMS", "BGB",
+                'B', obs, 'O', eye, 'S', sing, 'M', cap, 'G', hf);
+        // 12. the Bridge Remote round an EV cell (its charge comes along)
+        ItemStack ground = new ItemStack(ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.GROUND);
+        GameRegistry.addRecipe(new BridgeChargeRecipeSC(ground.copy(), "LIL", "TXT", "TVT",
+                'L', comp("polymerPlate"), 'I', comp("quartzEmitter"), 'T', tp, 'X', ctl, 'V', new ItemStack(ModItems.battery, 1, 3)));
+        // 13. the Space Remote round a Bridge Remote (its binding and charge) and an Exo core
+        GameRegistry.addRecipe(new BridgeChargeRecipeSC(new ItemStack(ModItems.bridgeRemote, 1, com.sc.item.ItemBridgeRemoteSC.SPACE),
+                "SOS", "MRM", "SYS", 'S', sing, 'O', eye, 'M', cap, 'R', ground, 'Y', new ItemStack(ModItems.battery, 1, 5)));
+        // 14. the coordinator, 15. its copy
+        OreRecipes.shaped(new ItemStack(ModItems.coordinator), "TRT", "GCG", "TRT",
+                'T', tp, 'R', new ItemStack(Items.redstone), 'G', new ItemStack(Blocks.glass_pane), 'C', new ItemStack(Items.compass));
+        GameRegistry.addRecipe(new CoordinatorCopyRecipeSC());
+        // 16. the Armour Link Module
+        OreRecipes.shaped(new ItemStack(ModItems.bridgeLinkModule), "GOG", "PXP", "GSG",
+                'G', hf, 'O', eye, 'P', mem, 'X', ctl, 'S', sing);
+    }
+
+    private static ItemStack part(int meta, int count) {
+        return com.sc.block.BlockBridgeSC.stack(meta, count);
     }
 }

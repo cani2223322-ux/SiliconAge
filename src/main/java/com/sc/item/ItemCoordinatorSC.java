@@ -40,6 +40,27 @@ public class ItemCoordinatorSC extends Item {
         return s != null && s.getItem() instanceof ItemCoordinatorSC;
     }
 
+    /** A filled coordinator is never used up in a craft (the copy recipe, CoordinatorCopyRecipeSC): it stays in the grid. */
+    @Override
+    public boolean hasContainerItem(ItemStack s) {
+        return BridgeItemDataSC.point(s) != null;
+    }
+
+    @Override
+    public ItemStack getContainerItem(ItemStack s) {
+        if (BridgeItemDataSC.point(s) == null) {
+            return null;
+        }
+        ItemStack back = s.copy();
+        back.stackSize = 1;
+        return back;
+    }
+
+    @Override
+    public boolean doesContainerItemLeaveCraftingGrid(ItemStack s) {
+        return false;
+    }
+
     /** "Name (x y z)" or "x y z" - tooltips and screens. */
     public static String label(ItemStack s) {
         int[] p = BridgeItemDataSC.point(s);

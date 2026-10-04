@@ -1416,7 +1416,20 @@ public final class BookContent {
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.heathead"))).addAll(paras("sc.manual.bridge.heat"));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.famhead"))).addAll(paras("sc.manual.bridge.fam"));
         e.add(BookEl.head(Lang.tr("sc.manual.bridge.lookhead"))).addAll(paras("sc.manual.bridge.look"));
-        e.about(parts.subList(0, com.sc.block.BlockBridgeSC.parts()).toArray(new ItemStack[0]));
+        // the crafts (approved «все ★»): the parts, both gravity-coil recipes, the remotes, the coordinator and its copy, the link module
+        e.add(BookEl.head(Lang.tr("sc.book.craft")));
+        for (ItemStack p : parts) {
+            if (p.getItem() == Item.getItemFromBlock(ModBlocks.gravStabiliser)) {
+                continue;                                  // its recipe is in the Singular armour's article
+            }
+            for (IRecipe r : craftingFor(p)) {
+                e.add(BookEl.craft(r));
+            }
+        }
+        // the G key opens this article for every bridge part and item (the coil and the stabiliser have their own articles)
+        List<ItemStack> about = new ArrayList<ItemStack>(parts.subList(0, com.sc.block.BlockBridgeSC.parts()));
+        about.addAll(parts.subList(com.sc.block.BlockBridgeSC.parts() + 2, parts.size()));
+        e.about(about.toArray(new ItemStack[0]));
         list.add(e);
     }
 
