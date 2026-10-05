@@ -87,6 +87,7 @@ public final class SelfTestSC {
             bridge2();
             bridge3();
             bridgeRecipes();
+            bridgeVortexLook();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -4919,6 +4920,57 @@ public final class SelfTestSC {
     }
 
     /** The bridge's crafts (approved): each part and item, charge carried, the coordinator copy, the second gravity-coil recipe, the book. */
+    /** ВП: the vortex's look in numbers - the colour by stability, the open / close sizes, the rim's wave. */
+    private static void bridgeVortexLook() {
+        float[] g = com.sc.bridge.BridgeVortexMathSC.colour(com.sc.bridge.BridgeMathSC.GROUND, 80);
+        float[] sp = com.sc.bridge.BridgeVortexMathSC.colour(com.sc.bridge.BridgeMathSC.SPACE, 80);
+        float[] g60 = com.sc.bridge.BridgeVortexMathSC.colour(com.sc.bridge.BridgeMathSC.GROUND, 60);
+        float[] g45 = com.sc.bridge.BridgeVortexMathSC.colour(com.sc.bridge.BridgeMathSC.GROUND, 45);
+        float[] g30 = com.sc.bridge.BridgeVortexMathSC.colour(com.sc.bridge.BridgeMathSC.GROUND, 30);
+        float[] g20 = com.sc.bridge.BridgeVortexMathSC.colour(com.sc.bridge.BridgeMathSC.GROUND, 20);
+        float[] s20 = com.sc.bridge.BridgeVortexMathSC.colour(com.sc.bridge.BridgeMathSC.SPACE, 20);
+        check(g[1] > g[0] && g[1] > g[2], "vortex: a stable Ground vortex is green");
+        check(sp[2] > sp[1] && sp[0] > sp[1], "vortex: a stable Space vortex is blue-violet");
+        check(java.util.Arrays.equals(g, g60), "vortex: at 60% still the kind's own colour");
+        check(g45[0] > g60[0] && g45[2] < g60[2], "vortex: under 60% it turns towards yellow");
+        check(g30[0] > g45[0] && g30[0] >= 0.99F && g30[1] > 0.8F, "vortex: at 30% fully yellow");
+        check(g20[0] >= 0.99F && g20[1] < 0.6F && g20[2] < 0.2F && java.util.Arrays.equals(g20, s20), "vortex: under 30% orange (either kind)");
+        check(com.sc.bridge.BridgeVortexMathSC.flicker(80, 12345) == 1F, "vortex: no flicker while stable");
+        boolean varies = false, inRange = true;
+        for (long ms = 0; ms < 3000; ms += 60) {
+            float f = com.sc.bridge.BridgeVortexMathSC.flicker(20, ms);
+            inRange &= f >= 0.6F && f <= 1F;
+            varies |= Math.abs(f - com.sc.bridge.BridgeVortexMathSC.flicker(20, 0)) > 0.05F;
+        }
+        check(inRange && varies, "vortex: under 30% it flickers within 0.6-1");
+        boolean grows = true;
+        float prev = -1;
+        for (int t = 0; t <= com.sc.bridge.BridgeVortexMathSC.OPEN_TICKS; t++) {
+            float s = com.sc.bridge.BridgeVortexMathSC.openScale(t);
+            grows &= s > prev && s >= 0F && s <= 1F;
+            prev = s;
+        }
+        check(com.sc.bridge.BridgeVortexMathSC.openScale(0) == 0F && grows && com.sc.bridge.BridgeVortexMathSC.openScale(100) == 1F,
+                "vortex: opening grows from a point to full size in 0.5 s");
+        check(com.sc.bridge.BridgeVortexMathSC.openFlash(0) == 1F && com.sc.bridge.BridgeVortexMathSC.openFlash(10) == 0F,
+                "vortex: the opening flash fades over the growth");
+        check(com.sc.bridge.BridgeVortexMathSC.closeScale(0) == 1F && com.sc.bridge.BridgeVortexMathSC.closeScale(200) < 1F
+                && com.sc.bridge.BridgeVortexMathSC.closeScale(200) > 0F && com.sc.bridge.BridgeVortexMathSC.closeScale(400) == 0F,
+                "vortex: collapsing shrinks to a point in 0.4 s");
+        boolean same = true, bounded = true, periodic = true, differs = false;
+        for (int i = 0; i < 64; i++) {
+            double th = i * 0.3, t = i * 0.17;
+            float a = com.sc.bridge.BridgeVortexMathSC.rimNoise(th, t, 42L);
+            same &= a == com.sc.bridge.BridgeVortexMathSC.rimNoise(th, t, 42L);
+            bounded &= a >= -1F && a <= 1F;
+            periodic &= Math.abs(a - com.sc.bridge.BridgeVortexMathSC.rimNoise(th + Math.PI * 2, t, 42L)) < 1e-4F;
+            differs |= Math.abs(a - com.sc.bridge.BridgeVortexMathSC.rimNoise(th, t, 987654321L)) > 1e-3F;
+        }
+        check(same && bounded, "vortex: the rim's wave is deterministic and within -1..1");
+        check(periodic, "vortex: the rim closes on itself (no seam at 360 degrees)");
+        check(differs, "vortex: two vortices wave differently");
+    }
+
     private static void bridgeRecipes() {
         ItemStack X = ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.CONTROLLER), P = ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.MEMORY_CHIP),
                 T = new ItemStack(ModItems.component("tiPlate")), K = new ItemStack(ModItems.component("tiCasing")), G = ModItems.ingot.stackOf(Material.HAFNIUM),

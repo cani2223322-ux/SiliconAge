@@ -14,7 +14,8 @@ Writes into src/main/resources/assets/siliconage/textures/blocks (32 x 32, the m
   with stars), each animated (16 frames, .mcmeta).
 and a preview sheet (x4) next to this script.
 
-Usage: python gen_bridge_tex.py [project dir]
+Usage: python gen_bridge_tex.py [project dir] [--fx]
+  --fx: only textures/fx/vortex_spiral, vortex_stars, vortex_glow (256 / 256 / 128 px, the one-disc vortex).
 """
 import json
 import math
@@ -24,7 +25,7 @@ import sys
 
 from PIL import Image
 
-PROJECT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+PROJECT = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT = os.path.join(PROJECT, 'src', 'main', 'resources', 'assets', 'siliconage', 'textures', 'blocks')
 PREVIEW = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bridge_tex_preview.png')
 S = 32
@@ -424,5 +425,102 @@ def main():
     print('wrote %d block textures, %d vortex tiles, preview %s' % (len(tex), 9 + 25, PREVIEW))
 
 
+# ------------------------------------------------------------------ the vortex as one disc (fx, 256 px)
+# The portal is drawn as ONE disc by the centre cell's renderer (client/BridgeVortexRendererSC): these are greyscale
+# (white + alpha) pictures it tints and turns, so the colour by kind / stability is the renderer's.
+
+FX = os.path.join(PROJECT, 'src', 'main', 'resources', 'assets', 'siliconage', 'textures', 'fx')
+FS = 256
+
+
+def smooth(e0, e1, x):
+    t = max(0.0, min(1.0, (x - e0) / (e1 - e0)))
+    return t * t * (3 - 2 * t)
+
+
+def fx_spiral():
+    """A seamless radial spiral: 3 logarithmic arms + 7 thin streaks, white, the alpha its brightness, fading to
+    nothing at the rim (r = 1 is the texture's inscribed circle)."""
+    im = Image.new('RGBA', (FS, FS), (255, 255, 255, 0))
+    c = (FS - 1) / 2.0
+    pix = im.load()
+    for y in range(FS):
+        for x in range(FS):
+            dx, dy = (x - c) / c, (y - c) / c
+            r = math.hypot(dx, dy)
+            if r >= 1.0:
+                continue
+            th = math.atan2(dy, dx)
+            lr = math.log(max(r, 0.02))
+            arms = 0.5 + 0.5 * math.cos(3 * th + 4.2 * lr)
+            streak = 0.5 + 0.5 * math.cos(7 * th + 7.5 * lr + 1.3)
+            v = 0.62 * arms ** 1.6 + 0.38 * streak ** 3
+            v *= 0.55 + 0.45 * smooth(0.0, 0.35, r)          # the very centre is a calm eye
+            v *= 1 - smooth(0.78, 1.0, r)                     # fade out at the rim
+            a = int(max(0, min(255, v * 255)))
+            g = int(200 + 55 * v)
+            pix[x, y] = (g, g, g, a)
+    return im
+
+
+def fx_stars():
+    """The Space bridge's starfield: dots of different size and colour inside the inscribed circle, transparent."""
+    im = Image.new('RGBA', (FS, FS), (255, 255, 255, 0))
+    c = (FS - 1) / 2.0
+    pix = im.load()
+    rnd = random.Random(1609)
+    for _ in range(170):
+        r = math.sqrt(rnd.random()) * 0.92 * c
+        th = rnd.random() * 2 * math.pi
+        sx, sy = c + r * math.cos(th), c + r * math.sin(th)
+        big = rnd.random()
+        rad = 0.7 + (2.0 if big > 0.93 else 0.9 if big > 0.7 else 0.0)
+        col = rnd.choice([(255, 255, 255), (200, 220, 255), (255, 235, 210), (220, 200, 255)])
+        for y in range(int(sy - rad - 2), int(sy + rad + 3)):
+            for x in range(int(sx - rad - 2), int(sx + rad + 3)):
+                if not (0 <= x < FS and 0 <= y < FS):
+                    continue
+                d = math.hypot(x - sx, y - sy)
+                a = max(0.0, 1 - d / (rad + 1.2)) ** 2
+                if a <= 0:
+                    continue
+                old = pix[x, y]
+                na = min(255, old[3] + int(a * 255))
+                pix[x, y] = col + (na,)
+    return im
+
+
+def fx_glow(size=128):
+    """A soft round glow (the halo, the dark core, the birth / collapse flash): white, gaussian alpha."""
+    im = Image.new('RGBA', (size, size), (255, 255, 255, 0))
+    c = (size - 1) / 2.0
+    pix = im.load()
+    for y in range(size):
+        for x in range(size):
+            r = math.hypot(x - c, y - c) / c
+            a = math.exp(-r * r * 4.5) * (1 - smooth(0.85, 1.0, r))
+            pix[x, y] = (255, 255, 255, int(255 * a))
+    return im
+
+
+def main_fx():
+    if not os.path.isdir(FX):
+        os.makedirs(FX)
+    out = {'vortex_spiral': fx_spiral(), 'vortex_stars': fx_stars(), 'vortex_glow': fx_glow()}
+    for name, im in out.items():
+        im.save(os.path.join(FX, name + '.png'))
+        with open(os.path.join(FX, name + '.png.mcmeta'), 'w') as fh:
+            json.dump({'texture': {'blur': True, 'clamp': True}}, fh)
+    sheet = Image.new('RGBA', (3 * (FS + 8) + 8, FS + 16), (20, 24, 30, 255))
+    for i, name in enumerate(sorted(out)):
+        im = out[name] if out[name].size[0] == FS else out[name].resize((FS, FS), Image.BILINEAR)
+        sheet.paste(im, (8 + i * (FS + 8), 8), im)
+    sheet.save(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bridge_fx_preview.png'))
+    print('wrote %d fx textures into %s' % (len(out), FX))
+
+
 if __name__ == '__main__':
-    main()
+    if '--fx' in sys.argv:          # only the vortex disc's pictures (textures/fx), the block textures untouched
+        main_fx()
+    else:
+        main()

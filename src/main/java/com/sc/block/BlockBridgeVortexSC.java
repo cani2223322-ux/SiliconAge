@@ -22,14 +22,14 @@ import net.minecraft.world.World;
  * One cell of an open bridge's vortex (meta 0 Ground - green, 1 Space - blue-white with stars): no item,
  * nothing solid, it glows. It is only ever put into air and taken away when the portal closes (or when it
  * finds its portal gone). Whatever walks into it goes to the other end (TileEntityBridgeControllerSC.enter).
- * The swirl is one big animated picture cut into 3x3 (5x5) tiles - each cell shows its own.
+ * The cells draw nothing as blocks: the opening's centre cell draws the whole portal as one disc
+ * (client/BridgeVortexRendererSC); every cell still lights the place, takes whoever walks in and is what WAILA shows.
  */
 public class BlockBridgeVortexSC extends Block {
 
-    public static final int GROUND_TILES = 3, SPACE_TILES = 5;
-
+    /** Only for the odd particle the game asks a block for (the disc itself is drawn from textures/fx). */
     @SideOnly(Side.CLIENT)
-    private IIcon[] ground, space;
+    private IIcon ground, space;
 
     public BlockBridgeVortexSC() {
         super(Material.portal);
@@ -83,6 +83,12 @@ public class BlockBridgeVortexSC extends Block {
         return 1;
     }
 
+    /** ВП1: no block model - the master cell's renderer draws the whole opening as one disc. */
+    @Override
+    public int getRenderType() {
+        return -1;
+    }
+
     @Override
     public Item getItemDropped(int meta, Random rand, int fortune) {
         return null;
@@ -104,17 +110,6 @@ public class BlockBridgeVortexSC extends Block {
     }
 
     @Override
-    @SideOnly(Side.CLIENT)
-    public boolean shouldSideBeRendered(IBlockAccess w, int x, int y, int z, int side) {
-        TileEntity own = w.getTileEntity(x - net.minecraft.util.Facing.offsetsXForSide[side], y - net.minecraft.util.Facing.offsetsYForSide[side],
-                z - net.minecraft.util.Facing.offsetsZForSide[side]);
-        if (own instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) own).isUnstable()) {
-            return false;                                  // С3: a shaking cell is drawn by its renderer (jittering)
-        }
-        return w.getBlock(x, y, z) != this && super.shouldSideBeRendered(w, x, y, z, side);
-    }
-
-    @Override
     public void onEntityCollidedWithBlock(World world, int x, int y, int z, Entity e) {
         if (world.isRemote) {
             return;
@@ -127,59 +122,15 @@ public class BlockBridgeVortexSC extends Block {
 
     @Override
     @SideOnly(Side.CLIENT)
-    public void randomDisplayTick(World world, int x, int y, int z, Random rand) {
-        boolean sp = world.getBlockMetadata(x, y, z) == 1;
-        for (int i = 0; i < 2; i++) {
-            world.spawnParticle("portal", x + rand.nextDouble(), y + rand.nextDouble(), z + rand.nextDouble(),
-                    (rand.nextDouble() - 0.5) * 0.6, (rand.nextDouble() - 0.5) * 0.6, (rand.nextDouble() - 0.5) * 0.6);
-        }
-        if (sp && rand.nextInt(4) == 0) {
-            world.spawnParticle("fireworksSpark", x + rand.nextDouble(), y + rand.nextDouble(), z + rand.nextDouble(), 0, 0.01, 0);
-        }
-        TileEntity te = world.getTileEntity(x, y, z);
-        if (te instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) te).isUnstable()) {
-            for (int i = 0; i < 3; i++) {                  // С3: sparks fly off a shaking vortex
-                world.spawnParticle(rand.nextBoolean() ? "magicCrit" : "crit", x + rand.nextDouble(), y + rand.nextDouble(), z + rand.nextDouble(),
-                        (rand.nextDouble() - 0.5) * 0.8, rand.nextDouble() * 0.4, (rand.nextDouble() - 0.5) * 0.8);
-            }
-        }
-        if (rand.nextInt(120) == 0) {
-            world.playSound(x + 0.5, y + 0.5, z + 0.5, "portal.portal", 0.35F, rand.nextFloat() * 0.4F + (sp ? 1.2F : 0.8F), false);
-        }
-    }
-
-    @Override
-    @SideOnly(Side.CLIENT)
     public void registerBlockIcons(IIconRegister register) {
-        ground = new IIcon[GROUND_TILES * GROUND_TILES];
-        space = new IIcon[SPACE_TILES * SPACE_TILES];
-        for (int i = 0; i < ground.length; i++) {
-            ground[i] = register.registerIcon(Reference.ASSETS + ":bridgeVortexG_" + i);
-        }
-        for (int i = 0; i < space.length; i++) {
-            space[i] = register.registerIcon(Reference.ASSETS + ":bridgeVortexS_" + i);
-        }
-        blockIcon = ground[ground.length / 2];
+        ground = register.registerIcon(Reference.ASSETS + ":bridgeVortexG_4");
+        space = register.registerIcon(Reference.ASSETS + ":bridgeVortexS_12");
+        blockIcon = ground;
     }
 
     @Override
     @SideOnly(Side.CLIENT)
     public IIcon getIcon(int face, int meta) {
-        return meta == 1 ? space[space.length / 2] : ground[ground.length / 2];
-    }
-
-    @Override
-    @SideOnly(Side.CLIENT)
-    public IIcon getIcon(IBlockAccess world, int x, int y, int z, int face) {
-        int meta = world.getBlockMetadata(x, y, z);
-        TileEntity te = world.getTileEntity(x, y, z);
-        if (!(te instanceof TileEntityBridgeVortexSC)) {
-            return getIcon(face, meta);
-        }
-        TileEntityBridgeVortexSC v = (TileEntityBridgeVortexSC) te;
-        IIcon[] set = meta == 1 ? space : ground;
-        int n = meta == 1 ? SPACE_TILES : GROUND_TILES;
-        int col = Math.max(0, Math.min(n - 1, v.getTileU())), row = Math.max(0, Math.min(n - 1, v.getTileV()));
-        return set[row * n + col];
+        return meta == 1 ? space : ground;
     }
 }

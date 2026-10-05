@@ -4306,7 +4306,7 @@ sc.manual.bridge.fam.1=The bridge remembers where you have been: chunks you walk
 sc.manual.bridge.fam.2=A familiar target is %s%% cheaper and precise. An unfamiliar one costs %s%% more and the exit may shift up to %s blocks (always to a free place); with the Navigation Computer - up to %s blocks, with a Receiver Beacon next to the target or to the scanner's finds from level 5 armour - precise.
 sc.manual.bridge.fam.3=Dimension scouting: the first Space bridge trip into a dimension with no Interdimensional Anchor exits with a scatter of up to %s blocks. Its price is already doubled by the missing anchor - it does not grow a second time.
 sc.manual.bridge.lookhead=Look
-sc.manual.bridge.look.1=The birth of a singularity is a flash and particles flying inward, then the vortex unfolds. While a portal is open a hologram with the target's coordinates hangs above the ring.
+sc.manual.bridge.look.1=The birth of a singularity is a flash and particles flying inward, then the vortex unfolds. While a portal is open a hologram with the target's coordinates hangs above the ring. The vortex is one solid spiral disc with a living rim: green for the Ground bridge, blue-violet with stars for the Space one; as stability drops it turns yellow, at a dangerous level orange with cracks; an end with no ring round it has a sparking energy rim.
 # Ground / Space Bridge, stage 2: remotes, coordinator, armour link, modes, access
 item.siliconage.bridgeRemote.name=Bridge Remote
 item.siliconage.spaceRemote.name=Space Remote

@@ -49,6 +49,18 @@ public class CommonProxy {
     public void bridgeSoftLand(int ticks) {
     }
 
+    /** ВП5 / ВП12: an open vortex's centre cell ticks on the client - its particles and hum (client only). */
+    public void vortexTick(net.minecraft.tileentity.TileEntity vortex) {
+    }
+
+    /** ВП7: an end near this client closed - its vortex shrinks to a point and pops (client only; any thread). */
+    public void bridgeCollapse(double x, double y, double z, int kind, int size, int axis, boolean ringless, int stability) {
+    }
+
+    /** ВП11: this client's player came through a bridge - the flash at the screen's edges and a trail (client only; any thread). */
+    public void bridgeArrive(int kind) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

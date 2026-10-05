@@ -20,6 +20,7 @@ public class ClientProxy extends CommonProxy {
         com.sc.client.BookKeySC.register();
         com.sc.client.BridgeHighlightSC.register();
         com.sc.client.BridgeHudSC.register();
+        com.sc.client.BridgeVortexFxSC.register();
         BlockConduitSC.renderId = RenderingRegistry.getNextAvailableRenderId();
         RenderingRegistry.registerBlockHandler(new ConduitRenderer(BlockConduitSC.renderId));
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(
@@ -51,6 +52,21 @@ public class ClientProxy extends CommonProxy {
         if (s instanceof com.sc.client.GuiBridgeControllerSC && ((com.sc.client.GuiBridgeControllerSC) s).isFor(x, y, z)) {
             ((com.sc.client.GuiBridgeControllerSC) s).setState(state);
         }
+    }
+
+    @Override
+    public void vortexTick(net.minecraft.tileentity.TileEntity vortex) {
+        com.sc.client.BridgeVortexFxSC.tick((com.sc.tileentity.TileEntityBridgeVortexSC) vortex);
+    }
+
+    @Override
+    public void bridgeCollapse(double x, double y, double z, int kind, int size, int axis, boolean ringless, int stability) {
+        com.sc.client.BridgeVortexFxSC.collapse(x, y, z, kind, size, axis, ringless, stability);
+    }
+
+    @Override
+    public void bridgeArrive(int kind) {
+        com.sc.client.BridgeVortexFxSC.arrive(kind);
     }
 
     @Override

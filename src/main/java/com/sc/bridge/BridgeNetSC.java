@@ -38,6 +38,8 @@ public final class BridgeNetSC {
         CHANNEL.registerMessage(HudHandler.class, Hud.class, 4, Side.CLIENT);
         CHANNEL.registerMessage(BirthHandler.class, Birth.class, 5, Side.CLIENT);
         CHANNEL.registerMessage(SoftLandHandler.class, SoftLand.class, 6, Side.CLIENT);
+        CHANNEL.registerMessage(CollapseHandler.class, Collapse.class, 7, Side.CLIENT);
+        CHANNEL.registerMessage(ArriveHandler.class, Arrive.class, 8, Side.CLIENT);
     }
 
     /** A remote / the armour / a coordinator: one command (BridgeFarSC.F_*), no distance limit - the server checks the link. */
@@ -366,6 +368,88 @@ public final class BridgeNetSC {
         @Override
         public IMessage onMessage(SoftLand msg, MessageContext ctx) {
             com.sc.SCMod.proxy.bridgeSoftLand(msg.ticks);
+            return null;
+        }
+    }
+    /** Server -> clients near an end that closes: ВП7 its vortex shrinks to a point and pops (drawn by the client alone). */
+    public static class Collapse implements IMessage {
+        public double x, y, z;
+        public int kind, size, axis, stability;
+        public boolean ringless;
+
+        public Collapse() {
+        }
+
+        public Collapse(double x, double y, double z, int kind, int size, int axis, boolean ringless, int stability) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.kind = kind;
+            this.size = size;
+            this.axis = axis;
+            this.ringless = ringless;
+            this.stability = stability;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            x = buf.readDouble();
+            y = buf.readDouble();
+            z = buf.readDouble();
+            kind = buf.readByte();
+            size = buf.readByte();
+            axis = buf.readByte();
+            ringless = buf.readBoolean();
+            stability = buf.readByte();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeDouble(x);
+            buf.writeDouble(y);
+            buf.writeDouble(z);
+            buf.writeByte(kind);
+            buf.writeByte(size);
+            buf.writeByte(axis);
+            buf.writeBoolean(ringless);
+            buf.writeByte(Math.max(0, Math.min(100, stability)));
+        }
+    }
+
+    public static class CollapseHandler implements IMessageHandler<Collapse, IMessage> {
+        @Override
+        public IMessage onMessage(Collapse msg, MessageContext ctx) {
+            com.sc.SCMod.proxy.bridgeCollapse(msg.x, msg.y, msg.z, msg.kind, msg.size, msg.axis, msg.ringless, msg.stability);
+            return null;
+        }
+    }
+
+    /** Server -> the player who just came through: ВП11 a flash at the screen's edges (green Ground / blue Space) and a trail. */
+    public static class Arrive implements IMessage {
+        public int kind;
+
+        public Arrive() {
+        }
+
+        public Arrive(int kind) {
+            this.kind = kind;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            kind = buf.readByte();
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            buf.writeByte(kind);
+        }
+    }
+
+    public static class ArriveHandler implements IMessageHandler<Arrive, IMessage> {
+        @Override
+        public IMessage onMessage(Arrive msg, MessageContext ctx) {
+            com.sc.SCMod.proxy.bridgeArrive(msg.kind);
             return null;
         }
     }

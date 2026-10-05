@@ -104,6 +104,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     private boolean aProj;
     private int aDim, ax, ay, az, apAxis, aW;
     private int openMode;
+    /** The total world time this portal opened (its vortex cells tell their clients - the disc grows from a point). */
+    private long openedAt;
     private String opener = "";
     private boolean openPrecise;
     // stage 3 (§9): the ring's heat (tenths of a percent) and its overheat lock (С12); the argon shortage (С3); what
@@ -984,7 +986,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         markDirty();
     }
 
-    /** С3: the vortex's cells are told whether it shakes (their clients draw it jittering). */
+    /** С3: the vortex's cells are told the stability (their clients colour it, crack it, shake it under 30%). */
     private void applyTurbulence(boolean t) {
         turbulent = t;
         for (int end = 0; end < 2; end++) {
@@ -996,7 +998,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 if (w.blockExists(c[0], c[1], c[2])) {
                     TileEntity te = w.getTileEntity(c[0], c[1], c[2]);
                     if (te instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) te).getOpenId() == openId) {
-                        ((TileEntityBridgeVortexSC) te).setUnstable(t);
+                        ((TileEntityBridgeVortexSC) te).setStability(stability);     // the colour, the cracks, the shaking
                     }
                 }
             }
@@ -1646,6 +1648,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         refreshEnv();
         stability = stabNow().total;
         turbulent = false;
+        openedAt = worldObj.getTotalWorldTime();
         placeEnds();
         litCoils(s, true);
         loadChunks();
@@ -1823,10 +1826,20 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 w.setBlock(c[0], c[1], c[2], ModBlocks.bridgeVortex, openKind == BridgeMathSC.SPACE ? 1 : 0, 3);
                 TileEntity te = w.getTileEntity(c[0], c[1], c[2]);
                 if (te instanceof TileEntityBridgeVortexSC) {
-                    ((TileEntityBridgeVortexSC) te).setup(ownDim(), xCoord, yCoord, zCoord, end, openId, c[3], c[4]);
+                    int[] look = endLook(end);
+                    ((TileEntityBridgeVortexSC) te).setup(ownDim(), xCoord, yCoord, zCoord, end, openId, c[3], c[4], look[0], look[1], look[2] != 0,
+                            openedAt, stability);
                 }
             }
         }
+    }
+
+    /** An end's opening for its look: {cells a side, plane axis, 1 if no ring round it (a projected end)}. */
+    private int[] endLook(int end) {
+        if (end == 0 && !aProj) {
+            return new int[]{Math.max(1, aSize - 2), aAxis, 0};
+        }
+        return end == 0 ? new int[]{aW, apAxis, 1} : new int[]{bW, bAxis, 1};
     }
 
     private void removeEnds() {
@@ -1835,7 +1848,22 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             if (w == null) {
                 continue;
             }
-            for (int[] c : endCells(end)) {
+            List<int[]> cells = endCells(end);
+            if (!cells.isEmpty()) {                          // ВП7: the clients near the end watch it collapse to a point
+                double x = 0, y = 0, z = 0;
+                for (int[] c : cells) {
+                    x += c[0] + 0.5;
+                    y += c[1] + 0.5;
+                    z += c[2] + 0.5;
+                }
+                x /= cells.size();
+                y /= cells.size();
+                z /= cells.size();
+                int[] look = endLook(end);
+                com.sc.bridge.BridgeNetSC.CHANNEL.sendToAllAround(new com.sc.bridge.BridgeNetSC.Collapse(x, y, z, openKind, look[0], look[1],
+                        look[2] != 0, stability), new cpw.mods.fml.common.network.NetworkRegistry.TargetPoint(w.provider.dimensionId, x, y, z, 64));
+            }
+            for (int[] c : cells) {
                 if (w.blockExists(c[0], c[1], c[2]) && w.getBlock(c[0], c[1], c[2]) == ModBlocks.bridgeVortex) {
                     w.setBlockToAir(c[0], c[1], c[2]);
                 }
@@ -2051,6 +2079,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             BridgeSoftLandSC.arrived(moved);                 // §7б: out into the air - a soft landing
             from.playSoundEffect(fx, fy, fz, "mob.endermen.portal", 0.8F, 1.0F);
             moved.worldObj.playSoundEffect(x, y, z, "mob.endermen.portal", 0.8F, 1.0F);
+            if (moved instanceof net.minecraft.entity.player.EntityPlayerMP) {      // ВП11: the arrival's flash and trail
+                com.sc.bridge.BridgeNetSC.CHANNEL.sendTo(new com.sc.bridge.BridgeNetSC.Arrive(openKind),
+                        (net.minecraft.entity.player.EntityPlayerMP) moved);
+            }
             if (shaken) {
                 moved.addVelocity((worldObj.rand.nextDouble() - 0.5) * 0.8, 0.35, (worldObj.rand.nextDouble() - 0.5) * 0.8);
                 moved.velocityChanged = true;
