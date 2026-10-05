@@ -293,7 +293,12 @@ public final class ModItems {
         GameRegistry.registerItem(coordinator, "coordinator");
         bridgeLinkModule = new com.sc.item.ItemBridgeLinkModuleSC();
         GameRegistry.registerItem(bridgeLinkModule, "bridgeLinkModule");
+        // the Energy Converter's modules: Channel Amplifier, Efficiency, the Mekanism / Galacticraft cards (appended)
+        converterModule = new com.sc.item.ItemConverterModuleSC();
+        GameRegistry.registerItem(converterModule, "converterModule");
     }
+
+    public static com.sc.item.ItemConverterModuleSC converterModule;
 
     /** The Compressed Matter Capsule: a plain component with a TooltipSC tooltip. */
     public static final class MatterCapsule extends ItemSimpleSC {

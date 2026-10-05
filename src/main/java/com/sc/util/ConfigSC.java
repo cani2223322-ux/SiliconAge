@@ -40,6 +40,12 @@ public final class ConfigSC {
     public static boolean bladeExecutePlayers = false;
     /** A drill stops drawing on the chestplate once its charge is below this %; an overheated chestplate never feeds it. */
     public static int drillArmorReserve = 15;
+    /**
+     * The Energy Converter: units of the other energies one EU is worth (RF, Mekanism J, Galacticraft gJ;
+     * gJ 0 = Galacticraft's own rate when it is installed, else 16 / 2.44) and the conversion loss, %.
+     */
+    public static float converterRfPerEu = 4F, converterJPerEu = 10F, converterGjPerEu = 0F;
+    public static int converterLoss = 5;
 
     /** A whole number scaled by a multiplier, at least `min`, capped to an int. */
     public static int scale(int base, float mul, int min) {
@@ -106,6 +112,14 @@ public final class ConfigSC {
             drillArmorReserve = config.getInt("drillArmorReserve", b, 15, 0, 90,
                     "A drill stops taking energy from the chestplate below this % of its charge (an overheated chestplate never feeds it)"
                     + " / Бур не берёт энергию с нагрудника, если его заряд ниже этого % (перегретый нагрудник не питает)");
+            String cv = "converter";
+            config.setCategoryComment(cv, "The Energy Converter: exchange rates and loss / Преобразователь энергии: курсы и потери");
+            converterRfPerEu = config.getFloat("rfPerEu", cv, 4F, 0.1F, 1000F, "RF for one EU / RF за 1 EU");
+            converterJPerEu = config.getFloat("jPerEu", cv, 10F, 0.1F, 1000F, "Mekanism joules (J) for one EU / Джоулей Mekanism за 1 EU");
+            converterGjPerEu = config.getFloat("gjPerEu", cv, 0F, 0F, 1000F,
+                    "Galacticraft gJ for one EU; 0 = Galacticraft's own rate (16 / 2.44 without it) / gJ Galacticraft за 1 EU; 0 - курс самого Galacticraft");
+            converterLoss = config.getInt("lossPercent", cv, 5, 0, 50,
+                    "Conversion loss, %; each Efficiency module takes 2 off (at most 2 count) / Потери преобразования, %; модуль КПД снимает 2 (до 2 шт.)");
         } finally {
             if (config.hasChanged()) {
                 config.save();

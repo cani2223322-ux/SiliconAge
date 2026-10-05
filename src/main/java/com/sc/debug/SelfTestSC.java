@@ -89,6 +89,7 @@ public final class SelfTestSC {
             bridge3();
             bridgeRecipes();
             bridgeVortexLook();
+            SelfTestConverterSC.run();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -96,7 +97,7 @@ public final class SelfTestSC {
         System.out.println("[SC-TEST] SUMMARY passed=" + passed + " failed=" + failed);
     }
 
-    private static void check(boolean ok, String what) {
+    static void check(boolean ok, String what) {
         if (ok) {
             passed++;
             System.out.println("[SC-TEST] PASS " + what);
@@ -440,7 +441,7 @@ public final class SelfTestSC {
     }
 
     /** A .lang file of the jar as key -> value (the first one wins, as in the game). */
-    private static java.util.Map<String, String> langMap(String lang) {
+    static java.util.Map<String, String> langMap(String lang) {
         java.util.Map<String, String> map = new java.util.HashMap<String, String>();
         java.io.InputStream in = SelfTestSC.class.getResourceAsStream("/assets/siliconage/lang/" + lang + ".lang");
         if (in == null) {

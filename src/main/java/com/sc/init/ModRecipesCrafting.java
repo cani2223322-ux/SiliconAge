@@ -60,6 +60,30 @@ public final class ModRecipesCrafting {
         tanks();
         manual();
         bridge();
+        converter();
+    }
+
+    /**
+     * The Energy Converter and its modules - only when some other energy is in the game (the RF API,
+     * Mekanism or Galacticraft): without one the converter has no use, and no recipe.
+     */
+    private static void converter() {
+        if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
+            return;
+        }
+        ItemStack ev = cable(CableType.SUPERCONDUCTOR);
+        ItemStack controller = silicon(SiliconMaterial.CONTROLLER), memory = silicon(SiliconMaterial.MEMORY_CHIP);
+        com.sc.item.ItemConverterModuleSC m = ModItems.converterModule;
+        OreRecipes.shaped(new ItemStack(ModBlocks.energyConverter), "TKT", "EXE", "TRT",
+                'T', comp("tiPlate"), 'K', comp("copperCoil"), 'E', ev, 'X', controller, 'R', Blocks.redstone_block);
+        OreRecipes.shaped(m.stackOf(com.sc.item.ItemConverterModuleSC.Kind.AMPLIFIER), "KEK", "ECE", "KEK",
+                'K', comp("copperCoil"), 'E', ev, 'C', comp("tantalumCapacitor"));
+        OreRecipes.shaped(m.stackOf(com.sc.item.ItemConverterModuleSC.Kind.EFFICIENCY), "PDP", "DXD", "PDP",
+                'P', comp("polymerPlate"), 'D', comp("dielectric"), 'X', controller);
+        OreRecipes.shaped(m.stackOf(com.sc.item.ItemConverterModuleSC.Kind.CARD_MEKANISM), " K ", "MXM", " D ",
+                'K', comp("copperCoil"), 'M', memory, 'X', controller, 'D', comp("dielectric"));
+        OreRecipes.shaped(m.stackOf(com.sc.item.ItemConverterModuleSC.Kind.CARD_GALACTICRAFT), " H ", "MXM", " T ",
+                'H', comp("heLoopModule"), 'M', memory, 'X', controller, 'T', comp("tiPlate"));
     }
 
     private static ItemStack cable(CableType type) {

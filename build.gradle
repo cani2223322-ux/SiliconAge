@@ -77,6 +77,11 @@ dependencies {
     // MicdoodleCore, which isn't there - runClient / runServer would stop on the missing mod).
     // Our handler is registered only when GalacticraftCore is loaded (ShieldEventHandler).
     compileOnlySC files('libs/GalacticraftCore-1.7-3.0.12.504.jar')
+    // The Energy Converter (com.sc.tileentity.TileEntityEnergyConverterSC) - compile only, never in our jar:
+    // CoFH's Redstone Flux API (cofh/api/energy/*.class taken out of Industrial Upgrade's jar; whoever ships
+    // it at runtime - IU, Thermal, EnderIO - provides it, without it the RF tile class is never registered)
+    // and stubs of Mekanism's energy API (tools/mekanism-api-stub, rebuilt with its build.sh).
+    compileOnlySC files('libs/rf-api-compileonly.jar', 'libs/mekanism-api-stub-compileonly.jar')
 }
 
 // ic2/api/energy/tile/IMultiEnergySource is only compiled against: Industrial Upgrade ships the real one

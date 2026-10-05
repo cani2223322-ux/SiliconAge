@@ -341,7 +341,7 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
                 || te instanceof TileEntityTransformerSC || te instanceof TileEntityTankSC || te instanceof TileEntityFieldGeneratorSC
                 || te instanceof com.sc.tileentity.TileEntityQuarrySC || te instanceof com.sc.tileentity.TileEntityWirelessSC
                 || te instanceof com.sc.tileentity.TileEntityConduitBundleSC || te instanceof com.sc.tileentity.TileEntityShowerSC
-                || te instanceof com.sc.tileentity.TileEntityArmorStationSC
+                || te instanceof com.sc.tileentity.TileEntityArmorStationSC || te instanceof com.sc.tileentity.TileEntityEnergyConverterSC
                 || world.getBlock(x, y, z) == com.sc.init.ModBlocks.bridge;           // the bridge's parts (the controller keeps its tanks, a capacitor its charge)
     }
 

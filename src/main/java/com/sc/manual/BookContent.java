@@ -832,6 +832,7 @@ public final class BookContent {
                 .add(BookEl.item(adaptive, adaptive.getDisplayName(), Lang.tr("sc.manual.energy.storagemod.adaptive")))
                 .addAll(paras("sc.manual.energy.storagemods")).add(BookEl.link("storage", Lang.tr("sc.manual.energy.storagehead")))
                 .add(BookEl.link("modules", Lang.tr("sc.book.modules.title"))));
+        list.add(converter(c));
         StringBuilder padSuits = new StringBuilder();         // "Nano Suit from MV, ... Singular Suit from SV" from ArmorSuit.chargeTier
         for (ArmorSuit suit : ArmorSuit.values()) {
             padSuits.append(padSuits.length() == 0 ? "" : ", ").append(Lang.tr("sc.book.suitfrom",
@@ -904,6 +905,62 @@ public final class BookContent {
                         new ItemStack(ModItems.linkCard)));
         list.add(simple("quantum", c, new ItemStack(ModBlocks.quantumTranslator), "sc.manual.energy.quantumhead", "sc.manual.energy.quantum")
                 .about(new ItemStack(ModBlocks.quantumTranslator, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModItems.entangledCrystal, 1, OreDictionary.WILDCARD_VALUE)));
+    }
+
+    /**
+     * The Energy Converter: the pairs and their rates (the config's - ForeignEnergySC), the buffers, the
+     * throughput, the faces, the modules (each with the slot's limit), the recipes, the other mods.
+     */
+    private static BookEntry converter(BookChapter c) {
+        com.sc.energy.ForeignEnergySC.Kind[] kinds = com.sc.energy.ForeignEnergySC.Kind.values();
+        ItemStack conv = new ItemStack(ModBlocks.energyConverter);
+        BookEntry e = new BookEntry("converter", c, conv, Lang.tr("sc.manual.energy.convhead"));
+        Tier base = com.sc.energy.ForeignEnergySC.BASE_TIER;
+        int loss = com.sc.energy.ForeignEnergySC.lossPercent(0);
+        e.add(BookEl.title(Lang.tr("sc.manual.energy.convhead")))
+                .addAll(paras("sc.manual.energy.conv", null,
+                        new Object[]{num(com.sc.energy.ForeignEnergySC.BASE_EU_BUFFER), String.valueOf(loss)},
+                        new Object[]{base.name(), num(base.getVoltage())}));
+        BookEl t = BookEl.table(Lang.tr("sc.manual.energy.conv.t.energy"), Lang.tr("sc.manual.energy.conv.t.rate"),
+                Lang.tr("sc.manual.energy.conv.t.buffer"), Lang.tr("sc.manual.energy.conv.t.need"));
+        ItemStack[] icons = {null, ModItems.converterModule.stackOf(com.sc.item.ItemConverterModuleSC.Kind.CARD_MEKANISM),
+                ModItems.converterModule.stackOf(com.sc.item.ItemConverterModuleSC.Kind.CARD_GALACTICRAFT)};
+        for (com.sc.energy.ForeignEnergySC.Kind k : kinds) {
+            t.row(icons[k.ordinal()], k.unit, "1 EU = " + com.sc.block.ItemBlockEnergyConverterSC.trimRate(k.perEu()) + " " + k.unit,
+                    num(Math.round(com.sc.energy.ForeignEnergySC.BASE_EU_BUFFER * k.perEu())) + " " + k.unit,
+                    Lang.tr("sc.manual.energy.conv.need." + k.name().toLowerCase(Locale.ROOT)));
+        }
+        e.add(BookEl.head(Lang.tr("sc.manual.energy.conv.pairshead"))).add(t).addAll(paras("sc.manual.energy.convpair"));
+        e.add(BookEl.head(Lang.tr("sc.manual.energy.conv.faceshead"))).addAll(paras("sc.manual.energy.convfaces"));
+        e.add(BookEl.head(Lang.tr("sc.manual.energy.conv.modhead")));
+        ItemStack transformer = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TRANSFORMER);
+        ItemStack universal = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER);
+        ItemStack storage = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE);
+        e.add(BookEl.item(transformer, transformer.getDisplayName(), Lang.tr("sc.manual.energy.convmod.transformer",
+                com.sc.energy.ForeignEnergySC.MAX_TRANSFORMERS, com.sc.energy.ForeignEnergySC.euTier(com.sc.energy.ForeignEnergySC.MAX_TRANSFORMERS).name())));
+        e.add(BookEl.item(universal, universal.getDisplayName(), Lang.tr("sc.manual.energy.convmod.universal", Tier.SV.name())));
+        e.add(BookEl.item(storage, storage.getDisplayName(), Lang.tr("sc.manual.energy.convmod.storage", com.sc.energy.ForeignEnergySC.MAX_STORAGE,
+                num(com.sc.energy.ForeignEnergySC.euCapacity(com.sc.energy.ForeignEnergySC.MAX_STORAGE)))));
+        for (com.sc.item.ItemConverterModuleSC.Kind k : com.sc.item.ItemConverterModuleSC.Kind.values()) {
+            ItemStack s = ModItems.converterModule.stackOf(k);
+            String line = Lang.tr("sc.conv.module.details." + k.key());
+            if (k.max > 1) {
+                line += " " + Lang.tr("sc.conv.module.max", k.max);
+            }
+            e.add(BookEl.item(s, s.getDisplayName(), line));
+        }
+        e.add(BookEl.head(Lang.tr("sc.manual.energy.conv.extrahead"))).addAll(paras("sc.manual.energy.convextra"));
+        if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
+            e.add(BookEl.warn(Lang.tr("sc.conv.tooltip.noforeign")));
+        }
+        crafting(e, conv);
+        for (com.sc.item.ItemConverterModuleSC.Kind k : com.sc.item.ItemConverterModuleSC.Kind.values()) {
+            crafting(e, ModItems.converterModule.stackOf(k));
+        }
+        e.add(BookEl.link("compat", Lang.tr("sc.book.compat.title"))).add(BookEl.link("modules", Lang.tr("sc.book.modules.title")))
+                .add(BookEl.link("storage", Lang.tr("sc.manual.energy.storagehead")));
+        e.about(conv, new ItemStack(ModItems.converterModule, 1, OreDictionary.WILDCARD_VALUE));
+        return e;
     }
 
     /** The SV tier (Singular, 131 072 EU/t): what it is, how to get it, its blocks, IC2. */

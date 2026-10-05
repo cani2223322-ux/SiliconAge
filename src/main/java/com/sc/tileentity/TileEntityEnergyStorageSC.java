@@ -833,7 +833,12 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
      * electric item. @return EU taken
      */
     public int chargeItem(ItemStack s, int max) {
-        if (s == null || max <= 0 || !tierAllows(s)) {
+        return chargeItemAt(s, max, getTier());
+    }
+
+    /** chargeItem for a block of tier `tier` (the Energy Converter's charge slot too). @return EU taken */
+    public static int chargeItemAt(ItemStack s, int max, Tier tier) {
+        if (s == null || max <= 0 || !tierAllowsAt(s, tier)) {
             return 0;
         }
         if (s.getItem() instanceof com.sc.item.ItemArmorSC) {
@@ -858,14 +863,18 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             return com.sc.item.ItemBatterySC.charge(s, max);
         }
         if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
-            return Ic2Charge.charge(s, max, getTier().toIc2Tier());
+            return Ic2Charge.charge(s, max, tier.toIc2Tier());
         }
         return 0;
     }
 
     /** The mod's own item is at most this block's tier (IC2 items are checked by IC2's charge()). */
     public boolean tierAllows(ItemStack s) {
-        Tier block = getTier();
+        return tierAllowsAt(s, getTier());
+    }
+
+    /** tierAllows for a block of tier `block`. */
+    public static boolean tierAllowsAt(ItemStack s, Tier block) {
         if (s.getItem() instanceof com.sc.item.ItemArmorSC) {
             return ((com.sc.item.ItemArmorSC) s.getItem()).getSuit().chargeTier.ordinal() <= block.ordinal();
         }
@@ -910,6 +919,15 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         static boolean providesEnergy(ItemStack s) {
             return s.getItem() instanceof ic2.api.item.IElectricItem && ((ic2.api.item.IElectricItem) s.getItem()).canProvideEnergy(s);
         }
+
+        static boolean isElectric(ItemStack s) {
+            return s.getItem() instanceof ic2.api.item.IElectricItem;
+        }
+    }
+
+    /** An IC2 electric item (IC2 installed) - chargeItemAt charges it (the Energy Converter's slot takes it). */
+    public static boolean ic2Chargeable(ItemStack s) {
+        return s != null && cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID) && Ic2Charge.isElectric(s);
     }
 
     // ---- the charge slot ----

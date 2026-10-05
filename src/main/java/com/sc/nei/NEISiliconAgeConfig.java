@@ -44,6 +44,13 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         }
         // the bundle block itself is never an item you hold - the cable / pipe / tube items are
         API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.conduitBundle));
+        // the Energy Converter and its modules: no other energy in this game (no RF API, Mekanism, Galacticraft) - no use, no recipe
+        if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.energyConverter));
+            for (int i = 0; i < com.sc.item.ItemConverterModuleSC.Kind.values().length; i++) {
+                API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModItems.converterModule, 1, i));
+            }
+        }
         GeneratorRecipeHandlerSC generators = new GeneratorRecipeHandlerSC();
         API.registerRecipeHandler(generators);
         API.registerUsageHandler(generators);

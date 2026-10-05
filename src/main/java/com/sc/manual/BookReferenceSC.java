@@ -78,6 +78,15 @@ final class BookReferenceSC {
         e.add(BookEl.head("Not Enough Items")).addAll(BookContent.paras("sc.book.compat.nei"));
         e.add(BookEl.head("WAILA")).addAll(BookContent.paras("sc.book.compat.waila"));
         e.add(BookEl.head("Galacticraft")).addAll(BookContent.paras("sc.book.compat.gc", new Object[]{com.sc.util.ArmorGasSC.OXYGEN_PER_SECOND}));
+        // the Energy Converter: which energies this game has (the same checks the block makes)
+        ItemStack conv = new ItemStack(ModBlocks.energyConverter);
+        e.add(BookEl.head(Lang.tr("sc.book.compat.convhead"), conv)).addAll(BookContent.paras("sc.book.compat.conv",
+                new Object[]{com.sc.block.ItemBlockEnergyConverterSC.trimRate(com.sc.energy.ForeignEnergySC.Kind.RF.perEu()),
+                        com.sc.block.ItemBlockEnergyConverterSC.trimRate(com.sc.energy.ForeignEnergySC.Kind.J.perEu()),
+                        com.sc.block.ItemBlockEnergyConverterSC.trimRate(com.sc.energy.ForeignEnergySC.Kind.GJ.perEu())}));
+        e.add(BookEl.dim(Lang.tr("sc.book.compat.conv.now", yesNo(com.sc.energy.ForeignEnergySC.rfApi()),
+                yesNo(com.sc.energy.ForeignEnergySC.mekanism()), yesNo(com.sc.energy.ForeignEnergySC.galacticraft()))));
+        e.add(BookEl.link("converter", Lang.tr("sc.manual.energy.convhead")));
         e.add(BookEl.head(Lang.tr("sc.book.compat.othershead"))).addAll(BookContent.paras("sc.book.compat.others",
                 new Object[]{com.sc.tileentity.TileEntityFieldGeneratorSC.RF_PER_EU}));
         return e;
@@ -203,6 +212,17 @@ final class BookReferenceSC {
             e.add(BookEl.item(s, s.getDisplayName(), BookContent.bridgeModuleLine(i)));
         }
         e.add(BookEl.link("bridge.places", Lang.tr("sc.book.bridge_places.title")));
+        e.add(BookEl.head(Lang.tr("sc.book.modules.conv"), new ItemStack(ModBlocks.energyConverter)));
+        e.add(BookEl.dim(Lang.tr("sc.book.modules.conv.upgrades")));
+        for (com.sc.item.ItemConverterModuleSC.Kind k : com.sc.item.ItemConverterModuleSC.Kind.values()) {
+            ItemStack s = ModItems.converterModule.stackOf(k);
+            String line = Lang.tr("sc.conv.module.details." + k.key());
+            if (k.max > 1) {
+                line += " " + Lang.tr("sc.conv.module.max", k.max);
+            }
+            e.add(BookEl.item(s, s.getDisplayName(), line));
+        }
+        e.add(BookEl.link("converter", Lang.tr("sc.manual.energy.convhead")));
         e.add(BookEl.head(Lang.tr("sc.book.modules.other")));
         ItemStack[] other = {new ItemStack(ModItems.fieldLinkModule), new ItemStack(ModItems.bridgeLinkModule), new ItemStack(ModItems.tubeSpeedUpgrade),
                 new ItemStack(ModItems.itemFilter), new ItemStack(ModItems.oreLens), new ItemStack(ModItems.areaCard), new ItemStack(ModItems.oreScanner),
@@ -233,6 +253,9 @@ final class BookReferenceSC {
         if (com.sc.tileentity.TileEntityArmorStationSC.acceptsModule(s)) {
             w.add(Lang.tr("sc.book.modules.w.stations"));
         }
+        if (com.sc.tileentity.TileEntityEnergyConverterSC.isModule(s)) {
+            w.add(Lang.tr("sc.book.modules.w.converter"));
+        }
         StringBuilder sb = new StringBuilder();
         for (String x : w) {
             sb.append(sb.length() > 0 ? ", " : "").append(x);
@@ -255,6 +278,10 @@ final class BookReferenceSC {
             sentence(sb, Lang.tr("sc.book.qmod.max", k.max));
         }
         return sb.toString();
+    }
+
+    private static String yesNo(boolean b) {
+        return Lang.tr(b ? "sc.book.compat.conv.yes" : "sc.book.compat.conv.no");
     }
 
     /** One more sentence: after a full stop just a space. */

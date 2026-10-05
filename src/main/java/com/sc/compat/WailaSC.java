@@ -94,6 +94,22 @@ public class WailaSC implements IWailaDataProvider {
             int flow = t.getInteger("scFlow");
             tip.add(Lang.tr("sc.waila.flow", (flow > 0 ? "+" : "") + flow));
         }
+        if (t.hasKey("scConvPair")) {                                  // the Energy Converter: the other buffer, the pair, the flow
+            com.sc.energy.ForeignEnergySC.Kind k = com.sc.energy.ForeignEnergySC.Kind.byOrdinal(t.getInteger("scConvPair"));
+            if (k == null) {
+                tip.add(Lang.tr("sc.waila.conv.nopair"));
+            } else {
+                tip.add(Lang.tr("sc.waila.conv.buffer", k.unit, String.valueOf(Math.round(t.getDouble("scConvX"))),
+                        String.valueOf(Math.round(t.getDouble("scConvXMax")))));
+                tip.add(Lang.tr("sc.waila.conv.pair", "EU-" + k.unit, Lang.tr("sc.waila.conv.dir." + t.getInteger("scConvDir"), k.unit)));
+                int eu = t.getInteger("scConvEu"), x = Math.abs(t.getInteger("scConvXf"));
+                tip.add(eu > 0 ? Lang.tr("sc.waila.conv.flow", eu + " EU/t", x + " " + k.unit + "/t")
+                        : eu < 0 ? Lang.tr("sc.waila.conv.flow", x + " " + k.unit + "/t", -eu + " EU/t") : Lang.tr("sc.waila.conv.idle"));
+                if (t.getBoolean("scConvBlocked")) {
+                    tip.add("§c" + Lang.tr("sc.waila.conv.blocked"));
+                }
+            }
+        }
         if (t.hasKey("scOutFaces")) {                                  // a storage with Output Splitters
             tip.add(Lang.tr("sc.waila.outputs", t.getInteger("scOutFaces"), t.getInteger("scOutTotal")));
         }
@@ -266,6 +282,16 @@ public class WailaSC implements IWailaDataProvider {
                 tag.setInteger("scOutFaces", faces);
                 tag.setInteger("scOutTotal", st.outputTier().getVoltage() * st.packetsPerTick());
             }
+        }
+        if (te instanceof com.sc.tileentity.TileEntityEnergyConverterSC) {
+            com.sc.tileentity.TileEntityEnergyConverterSC c = (com.sc.tileentity.TileEntityEnergyConverterSC) te;
+            tag.setInteger("scConvPair", c.pairKind() == null ? -1 : c.pairKind().ordinal());
+            tag.setInteger("scConvDir", c.getDirection());
+            tag.setDouble("scConvX", c.getForeign());
+            tag.setDouble("scConvXMax", c.foreignCapacity());
+            tag.setInteger("scConvEu", c.statConvEu());
+            tag.setInteger("scConvXf", c.statConvX());
+            tag.setBoolean("scConvBlocked", c.pairKind() != null && !c.pairActive());
         }
         if (te instanceof TileEntityMachineSC) {
             TileEntityMachineSC m = (TileEntityMachineSC) te;

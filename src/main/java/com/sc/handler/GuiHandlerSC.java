@@ -30,6 +30,8 @@ public class GuiHandlerSC implements IGuiHandler {
     public static final int ARMOR_STATION_GUI_ID = 7;
     /** The Singular Service Station. */
     public static final int SINGULAR_STATION_GUI_ID = 8;
+    /** The Energy Converter. */
+    public static final int ENERGY_CONVERTER_GUI_ID = 9;
     /** Conduit connector menu: this + the side (0..5). */
     public static final int CONDUIT_GUI_BASE = 10;
     /** Item filter set-up (the filter in the player's hand). */
@@ -57,6 +59,9 @@ public class GuiHandlerSC implements IGuiHandler {
         }
         if (id == SINGULAR_STATION_GUI_ID && te instanceof com.sc.tileentity.TileEntitySingularStationSC) {
             return new com.sc.inventory.ContainerSingularStationSC(player.inventory, (com.sc.tileentity.TileEntitySingularStationSC) te);
+        }
+        if (id == ENERGY_CONVERTER_GUI_ID && te instanceof com.sc.tileentity.TileEntityEnergyConverterSC) {
+            return new com.sc.inventory.ContainerEnergyConverterSC(player.inventory, (com.sc.tileentity.TileEntityEnergyConverterSC) te);
         }
         if (id == ARMOR_STATION_GUI_ID && te instanceof com.sc.tileentity.TileEntityArmorStationSC) {
             return new com.sc.inventory.ContainerArmorStationSC(player.inventory, (com.sc.tileentity.TileEntityArmorStationSC) te);
@@ -97,6 +102,9 @@ public class GuiHandlerSC implements IGuiHandler {
         }
         if (id == SINGULAR_STATION_GUI_ID && te instanceof com.sc.tileentity.TileEntitySingularStationSC) {
             return new com.sc.inventory.GuiSingularStationSC(player.inventory, (com.sc.tileentity.TileEntitySingularStationSC) te);
+        }
+        if (id == ENERGY_CONVERTER_GUI_ID && te instanceof com.sc.tileentity.TileEntityEnergyConverterSC) {
+            return new com.sc.inventory.GuiEnergyConverterSC(player.inventory, (com.sc.tileentity.TileEntityEnergyConverterSC) te);
         }
         if (id == ARMOR_STATION_GUI_ID && te instanceof com.sc.tileentity.TileEntityArmorStationSC) {
             return new com.sc.inventory.GuiArmorStationSC(player.inventory, (com.sc.tileentity.TileEntityArmorStationSC) te);

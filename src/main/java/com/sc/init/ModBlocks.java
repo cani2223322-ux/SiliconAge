@@ -82,6 +82,8 @@ public final class ModBlocks {
     public static com.sc.block.BlockBridgeVortexSC bridgeVortex;
     /** The krypton searchlight's moving light (ArmorLogicSC.searchlight). */
     public static com.sc.block.BlockLightSC lightSC;
+    /** The Energy Converter: EU <-> RF / Mekanism J / Galacticraft gJ. */
+    public static com.sc.block.BlockEnergyConverterSC energyConverter;
 
     private ModBlocks() {
     }
@@ -197,6 +199,12 @@ public final class ModBlocks {
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityTankSC.class, "SiliconAge.tank");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityChargePadSC.class, "SiliconAge.chargePad");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityQuarrySC.class, "SiliconAge.quarry");
+        // the Energy Converter (appended): always registered; its tile class speaks RF only when the RF API is there,
+        // under one tile id either way (a world keeps its converters with or without the API)
+        energyConverter = new com.sc.block.BlockEnergyConverterSC();
+        GameRegistry.registerBlock(energyConverter, com.sc.block.ItemBlockEnergyConverterSC.class, "energyConverter");
+        GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityEnergyConverterSC.tileClass(),
+                com.sc.tileentity.TileEntityEnergyConverterSC.TILE_ID);
 
         registerOreDict();
     }

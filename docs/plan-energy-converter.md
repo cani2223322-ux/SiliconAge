@@ -1,0 +1,26 @@
+# Преобразователь энергии — краткий план (реализовано)
+
+Утверждённый дизайн: макеты `docs/energy-converter/conv2_RF.png`, `conv2_J_balance.png` (экран 340 × 262).
+
+## Блок
+- `BlockEnergyConverterSC` / `TileEntityEnergyConverterSC` (+ `TileEntityEnergyConverterRfSC` — тот же тайл с `cofh.api.energy.IEnergyHandler`).
+  Id тайла один: `SiliconAge.energyConverter`; регистрируется RF-класс, только если RF API есть в classpath.
+- Энергии: EU всегда; RF — есть RF API; J — загружен Mekanism + «Карта Mekanism»; gJ — загружен Galacticraft + «Карта Galacticraft».
+- Курсы (конфиг `converter`): 1 EU = 4 RF = 10 J; gJ = курс Galacticraft (`EnergyConfigHandler.IC2_RATIO`, по умолчанию 16/2,44); потери 5 %.
+- Буферы: EU 1 000 000 × 4ⁿ (Накопитель, до 4); второй — столько же по курсу. Смена вида: остаток → EU с потерями, нет места — отказ.
+- Направление: EU → X, X → EU, «Баланс» (выравнивает заполнение, мёртвая зона 2 %).
+- Пропускная = напряжение рабочего уровня × пакеты: MV, Трансформатор +1 (до 4), Универсальный → SV (любое напряжение), Усилитель канала ×2 (до 3). EU выдаются с уровнем по трансформаторам.
+- Модуль КПД: 5 → 3 → 1 %.
+- Грани: режим (Вход/Выход/Выкл) × буфер (EU/X/Авто) × фильтр входа; приоритет выхода (EU или X первыми), компаратор по EU или X, слот зарядки.
+- Ставится выключенным; ключ/поломка сохраняют буферы, настройки и модули в предмете.
+
+## Совместимость (мод работает без других модов)
+- IC2 / IU — как у остальных блоков (`@Optional`); Mekanism (`IStrictEnergyAcceptor`, `ICableOutputter`) и Galacticraft (`IElectrical`) — `@Optional.Interface`.
+- RF — подкласс тайла (IU не объявляет API `CoFHAPI|energy`, поэтому `@Optional` не годится).
+- Вызовы чужих API — только в `com.sc.compat.RfOpsSC / MekOpsSC / GcOpsSC`, после проверок `ForeignEnergySC`.
+- Компиляция: `libs/rf-api-compileonly.jar` (классы из IU), `libs/mekanism-api-stub-compileonly.jar` (`tools/mekanism-api-stub`), GC jar — всё `compileOnlySC`, в наш jar не попадает.
+- Нет ни одной другой энергии: рецептов нет, блок и модули скрыты в NEI и творческой вкладке, поставленный блок — буфер EU.
+
+## Проверки
+- `SelfTestConverterSC`: курсы/потери, возврат при смене вида, баланс, пропускная/буферы с модулями, доступность видов, NBT граней и предмета, тик преобразования, рецепты, тексты.
+- `WorldTestConverterSC`: накопитель → EU → RF-приёмник (×3,8); RF → EU → накопитель (×0,2375).
