@@ -170,6 +170,8 @@ public class BlockBridgeSC extends Block {
         }
         if (world.isRemote) {
             com.sc.SCMod.proxy.openBridge(c[0], c[1], c[2]);
+        } else if (te instanceof TileEntityBridgeControllerSC) {
+            ((TileEntityBridgeControllerSC) te).claim(player);   // М-7: an ownerless controller (automation) - the first right-click owns it
         }
         return true;
     }

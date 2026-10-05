@@ -10,15 +10,11 @@ import java.util.Set;
 
 import com.sc.init.ModItems;
 import com.sc.machine.MachineRecipe;
-import com.sc.machine.MachineType;
-import com.sc.machine.RecipeRegistry;
 import com.sc.util.SCToolType;
 
 import net.minecraft.init.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.crafting.CraftingManager;
-import net.minecraft.item.crafting.FurnaceRecipes;
 import net.minecraft.item.crafting.IRecipe;
 import net.minecraft.item.crafting.ShapedRecipes;
 import net.minecraft.item.crafting.ShapelessRecipes;
@@ -206,12 +202,10 @@ final class BookMaterialsSC {
     }
 
     private static MachineRecipe firstMaker(ItemStack s, boolean anyMeta) {
-        for (MachineType type : MachineType.values()) {
-            for (MachineRecipe r : RecipeRegistry.recipesFor(type)) {
-                for (ItemStack o : r.outputs) {
-                    if (same(s, o, anyMeta)) {
-                        return r;
-                    }
+        for (BookIndexSC.MR m : BookIndexSC.machineMaking(s)) {
+            for (ItemStack o : m.r.outputs) {
+                if (same(s, o, anyMeta)) {
+                    return m.r;
                 }
             }
         }
@@ -221,27 +215,26 @@ final class BookMaterialsSC {
     /** "Crusher, Ore Washer; Crafting table; Furnace" - who makes it (null: nothing). */
     static String madeIn(ItemStack s, boolean anyMeta) {
         Set<String> by = new LinkedHashSet<String>();
-        for (MachineType type : MachineType.values()) {
-            for (MachineRecipe r : RecipeRegistry.recipesFor(type)) {
-                boolean makes = false;
-                for (ItemStack o : r.outputs) {
-                    makes |= same(s, o, anyMeta);
-                }
-                for (ItemStack o : r.byproducts) {
-                    makes |= same(s, o, anyMeta);
-                }
-                if (makes) {
-                    by.add(type.localizedName());
-                }
+        for (BookIndexSC.MR m : BookIndexSC.machineMaking(s)) {
+            boolean makes = false;
+            for (ItemStack o : m.r.outputs) {
+                makes |= same(s, o, anyMeta);
+            }
+            for (ItemStack o : m.r.byproducts) {
+                makes |= same(s, o, anyMeta);
+            }
+            if (makes) {
+                by.add(m.type.localizedName());
             }
         }
-        for (Object o : CraftingManager.getInstance().getRecipeList()) {
+        for (Object o : BookIndexSC.craftMaking(s)) {
             if (same(s, ((IRecipe) o).getRecipeOutput(), anyMeta)) {
                 by.add(Lang.tr("sc.book.crafting"));
                 break;
             }
         }
-        for (Object o : FurnaceRecipes.smelting().getSmeltingList().values()) {
+        for (Map.Entry<?, ?> en : BookIndexSC.smeltMaking(s)) {
+            Object o = en.getValue();
             if (o instanceof ItemStack && same(s, (ItemStack) o, anyMeta)) {
                 by.add(new ItemStack(Blocks.furnace).getDisplayName());
                 break;
@@ -253,18 +246,16 @@ final class BookMaterialsSC {
     /** The products it goes into (machine recipes, crafting, the furnace), at most SHOWN named. */
     static String usedIn(ItemStack s, boolean anyMeta) {
         Set<String> into = new LinkedHashSet<String>();
-        for (MachineType type : MachineType.values()) {
-            for (MachineRecipe r : RecipeRegistry.recipesFor(type)) {
-                boolean uses = false;
-                for (ItemStack in : r.inputs) {
-                    uses |= same(s, in, anyMeta);
-                }
-                if (uses) {
-                    into.add(product(r));
-                }
+        for (BookIndexSC.MR m : BookIndexSC.machineUsing(s)) {
+            boolean uses = false;
+            for (ItemStack in : m.r.inputs) {
+                uses |= same(s, in, anyMeta);
+            }
+            if (uses) {
+                into.add(product(m.r));
             }
         }
-        for (Object o : CraftingManager.getInstance().getRecipeList()) {
+        for (Object o : BookIndexSC.craftUsing(s)) {
             IRecipe r = (IRecipe) o;
             if (r.getRecipeOutput() == null) {
                 continue;
@@ -276,8 +267,7 @@ final class BookMaterialsSC {
                 }
             }
         }
-        for (Object o : FurnaceRecipes.smelting().getSmeltingList().entrySet()) {
-            Map.Entry<?, ?> en = (Map.Entry<?, ?>) o;
+        for (Map.Entry<?, ?> en : BookIndexSC.smeltUsing(s)) {
             if (en.getKey() instanceof ItemStack && same(s, (ItemStack) en.getKey(), anyMeta) && en.getValue() instanceof ItemStack) {
                 into.add(name((ItemStack) en.getValue()));
             }
@@ -290,16 +280,14 @@ final class BookMaterialsSC {
     /** For a kind with many materials: the machines (and the crafting table / furnace) that take it. */
     static String usedBy(ItemStack s) {
         Set<String> by = new LinkedHashSet<String>();
-        for (MachineType type : MachineType.values()) {
-            for (MachineRecipe r : RecipeRegistry.recipesFor(type)) {
-                for (ItemStack in : r.inputs) {
-                    if (same(s, in, true)) {
-                        by.add(type.localizedName());
-                    }
+        for (BookIndexSC.MR m : BookIndexSC.machineUsing(s)) {
+            for (ItemStack in : m.r.inputs) {
+                if (same(s, in, true)) {
+                    by.add(m.type.localizedName());
                 }
             }
         }
-        for (Object o : CraftingManager.getInstance().getRecipeList()) {
+        for (Object o : BookIndexSC.craftUsing(s)) {
             IRecipe r = (IRecipe) o;
             boolean found = false;
             for (Object in : ingredients(r)) {
@@ -310,7 +298,8 @@ final class BookMaterialsSC {
                 break;
             }
         }
-        for (Object o : FurnaceRecipes.smelting().getSmeltingList().keySet()) {
+        for (Map.Entry<?, ?> en : BookIndexSC.smeltUsing(s)) {
+            Object o = en.getKey();
             if (o instanceof ItemStack && same(s, (ItemStack) o, true)) {
                 by.add(new ItemStack(Blocks.furnace).getDisplayName());
                 break;
@@ -353,6 +342,22 @@ final class BookMaterialsSC {
             n++;
         }
         return sb.toString();
+    }
+
+    /** Every look-up the chapter makes, as text (the self-test compares it with and without the index). */
+    static List<String> lookups() {
+        List<String> out = new ArrayList<String>();
+        for (String n : names()) {
+            ItemStack s = stackOf(n);
+            if (s == null) {
+                continue;
+            }
+            boolean kinds = KINDS.contains(n), anyMeta = kinds || s.getItem().isDamageable();
+            MachineRecipe r = firstMaker(s, anyMeta);
+            out.add(n + "|" + madeIn(s, anyMeta) + "|" + usedIn(s, anyMeta) + "|" + usedBy(s) + "|" + BookContent.craftingFor(s)
+                    + "|" + (r == null ? null : Integer.toHexString(System.identityHashCode(r))));
+        }
+        return out;
     }
 
     /** Every item the chapter covers (for the self-test). */

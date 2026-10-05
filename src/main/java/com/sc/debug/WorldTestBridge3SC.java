@@ -166,10 +166,15 @@ public class WorldTestBridge3SC {
                     && r != null && "sc.bridge.journal.repaired".equals(r.key),
                     "bridge 3: «Ремонт» takes the wear 72% -> " + c.getWear() + "% for " + (he - c.tankAmount(BridgeMathSC.HE)) + " mB He and "
                             + (eu - c.capacitorEnergy()) + " EU");
-            // С2: a swapped coil -10% (and the calibration is gone)
+            // М-4: a swapped coil keeps the wear (only «Ремонт» takes it off), the calibration is gone
             c.setWearForTest(30);
             w.setBlockToAir(X - 2, Y + 3, Z);
-            say(c.getWear() == 20 && !c.isCalibrated(), "bridge 3: a coil taken out (to be replaced) takes 10% wear off and the calibration: 30 -> " + c.getWear());
+            say(c.getWear() == 30 && !c.isCalibrated(), "bridge 3: a coil taken out keeps the wear (" + c.getWear() + "%) and loses the calibration");
+            // М-7: the ring is ownerless here - anyone opens, but not the settings; a fake player never claims it
+            String nm = c.getBridgeName();
+            c.action(walker, TileEntityBridgeControllerSC.A_NAME, new int[0], "Hijack");
+            say(c.ownerless() && c.allowed(walker) && !c.trusted(walker) && !c.isOwner(walker) && !c.claim(walker) && nm.equals(c.getBridgeName()),
+                    "bridge 3: an ownerless controller - opening for all, its name / settings refused, a fake player doesn't claim it");
         }
         if (ticks == 630) {
             BridgeFamiliarSC.get(w).forget("Bridge3Walker");

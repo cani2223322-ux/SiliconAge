@@ -21,6 +21,8 @@ public final class BridgeSpaceSC {
     }
 
     public static final int AIR = 0, PASS = 1, SOLID = 2, WATER = 3, LAVA = 4, OTHER = 5;
+    /** М-6: a free cell inside another bridge's ring (or right in front of / behind it) - taken for an end. */
+    public static final int RING = 6;
     /** How far under the surface «Y авто» looks; the explicit Y's search window (± blocks) for the nearest place. */
     public static final int AUTO_DEPTH = 256, NEAR_AUTO_DEPTH = 16, NEAR_DY = 6;
     /** The nearest free place: radius without / with the Navigation Computer. */
@@ -70,7 +72,7 @@ public final class BridgeSpaceSC {
         if (y + w > c.height()) {
             return no(r, "sc.bridge.place.high");
         }
-        boolean lava = false, water = false;
+        boolean lava = false, water = false, ring = false;
         int blocked = 0, rows = w;
         boolean centreBlocked = false;
         for (int v = 0; v < w; v++) {
@@ -83,6 +85,9 @@ public final class BridgeSpaceSC {
                         lava = true;
                     } else if (k == WATER) {
                         water = true;
+                    } else if (k == RING) {
+                        ring = true;
+                        blocked++;
                     } else if (k != AIR && k != PASS) {
                         blocked++;
                         rowBlocked = true;
@@ -108,6 +113,9 @@ public final class BridgeSpaceSC {
         }
         if (lava || floorLava) {
             return no(r, lava ? "sc.bridge.place.lava" : "sc.bridge.place.overlava");
+        }
+        if (ring) {
+            return no(r, "sc.bridge.place.ring");
         }
         if (centreBlocked) {
             return no(r, "sc.bridge.place.inside");
@@ -295,6 +303,37 @@ public final class BridgeSpaceSC {
             }
         }
         return null;
+    }
+
+    // ------------------------------------------------------------------ other bridges' rings (М-6)
+
+    /** Where other bridges' rings stand: their room is taken for an end. */
+    public interface Zones {
+        boolean ring(int x, int y, int z);
+    }
+
+    /** The cells with the free ones inside `zones` seen as RING (taken). */
+    public static Cells guarded(final Cells c, final Zones zones) {
+        if (zones == null) {
+            return c;
+        }
+        return new Cells() {
+            @Override
+            public int cell(int x, int y, int z) {
+                int k = c.cell(x, y, z);
+                return (k == AIR || k == PASS) && zones.ring(x, y, z) ? RING : k;
+            }
+
+            @Override
+            public int top(int x, int z) {
+                return c.top(x, z);
+            }
+
+            @Override
+            public int height() {
+                return c.height();
+            }
+        };
     }
 
     // ------------------------------------------------------------------ a real world

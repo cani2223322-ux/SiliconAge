@@ -576,10 +576,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (!mine) {
             return;
         }
-        if (wear > 0) {
-            wear = Math.max(0, wear - BridgeMathSC.COIL_SWAP_WEAR);  // С2: a fresh coil goes in (the ring needs calibrating again)
-            markDirty();
-        }
+        // М-4: a coil out / back no longer takes wear off (only «Ремонт» does); the calibration is lost below
         if (open) {
             shortWhat = "";
             closePortal("sc.bridge.journal.broken");
@@ -609,18 +606,53 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     // ------------------------------------------------------------------ access, messages, journal
 
-    /** May use the controller's screen: the owner, a friend, anyone in the public mode (null: the server itself - tests). */
+    /**
+     * May use the controller's screen: the owner, a friend, anyone in the public mode (null: the server itself - tests).
+     * М-7: a controller without an owner (placed by automation) - anyone may open / close portals from it, but its
+     * settings and bindings need an owner (ownerlessRefusal); the first player to right-click it becomes its owner (claim).
+     */
     public boolean allowed(EntityPlayer p) {
-        return trusted(p) || access == BridgeMathSC.ACCESS_PUBLIC;
+        return trusted(p) || access == BridgeMathSC.ACCESS_PUBLIC || owner.length() == 0;
     }
 
-    /** The owner or a friend: remotes and helmets bind and work only for them (§10). */
+    /** The owner or a friend: remotes and helmets bind and work only for them (§10); without an owner - nobody (М-7). */
     public boolean trusted(EntityPlayer p) {
-        return p == null || owner.length() == 0 || isOwner(p) || isFriend(p.getCommandSenderName());
+        return p == null || owner.length() > 0 && (isOwner(p) || isFriend(p.getCommandSenderName()));
     }
 
     public boolean isOwner(EntityPlayer p) {
-        return p == null || owner.length() == 0 || owner.equals(p.getCommandSenderName());
+        return p == null || owner.length() > 0 && owner.equals(p.getCommandSenderName());
+    }
+
+    /** No owner yet. */
+    public boolean ownerless() {
+        return owner.length() == 0;
+    }
+
+    /**
+     * М-7: the first player to right-click an ownerless controller (or bind a remote to it) becomes its owner.
+     * @return whether p became the owner now
+     */
+    public boolean claim(EntityPlayer p) {
+        if (p == null || worldObj == null || worldObj.isRemote || owner.length() > 0 || p instanceof net.minecraftforge.common.util.FakePlayer) {
+            return false;
+        }
+        setOwner(p.getCommandSenderName());
+        BridgeMsgSC m = new BridgeMsgSC("sc.bridge.msg.claimed");
+        log(m, nameOf(p), false);
+        tell(p, m);
+        worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        return true;
+    }
+
+    /** М-7: the settings / bindings of an ownerless controller are refused (said to the player); null - go on. */
+    public BridgeMsgSC ownerlessRefusal(EntityPlayer p) {
+        if (p == null || owner.length() > 0) {
+            return null;
+        }
+        BridgeMsgSC m = new BridgeMsgSC("sc.bridge.refuse.noowner");
+        tell(p, m);
+        return m;
     }
 
     public boolean isFriend(String n) {
@@ -745,6 +777,37 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     private String nameOf(EntityPlayer p) {
         return p == null ? "" : p.getCommandSenderName();
+    }
+
+    /** М-3: the ticks between two open attempts of one player (any bridge, any way: the screen, a remote, the armour). */
+    public static final int OPEN_COOLDOWN_TICKS = 20;
+    /** М-3: a player's last open attempt (the server's tick). */
+    private static final java.util.Map<String, Long> LAST_OPEN_TRY = new java.util.HashMap<String, Long>();
+
+    /**
+     * М-3: open attempts are rate-limited per player (at most one a second) - spamming «Открыть» can't make the server
+     * load / generate chunks at a target faster than that. The refusal goes to the chat only (not the journal).
+     * @return null - go on (the attempt is counted); else the refusal
+     */
+    public static BridgeMsgSC openThrottle(EntityPlayer p) {
+        if (p == null || p instanceof net.minecraftforge.common.util.FakePlayer || MinecraftServer.getServer() == null) {
+            return null;                                     // fake players don't send packets (the world tests drive them)
+        }
+        long now = com.sc.bridge.BridgeFarSC.now();
+        String k = p.getCommandSenderName().toLowerCase(java.util.Locale.ROOT);
+        synchronized (LAST_OPEN_TRY) {
+            Long last = LAST_OPEN_TRY.get(k);
+            if (last != null && now >= last && now - last < OPEN_COOLDOWN_TICKS) {
+                BridgeMsgSC m = new BridgeMsgSC("sc.bridge.refuse.tooFast");
+                tell(p, m);
+                return m;
+            }
+            if (LAST_OPEN_TRY.size() > 256) {
+                LAST_OPEN_TRY.clear();
+            }
+            LAST_OPEN_TRY.put(k, now);
+        }
+        return null;
     }
 
     /** A refusal: to the chat, the journal, the screen. @return it */
@@ -1047,10 +1110,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         int x = e.x + off[0], z = e.z + off[1];
         int near = scan != null && scan.nav ? BridgeSpaceSC.NEAR_RADIUS_NAV : BridgeSpaceSC.NEAR_RADIUS;
-        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), x, e.y, z, e.w, e.axis, near);
+        BridgeSpaceSC.Cells cells = cellsFor(ws);
+        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(cells, x, e.y, z, e.w, e.axis, near);
         int[] at = r.free ? new int[]{r.x, r.y, r.z} : r.hasNearest ? new int[]{r.nx, r.ny, r.nz} : null;
         if (at == null) {
-            r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), x, AUTO_Y, z, e.w, e.axis, near);
+            r = BridgeSpaceSC.probe(cells, x, AUTO_Y, z, e.w, e.axis, near);
             at = r.free ? new int[]{r.x, r.y, r.z} : r.hasNearest ? new int[]{r.nx, r.ny, r.nz} : null;
         }
         if (at == null || ShieldEventHandlerPrivate.foreignField(ws, p, at[0], at[1], at[2])) {
@@ -1122,7 +1186,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         x = Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, x));
         z = Math.max(-WORLD_LIMIT, Math.min(WORLD_LIMIT, z));
         y = y == AUTO_Y ? AUTO_Y : Math.max(1, Math.min(254, y));
-        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(BridgeSpaceSC.of(w), x, y, z, size, ringAxis(), radius);
+        BridgeSpaceSC.Result r = BridgeSpaceSC.probe(cellsFor(w), x, y, z, size, ringAxis(), radius);
         NBTTagCompound t = new NBTTagCompound();
         t.setBoolean("free", r.free);
         t.setString("reason", r.reason);
@@ -1156,6 +1220,83 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     private int[] ringCentre() {
         return scan == null ? new int[]{xCoord, yCoord, zCoord} : scan.centre();
+    }
+
+    /**
+     * М-6: the room of this bridge's ring no other bridge's end may take - the ring's inside and SIDE_CLEAR blocks in
+     * front of and behind it - as a box {minX, minY, minZ, maxX, maxY, maxZ}; null without a whole ring.
+     */
+    public int[] ringZoneBox() {
+        BridgeStructureSC.Scan s = scan != null ? scan : rescan();
+        if (s == null || !s.found || s.coilsNeeded <= 0 || s.coils < s.coilsNeeded) {
+            return null;
+        }
+        int h = (s.size - 1) / 2, d = BridgeStructureSC.SIDE_CLEAR;
+        int[] a = BridgeStructureSC.at(s.cx, s.cy, s.cz, s.axis, -(h - 1), 2, -d);
+        int[] b = BridgeStructureSC.at(s.cx, s.cy, s.cz, s.axis, h - 1, s.size - 1, d);
+        return new int[]{Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2]),
+                Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])};
+    }
+
+    /** М-6: a world's cells for this bridge's ends - the rooms of the other bridges' rings count as taken. */
+    private BridgeSpaceSC.Cells cellsFor(World w) {
+        return BridgeSpaceSC.guarded(BridgeSpaceSC.of(w), new RingZones(w, w.provider.dimensionId == ownDim() ? this : null));
+    }
+
+    /**
+     * М-6: the other bridges' ring rooms near the cells a check reads. A chunk's controllers (and its neighbours',
+     * a ring reaches at most 5 blocks from its controller) are looked up when the check first reads a block there -
+     * loaded chunks only, nothing is loaded for it.
+     */
+    static final class RingZones implements BridgeSpaceSC.Zones {
+        private final World w;
+        private final TileEntityBridgeControllerSC self;
+        private final Set<Long> touched = new HashSet<Long>(), listed = new HashSet<Long>();
+        private final List<int[]> boxes = new ArrayList<int[]>();
+
+        RingZones(World w, TileEntityBridgeControllerSC self) {
+            this.w = w;
+            this.self = self;
+        }
+
+        private static long chunkKey(int cx, int cz) {
+            return ((long) cx << 32) ^ (cz & 0xFFFFFFFFL);
+        }
+
+        @Override
+        public boolean ring(int x, int y, int z) {
+            int cx = x >> 4, cz = z >> 4;
+            if (touched.add(chunkKey(cx, cz))) {
+                for (int i = cx - 1; i <= cx + 1; i++) {
+                    for (int j = cz - 1; j <= cz + 1; j++) {
+                        long k = chunkKey(i, j);
+                        if (listed.contains(k) || !w.getChunkProvider().chunkExists(i, j)) {
+                            continue;
+                        }
+                        listed.add(k);
+                        // a copy: a controller's first check (rescan) may add tile entities to the chunk
+                        for (Object o : new ArrayList<Object>(w.getChunkFromChunkCoords(i, j).chunkTileEntityMap.values())) {
+                            if (o instanceof TileEntityBridgeControllerSC && o != self && !((TileEntity) o).isInvalid()) {
+                                TileEntityBridgeControllerSC c = (TileEntityBridgeControllerSC) o;
+                                if (self != null && c.xCoord == self.xCoord && c.yCoord == self.yCoord && c.zCoord == self.zCoord) {
+                                    continue;
+                                }
+                                int[] b = c.ringZoneBox();
+                                if (b != null) {
+                                    boxes.add(b);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for (int[] b : boxes) {
+                if (x >= b[0] && x <= b[3] && y >= b[1] && y <= b[4] && z >= b[2] && z <= b[5]) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------ calibration
@@ -1406,14 +1547,21 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     ends[i] = e;
                     continue;
                 }
-                r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), o.px, o.py, o.pz, w, ringAxis(), 0);
-                if (!r.free) {
+                BridgeSpaceSC.Cells cells = cellsFor(ws);
+                r = BridgeSpaceSC.probe(cells, o.px, o.py, o.pz, w, ringAxis(), o.fromFind ? radius : 0);
+                if (!r.free && o.fromFind && !r.hasNearest && o.py != AUTO_Y) {
+                    // М-1: a find deep in the rock with no room within the radius - the surface above it («Y авто»)
+                    r = BridgeSpaceSC.probe(cells, o.px, AUTO_Y, o.pz, w, ringAxis(), radius);
+                }
+                if (!r.free && !(o.fromFind && r.hasNearest)) {
                     pl.refuse = placeRefusal(r);
                     return pl;
                 }
-                e.x = r.x;
-                e.y = r.y;
-                e.z = r.z;
+                // М-1: a scanner's find is a block (an ore, a chest) - the end goes to the nearest free place next to it, as
+                // END_NEAR does (radius 16 / 32 with the Navigation Computer); «precise» (no scatter) stays as it was
+                e.x = r.free ? r.x : r.nx;
+                e.y = r.free ? r.y : r.ny;
+                e.z = r.free ? r.z : r.nz;
             } else {
                 boolean isFriend = i == friendAt;
                 EntityPlayer who = isFriend ? playerByName(o.friend) : p;
@@ -1439,7 +1587,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 }
                 int[] s = BridgeMathSC.projectionSpot(who.posX, who.boundingBox.minY, who.posZ, who.rotationYaw);
                 e.axis = s[3];
-                r = BridgeSpaceSC.probe(BridgeSpaceSC.of(ws), s[0], s[1], s[2], w, s[3], radius);
+                r = BridgeSpaceSC.probe(cellsFor(ws), s[0], s[1], s[2], w, s[3], radius);
                 if (!r.free && !r.hasNearest) {
                     pl.refuse = new BridgeMsgSC("sc.bridge.refuse.nearplace", e.player).part(new BridgeMsgSC(r.reason, (Object[]) r.args));
                     return pl;
@@ -1819,6 +1967,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     if (te instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) te).getOpenId() == openId) {
                         continue;
                     }
+                    if (te instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) te).controller() != null) {
+                        continue;                             // М-6: another live portal's cell is never taken over
+                    }
                 }
                 if (!b.isAir(w, c[0], c[1], c[2]) && b != ModBlocks.bridgeVortex) {
                     continue;                                 // never in a block
@@ -1865,6 +2016,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             }
             for (int[] c : cells) {
                 if (w.blockExists(c[0], c[1], c[2]) && w.getBlock(c[0], c[1], c[2]) == ModBlocks.bridgeVortex) {
+                    TileEntity te = w.getTileEntity(c[0], c[1], c[2]);
+                    if (te instanceof TileEntityBridgeVortexSC && ((TileEntityBridgeVortexSC) te).getOpenId() != 0
+                            && ((TileEntityBridgeVortexSC) te).getOpenId() != openId) {
+                        continue;                             // М-6: another portal's cell stays
+                    }
                     w.setBlockToAir(c[0], c[1], c[2]);
                 }
             }
@@ -2331,7 +2487,35 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     /** Stage 3: «Ремонт» (С2). */
     public static final int A_REPAIR = 25;
 
+    /** М-7: what an ownerless controller refuses - its settings, bindings, the ring's service; opening / closing stay open to all. */
+    private static boolean needsOwner(int a) {
+        switch (a) {
+            case A_NAME:
+            case A_FRIEND_ADD:
+            case A_FRIEND_DEL:
+            case A_ACCESS:
+            case A_REMOTE_MODE:
+            case A_BIND_HELMET:
+            case A_CALIBRATE:
+            case A_REPAIR:
+            case A_CLEAR:
+            case A_POWER:
+            case A_BM_ADD:
+            case A_BM_RENAME:
+            case A_BM_DELETE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     public void action(EntityPlayer p, int a, int[] v, String s) {
+        if (needsOwner(a) && ownerlessRefusal(p) != null) {
+            return;
+        }
+        if (a == A_OPEN && openThrottle(p) != null) {
+            return;
+        }
         switch (a) {
             case A_NAME:
             case A_FRIEND_ADD:
@@ -2621,7 +2805,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             t.setString("opener", opener);
         }
         if (o != null) {
-            Plan pl = plan(viewer, o, true);
+            Plan pl = previewPlan(viewer, o);
             if (pl.refuse != null) {
                 t.setTag("refuse", pl.refuse.write());
             } else {
@@ -2653,6 +2837,51 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             t.setTag("dims", dimList());
         }
         return t;
+    }
+
+    /** М-2: how long a remote's / the armour's preview plan is kept (ticks). */
+    public static final int PREVIEW_CACHE_TICKS = 30;
+    /** М-2: the preview plans by key (viewer, his block and look, the order) - {world time, Plan}. */
+    private final java.util.Map<String, Object[]> previewCache = new java.util.HashMap<String, Object[]>();
+
+    /**
+     * М-2: the preview plan for the screens (asked once a second each) kept 1.5 s per key: the viewer, the block he
+     * stands on, where he looks (a quarter - the projection spot), the order (mode, target, friend). A remote's screen
+     * no longer re-reads up to a million blocks of a big nearest-place search on every poll; «Открыть» plans anew.
+     */
+    private Plan previewPlan(EntityPlayer viewer, Order o) {
+        if (worldObj == null) {
+            return plan(viewer, o, true);
+        }
+        long now = worldObj.getTotalWorldTime();
+        StringBuilder k = new StringBuilder();
+        if (viewer != null) {
+            k.append(viewer.getCommandSenderName()).append('|').append(viewer.worldObj == null ? 0 : viewer.worldObj.provider.dimensionId).append('|')
+                    .append((int) Math.floor(viewer.posX)).append(',').append((int) Math.floor(viewer.boundingBox.minY)).append(',')
+                    .append((int) Math.floor(viewer.posZ)).append('|')
+                    .append(net.minecraft.util.MathHelper.floor_double(viewer.rotationYaw * 4.0F / 360.0F + 0.5D) & 3).append('|');
+        }
+        k.append(o.write().toString());
+        String key = k.toString();
+        Object[] hit = previewCache.get(key);
+        if (hit != null && now >= (Long) hit[0] && now - (Long) hit[0] < PREVIEW_CACHE_TICKS) {
+            return (Plan) hit[1];
+        }
+        if (previewCache.size() > 32) {
+            java.util.Iterator<Object[]> it = previewCache.values().iterator();
+            while (it.hasNext()) {
+                long t = (Long) it.next()[0];
+                if (now < t || now - t >= PREVIEW_CACHE_TICKS) {
+                    it.remove();
+                }
+            }
+            if (previewCache.size() > 32) {
+                previewCache.clear();
+            }
+        }
+        Plan pl = plan(viewer, o, true);
+        previewCache.put(key, new Object[]{now, pl});
+        return pl;
     }
 
     /** Stage 3 for the screens: heat, the overheat lock, the stability's factors, the environment, the repair's price, the scatter. */

@@ -21,11 +21,14 @@ import net.minecraft.entity.EntityCreature;
 import net.minecraft.entity.EntityList;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.IEntityOwnable;
 import net.minecraft.entity.IProjectile;
 import net.minecraft.entity.boss.IBossDisplayData;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.item.EntityXPOrb;
 import net.minecraft.entity.monster.IMob;
+import net.minecraft.entity.passive.EntityHorse;
+import net.minecraft.entity.passive.EntityTameable;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.entity.projectile.EntityArrow;
@@ -376,7 +379,7 @@ public final class SingularPowersSC {
                 p.boundingBox.addCoord(look.xCoord * range, look.yCoord * range, look.zCoord * range).expand(1, 1, 1));
         for (Object o : list) {
             Entity e = (Entity) o;
-            if (!e.isEntityAlive() || (livingOnly && !(e instanceof EntityLivingBase)) || (grabbable && !grabbable(e))) {
+            if (!e.isEntityAlive() || (livingOnly && !(e instanceof EntityLivingBase)) || (grabbable && !grabbable(e, p))) {
                 continue;
             }
             AxisAlignedBB bb = e.boundingBox.expand(0.3, 0.3, 0.3);
@@ -401,6 +404,38 @@ public final class SingularPowersSC {
     /** Н8 takes a mob or an animal - not a player, not a boss. */
     static boolean grabbable(Entity e) {
         return e instanceof EntityLiving && !(e instanceof IBossDisplayData) && e.isEntityAlive();
+    }
+
+    /**
+     * СБ-3: Н8 for this player - not a mob a player rides (a horse, a pig with its rider), not someone else's
+     * tamed animal (a wolf, an ocelot, a horse).
+     */
+    public static boolean grabbable(Entity e, EntityPlayer by) {
+        if (!grabbable(e)) {
+            return false;
+        }
+        if (e.riddenByEntity instanceof EntityPlayer) {
+            return false;
+        }
+        String owner = ownerOf(e);
+        return owner == null || owner.isEmpty() || (by != null && (owner.equals(by.getUniqueID().toString())
+                || owner.equalsIgnoreCase(by.getCommandSenderName())));
+    }
+
+    /** A tamed animal's owner (1.7.10: the UUID string, an old save's name), or null when it has none. */
+    public static String ownerOf(Entity e) {
+        if (e instanceof EntityTameable) {
+            EntityTameable t = (EntityTameable) e;
+            return t.isTamed() ? t.func_152113_b() : null;
+        }
+        if (e instanceof IEntityOwnable) {
+            return ((IEntityOwnable) e).func_152113_b();
+        }
+        if (e instanceof EntityHorse) {
+            EntityHorse h = (EntityHorse) e;
+            return h.isTame() ? h.func_152119_ch() : null;
+        }
+        return null;
     }
 
     /** A mob's name for chat: its name tag, or its kind (translated on the player's side). */
@@ -443,7 +478,8 @@ public final class SingularPowersSC {
     private static void grabTick(Grab g, long now) {
         EntityPlayer p = g.p;
         EntityLiving e = g.e;
-        if (p.isDead || !e.isEntityAlive() || e.worldObj != p.worldObj || p.getDistanceSqToEntity(e) > 16 * 16) {
+        if (p.isDead || !e.isEntityAlive() || e.worldObj != p.worldObj || p.getDistanceSqToEntity(e) > 16 * 16
+                || !SingularLevel.isSingular(ArmorGasSC.worn(p, ArmorGasSC.CHEST))) {      // СБ-5: the chestplate taken off - let go
             release(g, false);
             return;
         }
@@ -493,6 +529,47 @@ public final class SingularPowersSC {
         return e instanceof EntityArrow || e instanceof EntityFireball || e instanceof EntityThrowable || e instanceof IProjectile;
     }
 
+    /** EntityArrow.inGround (private in 1.7.10): null when it could not be found. */
+    private static java.lang.reflect.Field arrowInGround;
+    private static boolean arrowInGroundLooked;
+
+    /** СБ-6: an arrow stuck in a block - not a flying projectile, the dome and time slowing leave it alone. */
+    public static boolean stuckInGround(Entity e) {
+        if (!(e instanceof EntityArrow)) {
+            return false;
+        }
+        if (!arrowInGroundLooked) {
+            arrowInGroundLooked = true;
+            try {
+                arrowInGround = cpw.mods.fml.relauncher.ReflectionHelper.findField(EntityArrow.class, "inGround", "field_70254_i");
+            } catch (RuntimeException ex) {
+                arrowInGround = null;
+            }
+        }
+        if (arrowInGround != null) {
+            try {
+                return arrowInGround.getBoolean(e);
+            } catch (IllegalAccessException ex) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /** Test hook (СБ-6): marks an arrow stuck in a block. @return whether the field was there */
+    public static boolean setStuckForTest(EntityArrow a, boolean stuck) {
+        stuckInGround(a);
+        if (arrowInGround == null) {
+            return false;
+        }
+        try {
+            arrowInGround.setBoolean(a, stuck);
+            return true;
+        } catch (IllegalAccessException ex) {
+            return false;
+        }
+    }
+
     /** Н4: SLOW_TICKS of every mob and every projectile not the wearer's within SLOW_RADIUS at SLOW_FACTOR; О3. */
     private static void timeSlow(EntityPlayerMP p) {
         ArmorFeature f = ArmorFeature.TIME_SLOW;
@@ -538,7 +615,7 @@ public final class SingularPowersSC {
                     l.motionZ *= 0.6;
                     l.motionY *= 0.6;
                 }
-            } else if (projectile(e) && !ArmorLogicSC.shooterIs(e, p)) {
+            } else if (projectile(e) && !stuckInGround(e) && !ArmorLogicSC.shooterIs(e, p)) {
                 NBTTagCompound d = e.getEntityData();
                 if (!d.getBoolean(SLOWED)) {
                     d.setBoolean(SLOWED, true);
@@ -787,7 +864,7 @@ public final class SingularPowersSC {
                     e.motionY = Math.max(e.motionY, 0.2);
                     e.velocityChanged = true;
                 }
-            } else if (projectile(e) && d < r + 1 && !ArmorLogicSC.shooterIs(e, fld.owner)) {
+            } else if (projectile(e) && d < r + 1 && !stuckInGround(e) && !ArmorLogicSC.shooterIs(e, fld.owner)) {
                 particles(fld.world, "smoke", e.posX, e.posY, e.posZ, 6, 0.1, 0.02);
                 e.setDead();                                    // stopped at the dome's wall
             }

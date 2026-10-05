@@ -109,6 +109,7 @@ public class ItemBridgeRemoteSC extends Item {
     /** Binds the remote to a controller (the server): owner / friends, the right kind. @return the chat key said */
     public static String bind(ItemStack stack, EntityPlayer player, TileEntityBridgeControllerSC c) {
         String key;
+        c.claim(player);                                   // М-7: binding to an ownerless controller makes the binder its owner
         if (!c.trusted(player)) {
             key = "sc.bridge.remote.noaccess";
             say(player, key, c.getOwner());

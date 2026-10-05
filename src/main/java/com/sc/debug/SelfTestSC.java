@@ -67,6 +67,7 @@ public final class SelfTestSC {
             singularStation();
             singularStage5();
             singularCrafts();
+            auditFixes20261006();
             bladeFunctions();
             chargePad();
             batteries();
@@ -5091,4 +5092,154 @@ public final class SelfTestSC {
         com.sc.manual.BookEntry e = com.sc.manual.BookContent.entryFor(s);
         return e != null && e.id.equals(id);
     }
+
+    /** The fixes after the 2026-10-05 bug check (docs/todo-недоработки.md: СБ, М, МК). */
+    private static void auditFixes20261006() {
+        singularAudit20261005();
+        check(testCellTopUp(), "МК-1: a part-filled Singular Matter cell tops up from a tank that won't take it");
+        check(testBookIndex(), "МК-2: the handbook's recipe index gives the same lines as the full scan");
+        check(testStationCarry(), "МК-3: the Singular Station's recipe carries the Armour Station's EU and gas tanks");
+        bridgeChecks20261005();
+    }
+
+    /** Проверка 2026-10-05 СБ-1, СБ-2, СБ-4, СБ-6. */
+    private static void singularAudit20261005() {
+        net.minecraft.item.Item[] sg = ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR);
+        com.sc.util.ArmorGasSC.Gas he = com.sc.util.ArmorGasSC.Gas.HELIUM;
+        ItemStack donor = new ItemStack(sg[1]), fresh = new ItemStack(sg[1]);
+        com.sc.util.SingularLevel.setLevel(donor, 4);
+        int cap4 = com.sc.util.ArmorGasSC.capacity(donor, he);
+        com.sc.util.ArmorGasSC.setAmount(donor, he, cap4);
+        int[] over = com.sc.tileentity.TileEntitySingularStationSC.transferLevel(donor, fresh);
+        int cap1 = com.sc.util.ArmorGasSC.capacity(donor, he);
+        com.sc.tileentity.TileEntitySingularStationSC st = new com.sc.tileentity.TileEntitySingularStationSC();
+        int lost = st.pourIntoTanks(over);
+        boolean sb1 = cap4 > cap1 && over[he.ordinal()] == cap4 - cap1
+                && com.sc.util.ArmorGasSC.amount(donor, he) == cap1
+                && donor.getTagCompound().getInteger(com.sc.util.ArmorGasSC.nbtKey(he)) == cap1
+                && st.tankAmount(he) + lost == cap4 - cap1;
+        check(sb1, "СБ-1: donor surplus gas " + (cap4 - cap1) + " mB poured into the station (lost " + lost + ")");
+        ItemStack[] set = new ItemStack[4];
+        for (int t = 0; t < 4; t++) {
+            set[t] = new ItemStack(sg[t]);
+            com.sc.util.SingularLevel.setLevel(set[t], 2);
+        }
+        com.sc.util.SingularLevel.updateSync(set);
+        boolean wasSynced = com.sc.util.SingularLevel.synced(set[0]);
+        com.sc.tileentity.TileEntitySingularStationSC st2 = new com.sc.tileentity.TileEntitySingularStationSC();
+        st2.setInventorySlotContents(0, set[0]);
+        st2.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.DONOR_SLOT, set[1]);
+        boolean sb2 = wasSynced && !com.sc.util.SingularLevel.synced(set[0]) && !com.sc.util.SingularLevel.synced(set[1])
+                && com.sc.util.SingularLevel.clearSync(set[2]) && !com.sc.util.SingularLevel.clearSync(set[2]);
+        check(sb2, "СБ-2: the sync flag is cleared off a piece put in the station / not worn");
+        com.sc.tileentity.TileEntitySingularStationSC st3 = new com.sc.tileentity.TileEntitySingularStationSC();
+        ItemStack boots = new ItemStack(sg[3]);
+        com.sc.util.SingularLevel.setLevel(boots, 4);
+        st3.setInventorySlotContents(3, boots);
+        ItemStack core = new ItemStack(ModItems.battery, 1, com.sc.util.SingularStationMath.CORE_META);
+        long full = com.sc.item.ItemBatterySC.capacityOf(core);
+        com.sc.item.ItemBatterySC.setCharge(core, full);
+        st3.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, core);
+        String r = st3.startModerniseFor(new int[]{0, 0, 0, 4}, "tester");
+        long cost = st3.getProcess() == null ? -1 : st3.getProcess().cost[0];
+        ItemStack kept = st3.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
+        boolean sb4;
+        if (r == null && full > cost) {
+            sb4 = kept != null && com.sc.item.ItemBatterySC.chargeOf(kept) == full - cost && st3.getProcess().catalystEu == cost;
+            st3.cancelProcess();
+            ItemStack after = st3.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
+            sb4 &= after == kept && com.sc.item.ItemBatterySC.chargeOf(after)
+                    == full - cost + com.sc.util.SingularStationMath.refund(cost);
+        } else {
+            sb4 = r == null && kept == null;
+        }
+        check(sb4, "СБ-4: the core's charge above the cost (" + cost + " of " + full + ") stays in the core, cancel refunds into it (" + r + ")");
+        boolean sb6;
+        try {
+            net.minecraft.entity.projectile.EntityArrow a = new net.minecraft.entity.projectile.EntityArrow(null);
+            boolean flying = !com.sc.item.SingularPowersSC.stuckInGround(a);
+            boolean set6 = com.sc.item.SingularPowersSC.setStuckForTest(a, true);
+            sb6 = flying && set6 && com.sc.item.SingularPowersSC.stuckInGround(a)
+                    && !com.sc.item.SingularPowersSC.stuckInGround(null);
+        } catch (Throwable t) {
+            sb6 = false;
+        }
+        check(sb6, "СБ-6: an arrow stuck in the ground is seen (inGround via reflection)");
+    }
+
+    private static boolean testCellTopUp() {          // МК-1
+        if (com.sc.init.ModFluids.singularMatter == null || ModItems.singularCell == null) return true;
+        final net.minecraftforge.fluids.FluidTank src = new net.minecraftforge.fluids.FluidTank(
+                new net.minecraftforge.fluids.FluidStack(com.sc.init.ModFluids.singularMatter, 700), 4000);
+        net.minecraftforge.fluids.IFluidHandler h = new net.minecraftforge.fluids.IFluidHandler() {
+            public int fill(net.minecraftforge.common.util.ForgeDirection d, net.minecraftforge.fluids.FluidStack r, boolean doIt) { return 0; }
+            public net.minecraftforge.fluids.FluidStack drain(net.minecraftforge.common.util.ForgeDirection d, net.minecraftforge.fluids.FluidStack r, boolean doIt) {
+                return r != null && r.isFluidEqual(src.getFluid()) ? src.drain(r.amount, doIt) : null; }
+            public net.minecraftforge.fluids.FluidStack drain(net.minecraftforge.common.util.ForgeDirection d, int max, boolean doIt) { return src.drain(max, doIt); }
+            public boolean canFill(net.minecraftforge.common.util.ForgeDirection d, net.minecraftforge.fluids.Fluid f) { return false; }
+            public boolean canDrain(net.minecraftforge.common.util.ForgeDirection d, net.minecraftforge.fluids.Fluid f) { return true; }
+            public net.minecraftforge.fluids.FluidTankInfo[] getTankInfo(net.minecraftforge.common.util.ForgeDirection d) { return new net.minecraftforge.fluids.FluidTankInfo[]{src.getInfo()}; }
+        };
+        ItemStack cell = com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, 400);
+        net.minecraftforge.fluids.IFluidContainerItem it = (net.minecraftforge.fluids.IFluidContainerItem) cell.getItem();
+        net.minecraftforge.fluids.FluidStack got = com.sc.util.FluidHandSC.topUp(h, it, cell, it.getFluid(cell), false);
+        boolean ok = got != null && got.amount == 600 && com.sc.item.ItemSingularCellSC.amountOf(cell) == 1000 && src.getFluidAmount() == 100;
+        ok &= com.sc.util.FluidHandSC.topUp(h, it, cell, it.getFluid(cell), false) == null && src.getFluidAmount() == 100;
+        ItemStack c2 = com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, 500);
+        got = com.sc.util.FluidHandSC.topUp(h, it, c2, it.getFluid(c2), false);
+        ok &= got != null && got.amount == 100 && com.sc.item.ItemSingularCellSC.amountOf(c2) == 600 && src.getFluidAmount() == 0;
+        return ok;
+    }
+
+    private static boolean testBookIndex() {          // МК-2
+        String diff = com.sc.manual.BookContent.indexMatchesScan();
+        if (diff != null) System.out.println("[SC-SELFTEST] book index differs: " + diff);
+        return diff == null;
+    }
+
+    private static boolean testStationCarry() {       // МК-3
+        com.sc.init.ChargeCarryRecipeSC rec = null;
+        for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList())
+            if (o instanceof com.sc.init.ChargeCarryRecipeSC && ((com.sc.init.ChargeCarryRecipeSC) o).getRecipeOutput().getItem()
+                    == net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.singularStation)) rec = (com.sc.init.ChargeCarryRecipeSC) o;
+        if (rec == null) return false;
+        net.minecraft.inventory.InventoryCrafting grid = new net.minecraft.inventory.InventoryCrafting(new net.minecraft.inventory.Container() {
+            public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer p) { return true; } }, 3, 3);
+        ItemStack st = new ItemStack(com.sc.init.ModBlocks.armorStation);
+        net.minecraft.nbt.NBTTagCompound t = new net.minecraft.nbt.NBTTagCompound(), tanks = new net.minecraft.nbt.NBTTagCompound();
+        t.setInteger("EnergySC", 1234);
+        tanks.setInteger(com.sc.util.ArmorGasSC.Gas.values()[0].key(), 500);
+        t.setTag(com.sc.tileentity.TileEntityArmorStationSC.ITEM_TANKS_KEY, tanks);
+        st.setTagCompound(t);
+        grid.setInventorySlotContents(4, st);
+        ItemStack out = rec.getCraftingResult(grid);
+        return out != null && out.hasTagCompound() && out.getTagCompound().getInteger("EnergySC") == 1234
+                && out.getTagCompound().getCompoundTag(com.sc.tileentity.TileEntityArmorStationSC.ITEM_TANKS_KEY)
+                       .getInteger(com.sc.util.ArmorGasSC.Gas.values()[0].key()) == 500;
+    }
+
+    private static void bridgeChecks20261005() {
+        com.sc.bridge.BridgeSpaceSC.Cells g = com.sc.bridge.BridgeSpaceSC.guarded(new FakeCells(), new com.sc.bridge.BridgeSpaceSC.Zones() {
+            @Override
+            public boolean ring(int x, int y, int z) {
+                return x >= -1 && x <= 1 && y >= 64 && y <= 66 && z >= -2 && z <= 2;
+            }
+        });
+        com.sc.bridge.BridgeSpaceSC.Result in = com.sc.bridge.BridgeSpaceSC.check(g, 0, 64, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result away = com.sc.bridge.BridgeSpaceSC.check(g, 10, 64, 0, 3, 0);
+        com.sc.bridge.BridgeSpaceSC.Result near = com.sc.bridge.BridgeSpaceSC.probe(g, 0, 64, 0, 3, 0, 16);
+        boolean clear = true;
+        if (near.hasNearest) {
+            for (int u = -1; u <= 1; u++) for (int v = 0; v < 3; v++) for (int d = 0; d < 2; d++)
+                if (g.cell(near.nx + u, near.ny + v, near.nz + d) == com.sc.bridge.BridgeSpaceSC.RING) clear = false;
+        }
+        check(!in.free && "sc.bridge.place.ring".equals(in.reason) && away.free && near.hasNearest && clear
+                && com.sc.bridge.BridgeSpaceSC.guarded(new FakeCells(), null) != null,
+                "bridge М-6: another ring's room is taken for an end (" + in.reason + "), the nearest free place is outside it");
+        com.sc.tileentity.TileEntityBridgeControllerSC a = new com.sc.tileentity.TileEntityBridgeControllerSC();
+        check(a.ownerless() && a.allowed(null) && a.trusted(null) && a.ownerlessRefusal(null) == null
+                && com.sc.tileentity.TileEntityBridgeControllerSC.openThrottle(null) == null,
+                "bridge М-7 / М-3: an ownerless controller, the server itself is never refused or throttled");
+    }
+
 }

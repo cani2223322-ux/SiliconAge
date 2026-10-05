@@ -234,6 +234,9 @@ public final class BridgeFarSC {
         item(out, r);
         TileEntityBridgeControllerSC c = reach == R_OK ? find(link, id) : null;
         TileEntityBridgeControllerSC.Order o = order(v, text, BridgeMathSC.SRC_REMOTE);
+        if (o != null && o.fromFind && !nearFind(p, o)) {
+            o.fromFind = false;                                          // М-1: the free-place search is for real scanner finds only
+        }
         if (c == null) {
             if (action != F_STATE && action != F_TO_COORD) {
                 msg(out, new BridgeMsgSC("sc.bridge.far." + (reach == R_UNBOUND ? "unbound" : reach == R_LOST ? "lost" : reach == R_ACCESS ? "access" : "unreachable")));
@@ -249,6 +252,11 @@ public final class BridgeFarSC {
         switch (action) {
             case F_OPEN: {
                 if (o == null) {
+                    break;
+                }
+                BridgeMsgSC slow = TileEntityBridgeControllerSC.openThrottle(p);     // М-3: at most one attempt a second
+                if (slow != null) {
+                    msg(out, slow);
                     break;
                 }
                 if (ItemBridgeRemoteSC.isSpace(r) && !ItemBridgeRemoteSC.hasKey(r)) {
@@ -497,6 +505,11 @@ public final class BridgeFarSC {
             case F_HOME:
             case F_LAST: {
                 if (o == null) {
+                    break;
+                }
+                BridgeMsgSC slow = TileEntityBridgeControllerSC.openThrottle(p);     // М-3: at most one attempt a second
+                if (slow != null) {
+                    msg(out, slow);
                     break;
                 }
                 BridgeMsgSC m = c.openOrder(p, o);

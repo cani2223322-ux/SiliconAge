@@ -279,6 +279,9 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
     @Override
     public void setInventorySlotContents(int slot, ItemStack stack) {
+        if ((slot >= 0 && slot < SLOTS) || slot == DONOR_SLOT) {
+            SingularLevel.clearSync(stack);                 // СБ-2: a piece in the station is not worn
+        }
         if (slot < ALL_SLOTS) {
             super.setInventorySlotContents(slot, stack);
             return;
@@ -326,6 +329,15 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             return;
         }
         long now = worldObj.getTotalWorldTime();
+        if (now % 20 == 0) {                                // СБ-2: pieces that came in some other way (an old save, a pipe)
+            boolean cleared = SingularLevel.clearSync(extra[DONOR_SLOT - ALL_SLOTS]);
+            for (int i = 0; i < SLOTS; i++) {
+                cleared |= SingularLevel.clearSync(getStackInSlot(i));
+            }
+            if (cleared) {
+                markDirty();
+            }
+        }
         if (lastScan == Long.MIN_VALUE || now - lastScan >= (proc != null ? SCAN_EVERY : 5 * SCAN_EVERY) || now < lastScan) {
             lastScan = now;
             scan();
@@ -469,10 +481,15 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         }
         p.starter = starter == null ? "" : starter;
         if (cat) {                                          // the core is used up; its charge pays the EU first
-            long eu = Math.min(com.sc.item.ItemBatterySC.chargeOf(extra[1]), p.cost[SingularStationMath.R_EU]);
+            long charge = com.sc.item.ItemBatterySC.chargeOf(extra[1]);
+            long eu = Math.min(charge, p.cost[SingularStationMath.R_EU]);
             p.catalystEu = eu;
             p.drawn[SingularStationMath.R_EU] = eu;
-            extra[1] = null;
+            if (charge > eu) {                              // СБ-4: the charge above the cost stays in the core (kept in its slot, locked)
+                com.sc.item.ItemBatterySC.setCharge(extra[1], charge - eu);
+            } else {
+                extra[1] = null;
+            }
         }
         begin(p);
         return null;
@@ -749,12 +766,17 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             }
         } else if ((p.catalystEu > 0 || (p.kind == SingularProcessSC.KIND_MODERNISE && SingularStationMath.needsCatalyst(p.levels)))
                 && com.sc.init.ModItems.battery != null) {         // the core taken at the start comes back (an empty one too)
-            ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
-            com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
-            if (extra[1] == null) {
-                extra[1] = core;
-            } else if (worldObj != null && !worldObj.isRemote) {
-                worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, core));
+            if (isCore(extra[1])) {                         // СБ-4: the core was kept (its charge was above the cost) - the refund goes into it
+                com.sc.item.ItemBatterySC.setCharge(extra[1],
+                        com.sc.item.ItemBatterySC.chargeOf(extra[1]) + SingularStationMath.refund(p.catalystEu));
+            } else {
+                ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
+                com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
+                if (extra[1] == null) {
+                    extra[1] = core;
+                } else if (worldObj != null && !worldObj.isRemote) {
+                    worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, core));
+                }
             }
         }
         shortMask = 0;
@@ -811,10 +833,14 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         } else if (p.kind == SingularProcessSC.KIND_TRANSFER) {
             ItemStack donor = extra[0], target = p.target >= 0 && p.target < SLOTS ? getStackInSlot(p.target) : null;
             if (SingularLevel.isSingular(donor) && SingularLevel.isSingular(target)) {
-                transferLevel(donor, target);
+                int lost = pourIntoTanks(transferLevel(donor, target));     // СБ-1: the donor's surplus gas -> the tanks
                 if (who != null) {
                     who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.done.transfer",
                             String.valueOf(SingularLevel.levelOf(target))));
+                    if (lost > 0) {
+                        who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.transfer.gaslost",
+                                String.valueOf(lost)));
+                    }
                 }
             }
         }
@@ -837,8 +863,17 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return completed;
     }
 
-    /** Ф4 on two pieces: the donor's level, points and branches go to the target; the donor is level 1 again. */
-    public static void transferLevel(ItemStack donor, ItemStack target) {
+    /**
+     * Ф4 on two pieces: the donor's level, points and branches go to the target; the donor is level 1 again.
+     * СБ-1: the donor's tanks shrink with its level - what no longer fits leaves the piece.
+     * @return mB of each gas (by Gas ordinal) that left the donor - the station pours it into its own tanks
+     */
+    public static int[] transferLevel(ItemStack donor, ItemStack target) {
+        Gas[] gases = Gas.values();
+        int[] before = new int[gases.length];
+        for (Gas g : gases) {
+            before[g.ordinal()] = com.sc.util.ArmorGasSC.amount(donor, g);
+        }
         int lvl = SingularLevel.levelOf(donor), pts = SingularLevel.points(donor);
         int b3 = SingularLevel.branchChoice(donor, 3), b5 = SingularLevel.branchChoice(donor, 5);
         SingularLevel.setLevel(target, lvl);
@@ -849,6 +884,27 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         SingularLevel.setPoints(donor, 0);
         SingularLevel.setBranch(donor, 3, SingularLevel.BRANCH_NONE);
         SingularLevel.setBranch(donor, 5, SingularLevel.BRANCH_NONE);
+        int[] over = new int[gases.length];
+        for (Gas g : gases) {
+            int cap = com.sc.util.ArmorGasSC.capacity(donor, g), was = before[g.ordinal()];
+            if (was > cap) {
+                over[g.ordinal()] = was - cap;
+                com.sc.util.ArmorGasSC.setAmount(donor, g, cap);    // no hidden gas above the tank
+            }
+        }
+        return over;
+    }
+
+    /** СБ-1: the gas `over` (by Gas ordinal) goes into the station's tanks; @return mB that did not fit (lost) */
+    public int pourIntoTanks(int[] over) {
+        int lost = 0;
+        for (Gas g : Gas.values()) {
+            int n = over == null || g.ordinal() >= over.length ? 0 : over[g.ordinal()];
+            if (n > 0) {
+                lost += n - fillTank(g, n, true);
+            }
+        }
+        return lost;
     }
 
     // ------------------------------------------------------------------ the bridge link (docs/plan-ground-bridge.md §8, «Связь»)

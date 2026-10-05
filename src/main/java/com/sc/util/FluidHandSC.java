@@ -70,12 +70,21 @@ public final class FluidHandSC {
             IFluidContainerItem item = (IFluidContainerItem) held.getItem();
             FluidStack carried = item.getFluid(held);
             if (carried != null && carried.amount > 0) {
-                if (!te.canFill(ForgeDirection.UNKNOWN, carried.getFluid())) {
-                    tell(player, "sc.chat.fluid.wrong", carried);
+                boolean accepts = te.canFill(ForgeDirection.UNKNOWN, carried.getFluid());
+                int room = accepts ? te.fill(ForgeDirection.UNKNOWN, carried, false) : 0;
+                if (room <= 0) {
+                    // the target won't take it (or is full): top a part-filled cell up from it instead
+                    FluidStack topped = topUp(te, item, held, carried, creative);
+                    if (topped != null) {
+                        splash(world, x, y, z);
+                        tell(player, "sc.chat.fluid.out", topped);
+                        player.inventoryContainer.detectAndSendChanges();
+                        return;
+                    }
+                    tell(player, accepts ? "sc.chat.fluid.nofit" : "sc.chat.fluid.wrong", carried);
                     return;
                 }
-                int room = te.fill(ForgeDirection.UNKNOWN, carried, false);
-                FluidStack poured = room <= 0 ? null : item.drain(held, room, !creative);
+                FluidStack poured = item.drain(held, room, !creative);
                 if (poured == null || poured.amount <= 0) {
                     tell(player, "sc.chat.fluid.nofit", carried);
                     return;
@@ -98,6 +107,42 @@ public final class FluidHandSC {
             }
             player.inventoryContainer.detectAndSendChanges();
         }
+    }
+
+    /**
+     * A part-filled tank-in-an-item takes more of the same fluid from the handler: the room is
+     * simulated on both sides first, the handler is drained for real, and the item gets exactly what
+     * came out (nothing out - nothing in, so no dupes). Creative hands don't change. Null: nothing taken.
+     */
+    public static FluidStack topUp(IFluidHandler te, IFluidContainerItem item, ItemStack held, FluidStack carried, boolean creative) {
+        int room = item.getCapacity(held) - carried.amount;
+        if (room <= 0) {
+            return null;
+        }
+        FluidStack want = new FluidStack(carried, room);
+        int fits = item.fill(held, want.copy(), false);
+        if (fits <= 0) {
+            return null;
+        }
+        want = new FluidStack(carried, fits);
+        FluidStack avail = te.drain(ForgeDirection.UNKNOWN, want.copy(), false);
+        boolean byStack = avail != null && avail.isFluidEqual(carried) && avail.amount > 0;
+        if (!byStack) {                                     // handlers that only drain by amount
+            avail = te.drain(ForgeDirection.UNKNOWN, fits, false);
+            if (avail == null || !avail.isFluidEqual(carried) || avail.amount <= 0) {
+                return null;
+            }
+        }
+        int take = Math.min(fits, avail.amount);
+        FluidStack drained = byStack ? te.drain(ForgeDirection.UNKNOWN, new FluidStack(carried, take), true)
+                : te.drain(ForgeDirection.UNKNOWN, take, true);
+        if (drained == null || drained.amount <= 0) {
+            return null;
+        }
+        if (!creative) {
+            item.fill(held, drained.copy(), true);
+        }
+        return drained;
     }
 
     private static void tell(EntityPlayer player, String key, FluidStack f) {

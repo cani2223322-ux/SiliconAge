@@ -63,37 +63,67 @@ public final class BookContent {
     public static synchronized List<BookEntry> all() {
         String lang = Lang.tr("language.code") + "|" + Lang.tr("sc.book.lang");
         if (cache == null || !lang.equals(cacheLang)) {
-            List<BookEntry> list = new ArrayList<BookEntry>();
-            intro(list);
-            ores(list);
-            silicon(list);
-            machines(list);
-            generators(list);
-            bridge(list);
-            energy(list);
-            armor(list);
-            field(list);
-            safety(list);
-            BookMaterialsSC.materials(list);
-            BookReferenceSC.reference(list);
-            BookPathSC.path(list);                      // last: its steps link to (and name) the other articles
-            list.add(new BookEntry("recipes", BookChapter.RECIPES, new ItemStack(Blocks.crafting_table), Lang.tr("sc.book.recipes.title"))
-                    .add(BookEl.dim(Lang.tr("sc.manual.recipes.hint"))));
-            byId = new HashMap<String, BookEntry>();
-            byStack = new HashMap<String, BookEntry>();
-            for (BookEntry e : list) {
-                byId.put(e.id, e);
-                for (ItemStack s : e.about) {
-                    String k = key(s);
-                    if (!byStack.containsKey(k)) {
-                        byStack.put(k, e);
-                    }
-                }
+            BookIndexSC.begin();                        // МК-2: one pass over the recipes for this build
+            try {
+                build(lang);
+            } finally {
+                BookIndexSC.end();
             }
-            cache = list;
-            cacheLang = lang;
         }
         return cache;
+    }
+
+    private static void build(String lang) {
+        List<BookEntry> list = new ArrayList<BookEntry>();
+        intro(list);
+        ores(list);
+        silicon(list);
+        machines(list);
+        generators(list);
+        bridge(list);
+        energy(list);
+        armor(list);
+        field(list);
+        safety(list);
+        BookMaterialsSC.materials(list);
+        BookReferenceSC.reference(list);
+        BookPathSC.path(list);                      // last: its steps link to (and name) the other articles
+        list.add(new BookEntry("recipes", BookChapter.RECIPES, new ItemStack(Blocks.crafting_table), Lang.tr("sc.book.recipes.title"))
+                .add(BookEl.dim(Lang.tr("sc.manual.recipes.hint"))));
+        byId = new HashMap<String, BookEntry>();
+        byStack = new HashMap<String, BookEntry>();
+        for (BookEntry e : list) {
+            byId.put(e.id, e);
+            for (ItemStack s : e.about) {
+                String k = key(s);
+                if (!byStack.containsKey(k)) {
+                    byStack.put(k, e);
+                }
+            }
+        }
+        cache = list;
+        cacheLang = lang;
+    }
+
+    /**
+     * Self-test (МК-2): the Components chapter's look-ups give the same lines with the recipe index
+     * as by scanning every recipe. @return null when they agree, else the first item that differs
+     */
+    public static synchronized String indexMatchesScan() {
+        List<String> scan = BookMaterialsSC.lookups();
+        BookIndexSC.begin();
+        try {
+            List<String> indexed = BookMaterialsSC.lookups();
+            for (int i = 0; i < Math.max(scan.size(), indexed.size()); i++) {
+                String a = i < scan.size() ? scan.get(i) : null, b = i < indexed.size() ? indexed.get(i) : null;
+                if (a == null ? b != null : !a.equals(b)) {
+                    return a + " <> " + b;
+                }
+            }
+            return null;
+        } finally {
+            BookIndexSC.end();
+        }
     }
 
     /** Built again on the next use (the self-test builds it before other mods' recipes exist). */
@@ -522,7 +552,7 @@ public final class BookContent {
 
     public static List<IRecipe> craftingFor(ItemStack out) {
         List<IRecipe> found = new ArrayList<IRecipe>();
-        for (Object o : CraftingManager.getInstance().getRecipeList()) {
+        for (Object o : BookIndexSC.craftMaking(out)) {     // МК-2: while the book builds, only the recipes making this item
             IRecipe r = (IRecipe) o;
             ItemStack res = r.getRecipeOutput();
             if (res != null && res.getItem() == out.getItem() && (res.getItemDamage() == out.getItemDamage()
@@ -592,6 +622,7 @@ public final class BookContent {
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.byproducthead")))      // СМ2: singular matter while it runs
                 .add(BookEl.para(Lang.tr("sc.manual.generator.sing.byproduct", com.sc.tileentity.SingularReactorSC.SM_PER_SECOND,
                         com.sc.tileentity.SingularReactorSC.SM_TANK)));
+        e.add(BookEl.dim(Lang.tr("sc.manual.generator.sing.smport")));      // МК-5: a port takes matter only once it holds some
         e.add(BookEl.head(Lang.tr("sc.manual.generator.sing.buildhead"))).add(BookEl.image("singular_build", 300, 112))
                 .add(BookEl.dim(Lang.tr("sc.book.sing.buildimg"))).add(singularBuild())
                 .add(BookEl.items(materials(singularLayers()))).addAll(paras("sc.manual.generator.sing.build", null, null,
@@ -1033,6 +1064,7 @@ public final class BookContent {
         e.add(BookEl.head(Lang.tr("sc.manual.singstation.convhead"))).addAll(paras("sc.manual.singstation.conv"));
         convertCards(e);
         crafting(e, st);
+        e.add(BookEl.dim(Lang.tr("sc.manual.singstation.carry")));      // МК-3: the Armour Station's contents go over
         crafting(e, stab);
         e.about(st, stab);
         list.add(e);

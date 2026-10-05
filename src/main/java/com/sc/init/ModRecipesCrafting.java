@@ -552,6 +552,7 @@ public final class ModRecipesCrafting {
      * The Singular armour's blocks and cell (docs/plan-singular-armor.md, СС1 / ГС1 / item 7):
      *  - the Singular Service Station round an Armour Service Station: gravity coils, an Exo core (its
      *    charge goes into the station's buffer - ChargeCarryRecipeSC), Singular cable, a fusion core, hafnium;
+     *    the Armour Station's own EU, tanks and modules go into the new station too (carryFrom);
      *  - the Gravitational Stabiliser: hafnium round a gravity coil, a Compressed Matter Capsule, Singular cable;
      *  - the Singular Matter cell (empty): titanium plates and glass round a hafnium ingot.
      * The Singular suit itself comes from the station (Б-1: an Exo piece converted), not from the grid.
@@ -561,7 +562,8 @@ public final class ModRecipesCrafting {
         int stationMax = new com.sc.tileentity.TileEntitySingularStationSC().getMaxEnergyStored();
         GameRegistry.addRecipe(new ChargeCarryRecipeSC(new ItemStack(ModBlocks.singularStation), stationMax, "GXG", "CAC", "HFH",
                 'G', coil, 'X', new ItemStack(ModItems.battery, 1, com.sc.util.SingularStationMath.EXO_CORE_META),
-                'C', cable(CableType.SINGULAR), 'A', new ItemStack(ModBlocks.armorStation), 'F', comp("fusionCore"), 'H', hf));
+                'C', cable(CableType.SINGULAR), 'A', new ItemStack(ModBlocks.armorStation), 'F', comp("fusionCore"), 'H', hf)
+                .carryFrom(net.minecraft.item.Item.getItemFromBlock(ModBlocks.armorStation)));     // its EU, tanks, modules go over
         OreRecipes.shaped(new ItemStack(ModBlocks.gravStabiliser), "HMH", " G ", "HCH",
                 'H', hf, 'M', comp("matterCapsule"), 'G', coil, 'C', cable(CableType.SINGULAR));
         OreRecipes.shaped(new ItemStack(ModItems.singularCell), " T ", "GHG", " T ",

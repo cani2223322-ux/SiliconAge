@@ -18,7 +18,8 @@ import net.minecraft.world.World;
  * Reactor (levels 2 and 4 of its 7x7x5 build) - hold its black hole. The Ground / Space Bridge's ring is
  * made of them too (16 / 24 in a square standing on its edge): while its portal is open its coils glow
  * (metadata 1, set by the bridge controller) and show the ring's heat - 1 cold blue, 2 warm orange, 3 hot red (a
- * tint; a hot ring keeps its glow while it cools). A coil taken out of a bridge ring loses that bridge its calibration.
+ * tint; a hot ring keeps its glow while it cools). A coil taken out of a bridge ring loses that bridge its calibration (every
+ * controller whose ring it was in hears of it - М-5; the wear stays, only «Ремонт» takes it off - М-4).
  */
 public class BlockGravityCoilSC extends Block {
 
@@ -77,12 +78,33 @@ public class BlockGravityCoilSC extends Block {
         return null;
     }
 
+    /** М-5: every bridge controller whose ring this coil may be part of (each checks itself whether it is one of its coils). */
+    public static java.util.List<com.sc.tileentity.TileEntityBridgeControllerSC> bridgesBelow(World w, int x, int y, int z) {
+        java.util.List<com.sc.tileentity.TileEntityBridgeControllerSC> l = new java.util.ArrayList<com.sc.tileentity.TileEntityBridgeControllerSC>();
+        for (int dy = 1; dy <= 8; dy++) {
+            for (int dx = -4; dx <= 4; dx++) {
+                for (int dz = -4; dz <= 4; dz++) {
+                    if (dx != 0 && dz != 0) {
+                        continue;
+                    }
+                    if (!w.blockExists(x + dx, y - dy, z + dz)) {
+                        continue;
+                    }
+                    TileEntity te = w.getTileEntity(x + dx, y - dy, z + dz);
+                    if (te instanceof com.sc.tileentity.TileEntityBridgeControllerSC) {
+                        l.add((com.sc.tileentity.TileEntityBridgeControllerSC) te);
+                    }
+                }
+            }
+        }
+        return l;
+    }
+
     @Override
     public void breakBlock(World w, int x, int y, int z, Block block, int meta) {
         if (!w.isRemote) {
-            com.sc.tileentity.TileEntityBridgeControllerSC c = bridgeBelow(w, x, y, z);
-            if (c != null) {
-                c.ringChanged(x, y, z);
+            for (com.sc.tileentity.TileEntityBridgeControllerSC c : bridgesBelow(w, x, y, z)) {
+                c.ringChanged(x, y, z);                    // М-5: all of them, not the first one found
             }
         }
         super.breakBlock(w, x, y, z, block, meta);

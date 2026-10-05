@@ -181,6 +181,9 @@ public class WailaSC implements IWailaDataProvider {
             }
             if (ph == com.sc.tileentity.SingularReactorSC.PHASE_RUN || t.getInteger("scSingSm") > 0) {   // СМ2: the by-product
                 tip.add(Lang.tr("sc.waila.sm", t.getInteger("scSingSm"), com.sc.tileentity.SingularReactorSC.SM_TANK));
+                if (t.hasKey("scSingSmPorts") && t.getInteger("scSingSmPorts") == 0) {     // МК-5: the by-product has nowhere to go
+                    tip.add("§e" + Lang.tr("sc.waila.sing.smport"));
+                }
             }
         }
         if (t.hasKey("scBig")) {
@@ -325,6 +328,7 @@ public class WailaSC implements IWailaDataProvider {
             tag.setInteger("scSingEvent", s.getEvent());
             tag.setBoolean("scSingReady", s.isReady());
             tag.setInteger("scSingSm", s.getSmStored());
+            tag.setInteger("scSingSmPorts", s.smPortCount());          // МК-5: no port with singular matter yet - say how to make one
         }
         if (te instanceof com.sc.tileentity.TileEntityArmorStationSC) {
             com.sc.tileentity.TileEntityArmorStationSC st = (com.sc.tileentity.TileEntityArmorStationSC) te;

@@ -26,6 +26,8 @@ import net.minecraftforge.fluids.IFluidContainerItem;
  * any other singular matter tank by a right-click (FluidHandSC), pours into the Singular Station's
  * 8th tank, a mod tank or a machine, and into the worn suit from the K menu (one cell or «Заправить
  * всё», ArmorNetSC) - giving what fits and keeping the rest. NBT "Fluid" (Forge's FluidStack tag).
+ * МК-1: a part-filled cell clicked on a tank that won't take more (or not this fluid) is topped up
+ * from it instead (FluidHandSC.topUp).
  */
 public class ItemSingularCellSC extends Item implements IFluidContainerItem {
 

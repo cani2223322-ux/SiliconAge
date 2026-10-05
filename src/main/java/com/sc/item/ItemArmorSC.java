@@ -444,6 +444,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         if (stack.getItemDamage() != 0) {
             stack.setItemDamage(0);
         }
+        if (!world.isRemote) {
+            com.sc.util.SingularLevel.clearSync(stack);      // СБ-2: not worn (main inventory) - no set bonus (Р4)
+        }
         if (world.isRemote || armorType != 1 || entity.ticksExisted % 20 != 0 || !stack.hasTagCompound()) {
             return;
         }

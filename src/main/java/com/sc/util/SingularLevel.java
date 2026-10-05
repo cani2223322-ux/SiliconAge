@@ -499,6 +499,19 @@ public final class SingularLevel {
         return changed;
     }
 
+    /**
+     * СБ-2: the sync flag is valid only while the piece is worn - updateSync keeps it on the worn set; a piece
+     * found anywhere else (the main inventory - ItemArmorSC.onUpdate; the Singular station's armour / donor
+     * slots - TileEntitySingularStationSC) loses it here. @return whether it had the flag
+     */
+    public static boolean clearSync(ItemStack piece) {
+        if (piece == null || !piece.hasTagCompound() || !piece.getTagCompound().hasKey(SYNC)) {
+            return false;
+        }
+        piece.getTagCompound().removeTag(SYNC);
+        return true;
+    }
+
     /** Р3 + Р4: the piece's tanks grow by this much, percent (ArmorGasSC.levelBonusPercent). */
     public static int tankBonusPercent(ItemStack piece) {
         return isSingular(piece) ? bonusPercent(levelOf(piece), synced(piece), TANK_PCT) : 0;

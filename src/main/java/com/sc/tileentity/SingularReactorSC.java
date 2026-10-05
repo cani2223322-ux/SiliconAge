@@ -228,6 +228,11 @@ public class SingularReactorSC {
         return smStored;
     }
 
+    /** МК-5: the wall's port tanks that take the by-product (those already holding singular matter). */
+    public int smPortCount() {
+        return smPorts.size();
+    }
+
     /** Pipes / a bucket at the reactor block: up to `max` mB of the by-product. @return what came (or would come) out */
     public int drainSm(int max, boolean doDrain) {
         int n = Math.max(0, Math.min(max, smStored));

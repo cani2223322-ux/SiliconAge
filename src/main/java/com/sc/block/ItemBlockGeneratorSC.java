@@ -66,5 +66,9 @@ public class ItemBlockGeneratorSC extends ItemBlock {
             list.add(Lang.tr("sc.generator.tooltip.ignition", String.valueOf(nbt.getLong("IgnitionEU")),
                     String.valueOf(type.ignitionThreshold())));
         }
+        if (nbt.getInteger("SmStored") > 0) {                            // МК-4: the Singular reactor's inner by-product tank
+            list.add("§d" + Lang.tr("sc.generator.tooltip.sm", String.valueOf(nbt.getInteger("SmStored")),
+                    String.valueOf(com.sc.tileentity.SingularReactorSC.SM_TANK)));
+        }
     }
 }

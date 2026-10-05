@@ -1060,8 +1060,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
                     int wear = st.getInteger("wear");
                     t.add(Lang.tr("sc.bridge.gui.repair.hint", wear));
                     t.add("§7" + Lang.tr("sc.bridge.gui.repair.cost", g(st.getInteger("repairHe")), eu(st.getLong("repairEu"))));
-                    t.add("§7" + Lang.tr("sc.bridge.gui.repair.hint2", BridgeMathSC.REPAIR_HE_PER_WEAR, eu(BridgeMathSC.REPAIR_EU_PER_WEAR),
-                            BridgeMathSC.COIL_SWAP_WEAR));
+                    t.add("§7" + Lang.tr("sc.bridge.gui.repair.hint2", BridgeMathSC.REPAIR_HE_PER_WEAR, eu(BridgeMathSC.REPAIR_EU_PER_WEAR)));
                     if (st.getBoolean("open")) {
                         t.add("§c" + Lang.tr("sc.bridge.refuse.open"));
                     }
@@ -1152,7 +1151,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
         if (over(8, 197, 92, 8)) {
             t.add(Lang.tr("sc.bridge.gui.wear") + ": " + st.getInteger("wear") + "%");
             t.add("§7" + Lang.tr("sc.bridge.gui.wear.hint", BridgeMathSC.WEAR_FREE));
-            t.add("§7" + Lang.tr("sc.bridge.gui.wear.hint2", BridgeMathSC.COIL_SWAP_WEAR));
+            t.add("§7" + Lang.tr("sc.bridge.gui.wear.hint2"));
             return t;
         }
         if (over(110, 168, 192, 8)) {
