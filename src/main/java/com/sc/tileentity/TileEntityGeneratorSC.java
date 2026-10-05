@@ -2490,6 +2490,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (ignitionEU > 0) {
                 nbt.setLong("IgnitionEU", ignitionEU);              // the charge drawn so far; the hole itself never leaves
             }
+            if (getSingular().getSmStored() > 0) {
+                nbt.setInteger("SmStored", getSingular().getSmStored());   // СМ2: the by-product's inner tank isn't lost on breaking
+            }
         } else if (generatorType.needsIgnition()) {
             if (ignitionEU > 0) {
                 nbt.setLong("IgnitionEU", ignitionEU);
@@ -2539,6 +2542,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (singular()) {
             ignitionEU = Math.max(0L, Math.min(generatorType.ignitionThreshold(), nbt.getLong("IgnitionEU")));
+            getSingular().setSmForTest(nbt.getInteger("SmStored"));    // СМ2: the inner tank the item carried
         } else if (generatorType.needsIgnition()) {
             ignitionEU = Math.max(0L, Math.min(generatorType.ignitionThreshold(), nbt.getLong("IgnitionEU")));
             boolean was = ignited;

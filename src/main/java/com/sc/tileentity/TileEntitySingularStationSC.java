@@ -747,7 +747,8 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             for (ItemStack s : p.items) {
                 putBack(s.copy());
             }
-        } else if (p.catalystEu > 0 && com.sc.init.ModItems.battery != null) {
+        } else if ((p.catalystEu > 0 || (p.kind == SingularProcessSC.KIND_MODERNISE && SingularStationMath.needsCatalyst(p.levels)))
+                && com.sc.init.ModItems.battery != null) {         // the core taken at the start comes back (an empty one too)
             ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
             com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
             if (extra[1] == null) {

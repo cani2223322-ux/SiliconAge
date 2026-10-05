@@ -2050,6 +2050,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             yaw = aAxis == 0 ? (d > 0 ? 0F : 180F) : (d > 0 ? -90F : 90F);
         }
         data.setLong("scBridgeCd", now + BridgeMathSC.TELEPORT_COOLDOWN);
+        // never out into someone else's private field (the exit cell next to the end; a turbulent shift below)
+        EntityPlayer rights = player ? (EntityPlayer) e : playerByName(opener);
+        World dest = DimensionManager.getWorld(dim);
+        if (dest != null && ShieldEventHandlerPrivate.foreignField(dest, rights, (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z))) {
+            return;                                          // privateFor has told the player
+        }
         // С4: the pass costs EU by its mass and weighs on the stability for 10 s (the Mass Compensator halves both)
         int pm = massOf(e);
         if (!drawAny(BridgeMathSC.massEu(pm, scan != null && scan.mass))) {
@@ -2064,6 +2070,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         boolean shaken = false;
         if (stability < BridgeMathSC.TURBULENCE) {
             int[] spot = turbulentSpot(dim, x, y, z);
+            if (spot != null && dest != null && ShieldEventHandlerPrivate.foreignField(dest, rights, spot[0], spot[1], spot[2])) {
+                spot = null;                                 // lands as planned instead
+            }
             if (spot != null) {
                 x = spot[0] + 0.5;
                 y = spot[1];
@@ -2154,13 +2163,16 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     }
 
     private void releaseChunks() {
-        if (ticketA != null) {
-            ForgeChunkManager.releaseTicket(ticketA);
-            ticketA = null;
-        }
-        if (ticketB != null) {
-            ForgeChunkManager.releaseTicket(ticketB);
-            ticketB = null;
+        release(ticketA);
+        ticketA = null;
+        release(ticketB);
+        ticketB = null;
+    }
+
+    /** Lets a ticket go while its world is still the server's (ForgeChunkManager forgets an unloaded world's tickets itself). */
+    private static void release(ForgeChunkManager.Ticket t) {
+        if (t != null && t.world != null && DimensionManager.getWorld(t.world.provider.dimensionId) == t.world) {
+            ForgeChunkManager.releaseTicket(t);
         }
     }
 
@@ -2298,6 +2310,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     @Override
     public void onChunkUnload() {
         super.onChunkUnload();
+        // let them go, not just forget them: an open portal whose end A is in another world doesn't hold this chunk, and
+        // a forgotten ticket kept its chunks loaded until a restart while the controller, loaded again, asked for new ones
+        if (worldObj != null && !worldObj.isRemote) {
+            releaseChunks();
+            release(ticketR);
+        }
         ticketA = null;
         ticketB = null;
         ticketR = null;
@@ -2504,7 +2522,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             if (c == null || v.length < 4) {
                 m = new BridgeMsgSC("sc.bridge.refuse.nocoord");
             } else {
-                World w = worldFor(bridgeKind() == BridgeMathSC.SPACE ? v[3] : ownDim());
+                World w = DimensionManager.getWorld(bridgeKind() == BridgeMathSC.SPACE ? v[3] : ownDim());
+                if (w != null && !w.checkChunksExist(v[0] - 2, 0, v[2] - 2, v[0] + 2, 255, v[2] + 2)) {
+                    w = null;                                // a point far off isn't checked: a packet never loads / generates chunks for free
+                }
                 int y = v[1];
                 boolean safe = false;
                 if (w != null && y != AUTO_Y) {

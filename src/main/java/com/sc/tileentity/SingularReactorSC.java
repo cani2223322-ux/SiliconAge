@@ -238,6 +238,7 @@ public class SingularReactorSC {
         return n;
     }
 
+    /** Tests, and the reactor's item on placement (TileEntityGeneratorSC.readFromItem). */
     public void setSmForTest(int mb) {
         smStored = Math.max(0, Math.min(SM_TANK, mb));
     }

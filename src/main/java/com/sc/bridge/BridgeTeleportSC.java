@@ -98,9 +98,17 @@ public final class BridgeTeleportSC {
         if (copy == null) {
             return null;
         }
+        // the copy takes the data first, then the old one is emptied: a chest / hopper minecart's setDead (removeEntity)
+        // would otherwise spill its contents here while the copy carries them on
+        copy.copyDataFrom(e, true);
+        if (e instanceof net.minecraft.inventory.IInventory) {
+            net.minecraft.inventory.IInventory inv = (net.minecraft.inventory.IInventory) e;
+            for (int i = 0; i < inv.getSizeInventory(); i++) {
+                inv.setInventorySlotContents(i, null);
+            }
+        }
         fromW.removeEntity(e);
         e.isDead = false;
-        copy.copyDataFrom(e, true);
         copy.dimension = dim;
         copy.setLocationAndAngles(x, y, z, yaw, e.rotationPitch);
         copy.motionX = copy.motionY = copy.motionZ = 0;

@@ -363,6 +363,9 @@ public final class BridgeFarSC {
         int y = v[1];
         boolean safe = false;
         World w = DimensionManager.getWorld(v[3]);
+        if (w != null && !w.checkChunksExist(v[0] - 2, 0, v[2] - 2, v[0] + 2, 255, v[2] + 2)) {
+            w = null;                                    // a point far off isn't checked: a packet never loads / generates chunks for free
+        }
         if (w != null && y != TileEntityBridgeControllerSC.AUTO_Y) {
             safe = BridgeSpaceSC.check(BridgeSpaceSC.of(w), v[0], y, v[2], BridgeMathSC.vortexSize(BridgeMathSC.GROUND), 0).free;
         } else if (w != null) {
@@ -483,6 +486,9 @@ public final class BridgeFarSC {
         if (o != null && c.bridgeKind() == BridgeMathSC.GROUND && o.hasPoint) {
             o.pdim = c.getWorldObj().provider.dimensionId;
         }
+        if (o != null && o.fromFind && !nearFind(p, o)) {
+            o.fromFind = false;                                          // only a point the scanner found - not any point a packet claims
+        }
         if (o != null && o.fromFind) {                                   // level 5: precise portals to the scanner's finds
             o.precise = SingularLevel.effectiveLevel(p, h) >= SingularLevel.BRIDGE_FINDS_LEVEL;
         }
@@ -582,6 +588,18 @@ public final class BridgeFarSC {
             }
         }
         persisted.setTag(FINDS, now);
+    }
+
+    /** The order's point is one of the player's finds (or next to one: within 16 blocks across, the same dimension). */
+    static boolean nearFind(EntityPlayer p, TileEntityBridgeControllerSC.Order o) {
+        NBTTagList l = SingularLevel.persisted(p, false).getTagList(FINDS, 10);
+        for (int i = 0; i < l.tagCount(); i++) {
+            int[] q = l.getCompoundTagAt(i).getIntArray("p");
+            if (q.length == 4 && q[3] == o.pdim && Math.abs(q[0] - o.px) <= 16 && Math.abs(q[2] - o.pz) <= 16) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static NBTTagList finds(EntityPlayer p) {
