@@ -5073,3 +5073,4 @@ sc.book.modules.w.converter=преобразователь энергии
 sc.book.modules.conv=Модули преобразователя энергии
 sc.book.modules.conv.upgrades=Ещё в него ставятся Трансформатор, Универсальный трансформатор и Накопитель (см. выше).
 sc.singStation.catalyst.lost=Заряд ядра сверх стоимости не поместился в буфер станции: потеряно %s EU
+tile.siliconage.light.name=Свет прожектора

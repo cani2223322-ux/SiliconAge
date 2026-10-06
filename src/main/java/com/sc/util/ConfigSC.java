@@ -79,31 +79,31 @@ public final class ConfigSC {
             }
             machineSounds = config.getBoolean("machines", "sounds", true,
                     "Working machines, generators and quarries make their sound");
-            soundVolume = config.getFloat("volume", "sounds", 1F, 0F, 1F,
+            soundVolume = num(config, "volume", "sounds", 1F, 0F, 1F,
                     "Volume of every Silicon Age sound (0 = silent)");
             radiation = config.getBoolean("enabled", "radiation", true,
                     "RTGs and reactors irradiate players nearby: a dose builds up and makes them ill (lead, suits and fields protect)");
-            radiationMultiplier = config.getFloat("multiplier", "radiation", 1F, 0F, 10F,
+            radiationMultiplier = num(config, "multiplier", "radiation", 1F, 0F, 10F,
                     "Every radiation level is multiplied by this (0.5 = half as strong)");
             String b = "balance";
             config.setCategoryComment(b, "Multipliers on the mod's balance (1 = as designed). On a server, give the clients the same file"
                     + " so their screens and tooltips show the same numbers.");
-            machineSpeed = config.getFloat("machineSpeed", b, 1F, 0.1F, 10F,
+            machineSpeed = num(config, "machineSpeed", b, 1F, 0.1F, 10F,
                     "Machines work this many times faster (2 = recipes take half the time, at twice the EU a tick - the same EU an operation)");
-            machineEnergy = config.getFloat("machineEnergy", b, 1F, 0.1F, 10F,
+            machineEnergy = num(config, "machineEnergy", b, 1F, 0.1F, 10F,
                     "Machines use this many times the EU (below ~0.7 water electrolysis + a fuel cell starts to give free energy)");
-            storageCapacity = config.getFloat("storageCapacity", b, 1F, 0.1F, 10F, "Energy storages hold this many times the EU");
-            batteryCapacity = config.getFloat("batteryCapacity", b, 1F, 0.1F, 10F, "Portable batteries hold this many times the EU");
-            armorCapacity = config.getFloat("armorCapacity", b, 1F, 0.1F, 10F, "Suit pieces (Nano, Quantum, Exo) hold this many times the EU");
-            armorDamageCost = config.getFloat("armorDamageCost", b, 1F, 0.1F, 10F,
+            storageCapacity = num(config, "storageCapacity", b, 1F, 0.1F, 10F, "Energy storages hold this many times the EU");
+            batteryCapacity = num(config, "batteryCapacity", b, 1F, 0.1F, 10F, "Portable batteries hold this many times the EU");
+            armorCapacity = num(config, "armorCapacity", b, 1F, 0.1F, 10F, "Suit pieces (Nano, Quantum, Exo) hold this many times the EU");
+            armorDamageCost = num(config, "armorDamageCost", b, 1F, 0.1F, 10F,
                     "EU a suit spends on each point of damage it stops, times this (lower = stronger armour)");
             leadSuitPartProtection = config.getInt("leadSuitPartProtection", b, 22, 0, 25,
                     "Radiation each lead suit piece stops, % (4 pieces at 25 = all of it) / Защита от радиации за каждую часть свинцового костюма, %");
-            fieldUpkeep = config.getFloat("fieldUpkeep", b, 1F, 0.1F, 10F, "The field generator's upkeep, times this");
-            quarrySpeed = config.getFloat("quarrySpeed", b, 1F, 0.1F, 10F, "Quarries and the Exo Drilling Rig dig this many times faster");
-            wirelessRange = config.getFloat("wirelessRange", b, 1F, 0.1F, 10F, "Wireless transmitters reach this many times as far (XV stays unlimited)");
-            wirelessLoss = config.getFloat("wirelessLoss", b, 1F, 0F, 10F, "Wireless loss over distance, times this (0 = no loss)");
-            quantumUpkeep = config.getFloat("quantumUpkeep", b, 1F, 0F, 10F, "The quantum translator pair's upkeep, times this");
+            fieldUpkeep = num(config, "fieldUpkeep", b, 1F, 0.1F, 10F, "The field generator's upkeep, times this");
+            quarrySpeed = num(config, "quarrySpeed", b, 1F, 0.1F, 10F, "Quarries and the Exo Drilling Rig dig this many times faster");
+            wirelessRange = num(config, "wirelessRange", b, 1F, 0.1F, 10F, "Wireless transmitters reach this many times as far (XV stays unlimited)");
+            wirelessLoss = num(config, "wirelessLoss", b, 1F, 0F, 10F, "Wireless loss over distance, times this (0 = no loss)");
+            quantumUpkeep = num(config, "quantumUpkeep", b, 1F, 0F, 10F, "The quantum translator pair's upkeep, times this");
             quantumChunkLoading = config.getBoolean("quantumChunkLoading", b, true,
                     "Quantum translators keep their chunks loaded (off: both ends must be loaded by players)");
             bladeExecutePlayers = config.getBoolean("bladeExecutePlayers", b, false,
@@ -114,9 +114,9 @@ public final class ConfigSC {
                     + " / Бур не берёт энергию с нагрудника, если его заряд ниже этого % (перегретый нагрудник не питает)");
             String cv = "converter";
             config.setCategoryComment(cv, "The Energy Converter: exchange rates and loss / Преобразователь энергии: курсы и потери");
-            converterRfPerEu = config.getFloat("rfPerEu", cv, 4F, 0.1F, 1000F, "RF for one EU / RF за 1 EU");
-            converterJPerEu = config.getFloat("jPerEu", cv, 10F, 0.1F, 1000F, "Mekanism joules (J) for one EU / Джоулей Mekanism за 1 EU");
-            converterGjPerEu = config.getFloat("gjPerEu", cv, 0F, 0F, 1000F,
+            converterRfPerEu = num(config, "rfPerEu", cv, 4F, 0.1F, 1000F, "RF for one EU / RF за 1 EU");
+            converterJPerEu = num(config, "jPerEu", cv, 10F, 0.1F, 1000F, "Mekanism joules (J) for one EU / Джоулей Mekanism за 1 EU");
+            converterGjPerEu = num(config, "gjPerEu", cv, 0F, 0F, 1000F,
                     "Galacticraft gJ for one EU; 0 = Galacticraft's own rate (16 / 2.44 without it) / gJ Galacticraft за 1 EU; 0 - курс самого Galacticraft");
             converterLoss = config.getInt("lossPercent", cv, 5, 0, 50,
                     "Conversion loss, %; each Efficiency module takes 2 off (at most 2 count) / Потери преобразования, %; модуль КПД снимает 2 (до 2 шт.)");
@@ -125,6 +125,36 @@ public final class ConfigSC {
                 config.save();
             }
         }
+    }
+
+    /**
+     * Forge's getFloat clamps to [min, max] by comparisons, and "NaN" in the .cfg passes both (every
+     * comparison with NaN is false): a NaN multiplier then reached the machines and buffers. NaN or an
+     * infinity in the file: the default.
+     */
+    private static float num(Configuration config, String name, String category, float def, float min, float max, String comment) {
+        float v = config.getFloat(name, category, def, min, max, comment);
+        return Float.isNaN(v) || Float.isInfinite(v) ? def : v;
+    }
+
+    /**
+     * A fingerprint of the synced options (ConfigSyncSC): the handbook builds its pages once and keeps
+     * them while this stays the same - joining a server with other numbers, or leaving it, builds them again.
+     */
+    public static int stamp() {
+        int h = 1;
+        for (java.lang.reflect.Field f : ConfigSC.class.getDeclaredFields()) {
+            int m = f.getModifiers();
+            if (java.lang.reflect.Modifier.isPublic(m) && java.lang.reflect.Modifier.isStatic(m) && !java.lang.reflect.Modifier.isFinal(m)
+                    && f.getType().isPrimitive()) {
+                try {
+                    h = 31 * h + String.valueOf(f.get(null)).hashCode();
+                } catch (Exception ignored) {
+                    // not counted
+                }
+            }
+        }
+        return h;
     }
 
     public static OreGenSettings settingsFor(OreEntry ore) {

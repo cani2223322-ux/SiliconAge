@@ -6,8 +6,10 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Полная проверка мода на баги, исправлено (7):** книга не пересобиралась после смены конфига (показывала ёмкости другого сервера); значение «NaN» в конфиге обходило ограничения; Компрессор материи не принимал «Расширение бака»; при поломке компрессора с большим баком терялась часть сингулярной материи; подсказка предмета машины показывала неверный объём бака; полёт брони навсегда менял скорость полёта от других модов; IC2 не узнавал новый уровень накопителя, если трансформатор докладывали в стопку.
 
 ### English
+- **Full bug check, fixed (7):** the handbook wasn't rebuilt after a config change (showed another server's capacities); "NaN" in the config slipped past the limits; the Matter Compressor didn't take Tank Extensions; breaking a compressor with a big tank lost part of its Singular Matter; a machine item's tooltip showed the wrong tank size; suit flight permanently changed the flight speed given by other mods; IC2 didn't see a storage's new tier when a transformer was added to the stack.
 
 ## 0.1.7-alpha — 2026-10-06
 

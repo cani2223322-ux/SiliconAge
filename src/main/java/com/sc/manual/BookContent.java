@@ -61,7 +61,8 @@ public final class BookContent {
 
     /** Every article, in chapter order (built once per language). */
     public static synchronized List<BookEntry> all() {
-        String lang = Lang.tr("language.code") + "|" + Lang.tr("sc.book.lang");
+        // the server's options (ConfigSyncSC) change capacities and rates on the pages: built again with them
+        String lang = Lang.tr("language.code") + "|" + Lang.tr("sc.book.lang") + "|" + ConfigSC.stamp();
         if (cache == null || !lang.equals(cacheLang)) {
             BookIndexSC.begin();                        // МК-2: one pass over the recipes for this build
             try {

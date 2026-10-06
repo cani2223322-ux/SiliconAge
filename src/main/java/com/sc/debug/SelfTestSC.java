@@ -68,6 +68,7 @@ public final class SelfTestSC {
             singularStage5();
             singularCrafts();
             auditFixes20261006();
+            fullCheck20261006();
             bladeFunctions();
             chargePad();
             batteries();
@@ -5253,6 +5254,61 @@ public final class SelfTestSC {
         check(a.ownerless() && a.allowed(null) && a.trusted(null) && a.ownerlessRefusal(null) == null
                 && com.sc.tileentity.TileEntityBridgeControllerSC.openThrottle(null) == null,
                 "bridge М-7 / М-3: an ownerless controller, the server itself is never refused or throttled");
+    }
+
+    /** The full bug check of 2026-10-06: machines (compressor tank extensions) and generators (item round trip). */
+    private static void fullCheck20261006() {
+        {   // МШ: компрессор принимает расширение бака, полный бак переживает слом; печь отказывает
+            TileEntityMachineSC c = new TileEntityMachineSC();
+            c.setMachineType(MachineType.MATTER_COMPRESSOR);
+            ItemStack ext = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION);
+            ext.stackSize = 4;
+            boolean takes = c.isItemValidForSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ext);
+            c.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ext);
+            int cap = c.getTank(2).getCapacity();
+            c.getTank(2).fill(new FluidStack(ModFluids.singularMatter, cap), true);
+            FluidStack[] back = TileEntityMachineSC.tankFluidsOf(c.tanksForItem());
+            TileEntityMachineSC f = new TileEntityMachineSC();
+            f.setMachineType(MachineType.ELECTRIC_FURNACE);
+            check(takes && cap == TileEntityMachineSC.SM_TANK + 4 * com.sc.machine.UpgradeType.TANK_PER_UPGRADE
+                    && back[2] != null && back[2].amount == cap
+                    && !f.isItemValidForSlot(TileEntityMachineSC.FIRST_UPGRADE_SLOT, ext),
+                    "compressor: tank extensions fit, a full 40000 mB SM tank survives the item; furnace refuses them");
+        }
+        generatorItemRoundTrip();
+    }
+
+    /** Generator item: buffer, fuel and ignition survive break/place; ignition clamped; Singular by-product kept. */
+    private static void generatorItemRoundTrip() {
+        com.sc.energy.GeneratorType exo = com.sc.energy.GeneratorType.EXO_REACTOR;
+        com.sc.tileentity.TileEntityGeneratorSC a = new com.sc.tileentity.TileEntityGeneratorSC();
+        a.setGeneratorType(exo);
+        a.setEnergyStoredClient(5000);
+        a.getFuelTank().fill(new net.minecraftforge.fluids.FluidStack(net.minecraftforge.fluids.FluidRegistry.getFluid("liquidhelium"), 1500), true);
+        a.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.UNKNOWN, 32768, 12345, false);
+        net.minecraft.nbt.NBTTagCompound tag = a.writeToItem();
+        com.sc.tileentity.TileEntityGeneratorSC b = new com.sc.tileentity.TileEntityGeneratorSC();
+        b.setGeneratorType(exo);
+        b.readFromItem(tag);
+        boolean ok = tag != null && b.getEnergyStored() == 5000 && b.getFuelTank().getFluidAmount() == 1500
+                && b.getIgnitionEU() == 12345 && !b.isIgnited();
+        tag.setLong("IgnitionEU", Long.MAX_VALUE);
+        com.sc.tileentity.TileEntityGeneratorSC c = new com.sc.tileentity.TileEntityGeneratorSC();
+        c.setGeneratorType(exo);
+        c.readFromItem(tag);
+        ok &= c.getIgnitionEU() == exo.ignitionThreshold();
+        com.sc.tileentity.TileEntityGeneratorSC s1 = new com.sc.tileentity.TileEntityGeneratorSC();
+        s1.setGeneratorType(com.sc.energy.GeneratorType.SINGULAR_REACTOR);
+        s1.getSingular().setSmForTest(1234);
+        com.sc.tileentity.TileEntityGeneratorSC s2 = new com.sc.tileentity.TileEntityGeneratorSC();
+        s2.setGeneratorType(com.sc.energy.GeneratorType.SINGULAR_REACTOR);
+        s2.readFromItem(s1.writeToItem());
+        ok &= s2.getSingular().getSmStored() == 1234;
+        com.sc.tileentity.TileEntityGeneratorSC cr = new com.sc.tileentity.TileEntityGeneratorSC();
+        cr.setGeneratorType(com.sc.energy.GeneratorType.CREATIVE);
+        cr.setEnergyStoredClient(1000);
+        ok &= cr.writeToItem() == null;
+        check(ok, "generator item: buffer, fuel, ignition (clamped) and the Singular by-product survive break/place");
     }
 
 }

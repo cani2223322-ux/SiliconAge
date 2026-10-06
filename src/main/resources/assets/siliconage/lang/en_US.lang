@@ -5073,3 +5073,4 @@ sc.book.modules.w.converter=the Energy Converter
 sc.book.modules.conv=Energy Converter modules
 sc.book.modules.conv.upgrades=It also takes the Transformer, the Universal Transformer and Energy Storage (see above).
 sc.singStation.catalyst.lost=The core's charge above the cost did not fit the station's buffer: %s EU lost
+tile.siliconage.light.name=Searchlight Light

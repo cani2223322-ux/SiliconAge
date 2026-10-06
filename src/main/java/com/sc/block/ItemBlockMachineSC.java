@@ -37,14 +37,14 @@ public class ItemBlockMachineSC extends ItemBlock {
         MachineType type = values[index >= 0 && index < values.length ? index : 0];
         list.add("§7" + com.sc.manual.Lang.tr("sc.machine.tooltip.info", type.tier.name(), type.tier.getVoltage(),
                 com.sc.tileentity.TileEntityMachineSC.configEuPerTick(type)));
-        contents(stack, list);
+        contents(stack, type, list);
         PickaxeOnlySC.tooltip(list);
         com.sc.util.TooltipSC.more(list, com.sc.manual.Lang.trOr("sc.manual.machine." + type.name().toLowerCase(java.util.Locale.ROOT), null),
                 com.sc.manual.Lang.tr("sc.machine.tooltip.howto"));
     }
 
     /** What a broken machine kept: charge, upgrades, tank contents. */
-    private static void contents(ItemStack stack, java.util.List list) {
+    private static void contents(ItemStack stack, MachineType type, java.util.List list) {
         int charge = stack.hasTagCompound() ? stack.getTagCompound().getInteger(com.sc.tileentity.TileEntityMachineSC.ITEM_ENERGY_KEY) : 0;
         if (charge > 0) {                                                       // the buffer's charge (BlockMachineSC.getDrops)
             list.add(com.sc.manual.Lang.tr("sc.machine.tooltip.energy", String.valueOf(charge)));
@@ -67,11 +67,24 @@ public class ItemBlockMachineSC extends ItemBlock {
         if (!stack.hasTagCompound() || !stack.getTagCompound().hasKey(com.sc.tileentity.TileEntityMachineSC.ITEM_TANKS_KEY)) {
             return;
         }
+        // the tanks' size once placed: the compressor's bigger base, plus the saved Tank Extensions
+        int capacity = type.isCompressor() ? com.sc.tileentity.TileEntityMachineSC.SM_TANK : com.sc.tileentity.TileEntityMachineSC.TANK_CAPACITY;
+        int extensions = 0;
+        if (stack.getTagCompound().hasKey(com.sc.tileentity.TileEntityMachineSC.ITEM_UPGRADES_KEY)) {
+            for (ItemStack up : com.sc.tileentity.TileEntityMachineSC.upgradesOf(
+                    stack.getTagCompound().getCompoundTag(com.sc.tileentity.TileEntityMachineSC.ITEM_UPGRADES_KEY))) {
+                if (up != null && up.getItem() instanceof com.sc.item.ItemUpgradeSC
+                        && com.sc.item.ItemUpgradeSC.typeOf(up) == com.sc.machine.UpgradeType.TANK_EXTENSION) {
+                    extensions += up.stackSize;
+                }
+            }
+        }
+        capacity += Math.min(com.sc.machine.UpgradeType.MAX_TANK_UPGRADES, extensions) * com.sc.machine.UpgradeType.TANK_PER_UPGRADE;
         for (net.minecraftforge.fluids.FluidStack fluid : com.sc.tileentity.TileEntityMachineSC.tankFluidsOf(
                 stack.getTagCompound().getCompoundTag(com.sc.tileentity.TileEntityMachineSC.ITEM_TANKS_KEY))) {
             if (fluid != null && fluid.getFluid() != null) {
                 list.add(com.sc.manual.Lang.tr(fluid.getFluid().isGaseous(fluid) ? "sc.tank.tooltip.gas" : "sc.tank.tooltip.fluid",
-                        fluid.getLocalizedName(), fluid.amount, com.sc.tileentity.TileEntityMachineSC.TANK_CAPACITY));
+                        fluid.getLocalizedName(), fluid.amount, capacity));
             }
         }
     }

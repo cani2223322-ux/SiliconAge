@@ -758,13 +758,15 @@ public final class ArmorLogicSC {
                 setFlySpeed(p, speed);
                 p.sendPlayerAbilities();          // the client takes its fly speed from this packet
             }
-            if (grav) {
+            // any speed of ours other than the vanilla one is noted: FLIGHT_FLAG is never set when the flight was
+            // already allowed (creative, another mod's flight) - the Quantum half / boosted double speed stayed for good
+            if (Math.abs(speed - VANILLA_FLY_SPEED) > 1e-4) {
                 data.setBoolean(FAST_FLAG, true);
             } else {
                 data.removeTag(FAST_FLAG);
             }
         } else if (data.getBoolean(FAST_FLAG)) {
-            // Н1 off in creative (where FLIGHT_FLAG never gets set): the x3 speed mustn't stay saved with the player
+            // Н1 off in creative / with another mod's flight (FLIGHT_FLAG never set): our speed mustn't stay saved with the player
             data.removeTag(FAST_FLAG);
             setFlySpeed(p, VANILLA_FLY_SPEED);
             p.sendPlayerAbilities();

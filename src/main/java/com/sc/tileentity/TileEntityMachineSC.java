@@ -394,7 +394,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             if (tag.hasKey(ITEM_TANK_NAMES[i])) {
                 FluidStack fluid = FluidStack.loadFluidStackFromNBT(tag.getCompoundTag(ITEM_TANK_NAMES[i]));
                 if (fluid != null && fluid.amount > 0) {
-                    fluids[i] = new FluidStack(fluid.getFluid(), Math.min(MAX_TANK_CAPACITY, fluid.amount));
+                    // the compressor's tanks are bigger (SM_TANK base): its full extended tank mustn't lose 4000 mB
+                    fluids[i] = new FluidStack(fluid.getFluid(), Math.min(Math.max(MAX_TANK_CAPACITY,
+                            SM_TANK + UpgradeType.MAX_TANK_UPGRADES * UpgradeType.TANK_PER_UPGRADE), fluid.amount));
                 }
             }
         }
@@ -1394,7 +1396,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     // a heat sink only where there's heat, a tank extension only where there are tanks
                     // (only new ones are refused - what an older world already has in the slots stays)
                     && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK && !machineType.heatCapable)
-                    && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.TANK_EXTENSION && !usesAnyTank(machineType));
+                    // (the Matter Compressor has no recipes, but its singular-matter tank takes extensions - tankCapacity)
+                    && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.TANK_EXTENSION && !usesAnyTank(machineType)
+                            && !machineType.isCompressor());
         }
         if (machineType.isSmelter()) {
             return slot < machineType.smeltStreams() && smeltResult(stack) != null;

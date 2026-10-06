@@ -80,6 +80,13 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
      */
     private int splitterModules;
     private boolean adaptiveModule;
+    /**
+     * Cached too: what IC2 reads off the tile on joining its net (the Transformers' output tier, the
+     * Universal Transformer's sink tier, the Overdrive packets) - a change re-announces the tile,
+     * also when a stack in a slot changed in place (a second Transformer merged onto the first).
+     */
+    private int transformerModules, overdriveModules;
+    private boolean universalModule;
     private ForgeDirection[] outFacesCache;
     private Tier outFacesTier;
     /** Inside upgradesChanged: its own markDirty() calls don't start it again. */
@@ -260,13 +267,24 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
     private void refreshModules() {
         splitterModules = upgradeCount(UpgradeType.OUTPUT_SPLITTER);
         adaptiveModule = upgradeCount(UpgradeType.ADAPTIVE_TRANSFORMER) > 0;
+        transformerModules = upgradeCount(UpgradeType.TRANSFORMER);
+        overdriveModules = upgradeCount(UpgradeType.OVERDRIVE);
+        universalModule = upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0;
         outFacesCache = null;
+    }
+
+    /** The cached IC2-facing counts no longer match the slots. */
+    private boolean ic2ModulesStale() {
+        return upgradeCount(UpgradeType.TRANSFORMER) != transformerModules
+                || upgradeCount(UpgradeType.OVERDRIVE) != overdriveModules
+                || (upgradeCount(UpgradeType.UNIVERSAL_TRANSFORMER) > 0) != universalModule;
     }
 
     /** The slots no longer match the module cache (a stack changed in place - a part taken out, merged in). */
     private boolean modulesStale() {
         return upgradeCount(UpgradeType.OUTPUT_SPLITTER) != splitterModules
-                || (upgradeCount(UpgradeType.ADAPTIVE_TRANSFORMER) > 0) != adaptiveModule;
+                || (upgradeCount(UpgradeType.ADAPTIVE_TRANSFORMER) > 0) != adaptiveModule
+                || ic2ModulesStale();
     }
 
     /** Any change to the inventory comes here (slots changed in place too): modules in or out - upgradesChanged(). */
@@ -982,10 +1000,7 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             extraCharge[slot - FIRST_EXTRA_CHARGE] = stack;
         } else if (slot >= FIRST_UPGRADE_SLOT && slot < FIRST_EXTRA_CHARGE) {
             upgradeSlots[slot - FIRST_UPGRADE_SLOT] = stack;
-            if (worldObj != null && !worldObj.isRemote) {
-                refreshEnergyNet();   // a transformer changes the output tier IC2 cached
-            }
-            upgradesChanged();
+            upgradesChanged();        // re-announces the tile to IC2 when a Transformer / Overdrive / Universal changed
         } else {
             return;
         }
@@ -999,9 +1014,15 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         }
         modulesChanging = true;
         try {
+            boolean ic2Changed = ic2ModulesStale();
             refreshModules();              // both sides: the screen reads the faces and the module too
             if (worldObj != null && worldObj.isRemote) {
                 return;                    // the client gets both with the tile's NBT / the screen's sync
+            }
+            if (ic2Changed && worldObj != null) {
+                // IC2 caches the source / sink tier: a Transformer added to the stack already in a slot
+                // (merged in place - no setInventorySlotContents) or one of two taken out changes it too
+                refreshEnergyNet();
             }
             trimExtraOutputs();
             recomputeAdaptive();
