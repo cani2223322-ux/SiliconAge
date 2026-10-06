@@ -1028,12 +1028,10 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     if (stack == null || !RecipeRegistry.isValidInput(machineType, stack) || !InvUtilSC.canTake(source, slot, stack, dir)) {
                         continue;
                     }
-                    ItemStack want = stack.copy();
-                    want.stackSize = Math.min(budget, stack.stackSize);
-                    int took = want.stackSize - InvUtilSC.insert(this, ForgeDirection.UP, want);
+                    // never trust another mod's inventory: take only what fits, move what it really gave
+                    int took = InvUtilSC.move(source, slot, dir, this, ForgeDirection.UP, Math.min(budget, stack.stackSize),
+                            worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5);
                     if (took > 0) {
-                        source.decrStackSize(slot, took);
-                        source.markDirty();
                         budget -= took;
                     }
                 }

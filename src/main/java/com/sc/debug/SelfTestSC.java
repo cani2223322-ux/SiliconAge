@@ -70,6 +70,7 @@ public final class SelfTestSC {
             auditFixes20261006();
             fullCheck20261006();
             fullFixes20261006();
+            invUtilForeign();
             bladeFunctions();
             chargePad();
             batteries();
@@ -5472,5 +5473,75 @@ public final class SelfTestSC {
             }
             check(less && none && more && nullSlots, "Э-4: tubes with a foreign inventory that gives less / null / more, null slot arrays");
         }
+    }
+
+    /** Э-7: the shared inventory helper (machines, quarry, drill) doesn't trust other mods' inventories. */
+    private static void invUtilForeign() {
+        net.minecraftforge.common.util.ForgeDirection n = net.minecraftforge.common.util.ForgeDirection.NORTH;
+        net.minecraftforge.common.util.ForgeDirection so = net.minecraftforge.common.util.ForgeDirection.SOUTH;
+        net.minecraft.inventory.InventoryBasic stingy = new net.minecraft.inventory.InventoryBasic("t", false, 1) {
+            @Override
+            public ItemStack decrStackSize(int sl, int k) {
+                return super.decrStackSize(sl, Math.min(1, k));
+            }
+        };
+        net.minecraft.inventory.InventoryBasic d1 = new net.minecraft.inventory.InventoryBasic("d", false, 1);
+        stingy.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Items.iron_ingot, 10));
+        int m1 = com.sc.util.InvUtilSC.move(stingy, 0, n, d1, so, 4, null, 0, 0, 0);
+        boolean less = m1 == 1 && stingy.getStackInSlot(0).stackSize == 9 && d1.getStackInSlot(0).stackSize == 1;
+        net.minecraft.inventory.InventoryBasic liar = new net.minecraft.inventory.InventoryBasic("t", false, 1) {
+            @Override
+            public ItemStack decrStackSize(int sl, int k) {
+                return null;
+            }
+        };
+        net.minecraft.inventory.InventoryBasic d2 = new net.minecraft.inventory.InventoryBasic("d", false, 1);
+        liar.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Items.iron_ingot, 10));
+        int m2 = com.sc.util.InvUtilSC.move(liar, 0, n, d2, so, 4, null, 0, 0, 0);
+        boolean none = m2 == 0 && liar.getStackInSlot(0).stackSize == 10 && d2.getStackInSlot(0) == null;
+        net.minecraft.inventory.InventoryBasic greedy = new net.minecraft.inventory.InventoryBasic("t", false, 1) {
+            @Override
+            public ItemStack decrStackSize(int sl, int k) {
+                return super.decrStackSize(sl, 8);
+            }
+        };
+        net.minecraft.inventory.InventoryBasic small = new net.minecraft.inventory.InventoryBasic("d", false, 1) {
+            @Override
+            public int getInventoryStackLimit() {
+                return 4;
+            }
+        };
+        greedy.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Items.iron_ingot, 10));
+        int m3 = com.sc.util.InvUtilSC.move(greedy, 0, n, small, so, 4, null, 0, 0, 0);
+        boolean more = m3 == 4 && small.getStackInSlot(0).stackSize == 4 && greedy.getStackInSlot(0).stackSize == 6;
+        class NullSlots extends net.minecraft.inventory.InventoryBasic implements net.minecraft.inventory.ISidedInventory {
+            NullSlots() {
+                super("s", false, 2);
+            }
+
+            public int[] getAccessibleSlotsFromSide(int side) {
+                return null;
+            }
+
+            public boolean canInsertItem(int sl, ItemStack st, int side) {
+                return true;
+            }
+
+            public boolean canExtractItem(int sl, ItemStack st, int side) {
+                return true;
+            }
+        }
+        boolean nullOk;
+        try {
+            nullOk = com.sc.util.InvUtilSC.insert(new NullSlots(), so, new ItemStack(net.minecraft.init.Items.iron_ingot, 5)) == 5
+                    && com.sc.util.InvUtilSC.slots(new NullSlots(), so).length == 0;
+        } catch (RuntimeException e) {
+            nullOk = false;
+        }
+        net.minecraft.inventory.InventoryBasic sim = new net.minecraft.inventory.InventoryBasic("d", false, 1);
+        boolean simOk = com.sc.util.InvUtilSC.insert(sim, so, new ItemStack(net.minecraft.init.Items.iron_ingot, 3), true) == 0
+                && sim.getStackInSlot(0) == null;
+        check(less && none && more && nullOk && simOk,
+                "Э-7: machines/quarry/drill inventory helper: a foreign inventory giving less / null / more, null slot arrays, simulate");
     }
 }
