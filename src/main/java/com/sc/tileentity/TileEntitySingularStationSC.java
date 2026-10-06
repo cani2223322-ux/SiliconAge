@@ -25,7 +25,8 @@ import net.minecraft.util.AxisAlignedBB;
  *    next level done by the player who presses the button) goes up a level at once, for the cost in
  *    SingularStationMath (ПР3 set discount, Ф8 resonance), drawn as the progress grows (ПР4: nothing
  *    there - it waits); its slots are locked (ПР6); «Отменить» gives back half of what was drawn;
- *    4 -> 5 consumes a Singular core in the catalyst slot, its charge counts toward the EU;
+ *    4 -> 5 consumes a Singular core in the catalyst slot at the start (Н-1 В2), its charge counts toward
+ *    the EU, the charge above the cost goes into the station's EU buffer (what does not fit is lost);
  *  - Ф3 branch change of the chestplate (BRANCH_SM mB of singular matter), Ф4 level transfer from the
  *    donor slot to a level-1 piece of the same type, Ф5 sync of lagging pieces, the colour scheme;
  *  - speed: gravitational stabilisers within STAB_RADIUS (same Y +-1; up to 4, +25% each) and a
@@ -480,18 +481,30 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             p.levels[i] = lv[i];
         }
         p.starter = starter == null ? "" : starter;
-        if (cat) {                                          // the core is used up; its charge pays the EU first
-            long charge = com.sc.item.ItemBatterySC.chargeOf(extra[1]);
+        long lost = 0;
+        if (cat) {                                          // Н-1 В2: the core is always used up; its charge pays the EU first
+            long charge = Math.max(0L, com.sc.item.ItemBatterySC.chargeOf(extra[1]));
             long eu = Math.min(charge, p.cost[SingularStationMath.R_EU]);
             p.catalystEu = eu;
             p.drawn[SingularStationMath.R_EU] = eu;
-            if (charge > eu) {                              // СБ-4: the charge above the cost stays in the core (kept in its slot, locked)
-                com.sc.item.ItemBatterySC.setCharge(extra[1], charge - eu);
-            } else {
-                extra[1] = null;
+            extra[1] = null;
+            long over = charge - eu;                        // the charge above the cost -> the station's buffer, as much as fits
+            if (over > 0) {
+                long put = Math.min(over, Math.max(0L, (long) getMaxEnergyStored() - getEnergyStored()));
+                if (put > 0) {
+                    addEnergy((int) Math.min(Integer.MAX_VALUE, put));
+                }
+                lost = over - put;
             }
         }
         begin(p);
+        if (lost > 0 && worldObj != null && !worldObj.isRemote && !p.starter.isEmpty()) {
+            EntityPlayer who = worldObj.getPlayerEntityByName(p.starter);
+            if (who != null) {
+                who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.catalyst.lost",
+                        String.valueOf(lost)));
+            }
+        }
         return null;
     }
 
@@ -741,7 +754,11 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
     // ------------------------------------------------------------------ cancelling, finishing
 
-    /** «Отменить»: half of what was drawn goes back (EU to the buffer, gases to the tanks, the core's share as a core). */
+    /**
+     * «Отменить»: half of what was drawn goes back (EU to the buffer, gases to the tanks). The catalyst core was used up at
+     * the start (Н-1 В2), so a new core comes back carrying 50% of the charge that was counted toward the cost (an empty one
+     * too); the leftover that went into the buffer at the start is not counted again (no dupe).
+     */
     public void cancelProcess() {
         if (proc == null) {
             return;
@@ -765,18 +782,13 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 putBack(s.copy());
             }
         } else if ((p.catalystEu > 0 || (p.kind == SingularProcessSC.KIND_MODERNISE && SingularStationMath.needsCatalyst(p.levels)))
-                && com.sc.init.ModItems.battery != null) {         // the core taken at the start comes back (an empty one too)
-            if (isCore(extra[1])) {                         // СБ-4: the core was kept (its charge was above the cost) - the refund goes into it
-                com.sc.item.ItemBatterySC.setCharge(extra[1],
-                        com.sc.item.ItemBatterySC.chargeOf(extra[1]) + SingularStationMath.refund(p.catalystEu));
-            } else {
-                ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
-                com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
-                if (extra[1] == null) {
-                    extra[1] = core;
-                } else if (worldObj != null && !worldObj.isRemote) {
-                    worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, core));
-                }
+                && com.sc.init.ModItems.battery != null) {         // the core used up at the start comes back as a new one
+            ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
+            com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
+            if (extra[1] == null) {
+                extra[1] = core;
+            } else if (worldObj != null && !worldObj.isRemote) {   // an older save (СБ-4) may still hold the kept core there
+                worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, core));
             }
         }
         shortMask = 0;

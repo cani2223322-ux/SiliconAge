@@ -89,6 +89,11 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
     private long tickStamp = Long.MIN_VALUE;
     private long euInTick, euOutTick, euOutPrevTick;
     private double xInTick, xOutTick;
+    /** The redstone check of switchedOn(), asked once a tick (and again when the redstone mode changes). */
+    private boolean redstoneCache, redstoneCacheValid;
+    private int redstoneCacheMode = -1;
+    /** How many times the redstone signal was really asked (the self-test checks the cache with it). */
+    private int redstoneChecks;
 
     // ---- the second being measured, and what the screen shows (per tick, averaged over a second) ----
     private long wEuIn, wEuOut, wEuConvOut, wEuConvIn, wEuCharge;
@@ -502,10 +507,28 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
     @Override
     public boolean acceptsFrom(ForgeDirection side) {
         if (side == ForgeDirection.UNKNOWN) {
-            return true;
+            return anyEuInput();                       // no face given (a wireless charger): only with some EU input face
         }
         int s = side.ordinal();
-        return s < 6 && mode[s] == MODE_IN && buf[s] != BUF_X && (filter[s] & F_EU) != 0;
+        return s < 6 && euInput(s);
+    }
+
+    private boolean euInput(int s) {
+        return mode[s] == MODE_IN && buf[s] != BUF_X && (filter[s] & F_EU) != 0;
+    }
+
+    /** Some face takes EU in. */
+    private boolean anyEuInput() {
+        for (int s = 0; s < 6; s++) {
+            if (euInput(s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean foreignInput(int s, Kind k) {
+        return k != null && mode[s] == MODE_IN && buf[s] != BUF_EU && (filter[s] & filterBit(k)) != 0;
     }
 
     /** The other energy comes in through this face. */
@@ -515,10 +538,15 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
             return false;
         }
         if (side == ForgeDirection.UNKNOWN) {
-            return true;
+            for (int s = 0; s < 6; s++) {              // no face given (a wireless charger): only with some input face for it
+                if (foreignInput(s, k)) {
+                    return true;
+                }
+            }
+            return false;
         }
         int s = side.ordinal();
-        return s < 6 && mode[s] == MODE_IN && buf[s] != BUF_EU && (filter[s] & filterBit(k)) != 0;
+        return s < 6 && foreignInput(s, k);
     }
 
     @Override
@@ -559,6 +587,9 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
             return false;
         }
         ForgeDirection face = ForgeDirection.getOrientation(side).getOpposite();
+        if (te instanceof TileEntityEnergyConverterSC) {
+            return converterTakes((TileEntityEnergyConverterSC) te, k, face);   // its face's settings, not just "it speaks RF"
+        }
         try {
             switch (k) {
                 case RF: return ForeignEnergySC.rfApi() && !ForeignEnergySC.testAllPresent && com.sc.compat.RfOpsSC.takes(te, face);
@@ -568,6 +599,16 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         } catch (Throwable t) {
             return false;                              // another mod's tile misbehaving: not a receiver
         }
+    }
+
+    /**
+     * Another converter beside an «Авто» output takes energy `k` through its face `face`: its pair is
+     * `k` and works, and that face is an input letting `k` in (else the face sends EU - two converters
+     * facing each other sent RF the other one refused, and nothing moved).
+     */
+    public static boolean converterTakes(TileEntityEnergyConverterSC other, Kind k, ForgeDirection face) {
+        return other != null && k != null && other.pairKind() == k && other.pairActive() && face != null
+                && face != ForgeDirection.UNKNOWN && other.acceptsForeignFrom(face);
     }
 
     /** What face `side` sends out: nothing, EU, or the other energy (Авто: what the neighbour takes, EU else). */
@@ -634,7 +675,27 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
             euOutTick = 0;
             xInTick = 0;
             xOutTick = 0;
+            redstoneCacheValid = false;
         }
+    }
+
+    /** Switched on and not held by redstone - the redstone asked once a tick (the energy APIs ask this many times a tick). */
+    @Override
+    protected boolean switchedOn() {
+        if (!powerOn) {
+            return false;
+        }
+        if (redstoneMode == 0) {
+            return true;
+        }
+        beginTick();
+        if (!redstoneCacheValid || redstoneCacheMode != redstoneMode) {
+            redstoneCache = redstoneAllows();
+            redstoneCacheMode = redstoneMode;
+            redstoneCacheValid = true;
+            redstoneChecks++;
+        }
+        return redstoneCache;
     }
 
     @Override
@@ -855,6 +916,9 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         }
         beginTick();
         int budget = (int) Math.max(0, Math.min(Integer.MAX_VALUE, throughput - euInTick));
+        if (from == ForgeDirection.UNKNOWN && !anyEuInput()) {
+            return 0;                                       // no face given, and no face takes EU in
+        }
         int got = super.receiveEnergy(from, voltage, Math.min(amount, budget), simulate);
         if (isInvalid()) {
             return amount;                                  // overvolted - it blew up, the packet with it
@@ -991,11 +1055,46 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         return pairKind() == Kind.J ? foreign : 0;
     }
 
+    /**
+     * Mekanism's cables pull J by setting the buffer lower (ICableOutputter): what left is booked as this
+     * tick's output (the stats, the faces - shared among the J output faces, the cable doesn't say which);
+     * not limited. A raise is booked as input the same way.
+     */
     @Override
     public void setEnergy(double energy) {
         if (pairKind() == Kind.J) {
+            double before = foreign;
             foreign = Math.max(0, Math.min(foreignCapacity(), energy));
             foreignChanged();
+            double moved = foreign - before;
+            if (moved != 0) {
+                beginTick();
+                if (moved < 0) {
+                    xOutTick -= moved;
+                    wXOut -= moved;
+                } else {
+                    xInTick += moved;
+                    wXIn += moved;
+                }
+                foreignSides(moved);
+            }
+        }
+    }
+
+    /** Books `amount` of the other energy (+ in, - out) shared among the faces it could have gone through. */
+    private void foreignSides(double amount) {
+        Kind k = pairKind();
+        boolean in = amount > 0;
+        int n = 0;
+        for (int s = 0; s < 6; s++) {
+            if (in ? foreignInput(s, k) : outKind[s] == OUT_X) {
+                n++;
+            }
+        }
+        for (int s = 0; s < 6 && n > 0; s++) {
+            if (in ? foreignInput(s, k) : outKind[s] == OUT_X) {
+                wSide[s] += amount / n;
+            }
         }
     }
 
@@ -1587,6 +1686,25 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
     }
 
     /** World test: an EU amount straight into the buffer. */
+    /** How many times the redstone signal was really asked (the switchedOn() cache). */
+    public int redstoneChecksForTest() {
+        return redstoneChecks;
+    }
+
+    /** As if the world ticked on (the per-tick counters and the redstone cache start again). */
+    public void nextTickForTest() {
+        tickStamp = Long.MIN_VALUE;
+        beginTick();
+    }
+
+    public boolean switchedOnForTest() {
+        return switchedOn();
+    }
+
+    public double xOutTickForTest() {
+        return xOutTick;
+    }
+
     public void addEnergyForTest(int eu) {
         addEnergy(eu);
     }

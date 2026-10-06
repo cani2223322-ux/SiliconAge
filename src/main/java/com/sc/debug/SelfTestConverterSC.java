@@ -40,6 +40,10 @@ final class SelfTestConverterSC {
         conversionTick();
         rfWhole();
         firstNetJoin();
+        mekPullCounted();
+        unknownSide();
+        switchCache();
+        converterNeighbour();
         recipes();
         texts();
     }
@@ -69,6 +73,118 @@ final class SelfTestConverterSC {
             boolean out = sim == 10 && e == 10 && Math.abs(te.getForeign() - 0.5) < 1e-9;
             check(noFree && whole && out, "RF in / out whole: 0.6 RF of room takes " + r0 + ", 5.6 takes " + r5
                     + ", 10.5 RF in the buffer gives " + e + " and keeps " + te.getForeign());
+        } finally {
+            ForeignEnergySC.testAllPresent = was;
+        }
+    }
+
+    /** A Mekanism cable pulling J (setEnergy lower) is booked as this tick's output. */
+    private static void mekPullCounted() {
+        boolean was = ForeignEnergySC.testAllPresent;
+        ForeignEnergySC.testAllPresent = true;
+        try {
+            TileEntityEnergyConverterSC te = TileEntityEnergyConverterSC.create();
+            te.setInventorySlotContents(TileEntityEnergyConverterSC.FIRST_MODULE, ModItems.converterModule.stackOf(ItemConverterModuleSC.Kind.CARD_MEKANISM));
+            te.refreshForTest();
+            te.setPairForTest(Kind.J.ordinal());
+            te.setMode(3, TileEntityEnergyConverterSC.MODE_OUT);
+            te.setBuf(3, TileEntityEnergyConverterSC.BUF_X);
+            te.recomputeKinds();
+            te.setForeignForTest(1000);
+            te.nextTickForTest();
+            te.setEnergy(400);
+            check(near(te.xOutTickForTest(), 600) && near(te.getForeign(), 400),
+                    "a Mekanism cable pulling 600 J through setEnergy is booked as output: " + te.xOutTickForTest() + " J this tick");
+        } finally {
+            ForeignEnergySC.testAllPresent = was;
+        }
+    }
+
+    /** No face given (a wireless charger): energy only comes in when some face is an input for it (mode, buffer, filter). */
+    private static void unknownSide() {
+        boolean was = ForeignEnergySC.testAllPresent;
+        ForeignEnergySC.testAllPresent = true;
+        try {
+            net.minecraftforge.common.util.ForgeDirection u = net.minecraftforge.common.util.ForgeDirection.UNKNOWN;
+            TileEntityEnergyConverterSC te = TileEntityEnergyConverterSC.create();
+            te.refreshForTest();
+            te.setPairForTest(Kind.RF.ordinal());
+            boolean allIn = te.acceptForeign(Kind.RF, u, 10, true) > 0 && te.receiveEnergy(u, 128, 10, true) == 10;
+            for (int s = 0; s < 6; s++) {
+                te.setMode(s, TileEntityEnergyConverterSC.MODE_OUT);
+            }
+            boolean allOut = te.acceptForeign(Kind.RF, u, 10, true) == 0 && te.receiveEnergy(u, 128, 10, true) == 0 && !te.acceptsFrom(u)
+                    && !te.acceptsForeignFrom(u);
+            te.setMode(2, TileEntityEnergyConverterSC.MODE_IN);
+            te.setBuf(2, TileEntityEnergyConverterSC.BUF_EU);
+            boolean euOnly = te.acceptForeign(Kind.RF, u, 10, true) == 0 && te.receiveEnergy(u, 128, 10, true) == 10;
+            te.setBuf(2, TileEntityEnergyConverterSC.BUF_AUTO);
+            te.setFilter(2, TileEntityEnergyConverterSC.filterBit(Kind.RF));
+            boolean rfOnly = te.acceptForeign(Kind.RF, u, 10, true) > 0 && te.receiveEnergy(u, 128, 10, true) == 0;
+            te.setFilter(2, 0);
+            boolean none = te.acceptForeign(Kind.RF, u, 10, true) == 0 && te.receiveEnergy(u, 128, 10, true) == 0;
+            check(allIn && allOut && euOnly && rfOnly && none, "no face given: all inputs take EU and RF (" + allIn + "), all outputs nothing ("
+                    + allOut + "), an EU input only EU (" + euOnly + "), an RF-filtered input only RF (" + rfOnly + "), a closed filter nothing (" + none + ")");
+        } finally {
+            ForeignEnergySC.testAllPresent = was;
+        }
+    }
+
+    /** The redstone is asked once a tick however often the nets ask; the switch and the redstone mode act at once. */
+    private static void switchCache() {
+        TileEntityEnergyConverterSC te = TileEntityEnergyConverterSC.create();
+        te.refreshForTest();
+        te.setRedstoneMode(1);
+        te.nextTickForTest();
+        int c0 = te.redstoneChecksForTest();
+        for (int i = 0; i < 5; i++) {
+            te.switchedOnForTest();
+            te.demandedEnergy();
+            te.receiveEnergy(net.minecraftforge.common.util.ForgeDirection.NORTH, 128, 1, true);
+        }
+        boolean once = te.redstoneChecksForTest() - c0 == 1;
+        te.nextTickForTest();
+        te.switchedOnForTest();
+        te.demandedEnergy();
+        boolean nextTick = te.redstoneChecksForTest() - c0 == 2;
+        te.setRedstoneMode(2);
+        te.switchedOnForTest();
+        boolean modeChange = te.redstoneChecksForTest() - c0 == 3;
+        te.setPowerOn(false);
+        boolean off = !te.switchedOnForTest() && te.demandedEnergy() == 0;
+        te.setPowerOn(true);
+        boolean on = te.switchedOnForTest();
+        te.setRedstoneMode(0);
+        int c1 = te.redstoneChecksForTest();
+        te.nextTickForTest();
+        te.switchedOnForTest();
+        boolean noSignalAsked = te.redstoneChecksForTest() == c1;
+        check(once && nextTick && modeChange && off && on && noSignalAsked, "switchedOn: the redstone asked once a tick (" + once + "), again the next tick ("
+                + nextTick + ") and on a mode change (" + modeChange + "), the switch at once (" + off + "/" + on + "), never with mode «always» ("
+                + noSignalAsked + ")");
+    }
+
+    /** An «Авто» output beside another converter sends the other energy only when that converter's face takes it in. */
+    private static void converterNeighbour() {
+        boolean was = ForeignEnergySC.testAllPresent;
+        ForeignEnergySC.testAllPresent = true;
+        try {
+            net.minecraftforge.common.util.ForgeDirection n = net.minecraftforge.common.util.ForgeDirection.NORTH;
+            TileEntityEnergyConverterSC b = TileEntityEnergyConverterSC.create();
+            b.refreshForTest();
+            b.setPairForTest(Kind.RF.ordinal());
+            boolean in = TileEntityEnergyConverterSC.converterTakes(b, Kind.RF, n);
+            boolean otherKind = !TileEntityEnergyConverterSC.converterTakes(b, Kind.J, n);
+            b.setBuf(n.ordinal(), TileEntityEnergyConverterSC.BUF_EU);
+            boolean euBuf = !TileEntityEnergyConverterSC.converterTakes(b, Kind.RF, n);
+            b.setBuf(n.ordinal(), TileEntityEnergyConverterSC.BUF_AUTO);
+            b.setFilter(n.ordinal(), TileEntityEnergyConverterSC.F_EU);
+            boolean filtered = !TileEntityEnergyConverterSC.converterTakes(b, Kind.RF, n);
+            b.setFilter(n.ordinal(), TileEntityEnergyConverterSC.F_ALL);
+            b.setMode(n.ordinal(), TileEntityEnergyConverterSC.MODE_OUT);
+            boolean out = !TileEntityEnergyConverterSC.converterTakes(b, Kind.RF, n);
+            check(in && otherKind && euBuf && filtered && out, "a converter neighbour takes RF through an «Авто» input (" + in + "), not another energy ("
+                    + otherKind + "), not through an EU-buffer face (" + euBuf + "), an EU-filtered face (" + filtered + ") or an output (" + out + ")");
         } finally {
             ForeignEnergySC.testAllPresent = was;
         }

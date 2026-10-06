@@ -747,6 +747,9 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     @Override
     public void setInventorySlotContents(int slot, ItemStack stack) {
+        if (slot >= 0 && slot < SLOTS) {
+            com.sc.util.SingularLevel.clearSync(stack);     // Н-2: a piece in a station's armour slot is not worn (СБ-2)
+        }
         slots[slot] = stack;
         if (slot >= FIRST_UPGRADE_SLOT) {
             modulesChanged();

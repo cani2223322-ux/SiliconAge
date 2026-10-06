@@ -5141,20 +5141,32 @@ public final class SelfTestSC {
         long full = com.sc.item.ItemBatterySC.capacityOf(core);
         com.sc.item.ItemBatterySC.setCharge(core, full);
         st3.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, core);
+        int buf0 = st3.getEnergyStored(), buf0Max = st3.getMaxEnergyStored();
         String r = st3.startModerniseFor(new int[]{0, 0, 0, 4}, "tester");
         long cost = st3.getProcess() == null ? -1 : st3.getProcess().cost[0];
         ItemStack kept = st3.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
         boolean sb4;
-        if (r == null && full > cost) {
-            sb4 = kept != null && com.sc.item.ItemBatterySC.chargeOf(kept) == full - cost && st3.getProcess().catalystEu == cost;
+        if (r == null && cost >= 0) {
+            long counted = Math.min(full, cost);
+            long put = Math.min(full - counted, Math.max(0L, (long) buf0Max - buf0));
+            sb4 = kept == null && st3.getProcess().catalystEu == counted && st3.getProcess().drawn[0] == counted
+                    && st3.getEnergyStored() == buf0 + put;
+            int bufStart = st3.getEnergyStored();
             st3.cancelProcess();
             ItemStack after = st3.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
-            sb4 &= after == kept && com.sc.item.ItemBatterySC.chargeOf(after)
-                    == full - cost + com.sc.util.SingularStationMath.refund(cost);
+            sb4 &= st3.getProcess() == null && com.sc.tileentity.TileEntitySingularStationSC.isCore(after) && after != core
+                    && com.sc.item.ItemBatterySC.chargeOf(after) == com.sc.util.SingularStationMath.refund(counted)
+                    && st3.getEnergyStored() == bufStart;
         } else {
-            sb4 = r == null && kept == null;
+            sb4 = false;
         }
-        check(sb4, "СБ-4: the core's charge above the cost (" + cost + " of " + full + ") stays in the core, cancel refunds into it (" + r + ")");
+        check(sb4, "Н-1 В2: the core is consumed at the start (" + cost + " of " + full + " counted), the rest goes into the station's buffer,"
+                + " cancel returns a core with 50% of the counted charge (" + r + ")");
+        ItemStack synced = new ItemStack(sg[0]);
+        synced.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        synced.getTagCompound().setBoolean(com.sc.util.SingularLevel.SYNC, true);
+        new com.sc.tileentity.TileEntityArmorStationSC().setInventorySlotContents(0, synced);
+        check(!synced.getTagCompound().hasKey(com.sc.util.SingularLevel.SYNC), "Н-2: the sync flag is cleared off a piece put in the regular Armour Service Station");
         boolean sb6;
         try {
             net.minecraft.entity.projectile.EntityArrow a = new net.minecraft.entity.projectile.EntityArrow(null);

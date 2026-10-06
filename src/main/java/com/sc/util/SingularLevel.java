@@ -502,7 +502,8 @@ public final class SingularLevel {
     /**
      * СБ-2: the sync flag is valid only while the piece is worn - updateSync keeps it on the worn set; a piece
      * found anywhere else (the main inventory - ItemArmorSC.onUpdate; the Singular station's armour / donor
-     * slots - TileEntitySingularStationSC) loses it here. @return whether it had the flag
+     * slots - TileEntitySingularStationSC; Н-2: the regular Armour Service Station's armour slots -
+     * TileEntityArmorStationSC.setInventorySlotContents) loses it here. @return whether it had the flag
      */
     public static boolean clearSync(ItemStack piece) {
         if (piece == null || !piece.hasTagCompound() || !piece.getTagCompound().hasKey(SYNC)) {
