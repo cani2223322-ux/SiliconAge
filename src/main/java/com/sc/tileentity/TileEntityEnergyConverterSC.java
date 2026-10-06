@@ -1115,7 +1115,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
 
     @Override
     public boolean canOutputTo(ForgeDirection side) {
-        return pairKind() == Kind.J && pairActive() && side != ForgeDirection.UNKNOWN && side.ordinal() < 6 && outKind[side.ordinal()] == OUT_X;
+        return pairKind() == Kind.J && pairActive() && switchedOn() && side != ForgeDirection.UNKNOWN && side.ordinal() < 6 && outKind[side.ordinal()] == OUT_X;
     }
 
     // ---- Galacticraft (IElectrical) ----
