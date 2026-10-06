@@ -2,7 +2,7 @@
 
 # Silicon Age: From Wafer to ExoTech
 
-![Minecraft 1.7.10](https://img.shields.io/badge/Minecraft-1.7.10-green) ![Forge 10.13.4.1614](https://img.shields.io/badge/Forge-10.13.4.1614-orange) ![Status: alpha](https://img.shields.io/badge/status-alpha-red)
+![Minecraft 1.7.10](https://img.shields.io/badge/Minecraft-1.7.10-green) ![Forge 10.13.4.1614](https://img.shields.io/badge/Forge-10.13.4.1614-orange) ![Status: beta](https://img.shields.io/badge/status-beta-yellow)
 
 **[Русский](#русский) | [English](#english)**
 
@@ -12,7 +12,7 @@
 
 Технический мод для Minecraft 1.7.10: путь от кремниевой пластины до экзотехнологий. Вы добываете руды, строите производство полупроводников и энергосеть, а в конце собираете энергетическую броню, клинки, буры и защитные поля.
 
-> ⚠️ **Альфа-версия.** Возможны ошибки и изменения, ломающие миры. Делайте резервные копии миров.
+> ⚠️ **Бета-версия.** Основное содержимое готово, идёт доводка и исправление ошибок. Возможны баги — делайте резервные копии миров.
 
 ### Возможности
 - **Производство полупроводников:** цепочка от кварца и руд до кремниевых пластин, кристаллов, чипов и контроллеров. 32 машины уровней LV–IV, улучшения машин, брак и побочные продукты.
@@ -67,7 +67,7 @@
 - **Энергонакопители:** компаратор, выход поворачивается ключом, слот разрядки, модули (трансформатор, объём, форсаж, **расширитель выхода** — до 3 выходных граней, **адаптивный трансформатор** — повышает выход до уровня самого слабого потребителя, **универсальный трансформатор**), до 4 слотов зарядки на старших уровнях.
 - **Жидкости:** вёдра для всех 22 жидкостей мода, заливка и слив ведром или капсулой по машине, модуль расширенного бака и очистка баков за энергию.
 - **Иллюстрированный справочник инженера:** 14 разделов плитками, больше 175 статей с иконками предметов, сетками крафта, рецептами машин, картами руд, схемами мультиблоков и рисунками; поиск, закладки, «первые шаги» с галочками. **«Путь развития»** с маршрутами по уровням энергии, реакторам и броне, раздел **«Компоненты»** (все детали и материалы: где делаются и куда идут), **«Справочная»** (клавиши, совместимость, жидкости и газы, все модули), отдельный раздел о мосте. У каждого предмета мода есть статья. Выдаётся при первом крафте любого предмета мода.
-- **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое); на сервере настройки приходят игрокам с сервера. Блоки с содержимым ломаются только киркой — рукой ничего не потеряешь.
+- **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое); на сервере настройки приходят игрокам с сервера; список измерений, где генерируются руды (`worldgen.oreDimensions`). Блоки с содержимым ломаются только киркой — рукой ничего не потеряешь.
 
 ### Управление
 | Клавиша | Действие |
@@ -82,7 +82,7 @@
 
 ### Требования и установка
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (или новее для 1.7.10), Java 8.
-2. Скачайте `SiliconAgeAlpha-0.1.7.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
+2. Скачайте `SiliconAgeBeta-0.1.8.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
 
 ### Моды, которые помогут (необязательны)
 | Мод | Что даёт вместе с Silicon Age |
@@ -115,7 +115,7 @@ MJ, Universal Electricity и Botania не поддерживаются.
 
 A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mine ores, build semiconductor production and an energy network, and end up with energy suits, blades, drills and protective fields.
 
-> ⚠️ **Alpha.** Expect bugs and world-breaking changes. Back up your worlds.
+> ⚠️ **Beta.** The main content is in; polishing and bug fixing go on. Bugs are possible - back up your worlds.
 
 ### Features
 - **Semiconductor fabrication:** a chain from quartz and ores to silicon wafers, crystals, chips and controllers. 32 machines from LV to IV, machine upgrades, defects and by-products.
@@ -170,7 +170,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 - **Energy storages:** comparator output, the output face turned with a wrench, a discharge slot, upgrades (transformer, capacity, overdrive, **output splitter** - up to 3 output faces, **adaptive transformer** - raises the output up to the weakest consumer's tier, **universal transformer**), up to 4 charge slots on the higher tiers.
 - **Fluids:** buckets for all 22 of the mod's fluids, filling and draining machines with a bucket or a cell, a tank extension upgrade and clearing tanks for energy.
 - **Illustrated engineer's handbook:** 14 chapter tiles, 175+ articles with item icons, crafting grids, machine recipes, ore cards, multiblock layouts and pictures; search, bookmarks, "first steps" with ticks. A **Progression** chapter with routes through the energy tiers, reactors and suits, a **Components** chapter (every part and material: where it is made and what it goes into), a **Reference** chapter (keys, compatibility, fluids and gases, every module), a chapter on the bridge. Every item of the mod has an article. Given on the first craft of any item of the mod.
-- **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more); on a server the players get the server's settings. Blocks that hold things break only with a pickaxe - nothing is lost by hand.
+- **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more); on a server the players get the server's settings; the list of dimensions where ores generate (`worldgen.oreDimensions`). Blocks that hold things break only with a pickaxe - nothing is lost by hand.
 
 ### Controls
 | Key | Action |
@@ -185,7 +185,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 
 ### Requirements and installation
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (or newer for 1.7.10), Java 8.
-2. Download `SiliconAgeAlpha-0.1.7.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
+2. Download `SiliconAgeBeta-0.1.8.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
 
 ### Mods that help (optional)
 | Mod | What it adds with Silicon Age |
