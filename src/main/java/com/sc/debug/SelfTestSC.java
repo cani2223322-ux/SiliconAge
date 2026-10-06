@@ -71,6 +71,7 @@ public final class SelfTestSC {
             fullCheck20261006();
             fullFixes20261006();
             invUtilForeign();
+            singToolsFormicons();
             singToolsFixes();
             singToolsPolish();
             singToolsUi();
@@ -6264,6 +6265,31 @@ public final class SelfTestSC {
                             && com.sc.item.BladeSingularSC.gapOk(102, 100, true, 2) && com.sc.item.BladeSingularSC.gapOk(5, 100, true, 2)
                             && !com.sc.item.BladeSingularSC.gapOk(100, 100, true, 2),
                     "tool wheel: a form / mode step at most once per WHEEL_GAP ticks");
+        }
+    }
+
+    /** Singular blade & drill, formicons (docs/plan-singular-tools.md). */
+    private static void singToolsFormicons() {
+        // ---- Singular blade: an icon per form x scheme x lit, every name distinct
+        {
+            java.util.Set<String> fiNames = new java.util.HashSet<String>();
+            boolean fiOk = true;
+            int fiCount = 0;
+            for (com.sc.util.BladeForm fiF : com.sc.util.BladeForm.values()) {
+                for (com.sc.util.SingularScheme fiS : com.sc.util.SingularScheme.values()) {
+                    for (int fiL = 0; fiL < 2; fiL++) {
+                        String fiN = com.sc.item.ItemBladeSC.formIconName(fiF, fiS, fiL == 1);
+                        fiOk &= fiN.startsWith(fiL == 1 ? "bladeSingularOn_" : "bladeSingular_")
+                                && fiN.endsWith("_" + fiF.key() + "_" + fiS.key());
+                        fiNames.add(fiN);
+                        fiCount++;
+                    }
+                }
+            }
+            check(fiOk, "blade form icons: names follow bladeSingular[On]_<form>_<scheme>");
+            check(fiNames.size() == fiCount, "blade form icons: " + fiCount + " names, all distinct (got " + fiNames.size() + ")");
+            check(com.sc.item.ItemBladeSC.formIconName(null, null, false).equals("bladeSingular_sword_a"),
+                    "blade form icons: null form / scheme fall back to sword / A");
         }
     }
 }

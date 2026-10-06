@@ -145,7 +145,40 @@ public final class BladeLogicSC {
         ItemBladeSC.setForm(blade, to);
         p.inventoryContainer.detectAndSendChanges();
         resendHeld(p);
-        p.worldObj.playSoundAtEntity(p, "mob.blaze.hit", 0.3F, 2F);
+        formSwitchEffect(p, blade);
+    }
+
+    /**
+     * The form has changed (server): a low warp whoosh at the player and a burst of the scheme's accent colour
+     * round the blade in hand (reddust, its "velocity" the colour), seen by everyone near. Server only - the
+     * client's own guess (ToolWheelSC) shows no effect, so it is not doubled.
+     */
+    static void formSwitchEffect(EntityPlayer p, ItemStack blade) {
+        p.worldObj.playSoundAtEntity(p, "mob.endermen.portal", 0.45F, 1.6F);
+        p.worldObj.playSoundAtEntity(p, "random.fizz", 0.2F, 1.9F);
+        if (!(p.worldObj instanceof WorldServer)) {
+            return;
+        }
+        WorldServer ws = (WorldServer) p.worldObj;
+        int acc = com.sc.util.ToolLevelSC.schemeOf(blade).accent;
+        float r = Math.max(0.01F, ((acc >> 16) & 255) / 255F), g = ((acc >> 8) & 255) / 255F, b = (acc & 255) / 255F;
+        double yaw = Math.toRadians(p.rotationYaw);
+        double fx = -Math.sin(yaw), fz = Math.cos(yaw);                // forward (horizontal)
+        double rx = -fz, rz = fx;                                      // right
+        double hx = p.posX + fx * 0.45 + rx * 0.35;                    // the right hand, a little ahead
+        double hy = p.posY + p.getEyeHeight() - 0.55;
+        double hz = p.posZ + fz * 0.45 + rz * 0.35;
+        for (int i = 0; i < 20; i++) {                                 // a ring round the hand
+            double a = Math.PI * 2 * i / 20;
+            double rad = 0.35 + p.worldObj.rand.nextDouble() * 0.12;
+            double side = Math.cos(a) * rad, up = Math.sin(a) * rad;
+            ws.func_147487_a("reddust", hx + rx * side + fx * up * 0.3, hy + up, hz + rz * side + fz * up * 0.3, 0, r, g, b, 1.0);
+        }
+        for (int i = 0; i < 8; i++) {                                  // and up along the blade
+            double k = 0.15 + i * 0.1;
+            ws.func_147487_a("reddust", hx + fx * k * 0.6, hy + k, hz + fz * k * 0.6, 0, r, g, b, 1.0);
+        }
+        ws.func_147487_a("witchMagic", hx, hy + 0.3, hz, 6, 0.15, 0.25, 0.15, 0.02);
     }
 
     // ------------------------------------------------------------------ heat (the full Singular suit takes it)

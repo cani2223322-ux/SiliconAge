@@ -56,6 +56,8 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
     private IIcon iconOff, iconOn;
     /** Singular: an off / on icon per colour scheme (SingularScheme ordinal). */
     private IIcon[] schemeOff, schemeOn;
+    /** Singular: an off / on icon per form and colour scheme ([BladeForm ordinal][SingularScheme ordinal]). */
+    private IIcon[][] formOff, formOn;
     private Object ic2Manager;
 
     public ItemBladeSC(BladeType type) {
@@ -240,6 +242,15 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
             }
             iconOff = schemeOff[SingularScheme.DEFAULT.ordinal()];
             iconOn = schemeOn[SingularScheme.DEFAULT.ordinal()];
+            BladeForm[] forms = BladeForm.values();         // bladeSingular_<form>_<k> / bladeSingularOn_<form>_<k>
+            formOff = new IIcon[forms.length][all.length];
+            formOn = new IIcon[forms.length][all.length];
+            for (BladeForm f : forms) {
+                for (SingularScheme s : all) {
+                    formOff[f.ordinal()][s.ordinal()] = register.registerIcon(Reference.ASSETS + ":" + formIconName(f, s, false));
+                    formOn[f.ordinal()][s.ordinal()] = register.registerIcon(Reference.ASSETS + ":" + formIconName(f, s, true));
+                }
+            }
             return;
         }
         iconOff = register.registerIcon(base);
@@ -251,18 +262,38 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
         return iconOff;
     }
 
+    /** Pure: the Singular blade's texture for a form, a scheme and lit / off - "bladeSingular[On]_<form>_<scheme>". */
+    public static String formIconName(BladeForm form, SingularScheme scheme, boolean lit) {
+        return "bladeSingular" + (lit ? "On" : "") + "_" + (form == null ? BladeForm.DEFAULT : form).key()
+                + "_" + (scheme == null ? SingularScheme.DEFAULT : scheme).key();
+    }
+
+    /** The icon for a stack (its lit state, scheme and - Singular - form; `holder` may be null: the stored form). */
+    private IIcon iconFor(ItemStack stack, EntityPlayer holder) {
+        boolean lit = isLit(stack);
+        if (formOff != null) {
+            int k = ToolLevelSC.schemeOf(stack).ordinal();
+            int f = (holder != null ? BladeSingularSC.effectiveForm(holder, stack) : formOf(stack)).ordinal();
+            return lit ? formOn[f][k] : formOff[f][k];
+        }
+        return lit ? iconOn : iconOff;
+    }
+
+    /** Inventory / dropped / framed: no holder known - the stored form. */
     @Override
     public IIcon getIconIndex(ItemStack stack) {
-        if (schemeOff != null) {
-            int k = ToolLevelSC.schemeOf(stack).ordinal();
-            return isLit(stack) ? schemeOn[k] : schemeOff[k];
-        }
-        return isLit(stack) ? iconOn : iconOff;
+        return iconFor(stack, null);
     }
 
     @Override
     public IIcon getIcon(ItemStack stack, int pass) {
         return getIconIndex(stack);
+    }
+
+    /** In a player's hand: the form that counts for them (one their blade no longer opens shows as the sword). */
+    @Override
+    public IIcon getIcon(ItemStack stack, int pass, EntityPlayer player, ItemStack usingItem, int useRemaining) {
+        return iconFor(stack, player);
     }
 
     @Override
