@@ -783,12 +783,17 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             }
         } else if ((p.catalystEu > 0 || (p.kind == SingularProcessSC.KIND_MODERNISE && SingularStationMath.needsCatalyst(p.levels)))
                 && com.sc.init.ModItems.battery != null) {         // the core used up at the start comes back as a new one
-            ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
-            com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
-            if (extra[1] == null) {
-                extra[1] = core;
-            } else if (worldObj != null && !worldObj.isRemote) {   // an older save (СБ-4) may still hold the kept core there
-                worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, core));
+            if (isCore(extra[1])) {                         // an older save (СБ-4) still holds the kept core: the refund goes into it, no second core
+                com.sc.item.ItemBatterySC.setCharge(extra[1],
+                        com.sc.item.ItemBatterySC.chargeOf(extra[1]) + SingularStationMath.refund(p.catalystEu));
+            } else {
+                ItemStack core = new ItemStack(com.sc.init.ModItems.battery, 1, SingularStationMath.CORE_META);
+                com.sc.item.ItemBatterySC.setCharge(core, SingularStationMath.refund(p.catalystEu));
+                if (extra[1] == null) {
+                    extra[1] = core;
+                } else if (worldObj != null && !worldObj.isRemote) {
+                    worldObj.spawnEntityInWorld(new EntityItem(worldObj, xCoord + 0.5, yCoord + 1.2, zCoord + 0.5, core));
+                }
             }
         }
         shortMask = 0;
