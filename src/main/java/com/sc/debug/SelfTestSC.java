@@ -93,6 +93,7 @@ public final class SelfTestSC {
             radiation();
             balanceConfig();
             smelters();
+            vanillaOres();
             metalBlocks();
             electrolysisAndHeavyWater();
             drills();
@@ -3765,6 +3766,63 @@ public final class SelfTestSC {
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */
+    /** Vanilla ores in the mod's machines: iron/gold pipeline, gem ores, quartz, diamond dust, steel from dust. */
+    private static void vanillaOres() {
+        net.minecraft.item.crafting.FurnaceRecipes fr = net.minecraft.item.crafting.FurnaceRecipes.smelting();
+        FluidStack water = new FluidStack(FluidRegistry.WATER, 1000);
+        boolean chain = true;
+        for (Material m : new Material[]{Material.IRON, Material.GOLD}) {
+            ItemStack ore = new ItemStack(m == Material.IRON ? net.minecraft.init.Blocks.iron_ore : net.minecraft.init.Blocks.gold_ore);
+            net.minecraft.item.Item ingot = m == Material.IRON ? net.minecraft.init.Items.iron_ingot : net.minecraft.init.Items.gold_ingot;
+            MachineRecipe crush = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{ore}, null, null);
+            MachineRecipe wash = RecipeRegistry.findMatch(MachineType.ORE_WASHER, new ItemStack[]{ModItems.crushedOre.stackOf(m)}, water, null);
+            MachineRecipe spin = RecipeRegistry.findMatch(MachineType.CENTRIFUGE, new ItemStack[]{ModItems.purifiedCrushedOre.stackOf(m)}, null, null);
+            chain &= crush != null && crush.outputs[0].isItemEqual(ModItems.crushedOre.stackOf(m)) && crush.outputs[0].stackSize == 2
+                    && wash != null && wash.outputs[0].isItemEqual(ModItems.purifiedCrushedOre.stackOf(m))
+                    && spin != null && spin.outputs[0].isItemEqual(ModItems.dust.stackOf(m))
+                    && (m == Material.IRON ? spin.byproducts.length == 0
+                        : spin.byproducts.length == 1 && spin.byproducts[0].isItemEqual(ModItems.dustTiny.stackOf(Material.SILVER))
+                          && Math.abs(spin.byproductChances[0] - 0.10f) < 1e-6)
+                    && fr.getSmeltingResult(ModItems.dust.stackOf(m)) != null && fr.getSmeltingResult(ModItems.dust.stackOf(m)).getItem() == ingot
+                    && fr.getSmeltingResult(ModItems.crushedOre.stackOf(m)).getItem() == ingot
+                    && fr.getSmeltingResult(ModItems.purifiedCrushedOre.stackOf(m)).getItem() == ingot
+                    && ModItems.ingot.stackOf(m) == null;
+        }
+        check(chain, "vanilla ores: iron/gold ore -> 2 crushed -> purified -> dust (+10% tiny silver for gold) -> vanilla ingot");
+
+        boolean gems = true;
+        net.minecraft.block.Block[] ores = {net.minecraft.init.Blocks.coal_ore, net.minecraft.init.Blocks.redstone_ore, net.minecraft.init.Blocks.lapis_ore,
+                net.minecraft.init.Blocks.quartz_ore, net.minecraft.init.Blocks.diamond_ore, net.minecraft.init.Blocks.emerald_ore};
+        int[] counts = {2, 6, 8, 2, 1, 1};
+        for (int i = 0; i < ores.length; i++) {
+            MachineRecipe r = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{new ItemStack(ores[i])}, null, null);
+            gems &= r != null && r.outputs[0].stackSize == counts[i] && r.byproducts.length == 1 && r.byproductChances[0] > 0f;
+        }
+        MachineRecipe lapis = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{new ItemStack(net.minecraft.init.Blocks.lapis_ore)}, null, null);
+        gems &= lapis != null && lapis.outputs[0].getItem() == net.minecraft.init.Items.dye && lapis.outputs[0].getItemDamage() == 4;
+        check(gems, "vanilla ores: coal/redstone/lapis/quartz/diamond/emerald ore crushed to their drops with a bonus roll");
+
+        MachineRecipe quartz1 = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{new ItemStack(net.minecraft.init.Items.quartz, 1)}, null, null);
+        MachineRecipe quartz2 = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{new ItemStack(net.minecraft.init.Items.quartz, 2)}, null, null);
+        MachineRecipe grit = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{new ItemStack(net.minecraft.init.Items.diamond)}, null, null);
+        MachineRecipe steel = RecipeRegistry.findMatch(MachineType.BLAST_FURNACE,
+                new ItemStack[]{ModItems.dust.stackOf(Material.IRON), ModItems.dust.stackOf(Material.CARBON)}, null, null);
+        int wires = com.sc.manual.BookContent.craftingFor(new ItemStack(ModItems.TOOLS.get(com.sc.util.SCToolType.DIAMOND_WIRE))).size();
+        int blades = com.sc.manual.BookContent.craftingFor(new ItemStack(ModItems.TOOLS.get(com.sc.util.SCToolType.DIAMOND_BLADE))).size();
+        check(quartz1 == null && quartz2 != null && quartz2.outputs[0].getItem() == ModItems.siliconMaterial
+                        && grit != null && grit.outputs[0].isItemEqual(ModItems.dust.stackOf(Material.DIAMOND))
+                        && steel != null && steel.outputs[0].isItemEqual(ModItems.ingot.stackOf(Material.STEEL))
+                        && wires >= 2 && blades >= 2,
+                "vanilla ores: 2 nether quartz -> silica sand, diamond -> dust (wire/blade recipes), iron dust + carbon -> steel");
+
+        // Append-only metadata: the new materials sit after Magnesium in every item kind.
+        check(ModItems.crushedOre.metaOf(Material.MAGNESIUM) == Material.byKind(com.sc.item.MaterialItemKind.CRUSHED_ORE).length - 3
+                        && ModItems.dust.metaOf(Material.MAGNESIUM) == Material.byKind(com.sc.item.MaterialItemKind.DUST).length - 4
+                        && ModItems.dust.metaOf(Material.DIAMOND) == Material.byKind(com.sc.item.MaterialItemKind.DUST).length - 1
+                        && ModItems.ingot.metaOf(Material.MAGNESIUM) == Material.byKind(com.sc.item.MaterialItemKind.INGOT).length - 1,
+                "vanilla ores: iron/gold/diamond items appended, older metadata unchanged");
+    }
+
     private static void smelters() {
         com.sc.tileentity.TileEntityMachineSC e = new com.sc.tileentity.TileEntityMachineSC();
         e.setMachineType(com.sc.machine.MachineType.ELECTRIC_FURNACE);

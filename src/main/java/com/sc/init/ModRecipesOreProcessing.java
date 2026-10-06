@@ -7,6 +7,7 @@ import com.sc.util.Material;
 import com.sc.util.OreEntry;
 
 import cpw.mods.fml.common.registry.GameRegistry;
+import net.minecraft.init.Blocks;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidRegistry;
@@ -100,6 +101,73 @@ public final class ModRecipesOreProcessing {
         registerAluminium();
         registerMagnesium();
         registerTitanium();
+        registerVanillaOres();
+    }
+
+    /**
+     * Vanilla ores in the mod's machines. Iron and gold take the full pipeline (2 ingots per ore
+     * instead of the furnace's 1; gold carries a little silver); the gem ores are crushed straight
+     * to their drop with a bonus roll. The quarry's crushing/washing/centrifuge modules pick these
+     * up on their own, since they just run the machines' recipes.
+     */
+    private static void registerVanillaOres() {
+        Object[][] metals = {
+                {new ItemStack(Blocks.iron_ore), Material.IRON, new ItemStack(Items.iron_ingot), null, 0f},
+                {new ItemStack(Blocks.gold_ore), Material.GOLD, new ItemStack(Items.gold_ingot), Material.SILVER, 0.10f},
+        };
+        for (Object[] m : metals) {
+            Material metal = (Material) m[1];
+            ItemStack ingot = (ItemStack) m[2];
+            ItemStack[] traces = m[3] == null ? new ItemStack[0] : new ItemStack[]{ModItems.dustTiny.stackOf((Material) m[3])};
+            float[] chances = m[3] == null ? new float[0] : new float[]{(Float) m[4]};
+            RecipeRegistry.register(new MachineRecipe(MachineType.CRUSHER,
+                    new ItemStack[]{(ItemStack) m[0]}, null, null,
+                    new ItemStack[]{stack(ModItems.crushedOre, metal, 2)}, null, null,
+                    CRUSHER_TICKS, 0f));
+            RecipeRegistry.register(new MachineRecipe(MachineType.ORE_WASHER,
+                    new ItemStack[]{stack(ModItems.crushedOre, metal, 1)},
+                    new FluidStack(FluidRegistry.WATER, WASH_WATER_MB), null,
+                    new ItemStack[]{stack(ModItems.purifiedCrushedOre, metal, 1)}, null, null,
+                    WASHER_TICKS, 0f));
+            RecipeRegistry.register(new MachineRecipe(MachineType.CENTRIFUGE,
+                    new ItemStack[]{stack(ModItems.purifiedCrushedOre, metal, 1)}, null, null,
+                    new ItemStack[]{ModItems.dust.stackOf(metal)}, null, null,
+                    CENTRIFUGE_TICKS, 0f, traces, chances));
+            GameRegistry.addSmelting(ModItems.crushedOre.stackOf(metal), ingot.copy(), 0.3F);
+            GameRegistry.addSmelting(ModItems.purifiedCrushedOre.stackOf(metal), ingot.copy(), 0.3F);
+            GameRegistry.addSmelting(ModItems.dust.stackOf(metal), ingot.copy(), 0.3F);
+        }
+
+        // Gem ores: the ore's own drop, a little more than a pickaxe gets without Fortune.
+        gemOre(new ItemStack(Blocks.coal_ore), new ItemStack(Items.coal, 2), ModItems.dust.stackOf(Material.CARBON), 0.15f);
+        gemOre(new ItemStack(Blocks.redstone_ore), new ItemStack(Items.redstone, 6), new ItemStack(Items.redstone, 2), 0.25f);
+        gemOre(new ItemStack(Blocks.lapis_ore), new ItemStack(Items.dye, 8, 4), new ItemStack(Items.dye, 2, 4), 0.25f);
+        gemOre(new ItemStack(Blocks.quartz_ore), new ItemStack(Items.quartz, 2), new ItemStack(Items.quartz, 1), 0.25f);
+        gemOre(new ItemStack(Blocks.diamond_ore), new ItemStack(Items.diamond, 1), new ItemStack(Items.diamond, 1), 0.25f);
+        gemOre(new ItemStack(Blocks.emerald_ore), new ItemStack(Items.emerald, 1), new ItemStack(Items.emerald, 1), 0.25f);
+
+        // Nether quartz is SiO2 too: a second, poorer way into the silicon chain (quartzite ore gives 2 sand).
+        RecipeRegistry.register(new MachineRecipe(MachineType.CRUSHER,
+                new ItemStack[]{new ItemStack(Items.quartz, 2)}, null, null,
+                new ItemStack[]{ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.SILICA_SAND)}, null, null,
+                CRUSHER_TICKS, 0f));
+        // Diamond grit for the diamond wire and blade (ModRecipesMachineBlocks).
+        RecipeRegistry.register(new MachineRecipe(MachineType.CRUSHER,
+                new ItemStack[]{new ItemStack(Items.diamond)}, null, null,
+                new ItemStack[]{ModItems.dust.stackOf(Material.DIAMOND)}, null, null,
+                CRUSHER_TICKS, 0f));
+        // Steel straight from iron dust, skipping the ingot.
+        RecipeRegistry.register(new MachineRecipe(MachineType.BLAST_FURNACE,
+                new ItemStack[]{ModItems.dust.stackOf(Material.IRON), ModItems.dust.stackOf(Material.CARBON)}, null, null,
+                new ItemStack[]{ModItems.ingot.stackOf(Material.STEEL)}, null, null,
+                200, 0.02f));
+    }
+
+    private static void gemOre(ItemStack ore, ItemStack drop, ItemStack bonus, float chance) {
+        RecipeRegistry.register(new MachineRecipe(MachineType.CRUSHER,
+                new ItemStack[]{ore}, null, null,
+                new ItemStack[]{drop}, null, null,
+                CRUSHER_TICKS, 0f, new ItemStack[]{bonus}, new float[]{chance}));
     }
 
     /**

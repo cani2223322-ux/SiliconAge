@@ -16,7 +16,7 @@
 
 ### Возможности
 - **Производство полупроводников:** цепочка от кварца и руд до кремниевых пластин, кристаллов, чипов и контроллеров. 32 машины уровней LV–IV, улучшения машин, брак и побочные продукты.
-- **Руды и переработка:** 16 руд, дробление, промывка, центрифуга, химия и жидкости. **22 блока металлов** из слитков мода (9 слитков ↔ блок, основание маяка).
+- **Руды и переработка:** 16 руд, дробление, промывка, центрифуга, химия и жидкости; ванильные руды тоже идут в машины (железо и золото — 2 слитка с руды). **22 блока металлов** из слитков мода (9 слитков ↔ блок, основание маяка).
 - **Электропечь (LV) и индукционная печь (MV):** плавят всё, что обычная печь, без топлива; индукционная — два предмета сразу и разогрев до x3; опыт копится в печи.
 - **Электролиз и тяжёлая вода:** водород и кислород из воды, тяжёлая вода и дейтерий для термоядерных реакторов.
 - **Энергия LV → SV:** восемь уровней напряжения — LV, MV, HV, EV, **IV**, **QV (Квант)**, **XV (Экзо)** и **SV (Сингулярный)** до 131 072 EU/t.
@@ -119,7 +119,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 
 ### Features
 - **Semiconductor fabrication:** a chain from quartz and ores to silicon wafers, crystals, chips and controllers. 32 machines from LV to IV, machine upgrades, defects and by-products.
-- **Ores and processing:** 16 ores, crushing, washing, centrifuge, chemistry and fluids. **22 metal blocks** from the mod's ingots (9 ingots ↔ a block, a beacon base).
+- **Ores and processing:** 16 ores, crushing, washing, centrifuge, chemistry and fluids; vanilla ores go into the machines too (iron and gold - 2 ingots per ore). **22 metal blocks** from the mod's ingots (9 ingots ↔ a block, a beacon base).
 - **Electric Furnace (LV) and Induction Furnace (MV):** they smelt everything a furnace does, without fuel; the induction one takes two items at once and heats up to x3; smelting XP is stored in the furnace.
 - **Electrolysis and heavy water:** hydrogen and oxygen from water, heavy water and deuterium for the fusion reactors.
 - **Energy LV → SV:** eight voltage tiers - LV, MV, HV, EV, **IV**, **QV (Quantum)**, **XV (Exo)** and **SV (Singular)**, up to 131,072 EU/t.

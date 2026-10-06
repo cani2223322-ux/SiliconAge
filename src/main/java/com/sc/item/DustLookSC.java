@@ -54,6 +54,9 @@ public final class DustLookSC {
             case ASH: return 0xB4B0AC;
             case ARSENIC: return 0x8C9098;
             case SCRAP: return 0xA0907C;
+            case IRON: return 0xD8CCC4;
+            case GOLD: return 0xFFE070;
+            case DIAMOND: return 0x9CF4EC;
             default: return IngotLookSC.tint(material);
         }
     }

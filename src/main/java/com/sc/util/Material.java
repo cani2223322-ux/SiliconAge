@@ -58,7 +58,12 @@ public enum Material {
     // the reducing agent of the Kroll titanium process. Appended last on purpose: item
     // metadata is the position in each kind's list, so inserting earlier would shift the
     // meta of every material after it in existing worlds.
-    MAGNESIUM("Magnesium", true, false, true, false, true, "Magnesia");
+    MAGNESIUM("Magnesium", true, false, true, false, true, "Magnesia"),
+    // Vanilla ores through the mod's pipeline. No ingot of their own: the dust smelts to vanilla's
+    // iron / gold ingot. Appended last for the same metadata reason as Magnesium.
+    IRON("Iron", true, true, true, false, false, null),
+    GOLD("Gold", true, true, true, false, false, null),
+    DIAMOND("Diamond", false, false, true, false, false, null);  // crushed diamond: cheaper diamond wire / blade
 
     public final String oreDictName;
     public final boolean hasCrushedOre;

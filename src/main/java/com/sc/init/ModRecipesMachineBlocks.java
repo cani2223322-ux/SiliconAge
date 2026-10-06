@@ -206,6 +206,10 @@ public final class ModRecipesMachineBlocks {
         // TODO(§13.5): a steel disc with a diamond rim.
         OreRecipes.shaped(tool(SCToolType.DIAMOND_BLADE), new Object[]{
                 " D ", "DSD", " D ", 'D', Items.diamond, 'S', steel});
+        // Crushed diamond (Crusher) goes further: grit is what both tools really carry.
+        ItemStack grit = ModItems.dust.stackOf(Material.DIAMOND);
+        OreRecipes.shapeless(tool(SCToolType.DIAMOND_WIRE), steel, steel, grit, Items.string);
+        OreRecipes.shapeless(tool(SCToolType.DIAMOND_BLADE), steel, grit.copy(), grit.copy());
         // TODO(§13.5): real masks are a chrome pattern on fused quartz; gold stands in for chrome.
         // Deliberately needs no Controller - the Stepper uses it BEFORE the chain makes any.
         OreRecipes.shapeless(tool(SCToolType.PHOTOMASK), Blocks.glass_pane, Items.quartz, Items.quartz, Items.gold_ingot);

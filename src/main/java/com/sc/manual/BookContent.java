@@ -254,7 +254,7 @@ public final class BookContent {
         }
         list.add(new BookEntry("ores", c, all.get(0), Lang.tr("sc.book.ores.all"))
                 .add(BookEl.title(Lang.tr("sc.manual.ores.title", OreEntry.values().length))).addAll(paras("sc.manual.ores.intro"))
-                .add(BookEl.items(all)));
+                .add(BookEl.items(all)).add(BookEl.link("ores.vanilla", Lang.tr("sc.book.ores.vanilla.link"))));
         for (OreEntry ore : OreEntry.values()) {
             ItemStack block = new ItemStack(ModBlocks.oreSC, 1, ore.meta());
             BookEntry e = new BookEntry("ore." + ore.name().toLowerCase(Locale.ROOT), c, block, block.getDisplayName());
@@ -262,6 +262,7 @@ public final class BookContent {
             processing(e, block);
             list.add(e);
         }
+        list.add(vanillaOres(c));
         List<ItemStack> blocks = new ArrayList<ItemStack>();
         for (Material m : com.sc.block.BlockMetalSC.METALS) {
             blocks.add(com.sc.block.BlockMetalSC.stackOf(m, 1));
@@ -270,6 +271,44 @@ public final class BookContent {
         mb.add(BookEl.title(Lang.tr("sc.manual.ores.blockshead"))).addAll(paras("sc.manual.ores.blocks")).add(BookEl.items(blocks));
         mb.about(new ItemStack(ModBlocks.metalBlock, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModBlocks.metalBlock2, 1, OreDictionary.WILDCARD_VALUE));
         list.add(mb);
+    }
+
+    /** Vanilla ores in the mod's machines: iron and gold through the full route, the rest straight from the Crusher. */
+    private static BookEntry vanillaOres(BookChapter c) {
+        ItemStack[] metals = {new ItemStack(Blocks.iron_ore), new ItemStack(Blocks.gold_ore)};
+        ItemStack[] gems = {new ItemStack(Blocks.coal_ore), new ItemStack(Blocks.redstone_ore), new ItemStack(Blocks.lapis_ore),
+                new ItemStack(Blocks.quartz_ore), new ItemStack(Blocks.diamond_ore), new ItemStack(Blocks.emerald_ore)};
+        BookEntry e = new BookEntry("ores.vanilla", c, metals[0], Lang.tr("sc.book.ores.vanilla.title"));
+        e.add(BookEl.title(Lang.tr("sc.book.ores.vanilla.title"))).addAll(paras("sc.book.ores.vanilla.intro"));
+        for (ItemStack ore : metals) {
+            e.add(BookEl.head(ore.getDisplayName(), ore));
+            processing(e, ore);
+        }
+        e.add(BookEl.head(Lang.tr("sc.book.ores.vanilla.gems")));
+        for (ItemStack ore : gems) {
+            MachineRecipe r = crusherRecipe(ore);
+            if (r != null) {
+                e.add(BookEl.machine(r));
+            }
+        }
+        e.add(BookEl.head(Lang.tr("sc.book.ores.vanilla.extra"))).addAll(paras("sc.book.ores.vanilla.extra"));
+        for (ItemStack in : new ItemStack[]{new ItemStack(Items.quartz, 2), new ItemStack(Items.diamond)}) {
+            MachineRecipe r = crusherRecipe(in);
+            if (r != null) {
+                e.add(BookEl.machine(r));
+            }
+        }
+        e.about(metals).about(gems);
+        return e;
+    }
+
+    private static MachineRecipe crusherRecipe(ItemStack input) {
+        for (MachineRecipe r : RecipeRegistry.recipesFor(MachineType.CRUSHER)) {
+            if (r.inputs.length == 1 && MachineRecipe.isSameIngredient(input, r.inputs[0]) && r.inputs[0].stackSize == input.stackSize) {
+                return r;
+            }
+        }
+        return null;
     }
 
     /** The ore's route as a picture chain (crusher, washer, centrifuge... furnace), its by-products and uses. */
