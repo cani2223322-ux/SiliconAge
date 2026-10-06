@@ -53,6 +53,32 @@ public final class ForeignEnergySC {
         }
     }
 
+    /**
+     * The converter screen's colours of each energy by its buffer's fill (docs/energy-converter/conv3_rf_palettes.png,
+     * variant C2): the energy's own hue, brighter the fuller - one step per quarter (below 25 %, 25-50, 50-75, from 75 %).
+     * Rows: RF red, J blue, gJ green.
+     */
+    private static final int[][] PALETTE = {
+            {0xFF5A1414, 0xFF8C1E1E, 0xFFB42828, 0xFFE63C3C},
+            {0xFF17375A, 0xFF25558C, 0xFF2F6DB4, 0xFF3C8CE6},
+            {0xFF174E27, 0xFF257A3D, 0xFF2F9C4E, 0xFF3CC864}};
+    /** The colour of "no other energy" on the converter screen. */
+    public static final int NO_KIND_COLOUR = 0xFF6A6E74;
+
+    /** The colour of energy `k` at buffer fill `level` (0..1, clamped): its gauge, ARGB. Null kind - grey. */
+    public static int gaugeColour(Kind k, double level) {
+        if (k == null) {
+            return NO_KIND_COLOUR;
+        }
+        double l = Double.isNaN(level) ? 0 : Math.max(0, Math.min(1, level));
+        return PALETTE[k.ordinal()][Math.min(3, (int) (l * 4))];
+    }
+
+    /** The energy's full, bright colour (its label, the arrow, the graph line, the neighbour's mark), ARGB. */
+    public static int labelColour(Kind k) {
+        return gaugeColour(k, 1.0);
+    }
+
     /** Galacticraft's default gJ for one EU (its EnergyConfigHandler: 16 / 2.44). */
     public static final double GC_DEFAULT_RATE = 16.0 / 2.44;
     public static final String MEKANISM_MODID = "Mekanism", GC_MODID = "GalacticraftCore";

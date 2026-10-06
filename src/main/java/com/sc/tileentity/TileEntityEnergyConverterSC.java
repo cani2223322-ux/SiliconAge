@@ -457,6 +457,26 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         setBuf(side, (buf[side] + 1) % 3);
     }
 
+    /** The screen's "all faces" buttons. */
+    public static final int ALL_IN = 0, ALL_OUT = 1, ALL_AUTO = 2;
+
+    /**
+     * Every face at once: ALL_IN - all six inputs, ALL_OUT - all six outputs (buffers kept), ALL_AUTO - all six
+     * outputs with the buffer Auto (each gives what its neighbour understands). Anything else is ignored.
+     */
+    public void setAllFaces(int what) {
+        if (what < ALL_IN || what > ALL_AUTO) {
+            return;
+        }
+        for (int s = 0; s < 6; s++) {
+            mode[s] = (byte) (what == ALL_IN ? MODE_IN : MODE_OUT);
+            if (what == ALL_AUTO) {
+                buf[s] = BUF_AUTO;
+            }
+        }
+        facesChanged();
+    }
+
     public void setFilter(int side, int f) {
         filter[side] = (byte) (f & F_ALL);
         facesChanged();

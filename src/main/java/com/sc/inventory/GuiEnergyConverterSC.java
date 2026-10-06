@@ -24,20 +24,24 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraftforge.common.util.ForgeDirection;
 
 /**
- * The Energy Converter's screen (docs/energy-converter/conv2_RF.png, conv2_J_balance.png), 340 x 262:
- * left the six expansion slots, the charge slot and a summary (tier, packets, loss); top the pair
- * buttons «EU-RF / EU-J / EU-gJ» and the direction «EU → X / X → EU / Баланс»; centre the faces' table
- * (Сторона / Режим / Буфер - or the input filter - / Сосед / Поток); right two gauges - EU yellow, the
- * pair's energy in its colour - with the conversion's animated arrow and its loss between them; under the
- * table what is converted now, the throughput and the buffers, the flow over 30 seconds; at the bottom
- * the inventory, «Приоритет выхода», «Фильтр входа…», «Компаратор» and hints. A screen lower than 262
- * GUI pixels gets the compact 340 x 222 arrangement (no graph, tighter rows). Every part has a tooltip.
+ * The Energy Converter's screen (docs/energy-converter/conv3_screen.png), 340 x 262: left the six
+ * expansion slots, the charge slot and a summary (tier, packets, loss); top the pair buttons
+ * «EU-RF / EU-J / EU-gJ» (an unavailable one says under it what it lacks) and the direction; centre the
+ * faces' table (Сторона / Режим / Буфер - or the input filter - / Сосед with a square of its energy's
+ * colour / Поток), its columns measured with the font, and under it «Все: Вход / Выход / Авто»; right
+ * two gauges drawn as the machines' energy gauge (GuiEnergyGaugeSC) - EU in the charge colours, the
+ * pair's energy in its own colour, brighter the fuller (ForeignEnergySC.gaugeColour) - with a thick
+ * arrow of the conversion's way and its loss between them; under the table what is converted now and
+ * the rate / loss / throughput, the flow over 30 seconds across the whole width; at the bottom the
+ * inventory, «Приоритет выхода», «Фильтр входа…», «Компаратор». The long explanations are tooltips.
+ * A screen lower than 262 GUI pixels gets the compact 340 x 222 arrangement (no graph, tighter rows,
+ * the «Все» buttons beside the inventory).
  */
 public class GuiEnergyConverterSC extends GuiContainer {
 
-    private static final int BG = 0xFF22262D, EDGE = 0xFF4A5260, EDGE_HI = 0xFF5E6672, LINE = 0xFF3A414C, TITLE = 0xFFD84A,
-            LABEL = 0xC8CCD2, DIM = 0x8A9099, TEXT = 0xE6E8EC, GREEN = 0x5AE66E, ORANGE = 0xFFB040, RED = 0xFF6A6A,
-            EU_COL = 0xFFE0C040, GREY = 0x9AA0A8;
+    private static final int BG = 0xFF22262D, EDGE = 0xFF4A5260, EDGE_HI = 0xFF5E6672, TITLE = 0xFFD84A,
+            LABEL = 0xC8CCD2, DIM = 0x8A9099, TEXT = 0xE6E8EC, GREEN = 0x5AE66E, ORANGE = 0xFFB040,
+            EU_COL = 0xFFE0C040, GREY = 0x9AA0A8, NONE_COL = 0xFF6A6E74;
     /** Screen-only ids: the filter view switch. */
     private static final int ID_FILTER_VIEW = 71;
     private static final String[] SIDE_KEYS = {"down", "up", "north", "south", "west", "east"};
@@ -46,7 +50,7 @@ public class GuiEnergyConverterSC extends GuiContainer {
 
     /** One layout (screen-local GUI pixels). */
     static final class Lay {
-        int h, rowY0, rowStep, btnH, nowY, thrY, graphY, graphH, sepY, invY, hotbarY, prioY, filtY, hintY, hintStep, swapY;
+        int h, rowY0, rowStep, btnH, allX, allY, allW, allStep, allH, nowY, infoY, graphY, graphH, sepY, invY, hotbarY, prioY, filtY, hintY;
         int gaugeY, gaugeH, chargeLabelY, chargeY, sumY;
     }
 
@@ -56,33 +60,40 @@ public class GuiEnergyConverterSC extends GuiContainer {
     private static Lay big() {
         Lay l = new Lay();
         l.h = 262;
-        l.rowY0 = 55; l.rowStep = 13; l.btnH = 10;
-        l.nowY = 138; l.thrY = 147; l.graphY = 155; l.graphH = 20;
+        l.rowY0 = 57; l.rowStep = 12; l.btnH = 10;
+        l.allX = 54; l.allY = 129; l.allW = 50; l.allStep = 52; l.allH = 10;
+        l.nowY = 141; l.infoY = 151; l.graphY = 160; l.graphH = 16;
         l.sepY = 178; l.invY = 183; l.hotbarY = 241;
-        l.prioY = 182; l.filtY = 198; l.hintY = 215; l.hintStep = 9; l.swapY = 238;
-        l.gaugeY = 29; l.gaugeH = 70; l.chargeLabelY = 93; l.chargeY = 102; l.sumY = 124;
+        l.prioY = 182; l.filtY = 198; l.hintY = 216;
+        l.gaugeY = 27; l.gaugeH = 104; l.chargeLabelY = 93; l.chargeY = 102; l.sumY = 124;
         return l;
     }
 
     private static Lay small() {
         Lay l = new Lay();
         l.h = 222;
-        l.rowY0 = 54; l.rowStep = 11; l.btnH = 9;
-        l.nowY = 122; l.thrY = 131; l.graphY = 0; l.graphH = 0;
+        l.rowY0 = 55; l.rowStep = 10; l.btnH = 9;
+        l.allX = 176; l.allY = 175; l.allW = 50; l.allStep = 53; l.allH = 11;
+        l.nowY = 116; l.infoY = 125; l.graphY = 0; l.graphH = 0;
         l.sepY = 140; l.invY = 144; l.hotbarY = 202;
-        l.prioY = 144; l.filtY = 159; l.hintY = 176; l.hintStep = 9; l.swapY = 198;
-        l.gaugeY = 29; l.gaugeH = 56; l.chargeLabelY = 88; l.chargeY = 96; l.sumY = 116;
+        l.prioY = 144; l.filtY = 159; l.hintY = 190;
+        l.gaugeY = 27; l.gaugeH = 83; l.chargeLabelY = 87; l.chargeY = 96; l.sumY = 116;
         return l;
     }
 
-    private static final int GAUGE_EU_X = 270, GAUGE_X_X = 308, GAUGE_W = 23, TABLE_X = 54, MODE_X = 86, MODE_W = 33, BUF_X = 122, BUF_W = 31,
-            NB_X = 158, NB_W = 74, FLOW_R = 258, RIGHT_X = 176, RIGHT_W = 156;
+    /** Fixed places: the left column's width, the top buttons, the gauges and the gap with the arrow between them. */
+    static final int LEFT_W = 42, TABLE_X = 54, TABLE_R = 258, PAIR_X = 54, PAIR_W = 32, PAIR_STEP = 34, DIR_X = 158, DIR_W = 32, DIR_STEP = 34,
+            TOP_BTN_Y = 29, TOP_BTN_H = 11, CAPTION_Y = 41, GAUGE_EU_X = 262, GAUGE_X_X = 306, GAUGE_W = 28, GAP_X = GAUGE_EU_X + GAUGE_W,
+            GAP_W = GAUGE_X_X - GAP_X, GAUGE_TEXT_W = 34, MODE_W = 34, BUF_W = 30, SQUARE = 6, RIGHT_X = 176, RIGHT_W = 156,
+            GRAPH_X = 54, GRAPH_R = 332;
 
     private Lay L = BIG;
+    /** The table's columns, measured with the font in initGui (Сторона's width decides where the buttons start). */
+    private int modeX = 93, bufX = 129, nbX = 163;
     private final TileEntityEnergyConverterSC te;
     private GuiPowerSC power;
     private boolean filterView;
-    private final Btn[] pairBtn = new Btn[3], dirBtn = new Btn[3], modeBtn = new Btn[6], bufBtn = new Btn[6];
+    private final Btn[] pairBtn = new Btn[3], dirBtn = new Btn[3], modeBtn = new Btn[6], bufBtn = new Btn[6], allBtn = new Btn[3];
     private Btn prioBtn, filterBtn, compBtn;
 
     public GuiEnergyConverterSC(InventoryPlayer inv, TileEntityEnergyConverterSC te) {
@@ -100,26 +111,41 @@ public class GuiEnergyConverterSC extends GuiContainer {
         ySize = L.h;
         super.initGui();
         buttonList.clear();
+        columns();
         int x = guiLeft, y = guiTop;
         power = new GuiPowerSC(te, ContainerEnergyConverterSC.BTN_POWER, ContainerEnergyConverterSC.BTN_REDSTONE, 294, 4, 37, L.gaugeY, L.gaugeH);
         power.addButtons(buttonList, x, y);
-        int[] px = {54, 84, 114};
         for (int k = 0; k < 3; k++) {
-            pairBtn[k] = add(new Btn(ContainerEnergyConverterSC.BTN_PAIR + k, x + px[k], y + 29, 28, 11));
-        }
-        int[] dx = {150, 184, 218}, dw = {31, 31, 32};
-        for (int k = 0; k < 3; k++) {
-            dirBtn[k] = add(new Btn(ContainerEnergyConverterSC.BTN_DIR + k, x + dx[k], y + 29, dw[k], 11));
+            pairBtn[k] = add(new Btn(ContainerEnergyConverterSC.BTN_PAIR + k, x + PAIR_X + k * PAIR_STEP, y + TOP_BTN_Y, PAIR_W, TOP_BTN_H));
+            dirBtn[k] = add(new Btn(ContainerEnergyConverterSC.BTN_DIR + k, x + DIR_X + k * DIR_STEP, y + TOP_BTN_Y, DIR_W, TOP_BTN_H));
         }
         for (int r = 0; r < 6; r++) {
             int s = ROW_SIDE[r], ry = y + L.rowY0 + r * L.rowStep;
-            modeBtn[s] = add(new Btn(ContainerEnergyConverterSC.BTN_MODE + s, x + MODE_X, ry, MODE_W, L.btnH));
-            bufBtn[s] = add(new Btn(ContainerEnergyConverterSC.BTN_BUF + s, x + BUF_X, ry, BUF_W, L.btnH));
+            modeBtn[s] = add(new Btn(ContainerEnergyConverterSC.BTN_MODE + s, x + modeX, ry, MODE_W, L.btnH));
+            bufBtn[s] = add(new Btn(ContainerEnergyConverterSC.BTN_BUF + s, x + bufX, ry, BUF_W, L.btnH));
+        }
+        for (int k = 0; k < 3; k++) {
+            allBtn[k] = add(new Btn(ContainerEnergyConverterSC.BTN_ALL + k, x + L.allX + k * L.allStep, y + L.allY, L.allW, L.allH));
         }
         prioBtn = add(new Btn(ContainerEnergyConverterSC.BTN_PRIORITY, x + RIGHT_X, y + L.prioY, RIGHT_W, 13));
         filterBtn = add(new Btn(ID_FILTER_VIEW, x + RIGHT_X, y + L.filtY, 75, 13));
         compBtn = add(new Btn(ContainerEnergyConverterSC.BTN_COMPARATOR, x + RIGHT_X + 81, y + L.filtY, RIGHT_W - 81, 13));
         placeSlots();
+    }
+
+    /**
+     * The table's columns from the font: Сторона as wide as its longest name (24..40), then Режим, Буфер,
+     * then Сосед up to Поток (whose width is measured every frame from its numbers).
+     */
+    private void columns() {
+        int sideW = 0;
+        for (String k : SIDE_KEYS) {
+            sideW = Math.max(sideW, fontRendererObj.getStringWidth(Lang.tr("sc.conv.side." + k)));
+        }
+        sideW = Math.max(24, Math.min(40, sideW));
+        modeX = TABLE_X + sideW + 3;
+        bufX = modeX + MODE_W + 2;
+        nbX = bufX + BUF_W + 3;
     }
 
     @SuppressWarnings("unchecked")
@@ -173,9 +199,9 @@ public class GuiEnergyConverterSC extends GuiContainer {
         return k == null ? "-" : k.unit;
     }
 
+    /** The pair's energy's own colour (ARGB): labels, the arrow, the graph; grey without a pair. */
     private int xColour() {
-        Kind k = kind();
-        return k == null ? 0xFF6A6E74 : k.colour;
+        return ForeignEnergySC.labelColour(kind());
     }
 
     /** 1234567 -> "1 234 567". */
@@ -209,13 +235,34 @@ public class GuiEnergyConverterSC extends GuiContainer {
         TextFitSC.draw(fontRendererObj, text, x, y, maxW, color, guiLeft, guiTop);
     }
 
-    private void small(String text, int x, int y, int maxW, int color) {
-        float k = Math.min(0.75F, maxW / (float) Math.max(1, fontRendererObj.getStringWidth(text)));
+    /**
+     * Small text (at most `scale`), shrunk further to fit `maxW` down to `min`, below that cut with "..." -
+     * the whole text then a tooltip. @return the width drawn
+     */
+    private int small(String text, int x, int y, int maxW, int color, float scale, float min) {
+        return small(text, x, y, maxW, color, scale, min, false);
+    }
+
+    /** As above; `centre` - the smaller text centred in the 8-pixel line at y. */
+    private int small(String text, int x, int y, int maxW, int color, float scale, float min, boolean centre) {
+        int tw = Math.max(1, fontRendererObj.getStringWidth(text));
+        float k = Math.min(scale, maxW / (float) tw);
+        String shown = text;
+        if (k < min) {
+            k = min;
+            shown = fontRendererObj.trimStringToWidth(text, Math.max(0, (int) (maxW / k) - fontRendererObj.getStringWidth("..."))) + "...";
+            TextFitSC.hover(guiLeft + x, guiTop + y, maxW, Math.max(6, (int) (9 * k)), text);
+        }
         GL11.glPushMatrix();
-        GL11.glTranslatef(x, y, 0F);
+        GL11.glTranslatef(x, y + (centre ? (1 - k) * 4F : 0F), 0F);
         GL11.glScalef(k, k, 1F);
-        fontRendererObj.drawString(text, 0, 0, color);
+        fontRendererObj.drawString(shown, 0, 0, color);
         GL11.glPopMatrix();
+        return (int) Math.ceil(fontRendererObj.getStringWidth(shown) * k);
+    }
+
+    private void small(String text, int x, int y, int maxW, int color) {
+        small(text, x, y, maxW, color, 0.75F, 0.5F);
     }
 
     private static void rect(int x, int y, int w, int h, int c) {
@@ -228,6 +275,15 @@ public class GuiEnergyConverterSC extends GuiContainer {
         rect(x - 1, y - 1, 18, 18, 0xFF15181C);
         rect(x, y, 17, 17, 0xFF9A9EA4);
         rect(x, y, 16, 16, 0xFF7C8086);
+    }
+
+    private static int shade(int c, float k) {
+        int r = (int) (((c >> 16) & 255) * k), g = (int) (((c >> 8) & 255) * k), b = (int) ((c & 255) * k);
+        return 0xFF000000 | r << 16 | g << 8 | b;
+    }
+
+    private static float level(double v, double cap) {
+        return cap <= 0 ? 0F : (float) Math.max(0, Math.min(1, v / cap));
     }
 
     // ------------------------------------------------------------------ drawing
@@ -251,43 +307,28 @@ public class GuiEnergyConverterSC extends GuiContainer {
         for (int c = 0; c < 9; c++) {
             pocket(x + ContainerEnergyConverterSC.INV_X + c * 18, y + L.hotbarY);
         }
-        // the gauges
-        double euCap = te.getMaxEnergyStored(), xCap = te.foreignCapacity();
-        gauge(x + GAUGE_EU_X, y + L.gaugeY, GAUGE_W, L.gaugeH, euCap <= 0 ? 0 : te.getEnergyStored() / euCap, EU_COL);
-        gauge(x + GAUGE_X_X, y + L.gaugeY, GAUGE_W, L.gaugeH, xCap <= 0 ? 0 : te.getForeign() / xCap, xColour());
-        arrow(x + 294, y + L.gaugeY + L.gaugeH / 2 - 5, partialTicks);
+        // the gauges: the machines' gauge, EU in the charge colours, the other energy in its own
+        float euLevel = level(te.getEnergyStored(), te.getMaxEnergyStored());
+        GuiEnergyGaugeSC.draw(x + GAUGE_EU_X, y + L.gaugeY, GAUGE_W, L.gaugeH, euLevel);
+        Kind k = kind();
+        float xLevel = k == null ? 0F : level(te.getForeign(), te.foreignCapacity());
+        GuiEnergyGaugeSC.draw(x + GAUGE_X_X, y + L.gaugeY, GAUGE_W, L.gaugeH, xLevel, ForeignEnergySC.gaugeColour(k, xLevel));
+        if (k != null) {
+            arrow(x + GAP_X, arrowY() + y, partialTicks);
+        }
         // the graph
         if (L.graphH > 0) {
-            graph(x + TABLE_X, y + L.graphY, 204, L.graphH);
+            graph(x + GRAPH_X, y + L.graphY, GRAPH_R - GRAPH_X, L.graphH);
         }
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
-    /** A machine-style vertical gauge: a frame, the fill in `col`, a light level line, ticks on the right. */
-    private static void gauge(int x, int y, int w, int h, double f, int col) {
-        f = Math.max(0, Math.min(1, f));
-        rect(x, y, w, h, 0xFF101216);
-        rect(x + 1, y + 1, w - 2, h - 2, 0xFF5A606A);
-        rect(x + 2, y + 2, w - 4, h - 4, 0xFF0A0C10);
-        int ih = h - 4, fill = (int) Math.round(ih * f);
-        if (fill > 0) {
-            int top = y + 2 + ih - fill;
-            GuiEnergyGaugeSC.gradient(x + 2, top, w - 4, fill, shade(col, 1.0F), shade(col, 0.55F));
-            rect(x + 2, top, w - 4, 1, 0xFFF4F4F4);
-            rect(x + 2, top + 1, w - 4, 1, 0x60FFFFFF);
-        }
-        for (int i = 1; i < 10; i++) {
-            int ty = y + 2 + ih - Math.round(ih * i / 10F);
-            rect(x + w - (i == 5 ? 7 : 5), ty, i == 5 ? 5 : 3, 1, 0xFF6A707A);
-        }
+    /** The arrow bar's top (screen-local): the gauges' middle. */
+    private int arrowY() {
+        return L.gaugeY + L.gaugeH / 2 - 1;
     }
 
-    private static int shade(int c, float k) {
-        int r = (int) (((c >> 16) & 255) * k), g = (int) (((c >> 8) & 255) * k), b = (int) ((c & 255) * k);
-        return 0xFF000000 | r << 16 | g << 8 | b;
-    }
-
-    /** Which way the conversion goes now: 1 EU -> X, -1 X -> EU, 0 still (the direction button's way, dimmed). */
+    /** Which way the conversion goes now: 1 EU -> X, -1 X -> EU, 0 still (then the direction button's way). */
     private int flowSign() {
         int c = te.statConvEu();
         if (c != 0) {
@@ -296,27 +337,40 @@ public class GuiEnergyConverterSC extends GuiContainer {
         return te.getDirection() == TileEntityEnergyConverterSC.DIR_X_TO_EU ? -1 : te.getDirection() == TileEntityEnergyConverterSC.DIR_EU_TO_X ? 1 : 0;
     }
 
-    /** The arrow between the gauges, its chevron running the way the energy goes (still when nothing moves). */
+    /**
+     * The arrow in the gap between the gauges (GAP_W wide, its 3-pixel bar at y): towards the energy being
+     * made, in that energy's colour - EU -> X in X's, X -> EU in EU yellow; «Баланс» standing still has both
+     * heads, each in the colour of the energy it points at. Dimmed when nothing moves, a light running
+     * along it the way the energy goes when it does.
+     */
     private void arrow(int x, int y, float pt) {
-        int sign = flowSign();
         boolean moving = te.statConvEu() != 0 && te.isPowerOn();
-        int col = moving ? 0xFFF0F0F0 : 0xFF6A6E74;
-        int barCol = moving ? (sign > 0 ? EU_COL : xColour()) : 0xFF3A3E44;
-        rect(x, y + 3, 12, 4, barCol);
-        if (sign == 0) {
-            rect(x + 3, y, 6, 1, col);
-            rect(x + 3, y + 9, 6, 1, col);
+        int sign = flowSign();
+        float dim = moving ? 1F : 0.5F;
+        int xc = shade(xColour(), dim), ec = shade(EU_COL, dim);
+        int x0 = x + 1, x1 = x + GAP_W - 1;
+        if (sign == 0 || (te.getDirection() == TileEntityEnergyConverterSC.DIR_BALANCE && !moving)) {
+            int mid = (x0 + x1) / 2;
+            rect(x0, y, mid - x0, 3, ec);
+            rect(mid, y, x1 - mid, 3, xc);
+            head(x0, y, -1, ec);
+            head(x1 - 1, y, 1, xc);
             return;
         }
-        float t = mc.theWorld == null ? 0 : (mc.theWorld.getTotalWorldTime() % 20 + pt) / 20F;
-        int off = moving ? (int) (t * 6) : 3;
-        for (int i = 0; i < 5; i++) {
-            int len = 5 - Math.abs(2 - i) * 2;
-            int cx = sign > 0 ? x + off + (2 - Math.abs(2 - i)) : x + 11 - off - (2 - Math.abs(2 - i));
-            rect(Math.max(x, Math.min(x + 11, cx)), y + 2 + i, 1, 1, col);
-            if (len > 0) {
-                rect(Math.max(x, Math.min(x + 11, cx - sign)), y + 2 + i, 1, 1, col);
-            }
+        int col = sign > 0 ? xc : ec;
+        rect(x0, y, x1 - x0, 3, col);
+        head(sign > 0 ? x1 - 1 : x0, y, sign, col);
+        if (moving) {
+            float t = mc.theWorld == null ? 0 : (mc.theWorld.getTotalWorldTime() % 20 + pt) / 20F;
+            int run = x1 - x0 - 6, p = (int) (t * run);
+            rect(sign > 0 ? x0 + p : x1 - 2 - p, y + 1, 2, 1, 0xC0FFFFFF);
+        }
+    }
+
+    /** An arrowhead 4 columns deep ending at column `tipX`, pointing `dir` (1 right, -1 left): 3, 5, 7, 9 px high round the bar. */
+    private static void head(int tipX, int y, int dir, int col) {
+        for (int i = 0; i < 4; i++) {
+            rect(tipX - dir * i, y - i, 1, 3 + 2 * i, col);
         }
     }
 
@@ -354,94 +408,52 @@ public class GuiEnergyConverterSC extends GuiContainer {
     @Override
     protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
         Kind k = kind();
+        String u = unit();
         fit(Lang.tr("tile.siliconage.energyConverter.name"), 8, 6, 280, TITLE);
-        fontRendererObj.drawString(Lang.tr("sc.conv.gui.modules"), 8, 20, LABEL);
-        fontRendererObj.drawString(Lang.tr("sc.conv.gui.pair"), TABLE_X, 20, LABEL);
-        fontRendererObj.drawString(Lang.tr("sc.conv.gui.direction"), 150, 20, LABEL);
-        // the pair and direction captions
+        small(Lang.tr("sc.conv.gui.modules"), 8, 20, LEFT_W, LABEL, 1F, 0.7F);
+        fit(Lang.tr("sc.conv.gui.pair"), PAIR_X, 20, DIR_X - PAIR_X - 4, LABEL);
+        fit(Lang.tr("sc.conv.gui.direction"), DIR_X, 20, TABLE_R - DIR_X, LABEL);
+        // the pair and direction buttons, under an unavailable pair what it lacks
         Kind[] kinds = Kind.values();
         for (int i = 0; i < 3; i++) {
             Kind ki = kinds[i];
             boolean sel = k == ki, can = te.pairAvailable(ki);
-            pairBtn[i].set("EU-" + ki.unit, sel ? (ki.colour & 0xFFFFFF) : can ? TEXT : 0x6A6E74, sel, !can && !sel);
+            pairBtn[i].set("EU-" + ki.unit, sel ? (ForeignEnergySC.labelColour(ki) & 0xFFFFFF) : can ? TEXT : 0x6A6E74, sel, !can && !sel);
+            if (!can && !sel) {
+                String why = Lang.tr(ki.modPresent() ? "sc.conv.gui.needcard" : "sc.conv.gui.nomod");
+                smallCentred(why, PAIR_X + i * PAIR_STEP + PAIR_W / 2, CAPTION_Y, PAIR_W + 2, DIM, 0.6F);
+            }
         }
-        String u = unit();
-        String[] dirs = {"EU → " + u, u + " → EU", Lang.tr("sc.conv.gui.balance")};
+        String[] dirs = {"EU→" + u, u + "→EU", Lang.tr("sc.conv.gui.balance")};
         for (int i = 0; i < 3; i++) {
             boolean sel = te.getDirection() == i;
             dirBtn[i].set(dirs[i], sel ? GREEN : TEXT, sel, k == null);
         }
-        // the table
-        int hy = L.rowY0 - 9;
-        fontRendererObj.drawString(Lang.tr("sc.conv.gui.side"), TABLE_X, hy, LABEL);
-        fontRendererObj.drawString(Lang.tr("sc.conv.gui.mode"), MODE_X + 2, hy, LABEL);
-        fontRendererObj.drawString(Lang.tr(filterView ? "sc.conv.gui.filter" : "sc.conv.gui.buffer"), BUF_X + 2, hy, filterView ? ORANGE : LABEL);
-        fontRendererObj.drawString(Lang.tr("sc.conv.gui.neighbour"), NB_X, hy, LABEL);
-        String flowHead = Lang.tr("sc.conv.gui.flow");
-        fontRendererObj.drawString(flowHead, FLOW_R - fontRendererObj.getStringWidth(flowHead), hy, LABEL);
-        for (int r = 0; r < 6; r++) {
-            int s = ROW_SIDE[r], ry = L.rowY0 + r * L.rowStep;
-            int ty = ry + (L.btnH - 8) / 2 + 1;
-            fit(Lang.tr("sc.conv.side." + SIDE_KEYS[s]), TABLE_X, ty, MODE_X - TABLE_X - 2, TEXT);
-            int m = te.getMode(s);
-            modeBtn[s].set(Lang.tr("sc.conv.mode." + m), m == TileEntityEnergyConverterSC.MODE_IN ? GREEN
-                    : m == TileEntityEnergyConverterSC.MODE_OUT ? ORANGE : GREY, false, false);
-            if (filterView) {
-                bufBtn[s].set(filterText(s), ORANGE, false, false);
-            } else if (m == TileEntityEnergyConverterSC.MODE_OFF) {
-                bufBtn[s].set("—", GREY, false, true);
-            } else {
-                int b = te.getBuf(s);
-                String t = b == TileEntityEnergyConverterSC.BUF_AUTO ? Lang.tr("sc.conv.buf.auto") : b == TileEntityEnergyConverterSC.BUF_EU ? "EU" : u;
-                int c = b == TileEntityEnergyConverterSC.BUF_AUTO ? TITLE : b == TileEntityEnergyConverterSC.BUF_EU ? (EU_COL & 0xFFFFFF) : (xColour() & 0xFFFFFF);
-                bufBtn[s].set(t, c, false, false);
-            }
-            fit(neighbour(s), NB_X, ty, NB_W, LABEL);
-            String flow = m == TileEntityEnergyConverterSC.MODE_OFF ? "—" : sideFlow(s);
-            int fw = Math.min(fontRendererObj.getStringWidth(flow), FLOW_R - NB_X - NB_W - 2);
-            fit(flow, FLOW_R - fw, ty, FLOW_R - NB_X - NB_W - 2, te.statSide(s) > 0 ? GREEN : te.statSide(s) < 0 ? ORANGE : TEXT);
+        table(k, u);
+        for (int i = 0; i < 3; i++) {
+            allBtn[i].set(Lang.tr("sc.conv.gui.all." + i), TEXT, false, false);
         }
-        // now, throughput, buffers
-        double rate = te.rate();
-        int loss = te.lossPercent();
-        String rateText = rate(rate);
-        String now;
-        if (k == null) {
-            now = Lang.tr("sc.conv.gui.nopair");
-        } else if (te.statConvEu() > 0) {
-            now = Lang.tr("sc.conv.gui.now", num(te.statConvEu()) + " EU/t", num(Math.abs(te.statConvX())) + " " + u + "/t", rateText, String.valueOf(loss));
-        } else if (te.statConvEu() < 0) {
-            now = Lang.tr("sc.conv.gui.now", num(Math.abs(te.statConvX())) + " " + u + "/t", num(-te.statConvEu()) + " EU/t", rateText, String.valueOf(loss));
-        } else {
-            now = Lang.tr("sc.conv.gui.idle", rateText, String.valueOf(loss));
-        }
-        fit(now, TABLE_X, L.nowY, GAUGE_EU_X - TABLE_X - 4, TEXT);
-        int thr = te.throughput();
-        String thrText = k == null ? Lang.tr("sc.conv.gui.thr.eu", num(thr), big(te.getMaxEnergyStored()))
-                : Lang.tr("sc.conv.gui.thr", num(thr), num(Math.round(thr * rate)) + " " + u, big(te.getMaxEnergyStored()), big(te.foreignCapacity()) + " " + u);
-        fit(thrText, TABLE_X, L.thrY, GAUGE_EU_X - TABLE_X - 4, DIM);
+        status(k, u);
         if (L.graphH > 0) {
-            small(Lang.tr("sc.conv.gui.graph"), TABLE_X + 3, L.graphY + 2, 80, DIM);
+            small(Lang.tr("sc.conv.gui.graph"), GRAPH_X + 3, L.graphY + 2, 80, DIM, 0.6F, 0.5F);
         }
-        // the gauges' captions
-        centred("EU", GAUGE_EU_X, 21, GAUGE_W, EU_COL & 0xFFFFFF);
-        centred(u, GAUGE_X_X, 21, GAUGE_W, xColour() & 0xFFFFFF);
+        // the gauges' captions, numbers under them, the loss under the arrow
+        centred("EU", GAUGE_EU_X - 4, 18, GAUGE_W + 8, EU_COL & 0xFFFFFF);
+        centred(k == null ? "—" : u, GAUGE_X_X - 4, 18, GAUGE_W + 8, xColour() & 0xFFFFFF);
         gaugeText(GAUGE_EU_X, te.getEnergyStored(), te.getMaxEnergyStored(), "EU", te.statEuPlus(), te.statEuMinus());
         if (k != null) {
             gaugeText(GAUGE_X_X, te.getForeign(), te.foreignCapacity(), u, te.statXPlus(), te.statXMinus());
+            smallCentred("−" + te.lossPercent() + "%", GAP_X + GAP_W / 2, arrowY() + 7, GAP_W, 0xFF9696, 0.75F);
         } else {
             centred("—", GAUGE_X_X, L.gaugeY + L.gaugeH + 2, GAUGE_W, GREY);
-        }
-        if (k != null) {
-            String lossText = "−" + loss + "%";
-            small(lossText, 297, L.gaugeY + L.gaugeH / 2 + 8, 14, RED);
         }
         if (!te.isPowerOn()) {
             rect(GAUGE_EU_X + 2, L.gaugeY + 2, GAUGE_X_X + GAUGE_W - GAUGE_EU_X - 4, L.gaugeH - 4, 0xA0000000);
             centred(Lang.tr("sc.gui.power.label"), GAUGE_EU_X, L.gaugeY + L.gaugeH / 2 - 4, GAUGE_X_X + GAUGE_W - GAUGE_EU_X, 0xB0B8C4);
         }
         // left: the charge slot, the summary
-        fontRendererObj.drawString(Lang.tr("sc.conv.gui.charge"), 8, L.chargeLabelY, LABEL);
+        int loss = te.lossPercent();
+        small(Lang.tr("sc.conv.gui.charge"), 8, L.chargeLabelY, LEFT_W, LABEL, 1F, 0.7F);
         small(Lang.tr("sc.conv.gui.sum.tier", te.workTier().name()), 8, L.sumY, 44, LABEL);
         small(Lang.tr("sc.conv.gui.sum.packets", te.packets()), 8, L.sumY + 7, 44, LABEL);
         small(Lang.tr("sc.conv.gui.sum.loss", loss), 8, L.sumY + 14, 44, LABEL);
@@ -465,32 +477,91 @@ public class GuiEnergyConverterSC extends GuiContainer {
         prioBtn.set(Lang.tr("sc.conv.gui.priority", first), TEXT, false, false);
         filterBtn.set(Lang.tr("sc.conv.gui.filterbtn"), filterView ? ORANGE : TEXT, filterView, false);
         compBtn.set(Lang.tr("sc.conv.gui.comparator", te.getComparatorOf() == TileEntityEnergyConverterSC.COMP_EU ? "EU" : u), TEXT, false, false);
-        List<String> hint = fontRendererObj.listFormattedStringToWidth(Lang.tr("sc.conv.hint.dir." + te.getDirection(), u), RIGHT_W);
-        for (int i = 0; i < Math.min(2, hint.size()); i++) {
-            fontRendererObj.drawString(hint.get(i), RIGHT_X, L.hintY + i * L.hintStep, DIM);
+        small(Lang.tr("sc.conv.gui.hoverhint"), RIGHT_X, L.hintY, RIGHT_W, DIM, 0.75F, 0.6F);
+    }
+
+    /** The faces' table: the header (measured columns), six rows, the neighbour's energy square. */
+    private void table(Kind k, String u) {
+        String[] flows = new String[6];
+        String flowHead = Lang.tr("sc.conv.gui.flow");
+        int flowW = fontRendererObj.getStringWidth(flowHead);
+        for (int s = 0; s < 6; s++) {
+            flows[s] = te.getMode(s) == TileEntityEnergyConverterSC.MODE_OFF ? "—" : sideFlow(s);
+            flowW = Math.max(flowW, fontRendererObj.getStringWidth(flows[s]));
         }
-        if (k != null) {
-            fit(Lang.tr("sc.conv.hint.swap", u, String.valueOf(loss)), RIGHT_X, L.swapY, RIGHT_W, DIM);
+        flowW = Math.min(36, flowW);
+        int nbTextX = nbX + SQUARE + 2, nbTextW = TABLE_R - flowW - 3 - nbTextX;
+        int hy = L.rowY0 - 9;
+        fit(Lang.tr("sc.conv.gui.side"), TABLE_X, hy, modeX - TABLE_X - 1, LABEL);
+        centred(Lang.tr("sc.conv.gui.mode"), modeX, hy, MODE_W, LABEL);
+        centred(Lang.tr(filterView ? "sc.conv.gui.filter" : "sc.conv.gui.buffer"), bufX - 1, hy, BUF_W + 3, filterView ? ORANGE : LABEL);
+        fit(Lang.tr("sc.conv.gui.neighbour"), nbX, hy, TABLE_R - flowW - 3 - nbX, LABEL);
+        int fhw = Math.min(fontRendererObj.getStringWidth(flowHead), flowW);
+        fit(flowHead, TABLE_R - fhw, hy, flowW, LABEL);
+        for (int r = 0; r < 6; r++) {
+            int s = ROW_SIDE[r], ry = L.rowY0 + r * L.rowStep;
+            int ty = ry + (L.btnH - 8) / 2 + 1;
+            fit(Lang.tr("sc.conv.side." + SIDE_KEYS[s]), TABLE_X, ty, modeX - TABLE_X - 2, TEXT);
+            int m = te.getMode(s);
+            modeBtn[s].set(Lang.tr("sc.conv.mode." + m), m == TileEntityEnergyConverterSC.MODE_IN ? GREEN
+                    : m == TileEntityEnergyConverterSC.MODE_OUT ? ORANGE : GREY, false, false);
+            if (filterView) {
+                bufBtn[s].set(filterText(s), ORANGE, false, false);
+            } else if (m == TileEntityEnergyConverterSC.MODE_OFF) {
+                bufBtn[s].set("—", GREY, false, true);
+            } else {
+                int b = te.getBuf(s);
+                String t = b == TileEntityEnergyConverterSC.BUF_AUTO ? Lang.tr("sc.conv.buf.auto") : b == TileEntityEnergyConverterSC.BUF_EU ? "EU" : u;
+                int c = b == TileEntityEnergyConverterSC.BUF_AUTO ? TITLE : b == TileEntityEnergyConverterSC.BUF_EU ? (EU_COL & 0xFFFFFF) : (xColour() & 0xFFFFFF);
+                bufBtn[s].set(t, c, false, false);
+            }
+            Nb nb = neighbour(s);
+            if (nb.colour != 0) {
+                int sy = ry + (L.btnH - SQUARE) / 2;
+                rect(nbX, sy, SQUARE, SQUARE, 0xFF15181C);
+                rect(nbX + 1, sy + 1, SQUARE - 2, SQUARE - 2, nb.colour);
+                rect(nbX + 1, sy + 1, SQUARE - 2, 1, 0x50FFFFFF);
+            }
+            small(nb.text, nbTextX, ty, nbTextW, LABEL, 1F, 0.65F, true);
+            int fw = Math.min(fontRendererObj.getStringWidth(flows[s]), flowW);
+            fit(flows[s], TABLE_R - fw, ty, flowW, te.statSide(s) > 0 ? GREEN : te.statSide(s) < 0 ? ORANGE : TEXT);
         }
+    }
+
+    /** Under the table: what is converted now; the rate, the loss and the throughput (smaller, dim). */
+    private void status(Kind k, String u) {
+        int maxW = GAUGE_EU_X - 4 - TABLE_X;
+        String now;
+        if (k == null) {
+            now = Lang.tr("sc.conv.gui.nopair");
+        } else if (te.statConvEu() > 0) {
+            now = Lang.tr("sc.conv.gui.now", num(te.statConvEu()) + " EU/t", num(Math.abs(te.statConvX())) + " " + u + "/t");
+        } else if (te.statConvEu() < 0) {
+            now = Lang.tr("sc.conv.gui.now", num(Math.abs(te.statConvX())) + " " + u + "/t", num(-te.statConvEu()) + " EU/t");
+        } else {
+            now = Lang.tr("sc.conv.gui.idle");
+        }
+        fit(now, TABLE_X, L.nowY, maxW, TEXT);
+        String info = k == null ? Lang.tr("sc.conv.gui.info.eu", num(te.throughput()))
+                : Lang.tr("sc.conv.gui.info", rate(te.rate()), String.valueOf(te.lossPercent()), num(te.throughput()));
+        small(info, TABLE_X, L.infoY, maxW, DIM, 0.75F, 0.6F);
     }
 
     private void centred(String t, int x, int y, int w, int col) {
         TextFitSC.drawCentered(fontRendererObj, t, x, y, w, col, false, guiLeft, guiTop);
     }
 
-    /** Under a gauge: %, the amount, of the capacity, + in, - out a tick. */
+    /** Under a gauge: the amount, of the capacity, + in, - out a tick (the % is in the gauge's window). */
     private void gaugeText(int gx, double v, double cap, String unit, int plus, int minus) {
-        int y = L.gaugeY + L.gaugeH + 2, cx = gx + GAUGE_W / 2, w = 36;
-        String pct = (cap <= 0 ? 0 : Math.round(100 * v / cap)) + "%";
-        centred(pct, cx - w / 2, y, w, 0xFFFFFF);
-        smallCentred(big(v), cx, y + 9, w, TEXT);
-        smallCentred("/ " + big(cap) + " " + unit, cx, y + 16, w, DIM);
-        smallCentred("+" + num(plus) + "/t", cx, y + 23, w, GREEN);
-        smallCentred("−" + num(minus) + "/t", cx, y + 30, w, ORANGE);
+        int y = L.gaugeY + L.gaugeH + 2, cx = gx + GAUGE_W / 2, w = GAUGE_TEXT_W;
+        smallCentred(big(v), cx, y, w, TEXT, 0.75F);
+        smallCentred("/ " + big(cap), cx, y + 6, w, DIM, 0.75F);
+        smallCentred("+" + num(plus) + "/t", cx, y + 12, w, GREEN, 0.75F);
+        smallCentred("−" + num(minus) + "/t", cx, y + 18, w, ORANGE, 0.75F);
     }
 
-    private void smallCentred(String t, int cx, int y, int maxW, int col) {
-        float k = Math.min(0.75F, maxW / (float) Math.max(1, fontRendererObj.getStringWidth(t)));
+    private void smallCentred(String t, int cx, int y, int maxW, int col, float scale) {
+        float k = Math.min(scale, maxW / (float) Math.max(1, fontRendererObj.getStringWidth(t)));
         int w = (int) (fontRendererObj.getStringWidth(t) * k);
         GL11.glPushMatrix();
         GL11.glTranslatef(cx - w / 2F, y, 0F);
@@ -520,35 +591,66 @@ public class GuiEnergyConverterSC extends GuiContainer {
     private static final Map<Class<?>, Integer> KINDS = new HashMap<Class<?>, Integer>();
     private static final int K_EU = 1, K_RF = 2, K_J = 4, K_GJ = 8, K_IC2_CABLE = 16;
 
+    /** A neighbour cell: its text and the colour of its square (0 - no square: nothing there). */
+    private static final class Nb {
+        final String text;
+        final int colour;
+
+        Nb(String text, int colour) {
+            this.text = text;
+            this.colour = colour;
+        }
+    }
+
+    /**
+     * The colour of the energy a neighbour speaking `kinds` (K_* bits) gets from this converter: the pair's
+     * energy if it speaks it, else EU, else the first other energy it speaks; none - grey.
+     */
+    private int kindColour(int kinds) {
+        Kind pair = kind();
+        if (pair != null && (kinds & K_RF << pair.ordinal()) != 0) {
+            return ForeignEnergySC.labelColour(pair);
+        }
+        if ((kinds & K_EU) != 0) {
+            return EU_COL;
+        }
+        for (Kind k : Kind.values()) {
+            if ((kinds & K_RF << k.ordinal()) != 0) {
+                return ForeignEnergySC.labelColour(k);
+            }
+        }
+        return NONE_COL;
+    }
+
     /** What the neighbour beside face `s` is: the mod's cable and its tier, an IC2 cable, or the mod and the energies it speaks. */
-    private String neighbour(int s) {
+    private Nb neighbour(int s) {
         ForgeDirection d = ForgeDirection.getOrientation(s);
         int nx = te.xCoord + d.offsetX, ny = te.yCoord + d.offsetY, nz = te.zCoord + d.offsetZ;
         if (te.getWorldObj() == null || !te.getWorldObj().blockExists(nx, ny, nz)) {
-            return "—";
+            return new Nb("—", 0);
         }
         TileEntity n = te.getWorldObj().getTileEntity(nx, ny, nz);
         if (n == null) {
-            return "—";
+            return new Nb("—", 0);
         }
         if (n instanceof com.sc.tileentity.TileEntityConduitBundleSC) {
             com.sc.energy.CableType c = ((com.sc.tileentity.TileEntityConduitBundleSC) n).getCable();
-            return c == null ? Lang.tr("sc.conv.n.noenergy", "Silicon Age") : Lang.tr("sc.conv.n.cable", c.tier.name());
+            return c == null ? new Nb(Lang.tr("sc.conv.n.noenergy", "Silicon Age"), NONE_COL) : new Nb(Lang.tr("sc.conv.n.cable", c.tier.name()), EU_COL);
         }
         if (n instanceof com.sc.tileentity.TileEntityCableSC && ((com.sc.tileentity.TileEntityCableSC) n).getCableType() != null) {
-            return Lang.tr("sc.conv.n.cable", ((com.sc.tileentity.TileEntityCableSC) n).getCableType().tier.name());
+            return new Nb(Lang.tr("sc.conv.n.cable", ((com.sc.tileentity.TileEntityCableSC) n).getCableType().tier.name()), EU_COL);
         }
         if (n instanceof com.sc.energy.TileEntityEnergyBase) {
-            return Lang.tr("sc.conv.n.ours", n.getBlockType() == null ? "?" : new ItemStack(n.getBlockType(), 1,
-                    n.getBlockType().damageDropped(te.getWorldObj().getBlockMetadata(nx, ny, nz))).getDisplayName());
+            return new Nb(Lang.tr("sc.conv.n.ours", n.getBlockType() == null ? "?" : new ItemStack(n.getBlockType(), 1,
+                    n.getBlockType().damageDropped(te.getWorldObj().getBlockMetadata(nx, ny, nz))).getDisplayName()), EU_COL);
         }
         int kinds = kindsOf(n.getClass());
         String mod = modName(n);
         if ((kinds & K_IC2_CABLE) != 0) {
-            return Lang.tr("sc.conv.n.ic2cable", mod);
+            return new Nb(Lang.tr("sc.conv.n.ic2cable", mod), EU_COL);
         }
         if ((kinds & 15) == 0) {
-            return Lang.tr("sc.conv.n.noenergy", mod);
+            return new Nb(Lang.tr("sc.conv.n.noenergy", mod), NONE_COL);
         }
         StringBuilder sb = new StringBuilder();
         String[] names = {"EU", "RF", "J", "gJ"};
@@ -557,7 +659,7 @@ public class GuiEnergyConverterSC extends GuiContainer {
                 sb.append(sb.length() == 0 ? "" : "/").append(names[i]);
             }
         }
-        return mod + " · " + sb;
+        return new Nb(mod + " · " + sb, kindColour(kinds));
     }
 
     /** The energies a tile class speaks, by its interfaces' names (no other mod's class is loaded for it). */
@@ -640,16 +742,22 @@ public class GuiEnergyConverterSC extends GuiContainer {
         Kind k = kind();
         String u = unit();
         for (int i = 0; i < 3; i++) {
-            if (over(pairBtn[i], mx, my)) {
+            boolean caption = GuiGaugeSC.isOver(PAIR_X + i * PAIR_STEP, CAPTION_Y, PAIR_W, 6, mx, my) && !te.pairAvailable(Kind.values()[i]);
+            if (over(pairBtn[i], mx, my) || caption) {
                 Kind ki = Kind.values()[i];
                 l.add(Lang.tr("sc.conv.tip.pair", ki.unit, rate(ki.perEu())));
                 if (!ki.modPresent()) {
                     l.add("§c" + Lang.tr("sc.conv.tip.pair.nomod." + ki.name().toLowerCase(java.util.Locale.ROOT)));
+                    if (ki != Kind.RF) {
+                        l.add("§7" + Lang.tr("sc.conv.tip.pair.card." + ki.name().toLowerCase(java.util.Locale.ROOT)));
+                    }
                 } else if (!te.pairAvailable(ki)) {
                     l.add("§e" + Lang.tr("sc.conv.tip.pair.card." + ki.name().toLowerCase(java.util.Locale.ROOT)));
                 }
-                if (k != null && ki != k && te.getForeign() > 0) {
-                    l.add("§7" + Lang.tr("sc.conv.tip.pair.refund", num(Math.round(te.getForeign())) + " " + u, num(te.refundPreview())));
+                if (k != null && ki != k) {
+                    l.add("§7" + (te.getForeign() > 0
+                            ? Lang.tr("sc.conv.tip.pair.refund", num(Math.round(te.getForeign())) + " " + u, num(te.refundPreview()))
+                            : Lang.tr("sc.conv.hint.swap", u, String.valueOf(te.lossPercent()))));
                 }
                 return l;
             }
@@ -659,6 +767,19 @@ public class GuiEnergyConverterSC extends GuiContainer {
                 l.add(Lang.tr("sc.conv.hint.dir." + i, u));
                 return l;
             }
+        }
+        for (int i = 0; i < 3; i++) {
+            if (over(allBtn[i], mx, my)) {
+                l.add(Lang.tr("sc.conv.tip.all." + i));
+                return l;
+            }
+        }
+        if (GuiGaugeSC.isOver(TABLE_X, L.rowY0 - 10, TABLE_R - TABLE_X, 9, mx, my)) {
+            l.add(Lang.tr("sc.conv.tip.table.1"));
+            l.add("§7" + Lang.tr("sc.conv.tip.table.2"));
+            l.add("§7" + Lang.tr("sc.conv.tip.table.3", u));
+            l.add("§7" + Lang.tr("sc.conv.tip.table.4"));
+            return l;
         }
         for (int s = 0; s < 6; s++) {
             if (over(modeBtn[s], mx, my)) {
@@ -680,16 +801,17 @@ public class GuiEnergyConverterSC extends GuiContainer {
                 return l;
             }
         }
-        if (GuiGaugeSC.isOver(GAUGE_EU_X, L.gaugeY, GAUGE_W, L.gaugeH, mx, my)) {
-            l.add("EU: " + num(te.getEnergyStored()) + " / " + num(te.getMaxEnergyStored()));
+        int gaugeH = L.gaugeH + 2 + 24;
+        if (GuiGaugeSC.isOver(GAUGE_EU_X, L.gaugeY, GAUGE_W, gaugeH, mx, my)) {
+            gaugeTip(l, "EU", te.getEnergyStored(), te.getMaxEnergyStored());
             l.add("§a+" + num(te.statEuPlus()) + " EU/t  §6−" + num(te.statEuMinus()) + " EU/t");
             return l;
         }
-        if (GuiGaugeSC.isOver(GAUGE_X_X, L.gaugeY, GAUGE_W, L.gaugeH, mx, my)) {
+        if (GuiGaugeSC.isOver(GAUGE_X_X, L.gaugeY, GAUGE_W, gaugeH, mx, my)) {
             if (k == null) {
                 l.add(Lang.tr("sc.conv.gui.nopair"));
             } else {
-                l.add(u + ": " + num(Math.round(te.getForeign())) + " / " + num(Math.round(te.foreignCapacity())));
+                gaugeTip(l, u, te.getForeign(), te.foreignCapacity());
                 l.add("§a+" + num(te.statXPlus()) + " " + u + "/t  §6−" + num(te.statXMinus()) + " " + u + "/t");
                 if (!te.pairActive()) {
                     l.add("§c" + Lang.tr("sc.conv.tip.blocked"));
@@ -697,8 +819,14 @@ public class GuiEnergyConverterSC extends GuiContainer {
             }
             return l;
         }
-        if (GuiGaugeSC.isOver(293, L.gaugeY + L.gaugeH / 2 - 6, 14, 22, mx, my)) {
+        if (k != null && GuiGaugeSC.isOver(GAP_X, arrowY() - 4, GAP_W, 18, mx, my)) {
             l.add(Lang.tr("sc.conv.tip.arrow", rate(te.rate()), u, te.lossPercent()));
+            return l;
+        }
+        if (GuiGaugeSC.isOver(TABLE_X, L.nowY, GAUGE_EU_X - 4 - TABLE_X, L.infoY + 7 - L.nowY, mx, my)) {
+            int thr = te.throughput();
+            l.add(k == null ? Lang.tr("sc.conv.gui.thr.eu", num(thr), big(te.getMaxEnergyStored()))
+                    : Lang.tr("sc.conv.gui.thr", num(thr), num(Math.round(thr * te.rate())) + " " + u, big(te.getMaxEnergyStored()), big(te.foreignCapacity()) + " " + u));
             return l;
         }
         if (over(prioBtn, mx, my)) {
@@ -739,6 +867,12 @@ public class GuiEnergyConverterSC extends GuiContainer {
             return l;
         }
         return null;
+    }
+
+    /** A gauge's tooltip head: the buffer, how much of how much, the percentage. */
+    private static void gaugeTip(List<String> l, String unit, double v, double cap) {
+        l.add(Lang.tr("sc.conv.tip.gauge", unit, num(Math.round(v)) + " / " + num(Math.round(cap)) + " " + unit,
+                String.valueOf(Math.round(100 * level(v, cap)))));
     }
 
     private boolean over(GuiButton b, int mx, int my) {

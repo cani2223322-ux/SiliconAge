@@ -35,7 +35,13 @@ public final class GuiEnergyGaugeSC {
 
     public static void draw(int x, int y, int w, int h, float level) {
         level = Math.max(0F, Math.min(1F, level));
-        int c = colour(level);
+        draw(x, y, w, h, level, colour(level));
+    }
+
+    /** The same gauge lit in a given colour (ARGB) instead of the charge colour - the Energy Converter's energies. */
+    public static void draw(int x, int y, int w, int h, float level, int c) {
+        level = Math.max(0F, Math.min(1F, level));
+        c |= 0xFF000000;
         // ---- the frame: a vertical steel gradient, bevels, outline, rivets
         gradient(x, y, w, h, 0xFFAAB0BA, 0xFF747A84);
         rect(x + 1, y + 1, w - 2, 1, 0xFFD0D6E0);

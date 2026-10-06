@@ -20,7 +20,7 @@ public class ContainerEnergyConverterSC extends Container {
     public static final int CHARGE_X = 19, CHARGE_Y = 102, MOD_X = 9, MOD_Y = 30, MOD_STEP = 20, INV_X = 9, INV_Y = 183, HOTBAR_Y = 241;
     /** Buttons (sendEnchantPacket ids - a byte). */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_PAIR = 20, BTN_DIR = 30, BTN_MODE = 40, BTN_BUF = 50, BTN_FILTER = 60,
-            BTN_PRIORITY = 70, BTN_COMPARATOR = 72;
+            BTN_PRIORITY = 70, BTN_COMPARATOR = 72, BTN_ALL = 75;
 
     private final TileEntityEnergyConverterSC te;
     private final IntSyncSC sync = new IntSyncSC(TileEntityEnergyConverterSC.SYNC_COUNT);
@@ -152,6 +152,10 @@ public class ContainerEnergyConverterSC extends Container {
         }
         if (id == BTN_COMPARATOR) {
             te.cycleComparator();
+            return true;
+        }
+        if (id >= BTN_ALL && id <= BTN_ALL + TileEntityEnergyConverterSC.ALL_AUTO) {
+            te.setAllFaces(id - BTN_ALL);
             return true;
         }
         return false;

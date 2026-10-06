@@ -36,6 +36,8 @@ final class SelfTestConverterSC {
         modules();
         availability();
         sidesNbt();
+        allFaces();
+        palette();
         itemNbt();
         conversionTick();
         rfWhole();
@@ -339,6 +341,68 @@ final class SelfTestConverterSC {
     }
 
     /** The faces' modes, buffers, filters and the other settings survive writeToNBT / readFromNBT. */
+    /** The screen's "Все: Вход / Выход / Авто": every face's mode (and for Авто the buffer); a bad action changes nothing. */
+    private static void allFaces() {
+        TileEntityEnergyConverterSC te = TileEntityEnergyConverterSC.create();
+        te.setMode(2, TileEntityEnergyConverterSC.MODE_OFF);
+        te.setBuf(3, TileEntityEnergyConverterSC.BUF_EU);
+        te.setAllFaces(TileEntityEnergyConverterSC.ALL_OUT);
+        boolean out = true;
+        for (int s = 0; s < 6; s++) {
+            out &= te.getMode(s) == TileEntityEnergyConverterSC.MODE_OUT;
+        }
+        out &= te.getBuf(3) == TileEntityEnergyConverterSC.BUF_EU;
+        te.setAllFaces(TileEntityEnergyConverterSC.ALL_IN);
+        boolean in = true;
+        for (int s = 0; s < 6; s++) {
+            in &= te.getMode(s) == TileEntityEnergyConverterSC.MODE_IN;
+        }
+        in &= te.getBuf(3) == TileEntityEnergyConverterSC.BUF_EU;
+        te.setAllFaces(TileEntityEnergyConverterSC.ALL_AUTO);
+        boolean auto = true;
+        for (int s = 0; s < 6; s++) {
+            auto &= te.getMode(s) == TileEntityEnergyConverterSC.MODE_OUT && te.getBuf(s) == TileEntityEnergyConverterSC.BUF_AUTO;
+        }
+        te.setMode(0, TileEntityEnergyConverterSC.MODE_OFF);
+        te.setAllFaces(7);
+        te.setAllFaces(-1);
+        boolean bad = te.getMode(0) == TileEntityEnergyConverterSC.MODE_OFF && te.getMode(1) == TileEntityEnergyConverterSC.MODE_OUT;
+        check(out && in && auto && bad, "all faces: out " + out + ", in " + in + ", auto " + auto + ", bad action ignored " + bad);
+    }
+
+    /** The screen's energy colours (variant C2): each energy's hue, a step brighter every quarter, clamped, grey without a kind. */
+    private static void palette() {
+        StringBuilder bad = new StringBuilder();
+        int[][] want = {{0xFF5A1414, 0xFF8C1E1E, 0xFFB42828, 0xFFE63C3C}, {0xFF17375A, 0xFF25558C, 0xFF2F6DB4, 0xFF3C8CE6},
+                {0xFF174E27, 0xFF257A3D, 0xFF2F9C4E, 0xFF3CC864}};
+        double[] at = {0.0, 0.1, 0.249, 0.25, 0.49, 0.5, 0.74, 0.75, 0.99, 1.0};
+        int[] step = {0, 0, 0, 1, 1, 2, 2, 3, 3, 3};
+        for (Kind k : Kind.values()) {
+            int prevBright = -1;
+            for (int i = 0; i < at.length; i++) {
+                int c = ForeignEnergySC.gaugeColour(k, at[i]);
+                if (c != want[k.ordinal()][step[i]]) {
+                    bad.append(' ').append(k.unit).append('@').append(at[i]).append('=').append(Integer.toHexString(c));
+                }
+                int bright = ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255);
+                if (bright < prevBright || (c >>> 24) != 0xFF) {
+                    bad.append(' ').append(k.unit).append(" darker/transparent at ").append(at[i]);
+                }
+                prevBright = bright;
+            }
+            if (ForeignEnergySC.gaugeColour(k, -3) != want[k.ordinal()][0] || ForeignEnergySC.gaugeColour(k, 7) != want[k.ordinal()][3]
+                    || ForeignEnergySC.gaugeColour(k, Double.NaN) != want[k.ordinal()][0] || ForeignEnergySC.labelColour(k) != want[k.ordinal()][3]) {
+                bad.append(' ').append(k.unit).append(" clamp/label");
+            }
+        }
+        int rf = ForeignEnergySC.labelColour(Kind.RF), j = ForeignEnergySC.labelColour(Kind.J), gj = ForeignEnergySC.labelColour(Kind.GJ);
+        boolean hues = ((rf >> 16) & 255) > (rf & 255) && (j & 255) > ((j >> 16) & 255) && ((gj >> 8) & 255) > ((gj >> 16) & 255);
+        if (ForeignEnergySC.gaugeColour(null, 0.5) != ForeignEnergySC.NO_KIND_COLOUR || !hues) {
+            bad.append(" null/hues");
+        }
+        check(bad.length() == 0, "palette: RF red, J blue, gJ green by quarters" + bad);
+    }
+
     private static void sidesNbt() {
         TileEntityEnergyConverterSC a = TileEntityEnergyConverterSC.create();
         a.setMode(0, TileEntityEnergyConverterSC.MODE_OFF);
@@ -463,6 +527,11 @@ final class SelfTestConverterSC {
                         bad.append(" cyrillic:").append(k);
                     }
                 }
+            }
+        }
+        for (String k : ru.keySet()) {
+            if ((k.startsWith("sc.conv.gui.") || k.startsWith("sc.conv.hint.") || k.startsWith("sc.conv.tip.")) && ru.get(k).matches(".*[\u00AB\u00BB].*")) {
+                bad.append(" guillemets:").append(k);
             }
         }
         String[] must = {"tile.siliconage.energyConverter.name", "item.siliconage.converterModule.card_galacticraft.name", "sc.conv.tooltip.noforeign",
