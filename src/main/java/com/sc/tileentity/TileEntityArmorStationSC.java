@@ -439,10 +439,13 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         if (worldObj.getTotalWorldTime() % WINDOW_EVERY == 0) {
             refreshWindows();
         }
+        if (worldObj.getTotalWorldTime() % COOL_EVERY == 0) {
+            coolSlots();                                   // БР-4: the pieces in the slots cool, switched on or not
+        }
         if (worldObj.getTotalWorldTime() % EVERY != 0) {
             return;
         }
-        List<EntityPlayer> on = standing();
+        List<EntityPlayer> on = served(standing());
         players = on.size();
         if (!switchedOn()) {
             status = ST_OFF;
@@ -506,6 +509,47 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     public List<EntityPlayer> standing() {
         AxisAlignedBB box = AxisAlignedBB.getBoundingBox(xCoord, yCoord + 1, zCoord, xCoord + 1, yCoord + 1.5, zCoord + 1);
         return worldObj.getEntitiesWithinAABB(EntityPlayer.class, box);
+    }
+
+    /** Ticks between two coolings of the pieces in the armour slots (once a second). */
+    public static final int COOL_EVERY = 20;
+    /** Ticks between two "private field" messages to a stranger standing on the station. */
+    public static final int DENIED_MSG_EVERY = 200;
+
+    /**
+     * БР-1: the players the station serves - those the private field covering it (if any) lets in:
+     * its owner and access list. The station has no owner of its own, so without a private field
+     * it serves everyone. A refused player is told whose field it is now and then (not every round).
+     */
+    public List<EntityPlayer> served(List<EntityPlayer> on) {
+        List<EntityPlayer> out = new java.util.ArrayList<EntityPlayer>(on.size());
+        for (EntityPlayer p : on) {
+            com.sc.tileentity.TileEntityFieldGeneratorSC f = com.sc.ShieldEventHandler.privateFieldAgainst(worldObj, p, xCoord, yCoord, zCoord);
+            if (f == null) {
+                out.add(p);
+                continue;
+            }
+            long now = worldObj.getTotalWorldTime(), last = p.getEntityData().getLong("scStationDenied");
+            if (now - last >= DENIED_MSG_EVERY || now < last) {
+                p.getEntityData().setLong("scStationDenied", now);
+                p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.private", f.getOwner()));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * БР-4: a piece lying in an armour slot sheds its suit's heatDissipation a second (the heat
+     * lives on the chestplate, NBT "HeatSC"), as one in the inventory does (ItemArmorSC.coolOneSecond).
+     */
+    private void coolSlots() {
+        boolean changed = false;
+        for (int i = 0; i < SLOTS; i++) {
+            changed |= ItemArmorSC.coolOneSecond(slots[i]);
+        }
+        if (changed) {
+            markDirty();
+        }
     }
 
     private void setActive(boolean on) {

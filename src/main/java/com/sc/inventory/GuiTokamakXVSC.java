@@ -183,7 +183,7 @@ public class GuiTokamakXVSC extends GuiContainer {
     }
 
     private int normHeat() {
-        return 600 + 100 * gen.upgradeCount(UpgradeType.OVERDRIVE) + (gen.isShielded() ? TileEntityGeneratorSC.SHIELDED_HEAT : 0);
+        return gen.runningHeat(600);
     }
 
     /** Seconds a port gas lasts at the running rate (argon: how many soft stops). */

@@ -447,18 +447,35 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         if (!world.isRemote) {
             com.sc.util.SingularLevel.clearSync(stack);      // СБ-2: not worn (main inventory) - no set bonus (Р4)
         }
-        if (world.isRemote || armorType != 1 || entity.ticksExisted % 20 != 0 || !stack.hasTagCompound()) {
+        if (world.isRemote || armorType != 1 || entity.ticksExisted % 20 != 0) {
             return;
         }
+        coolOneSecond(stack);
+    }
+
+    /**
+     * One second of passive cooling for a piece not worn (in the inventory, in a station's armour slot -
+     * БР-4): the heat ("HeatSC", kept on the chestplate) drops by the suit's heatDissipation, and at
+     * half the capacity or below the chips come back on. @return whether the piece's NBT changed
+     */
+    public static boolean coolOneSecond(ItemStack stack) {
+        if (stack == null || !(stack.getItem() instanceof ItemArmorSC) || !stack.hasTagCompound()) {
+            return false;
+        }
+        ArmorSuit suit = ((ItemArmorSC) stack.getItem()).getSuit();
         NBTTagCompound root = stack.getTagCompound();
         int heat = root.getInteger("HeatSC");
+        boolean changed = false;
         if (heat > 0) {
             heat = Math.max(0, heat - suit.heatDissipation);
             root.setInteger("HeatSC", heat);
+            changed = true;
         }
         if (root.getBoolean("ChipsOffSC") && heat * 100 / suit.heatCapacity <= 50) {
             root.setBoolean("ChipsOffSC", false);
+            changed = true;
         }
+        return changed;
     }
 
     @Override

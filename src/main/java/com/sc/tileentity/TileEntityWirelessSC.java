@@ -249,6 +249,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             unregister();
             holdChunk(false);
         }
+        quantumCached = null;
         super.invalidate();
     }
 
@@ -257,6 +258,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         if (worldObj != null && !worldObj.isRemote) {
             unregister();
         }
+        quantumCached = null;
         super.onChunkUnload();
     }
 
@@ -272,20 +274,40 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         return p;
     }
 
+    /** Э-3: the other half found last time (server only, not saved) - checked again each tick instead of a registry scan. */
+    private TileEntityWirelessSC quantumCached;
+
     /** The other half's translator: the same pair, the other half, a live crystal. */
     private TileEntityWirelessSC quantumPartner() {
         ItemStack mine = slots[SLOT_CRYSTAL];
         long pair = ItemEntangledCrystalSC.pairOf(mine);
         if (pair == 0) {
+            quantumCached = null;
             return null;
         }
+        TileEntityWirelessSC c = quantumCached;
+        if (c != null && LOADED.get(c.id) == c && isQuantumPartner(c, pair, mine)) {
+            return c;                                     // still registered (loaded), still the other half of this pair
+        }
+        quantumCached = null;
         for (TileEntityWirelessSC t : LOADED.values()) {
-            if (t != this && t.kind == QUANTUM && !t.isInvalid() && t.worldObj != null && !t.worldObj.isRemote && ItemEntangledCrystalSC.pairOf(t.slots[SLOT_CRYSTAL]) == pair
-                    && ItemEntangledCrystalSC.halfOf(t.slots[SLOT_CRYSTAL]) != ItemEntangledCrystalSC.halfOf(mine)) {
+            if (isQuantumPartner(t, pair, mine)) {
+                quantumCached = t;
                 return t;
             }
         }
         return null;
+    }
+
+    private boolean isQuantumPartner(TileEntityWirelessSC t, long pair, ItemStack mine) {
+        return t != this && t.kind == QUANTUM && !t.isInvalid() && t.worldObj != null && !t.worldObj.isRemote
+                && ItemEntangledCrystalSC.pairOf(t.slots[SLOT_CRYSTAL]) == pair
+                && ItemEntangledCrystalSC.halfOf(t.slots[SLOT_CRYSTAL]) != ItemEntangledCrystalSC.halfOf(mine);
+    }
+
+    /** Self-test: whether the next quantumPartner() starts from a remembered partner. */
+    public boolean hasCachedQuantumPartner() {
+        return quantumCached != null;
     }
 
     public static TileEntityWirelessSC loaded(long id) {

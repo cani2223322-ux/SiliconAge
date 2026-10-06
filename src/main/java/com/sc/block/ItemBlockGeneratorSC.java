@@ -47,14 +47,19 @@ public class ItemBlockGeneratorSC extends ItemBlock {
         if (nbt == null) {
             return;
         }
-        if (nbt.getInteger("EnergySC") > 0) {
-            list.add(Lang.tr("sc.storage.tooltip.charge", String.valueOf(nbt.getInteger("EnergySC")),
-                    String.valueOf(type.tier.getBuffer())));
+        if (nbt.getInteger("EnergySC") > 0) {                           // the buffer with the storage upgrades it had
+            int buffer = Math.max(TileEntityGeneratorSC.baseBuffer(type), nbt.getInteger(TileEntityGeneratorSC.ITEM_BUFFER_KEY));
+            list.add(Lang.tr("sc.storage.tooltip.charge", String.valueOf(nbt.getInteger("EnergySC")), String.valueOf(buffer)));
         }
-        if (nbt.hasKey("FuelTank")) {
-            FluidStack fuel = FluidStack.loadFluidStackFromNBT(nbt.getCompoundTag("FuelTank"));
-            if (fuel != null && fuel.amount > 0) {
-                list.add(Lang.tr("sc.waila.fluid", fuel.getLocalizedName(), fuel.amount, TileEntityGeneratorSC.TANK_CAPACITY));
+        // every tank it kept (fuel, the second fuel, the water), at the size it had with its Tank Extensions
+        int capacity = Math.max(TileEntityGeneratorSC.TANK_CAPACITY, nbt.getInteger(TileEntityGeneratorSC.ITEM_TANK_KEY));
+        for (String key : new String[]{"FuelTank", "FuelTank2", "OutTank"}) {
+            if (!nbt.hasKey(key)) {
+                continue;
+            }
+            FluidStack fluid = FluidStack.loadFluidStackFromNBT(nbt.getCompoundTag(key));
+            if (fluid != null && fluid.getFluid() != null && fluid.amount > 0) {
+                list.add(Lang.tr("sc.generator.tooltip.tank", fluid.getLocalizedName(), fluid.amount, Math.max(capacity, fluid.amount)));
             }
         }
         if (nbt.getBoolean("Ignited") && type.kind != GeneratorType.Kind.FUSION) {

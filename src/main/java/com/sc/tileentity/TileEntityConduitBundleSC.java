@@ -469,19 +469,68 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         markDirty();
     }
 
+    /**
+     * Э-1: what touched each side when last looked at (server only, not saved: the first look after
+     * loading always counts as a change). Only a tile can connect (connectorAt / linksTo / the energy
+     * net all go by the tile), so a side is: its tile (by identity), and with a tile its block, meta and
+     * - an energy tile - which ways that face takes / gives energy.
+     */
+    private TileEntity[] seenTile;
+    private final Object[] seenBlock = new Object[6];
+    private final int[] seenBits = new int[6];
+
+    /** Whether anything a connection depends on changed around us since the last call (and remembers it). */
+    public boolean neighboursChanged() {
+        boolean changed = seenTile == null;
+        if (changed) {
+            seenTile = new TileEntity[6];
+        }
+        for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
+            int i = dir.ordinal();
+            int x = xCoord + dir.offsetX, y = yCoord + dir.offsetY, z = zCoord + dir.offsetZ;
+            TileEntity te = neighbour(dir);
+            if (te != null && te.isInvalid()) {
+                te = null;
+            }
+            Object block = null;
+            int bits = 0;
+            if (te != null) {
+                block = worldObj.getBlock(x, y, z);
+                bits = worldObj.getBlockMetadata(x, y, z) & 0xFFFF;
+                if (te instanceof TileEntityEnergyBase) {
+                    TileEntityEnergyBase e = (TileEntityEnergyBase) te;
+                    ForgeDirection face = dir.getOpposite();
+                    bits |= (e.acceptsFrom(face) ? 1 << 16 : 0) | (e.isOutputFace(face) ? 1 << 17 : 0)
+                            | (e.isEnergySink() ? 1 << 18 : 0) | (e.isEnergySource() ? 1 << 19 : 0);
+                }
+            }
+            if (seenTile[i] != te || seenBlock[i] != block || seenBits[i] != bits) {
+                changed = true;
+            }
+            seenTile[i] = te;
+            seenBlock[i] = block;
+            seenBits[i] = bits;
+        }
+        return changed;
+    }
+
     /** A neighbouring block was placed or removed - connections may have changed. */
     public void onNeighbourChanged() {
         if (worldObj == null || worldObj.isRemote) {
             return;
         }
-        if (tube) {
-            tubeVersion++;
-        }
-        if (pipe != null) {
-            pipeVersion++;
-        }
-        if (cable != null && !Loader.isModLoaded(Reference.IC2_MODID)) {
-            EnergyNetSC.instance().invalidate();
+        // Э-1: only a change in what touches us rebuilds the (global) network versions - a lever or a
+        // redstone wire next to the bundle has no tile and connects to nothing
+        if (neighboursChanged()) {
+            if (tube) {
+                tubeVersion++;
+            }
+            if (pipe != null) {
+                pipeVersion++;
+            }
+            if (cable != null && !Loader.isModLoaded(Reference.IC2_MODID)) {
+                EnergyNetSC.instance().invalidate();
+            }
         }
         if (cable != null && Loader.isModLoaded(Reference.IC2_MODID)) {
             boolean powered = worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
@@ -604,8 +653,14 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             FluidStack taken = held != null
                     ? source.drain(face, new FluidStack(held.getFluid(), fits), true)
                     : source.drain(face, fits, true);
-            if (taken != null) {
-                tank().fill(taken, true);
+            if (taken != null && taken.amount > 0) {
+                // Э-4: a foreign tank may hand out more (or another fluid) than asked - what doesn't fit goes back
+                int filled = tank().fill(taken, true);
+                if (filled < taken.amount) {
+                    FluidStack back = taken.copy();
+                    back.amount = taken.amount - filled;
+                    source.fill(face, back, true);
+                }
                 fluidChanged();
             }
         }
@@ -638,7 +693,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             }
             FluidStack offer = fluid.copy();
             offer.amount = max - total;
-            total += Math.max(0, target.fill(face, offer, false));
+            total += Math.max(0, Math.min(offer.amount, target.fill(face, offer, false)));
         }
         FluidStack waiting = tank().getFluid();
         return Math.max(0, Math.min(max, total) - (waiting == null ? 0 : waiting.amount));
@@ -676,7 +731,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             }
             FluidStack offer = held.copy();
             offer.amount = Math.min(budget, held.amount);
-            int accepted = target.fill(face, offer, true);
+            int accepted = Math.min(offer.amount, target.fill(face, offer, true));   // Э-4: never trust more than offered
             if (accepted > 0) {
                 tank().drain(accepted, true);
                 budget -= accepted;
@@ -889,7 +944,11 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         ItemStack outFilter = connectorItems.get(sourceDir, com.sc.conduit.ConnectorInventorySC.OUT_FILTER);
         int perMove = Math.min(com.sc.item.ItemTubeSpeedSC.MAX_ITEMS,
                 ITEMS_PER_TICK + com.sc.item.ItemTubeSpeedSC.ITEMS_PER_UPGRADE * connectorItems.speed(sourceDir));
+        int sourceSize = source.getSizeInventory();
         for (int slot : accessibleSlots(source, sourceDir)) {
+            if (slot < 0 || slot >= sourceSize) {
+                continue;                     // Э-4: a foreign side list naming a slot that isn't there
+            }
             ItemStack stack = source.getStackInSlot(slot);
             if (stack == null || !canTake(source, slot, stack, sourceDir) || !com.sc.conduit.ItemFilterSC.passes(outFilter, stack)) {
                 continue;
@@ -904,13 +963,11 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
                         || !com.sc.conduit.ItemFilterSC.passes(r.owner.connectorItems.get(r.dir, com.sc.conduit.ConnectorInventorySC.IN_FILTER), stack)) {
                     continue;
                 }
-                ItemStack toMove = stack.copy();
-                toMove.stackSize = Math.min(perMove, stack.stackSize);
-                int accepted = toMove.stackSize - insert((IInventory) dest, r.dir, toMove);
-                if (accepted > 0) {
-                    source.decrStackSize(slot, accepted);
-                    source.markDirty();
-                    ((IInventory) dest).markDirty();
+                int moved = transfer(source, slot, sourceDir, stack, (IInventory) dest, r.dir, Math.min(perMove, stack.stackSize), this);
+                if (moved < 0) {
+                    break;                    // the source gave nothing out of that slot after all - try its next slot
+                }
+                if (moved > 0) {
                     if (rr) {
                         nextRoute[sourceDir.ordinal()] = turn + k + 1;   // the next one after the one that took it
                     }
@@ -959,10 +1016,85 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         return dir.getOpposite().ordinal();
     }
 
-    /** Slots reachable from that side, honouring ISidedInventory (a machine's side config). */
+    /**
+     * Э-4: moves up to `max` of what's in `slot` of `source` (`seen`: that slot as read just now) into
+     * `dest`, trusting neither side: only as many as dest has room for are asked of the source, and
+     * what decrStackSize actually returned is what gets moved (a foreign inventory may hand out less,
+     * more, or nothing); anything that then doesn't fit goes back into the source, or is dropped at
+     * `dropAt` - never created, never voided.
+     * @return items moved into dest; 0 if dest takes none; -1 if the source gave nothing out
+     */
+    public static int transfer(IInventory source, int slot, ForgeDirection sourceDir, ItemStack seen,
+                               IInventory dest, ForgeDirection destDir, int max, TileEntity dropAt) {
+        if (seen == null || max <= 0) {
+            return 0;
+        }
+        ItemStack probe = seen.copy();
+        probe.stackSize = Math.min(max, seen.stackSize);
+        int fits = probe.stackSize - insert(dest, destDir, probe, true);
+        if (fits <= 0) {
+            return 0;
+        }
+        ItemStack taken = source.decrStackSize(slot, fits);
+        if (taken == null || taken.stackSize <= 0 || taken.getItem() == null) {
+            return -1;
+        }
+        int left = insert(dest, destDir, taken, false);
+        int moved = taken.stackSize - left;
+        if (left > 0) {
+            ItemStack back = taken.copy();
+            back.stackSize = left;
+            giveBack(source, slot, back, dropAt);
+        }
+        source.markDirty();
+        if (moved > 0) {
+            dest.markDirty();
+        }
+        return moved;
+    }
+
+    /** What was taken out but found no place: back into its slot, else any slot of the source, else dropped. */
+    private static void giveBack(IInventory source, int slot, ItemStack back, TileEntity dropAt) {
+        int size = source.getSizeInventory();
+        int limit = Math.min(source.getInventoryStackLimit(), back.getMaxStackSize());
+        for (int pass = 0; pass <= size && back.stackSize > 0; pass++) {
+            int s = pass == 0 ? slot : pass - 1;
+            if (s < 0 || s >= size || (pass > 0 && s == slot)) {
+                continue;
+            }
+            ItemStack existing = source.getStackInSlot(s);
+            if (existing == null) {
+                ItemStack placed = back.copy();
+                placed.stackSize = Math.min(back.stackSize, Math.max(0, limit));
+                if (placed.stackSize > 0) {
+                    source.setInventorySlotContents(s, placed);
+                    back.stackSize -= placed.stackSize;
+                }
+            } else if (existing.isItemEqual(back) && ItemStack.areItemStackTagsEqual(existing, back)) {
+                int place = Math.min(back.stackSize, Math.max(0, limit - existing.stackSize));
+                if (place > 0) {
+                    ItemStack merged = existing.copy();
+                    merged.stackSize += place;
+                    source.setInventorySlotContents(s, merged);
+                    back.stackSize -= place;
+                }
+            }
+        }
+        if (back.stackSize > 0 && dropAt != null && dropAt.getWorldObj() != null) {
+            net.minecraft.entity.item.EntityItem drop = new net.minecraft.entity.item.EntityItem(dropAt.getWorldObj(),
+                    dropAt.xCoord + 0.5, dropAt.yCoord + 0.5, dropAt.zCoord + 0.5, back);
+            dropAt.getWorldObj().spawnEntityInWorld(drop);
+        }
+    }
+
+    /**
+     * Slots reachable from that side, honouring ISidedInventory (a machine's side config). Э-4: a
+     * foreign inventory's null comes back as no slots, never an NPE.
+     */
     private static int[] accessibleSlots(IInventory inv, ForgeDirection dir) {
         if (inv instanceof ISidedInventory) {
-            return ((ISidedInventory) inv).getAccessibleSlotsFromSide(facing(dir));
+            int[] slots = ((ISidedInventory) inv).getAccessibleSlotsFromSide(facing(dir));
+            return slots == null ? new int[0] : slots;
         }
         int[] all = new int[inv.getSizeInventory()];
         for (int i = 0; i < all.length; i++) {
@@ -980,26 +1112,39 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
                 && (!(inv instanceof ISidedInventory) || ((ISidedInventory) inv).canInsertItem(slot, stack, facing(dir)));
     }
 
-    /** @return how many of `stack` did NOT fit. */
-    private static int insert(IInventory destination, ForgeDirection destDir, ItemStack stack) {
+    /**
+     * Puts `stack` (not changed itself) into `destination`; `simulate`: only counts. Э-4: slot numbers
+     * outside the inventory are skipped, a merge goes through setInventorySlotContents (not into
+     * whatever getStackInSlot handed out - it may be a copy).
+     * @return how many of `stack` did NOT fit.
+     */
+    public static int insert(IInventory destination, ForgeDirection destDir, ItemStack stack, boolean simulate) {
         int remaining = stack.stackSize;
         int[] slots = accessibleSlots(destination, destDir);
+        int size = destination.getSizeInventory();
+        int limit = Math.max(0, Math.min(destination.getInventoryStackLimit(), stack.getMaxStackSize()));
         for (int i = 0; i < slots.length && remaining > 0; i++) {
             int slot = slots[i];
-            if (!canGive(destination, slot, stack, destDir)) {
+            if (slot < 0 || slot >= size || !canGive(destination, slot, stack, destDir)) {
                 continue;
             }
             ItemStack existing = destination.getStackInSlot(slot);
             if (existing == null) {
-                int place = Math.min(remaining, Math.min(destination.getInventoryStackLimit(), stack.getMaxStackSize()));
-                ItemStack placed = stack.copy();
-                placed.stackSize = place;
-                destination.setInventorySlotContents(slot, placed);
+                int place = Math.min(remaining, limit);
+                if (place > 0 && !simulate) {
+                    ItemStack placed = stack.copy();
+                    placed.stackSize = place;
+                    destination.setInventorySlotContents(slot, placed);
+                }
                 remaining -= place;
             } else if (existing.isItemEqual(stack) && ItemStack.areItemStackTagsEqual(existing, stack)) {
                 int room = Math.min(destination.getInventoryStackLimit(), existing.getMaxStackSize()) - existing.stackSize;
                 int place = Math.min(remaining, Math.max(0, room));
-                existing.stackSize += place;
+                if (place > 0 && !simulate) {
+                    ItemStack merged = existing.copy();
+                    merged.stackSize += place;
+                    destination.setInventorySlotContents(slot, merged);
+                }
                 remaining -= place;
             }
         }

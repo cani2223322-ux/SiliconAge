@@ -182,6 +182,19 @@ public class ShieldEventHandler {
         }
     }
 
+    /**
+     * The private field covering x,y,z that refuses this player, or null (no field, or the player is
+     * allowed). Silent - for checks that run every few ticks (the armour station, БР-1).
+     */
+    public static TileEntityFieldGeneratorSC privateFieldAgainst(net.minecraft.world.World w, net.minecraft.entity.player.EntityPlayer p,
+                                                                 int x, int y, int z) {
+        if (w == null || w.isRemote || p == null) {
+            return null;
+        }
+        TileEntityFieldGeneratorSC f = TileEntityFieldGeneratorSC.fieldWith(w, TileEntityFieldGeneratorSC.F_PRIVATE, x + 0.5, y + 0.5, z + 0.5);
+        return f == null || f.allowed(p) ? null : f;
+    }
+
     /** A private field: only its owner and access list may break or place blocks inside it or open its containers. */
     public static boolean privateFor(net.minecraft.world.World w, net.minecraft.entity.player.EntityPlayer p, int x, int y, int z) {
         if (w.isRemote || p == null) {

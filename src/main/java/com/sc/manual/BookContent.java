@@ -503,7 +503,11 @@ public final class BookContent {
         BookEntry quarry = new BookEntry("quarry", c, new ItemStack(ModBlocks.quarrySC), Lang.tr("sc.manual.machines.quarryhead"));
         quarry.add(BookEl.title(Lang.tr("sc.manual.machines.quarryhead")));
         List<BookEl> qp = paras("sc.manual.machines.quarry");
-        quarry.add(qp.get(0)).add(qp.get(2)).add(BookEl.head(Lang.tr("sc.book.quarry.menuhead"))).add(qp.get(1));
+        quarry.add(qp.get(0)).add(qp.get(2));
+        for (int i = 5; i < qp.size(); i++) {                       // .6 and on (К1, К2): the digging rules, before the menu
+            quarry.add(qp.get(i));
+        }
+        quarry.add(BookEl.head(Lang.tr("sc.book.quarry.menuhead"))).add(qp.get(1));
         quarry.add(BookEl.link("quarry.modules", Lang.tr("sc.book.quarry.modules"))).add(BookEl.link("quarry.exo", Lang.tr("sc.book.quarry.exo")));
         quarry.about(new ItemStack(ModBlocks.quarrySC, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModItems.areaCard));
         crafting(quarry, new ItemStack(ModBlocks.quarrySC));
@@ -593,7 +597,8 @@ public final class BookContent {
                 stats.row(null, Lang.tr("sc.book.t.radiation"), com.sc.radiation.RadiationSC.fmt(rad) + " / "
                         + TileEntityGeneratorSC.radiationRadius(type) + " " + Lang.tr("sc.book.blocks"));
             }
-            e.add(stats).add(BookEl.para(Lang.tr("sc.manual.generator." + type.name().toLowerCase(Locale.ROOT))));
+            e.add(stats).add(BookEl.para(Lang.tr("sc.manual.generator." + type.name().toLowerCase(Locale.ROOT))))
+                    .addAll(paras("sc.manual.generator." + type.name().toLowerCase(Locale.ROOT) + ".note"));  // Г-4: notes .note.1, .2...
             if (type == GeneratorType.TOKAMAK) {
                 e.add(BookEl.head(Lang.tr("sc.book.build"))).add(tokamakRing());
             }
@@ -714,10 +719,10 @@ public final class BookContent {
         switch (type.kind) {
             case PASSIVE: return Lang.tr("sc.manual.machines.passive");
             case FUSION: return Lang.tr("sc.manual.machines.fusioninfo", String.valueOf(type.ignitionThreshold()), TileEntityGeneratorSC.CELL_BURN_TICKS / 1200);
-            case DUAL_FLUID: return type.fuelRatePerTick + " mB/t " + fluidName(type.fuelFluidName) + " + " + type.fuel2RatePerTick + " mB/t "
+            case DUAL_FLUID: return type.fuelRatePerTick + " " + mb() + "/t " + fluidName(type.fuelFluidName) + " + " + type.fuel2RatePerTick + " " + mb() + "/t "
                     + fluidName(type.fuel2FluidName);
             case FLUID_FUEL:
-            case EXO: return type.fuelRatePerTick + " mB/t " + fluidName(type.fuelFluidName);
+            case EXO: return type.fuelRatePerTick + " " + mb() + "/t " + fluidName(type.fuelFluidName);
             default: return Lang.tr("sc.manual.gen.kind." + type.kind.name().toLowerCase(Locale.ROOT));
         }
     }
@@ -858,7 +863,7 @@ public final class BookContent {
         pipes.add(BookEl.title(Lang.tr("sc.manual.energy.pipes")));
         for (PipeType type : PipeType.values()) {
             ItemStack s = new ItemStack(ModBlocks.pipeSC, 1, type.ordinal());
-            pipes.add(BookEl.item(s, s.getDisplayName(), type.throughput + " mB/t" + (type.chemicallyResistant ? ", " + Lang.tr("sc.manual.energy.corrosionsafe") : "")));
+            pipes.add(BookEl.item(s, s.getDisplayName(), type.throughput + " " + mb() + "/t" + (type.chemicallyResistant ? ", " + Lang.tr("sc.manual.energy.corrosionsafe") : "")));
         }
         pipes.addAll(paras("sc.manual.energy.piperules")).about(new ItemStack(ModBlocks.pipeSC, 1, OreDictionary.WILDCARD_VALUE));
         list.add(pipes);
@@ -1183,7 +1188,7 @@ public final class BookContent {
                 }
             }
             if (tanks.length() > 0) {
-                e.add(BookEl.dim(Lang.tr("sc.armorStation.gas." + g.key()) + ": " + tanks + " mB"));
+                e.add(BookEl.dim(Lang.tr("sc.armorStation.gas." + g.key()) + ": " + tanks + " " + mb()));
             }
         }
         e.add(BookEl.head(Lang.tr("sc.armorStation.gas.singular_matter"))).addAll(paras("sc.manual.singular.matter", new Object[]{
@@ -1244,7 +1249,7 @@ public final class BookContent {
                     }
                 }
                 if (tanks.length() > 0) {
-                    gases.add(BookEl.dim(Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)) + ": " + tanks + " mB"));
+                    gases.add(BookEl.dim(Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)) + ": " + tanks + " " + mb()));
                 }
             }
         }
@@ -1526,6 +1531,11 @@ public final class BookContent {
             out.add(BookEl.para(i <= args.length && args[i - 1] != null ? Lang.tr(key, args[i - 1]) : text));
         }
         return out;
+    }
+
+    /** Л-1: the millibucket unit in the language ("мБ" / "mB"). */
+    static String mb() {
+        return Lang.trOr("sc.levelgui.mb", "mB");
     }
 
     /** A big number in the language's style: "50 000" in Russian, "50,000" in English. */

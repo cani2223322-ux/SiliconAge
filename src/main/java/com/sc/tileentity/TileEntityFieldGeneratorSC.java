@@ -172,6 +172,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public void toggle(int flag) {
+        if (flag == F_PRIVATE && !has(F_PRIVATE) && refuseClaimed(true)) {
+            return;                                 // another mod's protection there: no private zone over it
+        }
         flags ^= flag;
         changed();
     }
@@ -339,7 +342,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** After a change of shape: back to the saved one if the new zone overlaps a stranger's field. @return true if kept */
     private boolean keepShape(int[] before, int[] point) {
         zoneCache = null;
-        if (refuseForeign(true)) {
+        if (refuseForeign(true) || has(F_PRIVATE) && refuseClaimed(true)) {
             restoreShape(before, point);
             changed();
             return false;
@@ -369,6 +372,113 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
         }
         return null;
+    }
+
+    // ---- no private zone over another mod's protection (claims, spawn protection) ----
+
+    /** Grid step of the claim check (corners always in), and the most points checked (the step grows past it). */
+    public static final int CLAIM_STEP = 4, CLAIM_MAX_POINTS = 1024;
+
+    /** The owner as a player for other mods' protection checks (the online player's profile, else the offline UUID). */
+    private com.mojang.authlib.GameProfile ownerProfile() {
+        net.minecraft.server.MinecraftServer srv = net.minecraft.server.MinecraftServer.getServer();
+        net.minecraft.entity.player.EntityPlayerMP p = srv == null ? null : srv.getConfigurationManager().func_152612_a(owner);
+        if (p != null && p.getGameProfile() != null && p.getGameProfile().getId() != null) {
+            return p.getGameProfile();
+        }
+        return new com.mojang.authlib.GameProfile(EntityPlayer.func_146094_a(new com.mojang.authlib.GameProfile(null, owner)), owner);
+    }
+
+    /** min..max every `step`, max always in. */
+    public static int[] gridAxis(int min, int max, int step) {
+        int n = max <= min ? 1 : (max - min) / step + 1 + ((max - min) % step != 0 ? 1 : 0);
+        int[] v = new int[n];
+        for (int i = 0; i < n; i++) {
+            v[i] = Math.min(max, min + i * step);
+        }
+        return v;
+    }
+
+    /**
+     * A spot of the zone where breaking a block as the owner is cancelled (BlockEvent.BreakEvent through a
+     * FakePlayer with the owner's profile: another mod's claim, spawn protection), or null. Points: a grid
+     * over the zone's box every CLAIM_STEP blocks (column corners in, at most CLAIM_MAX_POINTS) that lie in
+     * the zone, and the zone's nodes. Server side; a field with no owner isn't checked.
+     */
+    public int[] claimedSpot() {
+        if (!(worldObj instanceof net.minecraft.world.WorldServer) || owner.isEmpty()) {
+            return null;
+        }
+        net.minecraft.world.WorldServer ws = (net.minecraft.world.WorldServer) worldObj;
+        net.minecraftforge.common.util.FakePlayer fake = net.minecraftforge.common.util.FakePlayerFactory.get(ws, ownerProfile());
+        if (fake.worldObj != worldObj) {
+            fake.setWorld(worldObj);                // Forge caches it by profile only
+        }
+        AxisAlignedBB b = zoneBounds();
+        int x0 = net.minecraft.util.MathHelper.floor_double(b.minX), x1 = net.minecraft.util.MathHelper.floor_double(b.maxX);
+        int z0 = net.minecraft.util.MathHelper.floor_double(b.minZ), z1 = net.minecraft.util.MathHelper.floor_double(b.maxZ);
+        int y0 = Math.max(0, net.minecraft.util.MathHelper.floor_double(b.minY));
+        int y1 = Math.max(y0, Math.min(255, net.minecraft.util.MathHelper.floor_double(b.maxY)));
+        int step = CLAIM_STEP;
+        int[] xs, ys, zs;
+        while (true) {
+            xs = gridAxis(x0, x1, step);
+            ys = gridAxis(y0, y1, step);
+            zs = gridAxis(z0, z1, step);
+            if ((long) xs.length * ys.length * zs.length <= CLAIM_MAX_POINTS || step > 512) {
+                break;
+            }
+            step *= 2;
+        }
+        for (int[] n : zoneNodes()) {
+            int ny = Math.max(0, Math.min(255, n[1]));
+            if (claimCancelled(fake, n[0], ny, n[2])) {
+                return new int[]{n[0], ny, n[2]};
+            }
+        }
+        for (int x : xs) {
+            for (int z : zs) {
+                boolean corner = (x == x0 || x == x1) && (z == z0 || z == z1);
+                for (int y : ys) {
+                    if ((corner || fieldContains(x + 0.5, y + 0.5, z + 0.5)) && claimCancelled(fake, x, y, z)) {
+                        return new int[]{x, y, z};
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean claimCancelled(EntityPlayer fake, int x, int y, int z) {
+        if (!worldObj.blockExists(x, y, z)) {
+            return false;                           // an unloaded chunk isn't loaded for the check
+        }
+        net.minecraftforge.event.world.BlockEvent.BreakEvent ev = new net.minecraftforge.event.world.BlockEvent.BreakEvent(
+                x, y, z, worldObj, worldObj.getBlock(x, y, z), worldObj.getBlockMetadata(x, y, z), fake);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+        return ev.isCanceled();
+    }
+
+    /** claimedSpot(); with `tell`, the players on this field's screen hear where. @return true if refused */
+    private boolean refuseClaimed(boolean tell) {
+        if (worldObj == null || worldObj.isRemote || !master) {
+            return false;
+        }
+        int[] spot = claimedSpot();
+        if (spot != null && tell) {
+            tellViewers("sc.field.claimed", spot[0] + " " + spot[1] + " " + spot[2]);
+        }
+        return spot != null;
+    }
+
+    private void tellViewers(String key, Object... args) {
+        for (Object o : worldObj.playerEntities) {
+            EntityPlayer p = (EntityPlayer) o;
+            if (p.openContainer instanceof com.sc.inventory.ContainerFieldGeneratorSC
+                    && ((com.sc.inventory.ContainerFieldGeneratorSC) p.openContainer).getField() == this) {
+                p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key, args));
+            }
+        }
     }
 
     /**
@@ -743,6 +853,16 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (!(e instanceof EntityLiving)) {
             return false;
         }
+        if (e.riddenByEntity instanceof EntityPlayer && allowed((EntityPlayer) e.riddenByEntity)) {
+            return false;                           // a mount under one of our own side: never pushed or hurt
+        }
+        if (e instanceof net.minecraft.entity.passive.EntityHorse) {
+            net.minecraft.entity.passive.EntityHorse h = (net.minecraft.entity.passive.EntityHorse) e;
+            String tamer = h.isTame() ? h.func_152119_ch() : null;   // the tamer's UUID (1.7.10 horses aren't IEntityOwnable)
+            if (tamer != null && !tamer.isEmpty() && (allowedName(tamer) || allowedName(tamerName(tamer)))) {
+                return false;                       // our own side's horse
+            }
+        }
         if (e instanceof net.minecraft.entity.IEntityOwnable) {
             String tamer = ((net.minecraft.entity.IEntityOwnable) e).func_152113_b();
             // 1.7.10 keeps the tamer's UUID here, not the name - look the name up (the access list holds names)
@@ -867,6 +987,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         int[] point = anchorPoint;
         applySettings(nbt);
         keepShape(before, point);
+        if (has(F_PRIVATE) && claimedSpot() != null) {
+            flags &= ~F_PRIVATE;                    // the pasted private zone over another mod's claim: not private
+        }
         changed();
     }
 

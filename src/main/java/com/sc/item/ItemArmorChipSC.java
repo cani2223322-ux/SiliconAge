@@ -122,6 +122,12 @@ public class ItemArmorChipSC extends Item {
         }
         ChipType type = typeAt(stack.getItemDamage());
         int tier = tierAt(stack.getItemDamage());
+        if (!worksIn(type, ((ItemArmorSC) chest.getItem()).getSuit())) {
+            // БР-5: a chip this suit can't run is refused - it used to go in and sit there doing nothing
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.chip.unsupported",
+                    new ChatComponentTranslation(getUnlocalizedName(stack) + ".name"), chest.getDisplayName()));
+            return stack;
+        }
         net.minecraft.nbt.NBTTagCompound chips = ItemArmorSC.chipsTag(chest);
         // §16: one chip per type. Installing another of the same type swaps it in and hands the
         // old one back - a plain refusal meant an installed chip could never be upgraded or removed.
@@ -143,6 +149,18 @@ public class ItemArmorChipSC extends Item {
             player.dropPlayerItemWithRandomChoice(returned, false);
         }
         return stack;                                          // an emptied stack (size 0) is removed by vanilla; null crashed tryUseItem
+    }
+
+    /**
+     * БР-5: can this chip work in a chestplate of that suit? The Oxygen Regenerator only runs in an
+     * Exo-class suit (ArmorLogicSC: ArmorSuit.exoClass); the rest work in all of them - every
+     * chestplate has a helium loop and gas tanks (ArmorGasSC.CAP).
+     */
+    public static boolean worksIn(ChipType type, com.sc.util.ArmorSuit suit) {
+        if (type == null || suit == null) {
+            return false;
+        }
+        return type != ChipType.OXYGEN_REGEN || com.sc.util.ArmorSuit.exoClass(suit);
     }
 
     /** Whether the chestplate has any chip installed (read-only: safe on the client). */

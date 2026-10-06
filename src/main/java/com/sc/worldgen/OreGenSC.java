@@ -32,8 +32,8 @@ public class OreGenSC implements IWorldGenerator {
 
     @Override
     public void generate(Random random, int chunkX, int chunkZ, World world, IChunkProvider chunkGenerator, IChunkProvider chunkProvider) {
-        if (world.provider.dimensionId != 0) {
-            return; // all 16 ores + Limestone are Overworld-only per §10/§17.1
+        if (!generatesIn(world.provider.dimensionId, ConfigSC.oreDimensions)) {
+            return; // all 16 ores + Limestone: Overworld only per §10/§17.1, unless the config lists more
         }
 
         int blockX = chunkX * 16;
@@ -47,6 +47,19 @@ public class OreGenSC implements IWorldGenerator {
         }
 
         generateLimestone(world, random, blockX, blockZ);
+    }
+
+    /** Whether `dim` is in the config's worldgen dimension list (null list: the Overworld only). */
+    public static boolean generatesIn(int dim, int[] dims) {
+        if (dims == null) {
+            return dim == 0;
+        }
+        for (int d : dims) {
+            if (d == dim) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void generateOre(World world, Random random, int blockX, int blockZ, OreEntry ore) {

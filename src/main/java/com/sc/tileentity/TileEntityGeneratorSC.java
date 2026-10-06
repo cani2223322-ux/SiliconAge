@@ -341,14 +341,46 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (!generatorType.burnsFuel()) {
             return 1;
         }
-        return Math.pow(1.5, upgradeCount(UpgradeType.OVERDRIVE)) * Math.pow(0.9, upgradeCount(UpgradeType.ECONOMIZER));
+        return Math.pow(1.5, effectiveOverdrive()) * Math.pow(0.9, upgradeCount(UpgradeType.ECONOMIZER));
+    }
+
+    /**
+     * Overdrive upgrades that count. Under IC2 without Industrial Upgrade only one packet of the
+     * output voltage leaves a tick (IC2 has no IMultiEnergySource), so the overdrive is cut back to
+     * the most whose output still fits one packet: no more output - and no more fuel at Overdrive's
+     * worse rate - than the net can take. A Transformer (a higher voltage) lets more of it work.
+     * The Tokamak XV (its output goes straight into the port storages) and the mod's own net, or
+     * IC2 with Industrial Upgrade, use every one.
+     */
+    public int effectiveOverdrive() {
+        int n = upgradeCount(UpgradeType.OVERDRIVE);
+        if (n == 0 || !generatorType.burnsFuel() || xv() || singular() || generatorType == GeneratorType.CREATIVE
+                || TileEntityEnergyStorageSC.overdriveWorks()) {
+            return n;
+        }
+        long v = outputTier().getVoltage();
+        while (n > 0 && outputWith(n) > v) {
+            n--;
+        }
+        return n;
+    }
+
+    /** Rated output with `overdrive` Overdrive upgrades (the rest as they are). */
+    private long outputWith(int overdrive) {
+        return Math.round(generatorType.euPerTick * Math.pow(1.5, overdrive) * Math.pow(0.9, upgradeCount(UpgradeType.ECONOMIZER))
+                * shieldingMultiplier() * bigOutputMultiplier());
+    }
+
+    /** Some Overdrive is idle: under IC2 without Industrial Upgrade its extra packets wouldn't leave (see effectiveOverdrive). */
+    public boolean overdriveCapped() {
+        return effectiveOverdrive() < upgradeCount(UpgradeType.OVERDRIVE);
     }
 
     public double fuelMultiplier() {
         if (!generatorType.burnsFuel()) {
             return 1;
         }
-        return Math.pow(1.75, upgradeCount(UpgradeType.OVERDRIVE)) * Math.pow(0.7, upgradeCount(UpgradeType.ECONOMIZER));
+        return Math.pow(1.75, effectiveOverdrive()) * Math.pow(0.7, upgradeCount(UpgradeType.ECONOMIZER));
     }
 
     /** Rated output with the upgrades - what a fuel generator makes each tick while it runs. */
@@ -1166,7 +1198,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (!bigReady) {
                 delta -= STAB_BROKEN;
             }
-            delta -= STAB_OVERDRIVE * upgradeCount(UpgradeType.OVERDRIVE);
+            delta -= STAB_OVERDRIVE * effectiveOverdrive();
             if (heat > HEAT_LIMIT * 9 / 10) {
                 delta -= STAB_HOT;
             }
@@ -1486,6 +1518,17 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     @Override
     public boolean isEnergySink() {
         return generatorType.needsIgnition() && !ignited && !singular();   // the Singular Reactor: from its port storages only
+    }
+
+    /**
+     * An unlit reactor taking its ignition charge accepts any voltage: the charge goes straight
+     * into the plasma, nothing in it burns (the mod's net never blew it up either). Its IC2 sink
+     * tier follows (getSinkTier: no blast under IC2), and the screen's "line too strong" warning
+     * (lineTooStrong) doesn't show for it.
+     */
+    @Override
+    public boolean acceptsAnyVoltage() {
+        return isEnergySink();
     }
 
     @Override
@@ -2043,12 +2086,16 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     /**
-     * Running heat of a lit reactor at full power: its base plus 100 per Overdrive upgrade - an
-     * overdriven reactor runs hot, and a full buffer can then tip it over the limit.
+     * Running heat of a lit reactor at full power: its base plus 100 per Overdrive upgrade and the
+     * lead casing's, never above HEAT_LIMIT - RUNNING_HEAT_MARGIN - running stays under the limit,
+     * only a full buffer (overheating()) can tip it over.
      */
-    private int runningHeat(int base) {
-        return base + 100 * upgradeCount(UpgradeType.OVERDRIVE) + (isShielded() ? SHIELDED_HEAT : 0);
+    public int runningHeat(int base) {
+        return Math.min(HEAT_LIMIT - RUNNING_HEAT_MARGIN, base + 100 * effectiveOverdrive() + (isShielded() ? SHIELDED_HEAT : 0));
     }
+
+    /** How far under HEAT_LIMIT a running reactor's heat settles at most. */
+    public static final int RUNNING_HEAT_MARGIN = 50;
 
     /** One tick of a lit reactor making energy: ramps up, heat follows the power. */
     private void burnPlasma(int base) {
@@ -2486,6 +2533,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (outTank.getFluidAmount() > 0) {
             nbt.setTag("OutTank", outTank.writeToNBT(new NBTTagCompound()));
         }
+        // for the item's tooltip (ItemBlockGeneratorSC): the sizes it had - its upgrades drop as items beside it
+        if (nbt.hasKey("EnergySC") && getMaxEnergyStored() > baseBuffer(generatorType)) {
+            nbt.setInteger(ITEM_BUFFER_KEY, getMaxEnergyStored());
+        }
+        if ((nbt.hasKey("FuelTank") || nbt.hasKey("FuelTank2") || nbt.hasKey("OutTank")) && tankCapacity() > TANK_CAPACITY) {
+            nbt.setInteger(ITEM_TANK_KEY, tankCapacity());
+        }
         if (singular()) {
             if (ignitionEU > 0) {
                 nbt.setLong("IgnitionEU", ignitionEU);              // the charge drawn so far; the hole itself never leaves
@@ -2526,6 +2580,17 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
         }
         return nbt.hasNoTags() ? null : nbt;
+    }
+
+    /** Item NBT (writeToItem, tooltip only): the buffer's and the tanks' size when it was broken, with the upgrades it had. */
+    public static final String ITEM_BUFFER_KEY = "BufferCap", ITEM_TANK_KEY = "TankCap";
+
+    /** A generator's buffer with no upgrades in (getMaxEnergyStored: its tier's, never under two ticks of output). */
+    public static int baseBuffer(GeneratorType type) {
+        if (type == GeneratorType.CREATIVE) {
+            return Tier.max().getBuffer();
+        }
+        return (int) Math.min(Integer.MAX_VALUE, Math.max((long) type.tier.getBuffer(), 2L * type.euPerTick));
     }
 
     /** Placed from an item that carries writeToItem()'s data. */

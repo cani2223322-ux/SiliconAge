@@ -46,6 +46,8 @@ public final class ConfigSC {
      */
     public static float converterRfPerEu = 4F, converterJPerEu = 10F, converterGjPerEu = 0F;
     public static int converterLoss = 5;
+    /** Dimensions the mod's ores and limestone generate in (worldgen is server-side: not synced). */
+    public static int[] oreDimensions = {0};
 
     /** A whole number scaled by a multiplier, at least `min`, capped to an int. */
     public static int scale(int base, float mul, int min) {
@@ -77,6 +79,9 @@ public final class ConfigSC {
                         "Attempted veins per chunk for " + ore.oreName + " (TODO: not specified in design doc, defaulted)");
                 ORE_SETTINGS.put(ore, new OreGenSettings(minY, maxY, veinSize, veinsPerChunk));
             }
+            oreDimensions = config.get("worldgen", "oreDimensions", new int[] {0},
+                    "Dimension ids the mod's ores and limestone generate in (0 = Overworld) / Id измерений, где генерируются руды и известняк мода (0 - Верхний мир)")
+                    .getIntList();
             machineSounds = config.getBoolean("machines", "sounds", true,
                     "Working machines, generators and quarries make their sound");
             soundVolume = num(config, "volume", "sounds", 1F, 0F, 1F,

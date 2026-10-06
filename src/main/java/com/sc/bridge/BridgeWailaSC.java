@@ -25,8 +25,16 @@ public final class BridgeWailaSC {
         return BridgeMathSC.group(eu);
     }
 
-    /** null: not a bridge block. */
+    /** null: not a bridge block. All lines, the far end included (the server itself / tests). */
     public static List<BridgeMsgSC> lines(TileEntity te) {
+        return lines(te, null);
+    }
+
+    /**
+     * null: not a bridge block. К-1: an open controller's far end (coordinates) only for a viewer with access
+     * (controller.allowed: owner, friends, public / ownerless; null viewer - the server itself), like the wireless.
+     */
+    public static List<BridgeMsgSC> lines(TileEntity te, net.minecraft.entity.player.EntityPlayer viewer) {
         List<BridgeMsgSC> l = new ArrayList<BridgeMsgSC>();
         if (te instanceof TileEntityBridgeControllerSC) {
             TileEntityBridgeControllerSC c = (TileEntityBridgeControllerSC) te;
@@ -38,7 +46,11 @@ public final class BridgeWailaSC {
             l.add(new BridgeMsgSC(s.kind == BridgeMathSC.SPACE ? "sc.waila.bridge.space" : "sc.waila.bridge.ground", s.coils, s.coilsNeeded));
             if (c.isOpen()) {
                 int[] b = c.getEndB();
-                l.add(new BridgeMsgSC("sc.waila.bridge.open", (c.getLifeLeft() + 19) / 20, b[1], b[2], b[3]));
+                if (viewer == null || c.allowed(viewer)) {
+                    l.add(new BridgeMsgSC("sc.waila.bridge.open", (c.getLifeLeft() + 19) / 20, b[1], b[2], b[3]));
+                } else {
+                    l.add(new BridgeMsgSC("sc.waila.bridge.open.hidden", (c.getLifeLeft() + 19) / 20));
+                }
             } else if (!s.valid) {
                 l.add(new BridgeMsgSC("sc.waila.bridge.problems", s.problems.size()));
             } else if (!c.isCalibrated()) {

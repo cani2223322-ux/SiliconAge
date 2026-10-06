@@ -245,7 +245,7 @@ public class WailaSC implements IWailaDataProvider {
     /** Server side: just the numbers the body needs, not the whole tile. */
     @Override
     public NBTTagCompound getNBTData(EntityPlayerMP player, TileEntity te, NBTTagCompound tag, World world, int x, int y, int z) {
-        java.util.List<com.sc.bridge.BridgeMsgSC> bridge = com.sc.bridge.BridgeWailaSC.lines(te);
+        java.util.List<com.sc.bridge.BridgeMsgSC> bridge = com.sc.bridge.BridgeWailaSC.lines(te, player);  // К-1: the far end only for those with access
         if (bridge != null) {
             net.minecraft.nbt.NBTTagList l = new net.minecraft.nbt.NBTTagList();
             for (com.sc.bridge.BridgeMsgSC m : bridge) {

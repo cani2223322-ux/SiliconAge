@@ -183,6 +183,14 @@ public final class BladeLogicSC {
         return !(e instanceof IEntityOwnable && ((IEntityOwnable) e).getOwner() == p);
     }
 
+    /**
+     * БР-2: an area blow is a player's attack like a left-click - Forge's AttackEntityEvent goes out
+     * for each target, and one somebody cancels (a private field, another mod's claim) is skipped.
+     */
+    static boolean claimed(EntityPlayer p, Entity e) {
+        return !net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.player.AttackEntityEvent(p, e));
+    }
+
     /** A key function: in hand, switched on, lit, not used in the last half second, paid for. */
     private static ItemStack useAction(EntityPlayer p, BladeFeature f, int eu) {
         ItemStack blade = held(p);
@@ -215,7 +223,8 @@ public final class BladeLogicSC {
         for (Object o : p.worldObj.getEntitiesWithinAABBExcludingEntity(p, p.boundingBox.expand(r, 1.5, r))) {
             Entity e = (Entity) o;
             double dx = e.posX - p.posX, dz = e.posZ - p.posZ, d = Math.sqrt(dx * dx + dz * dz);
-            if (!fair(p, e) || d > r + e.width / 2 || (d > 0.5 && len > 0.01 && (dx * lx + dz * lz) / (d * len) < 0.3)) {
+            if (!fair(p, e) || d > r + e.width / 2 || (d > 0.5 && len > 0.01 && (dx * lx + dz * lz) / (d * len) < 0.3)
+                    || !claimed(p, e)) {
                 continue;
             }
             e.hurtResistantTime = 0;
@@ -235,6 +244,9 @@ public final class BladeLogicSC {
         Vec3 start = eyes(p);
         Vec3 end = beamEnd(p, start, BladeFeature.WAVE_RANGE);
         for (Entity e : along(p, start, end)) {
+            if (!claimed(p, e)) {
+                continue;
+            }
             e.hurtResistantTime = 0;
             hit(p, blade, e, ItemBladeSC.typeOf(blade).onDamage);
         }
@@ -253,6 +265,9 @@ public final class BladeLogicSC {
         Vec3 start = eyes(p);
         Vec3 end = beamEnd(p, start, BladeFeature.LUNGE_RANGE);
         for (Entity e : along(p, start, end)) {
+            if (!claimed(p, e)) {
+                continue;
+            }
             e.hurtResistantTime = 0;
             hit(p, blade, e, ItemBladeSC.typeOf(blade).onDamage);
         }

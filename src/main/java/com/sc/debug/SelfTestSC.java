@@ -69,6 +69,7 @@ public final class SelfTestSC {
             singularCrafts();
             auditFixes20261006();
             fullCheck20261006();
+            fullFixes20261006();
             bladeFunctions();
             chargePad();
             batteries();
@@ -1155,9 +1156,46 @@ public final class SelfTestSC {
         odLv.setGeneratorType(com.sc.energy.GeneratorType.COMBUSTION);
         odLv.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od.copy());
         odLv.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 1, od.copy());
-        check(odLv.ratedOutput() == 72 && odLv.outputTier() == com.sc.energy.Tier.LV && odLv.packetsPerTick() == 3
-                        && odLv.sendMultibleEnergyPackets() && odLv.getMultibleEnergyPacketAmount() == 3,
-                "overdrive: 72 EU/t at LV goes out as 3 packets of 32 a tick, not 1 and a stalled buffer");
+        check(com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks()
+                ? odLv.ratedOutput() == 72 && odLv.outputTier() == com.sc.energy.Tier.LV && odLv.packetsPerTick() == 3
+                    && odLv.sendMultibleEnergyPackets() && odLv.getMultibleEnergyPacketAmount() == 3 && !odLv.overdriveCapped()
+                : odLv.ratedOutput() == 32 && odLv.packetsPerTick() == 1 && odLv.overdriveCapped() && odLv.effectiveOverdrive() == 0
+                    && gen.ratedOutput() == 48 && !gen.overdriveCapped(),
+                "overdrive: 3 packets of 32 (own net / IU); under IC2 without IU cut to one packet, a Transformer lets it work");
+        {   // Г-1: running heat stays under the limit (4 Overdrive + lead casing)
+            com.sc.tileentity.TileEntityGeneratorSC hot = new com.sc.tileentity.TileEntityGeneratorSC();
+            hot.setGeneratorType(com.sc.energy.GeneratorType.FUSION_REACTOR);
+            ItemStack od4 = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE);
+            od4.stackSize = 4;
+            hot.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od4);
+            hot.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 1, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.RAD_SHIELDING));
+            int lim = com.sc.tileentity.TileEntityGeneratorSC.HEAT_LIMIT - com.sc.tileentity.TileEntityGeneratorSC.RUNNING_HEAT_MARGIN;
+            check(hot.runningHeat(600) <= lim && hot.runningHeat(500) <= lim
+                    && (!com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks() || hot.runningHeat(600) == lim),
+                    "Г-1: reactor running heat capped at limit-50 (" + hot.runningHeat(600) + "): overheat only with a full buffer");
+            // Г-2: unlit reactor in ignition mode takes any voltage, no "will explode" warning
+            com.sc.tileentity.TileEntityGeneratorSC ign = new com.sc.tileentity.TileEntityGeneratorSC();
+            ign.setGeneratorType(com.sc.energy.GeneratorType.FUSION_REACTOR);
+            check(ign.isEnergySink() && ign.acceptsAnyVoltage() && !ign.lineTooStrong() && !gen.acceptsAnyVoltage(),
+                    "Г-2: unlit reactor (ignition sink) accepts any voltage; an ordinary generator doesn't");
+            // Г-5: item keeps the real buffer and tank sizes and every tank
+            com.sc.tileentity.TileEntityGeneratorSC tkG = new com.sc.tileentity.TileEntityGeneratorSC();
+            tkG.setGeneratorType(com.sc.energy.GeneratorType.COMBUSTION);
+            ItemStack extG = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION);
+            extG.stackSize = 2;
+            tkG.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, extG);
+            tkG.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + 1, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE));
+            net.minecraft.nbt.NBTTagCompound tin = new net.minecraft.nbt.NBTTagCompound();
+            tin.setInteger("EnergySC", 100);
+            tin.setTag("FuelTank2", new FluidStack(FluidRegistry.WATER, 5000).writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+            tkG.readFromItem(tin);
+            net.minecraft.nbt.NBTTagCompound tout = tkG.writeToItem();
+            check(tout != null && tout.hasKey("FuelTank2") && tkG.tankCapacity() > com.sc.tileentity.TileEntityGeneratorSC.TANK_CAPACITY
+                    && tout.getInteger(com.sc.tileentity.TileEntityGeneratorSC.ITEM_TANK_KEY) == tkG.tankCapacity()
+                    && tkG.getMaxEnergyStored() > com.sc.tileentity.TileEntityGeneratorSC.baseBuffer(com.sc.energy.GeneratorType.COMBUSTION)
+                    && tout.getInteger(com.sc.tileentity.TileEntityGeneratorSC.ITEM_BUFFER_KEY) == tkG.getMaxEnergyStored(),
+                    "Г-5: generator item keeps its tank size with extensions, the 2nd tank and the buffer with storage upgrades");
+        }
         com.sc.tileentity.TileEntityGeneratorSC sol = new com.sc.tileentity.TileEntityGeneratorSC();
         sol.setGeneratorType(com.sc.energy.GeneratorType.SOLAR_EXO);
         sol.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, od.copy());
@@ -5311,4 +5349,128 @@ public final class SelfTestSC {
         check(ok, "generator item: buffer, fuel, ignition (clamped) and the Singular by-product survive break/place");
     }
 
+    /** The fixes after the full bug check of 2026-10-06 (docs/todo-недоработки.md, «Полная проверка 2026-10-06»). */
+    private static void fullFixes20261006() {
+        // МШ-1: фильтр имён руд для глубокого сканирования
+        check(com.sc.machine.ExoOreTableSC.isOreName("oreCopper") && !com.sc.machine.ExoOreTableSC.isOreName("oreberryIron")
+                && !com.sc.machine.ExoOreTableSC.isOreName("ore") && !com.sc.machine.ExoOreTableSC.isOreName("orecopper")
+                && !com.sc.machine.ExoOreTableSC.isOreName("ingotCopper") && !com.sc.machine.ExoOreTableSC.isOreName(null),
+                "МШ-1: deep scan takes only ore[A-Z]... names");
+        boolean onlyBlocks = true;
+        for (com.sc.machine.ExoOreTableSC.Entry e : com.sc.machine.ExoOreTableSC.foreign()) {
+            onlyBlocks &= e.ore.getItem() instanceof net.minecraft.item.ItemBlock;
+        }
+        check(onlyBlocks, "МШ-1: deep scan foreign ores are blocks only");
+        // МШ-2: список измерений генерации
+        check(com.sc.worldgen.OreGenSC.generatesIn(0, new int[]{0}) && !com.sc.worldgen.OreGenSC.generatesIn(-1, new int[]{0})
+                && com.sc.worldgen.OreGenSC.generatesIn(7, new int[]{0, 7})
+                && com.sc.worldgen.OreGenSC.generatesIn(0, null) && !com.sc.worldgen.OreGenSC.generatesIn(1, null)
+                && com.sc.util.ConfigSC.oreDimensions != null && com.sc.util.ConfigSC.oreDimensions.length > 0,
+                "МШ-2: ore generation dimensions from the config (default 0)");
+        // БР-5: Oxygen Regen only in Exo-class suits, other chips everywhere
+        check(!com.sc.item.ItemArmorChipSC.worksIn(com.sc.util.ChipType.OXYGEN_REGEN, com.sc.util.ArmorSuit.NANO)
+                && !com.sc.item.ItemArmorChipSC.worksIn(com.sc.util.ChipType.OXYGEN_REGEN, com.sc.util.ArmorSuit.QUANTUM)
+                && com.sc.item.ItemArmorChipSC.worksIn(com.sc.util.ChipType.OXYGEN_REGEN, com.sc.util.ArmorSuit.EXO)
+                && com.sc.item.ItemArmorChipSC.worksIn(com.sc.util.ChipType.OXYGEN_REGEN, com.sc.util.ArmorSuit.SINGULAR)
+                && com.sc.item.ItemArmorChipSC.worksIn(com.sc.util.ChipType.CRYO_LOOP, com.sc.util.ArmorSuit.NANO)
+                && com.sc.item.ItemArmorChipSC.worksIn(com.sc.util.ChipType.SENSOR, com.sc.util.ArmorSuit.NANO)
+                && !com.sc.item.ItemArmorChipSC.worksIn(com.sc.util.ChipType.SENSOR, null),
+                "БР-5: a chip goes only into a chestplate where it works");
+        {   // БР-4: a piece out of use cools by heatDissipation a second; chips back on at <=50%
+            com.sc.util.ArmorSuit s = com.sc.util.ArmorSuit.EXO;
+            net.minecraft.item.ItemStack c = new net.minecraft.item.ItemStack(ModItems.ARMOR.get(s)[1]);
+            c.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+            c.getTagCompound().setInteger("HeatSC", s.heatCapacity / 2 + s.heatDissipation);
+            c.getTagCompound().setBoolean("ChipsOffSC", true);
+            boolean ch = com.sc.item.ItemArmorSC.coolOneSecond(c);
+            check(ch && c.getTagCompound().getInteger("HeatSC") == s.heatCapacity / 2 && !c.getTagCompound().getBoolean("ChipsOffSC")
+                    && com.sc.tileentity.TileEntityArmorStationSC.COOL_EVERY == 20 && !com.sc.item.ItemArmorSC.coolOneSecond(null),
+                    "БР-4: armour in a station slot cools, chips come back at 50% heat");
+        }
+        check(com.sc.ShieldEventHandler.privateFieldAgainst(null, null, 0, 0, 0) == null, "БР-1: the station access helper is null-safe");
+        {   // К1/К2: block dearer than the whole buffer takes the full buffer; own neighbours never dug
+            com.sc.tileentity.TileEntityQuarrySC qk = new com.sc.tileentity.TileEntityQuarrySC();
+            qk.setQuarryTier(com.sc.energy.Tier.LV);
+            int qkMax = qk.getMaxEnergyStored();
+            qk.setEnergyStoredClient(qkMax);
+            boolean k1full = qk.payable(qkMax + 1000) == qkMax;
+            qk.setEnergyStoredClient(qkMax - 1);
+            boolean k1wait = qk.payable(qkMax + 1000) == -1;
+            qk.setEnergyStoredClient(100);
+            boolean k1norm = qk.payable(50) == 50 && qk.payable(150) == -1;
+            boolean k2 = qk.touchesMe(1, 0, 0) && qk.touchesMe(0, -1, 0) && !qk.touchesMe(1, 1, 0) && !qk.touchesMe(0, 0, 0) && !qk.touchesMe(2, 0, 0);
+            check(k1full && k1wait && k1norm && k2, "К1/К2: an over-buffer block takes the full buffer; 6 own neighbours never dug");
+            int[] g1 = com.sc.tileentity.TileEntityFieldGeneratorSC.gridAxis(0, 10, 4);
+            int[] g2 = com.sc.tileentity.TileEntityFieldGeneratorSC.gridAxis(5, 5, 4);
+            int[] g3 = com.sc.tileentity.TileEntityFieldGeneratorSC.gridAxis(0, 8, 4);
+            check(java.util.Arrays.equals(g1, new int[]{0, 4, 8, 10}) && java.util.Arrays.equals(g2, new int[]{5})
+                    && java.util.Arrays.equals(g3, new int[]{0, 4, 8}) && com.sc.tileentity.TileEntityFieldGeneratorSC.CLAIM_MAX_POINTS >= 64,
+                    "П1: private-zone claim check grid every 4 blocks, edges in, capped");
+        }
+        {   // Э-4: foreign inventories in item tubes
+            net.minecraft.inventory.InventoryBasic stingy = new net.minecraft.inventory.InventoryBasic("t", false, 1) {
+                @Override
+                public ItemStack decrStackSize(int s, int n) {
+                    return super.decrStackSize(s, Math.min(1, n));
+                }
+            };
+            net.minecraft.inventory.InventoryBasic dst = new net.minecraft.inventory.InventoryBasic("d", false, 1);
+            stingy.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Items.iron_ingot, 10));
+            int moved = TileEntityConduitBundleSC.transfer(stingy, 0, net.minecraftforge.common.util.ForgeDirection.NORTH, stingy.getStackInSlot(0),
+                    dst, net.minecraftforge.common.util.ForgeDirection.SOUTH, 4, null);
+            boolean less = moved == 1 && stingy.getStackInSlot(0).stackSize == 9 && dst.getStackInSlot(0).stackSize == 1;
+            net.minecraft.inventory.InventoryBasic liar = new net.minecraft.inventory.InventoryBasic("t", false, 1) {
+                @Override
+                public ItemStack decrStackSize(int s, int n) {
+                    return null;
+                }
+            };
+            net.minecraft.inventory.InventoryBasic dst2 = new net.minecraft.inventory.InventoryBasic("d", false, 1);
+            liar.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Items.iron_ingot, 10));
+            int m2 = TileEntityConduitBundleSC.transfer(liar, 0, net.minecraftforge.common.util.ForgeDirection.NORTH, liar.getStackInSlot(0),
+                    dst2, net.minecraftforge.common.util.ForgeDirection.SOUTH, 4, null);
+            boolean none = m2 == -1 && liar.getStackInSlot(0).stackSize == 10 && dst2.getStackInSlot(0) == null;
+            net.minecraft.inventory.InventoryBasic greedy = new net.minecraft.inventory.InventoryBasic("t", false, 1) {
+                @Override
+                public ItemStack decrStackSize(int s, int n) {
+                    return super.decrStackSize(s, 8);
+                }
+            };
+            net.minecraft.inventory.InventoryBasic small = new net.minecraft.inventory.InventoryBasic("d", false, 1) {
+                @Override
+                public int getInventoryStackLimit() {
+                    return 4;
+                }
+            };
+            greedy.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Items.iron_ingot, 10));
+            int m3 = TileEntityConduitBundleSC.transfer(greedy, 0, net.minecraftforge.common.util.ForgeDirection.NORTH, greedy.getStackInSlot(0),
+                    small, net.minecraftforge.common.util.ForgeDirection.SOUTH, 4, null);
+            boolean more = m3 == 4 && small.getStackInSlot(0).stackSize == 4 && greedy.getStackInSlot(0).stackSize == 6;
+            class NullSided extends net.minecraft.inventory.InventoryBasic implements net.minecraft.inventory.ISidedInventory {
+                NullSided() {
+                    super("s", false, 2);
+                }
+
+                public int[] getAccessibleSlotsFromSide(int side) {
+                    return null;
+                }
+
+                public boolean canInsertItem(int slot, ItemStack st, int side) {
+                    return true;
+                }
+
+                public boolean canExtractItem(int slot, ItemStack st, int side) {
+                    return true;
+                }
+            }
+            boolean nullSlots;
+            try {
+                nullSlots = TileEntityConduitBundleSC.insert(new NullSided(), net.minecraftforge.common.util.ForgeDirection.SOUTH,
+                        new ItemStack(net.minecraft.init.Items.iron_ingot, 5), false) == 5;
+            } catch (RuntimeException e) {
+                nullSlots = false;
+            }
+            check(less && none && more && nullSlots, "Э-4: tubes with a foreign inventory that gives less / null / more, null slot arrays");
+        }
+    }
 }

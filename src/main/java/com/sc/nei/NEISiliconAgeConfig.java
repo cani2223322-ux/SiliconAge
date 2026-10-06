@@ -34,6 +34,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         }
         CompressorRecipeHandlerSC compressor = new CompressorRecipeHandlerSC();
         API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.lightSC));   // the searchlight's light: not an item to have
+        API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.bridgeVortex)); // Р-1: the bridge's vortex, a technical block
         API.registerRecipeHandler(compressor);
         API.registerUsageHandler(compressor);
         covered.add(compressor.getMachineType());

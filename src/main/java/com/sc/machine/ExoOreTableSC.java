@@ -48,12 +48,12 @@ public final class ExoOreTableSC {
                 seen.add(key(e.ore));
             }
             for (String name : net.minecraftforge.oredict.OreDictionary.getOreNames()) {
-                if (!name.startsWith("ore")) {
+                if (!isOreName(name)) {
                     continue;
                 }
                 for (ItemStack s : net.minecraftforge.oredict.OreDictionary.getOres(name)) {
-                    if (s == null || s.getItem() == null) {
-                        continue;
+                    if (s == null || !isBlock(s.getItem())) {
+                        continue;                       // only blocks: no "ore..." items
                     }
                     String id = String.valueOf(net.minecraft.item.Item.itemRegistry.getNameForObject(s.getItem()));
                     if (id.startsWith("minecraft:") || id.startsWith(com.sc.Reference.MODID + ":")) {
@@ -70,6 +70,20 @@ public final class ExoOreTableSC {
             foreign = l;
         }
         return foreign;
+    }
+
+    /** An ore dictionary ore name: "ore" + a capital letter (oreCopper yes; oreberry, ore, oreganoSeed no). */
+    public static boolean isOreName(String name) {
+        return name != null && name.length() > 3 && name.startsWith("ore") && name.charAt(3) >= 'A' && name.charAt(3) <= 'Z';
+    }
+
+    /** The item places a block (an ItemBlock whose block isn't air). */
+    static boolean isBlock(net.minecraft.item.Item item) {
+        if (!(item instanceof net.minecraft.item.ItemBlock)) {
+            return false;
+        }
+        net.minecraft.block.Block b = net.minecraft.block.Block.getBlockFromItem(item);
+        return b != null && b != Blocks.air;
     }
 
     private static String key(ItemStack s) {

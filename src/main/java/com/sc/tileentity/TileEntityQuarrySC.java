@@ -451,6 +451,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return 1;
         }
         Block block = worldObj.getBlock(x, y, z);
+        if (touchesMe(x, y, z) && !block.getMaterial().isLiquid()) {
+            return 1;                                      // its own neighbours (lever, torch, chest, cables) stay
+        }
         if (block.isAir(worldObj, x, y, z)) {
             return 1;
         }
@@ -485,6 +488,24 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 || b == Blocks.cobblestone_wall || b == Blocks.iron_bars || b == Blocks.iron_door || b == Blocks.rail
                 || b == Blocks.golden_rail || b == Blocks.detector_rail || b == Blocks.activator_rail || b == Blocks.bookshelf
                 || b == Blocks.glowstone;
+    }
+
+    /** One of the quarry's own 6 neighbours (a lever, a torch, the output chest, cables): never dug. */
+    public boolean touchesMe(int x, int y, int z) {
+        return Math.abs(x - xCoord) + Math.abs(y - yCoord) + Math.abs(z - zCoord) == 1;
+    }
+
+    /**
+     * EU to take for a block that costs `cost`: the cost when the buffer holds it; a block dearer than the
+     * whole buffer takes the full buffer once it is full (else it would wait for ever); -1: not yet.
+     */
+    public int payable(int cost) {
+        int stored = getEnergyStored();
+        if (stored >= cost) {
+            return cost;
+        }
+        int max = getMaxEnergyStored();
+        return cost > max && max > 0 && stored >= max ? stored : -1;
     }
 
     /** Another player's private field zone, or another mod's protection, forbids breaking there. */
@@ -660,8 +681,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 continue;
             }
             Block block = worldObj.getBlock(x, y, z);
-            int cost = verdict == 2 ? 20 : costFor(block.getBlockHardness(worldObj, x, y, z));
-            if (getEnergyStored() < cost) {
+            int cost = payable(verdict == 2 ? 20 : costFor(block.getBlockHardness(worldObj, x, y, z)));
+            if (cost < 0) {
                 setStatus(Status.NO_POWER);
                 return;
             }
@@ -787,9 +808,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return;
         }
         progress = Math.min(progress + haulsPerSecond() / 20.0, 8);
-        int cost = haulCost();
         while (progress >= 1) {
-            if (getEnergyStored() < cost) {
+            int cost = payable(haulCost());
+            if (cost < 0) {
                 setStatus(Status.NO_POWER);
                 return;
             }
@@ -1254,11 +1275,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                         if (y < 1 || y > 255 || Math.abs(x - x0) > 32 || Math.abs(z - z0) > 32 || !seen.add(posKey(x, y, z))) {
                             continue;
                         }
-                        if (!worldObj.blockExists(x, y, z) || worldObj.getBlock(x, y, z) != ore || worldObj.getBlockMetadata(x, y, z) != meta) {
+                        if (!worldObj.blockExists(x, y, z) || worldObj.getBlock(x, y, z) != ore || worldObj.getBlockMetadata(x, y, z) != meta
+                                || touchesMe(x, y, z)) {
                             continue;
                         }
-                        int cost = costFor(ore.getBlockHardness(worldObj, x, y, z));
-                        if (getEnergyStored() < cost || forbidden(x, y, z) || taken >= VEIN_MAX || headKind() == null) {
+                        int cost = payable(costFor(ore.getBlockHardness(worldObj, x, y, z)));
+                        if (cost < 0 || forbidden(x, y, z) || taken >= VEIN_MAX || headKind() == null) {
                             return taken;
                         }
                         removeEnergy(cost);
@@ -1535,7 +1557,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (items) {
             for (Object o : worldObj.getEntitiesWithinAABB(EntityItem.class, box)) {
                 EntityItem e = (EntityItem) o;
-                if (!e.isDead && e.getEntityItem() != null && firstEmpty() >= 0) {
+                if (!e.isDead && e.getEntityItem() != null && firstEmpty() >= 0 && magnetMay(e)) {
                     store(e.getEntityItem());
                     e.setDead();
                 }
@@ -1544,12 +1566,18 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (orbs) {
             for (Object o : worldObj.getEntitiesWithinAABB(EntityXPOrb.class, box)) {
                 EntityXPOrb e = (EntityXPOrb) o;
-                if (!e.isDead) {
+                if (!e.isDead && magnetMay(e)) {
                     xp += e.getXpValue();
                     e.setDead();
                 }
             }
         }
+    }
+
+    /** Not out of another player's private field zone the owner has no access to. */
+    public boolean magnetMay(net.minecraft.entity.Entity e) {
+        TileEntityFieldGeneratorSC field = TileEntityFieldGeneratorSC.fieldWith(worldObj, TileEntityFieldGeneratorSC.F_PRIVATE, e.posX, e.posY, e.posZ);
+        return field == null || field.allowedName(owner);
     }
 
     // ------------------------------------------------------------------ the scanner

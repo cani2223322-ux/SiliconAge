@@ -443,6 +443,9 @@ public final class DrillLogicSC {
         if (l == null || l[3] != p.worldObj.provider.dimensionId || !p.worldObj.blockExists(l[0], l[1], l[2])) {
             return null;
         }
+        if (com.sc.ShieldEventHandler.privateFor(p.worldObj, p, l[0], l[1], l[2])) {
+            return null;                    // БР-3: checked on every delivery - a chest now in someone's private field gets nothing, the drops fall
+        }
         TileEntity te = p.worldObj.getTileEntity(l[0], l[1], l[2]);
         if (te instanceof TileEntityChest) {
             // a double chest: both halves, in vanilla's order (as BlockChest opens it)

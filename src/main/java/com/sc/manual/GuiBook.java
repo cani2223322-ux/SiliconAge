@@ -914,7 +914,7 @@ public class GuiBook extends GuiScreen {
         }
         small(f.amount >= 1000 ? f.amount / 1000 + "B" : String.valueOf(f.amount), x + 2, y + 12, 0xFFFFFF);
         if (inPage(x, y, 18, 18)) {
-            hoverLines = lines(fl.getLocalizedName(f), "§7" + f.amount + " mB");
+            hoverLines = lines(fl.getLocalizedName(f), "§7" + f.amount + " " + BookContent.mb());
         }
         return x + 18;
     }

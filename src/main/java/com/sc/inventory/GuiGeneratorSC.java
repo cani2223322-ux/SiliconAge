@@ -442,7 +442,12 @@ public class GuiGeneratorSC extends GuiContainer {
                 used += generator.getStackInSlot(TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i) != null ? 1 : 0;
             }
             int tr = GuiBigSC.UPG_TEXT_W;
-            fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
+            if (generator.overdriveCapped()) {
+                // under IC2 without Industrial Upgrade the extra packets wouldn't leave: say so (the full text in the tooltip)
+                fit(Lang.tr("sc.gui.gen.ic2packets.short"), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0xB4501E);
+            } else {
+                fit(Lang.tr("sc.gui.big.upgrades.count", used, TileEntityGeneratorSC.UPGRADE_SLOTS), GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, tr, 0x505864);
+            }
         }
         drawRadiation();
     }
@@ -657,10 +662,9 @@ public class GuiGeneratorSC extends GuiContainer {
         return generator.getStatus() == GeneratorStatus.NO_BLANKET ? 1 : 2;
     }
 
-    /** The plasma's heat at full power: 600, and 100 more for each Overdrive. */
+    /** The plasma's heat at full power: 600, 100 more for each Overdrive, the casing's - under the limit (runningHeat). */
     private int fusNormHeat() {
-        return 600 + 100 * generator.upgradeCount(com.sc.machine.UpgradeType.OVERDRIVE)
-                + (generator.isShielded() ? TileEntityGeneratorSC.SHIELDED_HEAT : 0);
+        return generator.runningHeat(600);
     }
 
     /** A blanket in the slot, or the last one put out with life left in it (the next lighting goes on with that). */
@@ -1836,6 +1840,13 @@ public class GuiGeneratorSC extends GuiContainer {
         if (powerTip != null) {
             return powerTip;
         }
+        if (upgrades() && generator.overdriveCapped()
+                && GuiGaugeSC.isOver(GuiBigSC.UPG_TEXT_X, GuiBigSC.UPG_Y, GuiBigSC.UPG_TEXT_W, 9, mouseX, mouseY)) {
+            lines.add("§6" + Lang.tr("sc.gui.gen.ic2packets"));
+            lines.add(Lang.tr("sc.gui.gen.ic2packets.count", generator.effectiveOverdrive(),
+                    generator.upgradeCount(com.sc.machine.UpgradeType.OVERDRIVE)));
+            return lines;
+        }
         List<String> batteryTip = battery.tooltip(mouseX, mouseY, generator.getStackInSlot(TileEntityGeneratorSC.SLOT_BATTERY));
         if (batteryTip != null) {
             return batteryTip;
@@ -1845,6 +1856,9 @@ public class GuiGeneratorSC extends GuiContainer {
             lines.add(generator.getEnergyStored() + " / " + generator.getMaxEnergyStored() + " EU");
             lines.add(Lang.tr("sc.gui.output", type == GeneratorType.CREATIVE ? generator.getCreativeTier().getVoltage() : generator.ratedOutput()));
             lines.add(Lang.tr("sc.gui.gen.packet", generator.outputTier().name(), generator.outputTier().getVoltage()));
+            if (generator.overdriveCapped()) {
+                lines.add("§6" + Lang.tr("sc.gui.gen.ic2packets"));
+            }
             return lines;
         }
 

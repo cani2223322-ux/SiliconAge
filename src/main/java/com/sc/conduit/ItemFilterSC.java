@@ -89,13 +89,50 @@ public final class ItemFilterSC {
         tag(filter).setTag("Items", list);
     }
 
+    /** Э-2: parsed lists by filter stack (identity - ItemStack has no equals), dropped with the stack. */
+    private static final java.util.Map<ItemStack, Parsed> PARSED = new java.util.WeakHashMap<ItemStack, Parsed>();
+
+    private static final class Parsed {
+        final Object items;          // the "Items" list it was parsed from (by identity; setEntry always puts a new one)
+        final int count, damage;
+        final ItemStack[] entries;
+
+        Parsed(Object items, int count, int damage, ItemStack[] entries) {
+            this.items = items;
+            this.count = count;
+            this.damage = damage;
+            this.entries = entries;
+        }
+    }
+
+    /**
+     * entries(filter), parsed once per filter stack and its list: parsed again when the list is
+     * another object (setEntry, a copied or re-synced stack), has another length, or the filter
+     * changed kind. Read only - callers must not change the array or its stacks.
+     */
+    public static ItemStack[] cachedEntries(ItemStack filter) {
+        NBTTagList list = filter.hasTagCompound() && filter.getTagCompound().hasKey("Items", 9)
+                ? filter.getTagCompound().getTagList("Items", 10) : null;
+        int count = list == null ? -1 : list.tagCount();
+        int damage = filter.getItemDamage();
+        synchronized (PARSED) {
+            Parsed p = PARSED.get(filter);
+            if (p != null && p.items == list && p.count == count && p.damage == damage) {
+                return p.entries;
+            }
+            ItemStack[] parsed = entries(filter);
+            PARSED.put(filter, new Parsed(list, count, damage, parsed));
+            return parsed;
+        }
+    }
+
     /** Whether `candidate` gets past this filter (no filter at all: yes). */
     public static boolean passes(ItemStack filter, ItemStack candidate) {
         if (!isFilter(filter) || candidate == null) {
             return true;
         }
         boolean black = flag(filter, BLACKLIST);
-        for (ItemStack e : entries(filter)) {
+        for (ItemStack e : cachedEntries(filter)) {
             if (e != null && matches(filter, e, candidate)) {
                 return !black;
             }
