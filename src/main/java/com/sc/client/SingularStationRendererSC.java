@@ -16,7 +16,7 @@ import net.minecraft.util.IIcon;
  * The Singular Service Station's look (В1): the armour station's gas windows on its sides, and over
  * the pedestal two tilted rings that turn slowly (fast and glowing violet while a process runs);
  * while it works, a slowly spinning translucent hologram of the pieces in the slots (their item
- * icons, stacked helmet to boots) and beams from each counted stabiliser's orb to the rings. Flat
+ * icons, stacked helmet to boots, the tool slot's blade / drill beside them) and beams from each counted stabiliser's orb to the rings. Flat
  * quads and lines only - cheap.
  */
 public class SingularStationRendererSC extends ArmorStationRendererSC {
@@ -140,6 +140,18 @@ public class SingularStationRendererSC extends ArmorStationRendererSC {
             tes.addVertexWithUV(size / 2, cy - size / 2, 0, icon.getMaxU(), icon.getMaxV());
             tes.addVertexWithUV(size / 2, cy + size / 2, 0, icon.getMaxU(), icon.getMinV());
             tes.addVertexWithUV(-size / 2, cy + size / 2, 0, icon.getMinU(), icon.getMinV());
+            tes.draw();
+        }
+        ItemStack tool = st.holoPiece(4);                       // the tool slot's blade / drill, beside the pieces
+        IIcon icon = tool == null ? null : tool.getItem().getIcon(tool, 0);
+        if (icon != null) {
+            double tx = 0.36, ts = 0.38;
+            tes.startDrawingQuads();
+            tes.setColorRGBA(210, 160, 255, 150);
+            tes.addVertexWithUV(tx - ts / 2, -ts / 2, 0, icon.getMinU(), icon.getMaxV());
+            tes.addVertexWithUV(tx + ts / 2, -ts / 2, 0, icon.getMaxU(), icon.getMaxV());
+            tes.addVertexWithUV(tx + ts / 2, ts / 2, 0, icon.getMaxU(), icon.getMinV());
+            tes.addVertexWithUV(tx - ts / 2, ts / 2, 0, icon.getMinU(), icon.getMinV());
             tes.draw();
         }
         GL11.glPopMatrix();

@@ -3,7 +3,7 @@ package com.sc.util;
 import com.sc.energy.Tier;
 
 /**
- * The three electric drills, one per suit (styled like it; its set bonus goes with it). Pickaxe +
+ * The electric drills, one per suit (styled like it; its set bonus goes with it). Pickaxe +
  * shovel, EU per block, no durability. The batteries are small on purpose: worn energy armour feeds
  * the drill (DrillLogicSC.pay) and its weapon charger tops it up - the drill is meant to be used
  * with the suit. Heat is the drill's own, as for the blades.
@@ -14,7 +14,9 @@ public enum DrillType {
 
     NANO(ArmorSuit.NANO, Tier.MV, 10000, 12F, 50, 3, 0),
     QUANTUM(ArmorSuit.QUANTUM, Tier.HV, 40000, 24F, 150, 4, 3),
-    EXO(ArmorSuit.EXO, Tier.EV, 100000, 48F, 300, 5, 5);
+    EXO(ArmorSuit.EXO, Tier.EV, 100000, 48F, 300, 5, 5),
+    /** docs/plan-singular-tools.md (appended - ordinals and registry names are saved): only made from an Exo drill in the Singular station. */
+    SINGULAR(ArmorSuit.SINGULAR, Tier.SV, 1000000, 64F, 400, 5, 5);
 
     /** The suit it belongs to (its set bonus). */
     public final ArmorSuit suit;
@@ -38,8 +40,13 @@ public enum DrillType {
         this.euPerBlock = euPerBlock;
         this.harvestLevel = harvestLevel;
         this.fortune = fortune;
-        this.heatCapacity = 100 << ordinal();   // 100, 200, 400 - like the suits and blades
-        this.heatDissipation = 2 << ordinal();  // 2, 4, 8
+        this.heatCapacity = 100 << ordinal();   // 100, 200, 400, 800 (Singular) - like the suits and blades
+        this.heatDissipation = 2 << ordinal();  // 2, 4, 8, 16
+    }
+
+    /** Exo or above: the Singular drill keeps every Exo rule (the halved area cost with its set). */
+    public boolean exoClass() {
+        return ordinal() >= EXO.ordinal();
     }
 
     public String key() {

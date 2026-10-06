@@ -296,9 +296,17 @@ public final class ModItems {
         // the Energy Converter's modules: Channel Amplifier, Efficiency, the Mekanism / Galacticraft cards (appended)
         converterModule = new com.sc.item.ItemConverterModuleSC();
         GameRegistry.registerItem(converterModule, "converterModule");
+        // the Singular drill's crumbs and the clot nine of them make (appended, docs/plan-singular-tools.md)
+        singularCrumb = new com.sc.item.ItemSingularCrumbSC();
+        GameRegistry.registerItem(singularCrumb, "singularCrumb");
+        singularClot = new com.sc.item.ItemSingularClotSC();
+        GameRegistry.registerItem(singularClot, "singularClot");
     }
 
     public static com.sc.item.ItemConverterModuleSC converterModule;
+    /** «Крупица сингулярности» (the Singular drill's) and «Сгусток сингулярности» (nine of them). */
+    public static com.sc.item.ItemSingularCrumbSC singularCrumb;
+    public static com.sc.item.ItemSingularClotSC singularClot;
 
     /** The Compressed Matter Capsule: a plain component with a TooltipSC tooltip. */
     public static final class MatterCapsule extends ItemSimpleSC {

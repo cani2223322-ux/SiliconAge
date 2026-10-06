@@ -10,6 +10,8 @@ import com.sc.init.ModCreativeTab;
 import com.sc.manual.Lang;
 import com.sc.util.DrillFeature;
 import com.sc.util.DrillType;
+import com.sc.util.SingularScheme;
+import com.sc.util.ToolLevelSC;
 
 import cpw.mods.fml.common.Optional;
 import net.minecraft.block.Block;
@@ -29,12 +31,14 @@ import net.minecraft.util.IIcon;
 import net.minecraft.world.World;
 
 /**
- * Electric drills (Nano / Quantum / Exo), styled after the suits and IC2's drills: pickaxe +
+ * Electric drills (Nano / Quantum / Exo / Singular), styled after the suits and IC2's drills: pickaxe +
  * shovel, EU per block, no durability, a small battery - worn energy armour feeds it and its
  * weapon charger tops it up. Functions (DrillFeature: area modes, silk touch / fortune, vein,
  * autosmelt, laser, link...) are switched and bound in the armour screen (K, "Drill" tab); the
  * breaking itself is DrillLogicSC. Right-click places a torch; sneak + right-click charges from a
  * machine or links a chest. Its heat is its own.
+ * The Singular drill (docs/plan-singular-tools.md) adds levels, branches, the black hole mode and the
+ * colour scheme (ToolLevelSC, NBT): its icon follows the scheme, taken from the worn Singular chestplate.
  */
 @Optional.Interface(iface = "ic2.api.item.ISpecialElectricItem", modid = Reference.IC2_MODID)
 public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricItem {
@@ -44,6 +48,8 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
 
     private final DrillType type;
     private IIcon icon;
+    /** Singular: an icon per colour scheme (SingularScheme ordinal). */
+    private IIcon[] schemeIcons;
     private Object ic2Manager;
 
     public ItemDrillSC(DrillType type) {
@@ -103,17 +109,31 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         return spent;
     }
 
-    /** Whether this drill has the function and it is switched on (a fresh drill: its default). */
+    /**
+     * Whether this drill has the function and it is switched on (a fresh drill: its default). The black hole is
+     * its mode: on while "SingHole" holds a size. The Singular functions' level: DrillLogicSC.unlocked / on.
+     */
     public static boolean isEnabled(ItemStack stack, DrillFeature f) {
         DrillType t = typeOf(stack);
         if (t == null || !f.availableIn(t)) {
             return false;
+        }
+        if (f == DrillFeature.BLACK_HOLE) {
+            return blackHoleSize(stack) > 0;
         }
         boolean toggled = stack.hasTagCompound() && (stack.getTagCompound().getInteger(TOGGLED) & (1 << f.ordinal())) != 0;
         return f.onByDefault != toggled;
     }
 
     public static void setEnabled(ItemStack stack, DrillFeature f, boolean on) {
+        if (f == DrillFeature.BLACK_HOLE) {                // the mode: on - the smallest zone unless one is set, off - none
+            if (!on) {
+                setBlackHoleSize(stack, 0);
+            } else if (blackHoleSize(stack) == 0) {
+                setBlackHoleSize(stack, com.sc.util.DrillZoneSC.HOLE_SIZES[1]);
+            }
+            return;
+        }
         int bits = tag(stack).getInteger(TOGGLED);
         bits = on != f.onByDefault ? bits | (1 << f.ordinal()) : bits & ~(1 << f.ordinal());
         stack.getTagCompound().setInteger(TOGGLED, bits);
@@ -148,6 +168,53 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         }
     }
 
+    /** Singular, NBT "SingHole": the black hole mode's zone - 0 (off), 5, 9 or 12. Client-safe. */
+    public static final String HOLE = "SingHole", HOLE_DEPTH = "SingHoleDepth";
+
+    public static int blackHoleSize(ItemStack stack) {
+        int v = stack != null && stack.hasTagCompound() ? stack.getTagCompound().getInteger(HOLE) : 0;
+        return v == 5 || v == 9 || v == 12 ? v : 0;
+    }
+
+    /** Singular, NBT "SingHoleDepth": the black hole's depth - 1, or 3 (a tunnel). Client-safe. */
+    public static int tunnelDepth(ItemStack stack) {
+        return stack != null && stack.hasTagCompound() && stack.getTagCompound().getInteger(HOLE_DEPTH) == 3 ? 3 : 1;
+    }
+
+    /** Sets the black hole's size (0 / 5 / 9 / 12; anything else: off). */
+    public static void setBlackHoleSize(ItemStack stack, int size) {
+        tag(stack).setInteger(HOLE, size == 5 || size == 9 || size == 12 ? size : 0);
+    }
+
+    /** Sets the black hole's depth (3: a tunnel, anything else: 1). */
+    public static void setTunnelDepth(ItemStack stack, int depth) {
+        tag(stack).setInteger(HOLE_DEPTH, depth == 3 ? 3 : 1);
+    }
+
+    /** Singular, NBT: blocks dug towards the next level point ("SingDigCnt"), units towards the next crumb ("SingCrumbCnt"). */
+    public static final String DIG_COUNT = "SingDigCnt", CRUMB_COUNT = "SingCrumbCnt";
+
+    public static int digCounter(ItemStack stack) {
+        return stack != null && stack.hasTagCompound() ? Math.max(0, stack.getTagCompound().getInteger(DIG_COUNT)) : 0;
+    }
+
+    public static void setDigCounter(ItemStack stack, int n) {
+        tag(stack).setInteger(DIG_COUNT, Math.max(0, n));
+    }
+
+    public static int crumbCounter(ItemStack stack) {
+        return stack != null && stack.hasTagCompound() ? Math.max(0, stack.getTagCompound().getInteger(CRUMB_COUNT)) : 0;
+    }
+
+    public static void setCrumbCounter(ItemStack stack, int n) {
+        tag(stack).setInteger(CRUMB_COUNT, Math.max(0, n));
+    }
+
+    /** Blocks counted towards the next singularity crumb, 0..CRUMB_BLOCKS (the HUD). Client-safe. */
+    public static int crumbProgress(ItemStack stack) {
+        return Math.min(ItemSingularCrumbSC.CRUMB_BLOCKS, crumbCounter(stack));
+    }
+
     /** The linked chest {x, y, z, dimension}, or null. */
     public static int[] link(ItemStack stack) {
         if (stack == null || !stack.hasTagCompound() || !stack.getTagCompound().hasKey("LinkX")) {
@@ -161,12 +228,32 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
 
     @Override
     public void registerIcons(IIconRegister register) {
-        icon = register.registerIcon(Reference.ASSETS + ":drill" + Character.toUpperCase(type.key().charAt(0)) + type.key().substring(1));
+        String base = Reference.ASSETS + ":drill" + Character.toUpperCase(type.key().charAt(0)) + type.key().substring(1);
+        if (type == DrillType.SINGULAR) {                  // drillSingular_a ... _k
+            SingularScheme[] all = SingularScheme.values();
+            schemeIcons = new IIcon[all.length];
+            for (SingularScheme s : all) {
+                schemeIcons[s.ordinal()] = register.registerIcon(base + "_" + s.key());
+            }
+            icon = schemeIcons[SingularScheme.DEFAULT.ordinal()];
+            return;
+        }
+        icon = register.registerIcon(base);
     }
 
     @Override
     public IIcon getIconFromDamage(int damage) {
         return icon;
+    }
+
+    @Override
+    public IIcon getIconIndex(ItemStack stack) {
+        return schemeIcons != null ? schemeIcons[ToolLevelSC.schemeOf(stack).ordinal()] : icon;
+    }
+
+    @Override
+    public IIcon getIcon(ItemStack stack, int pass) {
+        return getIconIndex(stack);
     }
 
     @Override
@@ -196,7 +283,9 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add(Lang.tr("sc.tooltip.armor.charge", chargeOf(stack), type.maxCharge));
+        int funnel = DrillLogicSC.funnelRadius(player, stack) * 2 + 1;
         String mode = isEnabled(stack, DrillFeature.VEIN) ? Lang.tr("sc.drillfn.vein")
+                : funnel > 1 ? funnel + "x" + funnel
                 : isEnabled(stack, DrillFeature.TUNNEL) ? Lang.tr("sc.drillfn.tunnel")
                 : isEnabled(stack, DrillFeature.AREA_5X5) ? "5x5" : isEnabled(stack, DrillFeature.AREA_3X3) ? "3x3" : "1x1";
         if (isEnabled(stack, DrillFeature.SILK)) {
@@ -205,29 +294,68 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
             mode += ", " + Lang.tr("sc.drillfn.fortune") + " " + Lang.tr("enchantment.level." + type.fortune);
         }
         list.add(Lang.tr(overheated(stack) ? "sc.tooltip.drill.statehot" : "sc.tooltip.drill.state", mode, heatPercent(stack)));
+        boolean sing = type == DrillType.SINGULAR;
+        if (sing) {
+            ItemBladeSC.singularSummary(stack, list);
+            int hole = DrillLogicSC.holeSize(player, stack);
+            list.add(hole > 0 ? Lang.tr("sc.tooltip.tool.sing.hole", hole, hole, tunnelDepth(stack)) : Lang.tr("sc.tooltip.tool.sing.hole.off"));
+            if (hole > 0) {
+                list.add("\u00a77" + Lang.tr("sc.tooltip.drill.sing.crumbs", crumbProgress(stack), ItemSingularCrumbSC.CRUMB_BLOCKS));
+            }
+        }
         switch (com.sc.util.TooltipSC.page()) {
             case 1: {
                 java.util.List<String> names = new java.util.ArrayList<String>();
                 java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
                 int lit = 0;
+                java.util.List<String> locked = new java.util.ArrayList<String>();
                 for (DrillFeature f : DrillFeature.values()) {
-                    if (f.availableIn(type)) {
-                        names.add(Lang.tr("sc.drillfn." + f.key()));
-                        on.add(isEnabled(stack, f));
-                        lit += isEnabled(stack, f) ? 1 : 0;
+                    if (!f.availableIn(type)) {
+                        continue;
                     }
+                    if (!DrillLogicSC.unlocked(player, stack, f)) {      // not opened by the Singular level yet
+                        locked.add(Lang.tr("sc.tooltip.drill.sing.lockitem", Lang.tr("sc.drillfn." + f.key()), f.singLevel()));
+                        continue;
+                    }
+                    boolean fnOn = DrillLogicSC.on(player, stack, f);
+                    names.add(Lang.tr("sc.drillfn." + f.key()));
+                    on.add(fnOn);
+                    lit += fnOn ? 1 : 0;
                 }
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.pairs(list, names, on);
+                if (!locked.isEmpty()) {
+                    StringBuilder sb = new StringBuilder();
+                    for (String l : locked) {
+                        sb.append(sb.length() > 0 ? ", " : "").append(l);
+                    }
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.locked", sb.toString()), "\u00a78");
+                }
                 list.add("\u00a77" + Lang.tr("sc.tooltip.drill.stats", type.euPerBlock, type.harvestLevel));
                 if (DrillFeature.AUTOSMELT.availableIn(type)) {
                     list.add("\u00a77" + Lang.tr("sc.tooltip.drill.smeltnoxp"));   // a furnace's XP isn't given
+                }
+                if (sing) {
+                    ItemBladeSC.singularDetails(list, false);
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.hole", DrillFeature.HOLE_BLOCKS_PER_MB,
+                            DrillFeature.BLACK_HOLE.cooldownTicks() / 20), "\u00a7d");
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.crumbinfo", ItemSingularCrumbSC.CRUMB_BLOCKS,
+                            ItemSingularCrumbSC.ORE_MUL, DrillFeature.BLOCKS_PER_POINT), "\u00a77");
+                    int b = ToolLevelSC.branchOf(stack);
+                    if (b != ToolLevelSC.BRANCH_NONE) {
+                        com.sc.util.TooltipSC.wrap(list, Lang.tr(ToolLevelSC.branchLangKey(stack, b) + ".desc"), "\u00a77");
+                    }
                 }
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;
             }
             case 2:
                 com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.howto", type.chargeTier.name()), "\u00a77");
+                if (sing) {
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.drill.keys"), "\u00a7d");
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.controls"), "\u00a7d");
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.station"), "\u00a77");
+                }
                 break;
             default:
                 com.sc.util.TooltipSC.hintShift(list);
@@ -317,13 +445,33 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         return isEnabled(stack, DrillFeature.TORCH) && DrillLogicSC.placeTorch(player, world, x, y, z, side, hitX, hitY, hitZ);
     }
 
+    /** Singular: Shift + right-click in the air (or on a block that took nothing) - the black hole's depth 1 <-> 3. */
+    @Override
+    public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
+        if (type == DrillType.SINGULAR && player.isSneaking() && !world.isRemote) {
+            DrillLogicSC.toggleDepth(player);
+        }
+        return stack;
+    }
+
     // ---- once a second: cooling ----
 
     @Override
     public void onUpdate(ItemStack stack, World world, Entity entity, int slot, boolean held) {
         if (!world.isRemote && entity.ticksExisted % 20 == 0 && heatOf(stack) > 0
                 && !(entity instanceof EntityPlayer && DrillLogicSC.digging((EntityPlayer) entity, stack))) {
-            addHeat(stack, -type.heatDissipation);
+            int h = heatOf(stack);
+            if (entity instanceof EntityPlayer && DrillLogicSC.dumpsHeat((EntityPlayer) entity, stack)) {
+                ArmorLogicSC.addHeat((EntityPlayer) entity, h);   // full Singular suit: what heat is left in the drill goes into the suit
+                addHeat(stack, -h);
+            } else {
+                addHeat(stack, -type.heatDissipation);
+            }
+        }
+        // Singular: the worn Singular chestplate's colour scheme, once a second (not while digging: the block would restart)
+        if (type == DrillType.SINGULAR && !world.isRemote && entity instanceof EntityPlayer && entity.ticksExisted % 20 == 11
+                && !DrillLogicSC.digging((EntityPlayer) entity, stack)) {
+            ToolLevelSC.syncScheme((EntityPlayer) entity, stack);
         }
     }
 

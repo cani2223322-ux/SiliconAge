@@ -25,12 +25,15 @@ import net.minecraft.item.ItemStack;
 /**
  * NEI page of the Singular Station's Б-1 conversion: an Exo piece and its materials -> the Singular
  * piece of level 1, with the EU / gases and the time under it (SingularStationMath). R on a
- * Singular piece, U on an Exo piece, a material or the station itself open it.
+ * Singular piece, U on an Exo piece, a material or the station itself open it. The tool slot's two
+ * conversions (Exo blade / drill -> the Singular one, docs/plan-singular-tools.md §4) are pages 4 and 5.
  */
 public class SingularConvertHandlerSC extends TemplateRecipeHandler {
 
     static final String ID = "sc.singconvert";
     private static final int IN_X = 4, Y = 6, MAT_X = 28, OUT_X = 142, ARROW_X = 104;
+    /** Page types: 0..3 the armour pieces, then the blade and the drill (tool kind = type - 3). */
+    private static final int T_BLADE = 4, T_DRILL = 5, TYPES = 6;
 
     public SingularConvertHandlerSC() {
         transferRects.add(new RecipeTransferRect(new java.awt.Rectangle(ARROW_X, Y, 30, 16), ID));
@@ -62,13 +65,33 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
     }
 
     private static ItemStack piece(ArmorSuit suit, int type) {
+        if (type == T_BLADE) {
+            return new ItemStack(ModItems.BLADES.get(suit == ArmorSuit.EXO ? com.sc.util.BladeType.EXO : com.sc.util.BladeType.SINGULAR));
+        }
+        if (type == T_DRILL) {
+            return new ItemStack(ModItems.DRILLS.get(suit == ArmorSuit.EXO ? com.sc.util.DrillType.EXO : com.sc.util.DrillType.SINGULAR));
+        }
         return new ItemStack(ModItems.ARMOR.get(suit)[type]);
+    }
+
+    private static int toolOf(int type) {
+        return type >= T_BLADE ? type - 3 : SingularStationMath.TOOL_NONE;
+    }
+
+    private static int maskOf(int type) {
+        return type < T_BLADE ? 1 << type : 0;
+    }
+
+    /** The page type of a blade / drill stack (any tier), or -1. */
+    private static int toolType(ItemStack s) {
+        int k = TileEntitySingularStationSC.toolKindOf(s);
+        return k == SingularStationMath.TOOL_BLADE ? T_BLADE : k == SingularStationMath.TOOL_DRILL ? T_DRILL : -1;
     }
 
     @Override
     public void loadCraftingRecipes(String outputId, Object... results) {
         if (ID.equals(outputId)) {
-            for (int t = 0; t < 4; t++) {
+            for (int t = 0; t < TYPES; t++) {
                 arecipes.add(new CachedConvert(t));
             }
         } else {
@@ -80,6 +103,8 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
     public void loadCraftingRecipes(ItemStack result) {
         if (result != null && result.getItem() instanceof ItemArmorSC && ((ItemArmorSC) result.getItem()).getSuit() == ArmorSuit.SINGULAR) {
             arecipes.add(new CachedConvert(((ItemArmorSC) result.getItem()).armorType));
+        } else if (com.sc.util.ToolLevelSC.isSingularTool(result)) {
+            arecipes.add(new CachedConvert(toolType(result)));
         }
     }
 
@@ -96,9 +121,13 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
             arecipes.add(new CachedConvert(((ItemArmorSC) ingredient.getItem()).armorType));
             return;
         }
+        if (TileEntitySingularStationSC.isExoTool(ingredient)) {
+            arecipes.add(new CachedConvert(toolType(ingredient)));
+            return;
+        }
         int k = TileEntitySingularStationSC.materialKind(ingredient);
-        for (int t = 0; k >= 0 && t < 4; t++) {
-            if (SingularStationMath.convertMaterials(1 << t)[k] > 0) {
+        for (int t = 0; k >= 0 && t < TYPES; t++) {
+            if (SingularStationMath.convertMaterials(maskOf(t), toolOf(t))[k] > 0) {
                 arecipes.add(new CachedConvert(t));
             }
         }
@@ -125,7 +154,7 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
     @Override
     public void drawExtras(int recipe) {
         CachedConvert r = (CachedConvert) arecipes.get(recipe);
-        long[] c = SingularStationMath.convertCost(1 << r.type);
+        long[] c = SingularStationMath.convertCost(maskOf(r.type), toolOf(r.type));
         StringBuilder b = new StringBuilder(SingularStationMath.shortAmount(c[0], Lang.tr("sc.singStation.unit.k"), Lang.tr("sc.singStation.unit.m"),
                 Lang.tr("sc.singStation.unit.b")) + " EU");
         for (int i = 1; i < SingularStationMath.RESOURCES; i++) {
@@ -134,9 +163,9 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
             }
         }
         drawFit(b.toString(), 4, 30, 158, com.sc.inventory.GuiHoloSC.VALUE);
-        drawFit(Lang.tr("sc.nei.conv.time", TileEntitySingularStationSC.timeText(SingularStationMath.convertTicks(1 << r.type))), 4, 40, 120,
+        drawFit(Lang.tr("sc.nei.conv.time", TileEntitySingularStationSC.timeText(SingularStationMath.convertTicks(maskOf(r.type), toolOf(r.type)))), 4, 40, 120,
                 com.sc.inventory.GuiHoloSC.LABEL);
-        drawFit(Lang.tr("sc.nei.conv.note"), 4, 50, 120, 0x8898A8);
+        drawFit(Lang.tr(r.type >= T_BLADE ? "sc.nei.conv.note.tool" : "sc.nei.conv.note"), 4, 50, 120, 0x8898A8);
         com.sc.inventory.GuiHoloSC.glint(0, 0, 166, 63);
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
@@ -155,7 +184,7 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
         GL11.glPopMatrix();
     }
 
-    // ---- one piece's conversion ----
+    // ---- one piece's (or tool's) conversion ----
 
     public class CachedConvert extends CachedRecipe {
         final int type;
@@ -167,7 +196,7 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
             this.type = type;
             in = new PositionedStack(piece(ArmorSuit.EXO, type), IN_X, Y);
             out = new PositionedStack(piece(ArmorSuit.SINGULAR, type), OUT_X, Y);
-            int[] need = SingularStationMath.convertMaterials(1 << type);
+            int[] need = SingularStationMath.convertMaterials(maskOf(type), toolOf(type));
             for (int k = 0; k < need.length; k++) {
                 if (need[k] > 0) {
                     mats.add(new PositionedStack(TileEntitySingularStationSC.materialStack(k, need[k]), MAT_X + mats.size() * 18, Y));

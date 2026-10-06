@@ -22,10 +22,12 @@ import com.sc.util.ArmorGasSC;
 import com.sc.util.ArmorGasSC.Gas;
 import com.sc.util.ArmorSuit;
 import com.sc.util.BladeFeature;
+import com.sc.util.BladeForm;
 import com.sc.util.BladeType;
 import com.sc.util.DrillFeature;
 import com.sc.util.DrillType;
 import com.sc.util.PowerModeKey;
+import com.sc.util.ToolLevelSC;
 
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
@@ -117,6 +119,12 @@ public class GuiArmorSC extends GuiScreen {
     private static final int FILL_BASE = 1100, FILL_MAX = 5;
     /** "Fill everything": the count on its button stops at this many containers (the server pours them all with one GAS_FILL_ALL). */
     private static final int FILL_ALL_MAX = 64;
+    /**
+     * The Singular blade / drill tabs (docs/plan-singular-tools.md §4): the page switch (functions / level), the
+     * branches (TL_BRANCH + branch - 1), the forms (TL_FORM + BladeForm ordinal, under TL_FORM_MAX), the drill's mode step.
+     * All between FILL_BASE + 64 and BIND_BASE: refresh() and the feature hovers leave them alone.
+     */
+    private static final int TL_PAGE = 1200, TL_BRANCH = 1201, TL_FORM = 1210, TL_FORM_MAX = 20, TL_HOLE = 1230;
 
     // ---- layout ----
     private static final int WIN_W = 470, WIN_H = 236, KEY_W = 20, CHIP_W = 26, GAP = 3, COL_GAP = 8, GAS_PITCH = 11;
@@ -196,6 +204,12 @@ public class GuiArmorSC extends GuiScreen {
     private int levelPage, lvLx, lvLw, lvRx, lvRw, lvPageW, lvBranchY = -1, lvBranchRows, lvNoteY = -1, lvProfHeadY = -1, lvKeyY = -1, lvBonusY = -1;
     /** The "remove chips" button is on screen (rebuilt when the chips come or go). */
     private boolean chipsShown;
+    // ---- Singular tool tabs (set by initGui / initToolInfo) ----
+    /** 0: the functions (rows), 1: level, form / mode, branch, gas. */
+    private int toolPage;
+    /** The page switch's width at the foot (0: none - not a Singular tool). */
+    private int tlPageW;
+    private int tlTitleY = -1, tlLevelY = -1, tlReadyY = -1, tlFormY = -1, tlBranchY = -1, tlNoteY = -1, tlPerkY = -1, tlGasY = -1, tlOpensY = -1;
     /** The function (ArmorFeature, BladeFeature or PowerModeKey) whose key is being set (waiting for a key press), or null. */
     private Enum<?> capturing;
 
@@ -243,6 +257,7 @@ public class GuiArmorSC extends GuiScreen {
         sysMoreY = -1;
         fillMoreY = -1;
         lifeY = -1;
+        tlPageW = 0;
         tabs.clear();
         for (int type = 0; type < 4; type++) {
             if (ArmorLogicSC.piece(mc.thePlayer, type) != null) {
@@ -314,9 +329,13 @@ public class GuiArmorSC extends GuiScreen {
                 modeDescs.add(new int[]{k.ordinal(), dx, y + (btnH - 8) / 2, contentX + contentW - dx});
                 y += r[1];
             }
+        } else if (toolPage == 1 && singularTool() != null) {
+            initToolInfo(singularTool());
+            addToolPageButton();
         } else {
             List<Enum<?>> list = new ArrayList<Enum<?>>();
             boolean armour = selectedPiece < 4;
+            boolean chips = armour || singularTool() != null;    // the Singular tools' functions show their gas (from the armour) too
             if (selectedPiece == DRILL_TAB) {
                 DrillType t = ItemDrillSC.typeOf(drill());
                 for (DrillFeature f : DrillFeature.values()) {
@@ -341,7 +360,7 @@ public class GuiArmorSC extends GuiScreen {
             }
             boolean chest = selectedPiece == 1;
             int branchLevel = chest ? pendingBranch() : 0;
-            int[] r = chooseRows(list.size(), armour ? 150 : 140, chest ? (branchLevel > 0 ? 40 : 20) : 0);
+            int[] r = chooseRows(list.size(), chips ? 150 : 140, chest ? (branchLevel > 0 ? 40 : 20) : 0);
             int cols = r[0];
             int colW = (contentW - (cols - 1) * COL_GAP) / cols;
             if (cols == 1) {
@@ -351,11 +370,14 @@ public class GuiArmorSC extends GuiScreen {
             int rowsY = contentY + 10;
             for (int c = 0; c < cols && c * per < list.size(); c++) {
                 int x = contentX + c * (colW + COL_GAP);
-                heads.add(new int[]{x, contentY, colW - KEY_W - GAP - (armour ? CHIP_W + GAP : 0), armour ? 1 : 0, colW});
+                heads.add(new int[]{x, contentY, colW - KEY_W - GAP - (chips ? CHIP_W + GAP : 0), chips ? 1 : 0, colW});
             }
             for (int i = 0; i < list.size(); i++) {
                 int x = contentX + (i / per) * (colW + COL_GAP);
-                addRow(list.get(i), x, rowsY + (i % per) * r[1], colW - KEY_W - GAP - (armour ? CHIP_W + GAP : 0), armour);
+                addRow(list.get(i), x, rowsY + (i % per) * r[1], colW - KEY_W - GAP - (chips ? CHIP_W + GAP : 0), chips);
+            }
+            if (singularTool() != null) {
+                addToolPageButton();
             }
             int y = rowsY + per * r[1] + 4;
             chipsShown = chest && ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1));
@@ -550,6 +572,10 @@ public class GuiArmorSC extends GuiScreen {
 
     /** A Singular branch function the chestplate's choice (or no choice yet) keeps off; creative: none. */
     private boolean branchLocked(Enum<?> f) {
+        if (f instanceof BladeFeature || f instanceof DrillFeature) {
+            ItemStack t = f instanceof BladeFeature ? blade() : drill();
+            return t != null && !toolUnlocked(f) && lockedLevel(f) == 0;
+        }
         if (!(f instanceof ArmorFeature) || mc.thePlayer.capabilities.isCreativeMode) {
             return false;
         }
@@ -781,7 +807,7 @@ public class GuiArmorSC extends GuiScreen {
 
     /** What the open tab was laid out for - rebuilt when it changes. */
     private String signature() {
-        return selectedPiece == LIFE_TAB ? lifeSignature() : selectedPiece == LEVEL_TAB ? levelSignature() : wornSignature();
+        return selectedPiece == LIFE_TAB ? lifeSignature() : selectedPiece == LEVEL_TAB ? levelSignature() : wornSignature() + toolSignature();
     }
 
     /** The worn pieces plus what the level tab's buttons show: the branch choices, the profiles, the page. */
@@ -1219,6 +1245,430 @@ public class GuiArmorSC extends GuiScreen {
         }
     }
 
+    // ------------------------------------------------------------------ Singular blade / drill (docs/plan-singular-tools.md §4)
+
+    /** The Singular blade / drill of the open tab, or null (any other tab or tool). */
+    private ItemStack singularTool() {
+        if (selectedPiece == BLADE_TAB) {
+            ItemStack b = blade();
+            return ToolLevelSC.isBlade(b) ? b : null;
+        }
+        if (selectedPiece == DRILL_TAB) {
+            ItemStack d = drill();
+            return ToolLevelSC.isDrill(d) ? d : null;
+        }
+        return null;
+    }
+
+    /** Level, branch, form / mode, page, creative, Singular armour worn: what the tool's buttons were built for. */
+    private String toolSignature() {
+        ItemStack t = singularTool();
+        if (t == null) {
+            return "";
+        }
+        int mode = ToolLevelSC.isBlade(t) ? ItemBladeSC.formOf(t).ordinal() * 10 + com.sc.item.BladeSingularSC.effectiveForm(mc.thePlayer, t).ordinal()
+                : DrillLogicSC.holeSize(mc.thePlayer, t) * 10 + ItemDrillSC.tunnelDepth(t);
+        return "|t" + ToolLevelSC.levelOf(t) + ToolLevelSC.branchOf(t) + ":" + mode + ":" + toolPage
+                + (mc.thePlayer.capabilities.isCreativeMode ? 'c' : 's') + (com.sc.util.SingularLevel.wearsSingular(mc.thePlayer) ? 'w' : '-');
+    }
+
+    // the feature metadata of the Singular tools (old functions: level 1, no branch, no gas, no cooldown)
+    private static int singLevelOf(Enum<?> f) {
+        return f instanceof BladeFeature ? ((BladeFeature) f).singLevel() : f instanceof DrillFeature ? ((DrillFeature) f).singLevel() : 1;
+    }
+
+    private static int branchOfFeature(Enum<?> f) {
+        return f instanceof BladeFeature ? ((BladeFeature) f).branch() : f instanceof DrillFeature ? ((DrillFeature) f).branch() : 0;
+    }
+
+    /** The Singular blade's form that counts now: FORM_ATTACK's gas, cost and cooldown follow it. */
+    private BladeForm attackForm() {
+        return com.sc.item.BladeSingularSC.effectiveForm(mc.thePlayer, blade());
+    }
+
+    private Gas toolGas(Enum<?> f) {
+        if (f == BladeFeature.FORM_ATTACK) {
+            return BladeFeature.formAttackGas(attackForm());
+        }
+        return f instanceof BladeFeature ? ((BladeFeature) f).gas() : f instanceof DrillFeature ? ((DrillFeature) f).gas() : null;
+    }
+
+    private int toolGasMb(Enum<?> f) {
+        if (f == BladeFeature.FORM_ATTACK) {
+            return BladeFeature.formAttackGasMb(attackForm());
+        }
+        return f instanceof BladeFeature ? ((BladeFeature) f).gasMb() : f instanceof DrillFeature ? ((DrillFeature) f).gasMb() : 0;
+    }
+
+    private static boolean toolGasPerSecond(Enum<?> f) {
+        return f instanceof BladeFeature ? ((BladeFeature) f).gasPerSecond() : f instanceof DrillFeature && ((DrillFeature) f).gasPerSecond();
+    }
+
+    /** Base cooldown: FORM_ATTACK - the form's; the black hole - its zone's now (12x12 only, none for the Miner at 3). */
+    private int toolCooldown(Enum<?> f) {
+        if (f == BladeFeature.FORM_ATTACK) {
+            return BladeFeature.formAttackCooldown(attackForm());
+        }
+        if (f == DrillFeature.BLACK_HOLE) {
+            ItemStack d = drill();
+            int size = DrillLogicSC.holeSize(mc.thePlayer, d);
+            return size > 0 ? DrillLogicSC.holeCooldown(mc.thePlayer, d, size) : 0;
+        }
+        return f instanceof BladeFeature ? ((BladeFeature) f).cooldownTicks() : f instanceof DrillFeature ? ((DrillFeature) f).cooldownTicks() : 0;
+    }
+
+    private static String toolKey(Enum<?> f) {
+        return f instanceof BladeFeature ? ((BladeFeature) f).key() : ((DrillFeature) f).key();
+    }
+
+    /** One of the Singular tools' own functions (not an Exo-era one). */
+    private static boolean singularOnly(Enum<?> f) {
+        return f instanceof BladeFeature ? ((BladeFeature) f).minType == BladeType.SINGULAR
+                : f instanceof DrillFeature && ((DrillFeature) f).minType == DrillType.SINGULAR;
+    }
+
+    /** Open on the tool in hand (its level / branch; creative: all); any non-Singular tool: always. */
+    private boolean toolUnlocked(Enum<?> f) {
+        if (f instanceof BladeFeature) {
+            ItemStack t = blade();
+            return !ToolLevelSC.isSingularTool(t) || BladeLogicSC.unlocked(mc.thePlayer, t, (BladeFeature) f);
+        }
+        if (f instanceof DrillFeature) {
+            ItemStack t = drill();
+            return !ToolLevelSC.isSingularTool(t) || DrillLogicSC.unlocked(mc.thePlayer, t, (DrillFeature) f);
+        }
+        return true;
+    }
+
+    /** The extra hover lines of a Singular tool's function: lock / level, the Exo-era discount, the gas, the cooldown. */
+    private void toolTip(List<String> tip, Enum<?> f) {
+        ItemStack t = f instanceof BladeFeature ? blade() : drill();
+        if (!ToolLevelSC.isSingularTool(t)) {
+            return;
+        }
+        EntityPlayer p = mc.thePlayer;
+        tip.add(0, nameOf(f));
+        int lock = lockedLevel(f), br = branchOfFeature(f);
+        if (lock > 0) {
+            tip.add("§c" + Lang.tr("sc.armorgui.tip.locked", lock) + (br != 0 ? " · " + Lang.tr(ToolLevelSC.branchLangKey(t, br)) : ""));
+        } else if (branchLocked(f)) {
+            tip.add("§c" + Lang.tr("sc.toolgui.tip.branch", Lang.tr(ToolLevelSC.branchLangKey(t, br))));
+        } else if (singLevelOf(f) > 1) {
+            tip.add("§d" + Lang.tr("sc.armorgui.tip.level", singLevelOf(f)));
+        }
+        if (!singularOnly(f)) {
+            tip.add("§7" + Lang.tr("sc.toolgui.tip.legacy", Math.round((1F - ToolLevelSC.LEGACY_MUL) * 100)));
+        }
+        if (f == BladeFeature.FORM_ATTACK) {                   // the attack of the form that counts now
+            BladeForm form = attackForm();
+            String key = BladeFeature.formAttackKey(form);
+            tip.add("§d" + Lang.tr("sc.toolgui.tip.formattack", Lang.tr(form.langKey()), Lang.tr(key)));
+            tip.add("§7" + Lang.trOr(key + ".desc", ""));
+        } else if (f == DrillFeature.BLACK_HOLE) {             // a mode: the zone as the level lets it work
+            tip.add("§d" + SingularHudSC.holeLine(mc.thePlayer, t));
+            tip.add("§7" + Lang.tr("sc.toolgui.tip.holemode"));
+        }
+        Gas g = toolGas(f);
+        if (g != null) {
+            int mb = toolGasMb(f), amount = ArmorGasSC.suitAmount(p, g);
+            tip.add("§7" + Lang.tr(toolGasPerSecond(f) ? "sc.armorgui.tip.use.s" : "sc.armorgui.tip.use.u", mb));
+            tip.add((amount < mb || amount <= 0 ? "§c" : "§b") + Lang.tr("sc.toolgui.tip.gas", GasUiSC.name(g), amount));
+        } else if (singularOnly(f)) {
+            tip.add("§7" + Lang.tr("sc.toolgui.tip.nogas"));
+        }
+        int cd = toolCooldown(f);
+        if (cd > 0) {
+            int left = ToolLevelSC.cooldownLeft(t, toolKey(f), mc.theWorld);
+            tip.add(left > 0 ? "§6" + Lang.tr("sc.armorgui.tip.cooldown", (left + 19) / 20)
+                    : "§7" + Lang.tr("sc.toolgui.tip.cd", num(ToolLevelSC.cooldownTicks(p, cd) / 20F)));
+        }
+    }
+
+    /** The switch between the functions and the level page, at the foot on the right. */
+    private void addToolPageButton() {
+        tlPageW = Math.min(120, Math.max(60, contentW / 3));
+        buttonList.add(new TextFitSC.Button(TL_PAGE, contentX + contentW - tlPageW, footY - 1, tlPageW, 11,
+                Lang.tr(toolPage == 0 ? "sc.toolgui.page.level" : "sc.toolgui.page.functions")));
+    }
+
+    /**
+     * The level page of a Singular tool (mock-up tools_2_ktab): the title, the level and its points, the
+     * readiness, the forms (blade) / the black hole mode (drill), the branch buttons, the gas line, what the next
+     * level opens. The left panel stays while the page is at least 300 px wide; lines that don't fit are left out.
+     */
+    private void initToolInfo(ItemStack t) {
+        boolean wide = false;
+        for (int mode = 2; mode >= 0 && !wide; mode--) {
+            if (layoutPanel(mode)) {
+                setPanel(mode);
+                wide = contentW >= 300;
+            }
+        }
+        if (!wide) {
+            setPanel(0);
+        }
+        pitch = 16;
+        btnH = 14;
+        EntityPlayer p = mc.thePlayer;
+        boolean isBlade = ToolLevelSC.isBlade(t), creative = p.capabilities.isCreativeMode;
+        int x = contentX, cw = contentW, bottom = footY - 2, y = contentY;
+        tlFormY = tlBranchY = tlNoteY = tlPerkY = tlGasY = tlOpensY = -1;
+        tlTitleY = y;
+        y += 11;
+        tlLevelY = y;
+        y += 10;
+        tlReadyY = y;
+        y += 12;
+        if (y + 10 + 14 <= bottom) {
+            tlFormY = y;
+            y += 10;
+            if (isBlade) {
+                BladeForm[] forms = BladeForm.values();
+                int n = Math.min(forms.length, TL_FORM_MAX);
+                int bw = (cw - (n - 1) * 3) / n;
+                BladeForm cur = ItemBladeSC.formOf(t);
+                int lv = ToolLevelSC.effectiveLevel(p, t), br = ToolLevelSC.branchOf(t);
+                for (int i = 0; i < n; i++) {
+                    BladeForm f = forms[i];
+                    boolean open = f.open(lv, br, creative);
+                    String name = Lang.trOr("sc.toolgui.form.short." + f.key(), Lang.tr(f.langKey()));
+                    GuiButton b = new TextFitSC.Button(TL_FORM + i, x + i * (bw + 3), y, bw, 14, f == cur ? "§d" + name : open ? name : "§8" + name);
+                    b.enabled = open && f != cur;                 // the current one pressed in, the closed ones grey
+                    buttonList.add(b);
+                }
+            } else {
+                buttonList.add(new TextFitSC.Button(TL_HOLE, x, y, Math.min(cw, 200), 14, "§d" + SingularHudSC.holeLine(p, t)));
+            }
+            y += 18;
+        }
+        int count = ToolLevelSC.branchCount(t);
+        if (count > 0 && y + 10 + 14 <= bottom) {
+            tlBranchY = y;
+            y += 10;
+            int bw = (cw - (count - 1) * 4) / count;
+            int chosen = ToolLevelSC.branchOf(t);
+            boolean pending = ToolLevelSC.branchPending(t);
+            for (int b = 1; b <= count; b++) {
+                String name = Lang.tr(ToolLevelSC.branchLangKey(t, b));
+                String label = creative ? "§a" + name : chosen == b ? "§a" + name + " " + Lang.tr("sc.toolgui.branch.mark")
+                        : chosen != 0 ? "§8" + name : pending ? "§d" + name : "§7" + name;
+                GuiButton gb = new TextFitSC.Button(TL_BRANCH + b - 1, x + (b - 1) * (bw + 4), y, bw, 14, label);
+                gb.enabled = !creative && pending;                // a free pick only while pending; later - the station
+                buttonList.add(gb);
+            }
+            y += 17;
+            if (y + 9 <= bottom) {
+                tlNoteY = y;
+                y += 10;
+            }
+            if ((chosen != 0 || creative) && y + 9 <= bottom) {
+                tlPerkY = y;
+                y += 10;
+            }
+        }
+        if (y + 9 <= bottom) {
+            tlGasY = y;
+            y += 10;
+        }
+        if (ToolLevelSC.levelOf(t) < ToolLevelSC.MAX && y + 9 <= bottom) {
+            tlOpensY = y;
+        }
+    }
+
+    /** What branch `b` gives: its functions (and the blade's forms) with their levels, "—" when none are listed. */
+    private String branchGives(ItemStack t, int b) {
+        StringBuilder sb = new StringBuilder();
+        boolean isBlade = ToolLevelSC.isBlade(t);
+        Enum<?>[] all = isBlade ? (Enum<?>[]) BladeFeature.values() : (Enum<?>[]) DrillFeature.values();
+        for (Enum<?> f : all) {
+            if (branchOfFeature(f) == b) {
+                sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr("sc.toolgui.lv", nameOf(f), singLevelOf(f)));
+            }
+        }
+        if (isBlade) {
+            for (BladeForm f : BladeForm.values()) {
+                if (f.branch == b) {
+                    sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr("sc.toolgui.lv", Lang.tr(f.langKey()), f.level));
+                }
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : "—";
+    }
+
+    /** What the next level opens: the functions (no other branch's) and the forms of level `lv`. */
+    private String opensAt(ItemStack t, int lv) {
+        StringBuilder sb = new StringBuilder();
+        boolean isBlade = ToolLevelSC.isBlade(t);
+        int chosen = ToolLevelSC.branchOf(t);
+        Enum<?>[] all = isBlade ? (Enum<?>[]) BladeFeature.values() : (Enum<?>[]) DrillFeature.values();
+        for (Enum<?> f : all) {
+            int br = branchOfFeature(f);
+            if (singularOnly(f) && singLevelOf(f) == lv && (br == 0 || chosen == 0 || br == chosen)) {
+                sb.append(sb.length() > 0 ? ", " : "").append(nameOf(f));
+            }
+        }
+        if (isBlade) {
+            for (BladeForm f : BladeForm.values()) {
+                if (f.level == lv && (f.branch == 0 || chosen == 0 || f.branch == chosen)) {
+                    sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr(f.langKey()));
+                }
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : "—";
+    }
+
+    private void drawToolInfo() {
+        ItemStack t = singularTool();
+        if (t == null) {
+            return;
+        }
+        EntityPlayer p = mc.thePlayer;
+        boolean isBlade = ToolLevelSC.isBlade(t), creative = p.capabilities.isCreativeMode;
+        int x = contentX, cw = contentW, bottom = footY - 1;
+        int lvl = ToolLevelSC.levelOf(t), chosen = ToolLevelSC.branchOf(t);
+        String title = Lang.tr("sc.toolgui.title", t.getDisplayName(), lvl)
+                + (chosen != 0 ? " · " + Lang.tr("sc.toolgui.branch.of", Lang.tr(ToolLevelSC.branchLangKey(t, chosen))) : "");
+        fit(title, x, tlTitleY, cw, 0xC080FF);
+        // the level and its points
+        boolean top = lvl >= ToolLevelSC.MAX;
+        int need = ToolLevelSC.threshold(t), pts = ToolLevelSC.points(t);
+        int labW = Math.min(76, cw / 4), numW = Math.min(110, cw / 3);
+        fit(top ? Lang.tr("sc.toolgui.level.top", lvl) : Lang.tr("sc.toolgui.level.next", lvl, lvl + 1), x, tlLevelY, labW - 4, 0xE0E0E0);
+        int barX = x + labW, barW = cw - labW - numW - 4;
+        if (barW >= 16) {
+            bar(barX, tlLevelY + 1, barW, 7, top ? 1 : pts, top ? 1 : need, 0xB060FF, false);
+        }
+        int nx = barX + Math.max(0, barW) + 4;
+        boolean full = ToolLevelSC.pointsFull(t);
+        fit(top ? Lang.tr("sc.levelgui.max") : Lang.tr("sc.toolgui.points", amount(pts), amount(need)), nx, tlLevelY, x + cw - nx,
+                top || full ? 0x60FF60 : 0xA0A0A0);
+        List<String> lvTip = new ArrayList<String>();
+        lvTip.add("§d" + Lang.tr("sc.toolgui.level.tip", lvl, ToolLevelSC.MAX));
+        if (!top) {
+            lvTip.add("§7" + Lang.tr("sc.toolgui.points", pts, need));
+        }
+        lvTip.add("§7" + Lang.tr(isBlade ? "sc.toolgui.earn.blade" : "sc.toolgui.earn.drill"));
+        if (creative) {
+            lvTip.add("§a" + Lang.tr("sc.toolgui.creative"));
+        }
+        TextFitSC.hover(x, tlLevelY - 1, cw, 10, lvTip);
+        String ready = top ? Lang.tr("sc.toolgui.ready.top") : ToolLevelSC.readyToUpgrade(t) ? Lang.tr("sc.toolgui.ready")
+                : Lang.tr(isBlade ? "sc.toolgui.earn.blade" : "sc.toolgui.earn.drill");
+        fit(ready, x, tlReadyY, cw, !top && ToolLevelSC.readyToUpgrade(t) ? 0x60FF60 : 0x808080);
+        if (tlFormY >= 0) {
+            int hw = fit(Lang.tr(isBlade ? "sc.toolgui.form.head" : "sc.toolgui.hole.head"), x, tlFormY, cw, HEAD);
+            if (isBlade && cw - hw > 60) {
+                fit(Lang.tr("sc.toolgui.form.grey"), x + hw + 8, tlFormY, cw - hw - 8, 0x707070);
+            }
+        }
+        if (tlBranchY >= 0) {
+            fit(Lang.tr("sc.toolgui.branch.head", ToolLevelSC.BRANCH_LEVEL, ToolLevelSC.BRANCH_PERK_LEVEL), x, tlBranchY, cw, HEAD);
+        }
+        if (tlNoteY >= 0 && tlNoteY + 9 <= bottom) {
+            boolean pending = ToolLevelSC.branchPending(t);
+            String note = creative ? Lang.tr("sc.toolgui.branch.creative") : chosen != 0 ? Lang.tr("sc.toolgui.branch.station")
+                    : pending ? Lang.tr("sc.toolgui.branch.free") : Lang.tr("sc.toolgui.branch.later", ToolLevelSC.BRANCH_LEVEL);
+            fit(note, x, tlNoteY, cw, !creative && pending ? 0xC080FF : 0x808080);
+        }
+        if (tlPerkY >= 0 && tlPerkY + 9 <= bottom && chosen != 0) {
+            fit(Lang.tr("sc.toolgui.branch.gives", branchGives(t, chosen)), x, tlPerkY, cw, 0xA0A0A0);
+        }
+        if (tlGasY >= 0 && tlGasY + 9 <= bottom) {
+            boolean worn = com.sc.util.SingularLevel.wearsSingular(p);
+            int w = fit(Lang.tr(worn ? "sc.toolgui.gas.ok" : "sc.toolgui.gas.none"), x, tlGasY, cw, worn ? 0x60FF60 : RED);
+            List<String> tip = new ArrayList<String>();
+            tip.add(Lang.tr("sc.toolgui.gas.tip"));
+            if (!worn) {
+                tip.add("§c" + Lang.tr("sc.toolgui.gas.tip.none"));
+            }
+            TextFitSC.hover(x, tlGasY - 1, w, 10, tip);
+        }
+        if (tlOpensY >= 0 && tlOpensY + 9 <= bottom && !top) {
+            fit(Lang.tr("sc.toolgui.opens", lvl + 1, opensAt(t, lvl + 1)), x, tlOpensY, cw, 0xA0A0A0);
+        }
+    }
+
+    /** Hover texts of the tool page's buttons (after the buttons' own cut-label ones). */
+    private void toolButtonTips() {
+        ItemStack t = singularTool();
+        if (t == null) {
+            return;
+        }
+        EntityPlayer p = mc.thePlayer;
+        boolean creative = p.capabilities.isCreativeMode;
+        for (Object o : buttonList) {
+            GuiButton b = (GuiButton) o;
+            List<String> tip = new ArrayList<String>();
+            if (b.id == TL_PAGE) {
+                tip.add(Lang.tr(toolPage == 0 ? "sc.toolgui.page.level.tip" : "sc.toolgui.page.functions.tip"));
+            } else if (b.id == TL_HOLE) {
+                tip.add(SingularHudSC.holeLine(p, t));
+                if (ItemDrillSC.blackHoleSize(t) > DrillLogicSC.holeSize(p, t)) {   // a size kept from creative / above the level
+                    tip.add("§c" + Lang.tr("sc.toolgui.hole.capped", ItemDrillSC.blackHoleSize(t)));
+                }
+                tip.add("§7" + Lang.tr("sc.toolgui.hole.tip"));
+            } else if (b.id >= TL_FORM && b.id < TL_FORM + TL_FORM_MAX && ToolLevelSC.isBlade(t)) {
+                BladeForm f = BladeForm.of(b.id - TL_FORM);
+                tip.add(Lang.tr(f.langKey()));
+                String desc = Lang.trOr(f.langKey() + ".desc", "");
+                if (!desc.isEmpty()) {
+                    tip.add("§7" + desc);
+                }
+                if (f == ItemBladeSC.formOf(t)) {
+                    tip.add("§d" + Lang.tr("sc.toolgui.form.tip.current"));
+                } else if (f.open(p, t)) {
+                    tip.add("§e" + Lang.tr("sc.toolgui.form.tip.click"));
+                } else if (f.branch != 0 && ToolLevelSC.effectiveLevel(p, t) >= f.level) {
+                    tip.add("§c" + Lang.tr("sc.toolgui.tip.branch", Lang.tr(ToolLevelSC.branchLangKey(t, f.branch))));
+                } else {
+                    tip.add("§c" + Lang.tr("sc.armorgui.tip.locked", f.level)
+                            + (f.branch != 0 ? " · " + Lang.tr(ToolLevelSC.branchLangKey(t, f.branch)) : ""));
+                }
+                tip.add("§7" + Lang.tr("sc.toolgui.form.tip.wheel"));
+            } else if (b.id >= TL_BRANCH && b.id < TL_BRANCH + 3) {
+                int br = b.id - TL_BRANCH + 1, chosen = ToolLevelSC.branchOf(t);
+                tip.add(Lang.tr(ToolLevelSC.branchLangKey(t, br)));
+                tip.add("§7" + Lang.tr("sc.toolgui.branch.gives", branchGives(t, br)));
+                tip.add(creative ? "§a" + Lang.tr("sc.toolgui.branch.creative") : chosen == br ? "§a" + Lang.tr("sc.toolgui.branch.station")
+                        : chosen != 0 ? "§7" + Lang.tr("sc.toolgui.branch.station")
+                        : ToolLevelSC.branchPending(t) ? "§d" + Lang.tr("sc.toolgui.branch.free")
+                        : "§7" + Lang.tr("sc.toolgui.branch.later", ToolLevelSC.BRANCH_LEVEL));
+            } else {
+                continue;
+            }
+            TextFitSC.hover(b.xPosition, b.yPosition, b.width, b.height, tip);
+        }
+    }
+
+    private void toolAction(GuiButton b) {
+        if (b.id == TL_PAGE) {
+            toolPage = 1 - toolPage;
+            initGui();
+            return;
+        }
+        ItemStack t = singularTool();
+        if (t == null) {
+            return;
+        }
+        EntityPlayer p = mc.thePlayer;
+        if (b.id == TL_HOLE) {                                  // the server steps it; the button follows by the signature
+            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DRILL_MODE, 1));
+        } else if (b.id >= TL_BRANCH && b.id < TL_BRANCH + 3) {  // the free first choice; the server checks and answers
+            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.TOOL_BRANCH, b.id - TL_BRANCH + 1, ToolLevelSC.isBlade(t)));
+            b.enabled = false;
+        } else if (b.id >= TL_FORM && b.id < TL_FORM + TL_FORM_MAX && ToolLevelSC.isBlade(t)) {
+            BladeForm to = BladeForm.of(b.id - TL_FORM);
+            int steps = ArmorNetSC.formSteps(ItemBladeSC.formOf(t), to, ToolLevelSC.effectiveLevel(p, t), ToolLevelSC.branchOf(t),
+                    p.capabilities.isCreativeMode);
+            for (int i = 0; i < Math.abs(steps); i++) {           // one wheel step each: the server's own cycle, in order
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BLADE_FORM, steps > 0 ? 1 : -1));
+            }
+            if (steps != 0) {
+                ItemBladeSC.setForm(t, to);                     // shown at once
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ drawing helpers
 
     private static void box(int x, int y, int w, int h, int fill, int edge) {
@@ -1507,6 +1957,9 @@ public class GuiArmorSC extends GuiScreen {
 
     /** The gas the function's chip shows: its own gas where the suit runs on gases (Quantum / Exo; breathing in every suit), else null - EU. */
     private Gas chipGas(Enum<?> f) {
+        if (f instanceof BladeFeature || f instanceof DrillFeature) {
+            return toolGas(f);                             // a Singular tool's function: its gas comes from the worn armour
+        }
         if (!(f instanceof ArmorFeature)) {
             return null;
         }
@@ -1557,9 +2010,10 @@ public class GuiArmorSC extends GuiScreen {
                 drawRect(cx + 2, cy + (ch - 6) / 2, cx + 8, cy + (ch - 6) / 2 + 6, 0xFF000000 | g.color);
                 fit(GasUiSC.shortName(g), cx + 10, cy + (ch - 8) / 2 + 1, CHIP_W - 11, empty ? RED : g.color);
             } else {
+                boolean none = singularOnly(r.f);           // a Singular tool's own function without gas: no EU either
                 box(cx, cy, CHIP_W, ch, 0xFF19191E, edge);
-                drawRect(cx + 2, cy + (ch - 6) / 2, cx + 8, cy + (ch - 6) / 2 + 6, 0xFFAAAAAA);
-                fit("EU", cx + 10, cy + (ch - 8) / 2 + 1, CHIP_W - 11, 0xAAAAAA);
+                drawRect(cx + 2, cy + (ch - 6) / 2, cx + 8, cy + (ch - 6) / 2 + 6, none ? 0xFF505050 : 0xFFAAAAAA);
+                fit(none ? "—" : "EU", cx + 10, cy + (ch - 8) / 2 + 1, CHIP_W - 11, none ? 0x707070 : 0xAAAAAA);
             }
             TextFitSC.hover(cx, cy, CHIP_W, ch, featureTip(r.f));
         }
@@ -1709,6 +2163,14 @@ public class GuiArmorSC extends GuiScreen {
 
     /** The level a locked Singular function opens at (SingularLevel; creative: nothing locked), 0 when it's open. */
     private int lockedLevel(Enum<?> f) {
+        if (f instanceof BladeFeature || f instanceof DrillFeature) {
+            ItemStack t = f instanceof BladeFeature ? blade() : drill();
+            if (t == null || toolUnlocked(f)) {
+                return 0;
+            }
+            int lv = singLevelOf(f);
+            return ToolLevelSC.effectiveLevel(mc.thePlayer, t) >= lv ? 0 : lv;      // the level is there: the branch keeps it (branchLocked)
+        }
         if (!(f instanceof ArmorFeature)) {
             return 0;
         }
@@ -1779,10 +2241,12 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (f instanceof DrillFeature) {
             tip.add(Lang.tr("sc.drillfn." + ((DrillFeature) f).key() + ".desc"));
+            toolTip(tip, f);
             return tip;
         }
         if (f instanceof BladeFeature) {
             tip.add(Lang.tr("sc.bladefn." + ((BladeFeature) f).key() + ".desc"));
+            toolTip(tip, f);
             return tip;
         }
         ArmorFeature a = (ArmorFeature) f;
@@ -1939,6 +2403,10 @@ public class GuiArmorSC extends GuiScreen {
             levelAction(b);
             return;
         }
+        if (b.id >= TL_PAGE && b.id <= TL_HOLE) {
+            toolAction(b);
+            return;
+        }
         if (b.id == CHIPS_ID) {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.REMOVE_CHIPS, 0));   // the button goes once the chestplate comes back without them
             return;
@@ -1958,7 +2426,7 @@ public class GuiArmorSC extends GuiScreen {
         } else if (featureOf(b.id) instanceof DrillFeature) {
             DrillFeature f = (DrillFeature) featureOf(b.id);
             ItemStack drill = drill();
-            if (drill != null) {
+            if (drill != null && lockedLevel(f) == 0 && !branchLocked(f)) {     // a Singular function its level / branch keeps closed: no
                 boolean want = !ItemDrillSC.isEnabled(drill, f);
                 ItemDrillSC.setEnabled(drill, f, want);
                 ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DRILL_TOGGLE, f.ordinal(), want));
@@ -1966,7 +2434,7 @@ public class GuiArmorSC extends GuiScreen {
         } else if (featureOf(b.id) instanceof BladeFeature) {
             BladeFeature f = (BladeFeature) featureOf(b.id);
             ItemStack blade = blade();
-            if (blade != null) {
+            if (blade != null && lockedLevel(f) == 0 && !branchLocked(f)) {
                 boolean want = !ItemBladeSC.isEnabled(blade, f);
                 if (!(want && f == BladeFeature.BLADE && ItemBladeSC.overheated(blade))) {   // a hot blade stays dark
                     ItemBladeSC.setEnabled(blade, f, want);
@@ -2095,6 +2563,8 @@ public class GuiArmorSC extends GuiScreen {
                 drawLife();
             } else if (selectedPiece == LEVEL_TAB) {
                 drawLevel();
+            } else if (toolPage == 1 && singularTool() != null) {
+                drawToolInfo();
             } else {
                 drawRows();
             }
@@ -2116,13 +2586,18 @@ public class GuiArmorSC extends GuiScreen {
                     bonus = Lang.tr("sc.armorgui.set." + set.name().toLowerCase(Locale.ROOT));
                 }
             }
+            int footW = contentW - (tlPageW > 0 ? tlPageW + 4 : 0);   // the Singular tool's page switch at the right
             if (bonus != null) {
-                TextFitSC.drawCentered(fontRendererObj, bonus, contentX, footY, contentW, 0x80FF80, true, 0, 0);
+                TextFitSC.drawCentered(fontRendererObj, bonus, contentX, footY, footW, 0x80FF80, true, 0, 0);
+            } else if (singularTool() != null && !com.sc.util.SingularLevel.wearsSingular(mc.thePlayer)) {
+                TextFitSC.drawCentered(fontRendererObj, Lang.tr("sc.toolgui.gas.none.short"), contentX, footY, footW, RED, true, 0, 0);
             }
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
         if (selectedPiece == LEVEL_TAB) {
             levelButtonTips();                                   // over the buttons' own cut-label hovers
+        } else if (singularTool() != null) {
+            toolButtonTips();
         }
         if (capturing != null) {                                 // over the strip: what to press
             List<?> lines = fontRendererObj.listFormattedStringToWidth(Lang.tr("sc.armorgui.bind.wait"), winW - 20);

@@ -31,6 +31,9 @@ import net.minecraft.util.AxisAlignedBB;
  *    donor slot to a level-1 piece of the same type, Ф5 sync of lagging pieces, the colour scheme;
  *  - speed: gravitational stabilisers within STAB_RADIUS (same Y +-1; up to 4, +25% each) and a
  *    running Singular reactor within RES_RADIUS (+30%, -10% EU).
+ *  - the tool slot (docs/plan-singular-tools.md §4): an Exo / Singular blade or drill; it joins the conversion
+ *    (convertTool) and the modernisation (its share of the row; the drill's crumbs pay up to half its SM), takes the
+ *    scheme with the pieces and its branch re-choice (changeToolBranch, BRANCH_SM);
  *  - Б-1 conversion: the Exo pieces in the armour slots become Singular pieces of level 1, for the
  *    materials in the six material slots - a whole Exo set in one go - (and a Singular core in the catalyst slot) - taken whole at
  *    the start, given back whole on «Отменить» - and the resources of SingularStationMath.convertCost,
@@ -44,12 +47,13 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
      * The extra slots after the module slots: the donor piece (Ф4), the catalyst (Singular core), the six conversion
      * materials (Б-1) - 8 donor, 9 catalyst, 10..15 materials. They are saved by index ("SingItems", Slot 0..7 =
      * index - ALL_SLOTS); the materials were 4 (10..13) before, the last two (14, 15) were added at the end, so an
-     * older station loads as it was.
+     * older station loads as it was. The tool slot (16, a blade or a drill, docs/plan-singular-tools.md §4) was appended
+     * after them the same way (SingItems Slot 8). SING_SLOTS is the whole inventory; the materials end at MATERIAL_END.
      */
     public static final int DONOR_SLOT = ALL_SLOTS, CATALYST_SLOT = ALL_SLOTS + 1, MATERIAL_SLOT = ALL_SLOTS + 2, MATERIAL_SLOTS = 6,
-            SING_SLOTS = MATERIAL_SLOT + MATERIAL_SLOTS;
-    /** The donor slot's bit in a process mask. */
-    public static final int DONOR_BIT = 4;
+            MATERIAL_END = MATERIAL_SLOT + MATERIAL_SLOTS, TOOL_SLOT = MATERIAL_END, SING_SLOTS = TOOL_SLOT + 1;
+    /** The donor slot's and the tool slot's bits in a process mask. */
+    public static final int DONOR_BIT = 4, TOOL_BIT = 5;
     /** Singular matter's tank, mB (+SM_PER_EXTENSION per Tank Extension). */
     public static final int SM_TANK = 4000, SM_PER_EXTENSION = 2000;
     /** Stabilisers count within this many blocks across, at the station's Y +- STAB_DY. Resonance: a running reactor within RES_RADIUS. */
@@ -71,7 +75,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
     private long lastScan = Long.MIN_VALUE;
     /** Clients: the process runs (rings fast, hologram, beams); the hologram's pieces. */
     private boolean workingClient;
-    private final ItemStack[] holo = new ItemStack[4];
+    private final ItemStack[] holo = new ItemStack[5];
 
     public TileEntitySingularStationSC() {
         super();
@@ -162,7 +166,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (slot >= 0 && slot < SLOTS) {
             return proc.locks(slot);
         }
-        return slot == DONOR_SLOT ? proc.locks(DONOR_BIT) : slot == CATALYST_SLOT;
+        return slot == DONOR_SLOT ? proc.locks(DONOR_BIT) : slot == TOOL_SLOT ? proc.locks(TOOL_BIT) : slot == CATALYST_SLOT;
     }
 
     // ------------------------------------------------------------------ tanks, energy, charging
@@ -191,15 +195,77 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return s != null && s.getItem() instanceof com.sc.item.ItemBatterySC && s.getItemDamage() == SingularStationMath.CORE_META;
     }
 
-    /** What the donor slot takes: a Singular piece; the catalyst slot: a Singular core; a material slot: a conversion material. */
+    /**
+     * What the donor slot takes: a Singular piece; the catalyst slot: a Singular core; a material slot: a conversion
+     * material or Singular crumbs (the drill's modernisation); the tool slot: an Exo or Singular blade or drill.
+     */
     public static boolean fitsExtra(int slot, ItemStack s) {
         if (slot == DONOR_SLOT) {
             return SingularLevel.isSingular(s);
         }
-        if (slot >= MATERIAL_SLOT && slot < SING_SLOTS) {
-            return materialKind(s) >= 0;
+        if (slot == TOOL_SLOT) {
+            return isStationTool(s);
+        }
+        if (slot >= MATERIAL_SLOT && slot < MATERIAL_END) {
+            return materialKind(s) >= 0 || isCrumb(s);
         }
         return slot == CATALYST_SLOT && isCore(s);
+    }
+
+    /** «Крупица сингулярности» - pays part of the drill's SM in its modernisation. */
+    public static boolean isCrumb(ItemStack s) {
+        return s != null && s.getItem() != null && s.getItem() == com.sc.init.ModItems.singularCrumb;
+    }
+
+    /** An Exo blade or drill - the tool conversion's input. */
+    public static boolean isExoTool(ItemStack s) {
+        return com.sc.item.ItemBladeSC.typeOf(s) == com.sc.util.BladeType.EXO || com.sc.item.ItemDrillSC.typeOf(s) == com.sc.util.DrillType.EXO;
+    }
+
+    /** What the tool slot takes: an Exo or Singular blade / drill. */
+    public static boolean isStationTool(ItemStack s) {
+        return isExoTool(s) || com.sc.util.ToolLevelSC.isSingularTool(s);
+    }
+
+    /** SingularStationMath.TOOL_* of a blade / drill (any tier), TOOL_NONE otherwise. */
+    public static int toolKindOf(ItemStack s) {
+        return com.sc.item.ItemBladeSC.typeOf(s) != null ? SingularStationMath.TOOL_BLADE
+                : com.sc.item.ItemDrillSC.typeOf(s) != null ? SingularStationMath.TOOL_DRILL : SingularStationMath.TOOL_NONE;
+    }
+
+    public ItemStack getTool() {
+        return extra[TOOL_SLOT - ALL_SLOTS];
+    }
+
+    /** The Exo tool the conversion would take (TOOL_*), TOOL_NONE when the slot holds none. */
+    public int convertTool() {
+        ItemStack t = getTool();
+        return isExoTool(t) ? toolKindOf(t) : SingularStationMath.TOOL_NONE;
+    }
+
+    /** The Singular tool's level when it is ready for the modernisation (points full, under 5), else 0. */
+    public int toolReadyLevel() {
+        ItemStack t = getTool();
+        return com.sc.util.ToolLevelSC.readyToUpgrade(t) ? com.sc.util.ToolLevelSC.levelOf(t) : 0;
+    }
+
+    /** Singular crumbs in the material slots. */
+    public int crumbsHave() {
+        int n = 0;
+        for (int slot = MATERIAL_SLOT; slot < MATERIAL_END; slot++) {
+            ItemStack s = getStackInSlot(slot);
+            n += isCrumb(s) ? s.stackSize : 0;
+        }
+        return n;
+    }
+
+    /** Crumbs the drill's modernisation from `toolLevel` would take now (a blade / no tool: 0). */
+    public int crumbsFor(int toolLevel) {
+        if (toolKindOf(getTool()) != SingularStationMath.TOOL_DRILL || toolLevel <= 0) {
+            return 0;
+        }
+        long sm = SingularStationMath.toolModerniseCost(SingularStationMath.TOOL_DRILL, toolLevel, false)[SingularStationMath.R_SM];
+        return SingularStationMath.crumbsUsable(sm, crumbsHave());
     }
 
     /** The conversion material kind (SingularStationMath.M_*) of a stack, or -1. */
@@ -299,14 +365,25 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return slot >= ALL_SLOTS ? fitsExtra(slot, stack) : super.isItemValidForSlot(slot, stack);
     }
 
+    /** Hoppers and tubes: the armour slots and the tool slot (same rules: one item into an empty slot, not while locked). */
+    private static final int[] PIPE_SLOTS = {0, 1, 2, 3, TOOL_SLOT};
+
+    @Override
+    public int[] getAccessibleSlotsFromSide(int side) {
+        return PIPE_SLOTS;
+    }
+
     @Override
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
+        if (slot == TOOL_SLOT) {
+            return !isLocked(slot) && getTool() == null && isStationTool(stack);
+        }
         return !isLocked(slot) && super.canInsertItem(slot, stack, side);
     }
 
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
-        return !isLocked(slot) && super.canExtractItem(slot, stack, side);
+        return !isLocked(slot) && (slot == TOOL_SLOT || super.canExtractItem(slot, stack, side));
     }
 
     @Override
@@ -445,13 +522,17 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             return "sc.singStation.err.busy";
         }
         int[] lv = readyLevels(p);
-        if (SingularStationMath.pieces(lv) == 0) {
+        if (SingularStationMath.pieces(lv) == 0 && toolReadyLevel() == 0) {
             return "sc.singStation.err.noready";
         }
         return startModerniseFor(lv, p == null ? "" : p.getCommandSenderName());
     }
 
-    /** Starts the modernisation of the pieces at levels `lv` (0: not taking part) - the readiness already checked. */
+    /**
+     * Starts the modernisation of the pieces at levels `lv` (0: not taking part) - the readiness already checked - and of
+     * the Singular tool in the tool slot when it is ready (ToolLevelSC.readyToUpgrade): its share of the row joins the
+     * cost, the drill's crumbs (material slots) pay up to half its SM and leave the slots now (back whole on «Отменить»).
+     */
     public String startModerniseFor(int[] lv, String starter) {
         if (proc != null) {
             return "sc.singStation.err.busy";
@@ -463,10 +544,14 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 mask |= 1 << i;
             }
         }
+        int toolLv = toolReadyLevel(), tool = toolLv > 0 ? toolKindOf(getTool()) : SingularStationMath.TOOL_NONE;
+        if (toolLv > 0) {
+            mask |= 1 << TOOL_BIT;
+        }
         if (mask == 0) {
             return "sc.singStation.err.noready";
         }
-        boolean cat = SingularStationMath.needsCatalyst(lv);
+        boolean cat = SingularStationMath.needsCatalyst(lv) || toolLv == 4;
         if (cat && !isCore(extra[1])) {
             return "sc.singStation.err.nocatalyst";
         }
@@ -474,11 +559,22 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         p.kind = SingularProcessSC.KIND_MODERNISE;
         p.mask = mask;
         p.resonance = resonance;
-        long[] cost = SingularStationMath.moderniseCost(lv, resonance);
+        int crumbs = crumbsFor(toolLv);
+        long[] cost = SingularStationMath.moderniseCost(lv, tool, toolLv, crumbs, resonance);
         System.arraycopy(cost, 0, p.cost, 0, cost.length);
-        p.baseTicks = Math.max(1, SingularStationMath.moderniseTicks(lv));
-        for (int i = 0; i < SLOTS; i++) {
+        p.baseTicks = Math.max(1, SingularStationMath.moderniseTicks(lv, tool, toolLv));
+        for (int i = 0; i < SLOTS && i < lv.length; i++) {
             p.levels[i] = lv[i];
+        }
+        p.levels[TOOL_BIT] = toolLv;
+        for (int slot = MATERIAL_SLOT; slot < MATERIAL_END && crumbs > 0; slot++) {   // the crumbs leave the slots now, whole
+            if (isCrumb(extra[slot - ALL_SLOTS])) {
+                ItemStack taken = decrStackSize(slot, Math.min(crumbs, extra[slot - ALL_SLOTS].stackSize));
+                if (taken != null) {
+                    crumbs -= taken.stackSize;
+                    p.items.add(taken);
+                }
+            }
         }
         p.starter = starter == null ? "" : starter;
         long lost = 0;
@@ -591,7 +687,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
     /** The materials there now, per kind (a kind may lie in several slots): the six material slots and the catalyst slot (a Singular core). */
     public int[] materialsHave() {
         int[] have = new int[SingularStationMath.MATERIALS];
-        for (int slot = CATALYST_SLOT; slot < SING_SLOTS; slot++) {
+        for (int slot = CATALYST_SLOT; slot < MATERIAL_END; slot++) {
             ItemStack s = getStackInSlot(slot);
             int k = materialKind(s);
             if (k >= 0) {
@@ -603,10 +699,15 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
     /** EU the cores the conversion of `mask` would use carry (the first ones found, as startConvert takes them). */
     public long coreChargeFor(int mask) {
-        int[] need = SingularStationMath.convertMaterials(mask);
+        return coreChargeFor(mask, SingularStationMath.TOOL_NONE);
+    }
+
+    /** The same with the Exo tool `tool` (SingularStationMath.TOOL_*) converted too. */
+    public long coreChargeFor(int mask, int tool) {
+        int[] need = SingularStationMath.convertMaterials(mask, tool);
         long eu = 0;
         int[] left = {need[SingularStationMath.M_EXO_CORE], need[SingularStationMath.M_SING_CORE]};
-        for (int slot = CATALYST_SLOT; slot < SING_SLOTS; slot++) {
+        for (int slot = CATALYST_SLOT; slot < MATERIAL_END; slot++) {
             ItemStack s = getStackInSlot(slot);
             int k = materialKind(s);
             int j = k == SingularStationMath.M_EXO_CORE ? 0 : k == SingularStationMath.M_SING_CORE ? 1 : -1;
@@ -627,11 +728,11 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (proc != null) {
             return "sc.singStation.err.busy";
         }
-        int mask = convertMask();
-        if (mask == 0) {
+        int mask = convertMask(), tool = convertTool();
+        if (mask == 0 && tool == SingularStationMath.TOOL_NONE) {
             return "sc.singStation.err.noexo";
         }
-        int[] need = SingularStationMath.convertMaterials(mask), have = materialsHave();
+        int[] need = SingularStationMath.convertMaterials(mask, tool), have = materialsHave();
         for (int k = 0; k < need.length; k++) {
             if (have[k] < need[k]) {
                 return "sc.singStation.err.nomaterials";
@@ -639,14 +740,14 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         }
         SingularProcessSC q = new SingularProcessSC();
         q.kind = SingularProcessSC.KIND_CONVERT;
-        q.mask = mask;
-        long[] cost = SingularStationMath.convertCost(mask);
+        q.mask = mask | (tool != SingularStationMath.TOOL_NONE ? 1 << TOOL_BIT : 0);
+        long[] cost = SingularStationMath.convertCost(mask, tool);
         System.arraycopy(cost, 0, q.cost, 0, cost.length);
-        q.baseTicks = Math.max(1, SingularStationMath.convertTicks(mask));
+        q.baseTicks = Math.max(1, SingularStationMath.convertTicks(mask, tool));
         q.starter = starter == null ? "" : starter;
         long coreEu = 0;
         int[] left = need.clone();
-        for (int slot = CATALYST_SLOT; slot < SING_SLOTS; slot++) {      // the materials leave the slots now, whole
+        for (int slot = CATALYST_SLOT; slot < MATERIAL_END; slot++) {      // the materials leave the slots now, whole
             ItemStack s = getStackInSlot(slot);
             int k = materialKind(s);
             if (k < 0 || left[k] <= 0) {
@@ -699,6 +800,46 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return out;
     }
 
+    /** NBT keys a fresh Singular tool must not inherit (levels, branch, scheme, cooldowns, form / hole modes, heat). */
+    private static final String[] TOOL_FRESH_KEYS = {com.sc.util.ToolLevelSC.LEVEL, com.sc.util.ToolLevelSC.PTS, com.sc.util.ToolLevelSC.BRANCH,
+        com.sc.util.ToolLevelSC.SCHEME, com.sc.util.ToolLevelSC.COOLDOWNS, com.sc.util.BladeForm.NBT, com.sc.item.ItemDrillSC.HOLE,
+        com.sc.item.ItemDrillSC.HOLE_DEPTH, "HeatSC", "OverheatSC"};
+
+    /** The tool conversion with the default scheme A. */
+    public static ItemStack convertTool(ItemStack exo) {
+        return convertTool(exo, SingularScheme.DEFAULT);
+    }
+
+    /**
+     * The tool conversion: an Exo blade / drill becomes the Singular one of level 1 in scheme `scheme`, keeping its NBT -
+     * the charge (capped at the new capacity, which is bigger anyway), the function switches (FnToggled, by feature ordinal),
+     * the drill's linked chest, a name, enchantments - with the blade's Looting tag re-synced to the Singular tier. Cooled.
+     * Not an Exo tool: returned as it is.
+     */
+    public static ItemStack convertTool(ItemStack exo, SingularScheme scheme) {
+        if (!isExoTool(exo)) {
+            return exo;
+        }
+        boolean blade = com.sc.item.ItemBladeSC.typeOf(exo) != null;
+        ItemStack out = new ItemStack(blade ? com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR)
+                : com.sc.init.ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR));
+        NBTTagCompound tag = exo.hasTagCompound() ? (NBTTagCompound) exo.getTagCompound().copy() : new NBTTagCompound();
+        for (String k : TOOL_FRESH_KEYS) {
+            tag.removeTag(k);
+        }
+        out.setTagCompound(tag);
+        if (blade) {
+            com.sc.item.ItemBladeSC.setCharge(out, com.sc.item.ItemBladeSC.chargeOf(exo));
+            com.sc.item.ItemBladeSC.syncLooting(out);
+        } else {
+            com.sc.item.ItemDrillSC.setCharge(out, com.sc.item.ItemDrillSC.chargeOf(exo));
+        }
+        com.sc.util.ToolLevelSC.setLevel(out, com.sc.util.ToolLevelSC.MIN);
+        com.sc.util.ToolLevelSC.setPoints(out, 0);
+        com.sc.util.ToolLevelSC.setScheme(out, scheme == null ? SingularScheme.DEFAULT : scheme);
+        return out;
+    }
+
     /** Gives a stack back to the slots it can go to (a core: the catalyst slot first; then the material slots), the rest drops. */
     private void putBack(ItemStack s) {
         if (s == null || s.stackSize <= 0) {
@@ -708,7 +849,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             extra[CATALYST_SLOT - ALL_SLOTS] = s;
             return;
         }
-        for (int slot = MATERIAL_SLOT; slot < SING_SLOTS && s.stackSize > 0; slot++) {
+        for (int slot = MATERIAL_SLOT; slot < MATERIAL_END && s.stackSize > 0; slot++) {
             ItemStack in = extra[slot - ALL_SLOTS];
             if (in != null && in.isItemEqual(s) && ItemStack.areItemStackTagsEqual(in, s) && in.isStackable()) {
                 int n = Math.min(s.stackSize, Math.min(in.getMaxStackSize(), getInventoryStackLimit()) - in.stackSize);
@@ -718,7 +859,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 }
             }
         }
-        for (int slot = MATERIAL_SLOT; slot < SING_SLOTS && s.stackSize > 0; slot++) {
+        for (int slot = MATERIAL_SLOT; slot < MATERIAL_END && s.stackSize > 0; slot++) {
             if (extra[slot - ALL_SLOTS] == null) {
                 extra[slot - ALL_SLOTS] = s.copy();
                 s.stackSize = 0;
@@ -777,11 +918,10 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 fillTank(SingularStationMath.GAS[r], (int) Math.min(Integer.MAX_VALUE, g), true);
             }
         }
-        if (convert) {                                      // Б-1: the materials come back whole, the cores with their charge
-            for (ItemStack s : p.items) {
-                putBack(s.copy());
-            }
-        } else if ((p.catalystEu > 0 || (p.kind == SingularProcessSC.KIND_MODERNISE && SingularStationMath.needsCatalyst(p.levels)))
+        for (ItemStack s : p.items) {                       // Б-1 materials (the cores with their charge), the drill's crumbs: whole
+            putBack(s.copy());
+        }
+        if (!convert && (p.catalystEu > 0 || (p.kind == SingularProcessSC.KIND_MODERNISE && SingularStationMath.needsCatalyst(p.levels)))
                 && com.sc.init.ModItems.battery != null) {         // the core used up at the start comes back as a new one
             if (isCore(extra[1])) {                         // an older save (СБ-4) still holds the kept core: the refund goes into it, no second core
                 com.sc.item.ItemBatterySC.setCharge(extra[1],
@@ -824,6 +964,13 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             if (who != null && top > 0) {
                 SingularLevel.levelUpEffects(who, top);
             }
+            ItemStack tool = getTool();
+            if (p.locks(TOOL_BIT) && com.sc.util.ToolLevelSC.isSingularTool(tool) && com.sc.util.ToolLevelSC.levelOf(tool) == p.levels[TOOL_BIT]) {
+                int lv = com.sc.util.ToolLevelSC.applyLevelUp(tool);
+                if (who != null) {
+                    com.sc.util.ToolLevelSC.levelUpEffects(who, tool, lv);
+                }
+            }
         } else if (p.kind == SingularProcessSC.KIND_SYNC) {
             for (int i = 0; i < SLOTS; i++) {
                 ItemStack s = getStackInSlot(i);
@@ -843,6 +990,11 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                     super.setInventorySlotContents(i, convertPiece(s));
                     n++;
                 }
+            }
+            if (p.locks(TOOL_BIT) && isExoTool(getTool())) {
+                SingularScheme sc = shownScheme();
+                extra[TOOL_SLOT - ALL_SLOTS] = convertTool(getTool(), sc == null ? SingularScheme.DEFAULT : sc);
+                n++;
             }
             if (who != null && n > 0) {
                 who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.done.convert", String.valueOf(n)));
@@ -996,7 +1148,31 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return null;
     }
 
-    /** The scheme the screen shows: the chestplate's, else the first Singular piece's (null: none in the slots). */
+    /** The tool's branch re-choice (or a first choice): `choice` (ToolLevelSC branch) for BRANCH_SM mB of singular matter, as the chestplate's. */
+    public String changeToolBranch(int choice) {
+        ItemStack t = getTool();
+        if (!com.sc.util.ToolLevelSC.isSingularTool(t) || !com.sc.util.ToolLevelSC.validBranch(com.sc.util.ToolLevelSC.isBlade(t), choice)) {
+            return "sc.singStation.err.notool";
+        }
+        if (isLocked(TOOL_SLOT)) {
+            return "sc.singStation.err.busy";
+        }
+        if (com.sc.util.ToolLevelSC.levelOf(t) < com.sc.util.ToolLevelSC.BRANCH_LEVEL) {
+            return "sc.singStation.err.branchlevel";
+        }
+        if (com.sc.util.ToolLevelSC.branchOf(t) == choice) {
+            return "sc.singStation.err.samebranch";
+        }
+        if (tankAmount(Gas.SINGULAR_MATTER) < SingularStationMath.BRANCH_SM) {
+            return "sc.singStation.err.nosm";
+        }
+        getTank(Gas.SINGULAR_MATTER).drain(SingularStationMath.BRANCH_SM, true);
+        com.sc.util.ToolLevelSC.setBranch(t, choice);
+        markDirty();
+        return null;
+    }
+
+    /** The scheme the screen shows: the chestplate's, else the first Singular piece's, else the Singular tool's (null: none). */
     public SingularScheme shownScheme() {
         int[] order = {com.sc.util.ArmorGasSC.CHEST, com.sc.util.ArmorGasSC.HELMET, com.sc.util.ArmorGasSC.LEGS, com.sc.util.ArmorGasSC.BOOTS};
         for (int i : order) {
@@ -1004,10 +1180,10 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 return SingularScheme.of(getStackInSlot(i));
             }
         }
-        return null;
+        return com.sc.util.ToolLevelSC.isSingularTool(getTool()) ? com.sc.util.ToolLevelSC.schemeOf(getTool()) : null;
     }
 
-    /** ◄ ►: every Singular piece in the armour slots takes the next scheme (free). @return whether any changed */
+    /** ◄ ►: every Singular piece in the armour slots and the Singular tool take the next scheme (free). @return whether any changed */
     public boolean cycleScheme(int dir) {
         SingularScheme now = shownScheme();
         if (now == null) {
@@ -1018,6 +1194,9 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             if (SingularLevel.isSingular(getStackInSlot(i))) {
                 SingularScheme.setScheme(getStackInSlot(i), next);
             }
+        }
+        if (com.sc.util.ToolLevelSC.isSingularTool(getTool())) {
+            com.sc.util.ToolLevelSC.setScheme(getTool(), next);
         }
         markDirty();
         return true;
@@ -1099,6 +1278,16 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                         t.setByte("Slot", (byte) i);
                         holoList.appendTag(t);
                     }
+                }
+                ItemStack tool = getTool();
+                if (tool != null) {                         // the tool beside the pieces (Slot 4)
+                    ItemStack look = new ItemStack(tool.getItem(), 1, tool.getItemDamage());
+                    if (com.sc.util.ToolLevelSC.isSingularTool(tool)) {
+                        com.sc.util.ToolLevelSC.setScheme(look, com.sc.util.ToolLevelSC.schemeOf(tool));
+                    }
+                    NBTTagCompound t = look.writeToNBT(new NBTTagCompound());
+                    t.setByte("Slot", (byte) SLOTS);
+                    holoList.appendTag(t);
                 }
                 nbt.setTag("SingHolo", holoList);
             }

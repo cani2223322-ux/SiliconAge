@@ -944,12 +944,31 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
     }
 
-    /** Moves items from the input slots into the counter, up to MATTER_MAX. */
+    /**
+     * Moves items from the input slots into the counter, up to MATTER_MAX. A singularity clot (liquid mode
+     * only) skips the counter: ItemSingularClotSC.SM_PER_CLOT mB straight into the tank while it has room.
+     */
     private void absorbMatter() {
         int budget = MATTER_ABSORB_PER_TICK;
         boolean changed = false;
-        for (int i = 0; i < INPUT_SLOTS && budget > 0 && matter < MATTER_MAX; i++) {
+        for (int i = 0; i < INPUT_SLOTS && budget > 0; i++) {
             ItemStack s = slots[i];
+            if (com.sc.item.ItemSingularClotSC.isClot(s)) {
+                if (!matterLiquid || com.sc.init.ModFluids.singularMatter == null) {
+                    continue;                                // the capsule mode: it waits for the liquid one
+                }
+                FluidStack sm = new FluidStack(com.sc.init.ModFluids.singularMatter, com.sc.item.ItemSingularClotSC.SM_PER_CLOT);
+                while (s != null && budget > 0 && safeFill(getTank(2), sm, false) >= sm.amount) {
+                    getTank(2).fill(sm.copy(), true);
+                    budget--;
+                    changed = true;
+                    if (--s.stackSize <= 0) {
+                        slots[i] = null;
+                        s = null;
+                    }
+                }
+                continue;
+            }
             int mass = matterMass(s);
             while (s != null && mass > 0 && budget > 0 && matter < MATTER_MAX) {
                 matter += mass;
@@ -1402,7 +1421,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             return slot < machineType.smeltStreams() && smeltResult(stack) != null;
         }
         if (machineType.isCompressor()) {
-            return slot < INPUT_SLOTS && matterMass(stack) > 0;
+            return slot < INPUT_SLOTS && (matterMass(stack) > 0 || com.sc.item.ItemSingularClotSC.isClot(stack));
         }
         return slot < INPUT_SLOTS && RecipeRegistry.isValidInput(machineType, stack);
     }

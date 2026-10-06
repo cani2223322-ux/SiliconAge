@@ -163,6 +163,9 @@ final class BookPathSC {
                     .add(BookEl.link(SUIT_LINK[s.ordinal()], linkTitle(SUIT_LINK[s.ordinal()])));
             n++;
         }
+        // the Singular blade and drill: no step of their own (the Exo tools converted in the Singular station)
+        su.add(BookEl.para(Lang.tr("sc.book.path.suits.tools"))).add(BookEl.link("singularblade", linkTitle("singularblade")))
+                .add(BookEl.link("singulardrill", linkTitle("singulardrill")));
         su.add(BookEl.gap()).add(BookEl.link("chips", Lang.tr("sc.manual.armor.chipshead"))).add(BookEl.link("armorfn", Lang.tr("sc.manual.armor.fnhead")));
         list.add(su);
 

@@ -6,14 +6,24 @@ import java.util.Locale;
 
 import org.lwjgl.opengl.GL11;
 
+import com.sc.item.BladeLogicSC;
+import com.sc.item.DrillLogicSC;
 import com.sc.item.ItemArmorSC;
+import com.sc.item.ItemBladeSC;
+import com.sc.item.ItemDrillSC;
 import com.sc.manual.Lang;
 import com.sc.util.ArmorFeature;
 import com.sc.util.ArmorGasSC;
 import com.sc.util.ArmorGasSC.Gas;
+import com.sc.util.BladeFeature;
+import com.sc.util.BladeType;
+import com.sc.util.DrillFeature;
+import com.sc.util.DrillType;
 import com.sc.util.SingularCooldowns;
 import com.sc.util.SingularHud;
 import com.sc.util.SingularLevel;
+import com.sc.util.ToolGasSC;
+import com.sc.util.ToolLevelSC;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.client.Minecraft;
@@ -28,6 +38,9 @@ import net.minecraftforge.client.event.RenderGameOverlayEvent;
  * default, or at the top / right / left, or off (ArmorKeyBindsSC.hudPos, the K menu's Level tab).
  * Each icon: the function's code, a dark sweep for the time left, the time / «готов» / «нет СМ», its
  * short name under it (in a row). Also К1's boost and weakness, Н4's slowing and К2's resonance.
+ * The Singular tools (docs/plan-singular-tools.md §4): the blade's form over the hearts / food rows, its and the
+ * drill's key function cooldowns next to the armour's (same icons, the tool's NBT cooldowns), and a panel at the
+ * top with the drill's mode, the crumb in progress, SM in the armour and the drill's heat.
  * Client only.
  */
 public class SingularHudSC {
@@ -124,6 +137,194 @@ public class SingularHudSC {
         return out;
     }
 
+    // ------------------------------------------------------------------ the Singular tools (docs/plan-singular-tools.md §4)
+
+    /** A short key caption for a tool icon: "R", "^V", "M4"; unbound - the name's first two letters. */
+    private static String keyCode(Enum<?> f, String name) {
+        int[] b = f == null ? null : ArmorKeyBindsSC.get(f);
+        if (b == null || b[0] == 0) {
+            return name.length() > 2 ? name.substring(0, 2) : name;
+        }
+        String k = b[0] < 0 ? "M" + (b[0] - ArmorKeyBindsSC.MOUSE_BASE + 1) : org.lwjgl.input.Keyboard.getKeyName(b[0]);
+        if (k == null) {
+            k = "?";
+        }
+        if (k.length() > 3) {
+            k = k.substring(0, 3);
+        }
+        return (b[1] != 0 ? "^" : "") + k;
+    }
+
+    /**
+     * One tool function's icon, or null while hidden (the same states and look as the armour's). `f` the key's
+     * function (null: none - «Последний шанс»), `wanted` its missing gas is worth showing (on with a key / a mode on).
+     */
+    private static Icon toolIcon(EntityPlayer p, ItemStack tool, Enum<?> f, String name, boolean has, boolean wanted, int baseCd,
+            Gas gas, int gasMb, String key) {
+        if (baseCd <= 0) {
+            return null;
+        }
+        long now = p.worldObj.getTotalWorldTime();
+        long end = ToolLevelSC.cooldownEnd(tool, key);
+        boolean gasShort = gas != null && !ToolGasSC.has(p, gas, gasMb);
+        int st = SingularHud.toolState(has, end, now, gasShort, wanted);
+        if (st == SingularHud.HIDDEN) {
+            return null;
+        }
+        Icon ic = new Icon();
+        ic.code = keyCode(f, name);
+        ic.name = name;
+        if (st == SingularHud.COOLING) {
+            ic.text = SingularHud.time(SingularCooldowns.left(end, now), Lang.tr("sc.singhud.sec"));
+            ic.sweep = SingularHud.sweep(end, now, ToolLevelSC.cooldownTicks(p, baseCd));
+            ic.codeColor = DIM_PURPLE;
+        } else if (st == SingularHud.READY) {
+            ic.text = Lang.tr("sc.singhud.ready");
+            ic.textColor = GREEN;
+            ic.edge = 0xFF000000 | PURPLE;
+        } else {
+            ic.text = Lang.tr("sc.singhud.nogas", GasUiSC.shortName(gas));
+            ic.textColor = RED;
+            ic.codeColor = DIM_PURPLE;
+            ic.edge = 0xFF803030;
+        }
+        return ic;
+    }
+
+    /** A key function switched on with a key bound: its missing gas is worth an icon. */
+    private static boolean keyed(boolean on, Enum<?> f) {
+        return on && ArmorKeyBindsSC.get(f) != null;
+    }
+
+    /**
+     * The icons of the Singular blade / drill in hand: its key functions with a cooldown. The form attack goes by
+     * the form that counts (its own name, cooldown and gas; the sword's wave has none), the Guardian's «Последний
+     * шанс» (level 5) by its own cooldown; the drill's black hole (a mode, not a key) while its zone has one (12x12).
+     */
+    static List<Icon> toolIcons(EntityPlayer p) {
+        List<Icon> out = new ArrayList<Icon>();
+        ItemStack held = p.getCurrentEquippedItem();
+        if (ToolLevelSC.isBlade(held)) {
+            com.sc.util.BladeForm form = com.sc.item.BladeSingularSC.effectiveForm(p, held);
+            for (BladeFeature f : BladeFeature.values()) {
+                if (!f.isAction() || !f.availableIn(BladeType.SINGULAR)) {
+                    continue;
+                }
+                boolean fa = f == BladeFeature.FORM_ATTACK;
+                Icon ic = toolIcon(p, held, f, Lang.tr(fa ? BladeFeature.formAttackKey(form) : "sc.bladefn." + f.key()),
+                        BladeLogicSC.unlocked(p, held, f), keyed(ItemBladeSC.isEnabled(held, f), f),
+                        fa ? BladeFeature.formAttackCooldown(form) : f.cooldownTicks(), fa ? BladeFeature.formAttackGas(form) : f.gas(),
+                        fa ? BladeFeature.formAttackGasMb(form) : f.gasMb(), f.key());
+                if (ic != null) {
+                    out.add(ic);
+                }
+            }
+            if (ToolLevelSC.hasBranch(p, held, ToolLevelSC.BLADE_GUARDIAN, ToolLevelSC.BRANCH_PERK_LEVEL)) {
+                Icon ic = toolIcon(p, held, null, Lang.tr("sc.toolhud.lastchance"), true, true, BladeFeature.LAST_CHANCE_COOLDOWN,
+                        Gas.SINGULAR_MATTER, BladeFeature.LAST_CHANCE_SM, BladeFeature.LAST_CHANCE_KEY);
+                if (ic != null) {
+                    out.add(ic);
+                }
+            }
+        } else if (ToolLevelSC.isDrill(held)) {
+            for (DrillFeature f : DrillFeature.values()) {
+                if (!f.isAction() || !f.availableIn(DrillType.SINGULAR)) {
+                    continue;
+                }
+                Icon ic = toolIcon(p, held, f, Lang.tr("sc.drillfn." + f.key()), DrillLogicSC.unlocked(p, held, f),
+                        keyed(ItemDrillSC.isEnabled(held, f), f), f.cooldownTicks(), f.gas(), f.gasMb(), f.key());
+                if (ic != null) {
+                    out.add(ic);
+                }
+            }
+            DrillFeature hole = DrillFeature.BLACK_HOLE;
+            int size = DrillLogicSC.holeSize(p, held);
+            int cd = size > 0 ? DrillLogicSC.holeCooldown(p, held, size) : 0;
+            // a cooldown left from a 12x12 dig stays shown even after the mode changed
+            if (cd <= 0 && ToolLevelSC.cooldownEnd(held, hole.key()) > p.worldObj.getTotalWorldTime()) {
+                cd = hole.cooldownTicks();
+            }
+            Icon ic = toolIcon(p, held, hole, Lang.tr("sc.drillfn." + hole.key()), DrillLogicSC.unlocked(p, held, hole), size > 0,
+                    cd, hole.gas(), hole.gasMb(), hole.key());
+            if (ic != null) {
+                out.add(ic);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The black hole as it works now: the size the drill's level opens (a stored 12 on a level-3 drill digs 9x9)
+     * and the depth; «Обычный режим» while off. Client-safe (NBT + creative).
+     */
+    public static String holeLine(EntityPlayer p, ItemStack drill) {
+        int size = DrillLogicSC.holeSize(p, drill);
+        if (size <= 0) {
+            return Lang.tr("sc.toolgui.hole.off");
+        }
+        int depth = ItemDrillSC.tunnelDepth(drill);
+        return depth > 1 ? Lang.tr("sc.toolgui.hole.tunnel", size, size, depth) : Lang.tr("sc.toolgui.hole.size", size, size);
+    }
+
+    /** Above the hearts / food rows: the Singular blade's form. @return the height it took (0: none) */
+    private static int drawForm(FontRenderer fr, EntityPlayer p, int w, int h) {
+        ItemStack held = p.getCurrentEquippedItem();
+        if (!ToolLevelSC.isBlade(held)) {
+            return 0;
+        }
+        int rows = Math.max(net.minecraftforge.client.GuiIngameForge.left_height, net.minecraftforge.client.GuiIngameForge.right_height);
+        com.sc.util.BladeForm form = com.sc.item.BladeSingularSC.effectiveForm(p, held);
+        String s = Lang.tr("sc.toolhud.form", Lang.tr(form.langKey()), Lang.tr(BladeFeature.formAttackKey(form)));
+        fr.drawStringWithShadow(s, (w - fr.getStringWidth(s)) / 2, h - rows - 11, PURPLE);
+        return 11;
+    }
+
+    /** Top right (top left while the icons are on the right): the Singular drill's mode, the crumb, SM in the armour, heat. */
+    private static void drawDrillPanel(FontRenderer fr, EntityPlayer p, int w, int pos) {
+        ItemStack held = p.getCurrentEquippedItem();
+        if (!ToolLevelSC.isDrill(held)) {
+            return;
+        }
+        List<String> lines = new ArrayList<String>();
+        List<Integer> colors = new ArrayList<Integer>();
+        lines.add(Lang.tr("sc.toolhud.drill.head"));
+        colors.add(0xFFFFFF);
+        lines.add(holeLine(p, held));
+        colors.add(PURPLE);
+        int per = com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS;
+        int prog = Math.max(0, Math.min(per, ItemDrillSC.crumbProgress(held)));
+        lines.add(Lang.tr("sc.toolhud.drill.crumb", prog, per));
+        colors.add(0xE0E0E0);
+        int sm = ArmorGasSC.suitAmount(p, Gas.SINGULAR_MATTER);
+        lines.add(Lang.tr("sc.toolhud.drill.sm", sm));
+        colors.add(sm > 0 ? 0xE0E0E0 : RED);
+        int heat = ItemDrillSC.heatPercent(held);
+        boolean hot = ItemDrillSC.overheated(held);
+        lines.add(Lang.tr(hot ? "sc.drillhud.overheat" : "sc.toolhud.drill.heat", heat));
+        colors.add(hot || heat > 80 ? RED : heat > 0 ? ORANGE : 0xA0A0A0);
+        int tw = 0;
+        for (String s : lines) {
+            tw = Math.max(tw, fr.getStringWidth(s));
+        }
+        int pw = tw + 10, ph = 4 + 13 + (lines.size() - 1) * 10 + 3 + 2;
+        int x = pos == ArmorKeyBindsSC.HUD_RIGHT ? 4 : w - pw - 4, y = 4;
+        Gui.drawRect(x, y, x + pw, y + ph, 0xFF000000 | PURPLE);
+        Gui.drawRect(x + 1, y + 1, x + pw - 1, y + ph - 1, 0xD8140F1E);
+        int ly = y + 4;
+        for (int i = 0; i < lines.size(); i++) {
+            fr.drawStringWithShadow(lines.get(i), x + (pw - fr.getStringWidth(lines.get(i))) / 2, ly, colors.get(i));
+            ly += i == 0 ? 13 : 10;                       // a gap under the heading
+            if (i == 2) {                                 // the crumb's bar under its line
+                int share = Math.round((pw - 12) * SingularHud.crumbShare(prog, per));
+                Gui.drawRect(x + 6, ly - 1, x + pw - 6, ly, 0xFF3A2A4A);
+                if (share > 0) {
+                    Gui.drawRect(x + 6, ly - 1, x + 6 + share, ly, 0xFF000000 | PURPLE);
+                }
+                ly += 2;
+            }
+        }
+    }
+
     @SubscribeEvent
     public void onOverlay(RenderGameOverlayEvent.Post event) {
         Minecraft mc = Minecraft.getMinecraft();
@@ -132,14 +333,19 @@ public class SingularHudSC {
             return;
         }
         int pos = ArmorKeyBindsSC.hudPos();
-        if (pos == ArmorKeyBindsSC.HUD_OFF || !SingularLevel.wearsSingular(mc.thePlayer)) {
+        int w = event.resolution.getScaledWidth(), h = event.resolution.getScaledHeight();
+        FontRenderer fr = mc.fontRenderer;
+        int formH = drawForm(fr, mc.thePlayer, w, h);          // the tool's own lines: whatever the icons' place
+        drawDrillPanel(fr, mc.thePlayer, w, pos);
+        GL11.glColor4f(1F, 1F, 1F, 1F);
+        if (pos == ArmorKeyBindsSC.HUD_OFF) {
             return;
         }
-        List<Icon> icons = icons(mc.thePlayer);
+        List<Icon> icons = SingularLevel.wearsSingular(mc.thePlayer) ? icons(mc.thePlayer) : new ArrayList<Icon>();
+        icons.addAll(toolIcons(mc.thePlayer));               // next to the armour's, the same look
         if (icons.isEmpty()) {
             return;
         }
-        int w = event.resolution.getScaledWidth(), h = event.resolution.getScaledHeight();
         int n = icons.size();
         boolean row = pos == ArmorKeyBindsSC.HUD_HOTBAR || pos == ArmorKeyBindsSC.HUD_TOP;
         int x, y;
@@ -150,14 +356,13 @@ public class SingularHudSC {
                 y = 4 + (net.minecraft.entity.boss.BossStatus.bossName != null && net.minecraft.entity.boss.BossStatus.statusBarTime > 0 ? 18 : 0);
             } else {                                        // over the hearts / armour / food rows, whatever they take
                 int rows = Math.max(net.minecraftforge.client.GuiIngameForge.left_height, net.minecraftforge.client.GuiIngameForge.right_height);
-                y = h - rows - 4 - 9 - BOX;
+                y = h - rows - 4 - 9 - BOX - formH;
             }
         } else {
             int total = n * (BOX + 3) - 3;
             x = pos == ArmorKeyBindsSC.HUD_RIGHT ? w - BOX - 4 : 4;
             y = Math.max(4, (h - total) / 2);
         }
-        FontRenderer fr = mc.fontRenderer;
         for (Icon ic : icons) {
             drawIcon(fr, ic, x, y, row);
             if (row) {

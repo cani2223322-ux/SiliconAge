@@ -71,6 +71,13 @@ public final class SelfTestSC {
             fullCheck20261006();
             fullFixes20261006();
             invUtilForeign();
+            singToolsFixes();
+            singToolsPolish();
+            singToolsUi();
+            singToolsStation();
+            singToolsDrill();
+            singToolsBlade();
+            singToolsStage1();
             bladeFunctions();
             chargePad();
             batteries();
@@ -2539,9 +2546,9 @@ public final class SelfTestSC {
         int[] fsHave = fs.materialsHave();
         String fsStart = fs.startConvertFor("");
         com.sc.tileentity.SingularProcessSC fp = fs.getProcess();
-        boolean fullSet = com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOTS == 6 && fs.getSizeInventory() == 16 && TS == 10 && CAT == 9
+        boolean fullSet = com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOTS == 6 && fs.getSizeInventory() == 17 && TS == 10 && CAT == 9
                 && fs.isItemValidForSlot(TS + 5, hf) && fs.isItemValidForSlot(TS + 4, new ItemStack(ModItems.component("focusLens")))
-                && fs.getAccessibleSlotsFromSide(1).length == 4
+                && fs.getAccessibleSlotsFromSide(1).length == 5
                 && "sc.singStation.err.nomaterials".equals(fsShort) && java.util.Arrays.equals(fsHave, new int[]{13, 1, 64, 1, 2, 1, 1})
                 && fsStart == null && fp != null && fp.mask == 15 && fp.items.size() == 7 && fp.cost[0] == 350000000L
                 && fs.getStackInSlot(TS) != null && fs.getStackInSlot(TS).stackSize == 2 && fs.getStackInSlot(TS + 2) != null
@@ -3479,7 +3486,7 @@ public final class SelfTestSC {
 
     /** Energy blades: functions per tier, defaults and switches, the blade's own heat with its cool-down to half. */
     private static void bladeFunctions() {
-        int[] count = new int[3];
+        int[] count = new int[com.sc.util.BladeType.values().length];
         for (com.sc.util.BladeFeature f : com.sc.util.BladeFeature.values()) {
             for (com.sc.util.BladeType t : com.sc.util.BladeType.values()) {
                 count[t.ordinal()] += f.availableIn(t) ? 1 : 0;
@@ -3552,7 +3559,7 @@ public final class SelfTestSC {
 
     /** Drills: each tier has everything the one below has, defaults, fortune III / V, small batteries, pad tier rule. */
     private static void drills() {
-        int[] count = new int[3];
+        int[] count = new int[com.sc.util.DrillType.values().length];
         boolean inherits = true;
         for (com.sc.util.DrillFeature f : com.sc.util.DrillFeature.values()) {
             for (com.sc.util.DrillType t : com.sc.util.DrillType.values()) {
@@ -5543,5 +5550,720 @@ public final class SelfTestSC {
                 && sim.getStackInSlot(0) == null;
         check(less && none && more && nullOk && simOk,
                 "Э-7: machines/quarry/drill inventory helper: a foreign inventory giving less / null / more, null slot arrays, simulate");
+    }
+
+    /** Singular blade & drill, stage1 (docs/plan-singular-tools.md). */
+    private static void singToolsStage1() {
+        // ---- Singular blade & drill, stage 1 (docs/plan-singular-tools.md) ----
+        {
+            com.sc.util.BladeType st1Sb = com.sc.util.BladeType.SINGULAR;
+            com.sc.util.DrillType st1Sd = com.sc.util.DrillType.SINGULAR;
+            check(st1Sb.ordinal() == 3 && st1Sd.ordinal() == 3 && st1Sb.suit == com.sc.util.ArmorSuit.SINGULAR && st1Sd.suit == com.sc.util.ArmorSuit.SINGULAR
+                            && st1Sb.chargeTier == com.sc.energy.Tier.SV && st1Sd.chargeTier == com.sc.energy.Tier.SV
+                            && st1Sb.maxCharge == 16000000 && st1Sd.maxCharge == 1000000 && st1Sb.heatCapacity == 800 && st1Sb.heatDissipation == 16
+                            && st1Sd.heatCapacity == 800 && st1Sd.heatDissipation == 16 && st1Sd.fortune == 5 && st1Sb.looting == 6,
+                    "singular tools: appended, SV, 16M / 1M EU, heat 800 / 16");
+            check(st1Sb.exoClass() && st1Sd.exoClass() && com.sc.util.BladeType.EXO.exoClass() && !com.sc.util.BladeType.QUANTUM.exoClass()
+                            && !com.sc.util.DrillType.NANO.exoClass(),
+                    "singular tools count as Exo class (Exo rules)");
+            boolean st1AllOld = true;
+            for (com.sc.util.BladeFeature st1F : com.sc.util.BladeFeature.values()) {
+                st1AllOld &= st1F.availableIn(st1Sb);
+            }
+            for (com.sc.util.DrillFeature st1F : com.sc.util.DrillFeature.values()) {
+                st1AllOld &= st1F.availableIn(st1Sd);
+            }
+            check(st1AllOld, "singular tools have every Nano / Quantum / Exo function");
+            check(ModItems.BLADES.get(st1Sb) != null && ModItems.DRILLS.get(st1Sd) != null && ModItems.singularCrumb != null && ModItems.singularClot != null,
+                    "singular blade / drill / crumb / clot registered");
+
+            ItemStack st1Blade = new ItemStack(ModItems.BLADES.get(st1Sb));
+            ItemStack st1Drill = new ItemStack(ModItems.DRILLS.get(st1Sd));
+            ItemStack st1ExoBlade = new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.EXO));
+            check(com.sc.util.ToolLevelSC.isBlade(st1Blade) && com.sc.util.ToolLevelSC.isDrill(st1Drill) && !com.sc.util.ToolLevelSC.isSingularTool(st1ExoBlade)
+                            && com.sc.util.ToolLevelSC.levelOf(st1Blade) == 1 && com.sc.util.ToolLevelSC.points(st1Blade) == 0,
+                    "ToolLevelSC: kinds, fresh tool level 1 / 0 points");
+
+            // thresholds: blade / drill tables, 0 at 5
+            check(com.sc.util.ToolLevelSC.threshold(true, 1) == 3000 && com.sc.util.ToolLevelSC.threshold(true, 4) == 60000
+                            && com.sc.util.ToolLevelSC.threshold(false, 1) == 2000 && com.sc.util.ToolLevelSC.threshold(false, 4) == 50000
+                            && com.sc.util.ToolLevelSC.threshold(true, 5) == 0 && com.sc.util.ToolLevelSC.threshold(false, 0) == 0
+                            && com.sc.util.ToolLevelSC.threshold(st1Blade) == 3000 && com.sc.util.ToolLevelSC.threshold(st1Drill) == 2000
+                            && com.sc.util.ToolLevelSC.threshold(st1ExoBlade) == 0,
+                    "ToolLevelSC thresholds (blade 3000..60000, drill 2000..50000, none at 5)");
+
+            // points: capped at the threshold, not on other tools
+            int st1A1 = com.sc.util.ToolLevelSC.addPoints(st1Drill, 1500);
+            int st1A2 = com.sc.util.ToolLevelSC.addPoints(st1Drill, 1000);
+            int st1A3 = com.sc.util.ToolLevelSC.addPoints(st1Drill, 10);
+            check(st1A1 == 1500 && st1A2 == 500 && st1A3 == 0 && com.sc.util.ToolLevelSC.points(st1Drill) == 2000 && com.sc.util.ToolLevelSC.pointsFull(st1Drill)
+                            && com.sc.util.ToolLevelSC.readyToUpgrade(st1Drill) && com.sc.util.ToolLevelSC.addPoints(st1ExoBlade, 50) == 0
+                            && com.sc.util.ToolLevelSC.addPoints(st1Drill, -5) == 0,
+                    "ToolLevelSC.addPoints caps at the threshold (" + st1A1 + "/" + st1A2 + "/" + st1A3 + ")");
+
+            // level-up: +1, points back to 0, stops at 5
+            int st1Lv = com.sc.util.ToolLevelSC.applyLevelUp(st1Drill);
+            boolean st1LvOk = st1Lv == 2 && com.sc.util.ToolLevelSC.points(st1Drill) == 0 && !com.sc.util.ToolLevelSC.readyToUpgrade(st1Drill);
+            com.sc.util.ToolLevelSC.setLevel(st1Drill, 5);
+            com.sc.util.ToolLevelSC.addPoints(st1Drill, 100);
+            st1LvOk &= com.sc.util.ToolLevelSC.applyLevelUp(st1Drill) == 5 && com.sc.util.ToolLevelSC.points(st1Drill) == 0
+                    && !com.sc.util.ToolLevelSC.pointsFull(st1Drill) && com.sc.util.ToolLevelSC.applyLevelUp(st1ExoBlade) == 1;
+            com.sc.util.ToolLevelSC.setLevel(st1Drill, 9);
+            st1LvOk &= com.sc.util.ToolLevelSC.levelOf(st1Drill) == 5;
+            check(st1LvOk, "ToolLevelSC.applyLevelUp: +1, points reset, capped at 5");
+
+            // branches: blade 1..3, drill 1..2, chosen at 3, free choice only while pending
+            ItemStack st1B2 = new ItemStack(ModItems.BLADES.get(st1Sb));
+            ItemStack st1D2 = new ItemStack(ModItems.DRILLS.get(st1Sd));
+            boolean st1Br = com.sc.util.ToolLevelSC.branchCount(st1B2) == 3 && com.sc.util.ToolLevelSC.branchCount(st1D2) == 2
+                    && com.sc.util.ToolLevelSC.branchCount(st1ExoBlade) == 0
+                    && com.sc.util.ToolLevelSC.setBranch(st1B2, com.sc.util.ToolLevelSC.BLADE_GUARDIAN)
+                    && !com.sc.util.ToolLevelSC.setBranch(st1B2, 4) && !com.sc.util.ToolLevelSC.setBranch(st1D2, 3)
+                    && com.sc.util.ToolLevelSC.setBranch(st1D2, com.sc.util.ToolLevelSC.DRILL_PROSPECTOR)
+                    && !com.sc.util.ToolLevelSC.setBranch(st1ExoBlade, 1)
+                    && com.sc.util.ToolLevelSC.branchOf(st1B2) == 3 && com.sc.util.ToolLevelSC.branchOf(st1D2) == 2;
+            st1Br &= com.sc.util.ToolLevelSC.setBranch(st1B2, com.sc.util.ToolLevelSC.BRANCH_NONE) && com.sc.util.ToolLevelSC.branchOf(st1B2) == 0
+                    && !com.sc.util.ToolLevelSC.branchPending(st1B2);
+            st1B2.getTagCompound().setInteger(com.sc.util.ToolLevelSC.BRANCH, 7);           // garbage reads as none
+            st1Br &= com.sc.util.ToolLevelSC.branchOf(st1B2) == com.sc.util.ToolLevelSC.BRANCH_NONE;
+            com.sc.util.ToolLevelSC.setLevel(st1B2, 3);
+            st1Br &= com.sc.util.ToolLevelSC.branchPending(st1B2);
+            st1Br &= com.sc.util.ToolLevelSC.hasBranch(3, false, 2, 2, 3) && !com.sc.util.ToolLevelSC.hasBranch(3, false, 2, 1, 3)
+                    && !com.sc.util.ToolLevelSC.hasBranch(4, false, 2, 2, 5) && com.sc.util.ToolLevelSC.hasBranch(5, true, 0, 1, 5);
+            check(st1Br, "ToolLevelSC branches: blade 1..3, drill 1..2, validated, pending at level 3");
+
+            // forms: levels and the Guardian's shield
+            com.sc.util.BladeForm[] st1Forms = com.sc.util.BladeForm.values();
+            check(st1Forms.length == 6 && com.sc.util.BladeForm.SWORD.level == 1 && com.sc.util.BladeForm.SCYTHE.level == 1
+                            && com.sc.util.BladeForm.SPEAR.level == 1 && com.sc.util.BladeForm.WHIP.level == 2
+                            && com.sc.util.BladeForm.SHIELD.level == 3 && com.sc.util.BladeForm.SINGULAR.level == 5
+                            && com.sc.util.BladeForm.SHIELD.branch == com.sc.util.ToolLevelSC.BLADE_GUARDIAN
+                            && com.sc.util.BladeForm.SWORD.branch == 0 && com.sc.util.BladeForm.WHIP.key().equals("whip")
+                            && com.sc.item.ItemBladeSC.formOf(st1Blade) == com.sc.util.BladeForm.SWORD
+                            && com.sc.item.ItemBladeSC.formOf(null) == com.sc.util.BladeForm.SWORD,
+                    "BladeForm: six forms, levels 1/1/1/2/3/5, the shield is the Guardian's, default sword");
+            com.sc.item.ItemBladeSC.setForm(st1Blade, com.sc.util.BladeForm.SPEAR);
+            boolean st1Fm = com.sc.item.ItemBladeSC.formOf(st1Blade) == com.sc.util.BladeForm.SPEAR;
+            st1Fm &= com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.SPEAR, 1, 1, 0, false) == com.sc.util.BladeForm.SWORD   // whip shut at 1
+                    && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.SPEAR, 1, 3, 0, false) == com.sc.util.BladeForm.WHIP
+                    && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.WHIP, 1, 3, 1, false) == com.sc.util.BladeForm.SWORD // no shield: Destroyer
+                    && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.WHIP, 1, 3, 3, false) == com.sc.util.BladeForm.SHIELD
+                    && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.SWORD, -1, 5, 0, true) == com.sc.util.BladeForm.SINGULAR
+                    && com.sc.util.BladeForm.of(99) == com.sc.util.BladeForm.SWORD;
+            check(st1Fm, "BladeForm: setForm / formOf, cycling skips the shut forms");
+
+            // drill read helpers
+            ItemStack st1D3 = new ItemStack(ModItems.DRILLS.get(st1Sd));
+            boolean st1Dh = com.sc.item.ItemDrillSC.blackHoleSize(st1D3) == 0 && com.sc.item.ItemDrillSC.tunnelDepth(st1D3) == 1;
+            st1D3.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+            st1D3.getTagCompound().setInteger("SingHole", 9);
+            st1D3.getTagCompound().setInteger("SingHoleDepth", 3);
+            st1Dh &= com.sc.item.ItemDrillSC.blackHoleSize(st1D3) == 9 && com.sc.item.ItemDrillSC.tunnelDepth(st1D3) == 3;
+            st1D3.getTagCompound().setInteger("SingHole", 7);
+            st1Dh &= com.sc.item.ItemDrillSC.blackHoleSize(st1D3) == 0;
+            check(st1Dh, "ItemDrillSC.blackHoleSize / tunnelDepth read the NBT (0/5/9/12, 1/3)");
+
+            // cooldowns in the tool (pure: an explicit world tick)
+            ItemStack st1C = new ItemStack(ModItems.BLADES.get(st1Sb));
+            com.sc.util.ToolLevelSC.setCooldownEnd(st1C, "rift", 1000L);
+            boolean st1Cd = com.sc.util.ToolLevelSC.cooldownEnd(st1C, "rift") == 1000L && com.sc.util.ToolLevelSC.cooldownLeft(st1C, "rift", 940L) == 60
+                    && com.sc.util.ToolLevelSC.cooldownLeft(st1C, "rift", 1000L) == 0 && com.sc.util.ToolLevelSC.cooldownLeft(st1C, "other", 0L) == 0;
+            com.sc.util.ToolLevelSC.setCooldownEnd(st1C, "rift", 0L);
+            st1Cd &= com.sc.util.ToolLevelSC.cooldownEnd(st1C, "rift") == 0L && !st1C.getTagCompound().hasKey(com.sc.util.ToolLevelSC.COOLDOWNS);
+            st1Cd &= com.sc.util.ToolLevelSC.cooldownTicks(100, true) == 75 && com.sc.util.ToolLevelSC.cooldownTicks(100, false) == 100
+                    && com.sc.util.ToolLevelSC.cooldownTicks(1, true) == 1 && com.sc.util.ToolLevelSC.cooldownTicks(0, true) == 0
+                    && com.sc.util.ToolLevelSC.cooldownTicks((net.minecraft.entity.player.EntityPlayer) null, 40) == 40;
+            check(st1Cd, "ToolLevelSC cooldowns: end tick in the tool, ticks left, -25% with the full set");
+
+            // Exo legacy: old functions x0.8 EU on the Singular tools only
+            check(com.sc.util.ToolLevelSC.legacyCost(1000) == 800 && com.sc.util.ToolLevelSC.legacyCost(5) == 4
+                            && com.sc.util.ToolLevelSC.legacyCost(st1Blade, 1000) == 800 && com.sc.util.ToolLevelSC.legacyCost(st1ExoBlade, 1000) == 1000
+                            && com.sc.item.BladeLogicSC.legacy(st1Blade, com.sc.util.BladeFeature.WAVE_COST)
+                                    == 16000
+                            && com.sc.item.DrillLogicSC.legacy(st1Drill, 300) == 240 && com.sc.item.DrillLogicSC.legacy(null, 300) == 300
+                            && com.sc.util.ToolLevelSC.LEGACY_MUL == 0.8F,
+                    "LEGACY_MUL: Exo-era functions cost 80% EU on the Singular tools");
+
+            // scheme: kept in the tool, default A
+            ItemStack st1S = new ItemStack(ModItems.DRILLS.get(st1Sd));
+            boolean st1Sc = com.sc.util.ToolLevelSC.schemeOf(st1S) == com.sc.util.SingularScheme.A;
+            com.sc.util.ToolLevelSC.setScheme(st1S, com.sc.util.SingularScheme.G);
+            st1Sc &= com.sc.util.ToolLevelSC.schemeOf(st1S) == com.sc.util.SingularScheme.G
+                    && com.sc.util.ToolLevelSC.syncScheme(null, st1S) == false;
+            check(st1Sc, "ToolLevelSC scheme: default A, set / read");
+
+            // gases: the per-tick remainder
+            float[] st1Sp = com.sc.util.ToolGasSC.split(0.7F, 0.5F);
+            check(st1Sp[0] == 1F && Math.abs(st1Sp[1] - 0.2F) < 1e-4 && com.sc.util.ToolGasSC.split(0F, 0.25F)[0] == 0F,
+                    "ToolGasSC.split keeps the part of a mB");
+
+            // crumbs and the clot
+            check(com.sc.item.ItemSingularCrumbSC.crumbsToFeed(64, 15, 10) == 2 && com.sc.item.ItemSingularCrumbSC.crumbsToFeed(64, 0, 10) == 0
+                            && com.sc.item.ItemSingularCrumbSC.crumbsToFeed(3, 100, 10) == 3 && com.sc.item.ItemSingularCrumbSC.crumbsToFeed(0, 100, 10) == 0
+                            && com.sc.item.ItemSingularCrumbSC.CRUMB_POINTS == 10 && com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS == 64
+                            && com.sc.item.ItemSingularCrumbSC.ORE_MUL == 4,
+                    "singularity crumbs: only what fits is fed (10 points each)");
+            ItemStack st1Crumb = new ItemStack(ModItems.singularCrumb), st1Clot = new ItemStack(ModItems.singularClot);
+            ItemStack st1Made = com.sc.init.ModRecipesCrafting.craft(st1Crumb, st1Crumb, st1Crumb, st1Crumb, st1Crumb, st1Crumb, st1Crumb, st1Crumb, st1Crumb);
+            check(st1Made != null && st1Made.getItem() == ModItems.singularClot && st1Made.stackSize == 1
+                            && com.sc.item.ItemSingularClotSC.isClot(st1Clot) && !com.sc.item.ItemSingularClotSC.isClot(st1Crumb)
+                            && com.sc.tileentity.TileEntityMachineSC.matterMass(st1Clot) == 0
+                            && com.sc.tileentity.TileEntityMachineSC.matterMass(st1Crumb) == 0
+                            && com.sc.item.ItemSingularClotSC.SM_PER_CLOT == 100,
+                    "9 crumbs -> clot; neither is plain compressor mass (clot: 100 mB in the liquid mode)");
+        }
+    }
+
+    /** Singular blade & drill, blade (docs/plan-singular-tools.md). */
+    private static void singToolsBlade() {
+        // ---- Singular blade (stage 2, blade agent): metadata, forms, cascade, chain, gating, cooldowns
+        {
+            boolean sbMeta = true;
+            String sbBad = "";
+            for (com.sc.util.BladeFeature sbF : com.sc.util.BladeFeature.values()) {
+                boolean ok;
+                if (sbF.isSingular()) {
+                    ok = sbF.singLevel() >= 1 && sbF.singLevel() <= 5 && sbF.branch() == 0
+                            && (sbF.gas() == null) == (sbF.gasMb() == 0) && (!sbF.gasPerSecond() || sbF.gas() != null)
+                            && (sbF.cooldownTicks() == 0 || sbF.isAction()) && sbF.availableIn(com.sc.util.BladeType.SINGULAR)
+                            && !sbF.availableIn(com.sc.util.BladeType.EXO);
+                } else {
+                    ok = sbF.singLevel() == 1 && sbF.branch() == 0 && sbF.gas() == null && sbF.gasMb() == 0 && !sbF.gasPerSecond()
+                            && sbF.cooldownTicks() == 0;
+                }
+                if (!ok) {
+                    sbMeta = false;
+                    sbBad += sbF.key() + " ";
+                }
+            }
+            check(sbMeta && com.sc.util.BladeFeature.values().length <= 31, "singular blade: feature metadata consistent " + sbBad);
+            check(com.sc.util.BladeFeature.GRAV_PULL.ordinal() == 10 && com.sc.util.BladeFeature.FORM_ATTACK.ordinal() == 22
+                            && com.sc.util.BladeFeature.LOOTING.ordinal() == 9,
+                    "singular blade: features appended after LOOTING (ordinals saved)");
+            check(com.sc.util.BladeFeature.GRAV_PULL.isAction() && com.sc.util.BladeFeature.RIFT_STEP.isAction()
+                            && com.sc.util.BladeFeature.GRAV_TETHER.isAction() && com.sc.util.BladeFeature.FORM_ATTACK.isAction()
+                            && com.sc.util.BladeFeature.WAVE.isAction() && !com.sc.util.BladeFeature.CASCADE.isAction()
+                            && !com.sc.util.BladeFeature.HUNTER_SENSE.isAction() && !com.sc.util.BladeFeature.CHARGED_STRIKE.isAction()
+                            && !com.sc.util.BladeFeature.HUNTER_SENSE.onByDefault,
+                    "singular blade: keys vs switches, hunter's sense off by default");
+            check(com.sc.util.BladeFeature.GRAV_PULL.gas() == com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER && com.sc.util.BladeFeature.GRAV_PULL.gasMb() == 5
+                            && com.sc.util.BladeFeature.RIFT_STEP.gasMb() == 10 && com.sc.util.BladeFeature.PERFECT_PARRY.gas() == com.sc.util.ArmorGasSC.Gas.ARGON
+                            && com.sc.util.BladeFeature.HUNTER_SENSE.gasPerSecond() && com.sc.util.BladeFeature.HUNTER_SENSE.gas() == com.sc.util.ArmorGasSC.Gas.KRYPTON
+                            && com.sc.util.BladeFeature.EVENT_HORIZON.gasMb() == 10 && com.sc.util.BladeFeature.GRAV_SHIELD.gasMb() == 15
+                            && com.sc.util.BladeFeature.GRAV_TETHER.gasMb() == 10 && com.sc.util.BladeFeature.CHAIN_CUT.singLevel() == 4
+                            && com.sc.util.BladeFeature.CHARGED_STRIKE.singLevel() == 3 && com.sc.util.BladeFeature.RIFT_STEP.singLevel() == 2,
+                    "singular blade: gases and levels as in the plan");
+
+            // forms
+            check(Math.abs(com.sc.util.BladeFeature.formMul(com.sc.util.BladeForm.SWORD) - 1F) < 1e-6
+                            && Math.abs(com.sc.util.BladeFeature.formMul(com.sc.util.BladeForm.SCYTHE) - 0.8F) < 1e-6
+                            && Math.abs(com.sc.util.BladeFeature.formMul(com.sc.util.BladeForm.SPEAR) - 1.2F) < 1e-6
+                            && Math.abs(com.sc.util.BladeFeature.formMul(com.sc.util.BladeForm.WHIP) - 0.7F) < 1e-6
+                            && Math.abs(com.sc.util.BladeFeature.formMul(com.sc.util.BladeForm.SHIELD) - 0.5F) < 1e-6
+                            && Math.abs(com.sc.util.BladeFeature.formMul(com.sc.util.BladeForm.SINGULAR) - 2F) < 1e-6
+                            && com.sc.util.BladeFeature.formReach(com.sc.util.BladeForm.SPEAR) == 6 && com.sc.util.BladeFeature.formReach(com.sc.util.BladeForm.WHIP) == 7
+                            && com.sc.util.BladeFeature.formReach(com.sc.util.BladeForm.SWORD) == 0,
+                    "singular blade: form multipliers and reach");
+            check(com.sc.util.BladeFeature.formAttackCooldown(com.sc.util.BladeForm.SWORD) == 0
+                            && com.sc.util.BladeFeature.formAttackCooldown(com.sc.util.BladeForm.SINGULAR) == 600
+                            && com.sc.util.BladeFeature.formAttackGas(com.sc.util.BladeForm.SINGULAR) == com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER
+                            && com.sc.util.BladeFeature.formAttackGasMb(com.sc.util.BladeForm.SINGULAR) == 50
+                            && com.sc.util.BladeFeature.formAttackGas(com.sc.util.BladeForm.WHIP) == null
+                            && com.sc.util.BladeFeature.formAttackEu(com.sc.util.BladeForm.SWORD) == com.sc.util.BladeFeature.WAVE_COST
+                            && "sc.bladeform.scythe.attack".equals(com.sc.util.BladeFeature.formAttackKey(com.sc.util.BladeForm.SCYTHE)),
+                    "singular blade: form attacks - cooldown, gas, EU, lang key");
+            check(com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.SWORD, 1, 1, 0, false) == com.sc.util.BladeForm.SCYTHE
+                            && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.SPEAR, 1, 2, 0, false) == com.sc.util.BladeForm.WHIP
+                            && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.WHIP, 1, 4, com.sc.util.ToolLevelSC.BLADE_DESTROYER, false) == com.sc.util.BladeForm.SWORD
+                            && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.WHIP, 1, 3, com.sc.util.ToolLevelSC.BLADE_GUARDIAN, false) == com.sc.util.BladeForm.SHIELD
+                            && com.sc.util.BladeForm.cycle(com.sc.util.BladeForm.SWORD, -1, 5, 0, false) == com.sc.util.BladeForm.SINGULAR,
+                    "singular blade: one open form per wheel step (shield only for the Guardian)");
+
+            // cascade, chain, horizon
+            check(Math.abs(com.sc.util.BladeFeature.cascadeMul(0, false) - 1F) < 1e-5 && Math.abs(com.sc.util.BladeFeature.cascadeMul(3, false) - 1.3F) < 1e-5
+                            && Math.abs(com.sc.util.BladeFeature.cascadeMul(9, false) - 1.5F) < 1e-5
+                            && Math.abs(com.sc.util.BladeFeature.cascadeMul(9, true) - 1.8F) < 1e-5
+                            && Math.abs(com.sc.util.BladeFeature.cascadeMul(-2, true) - 1F) < 1e-5,
+                    "singular blade: cascade +10% a hit, cap 50% (Duelist 80%)");
+            check(Math.abs(com.sc.util.BladeFeature.chainMul(1) - 0.75F) < 1e-5 && Math.abs(com.sc.util.BladeFeature.chainMul(3) - 0.421875F) < 1e-5
+                            && Math.abs(com.sc.util.BladeFeature.horizonMul(0) - 1F) < 1e-5 && Math.abs(com.sc.util.BladeFeature.horizonMul(4) - 2F) < 1e-5
+                            && Math.abs(com.sc.util.BladeFeature.horizonMul(99) - 3F) < 1e-5,
+                    "singular blade: chain -25% a jump, horizon +25% a projectile (max 8)");
+
+            // gating: openAt and unlocked() on a real blade
+            check(com.sc.util.BladeFeature.RIFT_STEP.openAt(2, 0, false) && !com.sc.util.BladeFeature.RIFT_STEP.openAt(1, 0, false)
+                            && com.sc.util.BladeFeature.WAVE.openAt(1, 0, false) && !com.sc.util.BladeFeature.GRAV_TETHER.openAt(3, 0, true),
+                    "singular blade: functions open at their level");
+            net.minecraft.item.ItemStack sbBlade = new net.minecraft.item.ItemStack(com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR));
+            net.minecraft.item.ItemStack sbExo = new net.minecraft.item.ItemStack(com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.EXO));
+            boolean sbGate = com.sc.item.BladeLogicSC.unlocked(null, sbBlade, com.sc.util.BladeFeature.GRAV_PULL)
+                    && com.sc.item.BladeLogicSC.unlocked(null, sbBlade, com.sc.util.BladeFeature.WAVE)
+                    && !com.sc.item.BladeLogicSC.unlocked(null, sbBlade, com.sc.util.BladeFeature.RIFT_STEP)
+                    && !com.sc.item.BladeLogicSC.unlocked(null, sbBlade, com.sc.util.BladeFeature.CHAIN_CUT)
+                    && com.sc.item.BladeLogicSC.unlocked(null, sbExo, com.sc.util.BladeFeature.WAVE)
+                    && !com.sc.item.BladeLogicSC.unlocked(null, sbExo, com.sc.util.BladeFeature.GRAV_PULL);
+            com.sc.util.ToolLevelSC.setLevel(sbBlade, 4);
+            sbGate &= com.sc.item.BladeLogicSC.unlocked(null, sbBlade, com.sc.util.BladeFeature.CHAIN_CUT)
+                    && com.sc.item.BladeLogicSC.unlocked(null, sbBlade, com.sc.util.BladeFeature.GRAV_TETHER);
+            check(sbGate, "singular blade: unlocked() by level; old blades keep their own functions");
+            check(!com.sc.item.ItemBladeSC.isEnabled(sbBlade, com.sc.util.BladeFeature.HUNTER_SENSE)
+                            && com.sc.item.ItemBladeSC.isEnabled(sbBlade, com.sc.util.BladeFeature.CASCADE)
+                            && !com.sc.item.ItemBladeSC.isEnabled(sbExo, com.sc.util.BladeFeature.CASCADE),
+                    "singular blade: new switches' defaults, none on the Exo blade");
+
+            // branch gating (pure) and the set bonus on cooldowns
+            check(com.sc.util.ToolLevelSC.hasBranch(3, false, com.sc.util.ToolLevelSC.BLADE_DUELIST, com.sc.util.ToolLevelSC.BLADE_DUELIST, 3)
+                            && !com.sc.util.ToolLevelSC.hasBranch(4, false, com.sc.util.ToolLevelSC.BLADE_DUELIST, com.sc.util.ToolLevelSC.BLADE_DUELIST, 5)
+                            && !com.sc.util.ToolLevelSC.hasBranch(5, false, com.sc.util.ToolLevelSC.BLADE_GUARDIAN, com.sc.util.ToolLevelSC.BLADE_DESTROYER, 5)
+                            && com.sc.util.ToolLevelSC.hasBranch(1, true, 0, com.sc.util.ToolLevelSC.BLADE_DESTROYER, 1),
+                    "singular blade: branch perks at 3 / 5");
+            check(com.sc.util.ToolLevelSC.cooldownTicks(com.sc.util.BladeFeature.RIFT_STEP.cooldownTicks(), true) == 120
+                            && com.sc.util.ToolLevelSC.cooldownTicks(com.sc.util.BladeFeature.RIFT_STEP.cooldownTicks(), false) == 160
+                            && com.sc.util.ToolLevelSC.cooldownTicks(com.sc.util.BladeFeature.formAttackCooldown(com.sc.util.BladeForm.SINGULAR), true) == 450
+                            && com.sc.util.ToolLevelSC.cooldownTicks(com.sc.util.BladeFeature.CASCADE.cooldownTicks(), true) == 0,
+                    "singular blade: cooldowns -25% with the full Singular suit");
+            com.sc.util.ToolLevelSC.setCooldown(sbBlade, com.sc.util.BladeFeature.GRAV_PULL.key(), null, 60);   // no world: ignored
+            com.sc.util.ToolLevelSC.setCooldownEnd(sbBlade, com.sc.util.BladeFeature.GRAV_PULL.key(), 1000L);
+            check(com.sc.util.ToolLevelSC.cooldownLeft(sbBlade, "grav_pull", 940L) == 60 && com.sc.util.ToolLevelSC.cooldownLeft(sbBlade, "grav_pull", 1000L) == 0,
+                    "singular blade: cooldown key = the feature's key()");
+        }
+    }
+
+    /** Singular blade & drill, drill (docs/plan-singular-tools.md). */
+    private static void singToolsDrill() {
+        // ---- Singular drill, stage 2 (docs/plan-singular-tools.md §3): zones, sizes, crumbs, points, costs, metadata, placed record ----
+        {
+            // zone geometry: odd sizes centred; 12x12 shifted half a block toward the player; depth into the wall
+            int[] sdZ5 = com.sc.util.DrillZoneSC.zone(10, 64, 20, 1, 5, 1, 10.5, 70, 20.5);        // floor (up face), 5x5
+            check(sdZ5[0] == 8 && sdZ5[3] == 12 && sdZ5[2] == 18 && sdZ5[5] == 22 && sdZ5[1] == 64 && sdZ5[4] == 64
+                    && com.sc.util.DrillZoneSC.volume(sdZ5) == 25, "drill zone: 5x5 on a floor centred on the block");
+            int[] sdZ12a = com.sc.util.DrillZoneSC.zone(10, 64, 20, 1, 12, 1, 5.0, 70, 30.0);      // player at -x, +z
+            int[] sdZ12b = com.sc.util.DrillZoneSC.zone(10, 64, 20, 1, 12, 1, 15.0, 70, 10.0);     // player at +x, -z
+            check(sdZ12a[0] == 4 && sdZ12a[3] == 15 && sdZ12a[2] == 15 && sdZ12a[5] == 26
+                            && sdZ12b[0] == 5 && sdZ12b[3] == 16 && sdZ12b[2] == 14 && sdZ12b[5] == 25
+                            && com.sc.util.DrillZoneSC.volume(sdZ12a) == 144,
+                    "drill zone: 12x12 has 12 blocks a side, its centre shifted half a block toward the player");
+            int[] sdZt = com.sc.util.DrillZoneSC.zone(0, 64, 0, 3, 9, 3, 0.5, 65.6, 5.0);          // south wall (+z face), tunnel 3
+            int[] sdZd = com.sc.util.DrillZoneSC.zone(0, 64, 0, 0, 5, 3, 0.5, 60.0, 0.5);          // ceiling (down face), 3 deep up
+            check(sdZt[2] == -2 && sdZt[5] == 0 && sdZt[1] == 60 && sdZt[4] == 68 && sdZt[0] == -4 && sdZt[3] == 4
+                            && com.sc.util.DrillZoneSC.volume(sdZt) == 243 && sdZd[1] == 64 && sdZd[4] == 66
+                            && com.sc.util.DrillZoneSC.volume(com.sc.util.DrillZoneSC.zone(0, 64, 0, 5, 12, 3, 9, 70, 9)) == 432,
+                    "drill zone: the tunnel goes 3 deep away from the clicked face; 12x12x3 = 432 blocks");
+            check(com.sc.util.DrillZoneSC.onShell(sdZ5, 8, 64, 20) && !com.sc.util.DrillZoneSC.onShell(sdZt, 0, 64, -1)
+                    && com.sc.util.DrillZoneSC.inside(sdZ5, 12, 64, 22) && !com.sc.util.DrillZoneSC.inside(sdZ5, 13, 64, 22), "drill zone: shell / inside");
+
+            // black hole sizes gated by the level, the Shift+wheel cycle (with the tunnel depth), one step a call
+            check(com.sc.util.DrillZoneSC.maxHole(1) == 5 && com.sc.util.DrillZoneSC.maxHole(2) == 5 && com.sc.util.DrillZoneSC.maxHole(3) == 9
+                            && com.sc.util.DrillZoneSC.maxHole(4) == 9 && com.sc.util.DrillZoneSC.maxHole(5) == 12
+                            && com.sc.util.DrillZoneSC.effectiveHole(12, 3) == 9 && com.sc.util.DrillZoneSC.effectiveHole(9, 1) == 5
+                            && com.sc.util.DrillZoneSC.effectiveHole(0, 5) == 0 && com.sc.util.DrillZoneSC.effectiveHole(12, 5) == 12,
+                    "black hole: 5 at lv 1-2, 9 at 3-4, 12 at 5; a bigger stored size works as the largest open one");
+            int[] sdM = com.sc.util.DrillZoneSC.nextMode(0, 1, 1, 1);
+            int[] sdM2 = com.sc.util.DrillZoneSC.nextMode(sdM[0], sdM[1], 1, 1);
+            int[] sdM3 = com.sc.util.DrillZoneSC.nextMode(sdM2[0], sdM2[1], 1, 1);
+            int[] sdMb = com.sc.util.DrillZoneSC.nextMode(0, 1, -1, 5);
+            int[] sdM12 = com.sc.util.DrillZoneSC.nextMode(9, 3, 1, 5);
+            check(sdM[0] == 5 && sdM[1] == 1 && sdM2[0] == 5 && sdM2[1] == 3 && sdM3[0] == 0 && sdM3[1] == 1
+                            && sdMb[0] == 12 && sdMb[1] == 3 && sdM12[0] == 12 && sdM12[1] == 1
+                            && com.sc.util.DrillZoneSC.nextHole(0, 1, 3) == 5 && com.sc.util.DrillZoneSC.nextHole(9, 1, 3) == 0
+                            && com.sc.util.DrillZoneSC.nextHole(9, 1, 5) == 12,
+                    "black hole cycle: off -> 5 -> 5 tunnel -> off at lv 1; back from off -> 12 tunnel at lv 5; 9 tunnel -> 12");
+            ItemStack sdDrill = new ItemStack(ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR));
+            com.sc.item.ItemDrillSC.setEnabled(sdDrill, com.sc.util.DrillFeature.BLACK_HOLE, true);
+            boolean sdHoleOn = com.sc.item.ItemDrillSC.blackHoleSize(sdDrill) == 5 && com.sc.item.ItemDrillSC.isEnabled(sdDrill, com.sc.util.DrillFeature.BLACK_HOLE);
+            com.sc.item.ItemDrillSC.setBlackHoleSize(sdDrill, 7);
+            boolean sdBad = com.sc.item.ItemDrillSC.blackHoleSize(sdDrill) == 0 && !com.sc.item.ItemDrillSC.isEnabled(sdDrill, com.sc.util.DrillFeature.BLACK_HOLE);
+            com.sc.item.ItemDrillSC.setTunnelDepth(sdDrill, 3);
+            check(sdHoleOn && sdBad && com.sc.item.ItemDrillSC.tunnelDepth(sdDrill) == 3, "black hole switch = the SingHole size; invalid sizes are off; depth 3 kept");
+
+            // crumbs: 1 per 64 natural blocks, ores x4; points: 1 per 16 blocks
+            int[] sdC = com.sc.util.DrillZoneSC.accrue(60, com.sc.util.DrillZoneSC.crumbUnits(10, 2, com.sc.item.ItemSingularCrumbSC.ORE_MUL),
+                    com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS);                                  // 8 + 2*4 = 16 units on 60
+            int[] sdC432 = com.sc.util.DrillZoneSC.accrue(0, com.sc.util.DrillZoneSC.crumbUnits(432, 0, 4), 64);
+            int[] sdP = com.sc.util.DrillZoneSC.accrue(15, 33, com.sc.util.DrillFeature.BLOCKS_PER_POINT);
+            check(com.sc.util.DrillZoneSC.crumbUnits(10, 2, 4) == 16 && sdC[0] == 1 && sdC[1] == 12 && sdC432[0] == 6 && sdC432[1] == 48
+                            && sdP[0] == 3 && sdP[1] == 0 && com.sc.util.DrillZoneSC.accrue(0, 15, 16)[0] == 0,
+                    "crumbs: 64 natural blocks each, an ore counts 4; points: one per 16 blocks, the rest carried");
+            com.sc.item.ItemDrillSC.setCrumbCounter(sdDrill, 23);
+            com.sc.item.ItemDrillSC.setDigCounter(sdDrill, 9);
+            check(com.sc.item.ItemDrillSC.crumbProgress(sdDrill) == 23 && com.sc.item.ItemDrillSC.digCounter(sdDrill) == 9,
+                    "drill NBT: crumb progress and dig counter");
+
+            // costs: EU x0.5 a block (400 -> 200), SM 1 mB per 25 blocks, heat 1.5 a block
+            check(com.sc.util.DrillZoneSC.holeEu(com.sc.util.DrillType.SINGULAR.euPerBlock, com.sc.util.DrillFeature.HOLE_EU_MUL) == 200
+                            && Math.abs(com.sc.util.DrillZoneSC.holeGas(432, com.sc.util.DrillFeature.HOLE_BLOCKS_PER_MB) - 17.28F) < 1e-3
+                            && com.sc.util.DrillZoneSC.holeGas(0, 25) == 0F
+                            && com.sc.util.DrillZoneSC.holeHeat(25, com.sc.util.DrillFeature.HOLE_HEAT_PER_BLOCK) == 38
+                            && com.sc.util.DrillZoneSC.holeHeat(432, 1.5F) == 648 && com.sc.util.ToolGasSC.split(0.72F, 0.48F)[0] == 1F,
+                    "black hole costs: 200 EU a block, 17.28 mB SM for 432 blocks (fraction carried), heat 1.5 a block");
+            check(com.sc.util.DrillZoneSC.funnelRadius(1, false) == 0 && com.sc.util.DrillZoneSC.funnelRadius(2, false) == 3
+                            && com.sc.util.DrillZoneSC.funnelRadius(4, false) == 4 && com.sc.util.DrillZoneSC.funnelRadius(5, true) == 5,
+                    "gravitational funnel: 7x7 at lv 2, 9x9 at lv 4, 11x11 for the Miner at lv 5");
+
+            // feature metadata consistency
+            boolean sdMeta = true;
+            int sdSing = 0;
+            for (com.sc.util.DrillFeature sdF : com.sc.util.DrillFeature.values()) {
+                if (sdF.singular()) {
+                    sdSing++;
+                    sdMeta &= sdF.singLevel() >= 1 && sdF.singLevel() <= 5 && (sdF.gas() == null) == (sdF.gasMb() == 0)
+                            && sdF.availableIn(com.sc.util.DrillType.SINGULAR) && !sdF.availableIn(com.sc.util.DrillType.EXO);
+                } else {
+                    sdMeta &= sdF.singLevel() == 1 && sdF.gas() == null && sdF.gasMb() == 0 && sdF.cooldownTicks() == 0 && sdF.branch() == 0;
+                }
+                sdMeta &= !sdF.gasPerSecond() && sdF.ordinal() < 31;                                   // FnToggled bits
+            }
+            check(sdMeta && sdSing == 6 && com.sc.util.DrillFeature.GRAV_FUNNEL.singLevel() == 2 && com.sc.util.DrillFeature.REPLACE.singLevel() == 2
+                            && com.sc.util.DrillFeature.PHASE_DIG.singLevel() == 3 && com.sc.util.DrillFeature.PHASE_DIG.isAction()
+                            && com.sc.util.DrillFeature.LASER.isAction() && !com.sc.util.DrillFeature.BLACK_HOLE.isAction()
+                            && com.sc.util.DrillFeature.GRAV_FUNNEL.gas() == com.sc.util.ArmorGasSC.Gas.ARGON
+                            && com.sc.util.DrillFeature.BLACK_HOLE.gas() == com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER
+                            && com.sc.util.DrillFeature.BLACK_HOLE.cooldownTicks() == 20 && com.sc.util.DrillFeature.LINK.ordinal() == 11,
+                    "drill features: 6 Singular ones appended after LINK, levels / gases / cooldowns as the plan");
+            check(com.sc.util.ToolLevelSC.cooldownTicks(20, true) == 15 && com.sc.util.ToolLevelSC.cooldownTicks(20, false) == 20,
+                    "black hole 12x12 cooldown: 1 s, 0.75 s with the full Singular suit");
+
+            // the placed-block record: bounded FIFO, remove, re-add, positions round-trip
+            com.sc.util.PlacedRecordSC sdR = new com.sc.util.PlacedRecordSC(1000);
+            for (int i = 0; i < 1500; i++) {
+                sdR.add(i, 64, -i);
+            }
+            boolean sdBound = sdR.size() == 1000 && !sdR.contains(0, 64, 0) && !sdR.contains(499, 64, -499) && sdR.contains(500, 64, -500)
+                    && sdR.contains(1499, 64, -1499);
+            boolean sdRem = sdR.remove(700, 64, -700) && !sdR.contains(700, 64, -700) && !sdR.remove(700, 64, -700) && sdR.size() == 999;
+            sdR.add(700, 64, -700);                                     // re-added: now the newest
+            for (int i = 1500; i < 1700; i++) {
+                sdR.add(i, 64, -i);
+            }
+            boolean sdReAdd = sdR.contains(700, 64, -700) && !sdR.contains(699, 64, -699) && sdR.contains(701, 64, -701) && sdR.size() == 1000;
+            long[] sdAll = sdR.toArray();
+            com.sc.util.PlacedRecordSC sdR2 = new com.sc.util.PlacedRecordSC(100);
+            for (int i = 0; i < 5000; i++) {                             // place / break loops: stale ring entries compacted
+                sdR2.add(-5, 10, 7);
+                sdR2.remove(-5, 10, 7);
+            }
+            sdR2.add(1, 2, 3);
+            sdR2.add(-5, 10, 7);
+            boolean sdLoop = sdR2.size() == 2 && sdR2.toArray().length == 2 && sdR2.toArray()[1] == com.sc.util.DrillZoneSC.pack(-5, 10, 7);
+            int[] sdU = com.sc.util.DrillZoneSC.unpack(com.sc.util.DrillZoneSC.pack(-30000000, 255, 29999999));
+            check(sdBound && sdRem && sdReAdd && sdLoop && sdAll.length == 1000 && sdAll[sdAll.length - 1] == com.sc.util.DrillZoneSC.pack(1699, 64, -1699)
+                            && sdU[0] == -30000000 && sdU[1] == 255 && sdU[2] == 29999999,
+                    "placed-block record: newest 1000 kept, remove / re-add, oldest first, packed positions round-trip");
+        }
+    }
+
+    /** Singular blade & drill, station (docs/plan-singular-tools.md). */
+    private static void singToolsStation() {
+        // ---- Singular station: the tool slot (docs/plan-singular-tools.md §4, station agent) ----
+        {
+            final int TOOL = com.sc.tileentity.TileEntitySingularStationSC.TOOL_SLOT;
+            final int MAT = com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOT;
+            final int B = com.sc.util.SingularStationMath.TOOL_BLADE, D = com.sc.util.SingularStationMath.TOOL_DRILL;
+            // costs and times (black-box numbers)
+            long[] cb = com.sc.util.SingularStationMath.toolConvertCost(B), cd = com.sc.util.SingularStationMath.toolConvertCost(D);
+            int[] mb = com.sc.util.SingularStationMath.toolConvertMaterials(B), md = com.sc.util.SingularStationMath.toolConvertMaterials(D);
+            check(cb[0] == 400000000L && cb[1] == 1000 && cb[2] == 4000 && cb[3] == 0 && cb[4] == 0
+                    && cd[0] == 200000000L && cd[1] == 600 && cd[2] == 2000
+                    && com.sc.util.SingularStationMath.toolConvertTicks(B) == 3 * 1200 && com.sc.util.SingularStationMath.toolConvertTicks(D) == 2 * 1200
+                    && mb[com.sc.util.SingularStationMath.M_SING_CORE] == 1 && mb[com.sc.util.SingularStationMath.M_NB3SN] == 4
+                    && md[com.sc.util.SingularStationMath.M_SING_CORE] == 1 && md[com.sc.util.SingularStationMath.M_NB3SN] == 2,
+                    "Singular station tool conversion: blade 400M EU / 1000 SM / 4000 He / core + 4 Nb3Sn / 3 min, drill 200M / 600 / 2000 / core + 2 / 2 min");
+            long[] both = com.sc.util.SingularStationMath.convertCost(1, B);
+            check(both[0] == 450000000L && both[1] == 1100 && com.sc.util.SingularStationMath.convertTicks(1, B) == 3 * 1200
+                    && com.sc.util.SingularStationMath.convertMaterials(1, D)[com.sc.util.SingularStationMath.M_NB3SN] == 4
+                    && com.sc.util.SingularStationMath.convertCost(1, com.sc.util.SingularStationMath.TOOL_NONE)[0] == 50000000L,
+                    "Singular station: helmet + blade convert together (costs summed, the longest time, materials summed)");
+            // modernisation: blade 50%, drill 25% of the set's row; resonance EU x 0.9; the core for 4 -> 5
+            long[] t1 = com.sc.util.SingularStationMath.toolModerniseCost(B, 1, false), t4 = com.sc.util.SingularStationMath.toolModerniseCost(D, 4, true);
+            check(t1[0] == 25000000L && t1[1] == 50 && t1[2] == 1000 && t1[3] == 250
+                    && t4[0] == 900000000L && t4[1] == 250 && t4[4] == 500
+                    && com.sc.util.SingularStationMath.toolModerniseTicks(D, 4) == 10 * 1200
+                    && com.sc.util.SingularStationMath.toolModerniseCost(B, 5, false)[0] == 0,
+                    "Singular station tool modernisation: blade 1->2 = half the set's row, drill 4->5 = a quarter (resonance -10% EU), 10 min");
+            // crumbs: 10 mB SM each, at most 50% of the drill's SM
+            long drillSm = com.sc.util.SingularStationMath.toolModerniseCost(D, 2, false)[1];   // 250 / 4 = 63 mB
+            int maxCrumbs = com.sc.util.SingularStationMath.crumbsUsable(drillSm, 1000);
+            long[] withCrumbs = com.sc.util.SingularStationMath.moderniseCost(new int[4], D, 2, maxCrumbs, false);
+            long[] bladeCrumbs = com.sc.util.SingularStationMath.moderniseCost(new int[4], B, 2, 50, false);
+            check(drillSm == 63 && maxCrumbs == 3 && withCrumbs[1] == 63 - 30 && withCrumbs[1] * 2 >= drillSm
+                    && com.sc.util.SingularStationMath.crumbsUsable(drillSm, 1) == 1
+                    && bladeCrumbs[1] == com.sc.util.SingularStationMath.toolModerniseCost(B, 2, false)[1],
+                    "Singular station: crumbs pay <= 50% of the drill's SM (10 mB each), never the blade's: " + withCrumbs[1]);
+            // slot validity, hoppers
+            com.sc.tileentity.TileEntitySingularStationSC ts = new com.sc.tileentity.TileEntitySingularStationSC();
+            ItemStack exoBlade = new ItemStack(com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.EXO));
+            ItemStack exoDrill = new ItemStack(com.sc.init.ModItems.DRILLS.get(com.sc.util.DrillType.EXO));
+            ItemStack sDrill = new ItemStack(com.sc.init.ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR));
+            ItemStack nanoBlade = new ItemStack(com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.NANO));
+            int[] pipes = ts.getAccessibleSlotsFromSide(1);
+            check(ts.getSizeInventory() == 17 && TOOL == 16 && com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_END == 16
+                    && ts.isItemValidForSlot(TOOL, exoBlade) && ts.isItemValidForSlot(TOOL, exoDrill) && ts.isItemValidForSlot(TOOL, sDrill)
+                    && !ts.isItemValidForSlot(TOOL, nanoBlade) && !ts.isItemValidForSlot(TOOL, new ItemStack(com.sc.init.ModItems.battery, 1, 6))
+                    && !ts.isItemValidForSlot(MAT, exoBlade) && ts.isItemValidForSlot(MAT, new ItemStack(com.sc.init.ModItems.singularCrumb, 5))
+                    && pipes.length == 5 && pipes[4] == TOOL && ts.canInsertItem(TOOL, exoBlade, 1) && !ts.canInsertItem(TOOL, nanoBlade, 1),
+                    "Singular station: the tool slot (16) takes Exo / Singular blades and drills only, hoppers reach it, crumbs go to the material slots");
+            // the conversion keeps charge and switches
+            com.sc.item.ItemBladeSC.setCharge(exoBlade, 3000000);
+            com.sc.item.ItemBladeSC.setEnabled(exoBlade, com.sc.util.BladeFeature.EXECUTE, false);
+            com.sc.item.ItemBladeSC.setEnabled(exoBlade, com.sc.util.BladeFeature.LOOTING, true);
+            exoBlade.setStackDisplayName("Kusanagi");
+            ItemStack sb = com.sc.tileentity.TileEntitySingularStationSC.convertTool(exoBlade, com.sc.util.SingularScheme.values()[2]);
+            com.sc.item.ItemDrillSC.setCharge(exoDrill, 100000);
+            ItemStack sd = com.sc.tileentity.TileEntitySingularStationSC.convertTool(exoDrill);
+            check(com.sc.util.ToolLevelSC.isBlade(sb) && com.sc.util.ToolLevelSC.levelOf(sb) == 1 && com.sc.util.ToolLevelSC.points(sb) == 0
+                    && com.sc.item.ItemBladeSC.chargeOf(sb) == 3000000 && !com.sc.item.ItemBladeSC.isEnabled(sb, com.sc.util.BladeFeature.EXECUTE)
+                    && com.sc.item.ItemBladeSC.isEnabled(sb, com.sc.util.BladeFeature.LOOTING)
+                    && net.minecraft.enchantment.EnchantmentHelper.getEnchantmentLevel(net.minecraft.enchantment.Enchantment.looting.effectId, sb)
+                        == com.sc.util.BladeType.SINGULAR.looting
+                    && "Kusanagi".equals(sb.getDisplayName()) && com.sc.util.ToolLevelSC.schemeOf(sb) == com.sc.util.SingularScheme.values()[2]
+                    && com.sc.util.ToolLevelSC.isDrill(sd) && com.sc.item.ItemDrillSC.chargeOf(sd) == 100000
+                    && com.sc.util.ToolLevelSC.schemeOf(sd) == com.sc.util.SingularScheme.DEFAULT
+                    && com.sc.tileentity.TileEntitySingularStationSC.convertTool(sd) == sd,
+                    "Singular station convertTool: level 1, charge, switches, name, Looting re-synced, scheme; drill charge kept");
+            // a station converting an Exo blade (no world): materials taken, the tool slot locked, cancel gives them back
+            ts.setInventorySlotContents(TOOL, exoBlade.copy());
+            ts.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, new ItemStack(com.sc.init.ModItems.battery, 1, 6));
+            ts.setInventorySlotContents(MAT, new ItemStack(com.sc.init.ModItems.component("nb3SnPlate"), 3));
+            String short1 = ts.startConvertFor("");
+            ts.setInventorySlotContents(MAT, new ItemStack(com.sc.init.ModItems.component("nb3SnPlate"), 4));
+            String ok1 = ts.startConvertFor("");
+            com.sc.tileentity.SingularProcessSC tp = ts.getProcess();
+            boolean conv = "sc.singStation.err.nomaterials".equals(short1) && ok1 == null && tp != null
+                    && tp.mask == 1 << com.sc.tileentity.TileEntitySingularStationSC.TOOL_BIT && tp.cost[0] == 400000000L && tp.items.size() == 2
+                    && ts.isLocked(TOOL) && !ts.isItemValidForSlot(TOOL, exoDrill) && !ts.canExtractItem(TOOL, exoBlade, 0)
+                    && ts.getStackInSlot(MAT) == null;
+            ts.cancelProcess();
+            check(conv && ts.getProcess() == null && !ts.isLocked(TOOL) && ts.getStackInSlot(MAT) != null && ts.getStackInSlot(MAT).stackSize == 4
+                    && com.sc.tileentity.TileEntitySingularStationSC.isCore(ts.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT))
+                    && com.sc.tileentity.TileEntitySingularStationSC.isExoTool(ts.getStackInSlot(TOOL)),
+                    "Singular station: an Exo blade's conversion starts (materials whole, the slot locked) and «Отменить» gives them back");
+            // the drill's modernisation with crumbs: they leave the slots, come back whole on cancel
+            com.sc.tileentity.TileEntitySingularStationSC tm = new com.sc.tileentity.TileEntitySingularStationSC();
+            ItemStack ready = new ItemStack(com.sc.init.ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR));
+            com.sc.util.ToolLevelSC.setLevel(ready, 2);
+            com.sc.util.ToolLevelSC.setPoints(ready, com.sc.util.ToolLevelSC.threshold(ready));
+            tm.setInventorySlotContents(TOOL, ready);
+            tm.setInventorySlotContents(MAT + 1, new ItemStack(com.sc.init.ModItems.singularCrumb, 10));
+            String ms = tm.startModerniseFor(new int[4], "");
+            com.sc.tileentity.SingularProcessSC mp = tm.getProcess();
+            boolean mod = ms == null && mp != null && mp.kind == com.sc.tileentity.SingularProcessSC.KIND_MODERNISE
+                    && mp.levels[com.sc.tileentity.TileEntitySingularStationSC.TOOL_BIT] == 2 && mp.cost[1] == 33 && mp.items.size() == 1
+                    && tm.getStackInSlot(MAT + 1) != null && tm.getStackInSlot(MAT + 1).stackSize == 7 && tm.isLocked(TOOL);
+            tm.cancelProcess();
+            check(mod && tm.crumbsHave() == 10 && tm.getProcess() == null,
+                    "Singular station: a ready Singular drill modernises alone, 3 crumbs pay 30 of 63 mB SM, back whole on cancel");
+            // the tool's branch re-choice for BRANCH_SM, the scheme cycles onto the tool
+            com.sc.tileentity.TileEntitySingularStationSC tb = new com.sc.tileentity.TileEntitySingularStationSC();
+            ItemStack lv3 = new ItemStack(com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR));
+            com.sc.util.ToolLevelSC.setLevel(lv3, 3);
+            com.sc.util.ToolLevelSC.setBranch(lv3, com.sc.util.ToolLevelSC.BLADE_DUELIST);
+            tb.setInventorySlotContents(TOOL, lv3);
+            tb.fillTank(com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER, 150, true);
+            String b1 = tb.changeToolBranch(com.sc.util.ToolLevelSC.BLADE_DUELIST);
+            String b2 = tb.changeToolBranch(com.sc.util.ToolLevelSC.BLADE_GUARDIAN);
+            String b3 = tb.changeToolBranch(com.sc.util.ToolLevelSC.BLADE_DESTROYER);
+            com.sc.util.SingularScheme before = tb.shownScheme();
+            boolean cyc = tb.cycleScheme(1);
+            check("sc.singStation.err.samebranch".equals(b1) && b2 == null && "sc.singStation.err.nosm".equals(b3)
+                    && com.sc.util.ToolLevelSC.branchOf(lv3) == com.sc.util.ToolLevelSC.BLADE_GUARDIAN
+                    && tb.tankAmount(com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER) == 150 - com.sc.util.SingularStationMath.BRANCH_SM
+                    && before == com.sc.util.SingularScheme.DEFAULT && cyc
+                    && com.sc.util.ToolLevelSC.schemeOf(lv3) == com.sc.util.SingularStationMath.cycle(before, 1),
+                    "Singular station: the tool's branch re-choice costs 100 mB SM, the scheme arrows recolour the tool");
+            // an older station's NBT (no tool slot entry) loads with the slot empty; a saved tool comes back
+            net.minecraft.nbt.NBTTagCompound saved = new net.minecraft.nbt.NBTTagCompound();
+            tb.writeToNBT(saved);
+            com.sc.tileentity.TileEntitySingularStationSC tl = new com.sc.tileentity.TileEntitySingularStationSC();
+            tl.readFromNBT(saved);
+            net.minecraft.nbt.NBTTagCompound old = (net.minecraft.nbt.NBTTagCompound) saved.copy();
+            old.setTag("SingItems", new net.minecraft.nbt.NBTTagList());
+            com.sc.tileentity.TileEntitySingularStationSC to = new com.sc.tileentity.TileEntitySingularStationSC();
+            to.readFromNBT(old);
+            check(com.sc.util.ToolLevelSC.isBlade(tl.getTool()) && com.sc.util.ToolLevelSC.levelOf(tl.getTool()) == 3 && to.getTool() == null,
+                    "Singular station NBT: the tool slot is saved (SingItems Slot 8), an older save loads with it empty");
+        }
+    }
+
+    /** Singular blade & drill, ui (docs/plan-singular-tools.md). */
+    private static void singToolsUi() {
+        // ---- Singular blade & drill, stage 2 UI: messages, form steps, tool HUD (docs/plan-singular-tools.md §4) ----
+        {
+            // the new action ids: distinct from every older one and from the air jump
+            byte[] ui2Ids = {com.sc.handler.ArmorNetSC.BLADE_ACTION, com.sc.handler.ArmorNetSC.BLADE_FORM, com.sc.handler.ArmorNetSC.DRILL_ACTION,
+                com.sc.handler.ArmorNetSC.DRILL_MODE, com.sc.handler.ArmorNetSC.TOOL_BRANCH};
+            boolean ui2Distinct = true;
+            for (int i = 0; i < ui2Ids.length; i++) {
+                ui2Distinct &= ui2Ids[i] > com.sc.handler.ArmorNetSC.PROFILE_NEXT && ui2Ids[i] != com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION
+                        && com.sc.handler.ArmorNetSC.featureOfAction(ui2Ids[i]) == null;
+                for (int j = i + 1; j < ui2Ids.length; j++) {
+                    ui2Distinct &= ui2Ids[i] != ui2Ids[j];
+                }
+            }
+            check(ui2Distinct, "tools UI: BLADE_ACTION / BLADE_FORM / DRILL_ACTION / DRILL_MODE / TOOL_BRANCH ids distinct and new");
+
+            // encode / decode: a negative step and the branch flag survive the wire
+            io.netty.buffer.ByteBuf ui2Buf = io.netty.buffer.Unpooled.buffer();
+            new com.sc.handler.ArmorNetSC.Message(com.sc.handler.ArmorNetSC.BLADE_FORM, -1).toBytes(ui2Buf);
+            com.sc.handler.ArmorNetSC.Message ui2M = new com.sc.handler.ArmorNetSC.Message();
+            ui2M.fromBytes(ui2Buf);
+            io.netty.buffer.ByteBuf ui2Buf2 = io.netty.buffer.Unpooled.buffer();
+            new com.sc.handler.ArmorNetSC.Message(com.sc.handler.ArmorNetSC.TOOL_BRANCH, com.sc.util.ToolLevelSC.BLADE_GUARDIAN, true).toBytes(ui2Buf2);
+            com.sc.handler.ArmorNetSC.Message ui2M2 = new com.sc.handler.ArmorNetSC.Message();
+            ui2M2.fromBytes(ui2Buf2);
+            check(ui2M.action == com.sc.handler.ArmorNetSC.BLADE_FORM && com.sc.handler.ArmorNetSC.step(ui2M.feature) == -1
+                            && ui2M2.action == com.sc.handler.ArmorNetSC.TOOL_BRANCH && ui2M2.feature == 3 && ui2M2.value,
+                    "tools UI: form step -1 and the tool branch message encode / decode");
+            check(com.sc.handler.ArmorNetSC.step(5) == 1 && com.sc.handler.ArmorNetSC.step(-7) == -1 && com.sc.handler.ArmorNetSC.step(0) == 0,
+                    "tools UI: a wheel step is one form at most");
+
+            // the form row: steps from one form to another through the open ones, the shorter way round
+            com.sc.util.BladeForm ui2Sw = com.sc.util.BladeForm.SWORD, ui2Sc = com.sc.util.BladeForm.SCYTHE, ui2Sp = com.sc.util.BladeForm.SPEAR,
+                    ui2Wh = com.sc.util.BladeForm.WHIP, ui2Sh = com.sc.util.BladeForm.SHIELD, ui2Si = com.sc.util.BladeForm.SINGULAR;
+            check(com.sc.handler.ArmorNetSC.formSteps(ui2Sw, ui2Sc, 1, 0, false) == 1
+                            && com.sc.handler.ArmorNetSC.formSteps(ui2Sw, ui2Sp, 1, 0, false) == -1       // level 1: sword, scythe, spear - spear is one back
+                            && com.sc.handler.ArmorNetSC.formSteps(ui2Sp, ui2Sc, 1, 0, false) == -1
+                            && com.sc.handler.ArmorNetSC.formSteps(ui2Sw, ui2Sw, 1, 0, false) == 0,
+                    "tools UI: form steps at level 1");
+            check(com.sc.handler.ArmorNetSC.formSteps(ui2Sw, ui2Wh, 1, 0, false) == 0                         // closed: nothing sent
+                            && com.sc.handler.ArmorNetSC.formSteps(ui2Sw, ui2Sh, 3, com.sc.util.ToolLevelSC.BLADE_DUELIST, false) == 0
+                            && com.sc.handler.ArmorNetSC.formSteps(ui2Sw, ui2Sh, 3, com.sc.util.ToolLevelSC.BLADE_GUARDIAN, false) == -1   // sword..shield: 4 forward, 1 back
+                            && com.sc.handler.ArmorNetSC.formSteps(ui2Sw, ui2Wh, 2, 0, false) == -1
+                            && com.sc.handler.ArmorNetSC.formSteps(ui2Sc, ui2Si, 5, 0, true) == -2,
+                    "tools UI: form steps skip closed forms (level, branch), creative opens all");
+            // every step the client sends lands where it meant to (the server's cycle, step by step)
+            boolean ui2Lands = true;
+            for (com.sc.util.BladeForm ui2From : com.sc.util.BladeForm.values()) {
+                for (com.sc.util.BladeForm ui2To : com.sc.util.BladeForm.values()) {
+                    for (int ui2Lv = 1; ui2Lv <= 5; ui2Lv++) {
+                        int ui2N = com.sc.handler.ArmorNetSC.formSteps(ui2From, ui2To, ui2Lv, com.sc.util.ToolLevelSC.BLADE_GUARDIAN, false);
+                        if (ui2N == 0) {
+                            continue;
+                        }
+                        com.sc.util.BladeForm ui2At = ui2From;
+                        for (int k = 0; k < Math.abs(ui2N); k++) {
+                            ui2At = com.sc.util.BladeForm.cycle(ui2At, ui2N > 0 ? 1 : -1, ui2Lv, com.sc.util.ToolLevelSC.BLADE_GUARDIAN, false);
+                        }
+                        ui2Lands &= ui2At == ui2To;
+                    }
+                }
+            }
+            check(ui2Lands, "tools UI: a form click's steps always land on the form clicked");
+
+            // the tool HUD: icon states from the tool's own cooldown
+            check(com.sc.util.SingularHud.toolState(true, 200, 100, false, true) == com.sc.util.SingularHud.COOLING
+                            && com.sc.util.SingularHud.toolState(true, 90, 100, false, true) == com.sc.util.SingularHud.READY
+                            && com.sc.util.SingularHud.toolState(true, 0, 100, true, true) == com.sc.util.SingularHud.NOGAS
+                            && com.sc.util.SingularHud.toolState(true, 0, 100, true, false) == com.sc.util.SingularHud.HIDDEN
+                            && com.sc.util.SingularHud.toolState(false, 200, 100, false, true) == com.sc.util.SingularHud.HIDDEN
+                            && com.sc.util.SingularHud.toolState(true, 10, 100, false, true) == com.sc.util.SingularHud.HIDDEN,
+                    "tools UI: tool cooldown icon states");
+            check(com.sc.util.SingularHud.crumbShare(0, 64) == 0F && com.sc.util.SingularHud.crumbShare(32, 64) == 0.5F
+                            && com.sc.util.SingularHud.crumbShare(100, 64) == 1F && com.sc.util.SingularHud.crumbShare(5, 0) == 0F,
+                    "tools UI: the crumb bar's share");
+
+            // the K menu's id ranges hold the grown enums (BLADE_BASE 500..599, DRILL_BASE 700..899)
+            check(com.sc.util.BladeFeature.values().length <= 100 && com.sc.util.DrillFeature.values().length <= 200
+                            && com.sc.util.BladeForm.values().length <= 20,
+                    "tools UI: blade / drill features and blade forms fit the K menu's button id ranges");
+        }
+    }
+
+    /** Singular blade & drill, polish (docs/plan-singular-tools.md). */
+    private static void singToolsPolish() {
+        {
+            // Singular tools, stage 3 (polish): the handbook's articles and G on the new items
+            com.sc.manual.BookEntry pbBlade = com.sc.manual.BookContent.byId("singularblade");
+            com.sc.manual.BookEntry pbDrill = com.sc.manual.BookContent.byId("singulardrill");
+            com.sc.manual.BookEntry pbCrumb = com.sc.manual.BookContent.byId("singularcrumb");
+            ItemStack pbSb = new ItemStack(com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR));
+            ItemStack pbSd = new ItemStack(com.sc.init.ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR));
+            ItemStack pbEb = new ItemStack(com.sc.init.ModItems.BLADES.get(com.sc.util.BladeType.EXO));
+            com.sc.manual.BookEntry pbOfClot = com.sc.manual.BookContent.entryFor(new ItemStack(com.sc.init.ModItems.singularClot));
+            com.sc.manual.BookEntry pbOfCrumb = com.sc.manual.BookContent.entryFor(new ItemStack(com.sc.init.ModItems.singularCrumb));
+            com.sc.manual.BookEntry pbOfSb = com.sc.manual.BookContent.entryFor(pbSb);
+            com.sc.manual.BookEntry pbOfSd = com.sc.manual.BookContent.entryFor(pbSd);
+            com.sc.manual.BookEntry pbOfEb = com.sc.manual.BookContent.entryFor(pbEb);
+            check(pbBlade != null && pbDrill != null && pbCrumb != null && pbBlade.els.size() > 20 && pbDrill.els.size() > 20 && pbCrumb.els.size() > 5
+                    && pbOfClot == pbCrumb && pbOfCrumb == pbCrumb && pbOfSb == pbBlade && pbOfSd == pbDrill
+                    && pbOfEb != null && "blades".equals(pbOfEb.id)
+                    && pbBlade.chapter == com.sc.manual.BookChapter.ARMOR && pbCrumb.chapter == com.sc.manual.BookChapter.ARMOR,
+            "Singular tools polish: handbook articles - blade, drill, crumbs / clot (G opens them), the Exo blade still on «blades»");
+            // the station article has the tool slot: both conversion cards link the tools' articles
+            com.sc.manual.BookEntry pbSt = com.sc.manual.BookContent.byId("singularstation");
+            StringBuilder pbText = new StringBuilder();
+            for (com.sc.manual.BookEl el : pbSt.els) {
+        el.collectText(pbText);
+            }
+            check(pbSt != null && pbText.indexOf(pbSb.getDisplayName()) >= 0 && pbText.indexOf(pbSd.getDisplayName()) >= 0,
+            "Singular tools polish: the Singular station article names the Singular blade and drill (tool slot)");
+            // the form attack's metadata the K menu / HUD show (sword: no cooldown, collapse: SM)
+            check(com.sc.util.BladeFeature.formAttackCooldown(com.sc.util.BladeForm.SWORD) == 0
+                    && com.sc.util.BladeFeature.formAttackGas(com.sc.util.BladeForm.SINGULAR) == com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER
+                    && com.sc.util.BladeFeature.formAttackGasMb(com.sc.util.BladeForm.SINGULAR) > 0
+                    && !com.sc.util.DrillFeature.BLACK_HOLE.isAction()
+                    && com.sc.util.DrillZoneSC.effectiveHole(12, 3) == 9 && com.sc.util.DrillZoneSC.effectiveHole(12, 5) == 12,
+            "Singular tools polish: form attack by form, the black hole a mode, its size gated by the level");
+            com.sc.manual.BookContent.invalidate();
+        }
+    }
+
+    /** Singular blade & drill, fixes (docs/plan-singular-tools.md). */
+    private static void singToolsFixes() {
+        // ---- Singular tools, review fixes: crumb-eligible blocks, the black hole's SM up front, the wheel's rate limit ----
+        {
+            // crumbs only for natural stone / ground / ore - nothing that regrows or forms from lava + water
+            check(com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.stone, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.dirt, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.grass, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.sand, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.gravel, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.clay, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.netherrack, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.end_stone, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.iron_ore, 0)
+                            && com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.lit_redstone_ore, 0),
+                    "drill crumbs: stone, dirt, grass, sand, gravel, clay, netherrack, end stone and ores count");
+            check(!com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.cobblestone, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.mossy_cobblestone, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.stonebrick, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.obsidian, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.log, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.leaves, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.planks, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.pumpkin, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.melon_block, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.reeds, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.cactus, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.tallgrass, 1)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.snow, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.snow_layer, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.ice, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.wool, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.glass, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(net.minecraft.init.Blocks.air, 0)
+                            && !com.sc.item.DrillLogicSC.crumbBlock(null, 0),
+                    "drill crumbs: no cobblestone / stone bricks / obsidian, logs, leaves, planks, gourds, cane, cactus, plants, snow, ice, wool, glass");
+            // the black hole needs the whole zone's SM before it starts: 12x12x3 = 432 blocks at 25 a mB -> 18 mB
+            check(com.sc.util.DrillZoneSC.holeGasNeed(432, 25) == 18 && com.sc.util.DrillZoneSC.holeGasNeed(25, 25) == 1
+                            && com.sc.util.DrillZoneSC.holeGasNeed(26, 25) == 2 && com.sc.util.DrillZoneSC.holeGasNeed(0, 25) == 0
+                            && com.sc.util.DrillZoneSC.holeGasNeed(144, 0) == 0,
+                    "black hole: SM needed up front = the zone's volume / blocks per mB, rounded up");
+            // the zone's real cost never exceeds what was checked: whole mB taken <= holeGasNeed for any carried fraction < 1
+            float[] sfSplit = com.sc.util.ToolGasSC.split(0.99F, com.sc.util.DrillZoneSC.holeGas(432, 25));
+            check((int) sfSplit[0] <= com.sc.util.DrillZoneSC.holeGasNeed(432, 25),
+                    "black hole: the carried fraction never makes it take more SM than was checked");
+            // doors, beds, tall plants are left by the black hole
+            check(com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.wooden_door)
+                            && com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.iron_door)
+                            && com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.bed)
+                            && com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.double_plant)
+                            && !com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.stone),
+                    "black hole: doors, beds and tall plants are skipped");
+            // Shift + wheel: at least WHEEL_GAP ticks between two steps (time going back - a new world - lets it through)
+            check(com.sc.item.BladeSingularSC.gapOk(100, 0, false, 2) && !com.sc.item.BladeSingularSC.gapOk(101, 100, true, 2)
+                            && com.sc.item.BladeSingularSC.gapOk(102, 100, true, 2) && com.sc.item.BladeSingularSC.gapOk(5, 100, true, 2)
+                            && !com.sc.item.BladeSingularSC.gapOk(100, 100, true, 2),
+                    "tool wheel: a form / mode step at most once per WHEEL_GAP ticks");
+        }
     }
 }

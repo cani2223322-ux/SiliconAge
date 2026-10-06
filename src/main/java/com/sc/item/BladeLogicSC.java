@@ -28,9 +28,15 @@ import net.minecraft.world.WorldServer;
  * - Nano: hits and functions cost a quarter less,
  * - Quantum: a hostile mob killed by a normal hit gives the chestplate BladeFeature.KILL_REFUND EU (less than the hit),
  * - Exo: what the blade lacks is taken from the chestplate - it never goes dark for want of charge.
+ * The Singular blade counts as Exo for every Exo rule (with the full Singular suit as its set), and its
+ * Exo-era functions (sweep, wave, lunge, energy block, deflect, cutting) cost ToolLevelSC.LEGACY_MUL of their EU.
  * The blade's heat is its own (NBT of the blade); while the player blocks, the once-a-second upkeep
  * and the block's own costs (energy block, deflect) are put aside and settled after - changing the
  * blade's NBT mid-block makes the client drop the block.
+ * The Singular blade's own functions, forms and branches live in BladeSingularSC (its transient state per
+ * player is kept there, never in the blade's NBT); with the full Singular suit the blade's heat goes into the
+ * suit (heat()). Key functions and form changes come from the network thread and are queued for the server
+ * thread (action, cycleForm).
  */
 public final class BladeLogicSC {
 
@@ -46,10 +52,127 @@ public final class BladeLogicSC {
         return s != null && s.getItem() instanceof ItemBladeSC ? s : null;
     }
 
-    /** In hand, has the function, it's switched on, and (for all but the blade switch itself) the blade is lit. */
+    /** In hand, has the function, it's switched on, open at the blade's level, and the blade is lit. Client-safe. */
     public static boolean active(EntityPlayer p, BladeFeature f) {
         ItemStack s = held(p);
-        return s != null && ItemBladeSC.isEnabled(s, f) && ItemBladeSC.isLit(s);
+        return s != null && ItemBladeSC.isEnabled(s, f) && ItemBladeSC.isLit(s) && unlocked(p, s, f);
+    }
+
+    /**
+     * The tool has the function and its level / branch opens it: the older blades - whatever their tier
+     * has; the Singular blade - its own functions from their singLevel (creative: all). Client-safe (NBT only).
+     */
+    public static boolean unlocked(EntityPlayer p, ItemStack tool, BladeFeature f) {
+        BladeType t = ItemBladeSC.typeOf(tool);
+        if (t == null || f == null || !f.availableIn(t)) {
+            return false;
+        }
+        if (t != BladeType.SINGULAR) {
+            return true;
+        }
+        boolean creative = p != null && p.capabilities.isCreativeMode;
+        return f.openAt(com.sc.util.ToolLevelSC.effectiveLevel(p, tool), com.sc.util.ToolLevelSC.branchOf(tool), creative);
+    }
+
+    // ------------------------------------------------------------------ keys and the form (from the network thread)
+
+    /** Any key function of the blade (the Exo-era sweep / wave / lunge too): queued, run on the server thread. */
+    public static void action(net.minecraft.entity.player.EntityPlayerMP p, BladeFeature f) {
+        if (p != null && f != null && f.isAction()) {
+            BladeSingularSC.queue(p, f);
+        }
+    }
+
+    /** Shift + wheel with the Singular blade: the next open form `delta` steps on (queued, server thread). */
+    public static void cycleForm(net.minecraft.entity.player.EntityPlayerMP p, int delta) {
+        if (p != null && delta != 0) {
+            BladeSingularSC.queue(p, Integer.valueOf(delta));
+        }
+    }
+
+    /** Server thread: a queued key function. */
+    static void runAction(EntityPlayer p, BladeFeature f) {
+        if (p.isDead || p.getHealth() <= 0) {
+            return;
+        }
+        ItemStack blade = held(p);
+        if (blade == null || !f.availableIn(ItemBladeSC.typeOf(blade))) {
+            return;
+        }
+        if (!unlocked(p, blade, f)) {
+            ArmorLogicSC.warnArgs(p, "sc.armorkey.locked", 40, new ChatComponentTranslation("sc.bladefn." + f.key()),
+                    String.valueOf(f.singLevel()));
+            return;
+        }
+        switch (f) {
+            case SWEEP:
+                sweep(p);
+                break;
+            case WAVE:
+                wave(p);
+                break;
+            case LUNGE:
+                lunge(p);
+                break;
+            default:
+                BladeSingularSC.action(p, blade, f);
+                break;
+        }
+    }
+
+    /** Server thread: a queued form change - BladeForm.cycle over the forms the blade's level and branch open. */
+    static void runCycleForm(EntityPlayer p, int delta) {
+        ItemStack blade = held(p);
+        if (!com.sc.util.ToolLevelSC.isBlade(blade)) {
+            return;
+        }
+        if (p.isUsingItem()) {
+            // mid-block: refused - the client doesn't guess then; if it did just before raising the block, its copy is put
+            // right once the block ends (a resend now would end its block only)
+            BladeSingularSC.state(p).resendOnRelease = true;
+            return;
+        }
+        if (!BladeSingularSC.wheelReady(p)) {
+            resendHeld(p);                              // too fast: refused - the client's guess is put right
+            return;
+        }
+        com.sc.util.BladeForm from = ItemBladeSC.formOf(blade);
+        com.sc.util.BladeForm to = com.sc.util.BladeForm.cycle(from, delta, com.sc.util.ToolLevelSC.effectiveLevel(p, blade),
+                com.sc.util.ToolLevelSC.branchOf(blade), p.capabilities.isCreativeMode);
+        if (to == from) {
+            return;                                     // only the sword open
+        }
+        ItemBladeSC.setForm(blade, to);
+        p.inventoryContainer.detectAndSendChanges();
+        resendHeld(p);
+        p.worldObj.playSoundAtEntity(p, "mob.blaze.hit", 0.3F, 2F);
+    }
+
+    // ------------------------------------------------------------------ heat (the full Singular suit takes it)
+
+    /** Singular blade with the full Singular suit working: the blade's heat goes into the suit (its helium cools it). */
+    static boolean dumpsHeat(EntityPlayer p, ItemStack blade) {
+        return com.sc.util.ToolLevelSC.isBlade(blade) && ArmorLogicSC.bonusSet(p) == ArmorSuit.SINGULAR;
+    }
+
+    /** Heat of a hit / a function: into the suit (see dumpsHeat), noted down mid-block, or onto the blade. */
+    static void heat(EntityPlayer p, ItemStack blade, int h) {
+        if (h <= 0 || blade == null) {
+            return;
+        }
+        if (dumpsHeat(p, blade)) {
+            ArmorLogicSC.addHeat(p, h);
+        } else if (p.isUsingItem() && p.getCurrentEquippedItem() == blade) {
+            owe(p, blade, 0, h);                        // not the NBT mid-block
+        } else {
+            ItemBladeSC.addHeat(blade, h);
+        }
+    }
+
+    /** Destroyer, level 3: area blows (sweep, wave, lunge, the forms' attacks, chain) x1.25. */
+    static float areaMul(EntityPlayer p, ItemStack blade) {
+        return com.sc.util.ToolLevelSC.hasBranch(p, blade, com.sc.util.ToolLevelSC.BLADE_DESTROYER, com.sc.util.ToolLevelSC.BRANCH_LEVEL)
+                ? BladeFeature.DESTROYER_AREA_MUL : 1F;
     }
 
     private static boolean fullSetOf(EntityPlayer p, BladeType type) {
@@ -63,9 +186,15 @@ public final class BladeLogicSC {
         return t == BladeType.NANO && fullSetOf(p, t) ? (int) Math.ceil(eu * 0.75) : eu;
     }
 
-    /** The chestplate that feeds an Exo blade (the full Exo suit), or null. */
+    /** The chestplate that feeds an Exo (or Singular) blade with its full set, or null. */
     private static ItemStack feeder(EntityPlayer p, ItemStack blade) {
-        return ItemBladeSC.typeOf(blade) == BladeType.EXO && fullSetOf(p, BladeType.EXO) ? ArmorLogicSC.piece(p, 1) : null;
+        BladeType t = ItemBladeSC.typeOf(blade);
+        return t != null && t.exoClass() && fullSetOf(p, t) ? ArmorLogicSC.piece(p, 1) : null;
+    }
+
+    /** EU of an Exo-era function on this blade: ToolLevelSC.LEGACY_MUL of it on the Singular blade. */
+    public static int legacy(ItemStack blade, int eu) {
+        return com.sc.util.ToolLevelSC.legacyCost(blade, eu);
     }
 
     public static boolean canPay(EntityPlayer p, ItemStack blade, int eu) {
@@ -98,6 +227,10 @@ public final class BladeLogicSC {
         if (t == null || !f.availableIn(t)) {
             return;
         }
+        if (on && !unlocked(p, blade, f)) {
+            resendHeld(p);                              // a locked function can't be switched on
+            return;
+        }
         if (f == BladeFeature.BLADE && on && !canPay(p, blade, t.euPerHit)) {
             ItemBladeSC.setEnabled(blade, f, false);
             p.addChatComponentMessage(new ChatComponentTranslation("sc.blade.empty"));
@@ -112,7 +245,7 @@ public final class BladeLogicSC {
     }
 
     /** The held slot sent again as it is: the client may have guessed a switch the server refused. */
-    private static void resendHeld(EntityPlayer p) {
+    static void resendHeld(EntityPlayer p) {
         if (p instanceof net.minecraft.entity.player.EntityPlayerMP) {
             ((net.minecraft.entity.player.EntityPlayerMP) p).playerNetServerHandler.sendPacket(
                     new net.minecraft.network.play.server.S2FPacketSetSlot(0, 36 + p.inventory.currentItem, p.inventory.getCurrentItem()));
@@ -130,25 +263,40 @@ public final class BladeLogicSC {
             target.attackEntityFrom(DamageSource.causePlayerDamage(p), t.offDamage);
             return;
         }
-        if (hit(p, blade, target, t.onDamage)) {
+        // Singular: the form, cascade and the bonuses earned by blocking (BladeSingularSC)
+        BladeSingularSC.Hit sing = t == BladeType.SINGULAR ? BladeSingularSC.beforeHit(p, blade, target) : null;
+        float damage = sing == null ? t.onDamage : sing.damage(t.onDamage);
+        if (hit(p, blade, target, damage)) {
             pay(p, blade, t.euPerHit);
-            ItemBladeSC.addHeat(blade, BladeFeature.HIT_HEAT);
+            heat(p, blade, BladeFeature.HIT_HEAT);
             p.addExhaustion(0.3F);
             // Quantum set: a hostile mob killed by a normal hit gives back less than the hit cost - no energy farm
             if (t == BladeType.QUANTUM && fullSetOf(p, t) && target instanceof net.minecraft.entity.monster.IMob && !target.isEntityAlive()) {
                 ItemArmorSC.charge(ArmorLogicSC.piece(p, 1), BladeFeature.KILL_REFUND);
             }
+            if (sing != null) {
+                BladeSingularSC.afterHit(p, blade, target, sing, damage);
+            }
         }
+    }
+
+    /** An area blow on one target: refused ones (a private field, another mod's claim) skipped, the hit frames ignored. */
+    static boolean areaHit(EntityPlayer p, ItemStack blade, Entity e, float damage) {
+        if (!fair(p, e) || !claimed(p, e)) {
+            return false;
+        }
+        e.hurtResistantTime = 0;
+        return hit(p, blade, e, damage);
     }
 
     /**
      * One blow of the blade (a hit, the sweep, the wave, the lunge): armour pierce (Quantum), the
      * Exo blade's absolute damage, execute. @return whether it landed
      */
-    private static boolean hit(EntityPlayer p, ItemStack blade, Entity target, float damage) {
+    static boolean hit(EntityPlayer p, ItemStack blade, Entity target, float damage) {
         BladeType t = ItemBladeSC.typeOf(blade);
         DamageSource src = DamageSource.causePlayerDamage(p);
-        if (t == BladeType.EXO) {
+        if (t.exoClass()) {
             src.setDamageBypassesArmor().setDamageIsAbsolute();
         } else if (ItemBladeSC.isEnabled(blade, BladeFeature.ARMOR_PIERCE)) {
             src.setDamageBypassesArmor();
@@ -176,7 +324,7 @@ public final class BladeLogicSC {
     }
 
     /** Who the blade's area functions hit: living things but the player, their pets and villagers. */
-    private static boolean fair(EntityPlayer p, Entity e) {
+    static boolean fair(EntityPlayer p, Entity e) {
         if (!(e instanceof EntityLivingBase) || e == p || !e.isEntityAlive() || e instanceof INpc) {
             return false;
         }
@@ -191,32 +339,42 @@ public final class BladeLogicSC {
         return !net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.player.AttackEntityEvent(p, e));
     }
 
+    /** No key function in the last ACTION_COOLDOWN ticks (one press, two messages; every blade key shares it). */
+    static boolean actionGap(EntityPlayer p) {
+        long now = p.worldObj.getTotalWorldTime(), at = p.getEntityData().getLong(LAST_ACTION);
+        return now - at >= BladeFeature.ACTION_COOLDOWN || now < at;
+    }
+
+    static void markAction(EntityPlayer p) {
+        p.getEntityData().setLong(LAST_ACTION, p.worldObj.getTotalWorldTime());
+    }
+
     /** A key function: in hand, switched on, lit, not used in the last half second, paid for. */
     private static ItemStack useAction(EntityPlayer p, BladeFeature f, int eu) {
+        return useAction(p, f, eu, f.heat);
+    }
+
+    private static ItemStack useAction(EntityPlayer p, BladeFeature f, int eu, int heat) {
         ItemStack blade = held(p);
-        if (blade == null || !active(p, f)) {
-            return null;
-        }
-        NBTTagCompound data = p.getEntityData();
-        long now = p.worldObj.getTotalWorldTime();
-        if (now - data.getLong(LAST_ACTION) < BladeFeature.ACTION_COOLDOWN) {
+        if (blade == null || !active(p, f) || !actionGap(p)) {
             return null;
         }
         if (!pay(p, blade, eu)) {
             p.addChatComponentMessage(new ChatComponentTranslation("sc.blade.low", eu));
             return null;
         }
-        data.setLong(LAST_ACTION, now);
-        ItemBladeSC.addHeat(blade, f.heat);
+        markAction(p);
+        heat(p, blade, heat);
         return blade;
     }
 
     /** Quantum+: everything in an arc of 3 blocks in front takes a full blow. */
     public static void sweep(EntityPlayer p) {
-        ItemStack blade = useAction(p, BladeFeature.SWEEP, BladeFeature.SWEEP_COST);
+        ItemStack blade = useAction(p, BladeFeature.SWEEP, legacy(held(p), BladeFeature.SWEEP_COST));
         if (blade == null) {
             return;
         }
+        float damage = ItemBladeSC.typeOf(blade).onDamage * areaMul(p, blade);
         double r = BladeFeature.SWEEP_RANGE;
         Vec3 look = p.getLookVec();
         double lx = look.xCoord, lz = look.zCoord, len = Math.sqrt(lx * lx + lz * lz);
@@ -228,7 +386,7 @@ public final class BladeLogicSC {
                 continue;
             }
             e.hurtResistantTime = 0;
-            hit(p, blade, e, ItemBladeSC.typeOf(blade).onDamage);
+            hit(p, blade, e, damage);
         }
         p.worldObj.playSoundAtEntity(p, "mob.irongolem.throw", 1F, 1.4F);
         Vec3 front = eyes(p).addVector(lx * 1.5, -0.4, lz * 1.5);
@@ -237,10 +395,19 @@ public final class BladeLogicSC {
 
     /** Exo: a cut flying 16 blocks along the look, through every living thing on the way, stopped by walls. */
     public static void wave(EntityPlayer p) {
-        ItemStack blade = useAction(p, BladeFeature.WAVE, BladeFeature.WAVE_COST);
+        waveAs(p, BladeFeature.WAVE);
+    }
+
+    /**
+     * The wave fired by its own key, or (the Singular blade's sword form) by FORM_ATTACK - each key's own
+     * switch. Singular: x the event horizon's stored projectiles (spent), x1.25 for the Destroyer.
+     */
+    static void waveAs(EntityPlayer p, BladeFeature key) {
+        ItemStack blade = useAction(p, key, legacy(held(p), BladeFeature.WAVE_COST), BladeFeature.WAVE.heat);
         if (blade == null) {
             return;
         }
+        float damage = ItemBladeSC.typeOf(blade).onDamage * areaMul(p, blade) * BladeSingularSC.takeHorizon(p);
         Vec3 start = eyes(p);
         Vec3 end = beamEnd(p, start, BladeFeature.WAVE_RANGE);
         for (Entity e : along(p, start, end)) {
@@ -248,7 +415,7 @@ public final class BladeLogicSC {
                 continue;
             }
             e.hurtResistantTime = 0;
-            hit(p, blade, e, ItemBladeSC.typeOf(blade).onDamage);
+            hit(p, blade, e, damage);
         }
         p.worldObj.playSoundAtEntity(p, "mob.ghast.fireball", 0.8F, 1.8F);
         particles(p, start, end, "witchMagic", 3);
@@ -256,7 +423,7 @@ public final class BladeLogicSC {
 
     /** Exo: a leap 6 blocks forward, every living thing on that line takes a full blow. */
     public static void lunge(EntityPlayer p) {
-        ItemStack blade = useAction(p, BladeFeature.LUNGE, BladeFeature.LUNGE_COST);
+        ItemStack blade = useAction(p, BladeFeature.LUNGE, legacy(held(p), BladeFeature.LUNGE_COST));
         if (blade == null) {
             return;
         }
@@ -264,12 +431,13 @@ public final class BladeLogicSC {
         double len = Math.sqrt(look.xCoord * look.xCoord + look.zCoord * look.zCoord);
         Vec3 start = eyes(p);
         Vec3 end = beamEnd(p, start, BladeFeature.LUNGE_RANGE);
+        float damage = ItemBladeSC.typeOf(blade).onDamage * areaMul(p, blade);
         for (Entity e : along(p, start, end)) {
             if (!claimed(p, e)) {
                 continue;
             }
             e.hurtResistantTime = 0;
-            hit(p, blade, e, ItemBladeSC.typeOf(blade).onDamage);
+            hit(p, blade, e, damage);
         }
         if (len > 0.01) {
             p.motionX = look.xCoord / len * 1.2;
@@ -282,11 +450,11 @@ public final class BladeLogicSC {
         particles(p, start, end, "magicCrit", 2);
     }
 
-    private static Vec3 eyes(EntityPlayer p) {
+    static Vec3 eyes(EntityPlayer p) {
         return Vec3.createVectorHelper(p.posX, p.posY + p.getEyeHeight(), p.posZ);
     }
 
-    private static Vec3 beamEnd(EntityPlayer p, Vec3 start, double range) {
+    static Vec3 beamEnd(EntityPlayer p, Vec3 start, double range) {
         Vec3 look = p.getLookVec();
         Vec3 end = start.addVector(look.xCoord * range, look.yCoord * range, look.zCoord * range);
         MovingObjectPosition wall = p.worldObj.rayTraceBlocks(Vec3.createVectorHelper(start.xCoord, start.yCoord, start.zCoord),
@@ -295,7 +463,7 @@ public final class BladeLogicSC {
     }
 
     /** Living things the segment start-end passes through (with half a block of slack). */
-    private static List<Entity> along(EntityPlayer p, Vec3 start, Vec3 end) {
+    static List<Entity> along(EntityPlayer p, Vec3 start, Vec3 end) {
         List<Entity> hits = new ArrayList<Entity>();
         net.minecraft.util.AxisAlignedBB area = net.minecraft.util.AxisAlignedBB.getBoundingBox(
                 Math.min(start.xCoord, end.xCoord), Math.min(start.yCoord, end.yCoord), Math.min(start.zCoord, end.zCoord),
@@ -313,7 +481,7 @@ public final class BladeLogicSC {
         return hits;
     }
 
-    private static void particles(EntityPlayer p, Vec3 from, Vec3 to, String name, int perBlock) {
+    static void particles(EntityPlayer p, Vec3 from, Vec3 to, String name, int perBlock) {
         if (!(p.worldObj instanceof WorldServer)) {
             return;
         }
@@ -331,15 +499,20 @@ public final class BladeLogicSC {
     /** Blocking with the lit blade: energy block halves the hit once more (vanilla's own half comes after), paid per point. */
     public static float onHurt(EntityPlayer p, DamageSource source, float amount) {
         ItemStack blade = held(p);
-        if (blade == null || !p.isBlocking() || source.isUnblockable() || amount <= 0 || !active(p, BladeFeature.ENERGY_BLOCK)) {
+        if (blade == null || !p.isBlocking() || source.isUnblockable() || amount <= 0) {
             return amount;
         }
-        float saved = amount / 2;
-        if (!owe(p, blade, (int) Math.ceil(saved) * BladeFeature.BLOCK_EU_PER_POINT, BladeFeature.ENERGY_BLOCK.heat)) {
-            return amount;
+        float left = amount;
+        if (active(p, BladeFeature.ENERGY_BLOCK)) {
+            float saved = amount / 2;
+            int eu = BladeSingularSC.blockFree(p, blade) ? 0 : legacy(blade, (int) Math.ceil(saved) * BladeFeature.BLOCK_EU_PER_POINT);
+            if (owe(p, blade, eu, BladeFeature.ENERGY_BLOCK.heat)) {
+                p.worldObj.playSoundAtEntity(p, "random.fizz", 0.4F, 2F);
+                left = amount - saved;
+            }
         }
-        p.worldObj.playSoundAtEntity(p, "random.fizz", 0.4F, 2F);
-        return amount - saved;
+        BladeSingularSC.blocked(p, blade, amount, left);   // riposte: what the block took
+        return left;
     }
 
     /** Every tick, server: the upkeep put aside during a block; every other tick, blocking with deflect turns arrows and fireballs back. */
@@ -348,17 +521,33 @@ public final class BladeLogicSC {
             return;
         }
         settleDebt(p);
-        if (p.ticksExisted % 2 != 0 || !p.isBlocking() || !active(p, BladeFeature.DEFLECT)) {
+        BladeSingularSC.tick(p);                      // Singular: blocking, the spear / whip reach, once a second
+        if (p.ticksExisted % 2 != 0 || !p.isBlocking()) {
             return;
         }
         ItemStack blade = held(p);
+        // Singular: the event horizon swallows, the gravity shield turns back (free), else the paid deflect
+        boolean absorb = BladeSingularSC.horizonWorks(p), repel = BladeSingularSC.shieldWorks(p);
+        boolean deflect = active(p, BladeFeature.DEFLECT);
+        if (blade == null || !absorb && !repel && !deflect) {
+            return;
+        }
         double r = BladeFeature.DEFLECT_RANGE;
         for (Object o : p.worldObj.getEntitiesWithinAABBExcludingEntity(p, p.boundingBox.expand(r, r, r))) {
             Entity e = (Entity) o;
             if (!ArmorLogicSC.incomingProjectile(p, e)) {
                 continue;
             }
-            if (!owe(p, blade, BladeFeature.DEFLECT_COST, BladeFeature.DEFLECT.heat)) {
+            if (absorb) {
+                BladeSingularSC.absorb(p, blade, e);
+                continue;
+            }
+            if (repel) {
+                ArmorLogicSC.reflect(p, e);
+                continue;
+            }
+            int eu = BladeSingularSC.blockFree(p, blade) ? 0 : legacy(blade, BladeFeature.DEFLECT_COST);
+            if (!owe(p, blade, eu, BladeFeature.DEFLECT.heat)) {
                 return;
             }
             ArmorLogicSC.reflect(p, e);
@@ -376,7 +565,11 @@ public final class BladeLogicSC {
         int eu = 0, heat = -t.heatDissipation;
         if (held && ItemBladeSC.isLit(blade)) {
             eu = t.idlePerSecond;
-            heat += BladeFeature.BLADE.heat;
+            if (dumpsHeat(p, blade)) {
+                ArmorLogicSC.addHeat(p, BladeFeature.BLADE.heat);    // full Singular suit: the blade only cools
+            } else {
+                heat += BladeFeature.BLADE.heat;
+            }
         }
         NBTTagCompound data = p.getEntityData();
         if (held && p.isUsingItem() && p.getCurrentEquippedItem() == blade) {   // (getItemInUse is client-only)
@@ -396,11 +589,16 @@ public final class BladeLogicSC {
      * A cost met during a block (energy block, deflect), put aside with the upkeep instead of paid at
      * once. @return false if the blade can't pay it on top of what it already owes
      */
-    private static boolean owe(EntityPlayer p, ItemStack blade, int eu, int heat) {
+    static boolean owe(EntityPlayer p, ItemStack blade, int eu, int heat) {
         NBTTagCompound data = p.getEntityData();
-        int debtEu = data.getInteger(DEBT_EU) + eu, debtHeat = data.getInteger(DEBT_HEAT) + heat;
+        int debtEu = data.getInteger(DEBT_EU) + eu, debtHeat = data.getInteger(DEBT_HEAT);
         if (!canPay(p, blade, debtEu)) {
             return false;
+        }
+        if (heat > 0 && dumpsHeat(p, blade)) {
+            ArmorLogicSC.addHeat(p, heat);              // full Singular suit: into the suit, nothing to settle
+        } else {
+            debtHeat += heat;
         }
         data.setInteger(DEBT_EU, debtEu);
         data.setInteger(DEBT_HEAT, debtHeat);
@@ -412,7 +610,7 @@ public final class BladeLogicSC {
     }
 
     /** Ends the block on the server - and on the client, which only lets go when its held stack is replaced. */
-    private static void stopBlock(EntityPlayer p) {
+    static void stopBlock(EntityPlayer p) {
         p.stopUsingItem();
         resendHeld(p);
     }

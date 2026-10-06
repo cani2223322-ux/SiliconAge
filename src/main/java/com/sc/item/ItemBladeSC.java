@@ -10,7 +10,10 @@ import com.sc.energy.TileEntityEnergyBase;
 import com.sc.init.ModCreativeTab;
 import com.sc.manual.Lang;
 import com.sc.util.BladeFeature;
+import com.sc.util.BladeForm;
 import com.sc.util.BladeType;
+import com.sc.util.SingularScheme;
+import com.sc.util.ToolLevelSC;
 
 import cpw.mods.fml.common.Optional;
 import net.minecraft.block.Block;
@@ -33,13 +36,15 @@ import net.minecraft.util.IIcon;
 import net.minecraft.world.World;
 
 /**
- * Energy blades (Nano / Quantum / Exo), styled after the suits, working like IC2's nano saber:
+ * Energy blades (Nano / Quantum / Exo / Singular), styled after the suits, working like IC2's nano saber:
  * off it is a hilt (a weak hit, no EU), on it hits for full damage at EU per hit and a little per
  * second in hand. Right-click blocks (sword style), sneak + right-click switches the blade, and so
  * does its switch / key in the armour screen (K, "Blade" tab) with the rest of its functions
  * (BladeFeature). Its heat is its own, not the suit's; overheated it goes dark until it has cooled
  * to half. Charged like the suits: energy storage slot, sneak + right-click on a machine, the
  * chestplate's weapon charger, or an IC2 charger of its tier or higher.
+ * The Singular blade (docs/plan-singular-tools.md) adds levels, branches, forms and the colour scheme
+ * (ToolLevelSC, NBT): its icon follows the scheme, which it takes from the worn Singular chestplate.
  */
 @Optional.Interface(iface = "ic2.api.item.ISpecialElectricItem", modid = Reference.IC2_MODID)
 public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricItem {
@@ -49,6 +54,8 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
 
     private final BladeType type;
     private IIcon iconOff, iconOn;
+    /** Singular: an off / on icon per colour scheme (SingularScheme ordinal). */
+    private IIcon[] schemeOff, schemeOn;
     private Object ic2Manager;
 
     public ItemBladeSC(BladeType type) {
@@ -204,11 +211,37 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
         return isEnabled(stack, BladeFeature.BLADE) && !overheated(stack);
     }
 
+    /** The Singular blade's form (NBT "SingForm"; none / unknown / not a Singular blade: SWORD). Client-safe. */
+    public static BladeForm formOf(ItemStack stack) {
+        if (stack == null || !stack.hasTagCompound() || !stack.getTagCompound().hasKey(BladeForm.NBT)) {
+            return BladeForm.DEFAULT;
+        }
+        return BladeForm.of(stack.getTagCompound().getInteger(BladeForm.NBT));
+    }
+
+    public static void setForm(ItemStack stack, BladeForm form) {
+        if (stack != null) {
+            tag(stack).setInteger(BladeForm.NBT, (form == null ? BladeForm.DEFAULT : form).ordinal());
+        }
+    }
+
     // ---- look ----
 
     @Override
     public void registerIcons(IIconRegister register) {
         String base = Reference.ASSETS + ":blade" + Character.toUpperCase(type.key().charAt(0)) + type.key().substring(1);
+        if (type == BladeType.SINGULAR) {                  // bladeSingular_a / bladeSingularOn_a ... _k
+            SingularScheme[] all = SingularScheme.values();
+            schemeOff = new IIcon[all.length];
+            schemeOn = new IIcon[all.length];
+            for (SingularScheme s : all) {
+                schemeOff[s.ordinal()] = register.registerIcon(base + "_" + s.key());
+                schemeOn[s.ordinal()] = register.registerIcon(base + "On_" + s.key());
+            }
+            iconOff = schemeOff[SingularScheme.DEFAULT.ordinal()];
+            iconOn = schemeOn[SingularScheme.DEFAULT.ordinal()];
+            return;
+        }
         iconOff = register.registerIcon(base);
         iconOn = register.registerIcon(base + "On");
     }
@@ -220,6 +253,10 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
 
     @Override
     public IIcon getIconIndex(ItemStack stack) {
+        if (schemeOff != null) {
+            int k = ToolLevelSC.schemeOf(stack).ordinal();
+            return isLit(stack) ? schemeOn[k] : schemeOff[k];
+        }
         return isLit(stack) ? iconOn : iconOff;
     }
 
@@ -257,13 +294,21 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
         list.add(Lang.tr("sc.tooltip.armor.charge", chargeOf(stack), type.maxCharge));
         String state = Lang.tr(overheated(stack) ? "sc.tooltip.state.hot" : isLit(stack) ? "sc.tooltip.state.on" : "sc.tooltip.state.off");
         list.add(Lang.tr("sc.tooltip.blade.state", state, isLit(stack) ? type.onDamage : type.offDamage, heatPercent(stack)));
+        boolean sing = type == BladeType.SINGULAR;
+        if (sing) {
+            singularSummary(stack, list);
+        }
         switch (com.sc.util.TooltipSC.page()) {
             case 1: {
                 java.util.List<String> names = new java.util.ArrayList<String>();
                 java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
-                int total = 0, lit = 0;
+                int total = 0, lit = 0, locked = 0;
                 for (BladeFeature f : BladeFeature.values()) {
                     if (f == BladeFeature.BLADE || !f.availableIn(type)) {
+                        continue;
+                    }
+                    if (!BladeLogicSC.unlocked(player, stack, f)) {
+                        locked++;                           // Singular: opens at a higher level
                         continue;
                     }
                     total++;
@@ -276,16 +321,58 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
                 }
                 list.add(Lang.tr("sc.tooltip.functions", lit, total));
                 com.sc.util.TooltipSC.pairs(list, names, on);
+                if (locked > 0) {
+                    list.add("\u00a78" + Lang.tr("sc.tooltip.tool.sing.locked", locked));
+                }
                 list.add("\u00a77" + Lang.tr("sc.tooltip.blade.stats", type.euPerHit, type.idlePerSecond, type.chargeTier.name()));
+                if (sing) {
+                    BladeForm form = BladeSingularSC.effectiveForm(player, stack);
+                    list.add("\u00a7d" + Lang.tr("sc.tooltip.tool.sing.formattack", Lang.tr(form.langKey()),
+                            Lang.tr(BladeFeature.formAttackKey(form))));
+                    singularDetails(list, true);
+                }
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;
             }
             case 2:
                 com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.blade.howto", type.chargeTier.name()), "\u00a77");
+                if (sing) {
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.blade.keys"), "\u00a7d");
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.station"), "\u00a77");
+                }
                 break;
             default:
                 com.sc.util.TooltipSC.hintShift(list);
         }
+    }
+
+    /** Singular (blade and drill): the scheme, the level with its points, the branch, the blade's form. */
+    static void singularSummary(ItemStack stack, List list) {
+        list.add(Lang.tr("sc.tooltip.armor.scheme", Lang.tr(ToolLevelSC.schemeOf(stack).langKey())));
+        int lvl = ToolLevelSC.levelOf(stack);
+        list.add("\u00a7d" + Lang.tr("sc.tooltip.armor.singular.level", lvl, ToolLevelSC.MAX));
+        if (lvl < ToolLevelSC.MAX) {
+            int pts = ToolLevelSC.points(stack), need = ToolLevelSC.threshold(stack);
+            list.add(ToolLevelSC.pointsFull(stack)
+                    ? "\u00a7a" + Lang.tr("sc.tooltip.armor.singular.points.ready", pts, need)
+                    : "\u00a77" + Lang.tr("sc.tooltip.armor.singular.points", pts, need));
+        }
+        int b = ToolLevelSC.branchOf(stack);
+        if (b != ToolLevelSC.BRANCH_NONE) {
+            list.add(Lang.tr("sc.tooltip.tool.sing.branch", Lang.tr(ToolLevelSC.branchLangKey(stack, b))));
+        } else if (ToolLevelSC.branchPending(stack)) {
+            list.add("\u00a7e" + Lang.tr("sc.tooltip.tool.sing.branch.pending"));
+        }
+        if (ToolLevelSC.isBlade(stack)) {
+            list.add(Lang.tr("sc.tooltip.tool.sing.form", Lang.tr(formOf(stack).langKey())));
+        }
+    }
+
+    /** Singular, Shift page: the Exo legacy (-20% EU), where the points and the gases come from. */
+    static void singularDetails(List list, boolean blade) {
+        com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.legacy", Math.round((1F - ToolLevelSC.LEGACY_MUL) * 100)), "\u00a7d");
+        com.sc.util.TooltipSC.wrap(list, Lang.tr(blade ? "sc.tooltip.tool.sing.blade.points" : "sc.tooltip.tool.sing.drill.points"), "\u00a77");
+        com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.gas"), "\u00a77");
     }
 
     // ---- fighting ----
@@ -312,6 +399,15 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
             BladeLogicSC.attack(player, stack, entity);
         }
         return true;
+    }
+
+    /** Server: the Singular spear / whip hit further than the client sends hits (BladeSingularSC.swing). */
+    @Override
+    public boolean onEntitySwing(EntityLivingBase entity, ItemStack stack) {
+        if (type == BladeType.SINGULAR && !entity.worldObj.isRemote && entity instanceof EntityPlayer) {
+            BladeSingularSC.swing((EntityPlayer) entity, stack);
+        }
+        return false;
     }
 
     @Override
@@ -408,7 +504,7 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
             item.delayBeforeCanPickup = 10;
             player.worldObj.spawnEntityInWorld(item);
         }
-        BladeLogicSC.pay(player, stack, BladeFeature.CUT_COST);
+        BladeLogicSC.pay(player, stack, ToolLevelSC.legacyCost(stack, BladeFeature.CUT_COST));
         player.worldObj.setBlockToAir(x, y, z);
         return true;
     }
@@ -416,7 +512,7 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
     @Override
     public boolean onBlockDestroyed(ItemStack stack, World world, Block block, int x, int y, int z, EntityLivingBase entity) {
         if (!world.isRemote && entity instanceof EntityPlayer && cuttable(block) && cutting(stack)) {
-            BladeLogicSC.pay((EntityPlayer) entity, stack, BladeFeature.CUT_COST);
+            BladeLogicSC.pay((EntityPlayer) entity, stack, ToolLevelSC.legacyCost(stack, BladeFeature.CUT_COST));
         }
         return true;
     }
@@ -430,6 +526,11 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
         }
         if (!world.isRemote && entity instanceof EntityPlayer && entity.ticksExisted % 20 == 0) {
             BladeLogicSC.perSecond((EntityPlayer) entity, stack, slot, held);
+        }
+        // Singular: the worn Singular chestplate's colour scheme, once a second (not mid-block: that would drop it)
+        if (type == BladeType.SINGULAR && !world.isRemote && entity instanceof EntityPlayer && entity.ticksExisted % 20 == 11
+                && !(held && ((EntityPlayer) entity).isUsingItem())) {
+            ToolLevelSC.syncScheme((EntityPlayer) entity, stack);
         }
     }
 

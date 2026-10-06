@@ -46,7 +46,8 @@ public class ModCreativeTab extends CreativeTabs {
         add(order, ModItems.crushedOre, ModItems.purifiedCrushedOre, ModItems.dust, ModItems.dustTiny, ModItems.ingot,
                 ModItems.siliconMaterial, ModItems.coke, ModItems.rubber, ModItems.rubberBlue, ModItems.rubberHeatResist,
                 ModItems.compound, ModItems.alFoil, ModItems.leadFrame3, ModItems.leadFrame16, ModItems.leadFrame40,
-                ModItems.liquidHeCell, ModItems.deuteriumCell, ModItems.singularCell, ModItems.fluidBucket);
+                ModItems.liquidHeCell, ModItems.deuteriumCell, ModItems.singularCell, ModItems.singularCrumb, ModItems.singularClot,
+                ModItems.fluidBucket);
         // parts, in the order they were registered
         order.addAll(ModItems.COMPONENTS.values());
         // tools and upgrades
@@ -67,7 +68,7 @@ public class ModCreativeTab extends CreativeTabs {
             if (pieces != null) {
                 add(order, (Object[]) pieces);
             }
-            if (tier < BladeType.values().length) {               // the Singular suit has no blade / drill (yet)
+            if (tier < BladeType.values().length) {               // one blade / drill per suit (Singular too)
                 add(order, ModItems.BLADES.get(BladeType.values()[tier]));
             }
             if (tier < DrillType.values().length) {

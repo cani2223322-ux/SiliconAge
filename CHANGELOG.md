@@ -6,8 +6,16 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Сингулярный клинок и Сингулярный бур (SV):** получаются преобразованием Экзо-клинка / Экзо-бура в Сингулярной станции (новый слот инструмента: преобразование, модернизация до уровня 5, смена ветки, цветовая схема). Газы берут из баков надетой брони, все функции Экзо дешевле на 20%, с полным Сингулярным комплектом — питание от нагрудника, нагрев в броню, откаты −25%.
+  - Клинок: 6 форм (Shift + колесо) — Меч, Коса, Копьё, Хлыст-клинок, Щит-клинок, Сингулярная — у каждой своя особая атака; гравитационный рывок, каскад, клинок в ножнах, разрез пространства, идеальное парирование, чутьё охотника, заряженный удар, горизонт событий, гравитационный щит, цепной разрез, ответный удар, гравитационная привязка; ветки «Разрушитель», «Дуэлянт», «Страж» («Последний шанс»); очки уровня за убийства.
+  - Бур: режим «Чёрная дыра» 5×5 / 9×9 / 12×12 (и туннель 3) — уничтожает всё в зоне, кроме бедрока, блоков с содержимым и чужих приватов, и даёт **крупицы сингулярности** (только природные блоки, руда ×4); гравитационная воронка 7×7–11×11, сундук добычи в любом измерении, осушение, замена блоков, фазовое копание; ветки «Шахтёр» и «Старатель».
+  - **Крупица** и **сгусток сингулярности** (9 крупиц): очки бура, замена сингулярной материи в станции, сгусток в Компрессоре материи → 100 мБ. Меню K (уровень, формы, ветки, газ), HUD (форма, откаты, панель бура), рамка зоны, статьи в справочнике, NEI.
 
 ### English
+- **Singular Blade and Singular Drill (SV):** made by converting an Exo blade / drill in the Singular Station (a new tool slot: conversion, modernisation up to level 5, branch change, colour scheme). They take gases from the worn armour's tanks, every Exo function costs 20% less, and with the full Singular suit they draw from the chestplate, dump heat into the suit and get cooldowns -25%.
+  - Blade: 6 forms (Shift + wheel) - Sword, Scythe, Spear, Whip, Shield, Singular - each with its own special attack; gravity pull, cascade, sheath, rift step, perfect parry, hunter's sense, charged strike, event horizon, gravity shield, chain cut, riposte, gravity tether; Destroyer, Duelist and Guardian branches (Last Chance); level points for kills.
+  - Drill: Black Hole mode 5x5 / 9x9 / 12x12 (and a 3-deep tunnel) - destroys everything in the zone but bedrock, blocks with contents and other claims, and gives **Singular Crumbs** (natural blocks only, ores x4); gravity funnel 7x7-11x11, a loot chest in any dimension, drain, block replace, phase digging; Miner and Prospector branches.
+  - **Singular Crumb** and **Singular Clot** (9 crumbs): drill points, a Singular Matter substitute in the station, a clot gives 100 mB in the Matter Compressor. K screen (level, forms, branches, gas), HUD (form, cooldowns, drill panel), zone frame, handbook articles, NEI.
 
 ## 0.1.8-beta — 2026-10-06
 

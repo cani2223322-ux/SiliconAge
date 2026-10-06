@@ -59,6 +59,48 @@ public final class ArmorNetSC {
      * into profile `feature` (-1: the active one), step to the next profile (the key).
      */
     public static final byte PROFILE_SELECT = 23, PROFILE_SAVE = 24, PROFILE_NEXT = 25;
+    /**
+     * The Singular tools (docs/plan-singular-tools.md): fire key function `feature` (a BladeFeature / DrillFeature
+     * ordinal, isAction) of the blade / drill in hand - the old SWEEP / WAVE / LUNGE / LASER ids end there too;
+     * one step of the Singular blade's form / the Singular drill's mode (feature = -1 / +1, Shift + wheel);
+     * the free branch choice of the Singular tool in hand (value: the blade, else the drill; feature = the branch).
+     */
+    public static final byte BLADE_ACTION = 26, BLADE_FORM = 27, DRILL_ACTION = 28, DRILL_MODE = 29, TOOL_BRANCH = 30;
+
+    /** Pure: one wheel / form step's direction, -1 or +1 (0 stays 0). */
+    public static int step(int delta) {
+        return delta < 0 ? -1 : delta > 0 ? 1 : 0;
+    }
+
+    /**
+     * Pure: the single BLADE_FORM steps (signed: + forward) that take the blade from `from` to `to` through the
+     * forms open at `level` / `chosen` (creative: all), the shorter way round; 0 when it's there or `to` is closed.
+     */
+    public static int formSteps(com.sc.util.BladeForm from, com.sc.util.BladeForm to, int level, int chosen, boolean creative) {
+        if (from == null || to == null || from == to || !to.open(level, chosen, creative)) {
+            return 0;
+        }
+        int n = com.sc.util.BladeForm.values().length;
+        int fwd = 0, back = 0;
+        com.sc.util.BladeForm f = from;
+        for (int i = 1; i <= n && fwd == 0; i++) {
+            f = com.sc.util.BladeForm.cycle(f, 1, level, chosen, creative);
+            if (f == to) {
+                fwd = i;
+            }
+        }
+        f = from;
+        for (int i = 1; i <= n && back == 0; i++) {
+            f = com.sc.util.BladeForm.cycle(f, -1, level, chosen, creative);
+            if (f == to) {
+                back = i;
+            }
+        }
+        if (fwd == 0 || back == 0) {
+            return fwd != 0 ? fwd : -back;
+        }
+        return fwd <= back ? fwd : -back;
+    }
 
     /** BRANCH's feature byte for a level (3 / 5) and a choice (1 / 2). */
     public static int branchFeature(int level, int choice) {
@@ -396,7 +438,7 @@ public final class ArmorNetSC {
     public static class Handler implements IMessageHandler<Message, IMessage> {
         @Override
         public IMessage onMessage(Message msg, MessageContext ctx) {
-            EntityPlayerMP p = ctx.getServerHandler().playerEntity;
+            final EntityPlayerMP p = ctx.getServerHandler().playerEntity;
             if (p == null || p.isDead || p.getHealth() <= 0) {
                 return null;                               // on the death screen: nothing to act with
             }
@@ -427,35 +469,84 @@ public final class ArmorNetSC {
                     ArmorLogicSC.annihilate(p);
                     break;
                 case BLADE_TOGGLE: {
-                    com.sc.util.BladeFeature f = com.sc.util.BladeFeature.of(msg.feature);
-                    ItemStack blade = com.sc.item.BladeLogicSC.held(p);
-                    if (f != null && blade != null) {
-                        com.sc.item.BladeLogicSC.toggle(p, blade, f, msg.value);
+                    final com.sc.util.BladeFeature f = com.sc.util.BladeFeature.of(msg.feature);
+                    final boolean on = msg.value;
+                    if (f != null) {
+                        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // the tool's NBT: on the server thread
+                            @Override
+                            public void run() {
+                                ItemStack blade = com.sc.item.BladeLogicSC.held(p);
+                                if (blade != null) {
+                                    com.sc.item.BladeLogicSC.toggle(p, blade, f, on);
+                                }
+                            }
+                        });
                     }
                     break;
                 }
-                case BLADE_SWEEP:
-                    com.sc.item.BladeLogicSC.sweep(p);
+                case BLADE_SWEEP:                           // the old ids: the same generic path as BLADE_ACTION
+                    bladeAction(p, com.sc.util.BladeFeature.SWEEP);
                     break;
                 case BLADE_WAVE:
-                    com.sc.item.BladeLogicSC.wave(p);
+                    bladeAction(p, com.sc.util.BladeFeature.WAVE);
                     break;
                 case BLADE_LUNGE:
-                    com.sc.item.BladeLogicSC.lunge(p);
+                    bladeAction(p, com.sc.util.BladeFeature.LUNGE);
                     break;
+                case BLADE_ACTION:
+                    bladeAction(p, com.sc.util.BladeFeature.of(msg.feature));
+                    break;
+                case BLADE_FORM:
+                    if (com.sc.util.ToolLevelSC.isBlade(com.sc.item.BladeLogicSC.held(p)) && step(msg.feature) != 0) {
+                        com.sc.item.BladeLogicSC.cycleForm(p, step(msg.feature));
+                    }
+                    break;
+                case DRILL_ACTION:
+                    drillAction(p, com.sc.util.DrillFeature.of(msg.feature));
+                    break;
+                case DRILL_MODE:
+                    if (com.sc.util.ToolLevelSC.isDrill(com.sc.item.DrillLogicSC.held(p)) && step(msg.feature) != 0) {
+                        final int delta = step(msg.feature);
+                        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // the world / NBT: on the server thread
+                            @Override
+                            public void run() {
+                                com.sc.item.DrillLogicSC.cycleMode(p, delta);
+                            }
+                        });
+                    }
+                    break;
+                case TOOL_BRANCH: {                         // the free first choice; only the station changes it later
+                    final boolean blade = msg.value;
+                    final int branch = msg.feature;
+                    com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {
+                        @Override
+                        public void run() {
+                            toolBranch(p, blade, branch);
+                        }
+                    });
+                    break;
+                }
                 case REMOVE_CHIPS:
                     com.sc.item.ItemArmorChipSC.removeAll(p);
                     break;
                 case DRILL_TOGGLE: {
-                    com.sc.util.DrillFeature f = com.sc.util.DrillFeature.of(msg.feature);
-                    ItemStack drill = com.sc.item.DrillLogicSC.held(p);
-                    if (f != null && drill != null) {
-                        com.sc.item.DrillLogicSC.toggle(p, drill, f, msg.value);
+                    final com.sc.util.DrillFeature f = com.sc.util.DrillFeature.of(msg.feature);
+                    final boolean on = msg.value;
+                    if (f != null) {
+                        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {
+                            @Override
+                            public void run() {
+                                ItemStack drill = com.sc.item.DrillLogicSC.held(p);
+                                if (drill != null) {
+                                    com.sc.item.DrillLogicSC.toggle(p, drill, f, on);
+                                }
+                            }
+                        });
                     }
                     break;
                 }
-                case DRILL_LASER:
-                    com.sc.item.DrillLogicSC.laser(p);
+                case DRILL_LASER:                           // the old id: the same generic path as DRILL_ACTION
+                    drillAction(p, com.sc.util.DrillFeature.LASER);
                     break;
                 case GLOW_COLOR: {
                     for (int i = 0; i < 4; i++) {
@@ -503,6 +594,43 @@ public final class ArmorNetSC {
                     break;
             }
             return null;
+        }
+    }
+
+    /** A blade key function: a blade in hand that has it, a key function, open at the blade's level / branch. */
+    private static void bladeAction(EntityPlayerMP p, com.sc.util.BladeFeature f) {
+        ItemStack blade = com.sc.item.BladeLogicSC.held(p);
+        if (f != null && f.isAction() && blade != null && f.availableIn(com.sc.item.ItemBladeSC.typeOf(blade))
+                && com.sc.item.BladeLogicSC.unlocked(p, blade, f)) {
+            com.sc.item.BladeLogicSC.action(p, f);
+        }
+    }
+
+    /** A drill key function: the same checks - queued, run on the server thread (it digs). */
+    private static void drillAction(final EntityPlayerMP p, final com.sc.util.DrillFeature f) {
+        if (f == null || !f.isAction()) {
+            return;
+        }
+        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {
+            @Override
+            public void run() {
+                ItemStack drill = com.sc.item.DrillLogicSC.held(p);
+                if (drill != null && f.availableIn(com.sc.item.ItemDrillSC.typeOf(drill)) && com.sc.item.DrillLogicSC.unlocked(p, drill, f)) {
+                    com.sc.item.DrillLogicSC.action(p, f);
+                }
+            }
+        });
+    }
+
+    /** Server thread: the free first branch choice of the Singular tool in hand (`blade`: the blade, else the drill). */
+    private static void toolBranch(EntityPlayerMP p, boolean blade, int branch) {
+        ItemStack tool = blade ? com.sc.item.BladeLogicSC.held(p) : com.sc.item.DrillLogicSC.held(p);
+        boolean kind = blade ? com.sc.util.ToolLevelSC.isBlade(tool) : com.sc.util.ToolLevelSC.isDrill(tool);
+        if (kind && com.sc.util.ToolLevelSC.chooseFree(p, tool, branch)) {
+            p.inventoryContainer.detectAndSendChanges();
+            p.addChatComponentMessage(new ChatComponentTranslation("sc.toolgui.branch.chosen",
+                    new ChatComponentTranslation(tool.getItem().getUnlocalizedName(tool) + ".name"),
+                    new ChatComponentTranslation(com.sc.util.ToolLevelSC.branchLangKey(tool, branch))));
         }
     }
 

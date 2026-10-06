@@ -151,6 +151,7 @@ final class BookReferenceSC {
         }
         if ("singularmatter".equals(name)) {
             by.add(GeneratorType.SINGULAR_REACTOR.localizedName());
+            by.add(Lang.tr("sc.book.fluid.compliquid", MachineType.MATTER_COMPRESSOR.localizedName()));   // the liquid mode, the clots too
         }
         return by;
     }

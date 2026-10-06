@@ -64,6 +64,11 @@ public class SCMod {
         com.sc.handler.ConfigSyncSC.init();             // the server's config to joining clients
         com.sc.radiation.RadiationNetSC.init();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new com.sc.radiation.RadiationEventsSC());
+        // the Singular blade's and drill's events (docs/plan-singular-tools.md): Forge's (hits, drops, block breaks) and FML's (ticks)
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.item.BladeEventsSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.item.BladeEventsSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.item.DrillEventsSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.item.DrillEventsSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -122,6 +127,7 @@ public class SCMod {
         com.sc.tileentity.TileEntityGeneratorSC.forgetPorts(null);
         com.sc.bridge.BridgeConsentSC.reset();
         com.sc.tileentity.TileEntityBridgeControllerSC.TEST_PLAYERS.clear();
+        com.sc.item.BladeSingularSC.clearAll();          // the Singular tools' queued keys, collapses, tethers, per-player state
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */

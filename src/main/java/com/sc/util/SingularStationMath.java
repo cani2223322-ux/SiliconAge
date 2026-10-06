@@ -114,6 +114,125 @@ public final class SingularStationMath {
         return out;
     }
 
+    // ------------------------------------------------------------------ the tool slot (docs/plan-singular-tools.md §4)
+
+    /**
+     * The tool in the station's tool slot: none, a blade, a drill. Its conversion (Exo -> Singular, level 1) and its
+     * modernisation join the armour's process (one button, summed costs, the longest time, its own bit in the mask).
+     *  - conversion: blade 400M EU, 1000 SM, 4000 He, 1 Singular core, 4 Nb3Sn plates, 3 min;
+     *                drill 200M EU, 600 SM, 2000 He, 1 Singular core, 2 Nb3Sn plates, 2 min (materials whole, as Б-1);
+     *  - modernisation N -> N+1: TOOL_SHARE percent of the whole set's row (blade 50%, drill 25% - a piece's), its
+     *    minutes, the core catalyst for 4 -> 5 as the armour; resonance EU x 0.9 (the drill's share with the armour's);
+     *  - the drill's modernisation: Singular crumbs in the material slots pay up to CRUMB_MAX_PERCENT of its SM,
+     *    CRUMB_SM mB each (taken whole at the start, given back whole on «Отменить»);
+     *  - branch re-choice: BRANCH_SM, as the chestplate.
+     */
+    public static final int TOOL_NONE = 0, TOOL_BLADE = 1, TOOL_DRILL = 2;
+    private static final long[][] TOOL_CONVERT = {
+        {400000000L, 1000, 4000, 0, 0},
+        {200000000L, 600, 2000, 0, 0},
+    };
+    private static final int[] TOOL_CONVERT_MINUTES = {3, 2};
+    private static final int[][] TOOL_CONVERT_MATERIALS = {
+        {0, 0, 4, 0, 0, 0, 1},
+        {0, 0, 2, 0, 0, 0, 1},
+    };
+    /** Modernisation: the tool pays this percent of the whole set's row (blade, drill). */
+    private static final int[] TOOL_SHARE = {50, 25};
+    /** A crumb pays this much SM (mB); crumbs pay at most this percent of the drill's SM. */
+    public static final int CRUMB_SM = 10, CRUMB_MAX_PERCENT = 50;
+
+    private static boolean toolKind(int tool) {
+        return tool == TOOL_BLADE || tool == TOOL_DRILL;
+    }
+
+    /** The conversion of an Exo tool `tool` (TOOL_*): [EU, SM, He, D, Kr]; none: zeros. */
+    public static long[] toolConvertCost(int tool) {
+        long[] out = new long[RESOURCES];
+        if (toolKind(tool)) {
+            System.arraycopy(TOOL_CONVERT[tool - 1], 0, out, 0, RESOURCES);
+        }
+        return out;
+    }
+
+    public static int toolConvertTicks(int tool) {
+        return toolKind(tool) ? TOOL_CONVERT_MINUTES[tool - 1] * TICKS_PER_MINUTE : 0;
+    }
+
+    public static int[] toolConvertMaterials(int tool) {
+        int[] out = new int[MATERIALS];
+        if (toolKind(tool)) {
+            System.arraycopy(TOOL_CONVERT_MATERIALS[tool - 1], 0, out, 0, MATERIALS);
+        }
+        return out;
+    }
+
+    /** Б-1 with the tool: the armour pieces of `mask` and the Exo tool `tool`, summed. */
+    public static long[] convertCost(int mask, int tool) {
+        long[] out = convertCost(mask), t = toolConvertCost(tool);
+        for (int i = 0; i < RESOURCES; i++) {
+            out[i] += t[i];
+        }
+        return out;
+    }
+
+    public static int convertTicks(int mask, int tool) {
+        return Math.max(convertTicks(mask), toolConvertTicks(tool));
+    }
+
+    public static int[] convertMaterials(int mask, int tool) {
+        int[] out = convertMaterials(mask), t = toolConvertMaterials(tool);
+        for (int i = 0; i < MATERIALS; i++) {
+            out[i] += t[i];
+        }
+        return out;
+    }
+
+    /** The tool `tool` going from `level` (1..4) to the next: its share of the set's row; resonance EU x 0.9. */
+    public static long[] toolModerniseCost(int tool, int level, boolean resonance) {
+        long[] out = new long[RESOURCES];
+        if (!toolKind(tool) || level < 1 || level > 4) {
+            return out;
+        }
+        long[] r = row(level);
+        for (int i = 0; i < RESOURCES; i++) {
+            out[i] = ceilShare(r[i], TOOL_SHARE[tool - 1], 100);
+        }
+        if (resonance) {
+            out[R_EU] = ceilShare(out[R_EU], RESONANCE_EU_PERCENT, 100);
+        }
+        return out;
+    }
+
+    public static int toolModerniseTicks(int tool, int level) {
+        return toolKind(tool) ? minutes(level) * TICKS_PER_MINUTE : 0;
+    }
+
+    /** Crumbs the drill's modernisation takes when `have` lie in the slots and its SM part is `drillSm`: at most 50% of it. */
+    public static int crumbsUsable(long drillSm, int have) {
+        long max = drillSm * CRUMB_MAX_PERCENT / 100 / CRUMB_SM;
+        return (int) Math.max(0L, Math.min(have, max));
+    }
+
+    /**
+     * The modernisation of the armour pieces at `levels` (as moderniseCost) plus the tool `tool` at `toolLevel` (0: not
+     * taking part), `crumbs` of them paying the drill's SM (crumbsUsable already applied by the caller).
+     */
+    public static long[] moderniseCost(int[] levels, int tool, int toolLevel, int crumbs, boolean resonance) {
+        long[] out = moderniseCost(levels, resonance), t = toolModerniseCost(tool, toolLevel, resonance);
+        for (int i = 0; i < RESOURCES; i++) {
+            out[i] += t[i];
+        }
+        if (tool == TOOL_DRILL && crumbs > 0) {
+            out[R_SM] = Math.max(0L, out[R_SM] - Math.min((long) crumbs * CRUMB_SM, t[R_SM] * CRUMB_MAX_PERCENT / 100));
+        }
+        return out;
+    }
+
+    public static int moderniseTicks(int[] levels, int tool, int toolLevel) {
+        return Math.max(moderniseTicks(levels), toolModerniseTicks(tool, toolLevel));
+    }
+
     private SingularStationMath() {
     }
 

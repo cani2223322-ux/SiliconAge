@@ -319,9 +319,12 @@ public final class ArmorKeyBindsSC {
             mc.ingameGUI.func_110326_a(Lang.tr("sc.drillkey.unavailable", name), false);
             return;
         }
-        if (f.isAction()) {
+        if (toolLocked(mc, drill, f, name)) {
+            return;
+        }
+        if (f.isAction()) {                 // every key function, LASER too: one generic message; the server checks the rest and says why not
             if (com.sc.item.ItemDrillSC.isEnabled(drill, f)) {
-                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DRILL_LASER, 0));
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DRILL_ACTION, f.ordinal()));
             } else {
                 mc.ingameGUI.func_110326_a(Lang.tr("sc.armorkey.off", name), false);
             }
@@ -340,10 +343,12 @@ public final class ArmorKeyBindsSC {
             mc.ingameGUI.func_110326_a(Lang.tr("sc.bladekey.unavailable", name), false);
             return;
         }
-        if (f.isAction()) {
+        if (toolLocked(mc, blade, f, name)) {
+            return;
+        }
+        if (f.isAction()) {                 // every key function (sweep / wave / lunge too): one generic message
             if (BladeLogicSC.active(mc.thePlayer, f)) {
-                byte action = f == BladeFeature.SWEEP ? ArmorNetSC.BLADE_SWEEP : f == BladeFeature.WAVE ? ArmorNetSC.BLADE_WAVE : ArmorNetSC.BLADE_LUNGE;
-                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(action, 0));
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BLADE_ACTION, f.ordinal()));
             } else {
                 mc.ingameGUI.func_110326_a(Lang.tr(ItemBladeSC.isLit(blade) ? "sc.bladekey.unavailable" : "sc.bladekey.dark", name), false);
             }
@@ -357,6 +362,27 @@ public final class ArmorKeyBindsSC {
         ItemBladeSC.setEnabled(blade, f, want);
         ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BLADE_TOGGLE, f.ordinal(), want));
         mc.ingameGUI.func_110326_a(Lang.tr(want ? "sc.armorkey.on" : "sc.armorkey.off", name), false);
+    }
+
+    /**
+     * A Singular tool's function its level or branch keeps closed (BladeLogicSC / DrillLogicSC.unlocked):
+     * says so on the action bar («с ур. N» / «нужна ветка») and returns true.
+     */
+    private static boolean toolLocked(Minecraft mc, ItemStack tool, Enum<?> f, String name) {
+        boolean blade = f instanceof BladeFeature;
+        boolean open = blade ? BladeLogicSC.unlocked(mc.thePlayer, tool, (BladeFeature) f)
+                : com.sc.item.DrillLogicSC.unlocked(mc.thePlayer, tool, (com.sc.util.DrillFeature) f);
+        if (open) {
+            return false;
+        }
+        int level = blade ? ((BladeFeature) f).singLevel() : ((com.sc.util.DrillFeature) f).singLevel();
+        int branch = blade ? ((BladeFeature) f).branch() : ((com.sc.util.DrillFeature) f).branch();
+        if (branch != 0 && com.sc.util.ToolLevelSC.effectiveLevel(mc.thePlayer, tool) >= level) {   // the level is there: the branch isn't
+            mc.ingameGUI.func_110326_a(Lang.tr("sc.toolkey.branch", name, Lang.tr(com.sc.util.ToolLevelSC.branchLangKey(tool, branch))), false);
+        } else {
+            mc.ingameGUI.func_110326_a(Lang.tr("sc.armorkey.locked", name, level), false);
+        }
+        return true;
     }
 
     /** While a screen is open nothing fires, and a key held when it closes doesn't fire either. */

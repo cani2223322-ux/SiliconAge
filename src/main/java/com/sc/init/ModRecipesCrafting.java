@@ -592,6 +592,10 @@ public final class ModRecipesCrafting {
                 'H', hf, 'M', comp("matterCapsule"), 'G', coil, 'C', cable(CableType.SINGULAR));
         OreRecipes.shaped(new ItemStack(ModItems.singularCell), " T ", "GHG", " T ",
                 'T', comp("tiPlate"), 'G', new ItemStack(Blocks.glass_pane), 'H', hf);
+        // nine singularity crumbs (the Singular drill's) press into a clot - the Matter Compressor makes it 100 mB of singular matter.
+        // No recipe makes the Singular blade / drill: only the Singular station's conversion of the Exo ones.
+        ItemStack crumb = new ItemStack(ModItems.singularCrumb);
+        OreRecipes.shapeless(new ItemStack(ModItems.singularClot), crumb, crumb, crumb, crumb, crumb, crumb, crumb, crumb, crumb);
     }
 
     /**

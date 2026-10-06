@@ -480,6 +480,10 @@ public final class BookContent {
                         .add(BookEl.para(Lang.tr("sc.manual.comp.liquid", com.sc.tileentity.TileEntityMachineSC.SM_PER_CAPSULE,
                                 com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE, com.sc.tileentity.TileEntityMachineSC.SM_TANK)))
                         .add(BookEl.para(Lang.tr("sc.manual.comp.cell", com.sc.item.ItemSingularCellSC.CAPACITY)));
+                // a singularity clot: SM_PER_CLOT mB at once in the liquid mode (the crumbs' article has the rest)
+                e.add(BookEl.chain(listOf(new ItemStack(ModItems.singularClot), cell), listOf(machineStack(type))))
+                        .add(BookEl.para(Lang.tr("sc.manual.comp.clot", com.sc.item.ItemSingularClotSC.SM_PER_CLOT)))
+                        .add(BookEl.link("singularcrumb", Lang.tr("sc.manual.singcrumb.head")));
                 crafting(e, new ItemStack(ModItems.singularCell));
             }
             if (!recipes.isEmpty()) {
@@ -1071,32 +1075,250 @@ public final class BookContent {
         for (com.sc.util.BladeType type : com.sc.util.BladeType.values()) {
             ItemStack s = new ItemStack(ModItems.BLADES.get(type));
             blades.add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.manual.armor.bladeline", type.offDamage, type.onDamage, type.euPerHit,
-                    type.idlePerSecond, type.maxCharge, type.chargeTier.name(), type.heatCapacity, type.heatDissipation)))
-                    .about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
+                    type.idlePerSecond, type.maxCharge, type.chargeTier.name(), type.heatCapacity, type.heatDissipation)));
+            if (type != com.sc.util.BladeType.SINGULAR) {         // G on the Singular blade: its own article
+                blades.about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
+            }
         }
         for (com.sc.util.BladeFeature f : com.sc.util.BladeFeature.values()) {
+            if (f.isSingular()) {
+                continue;                                         // the Singular blade's own: in its article
+            }
             blades.add(BookEl.item(null, Lang.tr("sc.bladefn." + f.key()), "(" + new ItemStack(ModItems.BLADES.get(f.minType)).getDisplayName() + "+) "
                     + Lang.tr("sc.bladefn." + f.key() + ".desc")));
         }
         for (com.sc.util.BladeType type : com.sc.util.BladeType.values()) {
             blades.add(BookEl.dim(Lang.tr("sc.bladegui.set." + type.key())));
         }
+        blades.add(BookEl.link("singularblade", new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR)).getDisplayName()));
         list.add(blades);
+        singularBlade(list, c);
         BookEntry drills = new BookEntry("drills", c, new ItemStack(ModItems.DRILLS.get(com.sc.util.DrillType.values()[0])), Lang.tr("sc.manual.armor.drillshead"));
         drills.add(BookEl.title(Lang.tr("sc.manual.armor.drillshead"))).addAll(paras("sc.manual.armor.drills"));
         for (com.sc.util.DrillType type : com.sc.util.DrillType.values()) {
             ItemStack s = new ItemStack(ModItems.DRILLS.get(type));
             drills.add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.manual.armor.drillline", type.euPerBlock, (int) type.speed, type.harvestLevel,
-                    type.fortune, type.maxCharge, type.chargeTier.name()))).about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
+                    type.fortune, type.maxCharge, type.chargeTier.name())));
+            if (type != com.sc.util.DrillType.SINGULAR) {         // G on the Singular drill: its own article
+                drills.about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
+            }
         }
         for (com.sc.util.DrillFeature f : com.sc.util.DrillFeature.values()) {
+            if (f.singular()) {
+                continue;                                         // the Singular drill's own: in its article
+            }
             drills.add(BookEl.item(null, Lang.tr("sc.drillfn." + f.key()), "(" + new ItemStack(ModItems.DRILLS.get(f.minType)).getDisplayName() + "+) "
                     + Lang.tr("sc.drillfn." + f.key() + ".desc")));
         }
         for (com.sc.util.DrillType type : com.sc.util.DrillType.values()) {
             drills.add(BookEl.dim(Lang.tr("sc.drillgui.set." + type.key())));
         }
+        drills.add(BookEl.link("singulardrill", new ItemStack(ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR)).getDisplayName()));
         list.add(drills);
+        singularDrill(list, c);
+        singularCrumbs(list, c);
+    }
+
+    // ------------------------------------------------------------------ the Singular blade and drill (docs/plan-singular-tools.md)
+
+    private static String shortEu(long eu) {
+        return com.sc.util.SingularStationMath.shortAmount(eu, Lang.tr("sc.singStation.unit.k"), Lang.tr("sc.singStation.unit.m"),
+                Lang.tr("sc.singStation.unit.b"));
+    }
+
+    /** The share (percent) of the whole set's modernisation row a Singular tool pays (TOOL_BLADE / TOOL_DRILL). */
+    private static long toolShare(int tool) {
+        return Math.round(100.0 * com.sc.util.SingularStationMath.toolModerniseCost(tool, 1, false)[0]
+                / Math.max(1L, com.sc.util.SingularStationMath.row(1)[0]));
+    }
+
+    /** The conversion card of an Exo tool (TOOL_BLADE / TOOL_DRILL): Exo -> (the station) -> Singular, materials, EU / gases, time. */
+    private static void toolConvertCard(BookEntry e, int tool) {
+        boolean blade = tool == com.sc.util.SingularStationMath.TOOL_BLADE;
+        ItemStack exo = blade ? new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.EXO)) : new ItemStack(ModItems.DRILLS.get(com.sc.util.DrillType.EXO));
+        ItemStack sing = blade ? new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR))
+                : new ItemStack(ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR));
+        e.add(BookEl.chain(listOf(exo, sing), listOf(new ItemStack(ModBlocks.singularStation))));
+        int[] need = com.sc.util.SingularStationMath.toolConvertMaterials(tool);
+        List<ItemStack> mats = new ArrayList<ItemStack>();
+        for (int k = 0; k < need.length; k++) {
+            if (need[k] > 0) {
+                mats.add(com.sc.tileentity.TileEntitySingularStationSC.materialStack(k, need[k]));
+            }
+        }
+        e.add(BookEl.items(mats));
+        long[] cost = com.sc.util.SingularStationMath.toolConvertCost(tool);
+        e.add(BookEl.dim(Lang.tr("sc.manual.singstation.convrow", sing.getDisplayName(), shortEu(cost[0]), cost[1], cost[2], cost[3],
+                com.sc.util.SingularStationMath.toolConvertTicks(tool) / com.sc.util.SingularStationMath.TICKS_PER_MINUTE)));
+    }
+
+    /** The modernisation rows of a Singular tool: N -> N+1 its share of the set's row, the time. */
+    private static void toolModerniseRows(BookEntry e, int tool) {
+        e.add(BookEl.para(Lang.tr("sc.manual.singtool.modernise", toolShare(tool))));
+        for (int lvl = com.sc.util.ToolLevelSC.MIN; lvl < com.sc.util.ToolLevelSC.MAX; lvl++) {
+            long[] r = com.sc.util.SingularStationMath.toolModerniseCost(tool, lvl, false);
+            e.add(BookEl.dim(Lang.tr("sc.manual.singstation.row", lvl, lvl + 1, shortEu(r[0]), r[1], r[2], r[3], r[4],
+                    com.sc.util.SingularStationMath.toolModerniseTicks(tool, lvl) / com.sc.util.SingularStationMath.TICKS_PER_MINUTE)));
+        }
+    }
+
+    /** The level table of a Singular tool: points to the next level, what each level opens (functions, forms, zone, branch). */
+    private static BookEl toolLevels(boolean blade) {
+        BookEl t = BookEl.table(Lang.tr("sc.manual.singtool.t.level"), Lang.tr("sc.manual.singtool.t.points"), Lang.tr("sc.manual.singtool.t.opens"));
+        for (int lv = com.sc.util.ToolLevelSC.MIN; lv <= com.sc.util.ToolLevelSC.MAX; lv++) {
+            StringBuilder opens = new StringBuilder();
+            if (blade) {
+                for (com.sc.util.BladeForm f : com.sc.util.BladeForm.values()) {
+                    if (f.level == lv) {
+                        opens.append(opens.length() > 0 ? ", " : "").append(Lang.tr(f.langKey()))
+                                .append(f.branch != 0 ? " (" + Lang.tr("sc.toolbranch.blade." + f.branch) + ")" : "");
+                    }
+                }
+                for (com.sc.util.BladeFeature f : com.sc.util.BladeFeature.values()) {
+                    if (f.isSingular() && f.singLevel() == lv && f != com.sc.util.BladeFeature.FORM_ATTACK) {
+                        opens.append(opens.length() > 0 ? ", " : "").append(Lang.tr("sc.bladefn." + f.key()));
+                    }
+                }
+            } else {
+                for (com.sc.util.DrillFeature f : com.sc.util.DrillFeature.values()) {
+                    if (f.singular() && f.singLevel() == lv) {
+                        opens.append(opens.length() > 0 ? ", " : "").append(Lang.tr("sc.drillfn." + f.key()));
+                    }
+                }
+                int h = com.sc.util.DrillZoneSC.maxHole(lv);
+                if (lv == com.sc.util.ToolLevelSC.MIN || h > com.sc.util.DrillZoneSC.maxHole(lv - 1)) {
+                    opens.append(opens.length() > 0 ? ", " : "").append(Lang.tr("sc.toolgui.hole.size", h, h));
+                }
+            }
+            if (lv == com.sc.util.ToolLevelSC.BRANCH_LEVEL || lv == com.sc.util.ToolLevelSC.BRANCH_PERK_LEVEL) {
+                opens.append(opens.length() > 0 ? "; " : "").append(Lang.tr(lv == com.sc.util.ToolLevelSC.BRANCH_LEVEL
+                        ? "sc.manual.singtool.t.branch" : "sc.manual.singtool.t.perk"));
+            }
+            int need = com.sc.util.ToolLevelSC.threshold(blade, lv);
+            t.row(null, String.valueOf(lv), need > 0 ? num(need) : "-", opens.length() > 0 ? opens.toString() : "-");
+        }
+        return t;
+    }
+
+    /** The Singular blade: what it is, how to get it, levels, forms, functions, branches, gases and the set, keys. */
+    private static void singularBlade(List<BookEntry> list, BookChapter c) {
+        com.sc.util.BladeType type = com.sc.util.BladeType.SINGULAR;
+        ItemStack s = new ItemStack(ModItems.BLADES.get(type));
+        int tool = com.sc.util.SingularStationMath.TOOL_BLADE;
+        BookEntry e = new BookEntry("singularblade", c, s, s.getDisplayName());
+        e.add(BookEl.title(s.getDisplayName())).add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.manual.armor.bladeline", type.offDamage,
+                type.onDamage, type.euPerHit, type.idlePerSecond, type.maxCharge, type.chargeTier.name(), type.heatCapacity, type.heatDissipation)));
+        e.addAll(paras("sc.manual.singblade.intro", null, new Object[]{Math.round((1F - com.sc.util.ToolLevelSC.LEGACY_MUL) * 100)}));
+        // how to get it: the Exo blade converted in the Singular station
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.gethead"))).addAll(paras("sc.manual.singtool.get"));
+        toolConvertCard(e, tool);
+        // levels: points, the table, the station's price
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.levelhead"))).addAll(paras("sc.manual.singblade.level"));
+        e.add(toolLevels(true));
+        toolModerniseRows(e, tool);
+        // forms (Shift + wheel) and their special attacks
+        e.add(BookEl.head(Lang.tr("sc.manual.singblade.formshead"))).addAll(paras("sc.manual.singblade.forms"));
+        for (com.sc.util.BladeForm f : com.sc.util.BladeForm.values()) {
+            String name = Lang.tr("sc.toolgui.lv", Lang.tr(f.langKey()), f.level) + (f.branch != 0 ? ", " + Lang.tr("sc.toolbranch.blade." + f.branch) : "");
+            String attack = com.sc.util.BladeFeature.formAttackKey(f);
+            e.add(BookEl.item(null, name, Lang.tr("sc.manual.singblade.formline", Lang.tr(f.langKey() + ".desc"), Lang.tr(attack),
+                    Lang.tr(attack + ".desc"))));
+        }
+        // its own functions, by level
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.fnhead"))).addAll(paras("sc.manual.singblade.fn"));
+        for (com.sc.util.BladeFeature f : com.sc.util.BladeFeature.values()) {
+            if (f.isSingular()) {
+                e.add(BookEl.item(null, Lang.tr("sc.bladefn." + f.key()), Lang.tr("sc.manual.singtool.fnline", f.singLevel(),
+                        Lang.tr("sc.bladefn." + f.key() + ".desc"))));
+            }
+        }
+        // branches: chosen at level 3, the same choice's perk at 5
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.branchhead"))).addAll(paras("sc.manual.singtool.branch",
+                new Object[]{com.sc.util.ToolLevelSC.BRANCH_LEVEL, com.sc.util.ToolLevelSC.BRANCH_PERK_LEVEL, com.sc.util.SingularStationMath.BRANCH_SM}));
+        for (int b = 1; b <= com.sc.util.ToolLevelSC.branchCount(true); b++) {
+            e.add(BookEl.item(null, Lang.tr("sc.toolbranch.blade." + b), Lang.tr("sc.singStation.toolbranch.blade." + b + ".hint")));
+        }
+        e.add(BookEl.dim(Lang.tr("sc.manual.singblade.lastchance", com.sc.util.BladeFeature.LAST_CHANCE_COOLDOWN / 1200,
+                com.sc.util.BladeFeature.LAST_CHANCE_SM)));
+        // gases from the worn armour, the full set
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.gashead"))).addAll(paras("sc.manual.singtool.gas", null,
+                new Object[]{Math.round((1F - com.sc.util.ToolLevelSC.SET_COOLDOWN_MUL) * 100)}));
+        e.add(BookEl.dim(Lang.tr("sc.bladegui.set.singular")));
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.keyshead"))).addAll(paras("sc.manual.singblade.keys"));
+        e.add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()))
+                .add(BookEl.link("singulararmor", Lang.tr("sc.manual.singular.head"))).add(BookEl.link("blades", Lang.tr("sc.manual.armor.bladeshead")))
+                .add(BookEl.link("keys", Lang.tr("sc.book.keys.title")));
+        e.about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
+        list.add(e);
+    }
+
+    /** The Singular drill: what it is, how to get it, levels, functions, the black hole and its crumbs, branches. */
+    private static void singularDrill(List<BookEntry> list, BookChapter c) {
+        com.sc.util.DrillType type = com.sc.util.DrillType.SINGULAR;
+        ItemStack s = new ItemStack(ModItems.DRILLS.get(type));
+        int tool = com.sc.util.SingularStationMath.TOOL_DRILL;
+        BookEntry e = new BookEntry("singulardrill", c, s, s.getDisplayName());
+        e.add(BookEl.title(s.getDisplayName())).add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.manual.armor.drillline", type.euPerBlock,
+                (int) type.speed, type.harvestLevel, type.fortune, type.maxCharge, type.chargeTier.name())));
+        e.addAll(paras("sc.manual.singdrill.intro", null, new Object[]{Math.round((1F - com.sc.util.ToolLevelSC.LEGACY_MUL) * 100)}));
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.gethead"))).addAll(paras("sc.manual.singtool.get"));
+        toolConvertCard(e, tool);
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.levelhead"))).addAll(paras("sc.manual.singdrill.level",
+                new Object[]{com.sc.util.DrillFeature.BLOCKS_PER_POINT, com.sc.item.ItemSingularCrumbSC.CRUMB_POINTS}));
+        e.add(toolLevels(false));
+        toolModerniseRows(e, tool);
+        e.add(BookEl.dim(Lang.tr("sc.manual.singdrill.crumbpay", com.sc.util.SingularStationMath.CRUMB_SM, com.sc.util.SingularStationMath.CRUMB_MAX_PERCENT)));
+        // its own functions, by level
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.fnhead")));
+        for (com.sc.util.DrillFeature f : com.sc.util.DrillFeature.values()) {
+            if (f.singular()) {
+                e.add(BookEl.item(null, Lang.tr("sc.drillfn." + f.key()), Lang.tr("sc.manual.singtool.fnline", f.singLevel(),
+                        Lang.tr("sc.drillfn." + f.key() + ".desc"))));
+            }
+        }
+        // the black hole mode: sizes, what it never touches, the cost, the crumbs
+        e.add(BookEl.head(Lang.tr("sc.manual.singdrill.holehead"))).addAll(paras("sc.manual.singdrill.hole",
+                new Object[]{com.sc.util.DrillZoneSC.maxHole(1), com.sc.util.DrillZoneSC.maxHole(3), com.sc.util.DrillZoneSC.maxHole(5),
+                        com.sc.util.DrillZoneSC.HOLE_TUNNEL},
+                null,
+                new Object[]{Math.round(com.sc.util.DrillFeature.HOLE_EU_MUL * 100), com.sc.util.DrillFeature.HOLE_BLOCKS_PER_MB,
+                        number(com.sc.util.DrillFeature.BLACK_HOLE.cooldownTicks() / 20F)},
+                new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS, com.sc.item.ItemSingularCrumbSC.ORE_MUL}));
+        e.add(BookEl.link("singularcrumb", Lang.tr("sc.manual.singcrumb.head")));
+        // branches
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.branchhead"))).addAll(paras("sc.manual.singtool.branch",
+                new Object[]{com.sc.util.ToolLevelSC.BRANCH_LEVEL, com.sc.util.ToolLevelSC.BRANCH_PERK_LEVEL, com.sc.util.SingularStationMath.BRANCH_SM}));
+        for (int b = 1; b <= com.sc.util.ToolLevelSC.branchCount(false); b++) {
+            e.add(BookEl.item(null, Lang.tr("sc.toolbranch.drill." + b), Lang.tr("sc.toolbranch.drill." + b + ".desc")));
+        }
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.gashead"))).addAll(paras("sc.manual.singtool.gas", null,
+                new Object[]{Math.round((1F - com.sc.util.ToolLevelSC.SET_COOLDOWN_MUL) * 100)}));
+        e.add(BookEl.dim(Lang.tr("sc.drillgui.set.singular")));
+        e.add(BookEl.head(Lang.tr("sc.manual.singtool.keyshead"))).addAll(paras("sc.manual.singdrill.keys"));
+        e.add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()))
+                .add(BookEl.link("singulararmor", Lang.tr("sc.manual.singular.head"))).add(BookEl.link("drills", Lang.tr("sc.manual.armor.drillshead")))
+                .add(BookEl.link("keys", Lang.tr("sc.book.keys.title")));
+        e.about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
+        list.add(e);
+    }
+
+    /** Singularity crumbs and the clot: only from the black hole; points, the station, the compressor. */
+    private static void singularCrumbs(List<BookEntry> list, BookChapter c) {
+        ItemStack crumb = new ItemStack(ModItems.singularCrumb), clot = new ItemStack(ModItems.singularClot);
+        BookEntry e = new BookEntry("singularcrumb", c, crumb, Lang.tr("sc.manual.singcrumb.head"));
+        e.add(BookEl.title(Lang.tr("sc.manual.singcrumb.head"))).add(BookEl.items(listOf(crumb, clot)));
+        e.addAll(paras("sc.manual.singcrumb", new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS, com.sc.item.ItemSingularCrumbSC.ORE_MUL},
+                new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_POINTS},
+                new Object[]{com.sc.util.SingularStationMath.CRUMB_SM, com.sc.util.SingularStationMath.CRUMB_MAX_PERCENT}));
+        e.add(BookEl.head(clot.getDisplayName(), clot)).add(BookEl.para(Lang.tr("sc.manual.singclot", com.sc.item.ItemSingularClotSC.SM_PER_CLOT)));
+        crafting(e, clot);
+        ItemStack sm = com.sc.item.ItemSingularCellSC.filled(ModItems.singularCell, com.sc.item.ItemSingularClotSC.SM_PER_CLOT);
+        e.add(BookEl.chain(listOf(clot, sm), listOf(machineStack(MachineType.MATTER_COMPRESSOR))));
+        e.add(BookEl.link("singulardrill", new ItemStack(ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR)).getDisplayName()))
+                .add(BookEl.link("machine." + MachineType.MATTER_COMPRESSOR.name().toLowerCase(Locale.ROOT), MachineType.MATTER_COMPRESSOR.localizedName()))
+                .add(BookEl.link("singularstation", new ItemStack(ModBlocks.singularStation).getDisplayName()));
+        e.about(new ItemStack(ModItems.singularCrumb, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModItems.singularClot, 1, OreDictionary.WILDCARD_VALUE));
+        list.add(e);
     }
 
     /** The Singular Service Station and the Gravitational Stabiliser (docs/plan-singular-armor.md §7). */
@@ -1127,6 +1349,15 @@ public final class BookContent {
         e.add(BookEl.head(Lang.tr("sc.manual.singstation.convhead"))).addAll(paras("sc.manual.singstation.conv"));
         convertCards(e);
         crafting(e, st);
+        // the tool slot (docs/plan-singular-tools.md §4): the Exo blade / drill converted, the Singular ones modernised
+        e.add(BookEl.head(Lang.tr("sc.manual.singstation.toolhead"))).addAll(paras("sc.manual.singstation.tool", null,
+                new Object[]{toolShare(com.sc.util.SingularStationMath.TOOL_BLADE), toolShare(com.sc.util.SingularStationMath.TOOL_DRILL),
+                        com.sc.util.SingularStationMath.CRUMB_SM, com.sc.util.SingularStationMath.CRUMB_MAX_PERCENT,
+                        com.sc.util.SingularStationMath.BRANCH_SM}));
+        toolConvertCard(e, com.sc.util.SingularStationMath.TOOL_BLADE);
+        toolConvertCard(e, com.sc.util.SingularStationMath.TOOL_DRILL);
+        e.add(BookEl.link("singularblade", new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR)).getDisplayName()))
+                .add(BookEl.link("singulardrill", new ItemStack(ModItems.DRILLS.get(com.sc.util.DrillType.SINGULAR)).getDisplayName()));
         e.add(BookEl.dim(Lang.tr("sc.manual.singstation.carry")));      // МК-3: the Armour Station's contents go over
         crafting(e, stab);
         e.about(st, stab);

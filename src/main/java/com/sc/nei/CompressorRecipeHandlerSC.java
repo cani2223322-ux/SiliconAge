@@ -26,7 +26,8 @@ import net.minecraftforge.oredict.OreDictionary;
  * NEI page of the Matter Compressor. It has no recipe list - any item without NBT becomes mass -
  * so the page shows examples (stone, the heavy-metal blocks, dirt) with how many of each make one
  * Compressed Matter Capsule, and for a heavy metal (U on it) how much mass it gives. R on the
- * capsule, U on the machine and a click on its screen's progress bar open it as well.
+ * capsule, U on the machine and a click on its screen's progress bar open it as well. The last page: a
+ * singularity clot in the liquid mode - ItemSingularClotSC.SM_PER_CLOT mB of singular matter at once.
  */
 public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
 
@@ -100,6 +101,7 @@ public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
             for (ItemStack s : examples()) {
                 arecipes.add(new CachedCompress(s));
             }
+            addClot();
         } else {
             super.loadCraftingRecipes(outputId, results);
         }
@@ -116,10 +118,21 @@ public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
         }
     }
 
+    /** The clot's page (liquid mode): one clot -> SM_PER_CLOT mB of singular matter. */
+    private void addClot() {
+        if (com.sc.init.ModItems.singularClot != null && com.sc.init.ModItems.singularCell != null && com.sc.init.ModFluids.singularMatter != null) {
+            arecipes.add(new CachedCompress());
+        }
+    }
+
     @Override
     public void loadUsageRecipes(ItemStack ingredient) {
         if (NEIServerUtils.areStacksSameTypeCrafting(ingredient, MachineRecipeHandlerSC.machineStack(TYPE))) {
             loadCraftingRecipes(ownId());
+            return;
+        }
+        if (com.sc.item.ItemSingularClotSC.isClot(ingredient)) {
+            addClot();
             return;
         }
         // only the heavy metals: every other item would carry a page that only says "it fits too"
@@ -147,6 +160,13 @@ public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
     @Override
     public void drawExtras(int recipe) {
         CachedCompress r = (CachedCompress) arecipes.get(recipe);
+        if (r.clot) {
+            drawFit(Lang.tr("sc.nei.comp.clot", com.sc.item.ItemSingularClotSC.SM_PER_CLOT), 22, 45, 166 - 24, 0xD080FF);
+            drawFit(Lang.tr("sc.nei.comp.clot.mode"), 22, 54, 166 - 24, com.sc.inventory.GuiHoloSC.VALUE);
+            com.sc.inventory.GuiHoloSC.glint(0, 0, 166, 63);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
+            return;
+        }
         String time = String.format(java.util.Locale.ROOT, "%.1f",
                 TileEntityMachineSC.configTicks(TileEntityMachineSC.COMPRESS_TICKS) / 20F);
         GuiDraw.drawString(Lang.tr("sc.nei.cost", TileEntityMachineSC.configEuPerTick(TYPE), time), 22, 45,
@@ -173,6 +193,12 @@ public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
     @Override
     public List<String> handleItemTooltip(codechicken.nei.recipe.GuiRecipe guiRecipe, ItemStack stack, List<String> currenttip, int recipe) {
         CachedCompress r = (CachedCompress) arecipes.get(recipe);
+        if (r.clot) {
+            if (guiRecipe.isMouseOver(r.in, recipe)) {
+                currenttip.add("§d" + Lang.tr("sc.nei.comp.clot.tip"));
+            }
+            return super.handleItemTooltip(guiRecipe, stack, currenttip, recipe);
+        }
         if (guiRecipe.isMouseOver(r.in, recipe)) {
             currenttip.add("§c" + Lang.tr("sc.nei.comp.tip", r.mass));
             currenttip.add("§8" + Lang.tr("sc.nei.comp.any"));
@@ -188,9 +214,22 @@ public class CompressorRecipeHandlerSC extends TemplateRecipeHandler {
     public class CachedCompress extends CachedRecipe {
         final PositionedStack in, out;
         final int mass, needed;
+        final boolean clot;
         final List<PositionedStack> others = new ArrayList<PositionedStack>();
 
+        /** The singularity clot: SM_PER_CLOT mB in a Singular Matter Cell (the liquid mode). */
+        CachedCompress() {
+            clot = true;
+            mass = 0;
+            needed = 1;
+            in = new PositionedStack(new ItemStack(com.sc.init.ModItems.singularClot), IN_X, IN_Y);
+            out = new PositionedStack(com.sc.item.ItemSingularCellSC.filled(com.sc.init.ModItems.singularCell,
+                    com.sc.item.ItemSingularClotSC.SM_PER_CLOT), OUT_X, OUT_Y);
+            others.add(new PositionedStack(MachineRecipeHandlerSC.machineStack(TYPE), 3, 44));
+        }
+
         CachedCompress(ItemStack input) {
+            clot = false;
             ItemStack i = input.copy();
             mass = Math.max(1, TileEntityMachineSC.matterMass(i));
             needed = (TileEntityMachineSC.MATTER_PER_CAPSULE + mass - 1) / mass;

@@ -17,7 +17,7 @@ import net.minecraft.util.ChatComponentTranslation;
 /**
  * The Singular Service Station's screen (GuiSingularStationSC, W x H - fits a 320 x 240 screen):
  * the four armour slots, the module row, the donor and catalyst slots, the six conversion material
- * slots (Б-1, 3 x 2), the player's inventory; the
+ * slots (Б-1, 3 x 2), the tool slot (a blade or a drill, every tab), the player's inventory; the
  * station's numbers and its running process synced. A slot a process holds can't be taken (ПР6).
  * The positions here are the compact layout's start; the screen moves every slot to its layout and tab
  * (the slots of the other tabs off screen - they take nothing then, see slotInTab).
@@ -29,7 +29,7 @@ public class ContainerSingularStationSC extends Container {
             BTN_FILL = ContainerArmorStationSC.BTN_FILL, BTN_GAS = ContainerArmorStationSC.BTN_GAS, BTN_CHARGE = 14,
             BTN_MODERNISE = 40, BTN_CANCEL = 41, BTN_SYNC = 42, BTN_TRANSFER = 43, BTN_SCHEME_PREV = 44, BTN_SCHEME_NEXT = 45,
             BTN_CONVERT = 46, BTN_LINK = 47, BTN_BRANCH = 50, BTN_CLEAR = ContainerArmorStationSC.BTN_CLEAR, BTN_HELIUM = ContainerArmorStationSC.BTN_HELIUM,
-            BTN_TAB = 60;
+            BTN_TAB = 60, BTN_TOOL_BRANCH = 70;
     /**
      * The screen's tabs (GuiSingularStationSC); the client tells the server which one is open (BTN_TAB + tab), the
      * slots of the other tabs then take nothing (shift-click included) - what lies in them stays there.
@@ -75,9 +75,14 @@ public class ContainerSingularStationSC extends Container {
         tab = t >= 0 && t < TABS ? t : -1;
     }
 
-    /** Whether the station's slot `slot` belongs to tab `tab` (the armour and module slots: every tab; -1: all). */
+    /** Whether the station's slot `slot` belongs to tab `tab` (the armour, module and tool slots: every tab; -1: all). */
     public static boolean slotInTab(int tab, int slot) {
-        if (tab < 0 || slot < TileEntitySingularStationSC.DONOR_SLOT) {
+        return slotInTab(tab, slot, false);
+    }
+
+    /** The same; `crumbs`: a Singular drill lies in the tool slot - the material slots open on the modernisation tab too (its crumbs). */
+    public static boolean slotInTab(int tab, int slot, boolean crumbs) {
+        if (tab < 0 || slot < TileEntitySingularStationSC.DONOR_SLOT || slot == TileEntitySingularStationSC.TOOL_SLOT) {
             return true;
         }
         if (slot == TileEntitySingularStationSC.DONOR_SLOT) {
@@ -86,7 +91,12 @@ public class ContainerSingularStationSC extends Container {
         if (slot == TileEntitySingularStationSC.CATALYST_SLOT) {
             return tab == TAB_MODERN || tab == TAB_CONVERT;
         }
-        return tab == TAB_CONVERT;
+        return tab == TAB_CONVERT || crumbs && tab == TAB_MODERN;
+    }
+
+    /** slotInTab for this screen's open tab and the station's tool. */
+    boolean open(int slot) {
+        return slotInTab(tab, slot, com.sc.util.ToolLevelSC.isDrill(te.getTool()));
     }
 
     /** The tab a process kind belongs to. */
@@ -112,6 +122,7 @@ public class ContainerSingularStationSC extends Container {
         for (int i = 0; i < TileEntitySingularStationSC.MATERIAL_SLOTS; i++) {
             addSlotToContainer(new SlotMaterial(te, TileEntitySingularStationSC.MATERIAL_SLOT + i, matX(i), matY(i)).in(this));
         }
+        addSlotToContainer(new SlotExtra(te, TileEntitySingularStationSC.TOOL_SLOT, PIECE_X, ROW_Y + TileEntityArmorStationSC.SLOTS * ROW_STEP + 3).in(this));
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlotToContainer(new Slot(playerInv, col + row * 9 + 9, INV_X + col * 18, INV_Y + row * 18));
@@ -145,7 +156,7 @@ public class ContainerSingularStationSC extends Container {
         }
     }
 
-    /** The donor (a Singular piece) or the catalyst (a Singular core): one item, locked during a process. */
+    /** The donor (a Singular piece), the catalyst (a Singular core) or the tool (an Exo / Singular blade or drill): one item, locked during a process. */
     public static class SlotExtra extends Slot {
         private final TileEntitySingularStationSC st;
         private ContainerSingularStationSC owner;
@@ -162,7 +173,7 @@ public class ContainerSingularStationSC extends Container {
 
         @Override
         public boolean isItemValid(ItemStack stack) {
-            return (owner == null || slotInTab(owner.tab, getSlotIndex())) && st.isItemValidForSlot(getSlotIndex(), stack);
+            return (owner == null || owner.open(getSlotIndex())) && st.isItemValidForSlot(getSlotIndex(), stack);
         }
 
         @Override
@@ -191,7 +202,7 @@ public class ContainerSingularStationSC extends Container {
 
         @Override
         public boolean isItemValid(ItemStack stack) {
-            return (owner == null || slotInTab(owner.tab, getSlotIndex())) && inventory.isItemValidForSlot(getSlotIndex(), stack);
+            return (owner == null || owner.open(getSlotIndex())) && inventory.isItemValidForSlot(getSlotIndex(), stack);
         }
     }
 
@@ -215,6 +226,10 @@ public class ContainerSingularStationSC extends Container {
         }
         if (id >= BTN_CLEAR && id < BTN_CLEAR + GASES) {
             te.clearTank(Gas.values()[id - BTN_CLEAR]);
+            return true;
+        }
+        if (id >= BTN_TOOL_BRANCH && id < BTN_TOOL_BRANCH + 3) {
+            say(player, te.changeToolBranch(id - BTN_TOOL_BRANCH + 1));
             return true;
         }
         if (id >= BTN_BRANCH && id < BTN_BRANCH + 4) {
@@ -344,7 +359,7 @@ public class ContainerSingularStationSC extends Container {
             // a module: into the module row
         } else {
             boolean moved = false;
-            int[] targets = {0, 1, 2, 3, TileEntitySingularStationSC.DONOR_SLOT, TileEntitySingularStationSC.CATALYST_SLOT};
+            int[] targets = {0, 1, 2, 3, TileEntitySingularStationSC.TOOL_SLOT, TileEntitySingularStationSC.DONOR_SLOT, TileEntitySingularStationSC.CATALYST_SLOT};
             for (int k = 0; k < targets.length && !moved; k++) {
                 Slot target = (Slot) inventorySlots.get(targets[k]);
                 if (!target.getHasStack() && target.isItemValid(original)) {
@@ -352,8 +367,9 @@ public class ContainerSingularStationSC extends Container {
                     moved = true;
                 }
             }
-            if (!moved && TileEntitySingularStationSC.materialKind(original) >= 0) {   // a conversion material: into the material slots
-                moved = SlotMergeSC.mergeValid(inventorySlots, original, TileEntitySingularStationSC.MATERIAL_SLOT, TileEntitySingularStationSC.SING_SLOTS);
+            if (!moved && (TileEntitySingularStationSC.materialKind(original) >= 0 || TileEntitySingularStationSC.isCrumb(original))) {
+                // a conversion material or crumbs: into the material slots
+                moved = SlotMergeSC.mergeValid(inventorySlots, original, TileEntitySingularStationSC.MATERIAL_SLOT, TileEntitySingularStationSC.MATERIAL_END);
             }
             if (!moved && !mergeItemStack(original, index < hotbar ? hotbar : own, index < hotbar ? end : hotbar, false)) {
                 return null;

@@ -24,11 +24,13 @@ import net.minecraftforge.common.DimensionManager;
  * with a Singular helmet of level 1, scheme A, the same charge and helium, the tanks paying the rest
  * of the row. Station B starts the same and is cancelled: the materials come back whole, the helmet
  * stays Exo. Station C gets a whole Exo set and its materials in the six material slots (the Singular
- * core in the catalyst slot) and converts all four pieces in one process. The blocks are removed afterwards.
+ * core in the catalyst slot) and converts all four pieces in one process. Station D converts a charged Exo blade
+ * with a switched-off function in its tool slot (a Singular core + 4 Nb3Sn plates): a Singular blade of level 1, the
+ * same charge and switches. The blocks are removed afterwards.
  */
 public class WorldTestSingConvertSC {
 
-    private static final int AX = 270, BX = 280, CX = 290, Y = 200, Z = 90, SM = 300, HE = 4000, CHARGE = 5000;
+    private static final int AX = 270, BX = 280, CX = 290, DX = 300, Y = 200, Z = 90, SM = 300, HE = 4000, CHARGE = 5000, BLADE_EU = 3000000;
     private int ticks;
     private int heInHelm = -1;
     private long smLeftToDraw = -1, heLeftToDraw = -1;
@@ -47,6 +49,7 @@ public class WorldTestSingConvertSC {
             build(w, AX);
             build(w, BX);
             buildSet(w, CX);
+            buildTool(w, DX);
         }
         if (ticks == 60) {
             TileEntitySingularStationSC a = st(w, AX), b = st(w, BX);
@@ -74,6 +77,18 @@ public class WorldTestSingConvertSC {
                     + "): 6 material slots + the core, mask " + (pc == null ? "-" : pc.mask) + ", items " + (pc == null ? "-" : pc.items.size()));
             if (pc != null) {
                 c.fastForwardForTest(0.97);
+            }
+            TileEntitySingularStationSC d = st(w, DX);
+            String sd = d == null ? "no tile" : d.startConvertFor("");
+            SingularProcessSC pd = d == null ? null : d.getProcess();
+            boolean dOk = sd == null && pd != null && pd.mask == 1 << TileEntitySingularStationSC.TOOL_BIT && pd.cost[0] == 400000000L
+                    && pd.cost[1] == 1000 && pd.cost[2] == 4000 && pd.items.size() == 2 && d.isLocked(TileEntitySingularStationSC.TOOL_SLOT)
+                    && d.getStackInSlot(TileEntitySingularStationSC.MATERIAL_SLOT) == null;
+            System.out.println("[SC-WORLDTEST] " + (dOk ? "PASS" : "FAIL") + " singular station converts an Exo blade (" + sd + "): mask "
+                    + (pd == null ? "-" : pd.mask) + ", cost " + (pd == null ? "-" : pd.cost[0] + " EU / SM " + pd.cost[1] + " / He " + pd.cost[2])
+                    + ", the tool slot locked");
+            if (pd != null) {
+                d.fastForwardForTest(0.97);
             }
             if (p != null) {
                 a.fastForwardForTest(0.97);
@@ -117,6 +132,19 @@ public class WorldTestSingConvertSC {
             System.out.println("[SC-WORLDTEST] " + (cOk ? "PASS" : "FAIL") + " singular conversion of a whole Exo set done in one process: " + lv
                     + ", finished " + (c == null ? 0 : c.completedCount()));
             w.setBlockToAir(CX, Y, Z);
+            TileEntitySingularStationSC d = st(w, DX);
+            ItemStack bl = d == null ? null : d.getStackInSlot(TileEntitySingularStationSC.TOOL_SLOT);
+            boolean dOk = d != null && d.getProcess() == null && d.completedCount() == 1 && com.sc.util.ToolLevelSC.isBlade(bl)
+                    && com.sc.util.ToolLevelSC.levelOf(bl) == 1 && com.sc.item.ItemBladeSC.chargeOf(bl) == BLADE_EU
+                    && !com.sc.item.ItemBladeSC.isEnabled(bl, com.sc.util.BladeFeature.EXECUTE)
+                    && com.sc.util.ToolLevelSC.schemeOf(bl) == SingularScheme.DEFAULT && !d.isLocked(TileEntitySingularStationSC.TOOL_SLOT);
+            System.out.println("[SC-WORLDTEST] " + (dOk ? "PASS" : "FAIL") + " singular station: Exo blade -> " + (bl == null ? "-" : bl.getDisplayName())
+                    + ", level " + com.sc.util.ToolLevelSC.levelOf(bl) + ", charge " + (bl == null ? -1 : com.sc.item.ItemBladeSC.chargeOf(bl))
+                    + "/" + BLADE_EU + ", finished " + (d == null ? 0 : d.completedCount()));
+            if (d != null) {
+                d.setInventorySlotContents(TileEntitySingularStationSC.TOOL_SLOT, null);   // no blade dropped by the removal
+            }
+            w.setBlockToAir(DX, Y, Z);
         }
     }
 
@@ -165,6 +193,31 @@ public class WorldTestSingConvertSC {
         s.setInventorySlotContents(m + 3, new ItemStack(ModItems.component("fusionCore")));
         s.setInventorySlotContents(m + 4, new ItemStack(ModItems.battery, 1, 5));
         s.setInventorySlotContents(m + 5, hf);
+    }
+
+    /** Station D: a charged Exo blade (EXECUTE switched off) in the tool slot, a Singular core and 4 Nb3Sn plates, SM and helium for the rest. */
+    private static void buildTool(World w, int x) {
+        w.setBlock(x, Y, Z, ModBlocks.singularStation);
+        TileEntitySingularStationSC s = st(w, x);
+        if (s == null) {
+            return;
+        }
+        s.setPowerOn(true);
+        if (s.isChargeOn()) {
+            s.toggleCharge();
+        }
+        if (s.isFillGases()) {
+            s.toggleFillGases();
+        }
+        s.setEnergyStoredClient(13000000);
+        s.fillTank(Gas.SINGULAR_MATTER, 1000, true);
+        s.fillTank(Gas.HELIUM, HE, true);
+        ItemStack blade = new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.EXO));
+        com.sc.item.ItemBladeSC.setCharge(blade, BLADE_EU);
+        com.sc.item.ItemBladeSC.setEnabled(blade, com.sc.util.BladeFeature.EXECUTE, false);
+        s.setInventorySlotContents(TileEntitySingularStationSC.TOOL_SLOT, blade);
+        s.setInventorySlotContents(TileEntitySingularStationSC.CATALYST_SLOT, new ItemStack(ModItems.battery, 1, 6));
+        s.setInventorySlotContents(TileEntitySingularStationSC.MATERIAL_SLOT, new ItemStack(ModItems.component("nb3SnPlate"), 4));
     }
 
     /** A switched-on station (charging and filling off) with a full buffer, SM and helium, a charged Exo helmet and its materials. */

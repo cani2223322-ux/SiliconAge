@@ -21,6 +21,11 @@ public class ClientProxy extends CommonProxy {
         com.sc.client.BridgeHighlightSC.register();
         com.sc.client.BridgeHudSC.register();
         com.sc.client.BridgeVortexFxSC.register();
+        // the Singular tools: the black hole's zone frame, the blade's effects, Shift + wheel (form / mode)
+        MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
+        MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);
+        MinecraftForge.EVENT_BUS.register(com.sc.client.ToolWheelSC.INSTANCE);
+        cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(com.sc.client.ToolWheelSC.INSTANCE);   // ClientTickEvent
         BlockConduitSC.renderId = RenderingRegistry.getNextAvailableRenderId();
         RenderingRegistry.registerBlockHandler(new ConduitRenderer(BlockConduitSC.renderId));
         cpw.mods.fml.client.registry.ClientRegistry.bindTileEntitySpecialRenderer(

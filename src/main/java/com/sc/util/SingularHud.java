@@ -140,6 +140,23 @@ public final class SingularHud {
         return HIDDEN;
     }
 
+    /**
+     * Pure: a Singular tool key function's icon (docs/plan-singular-tools.md §4, the tools' cooldowns in the tool's
+     * NBT): COOLING while `end` is ahead, NOGAS while the worn armour lacks its gas and it's on with a key, READY a
+     * few seconds after the cooldown, else HIDDEN. `has`: the tool in hand has it open (level / branch).
+     */
+    public static int toolState(boolean has, long end, long now, boolean gasShort, boolean wanted) {
+        return stateOf(null, has, end, now, gasShort, wanted, 0L, 0L);
+    }
+
+    /** Pure: the share 0..1 of the blocks toward the next crumb (`progress` of `perCrumb`). */
+    public static float crumbShare(int progress, int perCrumb) {
+        if (perCrumb <= 0 || progress <= 0) {
+            return 0F;
+        }
+        return Math.min(1F, progress / (float) perCrumb);
+    }
+
     /** Pure: the indexes of the shown icons, in order, from their states. */
     public static List<Integer> shown(int[] states) {
         List<Integer> out = new ArrayList<Integer>();

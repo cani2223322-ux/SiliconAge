@@ -19,7 +19,7 @@ public class SingularProcessSC {
     public static final int KIND_MODERNISE = 0, KIND_TRANSFER = 1, KIND_SYNC = 2, KIND_CONVERT = 3;
 
     public int kind;
-    /** Locked station slots: bits 0..3 the armour slots, bit 4 the donor (TileEntitySingularStationSC.DONOR_BIT). */
+    /** Locked station slots: bits 0..3 the armour slots, bit 4 the donor (TileEntitySingularStationSC.DONOR_BIT), bit 5 the tool (TOOL_BIT). */
     public int mask;
     /** 0..1. */
     public double progress;
@@ -28,15 +28,16 @@ public class SingularProcessSC {
     public final long[] cost = new long[SingularStationMath.RESOURCES], drawn = new long[SingularStationMath.RESOURCES];
     /** EU the consumed Singular core brought (counted in drawn[R_EU] too). */
     public long catalystEu;
-    /** The pieces' levels when it started (slot 0..3; the donor's at 4) - checked again at the end. */
-    public final int[] levels = new int[5];
+    /** The pieces' levels when it started (slot 0..3; the donor's at 4; the tool's at 5) - checked again at the end. */
+    public final int[] levels = new int[6];
     /** Sync: the level the lagging pieces go to. */
     public int target;
     /** Who pressed the button (name: effects / chat at the end). */
     public String starter = "";
     /** Resonance counted when it started (the EU discount). */
     public boolean resonance;
-    /** Б-1: the materials taken out of the slots at the start (cores with their charge) - given back whole on «Отменить». */
+    /** Б-1: the materials taken out of the slots at the start (cores with their charge); the drill's modernisation: the
+     *  Singular crumbs it took - given back whole on «Отменить». */
     public final java.util.List<ItemStack> items = new java.util.ArrayList<ItemStack>();
 
     public boolean locks(int slot) {
