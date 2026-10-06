@@ -35,7 +35,8 @@ import net.minecraftforge.common.util.ForgeDirection;
 /**
  * The mod's wrench, three tiers (IC2 / Thermal style):
  * - Wrench (steel): turns blocks - the mod's machines, generators, storages and transformers,
- *   and anything else that supports rotateBlock; sets cable / pipe sides like any wrench.
+ *   and anything else that supports rotateBlock; sets cable / pipe sides like any wrench;
+ *   sneak + right-click on a cable (any tier, any mode): the network overview (NetViewNetSC).
  * - Electric Wrench (LV, battery): + Dismantle mode - the block goes straight into the inventory
  *   with its charge, fuel and tanks (what breaking it keeps), nothing lost.
  * - Quantum Wrench (HV, battery): + dismantles from up to 8 blocks away, + Copy mode - settings
@@ -207,6 +208,12 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             return false;
         }
         int mode = modeOf(stack);
+        // sneak + right-click on a cable, any mode: the network overview (plain right-click still
+        // sets the side's mode / dismantles - sneaking did the same before)
+        if (player.isSneaking() && cableUnderCursor(world, x, y, z, player)) {
+            player.getEntityData().setLong("scWrenchAt", world.getTotalWorldTime());
+            return com.sc.handler.NetViewNetSC.click(player, world, x, y, z);
+        }
         if (mode == MODE_DISMANTLE) {
             if (!dismantlable(world, x, y, z)) {
                 return false;
@@ -241,6 +248,20 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             return true;
         }
         return false;                                    // machines, transformers, conduits handle the wrench themselves
+    }
+
+    /** A bundle with a cable, the cable (not its pipe / tube) under the cursor - or nothing hit, the cable taken. */
+    private static boolean cableUnderCursor(World world, int x, int y, int z, EntityPlayer player) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof com.sc.tileentity.TileEntityConduitBundleSC) || ((com.sc.tileentity.TileEntityConduitBundleSC) te).getCable() == null) {
+            return false;
+        }
+        Block block = world.getBlock(x, y, z);
+        if (!(block instanceof com.sc.block.BlockConduitSC)) {
+            return true;
+        }
+        MovingObjectPosition hit = ((com.sc.block.BlockConduitSC) block).partUnderCursor(world, x, y, z, player);
+        return hit == null || hit.subHit < 0 || com.sc.conduit.ConduitKind.values()[hit.subHit / 8] == com.sc.conduit.ConduitKind.CABLE;
     }
 
     // ------------------------------------------------------------------ storage output faces (Output Splitter)
@@ -573,8 +594,8 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         }
         switch (com.sc.util.TooltipSC.page()) {
             case 1: {
-                String[] fns = {"rotate", "wires", "dismantle", "remote", "copy"};
-                boolean[] has = {true, true, tier.modes() > 1, tier == Tier.QUANTUM, tier == Tier.QUANTUM};
+                String[] fns = {"rotate", "wires", "netview", "dismantle", "remote", "copy"};
+                boolean[] has = {true, true, true, tier.modes() > 1, tier == Tier.QUANTUM, tier == Tier.QUANTUM};
                 java.util.List<String> names = new java.util.ArrayList<String>();
                 java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
                 int n = 0;
@@ -593,6 +614,7 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             }
             case 2:
                 com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.howto." + tier.name().toLowerCase(java.util.Locale.ROOT)), "§7");
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.netview"), "§7");
                 if (tier.maxCharge > 0) {
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.charging", tier.chargeTier.name()), "§7");
                 }

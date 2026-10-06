@@ -25,6 +25,7 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.ToolWheelSC.INSTANCE);
+        MinecraftForge.EVENT_BUS.register(com.sc.client.NetViewRendererSC.INSTANCE);   // the wrench's network overview (world + HUD)
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(com.sc.client.ToolWheelSC.INSTANCE);   // ClientTickEvent
         BlockConduitSC.renderId = RenderingRegistry.getNextAvailableRenderId();
         RenderingRegistry.registerBlockHandler(new ConduitRenderer(BlockConduitSC.renderId));

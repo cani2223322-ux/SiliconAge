@@ -71,6 +71,8 @@ public final class SelfTestSC {
             fullCheck20261006();
             fullFixes20261006();
             invUtilForeign();
+            singToolsNetview();
+            singToolsBooksearch();
             singToolsFormicons();
             singToolsFixes();
             singToolsPolish();
@@ -6290,6 +6292,254 @@ public final class SelfTestSC {
             check(fiNames.size() == fiCount, "blade form icons: " + fiCount + " names, all distinct (got " + fiNames.size() + ")");
             check(com.sc.item.ItemBladeSC.formIconName(null, null, false).equals("bladeSingular_sword_a"),
                     "blade form icons: null form / scheme fall back to sword / A");
+        }
+    }
+
+    /** Singular blade & drill, booksearch (docs/plan-singular-tools.md). */
+    private static void singToolsBooksearch() {
+        // ---- Handbook search and bookmarks (BookSearchSC: pure helpers, no client classes) ----
+        {
+            // normalisation: §-codes out, whitespace collapsed, lower case, ё = е, length kept by fold
+            check("елка ель еж".equals(com.sc.manual.BookSearchSC.norm("  §aЁлка \n ЕЛЬ\t §lЁж ")),
+                    "book search: norm strips §-codes, collapses spaces, folds case and ё (got '" + com.sc.manual.BookSearchSC.norm("  §aЁлка \n ЕЛЬ\t §lЁж ") + "')");
+            check(com.sc.manual.BookSearchSC.fold("ЁёAБ").equals("ееaб") && com.sc.manual.BookSearchSC.fold("ЁёAБ").length() == 4
+                            && com.sc.manual.BookSearchSC.plain("abc§").equals("abc") && com.sc.manual.BookSearchSC.plain(null).isEmpty(),
+                    "book search: fold keeps the length; a trailing § and null are safe");
+            check(com.sc.manual.BookSearchSC.count("кабель кабелькабель", "кабель") == 3 && com.sc.manual.BookSearchSC.count("ааа", "аа") == 1
+                            && com.sc.manual.BookSearchSC.count("x", "") == 0,
+                    "book search: count is non-overlapping");
+
+            // ranking: title start, then title, then body by the number of matches, then book order
+            java.util.List<com.sc.manual.BookSearchSC.Doc> bsDocs = new java.util.ArrayList<com.sc.manual.BookSearchSC.Doc>();
+            bsDocs.add(new com.sc.manual.BookSearchSC.Doc("d0", "Медный кабель", "Энергия", new String[]{"Кабель из меди."}, 0));
+            bsDocs.add(new com.sc.manual.BookSearchSC.Doc("d1", "Генератор", "Генераторы", new String[]{"кабель кабель §lкабель", null, "ещё кабель"}, 1));
+            bsDocs.add(new com.sc.manual.BookSearchSC.Doc("d2", "Провода: кабель", "Энергия", new String[]{"кабель"}, 2));
+            bsDocs.add(new com.sc.manual.BookSearchSC.Doc("d3", "Печь", "Машины", new String[]{"Ничего"}, 3));
+            bsDocs.add(new com.sc.manual.BookSearchSC.Doc("d4", "§eКабель-канал", "Энергия", new String[]{"Короб"}, 4));
+            int[] bsTotal = new int[1];
+            java.util.List<com.sc.manual.BookSearchSC.Hit> bsHits = com.sc.manual.BookSearchSC.search(bsDocs, "КАБЕЛЬ", 50, bsTotal);
+            StringBuilder bsOrder = new StringBuilder();
+            for (com.sc.manual.BookSearchSC.Hit h : bsHits) {
+                bsOrder.append(h.doc.id).append(' ');
+            }
+            check("d4 d0 d2 d1 ".equals(bsOrder.toString()) && bsTotal[0] == 4,
+                    "book search: ranked title-start, title (book order on a tie), then body by count (got " + bsOrder + ", total " + bsTotal[0] + ")");
+            check(bsHits.size() == 4 && bsHits.get(0).rank == 0 && bsHits.get(1).rank == 1 && bsHits.get(3).rank == 2 && bsHits.get(3).count == 4,
+                    "book search: rank classes and match counts");
+            java.util.List<com.sc.manual.BookSearchSC.Hit> bsTop = com.sc.manual.BookSearchSC.search(bsDocs, "кабель", 2, bsTotal);
+            check(bsTop.size() == 2 && bsTotal[0] == 4 && com.sc.manual.BookSearchSC.search(bsDocs, "к", 50, null).isEmpty(),
+                    "book search: the limit cuts the list, the total stays; one letter finds nothing");
+            com.sc.manual.BookSearchSC.Hit bsYo = com.sc.manual.BookSearchSC.match(bsDocs.get(1), com.sc.manual.BookSearchSC.norm("ЕЩЕ"));
+            check(bsYo != null && bsYo.el == 2 && com.sc.manual.BookSearchSC.fold(bsDocs.get(1).body.substring(bsYo.at, bsYo.at + bsYo.len)).equals("еще"),
+                    "book search: «еще» finds «ещё», in element 2, the offsets point into the shown body");
+            com.sc.manual.BookSearchSC.Hit bsWords = com.sc.manual.BookSearchSC.match(bsDocs.get(1), com.sc.manual.BookSearchSC.norm("генератор ещё"));
+            check(bsWords != null && bsWords.rank == 3 && com.sc.manual.BookSearchSC.match(bsDocs.get(3), "печь кабель") == null,
+                    "book search: words apart match only when every word is there");
+            check(bsDocs.get(1).body.indexOf('§') < 0 && bsDocs.get(4).title.equals("Кабель-канал"),
+                    "book search: no §-codes in the shown title and body");
+
+            // snippets: around the match, cut at spaces, "..." where cut, bounds safe
+            String bsText = "один два три четыре пять шесть семь восемь девять десять";
+            com.sc.manual.BookSearchSC.Snip bsS = com.sc.manual.BookSearchSC.snippet(bsText, bsText.indexOf("пять"), 4, 8, 8);
+            check(bsS.text.startsWith("...") && bsS.text.endsWith("...") && bsS.text.substring(bsS.hl, bsS.hl + bsS.hlLen).equals("пять")
+                            && bsS.text.length() < bsText.length(),
+                    "book search: a snippet around the match (got '" + bsS.text + "')");
+            com.sc.manual.BookSearchSC.Snip bsHead = com.sc.manual.BookSearchSC.snippet(bsText, 0, 4, 8, 8);
+            com.sc.manual.BookSearchSC.Snip bsTail = com.sc.manual.BookSearchSC.snippet(bsText, bsText.length() - 6, 6, 8, 8);
+            com.sc.manual.BookSearchSC.Snip bsNone = com.sc.manual.BookSearchSC.snippet(bsText, -1, 3, 8, 8);
+            com.sc.manual.BookSearchSC.Snip bsFar = com.sc.manual.BookSearchSC.snippet("abc", 1, 10, 5, 5);
+            check(!bsHead.text.startsWith("...") && bsHead.hl == 0 && bsHead.text.substring(0, 4).equals("один")
+                            && !bsTail.text.endsWith("...") && bsTail.text.substring(bsTail.hl).equals("десять")
+                            && bsNone.hl == 0 && bsNone.hlLen == 0 && bsNone.text.startsWith("один")
+                            && bsFar.text.equals("abc") && bsFar.hl == 1 && bsFar.hlLen == 2
+                            && com.sc.manual.BookSearchSC.snippet("", 0, 0, 5, 5).text.isEmpty()
+                            && com.sc.manual.BookSearchSC.snippet(bsText, 999, 2, 5, 5).hlLen == 0,
+                    "book search: snippet bounds - text start / end, no match, a match past the end, empty text");
+
+            // bookmarks: add / remove / limit / the file's lines round trip
+            java.util.List<String> bsMarks = new java.util.ArrayList<String>();
+            boolean bsOk = com.sc.manual.BookSearchSC.addMark(bsMarks, "keys", 64) && !com.sc.manual.BookSearchSC.addMark(bsMarks, "keys", 64)
+                    && !com.sc.manual.BookSearchSC.addMark(bsMarks, " ", 64) && !com.sc.manual.BookSearchSC.addMark(bsMarks, "a\nb", 64);
+            for (int i = 0; bsMarks.size() < com.sc.manual.BookSearchSC.MAX_MARKS; i++) {
+                bsOk &= com.sc.manual.BookSearchSC.addMark(bsMarks, "m" + i, com.sc.manual.BookSearchSC.MAX_MARKS);
+            }
+            bsOk &= !com.sc.manual.BookSearchSC.addMark(bsMarks, "extra", com.sc.manual.BookSearchSC.MAX_MARKS) && bsMarks.size() == 64;
+            bsOk &= com.sc.manual.BookSearchSC.removeMark(bsMarks, "m5") && !com.sc.manual.BookSearchSC.removeMark(bsMarks, "m5")
+                    && com.sc.manual.BookSearchSC.addMark(bsMarks, "extra", 64) && "extra".equals(bsMarks.get(63)) && "keys".equals(bsMarks.get(0));
+            check(bsOk, "bookmarks: no duplicates or blank ids, at most 64, removal frees a place, order kept");
+            java.util.List<String> bsLines = new java.util.ArrayList<String>(com.sc.manual.BookSearchSC.marksToLines(bsMarks));
+            bsLines.add(0, "# header");
+            bsLines.add("done=sp:w|copper");
+            bsLines.add("bm=keys");
+            bsLines.add("bm=");
+            check(com.sc.manual.BookSearchSC.marksFromLines(bsLines, 64).equals(bsMarks)
+                            && com.sc.manual.BookSearchSC.marksFromLines(bsLines, 3).size() == 3,
+                    "bookmarks: the file's lines round trip (other lines, duplicates and blanks skipped, capped)");
+
+            // the real book: indexed lazily, rebuilt with the book, finds an article by its title, no §-codes
+            java.util.List<com.sc.manual.BookSearchSC.Doc> bsIdx = com.sc.manual.BookSearchSC.index();
+            com.sc.manual.BookEntry bsKeys = com.sc.manual.BookContent.byId("keys");
+            boolean bsFound = false, bsClean = true;
+            for (com.sc.manual.BookSearchSC.Hit h : com.sc.manual.BookSearchSC.searchBook(bsKeys.title, null)) {
+                bsFound |= h.doc.id.equals("keys") && h.rank == 0;
+            }
+            for (com.sc.manual.BookSearchSC.Doc d : bsIdx) {
+                bsClean &= d.body.indexOf('§') < 0 && d.title.indexOf('§') < 0 && !d.id.equals("recipes");
+            }
+            check(bsIdx.size() > 50 && bsIdx == com.sc.manual.BookSearchSC.index() && bsFound && bsClean,
+                    "book search: the book's index (" + bsIdx.size() + " articles) finds «keys» by its title, no §-codes, no Recipes");
+            boolean bsHead2 = false;
+            for (com.sc.manual.BookEl el : bsKeys.els) {
+                bsHead2 |= el.kind == com.sc.manual.BookEl.Kind.HEAD && com.sc.manual.Lang.tr("sc.book.keys.bookhead").equals(el.text);
+            }
+            check(bsHead2, "book search: the keys article has the search and bookmarks section");
+            com.sc.manual.BookContent.invalidate();
+            check(com.sc.manual.BookSearchSC.index() != bsIdx, "book search: the index is built again with the book");
+        }
+    }
+
+    /** Singular blade & drill, netview (docs/plan-singular-tools.md). */
+    private static void singToolsNetview() {
+        // ---- network overview (NetViewScanSC): positions, bounded walk, flow estimate, load colours, clicks, snapshot round trip
+        {
+            long nvP = com.sc.util.NetViewScanSC.pack(-123456, 255, 987654);
+            check(com.sc.util.NetViewScanSC.unpackX(nvP) == -123456 && com.sc.util.NetViewScanSC.unpackY(nvP) == 255
+                            && com.sc.util.NetViewScanSC.unpackZ(nvP) == 987654
+                            && com.sc.util.NetViewScanSC.unpackZ(com.sc.util.NetViewScanSC.pack(5, 0, -7)) == -7,
+                    "netview: position pack / unpack (negative coordinates)");
+
+            final int nvLen = 50;
+            com.sc.util.NetViewScanSC.Graph nvLine = new com.sc.util.NetViewScanSC.Graph() {
+                public void links(long c, java.util.List<Long> out) {
+                    int x = com.sc.util.NetViewScanSC.unpackX(c);
+                    if (x > 0) {
+                        out.add(com.sc.util.NetViewScanSC.pack(x - 1, 64, 0));
+                    }
+                    if (x < nvLen - 1) {
+                        out.add(com.sc.util.NetViewScanSC.pack(x + 1, 64, 0));
+                    }
+                }
+
+                public void endpoints(long c, java.util.List<Long> out) {
+                    int x = com.sc.util.NetViewScanSC.unpackX(c);
+                    if (x % 5 == 0) {
+                        out.add(com.sc.util.NetViewScanSC.pack(x, 65, 0));
+                    }
+                }
+            };
+            long nvStart = com.sc.util.NetViewScanSC.pack(25, 64, 0);
+            com.sc.util.NetViewScanSC.Scan nvAll = com.sc.util.NetViewScanSC.scan(nvLine, nvStart, 4096, 512);
+            check(nvAll.cables.size() == 50 && nvAll.endpoints.size() == 10 && !nvAll.truncated
+                            && nvAll.cables.get(0) == nvStart && nvAll.links.get(0).length == 2,
+                    "netview: walk finds the whole line (50 cables, 10 blocks)");
+            com.sc.util.NetViewScanSC.Scan nvCut = com.sc.util.NetViewScanSC.scan(nvLine, nvStart, 20, 512);
+            check(nvCut.cables.size() == 20 && nvCut.truncated, "netview: cable bound cuts the walk and flags it");
+            com.sc.util.NetViewScanSC.Scan nvCutE = com.sc.util.NetViewScanSC.scan(nvLine, nvStart, 4096, 3);
+            check(nvCutE.endpoints.size() == 3 && nvCutE.truncated && nvCutE.cables.size() == 50,
+                    "netview: endpoint bound cuts the blocks, not the cables");
+
+            // source at cable 0, consumer at cable 3, 1 EU loss a block
+            com.sc.util.NetViewScanSC.Graph nvFour = new com.sc.util.NetViewScanSC.Graph() {
+                public void links(long c, java.util.List<Long> out) {
+                    int x = com.sc.util.NetViewScanSC.unpackX(c);
+                    if (x > 0) {
+                        out.add(com.sc.util.NetViewScanSC.pack(x - 1, 64, 0));
+                    }
+                    if (x < 3) {
+                        out.add(com.sc.util.NetViewScanSC.pack(x + 1, 64, 0));
+                    }
+                }
+
+                public void endpoints(long c, java.util.List<Long> out) {
+                    int x = com.sc.util.NetViewScanSC.unpackX(c);
+                    if (x == 0 || x == 3) {
+                        out.add(com.sc.util.NetViewScanSC.pack(x, 65, 0));
+                    }
+                }
+            };
+            com.sc.util.NetViewScanSC.Scan nvS4 = com.sc.util.NetViewScanSC.scan(nvFour, com.sc.util.NetViewScanSC.pack(0, 64, 0), 4096, 512);
+            int[] nvRole = {com.sc.util.NetViewScanSC.R_OUT, com.sc.util.NetViewScanSC.R_IN};
+            com.sc.util.NetViewScanSC.Flow nvF = com.sc.util.NetViewScanSC.estimate(nvS4, nvRole, new int[]{100, 0}, new int[]{0, 50}, 1, 128);
+            boolean nvPath = true;
+            for (int nvI = 0; nvI < 4; nvI++) {
+                nvPath &= nvF.cableFlow[nvI] == 54;
+            }
+            check(nvS4.endpoints.size() == 2 && nvF.taken[1] == 50 && nvF.loss == 4 && nvF.given[0] == 54 && nvPath,
+                    "netview: estimate - 50 EU/t delivered, 4 lost over 4 cables, 54 on every cable of the path");
+            com.sc.util.NetViewScanSC.Flow nvF2 = com.sc.util.NetViewScanSC.estimate(nvS4, nvRole, new int[]{100, 0}, new int[]{0, 50}, 1, 30);
+            check(nvF2.given[0] == 30 && nvF2.taken[1] == 26 && nvF2.cableFlow[3] == 30,
+                    "netview: estimate - the cable rating caps the flow");
+
+            check(com.sc.util.NetViewScanSC.level(49, 100, 0) == com.sc.util.NetViewScanSC.L_LOW
+                            && com.sc.util.NetViewScanSC.level(50, 100, 0) == com.sc.util.NetViewScanSC.L_MID
+                            && com.sc.util.NetViewScanSC.level(89, 100, 0) == com.sc.util.NetViewScanSC.L_MID
+                            && com.sc.util.NetViewScanSC.level(90, 100, 0) == com.sc.util.NetViewScanSC.L_HIGH
+                            && com.sc.util.NetViewScanSC.level(100, 100, 0) == com.sc.util.NetViewScanSC.L_HIGH
+                            && com.sc.util.NetViewScanSC.level(101, 100, 0) == com.sc.util.NetViewScanSC.L_OVER
+                            && com.sc.util.NetViewScanSC.level(0, 100, com.sc.util.NetViewScanSC.C_BOTTLENECK) == com.sc.util.NetViewScanSC.L_HIGH
+                            && com.sc.util.NetViewScanSC.level(0, 100, com.sc.util.NetViewScanSC.C_OVERVOLT) == com.sc.util.NetViewScanSC.L_OVER,
+                    "netview: load colours (green < 50%, yellow < 90%, red >= 90% / bottleneck, pulsing past the rating / overvolt)");
+
+            com.sc.util.NetViewScanSC.Clicks nvC = new com.sc.util.NetViewScanSC.Clicks();
+            Object nvWho = new Object(), nvOther = new Object();
+            int nvC1 = nvC.click(nvWho, 1000), nvC2 = nvC.click(nvWho, 1004), nvC3 = nvC.click(nvWho, 1010);
+            int nvC4 = nvC.click(nvWho, 1019), nvC5 = nvC.click(nvWho, 1040), nvC6 = nvC.click(nvOther, 1004);
+            check(nvC1 == com.sc.util.NetViewScanSC.CLICK_SCAN && nvC2 == com.sc.util.NetViewScanSC.CLICK_IGNORE
+                            && nvC3 == com.sc.util.NetViewScanSC.CLICK_IGNORE && nvC4 == com.sc.util.NetViewScanSC.CLICK_PING
+                            && nvC5 == com.sc.util.NetViewScanSC.CLICK_SCAN && nvC6 == com.sc.util.NetViewScanSC.CLICK_SCAN,
+                    "netview: held button clicks once, one scan a second per player, others independent");
+
+            com.sc.util.NetViewScanSC.Snapshot nvSn = new com.sc.util.NetViewScanSC.Snapshot();
+            nvSn.dim = -1;
+            nvSn.ox = -1000;
+            nvSn.oy = 70;
+            nvSn.oz = 2000;
+            nvSn.flags = com.sc.util.NetViewScanSC.S_TRUNCATED | com.sc.util.NetViewScanSC.S_MEASURED;
+            nvSn.cables(2);
+            nvSn.cx[0] = -1000; nvSn.cy[0] = 70; nvSn.cz[0] = 2000;
+            nvSn.cx[1] = -4095; nvSn.cy[1] = 71; nvSn.cz[1] = 2001;
+            nvSn.ctype[1] = 4;
+            nvSn.cflags[1] = (byte) com.sc.util.NetViewScanSC.C_OVERVOLT;
+            nvSn.cflow[1] = 123456;
+            nvSn.endpoints(1);
+            nvSn.ex[0] = -999; nvSn.ey[0] = 70; nvSn.ez[0] = 2000;
+            nvSn.ekind[0] = (byte) com.sc.util.NetViewScanSC.K_STORAGE;
+            nvSn.etier[0] = 3;
+            nvSn.erole[0] = 3;
+            nvSn.erate[0] = 2048;
+            nvSn.epct[0] = -1;
+            nvSn.gen = 5000000000L;
+            nvSn.cons = 7;
+            nvSn.loss = 3;
+            nvSn.stored = 1L << 40;
+            nvSn.capacity = (1L << 41) + 1;
+            nvSn.maxSourceTier = -1;
+            nvSn.bottlenecks = 2;
+            nvSn.hidden = 9;
+            io.netty.buffer.ByteBuf nvBuf = io.netty.buffer.Unpooled.buffer();
+            com.sc.util.NetViewScanSC.encode(nvBuf, nvSn);
+            com.sc.util.NetViewScanSC.Snapshot nvBack = com.sc.util.NetViewScanSC.decode(nvBuf);
+            check(nvBack.dim == -1 && nvBack.ox == -1000 && nvBack.oy == 70 && nvBack.oz == 2000 && nvBack.flags == nvSn.flags
+                            && nvBack.n == 2 && nvBack.cx[1] == -4095 && nvBack.cy[1] == 71 && nvBack.cz[1] == 2001
+                            && nvBack.ctype[1] == 4 && nvBack.cflags[1] == com.sc.util.NetViewScanSC.C_OVERVOLT && nvBack.cflow[1] == 123456
+                            && nvBack.m == 1 && nvBack.ex[0] == -999 && nvBack.ekind[0] == com.sc.util.NetViewScanSC.K_STORAGE
+                            && nvBack.etier[0] == 3 && nvBack.erole[0] == 3 && nvBack.erate[0] == 2048 && nvBack.epct[0] == -1
+                            && nvBack.gen == 5000000000L && nvBack.cons == 7 && nvBack.loss == 3 && nvBack.stored == 1L << 40
+                            && nvBack.capacity == (1L << 41) + 1 && nvBack.maxSourceTier == -1 && nvBack.bottlenecks == 2
+                            && nvBack.hidden == 9 && nvBuf.readableBytes() == 0 && nvBack.hasCable(-4095, 71, 2001),
+                    "netview: snapshot encode / decode round trip");
+            com.sc.util.NetViewScanSC.Snapshot nvPing = new com.sc.util.NetViewScanSC.Snapshot();
+            nvPing.flags = com.sc.util.NetViewScanSC.S_PING;
+            nvPing.ox = 5;
+            io.netty.buffer.ByteBuf nvBuf2 = io.netty.buffer.Unpooled.buffer();
+            com.sc.util.NetViewScanSC.encode(nvBuf2, nvPing);
+            com.sc.util.NetViewScanSC.Snapshot nvPingBack = com.sc.util.NetViewScanSC.decode(nvBuf2);
+            check(nvPingBack.flags == com.sc.util.NetViewScanSC.S_PING && nvPingBack.ox == 5 && nvPingBack.n == 0
+                            && nvPingBack.m == 0 && nvBuf2.readableBytes() == 0,
+                    "netview: ping (toggle-only click) round trip");
+            check("1234".equals(com.sc.util.NetViewScanSC.compact(1234)) && "45.7k".equals(com.sc.util.NetViewScanSC.compact(45678))
+                            && "3.2M".equals(com.sc.util.NetViewScanSC.compact(3200000)) && "12.0M".equals(com.sc.util.NetViewScanSC.compact(12000000)),
+                    "netview: compact EU numbers");
         }
     }
 }

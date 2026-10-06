@@ -60,6 +60,7 @@ public class SCMod {
         com.sc.handler.ArmorNetSC.init();
         com.sc.handler.FieldNetSC.init();
         com.sc.handler.QuarryNetSC.init();
+        com.sc.handler.NetViewNetSC.init();             // the wrench's network overview, server -> client
         com.sc.bridge.BridgeNetSC.init();
         com.sc.handler.ConfigSyncSC.init();             // the server's config to joining clients
         com.sc.radiation.RadiationNetSC.init();

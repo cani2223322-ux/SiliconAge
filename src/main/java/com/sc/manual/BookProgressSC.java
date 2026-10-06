@@ -44,10 +44,10 @@ public final class BookProgressSC {
             if (!f.exists()) {
                 return;
             }
-            for (String line : org.apache.commons.io.FileUtils.readLines(f, "UTF-8")) {
-                if (line.startsWith("bm=")) {
-                    marks.add(line.substring(3));
-                } else if (line.startsWith("done=")) {
+            List<String> lines = org.apache.commons.io.FileUtils.readLines(f, "UTF-8");
+            marks.addAll(BookSearchSC.marksFromLines(lines, BookSearchSC.MAX_MARKS));
+            for (String line : lines) {
+                if (line.startsWith("done=")) {
                     done.add(line.substring(5));
                 }
             }
@@ -59,9 +59,7 @@ public final class BookProgressSC {
     private static void save() {
         List<String> lines = new ArrayList<String>();
         lines.add("# Silicon Age handbook: bookmarks and first steps done (per world)");
-        for (String m : marks) {
-            lines.add("bm=" + m);
-        }
+        lines.addAll(BookSearchSC.marksToLines(new ArrayList<String>(marks)));
         for (String d : done) {
             lines.add("done=" + d);
         }
@@ -107,12 +105,24 @@ public final class BookProgressSC {
         return marks.contains(id);
     }
 
-    public static void toggleMark(String id) {
+    /** Adds or removes a bookmark; false when the list is full (nothing changed). */
+    public static boolean toggleMark(String id) {
         load();
-        if (!marks.remove(id)) {
-            marks.add(id);
+        List<String> l = new ArrayList<String>(marks);
+        boolean changed = BookSearchSC.removeMark(l, id) || BookSearchSC.addMark(l, id, BookSearchSC.MAX_MARKS);
+        if (changed) {
+            marks.clear();
+            marks.addAll(l);
+            save();
         }
-        save();
+        return changed;
+    }
+
+    public static void removeMark(String id) {
+        load();
+        if (marks.remove(id)) {
+            save();
+        }
     }
 
     /** Every 2 s: a step's item in the inventory ticks the step. */

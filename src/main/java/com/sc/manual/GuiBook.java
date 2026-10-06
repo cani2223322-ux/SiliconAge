@@ -38,8 +38,10 @@ import net.minecraftforge.oredict.ShapelessOreRecipe;
  * the open article on paper on the right, scrolled: headings, paragraphs, item icons (hover: the
  * tooltip, click: its page or, with NEI, its recipe), crafting grids, machine recipes, ore
  * routes, ore cards, tables, multiblocks layer by layer, pictures, the first steps' ticks.
- * The search box looks through every article (in the Recipes chapter: every recipe). Back,
- * Home and a bookmark star in the header; Backspace goes back, Esc (or E) closes back to where it was opened from.
+ * The search box (Ctrl+F or /) looks through every article's title and text (BookSearchSC; in the
+ * Recipes chapter: every recipe) and lists the hits with a snippet; Enter / a click opens one at its
+ * first match. Back, Home, the bookmark list and a bookmark star in the header; Backspace goes back,
+ * Esc clears the search or closes back to where the book was opened from (E too).
  */
 @SideOnly(Side.CLIENT)
 public class GuiBook extends GuiScreen {
@@ -60,6 +62,16 @@ public class GuiBook extends GuiScreen {
     private List<BookEntry> listed = new ArrayList<BookEntry>();
     private List<BookEl> recipeEls;
     private String recipeQuery;
+
+    // search results (parallel to `listed`), the bookmark list, the jump to a match
+    private static final int RES_ROW = 24, MARK_ROW = 18, FLASH_MS = 1800;
+    private List<BookSearchSC.Hit> hits = new ArrayList<BookSearchSC.Hit>();
+    private int hitTotal, resSel, resScroll, resMax, resRows = 1, marksScroll, marksMax;
+    /** The right side shows the hit list (else the open article); the bookmark list fills the book. */
+    private boolean resultsView, marksView;
+    private int jumpEl = -1, flashEl = -1;
+    private long flashUntil, toastUntil;
+    private String toast;
 
     // frame state: the book's box, what the mouse is over, what a click does
     private int bx, by, bw, bh, mx, my;
@@ -93,10 +105,12 @@ public class GuiBook extends GuiScreen {
         b.recipeEls = null;
         String n = q == null ? "" : net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(q).trim();
         b.query = n.length() > 32 ? n.substring(0, 32) : n;
+        b.marksView = false;
         if (b.searching()) {
-            b.listed = results(b.query);
-            if (!b.listed.isEmpty()) {
-                b.show(b.listed.get(0));
+            b.runSearch();
+            b.resultsView = true;                                     // no hits: the empty list
+            if (!b.hits.isEmpty()) {
+                b.open(b.hits.get(0));                                // Backspace: the whole list
             }
         }
         return b;
@@ -143,6 +157,12 @@ public class GuiBook extends GuiScreen {
     // ------------------------------------------------------------------ navigation
 
     private String state() {
+        if (marksView) {
+            return "marks";
+        }
+        if (resultsView && searching()) {
+            return "s:" + query;
+        }
         if (entry != null) {
             return "e:" + entry.id;
         }
@@ -152,6 +172,24 @@ public class GuiBook extends GuiScreen {
     private void restore(String s) {
         entry = null;
         chapter = null;
+        resultsView = false;
+        marksView = false;
+        jumpEl = -1;
+        flashEl = -1;
+        pageScroll = 0;
+        recipeEls = null;
+        if (s.startsWith("s:")) {                                     // the hit list (not remembered as lastState)
+            setQuery(s.substring(2));
+            if (searching()) {
+                resultsView = true;
+                runSearch();
+                return;
+            }
+            s = "home";
+        } else if ("marks".equals(s)) {
+            marksView = true;
+            return;
+        }
         if (s.startsWith("e:")) {
             BookEntry e = BookContent.byId(s.substring(2));
             if (e != null) {
@@ -180,27 +218,109 @@ public class GuiBook extends GuiScreen {
             history.push(now);
         }
         restore(s);
-        query = "";
-        if (search != null) {
-            search.setText("");
+        if (!s.startsWith("s:")) {
+            setQuery("");
         }
         scrollListTo();
+    }
+
+    private void setQuery(String q) {
+        query = q;
+        if (search != null && !search.getText().equals(q)) {
+            search.setText(q);
+        }
     }
 
     private void show(BookEntry e) {
         entry = e;
         chapter = e.chapter;
         pageScroll = 0;
+        resultsView = false;
+        marksView = false;
+        jumpEl = -1;
+        flashEl = -1;
         lastState = state();
+    }
+
+    /** A hit: its article, scrolled to the first match's element, which glows a moment. */
+    private void open(BookSearchSC.Hit h) {
+        BookEntry e = BookSearchSC.entry(h);
+        if (e == null) {
+            return;
+        }
+        String now = state();
+        if (!now.equals("e:" + e.id)) {
+            history.push(now);
+        }
+        show(e);
+        jumpEl = h.el;
+        flashEl = h.el;
+        flashUntil = System.currentTimeMillis() + FLASH_MS;
+        scrollListTo();
     }
 
     private void back() {
         if (!history.isEmpty()) {
             restore(history.pop());
-            if (searching()) {
-                listed = results(query);
+            if (searching() && !resultsView) {
+                runSearch();
             }
             scrollListTo();
+        }
+    }
+
+    /** Out of the hit list: back where the search was started from. */
+    private void leaveResults() {
+        resultsView = false;
+        String p = history.isEmpty() ? "home" : history.pop();
+        String q = query;
+        restore(p.startsWith("s:") ? "home" : p);
+        setQuery(q);
+        scrollListTo();
+    }
+
+    /** Esc in the search: the query cleared, the list left. */
+    private void clearSearch() {
+        boolean wasList = resultsView && searching();
+        setQuery("");
+        search.setFocused(false);
+        if (wasList) {
+            leaveResults();
+        }
+    }
+
+    /** Runs the query over the book: the hits and their articles (the list on the left). */
+    private void runSearch() {
+        int[] total = new int[1];
+        List<BookSearchSC.Hit> found = BookSearchSC.searchBook(query, total);
+        hits = new ArrayList<BookSearchSC.Hit>();
+        listed = new ArrayList<BookEntry>();
+        for (BookSearchSC.Hit h : found) {
+            BookEntry e = BookSearchSC.entry(h);
+            if (e != null) {
+                hits.add(h);
+                listed.add(e);
+            }
+        }
+        hitTotal = Math.max(total[0], hits.size());
+        resSel = Math.max(0, Math.min(resSel, hits.size() - 1));
+    }
+
+    private void moveSel(int d) {
+        if (hits.isEmpty()) {
+            return;
+        }
+        resSel = Math.max(0, Math.min(hits.size() - 1, resSel + d));
+        if (resSel < resScroll) {
+            resScroll = resSel;
+        } else if (resSel >= resScroll + resRows) {
+            resScroll = resSel - resRows + 1;
+        }
+        int rows = Math.max(1, (bh - HEADER - 2 * PAD) / ROW);
+        if (resSel < listScroll) {
+            listScroll = resSel;
+        } else if (resSel >= listScroll + rows) {
+            listScroll = resSel - rows + 1;
         }
     }
 
@@ -268,8 +388,31 @@ public class GuiBook extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) {
+        boolean focused = search.isFocused(), list = resultsView && searching();
         if (key == Keyboard.KEY_ESCAPE) {
-            close();
+            if (!search.getText().isEmpty() && (focused || list)) {
+                clearSearch();                                        // 1st Esc: the search, 2nd: the book
+            } else {
+                close();
+            }
+            return;
+        }
+        if (key == Keyboard.KEY_F && isCtrlKeyDown() || c == '/' && !focused) {
+            search.setFocused(true);
+            search.setCursorPositionEnd();
+            search.setSelectionPos(0);
+            return;
+        }
+        if (list && (key == Keyboard.KEY_UP || key == Keyboard.KEY_DOWN || key == Keyboard.KEY_PRIOR || key == Keyboard.KEY_NEXT)) {
+            moveSel(key == Keyboard.KEY_UP ? -1 : key == Keyboard.KEY_DOWN ? 1 : key == Keyboard.KEY_PRIOR ? -resRows : resRows);
+            return;
+        }
+        if ((key == Keyboard.KEY_RETURN || key == Keyboard.KEY_NUMPADENTER) && searching()) {
+            if (!hits.isEmpty()) {
+                click();
+                open(hits.get(list ? Math.max(0, Math.min(resSel, hits.size() - 1)) : 0));
+                search.setFocused(false);
+            }
             return;
         }
         int bookKey = com.sc.client.BookKeySC.KEY_BOOK.getKeyCode();
@@ -300,14 +443,21 @@ public class GuiBook extends GuiScreen {
         if (!search.isFocused() && c >= ' ' && !Character.isISOControl(c)) {
             search.setFocused(true);                                 // typing anywhere searches
         }
-        if (search.textboxKeyTyped(c, key)) {
+        String before = state();
+        if (search.textboxKeyTyped(c, key) && !search.getText().equals(query)) {
             query = search.getText();
             listScroll = 0;
+            resSel = 0;
+            resScroll = 0;
             if (searching()) {
-                listed = results(query);
-                if (!listed.isEmpty() && (entry == null || !listed.contains(entry))) {
-                    show(listed.get(0));                              // 4: a search from the first page opens its best hit
+                if (!resultsView) {
+                    history.push(before);                             // Esc / a short query: back here
+                    resultsView = true;
+                    marksView = false;
                 }
+                runSearch();
+            } else if (resultsView) {
+                leaveResults();
             }
             if (query.isEmpty()) {
                 search.setFocused(false);                             // Backspace goes back again
@@ -323,9 +473,13 @@ public class GuiBook extends GuiScreen {
             return;
         }
         int step = wheel > 0 ? -1 : 1;
-        if (chapter != null || searching()) {
+        if (marksView) {
+            marksScroll = Math.max(0, Math.min(marksMax, marksScroll + step));
+        } else if (chapter != null || searching()) {
             if (mx < bx + PAD + LIST_W) {
                 listScroll = Math.max(0, Math.min(listMax, listScroll + step * 3));
+            } else if (resultsView && searching()) {
+                resScroll = Math.max(0, Math.min(resMax, resScroll + step));
             } else {
                 pageScroll = Math.max(0, Math.min(pageMax, pageScroll + step * 24));
             }
@@ -360,11 +514,17 @@ public class GuiBook extends GuiScreen {
             return;
         }
         click();
-        if (a instanceof BookChapter) {
+        if (a instanceof BookSearchSC.Hit) {
+            open((BookSearchSC.Hit) a);
+        } else if (a instanceof BookChapter) {
             go("c:" + ((BookChapter) a).name());
         } else if (a instanceof BookEntry) {
             BookEntry e = (BookEntry) a;
-            if (searching()) {
+            int i = searching() && !marksView ? listed.indexOf(e) : -1;
+            if (i >= 0) {
+                resSel = i;
+                open(hits.get(i));                                    // a hit on the left: at its match too
+            } else if (searching() && !marksView) {
                 if (!state().equals("e:" + e.id)) {
                     history.push(state());
                 }
@@ -376,8 +536,15 @@ public class GuiBook extends GuiScreen {
             go("home");
         } else if ("back".equals(a)) {
             back();
+        } else if ("marks".equals(a)) {
+            go("marks");
         } else if ("mark".equals(a) && entry != null) {
-            BookProgressSC.toggleMark(entry.id);
+            if (!BookProgressSC.toggleMark(entry.id)) {
+                toast = Lang.tr("sc.book.marks.full", BookSearchSC.MAX_MARKS);
+                toastUntil = System.currentTimeMillis() + 2500;
+            }
+        } else if (a instanceof String && ((String) a).startsWith("unmark:")) {
+            BookProgressSC.removeMark(((String) a).substring(7));
         } else if (a instanceof String && ((String) a).startsWith("e:")) {
             go((String) a);
         }
@@ -403,23 +570,6 @@ public class GuiBook extends GuiScreen {
         clickActions.add(action);
     }
 
-    private static List<BookEntry> results(String q) {
-        String n = q.trim().toLowerCase(Locale.ROOT);
-        List<BookEntry> title = new ArrayList<BookEntry>(), body = new ArrayList<BookEntry>();
-        for (BookEntry e : BookContent.all()) {
-            if (e.chapter == BookChapter.RECIPES) {
-                continue;
-            }
-            if (e.title.toLowerCase(Locale.ROOT).contains(n)) {
-                title.add(e);
-            } else if (e.searchText().contains(n)) {
-                body.add(e);
-            }
-        }
-        title.addAll(body);
-        return title;
-    }
-
     @Override
     public void drawScreen(int mouseX, int mouseY, float partial) {
         mx = mouseX;
@@ -432,11 +582,17 @@ public class GuiBook extends GuiScreen {
         drawRect(bx - 2, by - 2, bx + bw + 2, by + bh + 2, COVER_EDGE);
         drawRect(bx, by, bx + bw, by + bh, COVER);
         header();
-        if (chapter == null && !searching()) {
+        if (marksView) {
+            marksPage();
+        } else if (chapter == null && !searching()) {
             home();
         } else {
             sideList();
-            page();
+            if (resultsView && searching()) {
+                resultsPage();
+            } else {
+                page();
+            }
         }
         super.drawScreen(mouseX, mouseY, partial);
         if (hoverStack != null) {
@@ -451,16 +607,30 @@ public class GuiBook extends GuiScreen {
         int x = bx + PAD, y = by + 4;
         x += headButton(x, y, "<<", "home", Lang.tr("sc.book.home"));
         x += headButton(x, y, "<", "back", Lang.tr("sc.book.back"));
-        if (entry != null && chapter != null) {
+        int nMarks = BookProgressSC.bookmarks().size();
+        headBox(x, y, "marks", Lang.tr("sc.book.marks.open", nMarks, BookSearchSC.MAX_MARKS), marksView);
+        mask(RIBBON, x + 4, y + 1, marksView ? GOLD : 0xFFE6DCC0, false);
+        x += 17;
+        boolean list = resultsView && searching();
+        if (entry != null && chapter != null && !list) {
             boolean m = BookProgressSC.isMarked(entry.id);
-            x += headButton(x, y, m ? "*" : "o", "mark", Lang.tr(m ? "sc.book.unmark" : "sc.book.mark"));
+            headBox(x, y, "mark", Lang.tr(m ? "sc.book.unmark" : "sc.book.mark"), false);
+            mask(STAR, x + 3, y + 1, m ? GOLD : 0xFFE6DCC0, !m);
+            x += 17;
         }
-        String t = chapter == null ? Lang.tr("sc.book.title") : entry != null && !searching()
+        String t = chapter == null ? Lang.tr("sc.book.title") : entry != null
                 ? chapter.title() + " > " + entry.title : chapter.title();
-        if (searching()) {
-            t = Lang.tr("sc.book.results", listed.size());
+        int tc = 0xE6DCC0;
+        if (marksView) {
+            t = Lang.tr("sc.book.marks.title", nMarks, BookSearchSC.MAX_MARKS);
+        } else if (list) {
+            t = Lang.tr("sc.book.results", hitTotal);
         }
-        fit(t, x + 4, y + 2, bx + bw - 124 - x - 6, 0xE6DCC0, 1F);
+        if (toast != null && System.currentTimeMillis() < toastUntil) {
+            t = toast;
+            tc = 0xFF9A7A;
+        }
+        fit(t, x + 4, y + 2, bx + bw - 124 - x - 6, tc, 1F);
         drawRect(bx + bw - 122, y - 1, bx + bw - 4, y + 12, 0xFF0A101E);
         drawRect(bx + bw - 122, y + 11, bx + bw - 4, y + 12, search.isFocused() ? GOLD : 0xFF3A4A6A);
         search.drawTextBox();
@@ -470,15 +640,46 @@ public class GuiBook extends GuiScreen {
     }
 
     private int headButton(int x, int y, String label, Object action, String tip) {
+        headBox(x, y, action, tip, false);
+        fontRendererObj.drawString(label, x + (14 - fontRendererObj.getStringWidth(label)) / 2, y + 1, 0xE6DCC0);
+        return 17;
+    }
+
+    /** A header button's box (14 x 13), its click and tooltip; true when the mouse is over it. */
+    private boolean headBox(int x, int y, Object action, String tip, boolean on) {
         int w = 14;
         boolean over = mx >= x && my >= y - 1 && mx < x + w && my < y + 12;
-        drawRect(x, y - 1, x + w, y + 12, over ? 0xFF3A5A8A : 0xFF26344E);
-        fontRendererObj.drawString(label, x + (w - fontRendererObj.getStringWidth(label)) / 2, y + 1, 0xE6DCC0);
+        drawRect(x, y - 1, x + w, y + 12, over ? 0xFF3A5A8A : on ? 0xFF34486E : 0xFF26344E);
         click(x, y - 1, w, 13, action);
         if (over) {
             hoverLines = lines(tip);
         }
-        return w + 3;
+        return over;
+    }
+
+    /** Pixel glyphs the vanilla font lacks: a star (bookmark this) and a ribbon (the bookmark list). */
+    private static final String[] STAR = {
+            "....#....", "....#....", "...###...", "#########", ".#######.", "..#####..", "..#####..", ".###.###.", ".##...##."};
+    private static final String[] RIBBON = {
+            "#######", "#######", "#######", "#######", "#######", "#######", "#######", "###.###", "##...##"};
+
+    /** Draws a mask; `hollow`: only its edge pixels. */
+    private void mask(String[] m, int x, int y, int color, boolean hollow) {
+        for (int r = 0; r < m.length; r++) {
+            for (int c = 0; c < m[r].length(); c++) {
+                if (m[r].charAt(c) != '#') {
+                    continue;
+                }
+                if (hollow && on(m, r - 1, c) && on(m, r + 1, c) && on(m, r, c - 1) && on(m, r, c + 1)) {
+                    continue;
+                }
+                drawRect(x + c, y + r, x + c + 1, y + r + 1, color);
+            }
+        }
+    }
+
+    private static boolean on(String[] m, int r, int c) {
+        return r >= 0 && r < m.length && c >= 0 && c < m[r].length() && m[r].charAt(c) == '#';
     }
 
     // ------------------------------------------------------------------ the first page
@@ -521,8 +722,17 @@ public class GuiBook extends GuiScreen {
         click(left + 4, y - 2, px + pw - left, 12, "e:start");
         y += 14;
         List<String> marks = BookProgressSC.bookmarks();
-        fontRendererObj.drawString(Lang.tr(marks.isEmpty() ? "sc.book.nomarks" : "sc.book.marks"), left + 6, y + 4, INK_DIM);
-        int ix = left + 8 + fontRendererObj.getStringWidth(Lang.tr(marks.isEmpty() ? "sc.book.nomarks" : "sc.book.marks"));
+        String label = Lang.tr(marks.isEmpty() ? "sc.book.nomarks" : "sc.book.marks");
+        int lw = fontRendererObj.getStringWidth(label);
+        boolean overLabel = !marks.isEmpty() && mx >= left + 6 && my >= y + 2 && mx < left + 6 + lw && my < y + 14;
+        fontRendererObj.drawString((overLabel ? "§n" : "") + label, left + 6, y + 4, marks.isEmpty() ? INK_DIM : LINK);
+        if (!marks.isEmpty()) {
+            click(left + 6, y + 2, lw, 12, "marks");                 // the whole list
+            if (overLabel) {
+                hoverLines = lines(Lang.tr("sc.book.marks.open", marks.size(), BookSearchSC.MAX_MARKS));
+            }
+        }
+        int ix = left + 8 + lw;
         for (String id : marks) {
             BookEntry e = BookContent.byId(id);
             if (e == null || ix > left + w - 20) {
@@ -547,10 +757,11 @@ public class GuiBook extends GuiScreen {
         int rows = h / ROW;
         listMax = Math.max(0, items.size() - rows);
         listScroll = Math.min(listScroll, listMax);
+        boolean list = resultsView && searching();
         for (int i = 0; i < rows && listScroll + i < items.size(); i++) {
             BookEntry e = items.get(listScroll + i);
             int ry = top + i * ROW;
-            boolean sel = e == entry, over = mx >= x && my >= ry && mx < x + LIST_W && my < ry + ROW;
+            boolean sel = list ? listScroll + i == resSel : e == entry, over = mx >= x && my >= ry && mx < x + LIST_W && my < ry + ROW;
             if (sel || over) {
                 drawRect(x, ry, x + LIST_W, ry + ROW, sel ? 0xFF3A5070 : 0xFF223050);
             }
@@ -576,13 +787,18 @@ public class GuiBook extends GuiScreen {
 
     private int px, pw, ptop, ph;
 
-    private void page() {
+    /** The paper on the right. */
+    private void layoutPage() {
         px = bx + PAD + LIST_W + PAD;
         pw = bx + bw - PAD - px;
         ptop = by + HEADER + PAD;
         ph = bh - HEADER - 2 * PAD;
         drawRect(px, ptop, px + pw, ptop + ph, PAPER);
         frame(px, ptop, pw, ph, PAPER_EDGE);
+    }
+
+    private void page() {
+        layoutPage();
         List<BookEl> els = pageEls();
         int cw = pw - 2 * PAD - 4, cx = px + PAD;
         int total = 0;
@@ -590,13 +806,27 @@ public class GuiBook extends GuiScreen {
             total += height(e, cw);
         }
         pageMax = Math.max(0, total - ph + 2 * PAD);
+        if (jumpEl >= 0 && entry != null && els == entry.els && jumpEl < els.size()) {
+            int off = 0;                                              // opened from a hit: its element near the top
+            for (int i = 0; i < jumpEl; i++) {
+                off += height(els.get(i), cw);
+            }
+            pageScroll = off - 10;
+        }
+        jumpEl = -1;
         pageScroll = Math.max(0, Math.min(pageMax, pageScroll));
         scissor(px + 1, ptop + 1, pw - 2, ph - 2);
         drawingPage = true;
         int y = ptop + PAD - pageScroll;
-        for (BookEl e : els) {
+        long now = System.currentTimeMillis();
+        for (int i = 0; i < els.size(); i++) {
+            BookEl e = els.get(i);
             int h = height(e, cw);
             if (y + h >= ptop && y <= ptop + ph) {
+                if (i == flashEl && now < flashUntil) {
+                    int a = (int) (0xA0L * (flashUntil - now) / FLASH_MS);
+                    drawRect(cx - 3, y - 2, cx + cw + 3, y + h - 1, a << 24 | 0xF2C850);
+                }
                 draw(e, cx, y, cw);
             }
             y += h;
@@ -608,6 +838,141 @@ public class GuiBook extends GuiScreen {
             int ty = ptop + (ph - th) * pageScroll / pageMax;
             drawRect(px + pw - 4, ptop + 2, px + pw - 2, ptop + ph - 2, 0x30000000);
             drawRect(px + pw - 4, ty, px + pw - 2, ty + th, 0xFF8A7A5A);
+        }
+    }
+
+    // ------------------------------------------------------------------ the hit list
+
+    private void resultsPage() {
+        layoutPage();
+        int cw = pw - 2 * PAD - 4, left = px + PAD - 2;
+        if (hits.isEmpty()) {
+            int yy = ptop + PAD;
+            for (String l : wrap(Lang.tr("sc.book.noresults") + " " + Lang.tr("sc.book.res.none"), cw)) {
+                fontRendererObj.drawString(l, px + PAD, yy, INK_DIM);
+                yy += 10;
+            }
+            return;
+        }
+        resRows = Math.max(1, (ph - 2 * PAD - 10) / RES_ROW);
+        resMax = Math.max(0, hits.size() - resRows);
+        resScroll = Math.max(0, Math.min(resMax, resScroll));
+        for (int i = 0; i < resRows && resScroll + i < hits.size(); i++) {
+            int idx = resScroll + i;
+            BookSearchSC.Hit h = hits.get(idx);
+            BookEntry e = listed.get(idx);
+            int ry = ptop + PAD + i * RES_ROW, rw = cw + 4;
+            boolean over = mx >= left && my >= ry - 1 && mx < left + rw && my < ry + RES_ROW - 2;
+            if (idx == resSel || over) {
+                drawRect(left, ry - 1, left + rw, ry + RES_ROW - 2, idx == resSel ? 0xFFE6D6A8 : 0xFFEDE2C6);
+            }
+            GL11.glPushMatrix();
+            GL11.glTranslatef(left + 2, ry, 0F);
+            GL11.glScalef(0.75F, 0.75F, 1F);
+            item(e.icon, 0, 0, false);
+            GL11.glPopMatrix();
+            int tx = left + 16;
+            String ch = h.doc.chapter;
+            int chW = Math.min((int) (fontRendererObj.getStringWidth(ch) * 0.75F) + 1, rw / 3);
+            fit(ch, left + rw - chW - 3, ry + 1, chW, INK_DIM, 0.75F);
+            fit(h.doc.title, tx, ry, left + rw - chW - 8 - tx, INK_HEAD, 1F);
+            snippet(h, tx, ry + 11, left + rw - 3 - tx);
+            click(left, ry - 1, rw, RES_ROW - 1, h);
+            if (over) {
+                hoverLines = lines(h.doc.title, "§7" + ch, "§8" + Lang.tr("sc.book.res.count", h.count));
+            }
+        }
+        String hint = Lang.tr("sc.book.res.hint");
+        if (hitTotal > hits.size()) {
+            hint = Lang.tr("sc.book.res.more", hits.size(), hitTotal) + " " + hint;
+        }
+        fit(hint, px + PAD, ptop + ph - PAD - 7, cw, INK_DIM, 0.85F);
+        if (resMax > 0) {
+            int area = resRows * RES_ROW, th = Math.max(8, area * resRows / hits.size());
+            int ty = ptop + PAD + (area - th) * resScroll / resMax;
+            drawRect(px + pw - 4, ty, px + pw - 2, ty + th, 0xFF8A7A5A);
+        }
+    }
+
+    /** A hit's snippet on one line, the match on a highlight. */
+    private void snippet(BookSearchSC.Hit h, int x, int y, int w) {
+        int chars = Math.max(12, w / 5);
+        BookSearchSC.Snip s = BookSearchSC.snippet(h.doc.body, h.at, h.len, chars / 3, chars);
+        String pre = s.text.substring(0, s.hl), mid = s.text.substring(s.hl, s.hl + s.hlLen), post = s.text.substring(s.hl + s.hlLen);
+        int mw = fontRendererObj.getStringWidth(mid);
+        if (mw > w) {
+            mid = fontRendererObj.trimStringToWidth(mid, w);
+            mw = fontRendererObj.getStringWidth(mid);
+            pre = "";
+            post = "";
+        }
+        int preMax = Math.max(0, (w - mw) / 3);
+        if (fontRendererObj.getStringWidth(pre) > preMax) {
+            int dots = fontRendererObj.getStringWidth("...");
+            pre = preMax > dots ? "..." + fontRendererObj.trimStringToWidth(pre, preMax - dots, true) : "";
+        }
+        int pw0 = fontRendererObj.getStringWidth(pre);
+        post = fontRendererObj.trimStringToWidth(post, Math.max(0, w - pw0 - mw));
+        fontRendererObj.drawString(pre, x, y, INK);
+        if (mw > 0) {
+            drawRect(x + pw0 - 1, y - 1, x + pw0 + mw, y + 9, 0xFFF2CF5A);
+            fontRendererObj.drawString(mid, x + pw0, y, 0x2A1A00);
+        }
+        fontRendererObj.drawString(post, x + pw0 + mw, y, INK);
+    }
+
+    // ------------------------------------------------------------------ the bookmark list
+
+    private void marksPage() {
+        int top = by + HEADER + PAD, left = bx + PAD, w = bw - 2 * PAD, h = bh - HEADER - 2 * PAD;
+        drawRect(left, top, left + w, top + h, PAPER);
+        frame(left, top, w, h, PAPER_EDGE);
+        List<String> marks = BookProgressSC.bookmarks();
+        if (marks.isEmpty()) {
+            int yy = top + 8;
+            for (String l : wrap(Lang.tr("sc.book.marks.empty"), w - 16)) {
+                fontRendererObj.drawString(l, left + 8, yy, INK_DIM);
+                yy += 10;
+            }
+            return;
+        }
+        int rows = Math.max(1, (h - 8) / MARK_ROW);
+        marksMax = Math.max(0, marks.size() - rows);
+        marksScroll = Math.max(0, Math.min(marksMax, marksScroll));
+        int rx = left + 4, rw = w - 8 - 4;
+        for (int i = 0; i < rows && marksScroll + i < marks.size(); i++) {
+            String id = marks.get(marksScroll + i);
+            BookEntry e = BookContent.byId(id);
+            int ry = top + 4 + i * MARK_ROW, xb = rx + rw - 14;
+            boolean over = mx >= rx && my >= ry && mx < rx + rw && my < ry + MARK_ROW - 1;
+            boolean overX = mx >= xb && my >= ry + 2 && mx < xb + 12 && my < ry + 14;
+            if (over) {
+                drawRect(rx, ry, rx + rw, ry + MARK_ROW - 1, 0xFFE8D9B0);
+            }
+            if (e != null) {
+                item(e.icon, rx + 2, ry + 1, false);
+            }
+            String title = e != null ? e.title : Lang.tr("sc.book.marks.missing", id);
+            String ch = e != null ? e.chapter.title() : "";
+            int chW = Math.min(fontRendererObj.getStringWidth(ch), rw / 3);
+            fit(title, rx + 22, ry + 5, xb - chW - 10 - (rx + 22), e != null ? INK_HEAD : INK_DIM, 1F);
+            fit(ch, xb - chW - 6, ry + 5, chW, INK_DIM, 1F);
+            drawRect(xb, ry + 2, xb + 12, ry + 14, overX ? 0xFFB04040 : 0xFFD8C8A0);
+            fontRendererObj.drawString("x", xb + 3, ry + 3, overX ? 0xFFFFFF : INK);
+            if (e != null) {
+                click(rx, ry, rw, MARK_ROW - 1, e);
+            }
+            click(xb, ry + 2, 12, 12, "unmark:" + id);
+            if (overX) {
+                hoverLines = lines(Lang.tr("sc.book.unmark"));
+            } else if (over && e != null) {
+                hoverLines = lines(e.title, "§7" + ch);
+            }
+        }
+        if (marksMax > 0) {
+            int area = rows * MARK_ROW, th = Math.max(8, area * rows / marks.size());
+            int ty = top + 4 + (area - th) * marksScroll / marksMax;
+            drawRect(left + w - 5, ty, left + w - 3, ty + th, 0xFF8A7A5A);
         }
     }
 

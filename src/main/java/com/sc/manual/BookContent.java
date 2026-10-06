@@ -212,7 +212,8 @@ public final class BookContent {
         BookChapter c = BookChapter.INTRO;
         list.add(new BookEntry("intro", c, new ItemStack(ModItems.manual), Lang.tr("sc.book.intro.about"))
                 .add(BookEl.title(Lang.tr("sc.manual.intro.title"))).addAll(paras("sc.manual.intro.about"))
-                .add(BookEl.gap()).add(BookEl.dim(Lang.tr("sc.book.intro.how"))).about(new ItemStack(ModItems.manual)));
+                .add(BookEl.gap()).add(BookEl.dim(Lang.tr("sc.book.intro.how"))).add(BookEl.dim(Lang.tr("sc.book.intro.search")))
+                .about(new ItemStack(ModItems.manual)));
         BookEntry start = new BookEntry("start", c, ModItems.ingot.stackOf(Material.COPPER), Lang.tr("sc.manual.intro.starthead"));
         start.add(BookEl.title(Lang.tr("sc.manual.intro.starthead"))).add(BookEl.dim(Lang.tr("sc.book.steps.hint")));
         for (int i = 0; i < STEPS.length; i++) {

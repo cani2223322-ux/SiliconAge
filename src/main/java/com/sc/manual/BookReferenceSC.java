@@ -60,6 +60,7 @@ final class BookReferenceSC {
         e.add(t).add(BookEl.dim(Lang.tr("sc.book.keys.free")));
         e.addAll(BookContent.paras("sc.book.keys.fn"));
         e.add(BookEl.head(Lang.tr("sc.book.keys.mousehead"))).addAll(BookContent.paras("sc.book.keys.mouse"));
+        e.add(BookEl.head(Lang.tr("sc.book.keys.bookhead"))).addAll(BookContent.paras("sc.book.keys.book"));
         e.add(BookEl.head(Lang.tr("sc.book.keys.neihead"))).addAll(BookContent.paras("sc.book.keys.nei"));
         e.add(BookEl.link("controls", Lang.tr("sc.manual.intro.controlshead"))).add(BookEl.link("armorfn", Lang.tr("sc.manual.armor.fnhead")))
                 .add(BookEl.link("bridge.armour", Lang.tr("sc.book.bridge_armour.title")));
