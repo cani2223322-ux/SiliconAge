@@ -191,8 +191,8 @@ public class BlockBridgeSC extends Block {
             if (tag != null) {
                 c.readFromItem(tag);
             }
-            if (placer instanceof EntityPlayer) {
-                c.setOwner(((EntityPlayer) placer).getCommandSenderName());
+            if (placer instanceof EntityPlayer && !(placer instanceof net.minecraftforge.common.util.FakePlayer)) {
+                c.setOwner(((EntityPlayer) placer).getCommandSenderName());   // М-7: automation (a FakePlayer) leaves it ownerless - claim
             }
             c.setPowerOn(false);                                 // placed off, as every energy block
             world.markBlockForUpdate(x, y, z);

@@ -607,8 +607,11 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         }
         euOutFaces = faces;
         if (sig != faceSignature) {
-            if (faceSignature != -1) {
-                netRefreshDue = true;                  // IC2 caches the faces a tile takes / gives on
+            // IC2 caches the faces a tile takes / gives on. The first time too, when EU go out somewhere:
+            // the tile joined the net (chunk load, placement with the item's settings) before its output
+            // faces were worked out - euOutFaces was still empty, and IC2 would never take EU from it
+            if (faceSignature != -1 || n > 0) {
+                netRefreshDue = true;
             }
             faceSignature = sig;
         }
@@ -727,6 +730,24 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         totalEuFromX += make;
     }
 
+    /** World tick the chunk was last told the other buffer changed. */
+    private long foreignMarkTick = -1;
+
+    /**
+     * The other buffer changed without the EU one: tell the chunk it has something to save (once a
+     * tick) - else RF / J / gJ moved in or out are not written on autosave / server stop and come back
+     * as they were (RF sent out a second time, or RF taken in lost).
+     */
+    private void foreignChanged() {
+        if (worldObj != null && !worldObj.isRemote) {
+            long now = worldObj.getTotalWorldTime();
+            if (now != foreignMarkTick) {
+                foreignMarkTick = now;
+                worldObj.markTileEntityChunkModified(xCoord, yCoord, zCoord, this);
+            }
+        }
+    }
+
     /** The other energy's outputs: what this tick's output budget leaves (EU first: the EU sent last tick counts against it). */
     private void pushForeign() {
         Kind k = pairKind();
@@ -772,6 +793,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
             given = Math.max(0, Math.min(given, offer));
             if (given > 0) {
                 foreign -= given;
+                foreignChanged();
                 budget -= given;
                 xOutTick += given;
                 wXOut += given;
@@ -897,6 +919,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         double got = Math.max(0, Math.min(amount, Math.min(budget, room)));
         if (!simulate && got > 0) {
             foreign += got;
+            foreignChanged();
             xInTick += got;
             wXIn += got;
             if (side != ForgeDirection.UNKNOWN && side.ordinal() < 6) {
@@ -916,6 +939,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         double give = Math.max(0, Math.min(amount, Math.min(foreign, foreignOutRoom())));
         if (!simulate && give > 0) {
             foreign -= give;
+            foreignChanged();
             xOutTick += give;
             wXOut += give;
             wSide[side.ordinal()] -= give;
@@ -934,12 +958,22 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
 
     // ---- RF (the methods of CoFH's IEnergyHandler; the subclass declares the interface) ----
 
+    /** RF is whole: only the whole RF that fit are taken (a fractional room taken in full and reported floored made RF). */
     public int receiveEnergy(ForgeDirection from, int maxReceive, boolean simulate) {
-        return (int) Math.floor(acceptForeign(Kind.RF, from, maxReceive, simulate) + 1e-9);
+        int can = (int) Math.floor(acceptForeign(Kind.RF, from, maxReceive, true) + 1e-9);
+        if (simulate || can <= 0) {
+            return Math.max(0, can);
+        }
+        return (int) Math.floor(acceptForeign(Kind.RF, from, can, false) + 1e-9);
     }
 
+    /** Only whole RF leave (a fractional rest given out and reported floored was lost). */
     public int extractEnergy(ForgeDirection from, int maxExtract, boolean simulate) {
-        return (int) Math.floor(provideForeign(Kind.RF, from, maxExtract, simulate) + 1e-9);
+        int can = (int) Math.floor(provideForeign(Kind.RF, from, maxExtract, true) + 1e-9);
+        if (simulate || can <= 0) {
+            return Math.max(0, can);
+        }
+        return (int) Math.floor(provideForeign(Kind.RF, from, can, false) + 1e-9);
     }
 
     public int getEnergyStored(ForgeDirection from) {
@@ -961,6 +995,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
     public void setEnergy(double energy) {
         if (pairKind() == Kind.J) {
             foreign = Math.max(0, Math.min(foreignCapacity(), energy));
+            foreignChanged();
         }
     }
 
@@ -1056,6 +1091,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
             int got = com.sc.compat.RfOpsSC.charge(s, rf, false);
             if (got > 0) {
                 foreign = Math.max(0, foreign - got);
+                foreignChanged();
                 wXCharge += got;
             }
             return;
@@ -1543,6 +1579,11 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
     public void setPairForTest(int kind) {
         pair = kind;
         kindsDirty = true;
+    }
+
+    /** Self-test: the energy nets are to be told about the faces again (next tick). */
+    public boolean netRefreshDueForTest() {
+        return netRefreshDue;
     }
 
     /** World test: an EU amount straight into the buffer. */

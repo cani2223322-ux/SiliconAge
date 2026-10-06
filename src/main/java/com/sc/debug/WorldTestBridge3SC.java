@@ -175,6 +175,15 @@ public class WorldTestBridge3SC {
             c.action(walker, TileEntityBridgeControllerSC.A_NAME, new int[0], "Hijack");
             say(c.ownerless() && c.allowed(walker) && !c.trusted(walker) && !c.isOwner(walker) && !c.claim(walker) && nm.equals(c.getBridgeName()),
                     "bridge 3: an ownerless controller - opening for all, its name / settings refused, a fake player doesn't claim it");
+            // М-7: a controller placed by automation (a FakePlayer) stays ownerless - a real player can claim it
+            w.setBlock(X + 20, Y, Z, com.sc.init.ModBlocks.bridge, com.sc.block.BlockBridgeSC.CONTROLLER, 3);
+            com.sc.init.ModBlocks.bridge.onBlockPlacedBy(w, X + 20, Y, Z, walker,
+                    new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.bridge, 1, com.sc.block.BlockBridgeSC.CONTROLLER));
+            net.minecraft.tileentity.TileEntity fte = w.getTileEntity(X + 20, Y, Z);
+            boolean fakeOwnerless = fte instanceof TileEntityBridgeControllerSC && ((TileEntityBridgeControllerSC) fte).ownerless()
+                    && !((TileEntityBridgeControllerSC) fte).claim(walker);
+            say(fakeOwnerless, "bridge 3: a controller placed by a fake player has no owner (claimable by a real player)");
+            w.setBlockToAir(X + 20, Y, Z);
         }
         if (ticks == 630) {
             BridgeFamiliarSC.get(w).forget("Bridge3Walker");

@@ -38,8 +38,53 @@ final class SelfTestConverterSC {
         sidesNbt();
         itemNbt();
         conversionTick();
+        rfWhole();
+        firstNetJoin();
         recipes();
         texts();
+    }
+
+    /** RF is whole: a fractional room isn't filled for free, a fractional rest isn't given away and lost. */
+    private static void rfWhole() {
+        boolean was = ForeignEnergySC.testAllPresent;
+        ForeignEnergySC.testAllPresent = true;
+        try {
+            TileEntityEnergyConverterSC te = TileEntityEnergyConverterSC.create();
+            te.refreshForTest();
+            te.setPairForTest(Kind.RF.ordinal());
+            double cap = te.foreignCapacity();
+            net.minecraftforge.common.util.ForgeDirection north = net.minecraftforge.common.util.ForgeDirection.NORTH;
+            te.setForeignForTest(cap - 0.6);
+            int r0 = te.receiveEnergy(north, 100, false);
+            boolean noFree = r0 == 0 && Math.abs(te.getForeign() - (cap - 0.6)) < 1e-6;
+            te.setForeignForTest(cap - 5.6);
+            int r5 = te.receiveEnergy(north, 100, false);
+            boolean whole = r5 == 5 && Math.abs(te.getForeign() - (cap - 0.6)) < 1e-6;
+            te.setMode(north.ordinal(), TileEntityEnergyConverterSC.MODE_OUT);
+            te.setBuf(north.ordinal(), TileEntityEnergyConverterSC.BUF_X);
+            te.recomputeKinds();
+            te.setForeignForTest(10.5);
+            int sim = te.extractEnergy(north, 100, true);
+            int e = te.extractEnergy(north, 100, false);
+            boolean out = sim == 10 && e == 10 && Math.abs(te.getForeign() - 0.5) < 1e-9;
+            check(noFree && whole && out, "RF in / out whole: 0.6 RF of room takes " + r0 + ", 5.6 takes " + r5
+                    + ", 10.5 RF in the buffer gives " + e + " and keeps " + te.getForeign());
+        } finally {
+            ForeignEnergySC.testAllPresent = was;
+        }
+    }
+
+    /** An EU output face known on the first look: the energy net is told again (it was joined with no output faces). */
+    private static void firstNetJoin() {
+        TileEntityEnergyConverterSC plain = TileEntityEnergyConverterSC.create();
+        plain.recomputeKinds();
+        boolean quiet = !plain.netRefreshDueForTest();
+        TileEntityEnergyConverterSC te = TileEntityEnergyConverterSC.create();
+        te.setMode(3, TileEntityEnergyConverterSC.MODE_OUT);
+        te.setBuf(3, TileEntityEnergyConverterSC.BUF_EU);
+        te.recomputeKinds();
+        check(quiet && te.netRefreshDueForTest() && te.outputFaces().length == 1,
+                "first face look: all inputs - the net left alone, an EU output - the net told again");
     }
 
     private static boolean near(double a, double b) {
