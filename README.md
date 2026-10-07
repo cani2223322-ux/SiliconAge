@@ -36,6 +36,7 @@
   - **Насос с баком из отсеков** (до 4 жидкостей) и вкладка **«Баки»**: сторона выдачи, очистка за энергию, закрепление жидкости, автовыдача, фильтр жидкостей, действие при полном баке. Насос забирает водоём целиком, «бесконечная» вода не восстанавливается.
   - Экзо-установка лазером поднимает руду из недр; линзы руды, резонатор, стабилизатор и глубинный сканер (руды других модов).
 - **Ключи трёх уровней:** поворот машин, демонтаж с сохранением заряда и содержимого, копирование настроек.
+- **Обзор сети:** Shift + ПКМ ключом по кабелю — голограмма всей сети: кабели по нагрузке (узкие места и перегрузка — красным), источники, потребители, накопители и трансформаторы, панель с выработкой, потреблением и потерями.
 - **Логистика:** связки кабелей, труб и пневмотрубок в одном блоке (как в Ender IO), фильтры предметов, переносные баки.
 - **Энергоброня Нано / Квант / Экзо:** больше 20 функций (полёт, ночное зрение, сканеры руд и существ, солнечная плёнка, щит, восстановление, импульс уничтожения и другие), чипы, режимы питания, нагрев, бонусы полного комплекта.
   - У каждого комплекта свой стиль и объёмные детали на модели.
@@ -55,6 +56,10 @@
 - **Преобразователь энергии:** EU ⇄ **RF**, **джоули Mekanism** и **gJ Galacticraft** (с картами Mekanism и Galacticraft), курсы и потери в конфиге, режим каждой грани, модули. Необязателен: без этих модов у него нет рецепта, а поставленный работает как буфер EU.
 - **Энергоклинки** трёх уровней: режущая кромка, энергоблок, широкий взмах, энергетическая волна, «Добыча» до V.
 - **Электробуры** трёх уровней: площадь 3x3 и 5x5, туннель, жила, шёлковое касание, удача до V, автоплавка, лазер, связь с сундуком. Питаются от надетой брони.
+- **Сингулярный клинок и Сингулярный бур (SV):** получаются из Экзо-клинка и Экзо-бура в Сингулярной станции, растут до уровня 5, ветки на выбор, цветовые схемы; газы берут из баков надетой брони.
+  - Клинок: **6 форм** (Shift + колесо) — Меч, Коса, Копьё, Хлыст-клинок, Щит-клинок, Сингулярная, у каждой своя особая атака; гравитационный рывок и привязка, разрез пространства, идеальное парирование, контратака, заряженный удар, гравитационный щит, «Последний шанс»; ветки «Разрушитель», «Дуэлянт», «Страж». Уважает PvP-настройки и приваты.
+  - Бур: режим **«Чёрная дыра»** 5x5 / 9x9 / 12x12 (и туннель) — уничтожает зону, кроме бедрока, блоков с содержимым и чужих приватов, и даёт **крупицы сингулярности** (поставленные игроком блоки не считаются); гравитационная воронка, сундук добычи в любом измерении, осушение, замена блоков, фазовое копание.
+  - **Крупицы** и **сгусток сингулярности**: очки уровня бура, оплата модернизации в станции, 100 мБ сингулярной материи в Компрессоре.
 - **Генератор поля:** кластер до 8 узлов, 5 форм поля.
   - Защита от мобов, снарядов и взрывов.
   - Запрет спавна, приватная зона со списком доступа (защищены и животные, рамки, вагонетки), лечение союзников; поле нельзя развернуть поверх чужого.
@@ -66,7 +71,7 @@
 - **Меню-голоэкраны:** у каждой машины и генератора свой экран с анимированной сценой процесса (дробилка, CVD, степпер, турбины, реакторы, солнечные панели…), шкала энергии с процентами, полноразмерные баки с текстурой жидкости; тот же стиль у карьера, генератора поля и страниц NEI.
 - **Энергонакопители:** компаратор, выход поворачивается ключом, слот разрядки, модули (трансформатор, объём, форсаж, **расширитель выхода** — до 3 выходных граней, **адаптивный трансформатор** — повышает выход до уровня самого слабого потребителя, **универсальный трансформатор**), до 4 слотов зарядки на старших уровнях.
 - **Жидкости:** вёдра для всех 22 жидкостей мода, заливка и слив ведром или капсулой по машине, модуль расширенного бака и очистка баков за энергию.
-- **Иллюстрированный справочник инженера:** 14 разделов плитками, больше 175 статей с иконками предметов, сетками крафта, рецептами машин, картами руд, схемами мультиблоков и рисунками; поиск, закладки, «первые шаги» с галочками. **«Путь развития»** с маршрутами по уровням энергии, реакторам и броне, раздел **«Компоненты»** (все детали и материалы: где делаются и куда идут), **«Справочная»** (клавиши, совместимость, жидкости и газы, все модули), отдельный раздел о мосте. У каждого предмета мода есть статья. Выдаётся при первом крафте любого предмета мода.
+- **Иллюстрированный справочник инженера:** 14 разделов плитками, больше 175 статей с иконками предметов, сетками крафта, рецептами машин, картами руд, схемами мультиблоков и рисунками; **поиск по всему тексту** (Ctrl+F или «/», список найденного с подсветкой), **закладки**, «первые шаги» с галочками. **«Путь развития»** с маршрутами по уровням энергии, реакторам и броне, раздел **«Компоненты»** (все детали и материалы: где делаются и куда идут), **«Справочная»** (клавиши, совместимость, жидкости и газы, все модули), отдельный раздел о мосте. У каждого предмета мода есть статья. Выдаётся при первом крафте любого предмета мода.
 - **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое); на сервере настройки приходят игрокам с сервера; список измерений, где генерируются руды (`worldgen.oreDimensions`). Блоки с содержимым ломаются только киркой — рукой ничего не потеряешь.
 
 ### Управление
@@ -77,12 +82,14 @@
 | **P** | Следующий профиль функций (Сингулярная броня) |
 | **H** / **J** | Мост «Домой» / к последней цели (шлем со связью с мостом), Shift + J — запомнить место |
 | **G** | Статья справочника о предмете под курсором в инвентаре (или в руке) |
-| **Гаечный ключ** | ПКМ — повернуть механизм, Shift + ПКМ в воздух — сменить режим (у электро- и квантового ключа) |
+| **Ctrl+F** или **/** | Поиск в справочнике |
+| **Shift + колесо** | Форма Сингулярного клинка / режим Сингулярного бура |
+| **Гаечный ключ** | ПКМ — повернуть механизм, Shift + ПКМ в воздух — сменить режим (у электро- и квантового ключа), Shift + ПКМ по кабелю — обзор сети |
 | **Shift / Ctrl** | Подробности и управление в подсказках предметов |
 
 ### Требования и установка
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (или новее для 1.7.10), Java 8.
-2. Скачайте `SiliconAgeBeta-0.1.8.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
+2. Скачайте `SiliconAgeBeta-0.1.9.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
 
 ### Моды, которые помогут (необязательны)
 | Мод | Что даёт вместе с Silicon Age |
@@ -139,6 +146,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
   - **A pump with a compartment tank** (up to 4 fluids) and a **Tanks** tab: output side, clearing for energy, pinning a fluid, auto output, a fluid filter, what to do when full. The pump takes a whole body of water, so "infinite" water doesn't refill.
   - The rig's laser brings ore up from the deep; ore lenses, resonator, stabilizer and a deep scanner (other mods' ores).
 - **Wrenches in three tiers:** turning machines, dismantling with charge and contents kept, copying settings.
+- **Network overview:** sneak + right-click a cable with a wrench - a hologram of the whole network: cables by load (bottlenecks and overload in red), sources, consumers, storages and transformers, a panel with output, consumption and losses.
 - **Logistics:** cable, pipe and pneumatic tube bundles in one block (Ender IO style), item filters, portable tanks.
 - **Nano / Quantum / Exo energy suits:** 20+ functions (flight, night vision, ore and life scanners, solar film, shield, regeneration, annihilation pulse and more), chips, power modes, heat, full-set bonuses.
   - Each suit has its own style and 3D parts on the worn model.
@@ -158,6 +166,10 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 - **Energy Converter:** EU ⇄ **RF**, **Mekanism joules** and **Galacticraft gJ** (with the Mekanism and Galacticraft cards), rates and loss in the config, a mode for every face, upgrades. Optional: without those mods it has no recipe, and one already placed works as an EU buffer.
 - **Energy blades** in three tiers: cutting edge, energy block, wide sweep, energy wave, Looting up to V.
 - **Electric drills** in three tiers: 3x3 and 5x5 areas, tunnel, vein, silk touch, fortune up to V, autosmelt, laser, chest link. Powered by the worn suit.
+- **Singular Blade and Singular Drill (SV):** made from the Exo blade and drill in the Singular Station, grow to level 5, branches to choose, colour schemes; they take gases from the worn suit's tanks.
+  - Blade: **6 forms** (sneak + wheel) - Sword, Scythe, Spear, Whip, Shield, Singular, each with its own special attack; gravity pull and tether, rift step, perfect parry, riposte, charged strike, gravity shield, Last Chance; Destroyer, Duelist and Guardian branches. Respects PvP settings and claims.
+  - Drill: **Black Hole** mode 5x5 / 9x9 / 12x12 (and a tunnel) - destroys the zone but bedrock, blocks with contents and other claims, and gives **Singular Crumbs** (player-placed blocks don't count); gravity funnel, a loot chest in any dimension, drain, block replace, phase digging.
+  - **Crumbs** and the **Singular Clot**: drill level points, paying for modernisation in the station, 100 mB of Singular Matter in the Compressor.
 - **Field generator:** a cluster of up to 8 nodes, 5 field shapes.
   - Protection from mobs, projectiles and explosions.
   - No spawning, a private zone with an access list (animals, frames and carts protected too), healing of allies; a field can't be deployed over someone else's.
@@ -169,7 +181,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 - **Holo-screen menus:** every machine and generator has its own screen with an animated scene of its process (crusher, CVD, stepper, turbines, reactors, solar panels...), an energy gauge with the percentage and full-size tank gauges in the fluid's texture; the quarry, the field generator and the NEI pages share the style.
 - **Energy storages:** comparator output, the output face turned with a wrench, a discharge slot, upgrades (transformer, capacity, overdrive, **output splitter** - up to 3 output faces, **adaptive transformer** - raises the output up to the weakest consumer's tier, **universal transformer**), up to 4 charge slots on the higher tiers.
 - **Fluids:** buckets for all 22 of the mod's fluids, filling and draining machines with a bucket or a cell, a tank extension upgrade and clearing tanks for energy.
-- **Illustrated engineer's handbook:** 14 chapter tiles, 175+ articles with item icons, crafting grids, machine recipes, ore cards, multiblock layouts and pictures; search, bookmarks, "first steps" with ticks. A **Progression** chapter with routes through the energy tiers, reactors and suits, a **Components** chapter (every part and material: where it is made and what it goes into), a **Reference** chapter (keys, compatibility, fluids and gases, every module), a chapter on the bridge. Every item of the mod has an article. Given on the first craft of any item of the mod.
+- **Illustrated engineer's handbook:** 14 chapter tiles, 175+ articles with item icons, crafting grids, machine recipes, ore cards, multiblock layouts and pictures; **full-text search** (Ctrl+F or "/", a result list with highlights), **bookmarks**, "first steps" with ticks. A **Progression** chapter with routes through the energy tiers, reactors and suits, a **Components** chapter (every part and material: where it is made and what it goes into), a **Reference** chapter (keys, compatibility, fluids and gases, every module), a chapter on the bridge. Every item of the mod has an article. Given on the first craft of any item of the mod.
 - **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more); on a server the players get the server's settings; the list of dimensions where ores generate (`worldgen.oreDimensions`). Blocks that hold things break only with a pickaxe - nothing is lost by hand.
 
 ### Controls
@@ -180,12 +192,14 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 | **P** | Next function profile (Singular armour) |
 | **H** / **J** | Bridge "Home" / to the last target (helmet with the bridge link), sneak + J remembers the spot |
 | **G** | The handbook article of the item under the cursor in an inventory (or in hand) |
-| **Wrench** | Right-click turns a machine, sneak + right-click in the air switches the mode (electric and quantum wrench) |
+| **Ctrl+F** or **/** | Search the handbook |
+| **Sneak + wheel** | Singular blade form / Singular drill mode |
+| **Wrench** | Right-click turns a machine, sneak + right-click in the air switches the mode (electric and quantum wrench), sneak + right-click a cable shows the network overview |
 | **Shift / Ctrl** | Details and controls in item tooltips |
 
 ### Requirements and installation
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (or newer for 1.7.10), Java 8.
-2. Download `SiliconAgeBeta-0.1.8.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
+2. Download `SiliconAgeBeta-0.1.9.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
 
 ### Mods that help (optional)
 | Mod | What it adds with Silicon Age |
