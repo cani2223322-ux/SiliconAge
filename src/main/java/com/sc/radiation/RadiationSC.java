@@ -233,7 +233,11 @@ public final class RadiationSC {
     /** Blocks by id and meta: registered as "blockLead" (this mod's or another mod's block of lead). */
     private static final Map<Integer, Boolean> LEAD_BLOCKS = new HashMap<Integer, Boolean>();
 
-    private static boolean isLeadBlock(Block b, int meta) {
+    /**
+     * Any block of lead - ours or another mod's ("blockLead"): a pack that unifies lead (UniDict) crafts only one mod's
+     * block, so the reactor shells take any of them too.
+     */
+    public static boolean isLeadBlock(Block b, int meta) {
         int key = (Block.getIdFromBlock(b) << 4) | (meta & 15);
         Boolean known = LEAD_BLOCKS.get(key);
         if (known == null) {

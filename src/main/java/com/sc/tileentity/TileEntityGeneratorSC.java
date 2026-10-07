@@ -838,8 +838,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return -1;
     }
 
-    private static boolean isShell(net.minecraft.block.Block b) {
-        return b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.leadGlass;
+    private boolean isShell(int x, int y, int z) {
+        net.minecraft.block.Block b = worldObj.getBlock(x, y, z);
+        return b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.leadGlass
+                || com.sc.radiation.RadiationSC.isLeadBlock(b, worldObj.getBlockMetadata(x, y, z));   // another mod's block of lead
     }
 
     /** Once a second: the 7x7x3 round the tokamak - coils, walls (lead, lead glass, port tanks and storages), cap and floor. */
@@ -860,7 +862,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         for (int dz = -3; dz <= 3; dz++) {
             for (int dx = -3; dx <= 3; dx++) {
                 for (int dy = -1; dy <= 1; dy += 2) {                 // cap and floor
-                    if (!isShell(worldObj.getBlock(x0 + dx, y0 + dy, z0 + dz))) {
+                    if (!isShell(x0 + dx, y0 + dy, z0 + dz)) {
                         caps++;
                     } else if (dy > 0) {
                         top |= 1L << ((dz + 3) * 7 + dx + 3);
@@ -881,7 +883,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 }
                 int w = wallIndex(dx, dz);
                 net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y0, z);
-                if (isShell(worldObj.getBlock(x, y0, z))) {
+                if (isShell(x, y0, z)) {
                     walls |= 1 << w;
                     portMem[w] = null;
                 } else if ((te instanceof TileEntityTankSC || te instanceof TileEntityEnergyStorageSC && !(te instanceof TileEntityChargePadSC))

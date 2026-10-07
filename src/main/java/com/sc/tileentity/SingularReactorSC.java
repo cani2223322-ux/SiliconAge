@@ -991,8 +991,10 @@ public class SingularReactorSC {
 
     // ------------------------------------------------------------------ the scan
 
-    private static boolean isShell(Block b) {
-        return b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.leadGlass;
+    private static boolean isShell(World w, int x, int y, int z) {
+        Block b = w.getBlock(x, y, z);
+        return b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.leadGlass
+                || com.sc.radiation.RadiationSC.isLeadBlock(b, w.getBlockMetadata(x, y, z));   // another mod's block of lead
     }
 
     /** Once a second: the 7x7x5 round the reactor. */
@@ -1016,7 +1018,7 @@ public class SingularReactorSC {
         for (int dz = -3; dz <= 3; dz++) {
             for (int dx = -3; dx <= 3; dx++) {
                 for (int dy = -2; dy <= 2; dy += 4) {
-                    if (!isShell(w.getBlock(x0 + dx, y0 + dy, z0 + dz))) {
+                    if (!isShell(w, x0 + dx, y0 + dy, z0 + dz)) {
                         caps++;
                     } else if (dy > 0) {
                         top |= 1L << ((dz + 3) * 7 + dx + 3);
@@ -1050,7 +1052,7 @@ public class SingularReactorSC {
                     labels[cell] = LABEL_NONE;
                     TileEntity te = w.getTileEntity(x, y, z);
                     boolean store = te instanceof TileEntityEnergyStorageSC && !(te instanceof TileEntityChargePadSC);
-                    if (isShell(w.getBlock(x, y, z))) {
+                    if (isShell(w, x, y, z)) {
                         wl[l] |= 1 << wi;
                         portMem[cell] = null;
                     } else if ((te instanceof TileEntityTankSC || store) && g.portHeldByOtherSC(x, y, z)) {

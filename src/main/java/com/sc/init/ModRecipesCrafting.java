@@ -131,7 +131,9 @@ public final class ModRecipesCrafting {
     // ---- §1 ----
 
     private static void cablesAndPipes() {
-        OreRecipes.shapeless(cable(CableType.COPPER_BARE, 4), ingot(Material.COPPER));
+        // Two ingots side by side, not one alone: a single copper ingot is other mods' nugget recipe (an ingot ->
+        // 9 nuggets), and whichever was registered first took the grid.
+        OreRecipes.shaped(cable(CableType.COPPER_BARE, 8), new Object[]{"II", 'I', ingot(Material.COPPER)});
         OreRecipes.shapeless(cable(CableType.COPPER_INSULATED), cable(CableType.COPPER_BARE), rubber());
         OreRecipes.shapeless(cable(CableType.SILVER), ingot(Material.SILVER), new ItemStack(ModItems.rubberBlue));
         OreRecipes.shapeless(cable(CableType.TUNGSTEN), ingot(Material.TUNGSTEN), new ItemStack(ModItems.rubberHeatResist));
@@ -164,7 +166,8 @@ public final class ModRecipesCrafting {
         // Target's backing plate - see ModItems' sputterBacking TODO for why the item itself
         // exists at all. Picked a cheap, plain-steel-plate crafting recipe by analogy with the
         // mod's other simple backing/frame components (comp("alFrame")/comp("tiFrame") etc.).
-        OreRecipes.shapeless(comp("sputterBacking"), ingot(Material.STEEL));
+        // two side by side: a single steel ingot is other mods' steel-nugget recipe (Railcraft and others)
+        OreRecipes.shaped(comp("sputterBacking", 2), new Object[]{"SS", 'S', ingot(Material.STEEL)});
     }
 
     // ---- §2 ----
@@ -560,7 +563,7 @@ public final class ModRecipesCrafting {
         OreRecipes.shapeless(new ItemStack(ModItems.radioprotector, 2), new ItemStack(Items.glass_bottle), new ItemStack(Items.sugar),
                 new ItemStack(Items.glowstone_dust), dust(Material.CARBON));
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.RAD_SHIELDING), "LBL", "ITI", "LBL",
-                'L', lead, 'B', new ItemStack(ModBlocks.leadBlock), 'I', new ItemStack(Items.iron_ingot), 'T', silicon(SiliconMaterial.TRANSISTOR));
+                'L', lead, 'B', "blockLead", 'I', new ItemStack(Items.iron_ingot), 'T', silicon(SiliconMaterial.TRANSISTOR));
         OreRecipes.shaped(new ItemStack(ModBlocks.shower), "IPI", "GBG", "ICI",
                 'I', new ItemStack(Items.iron_ingot), 'P', pipe(PipeType.COPPER), 'G', window, 'B', new ItemStack(Items.bucket),
                 'C', cable(CableType.SILVER));
@@ -793,11 +796,12 @@ public final class ModRecipesCrafting {
 
     /**
      * Pneumatic tube filters and speed upgrade (TODO: not in the design doc, modelled on Ender IO's):
-     * the basic filter is paper round a hopper, the advanced one adds logic around it.
+     * the basic filter is paper round a hopper over a bare copper cable (the cable: paper round a hopper alone is
+     * Ender IO's own basic filter - with both mods the grid gave theirs), the advanced one adds logic around it.
      */
     private static void tubeParts() {
         ItemStack basic = new ItemStack(ModItems.itemFilter, 1, 0);
-        OreRecipes.shaped(basic, " P ", "PHP", " P ", 'P', Items.paper, 'H', Blocks.hopper);
+        OreRecipes.shaped(basic, " P ", "PHP", " W ", 'P', Items.paper, 'H', Blocks.hopper, 'W', cable(CableType.COPPER_BARE));
         OreRecipes.shaped(new ItemStack(ModItems.itemFilter, 1, 1), " T ", "CFC", " T ",
                 'T', silicon(SiliconMaterial.TRANSISTOR), 'C', Items.comparator, 'F', basic);
         OreRecipes.shaped(new ItemStack(ModItems.tubeSpeedUpgrade), " I ", "PTP", " I ",

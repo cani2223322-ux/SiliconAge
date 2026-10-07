@@ -95,6 +95,7 @@ public final class SelfTestSC {
             smelters();
             vanillaOres();
             fixes20261007();
+            loneIngredientRecipes();
             metalBlocks();
             electrolysisAndHeavyWater();
             drills();
@@ -3767,6 +3768,22 @@ public final class SelfTestSC {
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */
+    /** No crafting recipe of the mod is one shared ingredient alone (a copper ingot alone was other mods' nuggets). */
+    private static void loneIngredientRecipes() {
+        StringBuilder bad = new StringBuilder();
+        for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+            String s = RecipeConflictsSC.loneShared((net.minecraft.item.crafting.IRecipe) o);
+            if (s != null) {
+                bad.append(bad.length() > 0 ? "; " : "").append(s);
+            }
+        }
+        check(bad.length() == 0, "crafting: no recipe of one shared ingredient alone" + (bad.length() > 0 ? " - " + bad : ""));
+        // a pack that unifies lead (UniDict) crafts another mod's block: the reactor shells go by "blockLead"
+        check(com.sc.radiation.RadiationSC.isLeadBlock(com.sc.init.ModBlocks.leadBlock, 0)
+                        && !com.sc.radiation.RadiationSC.isLeadBlock(net.minecraft.init.Blocks.iron_block, 0),
+                "crafting: any block of lead (\"blockLead\") counts as lead - ours and other mods'");
+    }
+
     /** Fixes after the post-0.1.8 bug check (Б, К, С, Р). */
     private static void fixes20261007() {
         // Б-1: a crumb of stone costs more SM in the black hole than its clot gives back
