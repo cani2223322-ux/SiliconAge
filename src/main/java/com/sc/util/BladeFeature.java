@@ -92,6 +92,8 @@ public enum BladeFeature {
     public static final float CHAIN_KEEP = 0.75F;
     /** Riposte: damage a block must take, the share the next hit gives back. */
     public static final float RIPOSTE_MIN = 10F, RIPOSTE_SHARE = 0.5F;
+    /** Riposte: at most this much is added (10 hearts), however long the block. */
+    public static final float RIPOSTE_MAX = 20F;
     /** Destroyer, level 3: area damage x1.25. */
     public static final float DESTROYER_AREA_MUL = 1.25F;
     /** Guardian, level 5 «Последний шанс»: 1 health instead of death, once in 5 minutes, singular matter (cooldown key in the blade). */

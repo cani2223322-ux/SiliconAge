@@ -842,6 +842,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     /** What the compressor never takes, whatever its rarity says: nether stars, diamonds, emeralds, ender pearls and eyes, beacons. */
     private static boolean isValuable(ItemStack stack) {
         net.minecraft.item.Item i = stack.getItem();
+        if (i == com.sc.init.ModItems.dust && com.sc.init.ModItems.dust.materialAt(stack.getItemDamage()) == com.sc.util.Material.DIAMOND) {
+            return true;                                     // Р-1: a crushed diamond is still a diamond
+        }
         return i == net.minecraft.init.Items.nether_star || i == net.minecraft.init.Items.diamond || i == net.minecraft.init.Items.emerald
                 || i == net.minecraft.init.Items.ender_pearl || i == net.minecraft.init.Items.ender_eye
                 || i == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.diamond_block)
@@ -1450,7 +1453,18 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (machineType.isSmelter() || machineType.isCompressor()) {
             return isItemValidForSlot(slot, stack) && (slots[slot] == null || slots[slot].isItemEqual(stack));
         }
+        if (machineType == MachineType.CRUSHER && handOnly(stack)) {
+            return false;
+        }
         return slot < INPUT_SLOTS && isItemValidForSlot(slot, stack) && fitsSomeRecipe(slot, stack);
+    }
+
+    /**
+     * Р-2: what the Crusher takes from a player's hand only - diamonds (to dust) and nether quartz (to silica sand).
+     * A Crusher fed by a quarry or a chest would otherwise grind every diamond and quartz that passes through.
+     */
+    public static boolean handOnly(ItemStack stack) {
+        return stack != null && (stack.getItem() == net.minecraft.init.Items.diamond || stack.getItem() == net.minecraft.init.Items.quartz);
     }
 
     /**

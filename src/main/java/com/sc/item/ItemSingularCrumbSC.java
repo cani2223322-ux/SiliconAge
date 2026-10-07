@@ -25,6 +25,11 @@ public class ItemSingularCrumbSC extends Item {
 
     /** Natural blocks per crumb dug, ores count this many times, level points per crumb fed. */
     public static final int CRUMB_BLOCKS = 64, ORE_MUL = 4, CRUMB_POINTS = 10;
+    /**
+     * Stone counts 1/STONE_DIV of a block: lava flowing onto water makes it, and nothing tells that stone from
+     * the natural kind - at 1/8 a crumb of it costs more singular matter (64*8/25 mB) than the crumb gives back.
+     */
+    public static final int STONE_DIV = 8;
 
     public ItemSingularCrumbSC() {
         setMaxStackSize(64);
@@ -95,7 +100,7 @@ public class ItemSingularCrumbSC extends Item {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add("§7" + Lang.tr("sc.tooltip.singcrumb"));
-        com.sc.util.TooltipSC.more(list, Lang.tr("sc.tooltip.singcrumb.details", CRUMB_BLOCKS, ORE_MUL),
+        com.sc.util.TooltipSC.more(list, Lang.tr("sc.tooltip.singcrumb.details", CRUMB_BLOCKS, ORE_MUL, STONE_DIV),
                 Lang.tr("sc.tooltip.singcrumb.howto", CRUMB_POINTS));
     }
 }

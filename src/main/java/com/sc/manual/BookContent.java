@@ -1323,7 +1323,8 @@ public final class BookContent {
                 null,
                 new Object[]{Math.round(com.sc.util.DrillFeature.HOLE_EU_MUL * 100), com.sc.util.DrillFeature.HOLE_BLOCKS_PER_MB,
                         number(com.sc.util.DrillFeature.BLACK_HOLE.cooldownTicks() / 20F)},
-                new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS, com.sc.item.ItemSingularCrumbSC.ORE_MUL}));
+                new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS, com.sc.item.ItemSingularCrumbSC.ORE_MUL,
+                        com.sc.item.ItemSingularCrumbSC.STONE_DIV}));
         e.add(BookEl.link("singularcrumb", Lang.tr("sc.manual.singcrumb.head")));
         // branches
         e.add(BookEl.head(Lang.tr("sc.manual.singtool.branchhead"))).addAll(paras("sc.manual.singtool.branch",
@@ -1347,7 +1348,8 @@ public final class BookContent {
         ItemStack crumb = new ItemStack(ModItems.singularCrumb), clot = new ItemStack(ModItems.singularClot);
         BookEntry e = new BookEntry("singularcrumb", c, crumb, Lang.tr("sc.manual.singcrumb.head"));
         e.add(BookEl.title(Lang.tr("sc.manual.singcrumb.head"))).add(BookEl.items(listOf(crumb, clot)));
-        e.addAll(paras("sc.manual.singcrumb", new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS, com.sc.item.ItemSingularCrumbSC.ORE_MUL},
+        e.addAll(paras("sc.manual.singcrumb", new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS, com.sc.item.ItemSingularCrumbSC.ORE_MUL,
+                        com.sc.item.ItemSingularCrumbSC.STONE_DIV},
                 new Object[]{com.sc.item.ItemSingularCrumbSC.CRUMB_POINTS},
                 new Object[]{com.sc.util.SingularStationMath.CRUMB_SM, com.sc.util.SingularStationMath.CRUMB_MAX_PERCENT}));
         e.add(BookEl.head(clot.getDisplayName(), clot)).add(BookEl.para(Lang.tr("sc.manual.singclot", com.sc.item.ItemSingularClotSC.SM_PER_CLOT)));

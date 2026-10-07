@@ -1,8 +1,21 @@
 package com.sc.item;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.gameevent.TickEvent;
+import net.minecraft.block.Block;
+import net.minecraft.entity.item.EntityFallingBlock;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.tileentity.TileEntityPiston;
+import net.minecraft.util.MathHelper;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.common.util.BlockSnapshot;
 import net.minecraftforge.event.world.BlockEvent;
@@ -55,7 +68,72 @@ public final class DrillEventsSC {
                 data.removeTag(BROKE_PLACED);
             }
         }
-        PlacedBlocksSC.forget(e.world, e.x, e.y, e.z);
+        // Б-2: forgotten only once the block is really gone - a BreakEvent is also how protection checks ask
+        // (the field generator's claim probe, the quarry, wrenches, other mods), and those leave it standing
+        if (pending.size() < PENDING_MAX) {
+            pending.add(new Pending(e.world, e.x, e.y, e.z, e.block));
+        }
+    }
+
+    private static final int PENDING_MAX = 65536, FALLING_MAX = 4096;
+    private final List<Pending> pending = new ArrayList<Pending>();
+    private final List<EntityFallingBlock> falling = new ArrayList<EntityFallingBlock>();
+
+    private static final class Pending {
+        final World w;
+        final int x, y, z;
+        final Block block;
+
+        Pending(World w, int x, int y, int z, Block block) {
+            this.w = w;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.block = block;
+        }
+    }
+
+    /** Б-4: falling sand / gravel lands somewhere else - where it lands counts as placed. */
+    @SubscribeEvent
+    public void onJoin(EntityJoinWorldEvent e) {
+        if (!e.world.isRemote && e.entity instanceof EntityFallingBlock && falling.size() < FALLING_MAX) {
+            falling.add((EntityFallingBlock) e.entity);
+        }
+    }
+
+    /**
+     * End of every server tick: broken blocks that are really gone lose their mark; a block a piston is moving
+     * counts as placed where it arrives (Б-4: no Forge event for either); landed falling blocks likewise.
+     */
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent e) {
+        if (e.phase != TickEvent.Phase.END) {
+            return;
+        }
+        for (Pending q : pending) {
+            if (q.w.blockExists(q.x, q.y, q.z) && q.w.getBlock(q.x, q.y, q.z) != q.block) {
+                PlacedBlocksSC.forget(q.w, q.x, q.y, q.z);
+            }
+        }
+        pending.clear();
+        for (Iterator<EntityFallingBlock> it = falling.iterator(); it.hasNext(); ) {
+            EntityFallingBlock f = it.next();
+            if (f.isDead) {
+                it.remove();
+                int x = MathHelper.floor_double(f.posX), y = MathHelper.floor_double(f.posY), z = MathHelper.floor_double(f.posZ);
+                if (f.worldObj.blockExists(x, y, z) && !f.worldObj.isAirBlock(x, y, z)) {
+                    PlacedBlocksSC.mark(f.worldObj, x, y, z);
+                }
+            }
+        }
+        for (WorldServer w : DimensionManager.getWorlds()) {
+            for (Object o : w.loadedTileEntityList) {
+                if (o instanceof TileEntityPiston) {
+                    TileEntityPiston te = (TileEntityPiston) o;
+                    PlacedBlocksSC.mark(w, te.xCoord, te.yCoord, te.zCoord);
+                }
+            }
+        }
     }
 
     /** Player data: the last placed block broken with the Singular drill in hand {dim, x, y, z} and its world tick. */

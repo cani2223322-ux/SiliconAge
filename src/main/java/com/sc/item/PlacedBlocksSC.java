@@ -10,10 +10,11 @@ import net.minecraft.world.WorldSavedData;
 /**
  * Blocks placed by players in one dimension (the world's per-dimension storage, "SiliconAgePlaced"): the Singular
  * drill's black hole gives no singularity crumbs for them (docs/plan-singular-tools.md §3.2 - no farming).
- * DrillEventsSC adds on BlockEvent.PlaceEvent and forgets on BlockEvent.BreakEvent. Bounded: the newest
+ * DrillEventsSC adds on BlockEvent.PlaceEvent, where a piston moves a block and where falling sand / gravel
+ * lands, and forgets after a BreakEvent once the block is really gone. Bounded: the newest
  * PlacedRecordSC.DEFAULT_MAX positions per dimension are kept, older ones count as natural again.
- * Not tracked: blocks moved by pistons, falling sand / gravel landing elsewhere, blocks set by other mods without
- * a PlaceEvent (machines, world editors), anything placed before this record existed.
+ * Not tracked: blocks set by other mods without a PlaceEvent (machines, world editors), anything placed before
+ * this record existed.
  */
 public class PlacedBlocksSC extends WorldSavedData {
 

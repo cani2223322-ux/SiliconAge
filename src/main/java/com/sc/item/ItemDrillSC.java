@@ -192,7 +192,7 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
     }
 
     /** Singular, NBT: blocks dug towards the next level point ("SingDigCnt"), units towards the next crumb ("SingCrumbCnt"). */
-    public static final String DIG_COUNT = "SingDigCnt", CRUMB_COUNT = "SingCrumbCnt";
+    public static final String DIG_COUNT = "SingDigCnt", CRUMB_COUNT = "SingCrumbCnt", STONE_COUNT = "SingStoneCnt";
 
     public static int digCounter(ItemStack stack) {
         return stack != null && stack.hasTagCompound() ? Math.max(0, stack.getTagCompound().getInteger(DIG_COUNT)) : 0;
@@ -208,6 +208,15 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
 
     public static void setCrumbCounter(ItemStack stack, int n) {
         tag(stack).setInteger(CRUMB_COUNT, Math.max(0, n));
+    }
+
+    /** Natural stone dug towards the next crumb unit (ItemSingularCrumbSC.STONE_DIV of it make one). */
+    public static int stoneCounter(ItemStack stack) {
+        return stack != null && stack.hasTagCompound() ? Math.max(0, stack.getTagCompound().getInteger(STONE_COUNT)) : 0;
+    }
+
+    public static void setStoneCounter(ItemStack stack, int n) {
+        tag(stack).setInteger(STONE_COUNT, Math.max(0, n));
     }
 
     /** Blocks counted towards the next singularity crumb, 0..CRUMB_BLOCKS (the HUD). Client-safe. */
@@ -340,7 +349,7 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.hole", DrillFeature.HOLE_BLOCKS_PER_MB,
                             DrillFeature.BLACK_HOLE.cooldownTicks() / 20), "\u00a7d");
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.crumbinfo", ItemSingularCrumbSC.CRUMB_BLOCKS,
-                            ItemSingularCrumbSC.ORE_MUL, DrillFeature.BLOCKS_PER_POINT), "\u00a77");
+                            ItemSingularCrumbSC.ORE_MUL, DrillFeature.BLOCKS_PER_POINT, ItemSingularCrumbSC.STONE_DIV), "\u00a77");
                     int b = ToolLevelSC.branchOf(stack);
                     if (b != ToolLevelSC.BRANCH_NONE) {
                         com.sc.util.TooltipSC.wrap(list, Lang.tr(ToolLevelSC.branchLangKey(stack, b) + ".desc"), "\u00a77");

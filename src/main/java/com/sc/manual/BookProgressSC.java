@@ -25,6 +25,12 @@ public final class BookProgressSC {
     private static final Set<String> done = new HashSet<String>();
     private static final Set<String> marks = new LinkedHashSet<String>();
     private static boolean loaded;
+    /** Кн-1: the file is there but couldn't be read - retried (at most every RETRY_MS) before anything overwrites it. */
+    private static boolean readFailed;
+    private static long lastTry;
+    private static final long RETRY_MS = 5000;
+    /** Кн-2: bookmarks read back from the file, older lists included (new ones stop at BookSearchSC.MAX_MARKS). */
+    private static final int READ_MARKS_MAX = 1024;
     private static int ticks;
 
     private BookProgressSC() {
@@ -35,28 +41,46 @@ public final class BookProgressSC {
     }
 
     private static void load() {
-        if (loaded) {
+        long now = System.currentTimeMillis();
+        if (loaded && !(readFailed && now - lastTry >= RETRY_MS)) {
             return;
         }
         loaded = true;
+        lastTry = now;
         try {
             File f = file();
             if (!f.exists()) {
+                readFailed = false;
                 return;
             }
             List<String> lines = org.apache.commons.io.FileUtils.readLines(f, "UTF-8");
-            marks.addAll(BookSearchSC.marksFromLines(lines, BookSearchSC.MAX_MARKS));
+            marks.addAll(BookSearchSC.marksFromLines(lines, READ_MARKS_MAX));    // merged with anything added meanwhile
             for (String line : lines) {
                 if (line.startsWith("done=")) {
                     done.add(line.substring(5));
                 }
             }
+            readFailed = false;
         } catch (Exception e) {
-            // a broken file: start clean
+            readFailed = true;                              // locked or broken: kept as it is, read again later
         }
     }
 
     private static void save() {
+        if (readFailed) {
+            lastTry = 0;
+            load();                                         // one more try to merge what the file has
+        }
+        if (readFailed) {
+            try {                                           // still unreadable: it is kept aside, not overwritten blind
+                File f = file(), keep = new File(f.getPath() + ".unreadable");
+                if (f.exists() && !keep.exists()) {
+                    org.apache.commons.io.FileUtils.copyFile(f, keep);
+                }
+            } catch (Exception e) {
+                return;                                     // couldn't even copy it: leave the file alone
+            }
+        }
         List<String> lines = new ArrayList<String>();
         lines.add("# Silicon Age handbook: bookmarks and first steps done (per world)");
         lines.addAll(BookSearchSC.marksToLines(new ArrayList<String>(marks)));
@@ -64,9 +88,18 @@ public final class BookProgressSC {
             lines.add("done=" + d);
         }
         try {
-            File f = file();
+            File f = file(), tmp = new File(f.getPath() + ".tmp");
             f.getParentFile().mkdirs();
-            org.apache.commons.io.FileUtils.writeLines(f, "UTF-8", lines);
+            org.apache.commons.io.FileUtils.writeLines(tmp, "UTF-8", lines);   // whole, then swapped in
+            if (f.exists() && !f.delete()) {
+                tmp.delete();
+                return;
+            }
+            if (!tmp.renameTo(f)) {
+                org.apache.commons.io.FileUtils.copyFile(tmp, f);
+                tmp.delete();
+            }
+            readFailed = false;
         } catch (Exception e) {
             // not saved - it's only a convenience
         }

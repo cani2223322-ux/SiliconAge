@@ -67,6 +67,15 @@ public final class ArmorNetSC {
      */
     public static final byte BLADE_ACTION = 26, BLADE_FORM = 27, DRILL_ACTION = 28, DRILL_MODE = 29, TOOL_BRANCH = 30;
 
+    /**
+     * Pure: a BLADE_FORM message's signed steps - one from the wheel, several from the K menu's form buttons (С-1: sent
+     * as one message, the server walks them in one go; one step a message fell to the server's wheel gap), at most a lap.
+     */
+    public static int formDelta(int feature) {
+        int max = com.sc.util.BladeForm.values().length;
+        return Math.max(-max, Math.min(max, feature));
+    }
+
     /** Pure: one wheel / form step's direction, -1 or +1 (0 stays 0). */
     public static int step(int delta) {
         return delta < 0 ? -1 : delta > 0 ? 1 : 0;
@@ -497,8 +506,8 @@ public final class ArmorNetSC {
                     bladeAction(p, com.sc.util.BladeFeature.of(msg.feature));
                     break;
                 case BLADE_FORM:
-                    if (com.sc.util.ToolLevelSC.isBlade(com.sc.item.BladeLogicSC.held(p)) && step(msg.feature) != 0) {
-                        com.sc.item.BladeLogicSC.cycleForm(p, step(msg.feature));
+                    if (com.sc.util.ToolLevelSC.isBlade(com.sc.item.BladeLogicSC.held(p)) && formDelta(msg.feature) != 0) {
+                        com.sc.item.BladeLogicSC.cycleForm(p, formDelta(msg.feature));
                     }
                     break;
                 case DRILL_ACTION:

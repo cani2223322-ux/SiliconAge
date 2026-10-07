@@ -842,7 +842,7 @@ public final class DrillLogicSC {
             return Boolean.FALSE;
         }
         net.minecraft.world.WorldSettings.GameType mode = p.theItemInWorldManager.getGameType();
-        int removed = 0, dug = 0, natural = 0, ores = 0;
+        int removed = 0, dug = 0, natural = 0, ores = 0, stone = 0;
         List<int[]> shell = new ArrayList<int[]>();
         boolean empty = false;
         for (int by = Math.min(255, box[4]); by >= Math.max(0, box[1]) && !empty; by--) {      // top down
@@ -863,6 +863,10 @@ public final class DrillLogicSC {
                     boolean liquid = b.getMaterial().isLiquid();
                     boolean first = bx == x && by == y && bz == z;                       // its event vanilla has fired
                     boolean nat = !liquid && !(first ? firstPlaced : PlacedBlocksSC.placed(w, bx, by, bz));   // before the event forgets it
+                    if (!p.capabilities.isCreativeMode && !canPay(p, drill, eu)) {
+                        empty = true;                             // before its event: a block left standing was never "broken"
+                        break;
+                    }
                     if (!first && net.minecraftforge.common.ForgeHooks.onBlockBreakEvent(w, mode, p, bx, by, bz).isCanceled()) {
                         continue;                                 // claims, private fields
                     }
@@ -876,7 +880,9 @@ public final class DrillLogicSC {
                     }
                     if (nat) {
                         dug++;                                    // level points: any natural block
-                        if (crumbBlock(b, meta)) {                // crumbs: natural stone / ground / ore only
+                        if (b == Blocks.stone) {
+                            stone++;                              // lava + water make it too: a fraction (STONE_DIV)
+                        } else if (crumbBlock(b, meta)) {         // crumbs: natural ground / ore / other rock
                             natural++;
                             ores += isOre(norm(b), meta) ? 1 : 0;
                         }
@@ -910,16 +916,20 @@ public final class DrillLogicSC {
             ToolLevelSC.setCooldown(drill, f.key(), w, ToolLevelSC.cooldownTicks(p, cd));
         }
         addDug(p, drill, dug);
-        addCrumbs(p, drill, DrillZoneSC.crumbUnits(natural, ores, ItemSingularCrumbSC.ORE_MUL));
+        addCrumbs(p, drill, DrillZoneSC.crumbUnits(natural, ores, ItemSingularCrumbSC.ORE_MUL) + stoneUnits(drill, stone));
         holeEffects(w, box);
         p.inventoryContainer.detectAndSendChanges();
         return Boolean.TRUE;
     }
 
-    /** Two-block things (doors, beds, tall plants): the black hole leaves them - a half cut off by the zone's edge would drop. */
+    /**
+     * Two-block things (doors, beds, tall plants, pistons): the black hole leaves them - a half cut off by the zone's
+     * edge would drop (a piston head's breakBlock takes its base along, even outside the zone).
+     */
     public static boolean twoPart(Block b) {
         return b instanceof net.minecraft.block.BlockDoor || b instanceof net.minecraft.block.BlockBed
-                || b instanceof net.minecraft.block.BlockDoublePlant;
+                || b instanceof net.minecraft.block.BlockDoublePlant || b instanceof net.minecraft.block.BlockPistonBase
+                || b instanceof net.minecraft.block.BlockPistonExtension || b instanceof net.minecraft.block.BlockPistonMoving;
     }
 
     /**
@@ -987,6 +997,16 @@ public final class DrillLogicSC {
         if (r[0] > 0) {
             ToolLevelSC.addPoints(drill, r[0]);
         }
+    }
+
+    /** Natural stone into crumb units: STONE_DIV blocks make one, the rest kept in the drill. */
+    static long stoneUnits(ItemStack drill, int stone) {
+        if (stone <= 0 || !ToolLevelSC.isDrill(drill)) {
+            return 0;
+        }
+        int[] r = DrillZoneSC.accrue(ItemDrillSC.stoneCounter(drill), stone, ItemSingularCrumbSC.STONE_DIV);
+        ItemDrillSC.setStoneCounter(drill, r[1]);
+        return r[0];
     }
 
     /** Singularity crumbs: one per CRUMB_BLOCKS units (the rest kept in the drill), into the inventory or dropped at the player. */

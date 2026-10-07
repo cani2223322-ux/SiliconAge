@@ -94,6 +94,7 @@ public final class SelfTestSC {
             balanceConfig();
             smelters();
             vanillaOres();
+            fixes20261007();
             metalBlocks();
             electrolysisAndHeavyWater();
             drills();
@@ -3766,6 +3767,36 @@ public final class SelfTestSC {
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */
+    /** Fixes after the post-0.1.8 bug check (Б, К, С, Р). */
+    private static void fixes20261007() {
+        // Б-1: a crumb of stone costs more SM in the black hole than its clot gives back
+        float smPerStoneCrumb = (float) com.sc.item.ItemSingularCrumbSC.CRUMB_BLOCKS * com.sc.item.ItemSingularCrumbSC.STONE_DIV
+                / com.sc.util.DrillFeature.HOLE_BLOCKS_PER_MB;
+        float smPerCrumbBack = Math.max((float) com.sc.item.ItemSingularClotSC.SM_PER_CLOT / 9F, com.sc.util.SingularStationMath.CRUMB_SM);
+        int[] st = com.sc.util.DrillZoneSC.accrue(5, 20, com.sc.item.ItemSingularCrumbSC.STONE_DIV);   // 25 stone: 3 units, 1 kept
+        check(smPerStoneCrumb > smPerCrumbBack && st[0] == 3 && st[1] == 1
+                        && com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.piston_head)
+                        && com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.piston_extension)
+                        && com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.sticky_piston)
+                        && !com.sc.item.DrillLogicSC.twoPart(net.minecraft.init.Blocks.stone),
+                "fixes 2026-10-07: stone crumbs cost more SM than they give back; pistons left by the black hole");
+        // С-1: the K menu's form buttons - several steps in one message, at most a lap
+        int forms = com.sc.util.BladeForm.values().length;
+        check(com.sc.handler.ArmorNetSC.formDelta(3) == 3 && com.sc.handler.ArmorNetSC.formDelta(-2) == -2
+                        && com.sc.handler.ArmorNetSC.formDelta(100) == forms && com.sc.handler.ArmorNetSC.formDelta(-100) == -forms,
+                "fixes 2026-10-07: blade form message carries the K menu's steps");
+        // Р-1 / Р-2: diamond dust isn't compressor mass; the Crusher takes diamonds and quartz only by hand
+        TileEntityMachineSC crusher = new TileEntityMachineSC();
+        crusher.setMachineType(MachineType.CRUSHER);
+        ItemStack dia = new ItemStack(net.minecraft.init.Items.diamond), qz = new ItemStack(net.minecraft.init.Items.quartz, 2);
+        check(TileEntityMachineSC.matterMass(ModItems.dust.stackOf(Material.DIAMOND)) == 0
+                        && TileEntityMachineSC.matterMass(ModItems.dust.stackOf(Material.IRON)) > 0
+                        && !crusher.canInsertItem(0, dia, 1) && !crusher.canInsertItem(0, qz, 1)
+                        && crusher.isItemValidForSlot(0, dia) && crusher.isItemValidForSlot(0, qz)
+                        && crusher.canInsertItem(0, new ItemStack(net.minecraft.init.Blocks.iron_ore), 1),
+                "fixes 2026-10-07: diamond dust kept out of the compressor, Crusher takes diamonds / quartz by hand only");
+    }
+
     /** Vanilla ores in the mod's machines: iron/gold pipeline, gem ores, quartz, diamond dust, steel from dust. */
     private static void vanillaOres() {
         net.minecraft.item.crafting.FurnaceRecipes fr = net.minecraft.item.crafting.FurnaceRecipes.smelting();

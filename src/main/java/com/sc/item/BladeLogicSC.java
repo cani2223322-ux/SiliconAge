@@ -137,8 +137,11 @@ public final class BladeLogicSC {
             return;
         }
         com.sc.util.BladeForm from = ItemBladeSC.formOf(blade);
-        com.sc.util.BladeForm to = com.sc.util.BladeForm.cycle(from, delta, com.sc.util.ToolLevelSC.effectiveLevel(p, blade),
-                com.sc.util.ToolLevelSC.branchOf(blade), p.capabilities.isCreativeMode);
+        com.sc.util.BladeForm to = from;
+        for (int i = Math.abs(delta); i > 0; i--) {        // the K menu's buttons: several steps in one message
+            to = com.sc.util.BladeForm.cycle(to, delta, com.sc.util.ToolLevelSC.effectiveLevel(p, blade),
+                    com.sc.util.ToolLevelSC.branchOf(blade), p.capabilities.isCreativeMode);
+        }
         if (to == from) {
             return;                                     // only the sword open
         }
@@ -358,10 +361,22 @@ public final class BladeLogicSC {
 
     /** Who the blade's area functions hit: living things but the player, their pets and villagers. */
     static boolean fair(EntityPlayer p, Entity e) {
-        if (!(e instanceof EntityLivingBase) || e == p || !e.isEntityAlive() || e instanceof INpc) {
+        if (!(e instanceof EntityLivingBase) || e == p || !e.isEntityAlive() || e instanceof INpc || pvpBlocked(p, e)) {
             return false;
         }
         return !(e instanceof IEntityOwnable && ((IEntityOwnable) e).getOwner() == p);
+    }
+
+    /**
+     * К-1: another player the server wouldn't let `p` hurt (PvP off, a team without friendly fire). Vanilla refuses
+     * only the damage - the pulls, tethers, pushes and slows have to ask themselves.
+     */
+    public static boolean pvpBlocked(EntityPlayer p, Entity e) {
+        if (!(e instanceof EntityPlayer) || e == p) {
+            return false;
+        }
+        net.minecraft.server.MinecraftServer s = net.minecraft.server.MinecraftServer.getServer();
+        return s != null && !s.isPVPEnabled() || !((EntityPlayer) e).canAttackPlayer(p);
     }
 
     /**

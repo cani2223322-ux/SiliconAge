@@ -1660,10 +1660,8 @@ public class GuiArmorSC extends GuiScreen {
             BladeForm to = BladeForm.of(b.id - TL_FORM);
             int steps = ArmorNetSC.formSteps(ItemBladeSC.formOf(t), to, ToolLevelSC.effectiveLevel(p, t), ToolLevelSC.branchOf(t),
                     p.capabilities.isCreativeMode);
-            for (int i = 0; i < Math.abs(steps); i++) {           // one wheel step each: the server's own cycle, in order
-                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BLADE_FORM, steps > 0 ? 1 : -1));
-            }
-            if (steps != 0) {
+            if (steps != 0) {                                     // one message: the server walks the steps in one go
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.BLADE_FORM, steps));
                 ItemBladeSC.setForm(t, to);                     // shown at once
             }
         }

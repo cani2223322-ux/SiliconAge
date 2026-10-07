@@ -390,8 +390,8 @@ public class GuiBook extends GuiScreen {
     protected void keyTyped(char c, int key) {
         boolean focused = search.isFocused(), list = resultsView && searching();
         if (key == Keyboard.KEY_ESCAPE) {
-            if (!search.getText().isEmpty() && (focused || list)) {
-                clearSearch();                                        // 1st Esc: the search, 2nd: the book
+            if (!search.getText().isEmpty()) {
+                clearSearch();                                        // 1st Esc: the search (also from an opened hit), 2nd: the book
             } else {
                 close();
             }
@@ -419,15 +419,17 @@ public class GuiBook extends GuiScreen {
         if (bookKey == Keyboard.KEY_NONE) {
             bookKey = Integer.MIN_VALUE;                              // unbound: a letter with no key code must not close the book
         }
-        if (key == bookKey && (Keyboard.isRepeatEvent() || System.currentTimeMillis() - openedAt < 400)) {
+        // Кн-3: while a search is typed (field focused or a query kept) the book and inventory keys are letters
+        boolean typing = search.isFocused() || !search.getText().isEmpty();
+        if (key == bookKey && !typing && (Keyboard.isRepeatEvent() || System.currentTimeMillis() - openedAt < 400)) {
             return;                                                   // the key that opened the book, still held
         }
-        if (key == bookKey && !search.isFocused()) {
+        if (key == bookKey && !typing) {
             close();
             return;
         }
         int invKey = mc.gameSettings.keyBindInventory.getKeyCode();
-        if (key == invKey && invKey != Keyboard.KEY_NONE && !search.isFocused()) {
+        if (key == invKey && invKey != Keyboard.KEY_NONE && !typing) {
             close();                                                  // the inventory key closes the book like Esc
             return;
         }

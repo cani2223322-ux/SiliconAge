@@ -59,7 +59,16 @@ public final class BladeSingularSC {
 
     private static final UUID SHEATH_ID = UUID.fromString("5c1e9a7d-2f4b-4d8e-9b3a-6e0f1c2d3b47");
     /** Player entity data: the minute of the kill cap and the mob points earned in it. */
-    private static final String KILL_MIN = "scBladeKillMin", KILL_PTS = "scBladeKillPts";
+    private static final String KILL_MIN = "scBladeKillMin", KILL_PTS = "scBladeKillPts", LAST_CHANCE_AT = "scBladeLastChance";
+
+    /** К-5/К-6: player data that outlives a death (a respawn copies only this compound). */
+    private static NBTTagCompound persisted(EntityPlayer p) {
+        NBTTagCompound root = p.getEntityData();
+        if (!root.hasKey(EntityPlayer.PERSISTED_NBT_TAG)) {
+            root.setTag(EntityPlayer.PERSISTED_NBT_TAG, new NBTTagCompound());
+        }
+        return root.getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG);
+    }
     /** Ticks between two blows from the spear's / whip's reach (a held swing calls it every tick). */
     private static final int REACH_GAP = 4;
 
@@ -68,6 +77,9 @@ public final class BladeSingularSC {
         int cascadeTarget = -1, cascadeStacks;
         long cascadeAt;
         boolean blocking, parryUsed, chargeCued, horizonDry, shieldDry;
+        /** К-3: the last block let go, and whether this block got the Guardian's free shield seconds. */
+        long blockEndedAt = -1000;
+        boolean shieldFree;
         long blockStart;
         float absorbed;
         long parryUntil, chargedUntil, riposteUntil;
@@ -282,9 +294,9 @@ public final class BladeSingularSC {
         return ItemBladeSC.typeOf(blade).onDamage;
     }
 
-    /** Someone else's private field covers the entity: no pushing, pulling or slowing it (silent). */
+    /** Someone else's private field covers the entity, or it's a player PvP spares: no pushing, pulling or slowing it (silent). */
     private static boolean guarded(EntityPlayer p, Entity e) {
-        return com.sc.ShieldEventHandler.privateFieldAgainst(e.worldObj, p, MathHelper.floor_double(e.posX),
+        return BladeLogicSC.pvpBlocked(p, e) || com.sc.ShieldEventHandler.privateFieldAgainst(e.worldObj, p, MathHelper.floor_double(e.posX),
                 MathHelper.floor_double(e.posY + e.height / 2), MathHelper.floor_double(e.posZ)) != null;
     }
 
@@ -355,6 +367,8 @@ public final class BladeSingularSC {
 
     private static void blockStarted(State s, long now) {
         s.blockStart = now;
+        // К-3: the free seconds only after as long without a block - re-raising it no longer keeps the shield free
+        s.shieldFree = now - s.blockEndedAt >= BladeFeature.GUARDIAN_FREE_TICKS || now < s.blockEndedAt;
         s.absorbed = 0;
         s.parryUsed = false;
         s.chargeCued = false;
@@ -364,6 +378,7 @@ public final class BladeSingularSC {
 
     /** The block let go: a long one charges the next hit; the parry's and riposte's bonuses wait BONUS_KEEP from now. */
     private static void blockEnded(EntityPlayer p, State s, long now) {
+        s.blockEndedAt = now;
         if (now - s.blockStart >= BladeFeature.CHARGE_TICKS && BladeLogicSC.active(p, BladeFeature.CHARGED_STRIKE)) {
             s.chargedUntil = now + BladeFeature.BONUS_KEEP;
         }
@@ -392,7 +407,7 @@ public final class BladeSingularSC {
             }
             if (!s.shieldDry && BladeLogicSC.active(p, BladeFeature.GRAV_SHIELD)) {
                 BladeFeature f = BladeFeature.GRAV_SHIELD;
-                boolean free = age < BladeFeature.GUARDIAN_FREE_TICKS
+                boolean free = s.shieldFree && age < BladeFeature.GUARDIAN_FREE_TICKS
                         && ToolLevelSC.hasBranch(p, blade, ToolLevelSC.BLADE_GUARDIAN, ToolLevelSC.BRANCH_LEVEL);
                 if (!free && !ToolGasSC.drainExact(p, f.gas(), f.gasMb())) {
                     s.shieldDry = true;
@@ -467,7 +482,7 @@ public final class BladeSingularSC {
         State s = state(p);
         s.absorbed += taken;
         if (s.absorbed > BladeFeature.RIPOSTE_MIN && BladeLogicSC.active(p, BladeFeature.RIPOSTE)) {
-            s.riposte = s.absorbed * BladeFeature.RIPOSTE_SHARE;
+            s.riposte = Math.min(BladeFeature.RIPOSTE_MAX, s.absorbed * BladeFeature.RIPOSTE_SHARE);   // К-4
             s.riposteUntil = p.worldObj.getTotalWorldTime() + BladeFeature.BONUS_KEEP;    // renewed when the block ends
         }
     }
@@ -704,6 +719,11 @@ public final class BladeSingularSC {
         if (p == null || p.worldObj.isRemote || src == null || src.isUnblockable() || !p.isBlocking()) {
             return false;
         }
+        // К-2: a blow from someone (a mob, a shooter's arrow) that would land - not lava, fire or a cactus, and not
+        // a hit the damage immunity right after another one would ignore anyway
+        if (src.getEntity() == null || p.hurtResistantTime > p.maxHurtResistantTime / 2) {
+            return false;
+        }
         ItemStack blade = BladeLogicSC.held(p);
         BladeFeature f = BladeFeature.PERFECT_PARRY;
         if (!ToolLevelSC.isBlade(blade) || !BladeLogicSC.active(p, f)) {
@@ -755,7 +775,7 @@ public final class BladeSingularSC {
             return;
         }
         boolean boss = victim instanceof IBossDisplayData;
-        NBTTagCompound data = p.getEntityData();
+        NBTTagCompound data = persisted(p);             // К-5: the minute's cap survives a death
         long minute = p.worldObj.getTotalWorldTime() / 1200L;
         if (data.getLong(KILL_MIN) != minute) {
             data.setLong(KILL_MIN, minute);
@@ -794,6 +814,12 @@ public final class BladeSingularSC {
                 || ToolLevelSC.cooldownLeft(blade, BladeFeature.LAST_CHANCE_KEY, p.worldObj) > 0) {
             return false;
         }
+        long now = p.worldObj.getTotalWorldTime();
+        NBTTagCompound data = persisted(p);
+        if (data.hasKey(LAST_CHANCE_AT) && now >= data.getLong(LAST_CHANCE_AT)
+                && now - data.getLong(LAST_CHANCE_AT) < ToolLevelSC.cooldownTicks(p, BladeFeature.LAST_CHANCE_COOLDOWN)) {
+            return false;                                   // К-6: the player's cooldown too - a second blade doesn't reset it
+        }
         if (!ToolGasSC.drainExact(p, Gas.SINGULAR_MATTER, BladeFeature.LAST_CHANCE_SM)) {
             ToolGasSC.noGasMessage(p, Gas.SINGULAR_MATTER, BladeFeature.LAST_CHANCE_SM);
             return false;
@@ -804,6 +830,7 @@ public final class BladeSingularSC {
         p.setHealth(1F);
         p.hurtResistantTime = p.maxHurtResistantTime;
         ToolLevelSC.setCooldown(blade, BladeFeature.LAST_CHANCE_KEY, p.worldObj, ToolLevelSC.cooldownTicks(p, BladeFeature.LAST_CHANCE_COOLDOWN));
+        data.setLong(LAST_CHANCE_AT, now);
         p.addChatComponentMessage(new ChatComponentTranslation("sc.blade.lastchance"));
         p.worldObj.playSoundAtEntity(p, "mob.zombie.unfect", 1F, 1.6F);
         spark(p.worldObj, "witchMagic", p.posX, p.posY + 1, p.posZ, 60, 0.6, 0.3);
@@ -1015,8 +1042,9 @@ public final class BladeSingularSC {
     private static boolean tetherTick(Tether t) {
         EntityLivingBase e = t.target;
         EntityPlayer p = t.p;
-        if (p.isDead || e.isDead || !e.isEntityAlive() || e.worldObj != p.worldObj || p.worldObj.getTotalWorldTime() >= t.end) {
-            return false;
+        if (p.isDead || e.isDead || !e.isEntityAlive() || e.worldObj != p.worldObj || p.worldObj.getTotalWorldTime() >= t.end
+                || guarded(p, e)) {
+            return false;                                // walked into someone's private field: let go
         }
         double dx = p.posX - e.posX, dy = p.posY - e.posY, dz = p.posZ - e.posZ, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         double leash = BladeFeature.TETHER_LEASH;
