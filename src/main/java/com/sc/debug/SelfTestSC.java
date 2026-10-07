@@ -96,6 +96,7 @@ public final class SelfTestSC {
             vanillaOres();
             fixes20261007();
             loneIngredientRecipes();
+            updateCheck();
             metalBlocks();
             electrolysisAndHeavyWater();
             drills();
@@ -3768,6 +3769,18 @@ public final class SelfTestSC {
     }
 
     /** The electric / induction furnace: furnace recipes, one / two streams, speed with heat. */
+    /** «Есть обновление»: version order by number and version.json parsing (no network here). */
+    private static void updateCheck() {
+        com.sc.util.UpdateCheckSC.Info i = com.sc.util.UpdateCheckSC.parse("{\"version\":\"0.1.11-beta\",\"channel\":\"beta\","
+                + "\"url\":\"https://example/r\",\"page\":\"https://example/c\",\"changes\":{\"ru\":[\"а\",\"б\",\"в\",\"г\"],\"en\":[\"a\"]}}");
+        check(com.sc.util.UpdateCheckSC.compare("0.1.10-beta", "0.1.9") > 0 && com.sc.util.UpdateCheckSC.compare("v0.1.9", "0.1.9-beta") == 0
+                        && com.sc.util.UpdateCheckSC.compare("0.1.9", "0.2.0") < 0 && com.sc.util.UpdateCheckSC.compare("x", "0.0.0") == 0
+                        && i != null && "0.1.11-beta".equals(i.version) && i.ru.length == 3 && i.en.length == 1 && "https://example/r".equals(i.url)
+                        && com.sc.util.UpdateCheckSC.parse("not json") == null && com.sc.util.UpdateCheckSC.parse("{\"x\":1}") == null
+                        && com.sc.util.UpdateCheckSC.message(i).getUnformattedText().contains("[Silicon Age]"),
+                "update check: versions compared by number (0.1.10 > 0.1.9), version.json parsed, bad files ignored");
+    }
+
     /** No crafting recipe of the mod is one shared ingredient alone (a copper ingot alone was other mods' nuggets). */
     private static void loneIngredientRecipes() {
         StringBuilder bad = new StringBuilder();

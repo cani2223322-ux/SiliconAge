@@ -104,6 +104,8 @@
 
 **Сборки с UniDict** (объединение металлов): слитки и блоки мода заменяются вариантом главного мода сборки — все рецепты мода их принимают, блоки металлов мода прессуются в прокатном станке, реакторы строятся из свинца любого мода. Крафты мода проверены против большой сборки (Thermal, Ender IO, IC2, AE2, Forestry и др.) — пересечений нет.
 
+**Проверка обновлений:** раз за запуск игры мод запрашивает номер последней версии с silicon-age.site и, если вышла новая, пишет об этом в чат (на сервере — операторам и в лог). О игроке ничего не отправляется; выключается в конфиге: `updates.check = false`.
+
 MJ, Universal Electricity и Botania не поддерживаются.
 
 ### Сборка из исходников
@@ -215,6 +217,8 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 | **Mekanism** (untested) | The Energy Converter exchanges EU for Mekanism joules and works with its cables. Written against the API, not yet tested in game with Mekanism |
 
 **UniDict packs** (unified metals): the mod's ingots and blocks are swapped for the pack's main mod's variant - every recipe of the mod takes them, the mod's metal blocks are pressed in the Rolling Machine, reactors are built of any mod's lead. The mod's recipes are checked against a large pack (Thermal, Ender IO, IC2, AE2, Forestry and more) - no clashes.
+
+**Update check:** once a game session the mod asks silicon-age.site for the latest version number and, when a newer one is out, says so in the chat (on a server - to operators and in the log). Nothing about the player is sent; turn it off in the config: `updates.check = false`.
 
 MJ, Universal Electricity and Botania are not supported.
 

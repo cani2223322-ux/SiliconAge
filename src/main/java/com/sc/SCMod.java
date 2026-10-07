@@ -135,6 +135,9 @@ public class SCMod {
     @Mod.EventHandler
     public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {
         event.registerServerCommand(new com.sc.debug.CommandEnergySC());
+        if (event.getServer().isDedicatedServer()) {
+            com.sc.util.UpdateCheckSC.start();               // operators hear about a newer version as they log in
+        }
         event.registerServerCommand(new com.sc.bridge.CommandBridgeSC());          // [Принять] / [Отклонить] of a bridge consent
         if (Boolean.getBoolean("sc.worldtest")) {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWirelessSC());

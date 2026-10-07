@@ -257,6 +257,7 @@ public class CommonEventHandler {
             return;
         }
         com.sc.util.SingularCooldowns.syncAll(p);   // the client's copy of the function cooldowns (K menu)
+        com.sc.util.UpdateCheckSC.onLogin(p);       // a dedicated server's operators: a newer version is out
         com.sc.item.SingularProgressSC.sync(p);     // ...and of the Singular level tasks
         NBTTagCompound entityData = p.getEntityData();
         NBTTagCompound data = entityData.getCompoundTag(EntityPlayer.PERSISTED_NBT_TAG);

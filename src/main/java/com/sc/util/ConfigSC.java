@@ -48,6 +48,9 @@ public final class ConfigSC {
     public static int converterLoss = 5;
     /** Dimensions the mod's ores and limestone generate in (worldgen is server-side: not synced). */
     public static int[] oreDimensions = {0};
+    /** «Есть обновление»: ask the site for the latest version (UpdateCheckSC); which releases to tell about; where. */
+    public static boolean updateCheck = true;
+    public static String updateChannel = "beta", updateUrl = UpdateCheckSC.DEFAULT_URL;
 
     /** A whole number scaled by a multiplier, at least `min`, capped to an int. */
     public static int scale(int base, float mul, int min) {
@@ -82,6 +85,16 @@ public final class ConfigSC {
             oreDimensions = config.get("worldgen", "oreDimensions", new int[] {0},
                     "Dimension ids the mod's ores and limestone generate in (0 = Overworld) / Id измерений, где генерируются руды и известняк мода (0 - Верхний мир)")
                     .getIntList();
+            String up = "updates";
+            config.setCategoryComment(up, "Update check: one request for the latest version number to the mod's site, nothing about the player is sent"
+                    + " / Проверка обновлений: один запрос номера последней версии на сайт мода, о игроке ничего не отправляется");
+            updateCheck = config.getBoolean("check", up, true,
+                    "Tell in the chat when a newer version is out (clients: once a session; servers: to operators and in the log)"
+                    + " / Сообщать в чате о новой версии (клиент - раз за запуск; сервер - операторам и в лог)");
+            updateChannel = config.getString("channel", up, "beta",
+                    "beta = every release, stable = only stable ones / beta - обо всех версиях, stable - только о стабильных",
+                    new String[]{"beta", "stable"});
+            updateUrl = config.getString("url", up, UpdateCheckSC.DEFAULT_URL, "Where the version file is / Адрес файла версии");
             machineSounds = config.getBoolean("machines", "sounds", true,
                     "Working machines, generators and quarries make their sound");
             soundVolume = num(config, "volume", "sounds", 1F, 0F, 1F,

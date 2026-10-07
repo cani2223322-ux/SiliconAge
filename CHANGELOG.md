@@ -6,8 +6,10 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Проверка обновлений:** раз за запуск игры мод спрашивает у сайта (silicon-age.site/version.json) номер последней версии и, если вышла новая, пишет в чат «Доступна новая версия … [Скачать] [Что нового]» и до трёх пунктов «что нового» на языке игрока; на выделенном сервере — операторам при входе и в лог. Без сети молчит, игру не задерживает. Конфиг: `updates.check`, `updates.channel` (beta / stable), `updates.url`.
 
 ### English
+- **Update check:** once a game session the mod asks the site (silicon-age.site/version.json) for the latest version and, when a newer one is out, says "Version … is out [Download] [What's new]" in the chat with up to three points of what's new in the player's language; on a dedicated server - to operators as they log in and in the log. Silent without a network, never holds the game up. Config: `updates.check`, `updates.channel` (beta / stable), `updates.url`.
 
 ## 0.1.10-beta — 2026-10-07
 
