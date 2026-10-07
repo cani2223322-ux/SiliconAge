@@ -68,11 +68,23 @@ public final class NeiCoverageSC {
                 }
             }
             if (n == 0) {
-                missing.add(line(s) + hiddenRecipes(s));
+                boolean hidden = codechicken.nei.api.ItemInfo.isHidden(s);
+                missing.add((hidden ? "(hidden in NEI) " : "") + line(s) + hiddenRecipes(s));
             }
         }
         out.add("# items " + stacks.size() + ", NEI handlers " + GuiCraftingRecipe.craftinghandlers.size() + ", without a recipe in NEI " + missing.size());
         out.addAll(missing);
+        int pages = 0;
+        for (ItemStack s : stacks) {
+            int over = ObtainHandlerSC.overflow(s);
+            if (over != -999) {
+                pages++;
+                if (over > 0) {
+                    out.add("PAGE TEXT TOO LONG by " + over + " px: " + line(s));
+                }
+            }
+        }
+        out.add("# «How to get» pages: " + pages);
         return out;
     }
 

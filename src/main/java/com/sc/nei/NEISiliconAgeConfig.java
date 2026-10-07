@@ -55,6 +55,8 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         GeneratorRecipeHandlerSC generators = new GeneratorRecipeHandlerSC();
         API.registerRecipeHandler(generators);
         API.registerUsageHandler(generators);
+        // «Как получить»: the items no recipe makes - ores, limestone, crumbs, scrap, creative, foreign fluids, UniDict's swaps
+        API.registerRecipeHandler(new ObtainHandlerSC());
         // the Singular Station's Б-1 conversion: Exo piece + materials -> Singular piece
         SingularConvertHandlerSC convert = new SingularConvertHandlerSC();
         API.registerRecipeHandler(convert);

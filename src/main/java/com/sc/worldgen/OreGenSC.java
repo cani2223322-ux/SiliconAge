@@ -25,10 +25,10 @@ public class OreGenSC implements IWorldGenerator {
     // TODO(design doc): Limestone's veins-per-chunk/size aren't given a number in §17.1
     // beyond "крупные пласты" ("large seams") - defaulted here to be deliberately common,
     // consistent with it gating the very first step of the whole silicon chain.
-    private static final int LIMESTONE_MIN_Y = 40;
-    private static final int LIMESTONE_MAX_Y = 90;
-    private static final int LIMESTONE_VEIN_SIZE = 20;
-    private static final int LIMESTONE_VEINS_PER_CHUNK = 6;
+    public static final int LIMESTONE_MIN_Y = 40;
+    public static final int LIMESTONE_MAX_Y = 90;
+    public static final int LIMESTONE_VEIN_SIZE = 20;
+    public static final int LIMESTONE_VEINS_PER_CHUNK = 6;
 
     @Override
     public void generate(Random random, int chunkX, int chunkZ, World world, IChunkProvider chunkGenerator, IChunkProvider chunkProvider) {
