@@ -16,7 +16,7 @@
 
 ### Возможности
 - **Производство полупроводников:** цепочка от кварца и руд до кремниевых пластин, кристаллов, чипов и контроллеров. 32 машины уровней LV–IV, улучшения машин, брак и побочные продукты.
-- **Руды и переработка:** 16 руд, дробление, промывка, центрифуга, химия и жидкости; ванильные руды тоже идут в машины (железо и золото — 2 слитка с руды). **22 блока металлов** из слитков мода (9 слитков ↔ блок, основание маяка).
+- **Руды и переработка:** 16 руд, дробление, промывка, центрифуга, химия и жидкости; ванильные руды тоже идут в машины (железо и золото — 2 слитка с руды). **22 блока металлов** из слитков мода (9 слитков ↔ блок, основание маяка; прокатный станок прессует блок из слитков любого мода).
 - **Электропечь (LV) и индукционная печь (MV):** плавят всё, что обычная печь, без топлива; индукционная — два предмета сразу и разогрев до x3; опыт копится в печи.
 - **Электролиз и тяжёлая вода:** водород и кислород из воды, тяжёлая вода и дейтерий для термоядерных реакторов.
 - **Энергия LV → SV:** восемь уровней напряжения — LV, MV, HV, EV, **IV**, **QV (Квант)**, **XV (Экзо)** и **SV (Сингулярный)** до 131 072 EU/t.
@@ -84,23 +84,25 @@
 | **G** | Статья справочника о предмете под курсором в инвентаре (или в руке) |
 | **Ctrl+F** или **/** | Поиск в справочнике |
 | **Shift + колесо** | Форма Сингулярного клинка / режим Сингулярного бура |
-| **Гаечный ключ** | ПКМ — повернуть механизм, Shift + ПКМ в воздух — сменить режим (у электро- и квантового ключа), Shift + ПКМ по кабелю — обзор сети |
+| **Гаечный ключ** | ПКМ — повернуть механизм, Shift + ПКМ в воздух — сменить режим (у электро- и квантового ключа), Shift + ПКМ по кабелю — обзор сети (ещё раз — обновить, Shift + ПКМ в воздух — скрыть) |
 | **Shift / Ctrl** | Подробности и управление в подсказках предметов |
 
 ### Требования и установка
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (или новее для 1.7.10), Java 8.
-2. Скачайте `SiliconAgeBeta-0.1.9.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
+2. Скачайте `SiliconAgeBeta-0.1.10.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
 
 ### Моды, которые помогут (необязательны)
 | Мод | Что даёт вместе с Silicon Age |
 |---|---|
 | **IndustrialCraft 2 Experimental** (2.2.828+) | Общая энергосеть с машинами и кабелями IC2, зарядка брони, клинков и буров в зарядниках IC2, зарядные плиты и генератор поля заряжают и предметы IC2 |
-| **Not Enough Items** + **CodeChickenCore** | Страницы рецептов всех машин и генераторов (с жидкостями, шансами и EU/t), переход к рецептам из экрана машины |
+| **Not Enough Items** + **CodeChickenCore** | Страницы рецептов всех машин и генераторов (с жидкостями, шансами и EU/t), переход к рецептам из экрана машины, страницы «Как получить» для всего, что не крафтится (руды, крупицы, чужие жидкости) |
 | **WAILA** (1.5.10) | Подсказка при наведении: заряд, выработка, прогресс машин, жидкости в баках, беспроводная связь, излучение |
 | **Industrial Upgrade** | «Форсаж» и расширитель выхода работают и в накопителе, который питает сеть IC2 |
 | **Galacticraft** | Шлем с включённым дыханием и кислородом в баке заменяет кислородное снаряжение; преобразователь энергии меняет EU на gJ |
 | **BuildCraft**, **Thermal Expansion** (CoFH), **Ender IO** и другие RF-моды | Их гаечные ключи поворачивают машины и работают на трубах и связках Silicon Age; генератор поля заряжает их RF-предметы; преобразователь энергии меняет EU на RF |
 | **Mekanism** (не проверено) | Преобразователь энергии меняет EU на джоули Mekanism и работает с его кабелями. Совместимость написана по API, в игре с Mekanism не проверялась |
+
+**Сборки с UniDict** (объединение металлов): слитки и блоки мода заменяются вариантом главного мода сборки — все рецепты мода их принимают, блоки металлов мода прессуются в прокатном станке, реакторы строятся из свинца любого мода. Крафты мода проверены против большой сборки (Thermal, Ender IO, IC2, AE2, Forestry и др.) — пересечений нет.
 
 MJ, Universal Electricity и Botania не поддерживаются.
 
@@ -126,7 +128,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 
 ### Features
 - **Semiconductor fabrication:** a chain from quartz and ores to silicon wafers, crystals, chips and controllers. 32 machines from LV to IV, machine upgrades, defects and by-products.
-- **Ores and processing:** 16 ores, crushing, washing, centrifuge, chemistry and fluids; vanilla ores go into the machines too (iron and gold - 2 ingots per ore). **22 metal blocks** from the mod's ingots (9 ingots ↔ a block, a beacon base).
+- **Ores and processing:** 16 ores, crushing, washing, centrifuge, chemistry and fluids; vanilla ores go into the machines too (iron and gold - 2 ingots per ore). **22 metal blocks** from the mod's ingots (9 ingots ↔ a block, a beacon base; the Rolling Machine presses a block from any mod's ingots).
 - **Electric Furnace (LV) and Induction Furnace (MV):** they smelt everything a furnace does, without fuel; the induction one takes two items at once and heats up to x3; smelting XP is stored in the furnace.
 - **Electrolysis and heavy water:** hydrogen and oxygen from water, heavy water and deuterium for the fusion reactors.
 - **Energy LV → SV:** eight voltage tiers - LV, MV, HV, EV, **IV**, **QV (Quantum)**, **XV (Exo)** and **SV (Singular)**, up to 131,072 EU/t.
@@ -194,23 +196,25 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 | **G** | The handbook article of the item under the cursor in an inventory (or in hand) |
 | **Ctrl+F** or **/** | Search the handbook |
 | **Sneak + wheel** | Singular blade form / Singular drill mode |
-| **Wrench** | Right-click turns a machine, sneak + right-click in the air switches the mode (electric and quantum wrench), sneak + right-click a cable shows the network overview |
+| **Wrench** | Right-click turns a machine, sneak + right-click in the air switches the mode (electric and quantum wrench), sneak + right-click a cable shows the network overview (again - refresh, sneak + right-click in the air - hide) |
 | **Shift / Ctrl** | Details and controls in item tooltips |
 
 ### Requirements and installation
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (or newer for 1.7.10), Java 8.
-2. Download `SiliconAgeBeta-0.1.9.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
+2. Download `SiliconAgeBeta-0.1.10.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
 
 ### Mods that help (optional)
 | Mod | What it adds with Silicon Age |
 |---|---|
 | **IndustrialCraft 2 Experimental** (2.2.828+) | One energy network with IC2 machines and cables, suits, blades and drills charge in IC2 chargers, charge pads and the field generator charge IC2 items too |
-| **Not Enough Items** + **CodeChickenCore** | Recipe pages for every machine and generator (fluids, chances, EU/t), recipes straight from a machine's screen |
+| **Not Enough Items** + **CodeChickenCore** | Recipe pages for every machine and generator (fluids, chances, EU/t), recipes straight from a machine's screen, "How to get" pages for everything with no recipe (ores, crumbs, other mods' fluids) |
 | **WAILA** (1.5.10) | Look-at info: charge, output, machine progress, tank contents, wireless links, radiation |
 | **Industrial Upgrade** | The overdrive and the output splitter also work in a storage that feeds an IC2 network |
 | **Galacticraft** | A suit helmet with breathing on and oxygen in its tank replaces the oxygen gear; the Energy Converter exchanges EU for gJ |
 | **BuildCraft**, **Thermal Expansion** (CoFH), **Ender IO** and other RF mods | Their wrenches turn machines and work on Silicon Age pipes and bundles; the field generator charges their RF items; the Energy Converter exchanges EU for RF |
 | **Mekanism** (untested) | The Energy Converter exchanges EU for Mekanism joules and works with its cables. Written against the API, not yet tested in game with Mekanism |
+
+**UniDict packs** (unified metals): the mod's ingots and blocks are swapped for the pack's main mod's variant - every recipe of the mod takes them, the mod's metal blocks are pressed in the Rolling Machine, reactors are built of any mod's lead. The mod's recipes are checked against a large pack (Thermal, Ender IO, IC2, AE2, Forestry and more) - no clashes.
 
 MJ, Universal Electricity and Botania are not supported.
 
