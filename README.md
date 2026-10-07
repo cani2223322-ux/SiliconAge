@@ -118,7 +118,7 @@ MJ, Universal Electricity и Botania не поддерживаются.
 3. Выполните `gradle build`. Готовый jar появится в `build/libs/`.
 
 ### Лицензия
-© 2026 Aleksandr. Мод можно свободно использовать в сборках и распространять. Изменение кода и выпуск своих версий — с разрешения автора.
+© 2026 Aleksandr. Все права защищены. Код открыт для просмотра; копирование, изменение — только с разрешения автора. Разрешено использовать мод в сборках и распространять.
 
 ---
 
@@ -232,4 +232,4 @@ MJ, Universal Electricity and Botania are not supported.
 3. Run `gradle build`. The jar is written to `build/libs/`.
 
 ### License
-© 2026 Aleksandr. You may freely use the mod in modpacks and redistribute it. Modifying the code and releasing your own versions — only with the author's permission.
+© 2026 Aleksandr. All rights reserved. The code is open to read; copying and changing it only with the author's permission. You may use the mod in modpacks and redistribute it.
