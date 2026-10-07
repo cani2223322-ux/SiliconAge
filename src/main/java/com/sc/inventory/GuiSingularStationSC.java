@@ -148,6 +148,8 @@ public class GuiSingularStationSC extends GuiContainer {
     private final ContainerSingularStationSC box;
     private GuiPowerSC power;
     private Btn action, cancel, powerBtn, charge, fill, redstone, helium, allGases, prev, next;
+    /** С-3: «Инструмент тоже» - a small toggle at the right of the modernisation panel's header. */
+    private Btn modTool;
     private final TabBtn[] tabs = new TabBtn[TABS];
     private final Btn[] branch = new Btn[4];
     /** The tool's branches on «Ветки» (blade 3, drill 2). */
@@ -323,7 +325,7 @@ public class GuiSingularStationSC extends GuiContainer {
             hi = Math.max(hi, toolCand);
         }
         p.readyLv = te.readyLevels(me());
-        int toolReady = te.toolReadyLevel();
+        int toolReady = te.toolModerniseLevel();            // С-3: only with «Инструмент тоже»
         p.ready = SingularStationMath.pieces(p.readyLv) + (toolReady > 0 ? 1 : 0);
         int[] lv = p.ready > 0 ? p.readyLv : cand;
         p.toolLv = p.ready > 0 ? toolReady : toolCand;
@@ -496,6 +498,7 @@ public class GuiSingularStationSC extends GuiContainer {
         }
         action = add(new Btn(ID_ACTION, x + L.px + 5, y + L.actY, L.pw - 10, L.actH, ACCENT));
         cancel = add(new Btn(ID_CANCEL, x + L.px + 5, y + L.cancelY, L.cancelW, L.cancelH, 0xFFFF8A80));
+        modTool = add(new Btn(ContainerSingularStationSC.BTN_MOD_TOOL, x + L.px + L.pw - 15, y + L.headY - 2, 11, L.big ? 11 : 10, OK));
         int bw = (L.pw - 14) / 2, bh = L.big ? 13 : 11;
         for (int k = 0; k < 4; k++) {
             branch[k] = add(new Btn(ContainerSingularStationSC.BTN_BRANCH + k, x + L.px + 5 + (k % 2) * (bw + 4), y + branchBtnY(k / 2), bw, bh, ACCENT));
@@ -710,6 +713,10 @@ public class GuiSingularStationSC extends GuiContainer {
         action.enabled = p.can;
         cancel.displayString = Lang.tr(armed() ? "sc.singStation.btn.cancel.sure" : "sc.singStation.btn.cancel");
         cancel.enabled = running;
+        modTool.visible = toolToggle();
+        modTool.selected = te.isModTool();
+        modTool.displayString = te.isModTool() ? "+" : "-";
+        modTool.color = te.isModTool() ? OK : TEXT;
         ItemStack chest = te.getStackInSlot(com.sc.util.ArmorGasSC.CHEST);
         for (int k = 0; k < 4; k++) {
             int level = k < 2 ? 3 : 5, side = k % 2 + 1;
@@ -1200,7 +1207,8 @@ public class GuiSingularStationSC extends GuiContainer {
 
     private void drawPanel(Plan p) {
         SingularProcessSC proc = te.getProcess();
-        TextFitSC.drawCentered(fontRendererObj, p.header, L.px + 3, L.headY, L.pw - 6, TEXT, false, guiLeft, guiTop);
+        int headW = toolToggle() ? L.pw - 34 : L.pw - 6;    // room for the «Инструмент тоже» toggle on the right
+        TextFitSC.drawCentered(fontRendererObj, p.header, L.px + 3 + (L.pw - 6 - headW) / 2, L.headY, headW, TEXT, false, guiLeft, guiTop);
         if (tab == T_BRANCH) {
             drawBranches();
         } else {
@@ -1241,6 +1249,12 @@ public class GuiSingularStationSC extends GuiContainer {
         int sx = L.px + 5 + L.cancelW + 4, sw = L.px + L.pw - 5 - sx;
         smallRight(status, L.px + L.pw - 5, L.cancelY + (L.cancelH - 6) / 2, sw,
                 st == TileEntityArmorStationSC.ST_WORKING ? OK : st == TileEntityArmorStationSC.ST_NO_ENERGY || st == TileEntityArmorStationSC.ST_NO_GAS ? YELLOW : LABEL);
+    }
+
+    /** С-3: the toggle shows on «Модернизация» while a Singular tool below level 5 sits in the tool slot. */
+    private boolean toolToggle() {
+        ItemStack t = te.getTool();
+        return tab == T_MODERN && com.sc.util.ToolLevelSC.isSingularTool(t) && com.sc.util.ToolLevelSC.levelOf(t) < com.sc.util.ToolLevelSC.MAX;
     }
 
     /** «Ветки» with the tool's row: the SM line under it, the cost line below that (the action button is hidden there). */
@@ -1420,6 +1434,11 @@ public class GuiSingularStationSC extends GuiContainer {
                 }
                 return tip;
             }
+        }
+        if (on(modTool)) {
+            tip.add(Lang.tr(te.isModTool() ? "sc.singStation.modtool.on" : "sc.singStation.modtool.off"));
+            tip.add("§7" + Lang.tr("sc.singStation.modtool.hint"));
+            return tip;
         }
         // the armour rows (not over the slot itself: the item's own tooltip)
         for (int i = 0; i < 4; i++) {

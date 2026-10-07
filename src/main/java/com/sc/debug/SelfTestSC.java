@@ -6136,6 +6136,14 @@ public final class SelfTestSC {
             com.sc.util.ToolLevelSC.setPoints(ready, com.sc.util.ToolLevelSC.threshold(ready));
             tm.setInventorySlotContents(TOOL, ready);
             tm.setInventorySlotContents(MAT + 1, new ItemStack(com.sc.init.ModItems.singularCrumb, 10));
+            String off = tm.startModerniseFor(new int[4], "");          // С-3: «Инструмент тоже» off - nothing to raise
+            boolean offOk = "sc.singStation.err.noready".equals(off) && tm.getProcess() == null && tm.crumbsHave() == 10
+                    && tm.toolModerniseLevel() == 0 && tm.toolReadyLevel() == 2;
+            tm.toggleModTool();
+            net.minecraft.nbt.NBTTagCompound mtNbt = new net.minecraft.nbt.NBTTagCompound();
+            tm.writeToNBT(mtNbt);
+            check(offOk && mtNbt.getBoolean("ModTool") && tm.toolModerniseLevel() == 2,
+                    "Singular station: a ready tool joins the modernisation only with «Инструмент тоже» (saved)");
             String ms = tm.startModerniseFor(new int[4], "");
             com.sc.tileentity.SingularProcessSC mp = tm.getProcess();
             boolean mod = ms == null && mp != null && mp.kind == com.sc.tileentity.SingularProcessSC.KIND_MODERNISE
@@ -6424,6 +6432,9 @@ public final class SelfTestSC {
             com.sc.manual.BookSearchSC.Hit bsWords = com.sc.manual.BookSearchSC.match(bsDocs.get(1), com.sc.manual.BookSearchSC.norm("генератор ещё"));
             check(bsWords != null && bsWords.rank == 3 && com.sc.manual.BookSearchSC.match(bsDocs.get(3), "печь кабель") == null,
                     "book search: words apart match only when every word is there");
+            com.sc.manual.BookSearchSC.Hit bsShort = com.sc.manual.BookSearchSC.match(bsDocs.get(1), com.sc.manual.BookSearchSC.norm("генератор и ещё"));
+            check(bsShort != null && com.sc.manual.BookSearchSC.match(bsDocs.get(1), com.sc.manual.BookSearchSC.norm("е щ")) == null,
+                    "book search: one-letter words apart don't count (Кн-4)");
             check(bsDocs.get(1).body.indexOf('§') < 0 && bsDocs.get(4).title.equals("Кабель-канал"),
                     "book search: no §-codes in the shown title and body");
 

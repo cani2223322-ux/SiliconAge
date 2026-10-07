@@ -6,8 +6,10 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Обзор сети:** кабели в приватах других модов (FTB Utilities, GriefPrevention и т.п.) больше не показываются, и не сообщается, сколько скрыто; повторный клик по той же сети обновляет цифры, Shift + ПКМ ключом в воздух закрывает голограмму (режим ключа при этом не меняется), «мёртвой» секунды после закрытия больше нет. **Сингулярная станция:** галочка «Инструмент тоже» в заголовке вкладки «Модерн.» — без неё модернизация повышает только броню и не тратит крупицы и ядро на инструмент. **Поиск в справочнике:** колесо мыши двигает выделение вместе со списком, клик по результату делает его выбранным, однобуквенные слова в запросе из нескольких слов не учитываются.
 
 ### English
+- **Network overview:** cables inside other mods' claims (FTB Utilities, GriefPrevention and the like) are no longer shown, nor is how much is hidden; another click on the same network refreshes the numbers, sneak + right-click with the wrench in the air closes the hologram (the wrench's mode stays), no more dead second after closing. **Singular Station:** a "Tool too" toggle in the "Upgrade" tab's header - without it the modernisation raises the armour only and spends no crumbs or core on the tool. **Handbook search:** the mouse wheel moves the selection with the list, clicking a result selects it, one-letter words in a several-word query don't count.
 
 ## 0.1.9-beta — 2026-10-07
 

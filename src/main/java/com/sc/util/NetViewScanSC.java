@@ -34,7 +34,7 @@ public final class NetViewScanSC {
     // cable flags
     public static final int C_BOTTLENECK = 1, C_OVERVOLT = 2;
     // snapshot flags (sent - append only)
-    public static final int S_TRUNCATED = 1, S_MEASURED = 2, S_HIDDEN = 4, S_PING = 8;
+    public static final int S_TRUNCATED = 1, S_MEASURED = 2, S_HIDDEN = 4, S_PING = 8, S_CLOSE = 16;
     // load levels
     public static final int L_LOW = 0, L_MID = 1, L_HIGH = 2, L_OVER = 3;
     // what a click does (Clicks.click)

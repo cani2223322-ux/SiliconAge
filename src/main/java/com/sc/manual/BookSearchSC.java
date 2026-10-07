@@ -169,8 +169,18 @@ public final class BookSearchSC {
             int rank = d.titleF.startsWith(nq) ? 0 : tc > 0 ? 1 : 2;
             return new Hit(d, rank, tc + bc, d.bodyF.indexOf(nq), nq.length());
         }
-        String[] words = nq.split(" ");
-        if (words.length < 2) {
+        String[] split = nq.split(" ");
+        if (split.length < 2) {
+            return null;
+        }
+        // Кн-4: a one-letter word apart is in nearly every article - it doesn't count (the whole phrase was tried above)
+        List<String> words = new ArrayList<String>();
+        for (String w : split) {
+            if (w.length() >= MIN_QUERY) {
+                words.add(w);
+            }
+        }
+        if (words.isEmpty()) {
             return null;
         }
         int sum = 0, first = -1, flen = 0;

@@ -478,10 +478,20 @@ public class GuiBook extends GuiScreen {
         if (marksView) {
             marksScroll = Math.max(0, Math.min(marksMax, marksScroll + step));
         } else if (chapter != null || searching()) {
+            boolean list = resultsView && searching() && !hits.isEmpty();
             if (mx < bx + PAD + LIST_W) {
                 listScroll = Math.max(0, Math.min(listMax, listScroll + step * 3));
+                if (list) {                                           // Кн-4: the selection stays among the rows shown
+                    int rows = Math.max(1, (bh - HEADER - 2 * PAD) / ROW);
+                    resSel = Math.max(listScroll, Math.min(listScroll + rows - 1, resSel));
+                    resSel = Math.max(0, Math.min(hits.size() - 1, resSel));
+                }
             } else if (resultsView && searching()) {
                 resScroll = Math.max(0, Math.min(resMax, resScroll + step));
+                if (list) {                                           // Кн-4: Enter opens what is seen
+                    resSel = Math.max(resScroll, Math.min(resScroll + resRows - 1, resSel));
+                    resSel = Math.max(0, Math.min(hits.size() - 1, resSel));
+                }
             } else {
                 pageScroll = Math.max(0, Math.min(pageMax, pageScroll + step * 24));
             }
@@ -517,6 +527,10 @@ public class GuiBook extends GuiScreen {
         }
         click();
         if (a instanceof BookSearchSC.Hit) {
+            int i = hits.indexOf(a);
+            if (i >= 0) {
+                resSel = i;                                           // Кн-4: Backspace comes back to this row
+            }
             open((BookSearchSC.Hit) a);
         } else if (a instanceof BookChapter) {
             go("c:" + ((BookChapter) a).name());

@@ -162,6 +162,9 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
     @Override
     public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
         if (player.isSneaking()) {
+            if (com.sc.handler.NetViewNetSC.close(player, world)) {
+                return stack;                               // С-4: the network overview closed, the mode stays
+            }
             if (!world.isRemote && tier.modes() > 1) {
                 int next = (modeOf(stack) + 1) % tier.modes();
                 tag(stack).setInteger(MODE, next);

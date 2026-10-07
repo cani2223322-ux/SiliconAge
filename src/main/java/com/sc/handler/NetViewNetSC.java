@@ -41,6 +41,8 @@ public final class NetViewNetSC {
     public static final SimpleNetworkWrapper CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel("SiliconAgeNetView");
 
     private static final NetViewScanSC.Clicks CLICKS = new NetViewScanSC.Clicks();
+    /** С-4: whose overview is on screen (as the client hides it: dimension, origin, until which tick). */
+    private static final java.util.Map<EntityPlayer, long[]> SHOWN = new java.util.WeakHashMap<EntityPlayer, long[]>();
 
     /** Client: the last snapshot heard, taken by the renderer (handed over between threads). */
     public static volatile Snapshot received;
@@ -69,7 +71,7 @@ public final class NetViewNetSC {
         if (what == NetViewScanSC.CLICK_IGNORE) {
             return true;
         }
-        if (ShieldEventHandler.privateFieldAgainst(world, p, x, y, z) != null) {
+        if (ShieldEventHandler.privateFieldAgainst(world, p, x, y, z) != null || new Claims(world, p).refused(x, y, z)) {
             p.addChatComponentMessage(new ChatComponentTranslation("sc.netview.noaccess"));
             return true;
         }
@@ -83,22 +85,80 @@ public final class NetViewNetSC {
                 p.addChatComponentMessage(new ChatComponentTranslation("sc.netview.truncated",
                         String.valueOf(NetViewScanSC.MAX_CABLES), String.valueOf(NetViewScanSC.MAX_ENDPOINTS)));
             }
-            if ((s.flags & NetViewScanSC.S_HIDDEN) != 0) {
-                p.addChatComponentMessage(new ChatComponentTranslation("sc.netview.hidden"));
-            }
         }
         s.dim = world.provider.dimensionId;
         s.ox = x;
         s.oy = y;
         s.oz = z;
+        if ((s.flags & NetViewScanSC.S_PING) == 0) {
+            SHOWN.put(p, new long[]{s.dim, x, y, z, world.getTotalWorldTime() + NetViewScanSC.LIFE_TICKS});
+        }
         CHANNEL.sendTo(new Message(s), p);
+        return true;
+    }
+
+    /**
+     * С-4: the wrench's sneak + right-click in the air closes this player's overview while it is on screen
+     * (instead of switching the wrench's mode). @return true when there was one to close
+     */
+    public static boolean close(EntityPlayer player, World world) {
+        if (world.isRemote || !(player instanceof EntityPlayerMP)) {
+            return false;
+        }
+        long[] v = SHOWN.remove(player);
+        if (v == null || v[0] != world.provider.dimensionId || world.getTotalWorldTime() >= v[4]) {
+            return false;
+        }
+        double dx = player.posX - v[1] - 0.5, dy = player.posY - v[2] - 0.5, dz = player.posZ - v[3] - 0.5;
+        if (dx * dx + dy * dy + dz * dz > (double) NetViewScanSC.HIDE_RANGE * NetViewScanSC.HIDE_RANGE) {
+            return false;                                   // the client has hidden it already
+        }
+        Snapshot s = new Snapshot();
+        s.flags = NetViewScanSC.S_CLOSE;
+        s.dim = (int) v[0];
+        CHANNEL.sendTo(new Message(s), (EntityPlayerMP) player);
         return true;
     }
 
     // ------------------------------------------------------------------ the world side of the walk
 
-    private static boolean refused(World w, EntityPlayer p, int x, int y, int z) {
-        return ShieldEventHandler.privateFieldAgainst(w, p, x, y, z) != null;
+    /**
+     * С-2: other mods' claims (FTB Utilities, GriefPrevention...). As the field generator asks them: a BreakEvent by a
+     * FakePlayer with the clicking player's profile, nothing broken - one probe a chunk (claims are by chunk), cached
+     * for the scan.
+     */
+    private static final class Claims {
+        final World w;
+        final EntityPlayer fake;
+        final java.util.Map<Long, Boolean> chunks = new java.util.HashMap<Long, Boolean>();
+
+        Claims(World w, EntityPlayer p) {
+            this.w = w;
+            EntityPlayer f = null;
+            if (w instanceof net.minecraft.world.WorldServer) {
+                f = net.minecraftforge.common.util.FakePlayerFactory.get((net.minecraft.world.WorldServer) w, p.getGameProfile());
+                if (f.worldObj != w) {
+                    f.setWorld(w);                          // Forge caches it by profile only
+                }
+            }
+            this.fake = f;
+        }
+
+        boolean refused(int x, int y, int z) {
+            if (fake == null || !w.blockExists(x, y, z)) {
+                return false;
+            }
+            Long key = Long.valueOf(((long) (x >> 4) << 32) | ((z >> 4) & 0xFFFFFFFFL));
+            Boolean r = chunks.get(key);
+            if (r == null) {
+                net.minecraftforge.event.world.BlockEvent.BreakEvent ev = new net.minecraftforge.event.world.BlockEvent.BreakEvent(
+                        x, y, z, w, w.getBlock(x, y, z), w.getBlockMetadata(x, y, z), fake);
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+                r = Boolean.valueOf(ev.isCanceled());
+                chunks.put(key, r);
+            }
+            return r.booleanValue();
+        }
     }
 
     private static TileEntityConduitBundleSC bundle(World w, long pos) {
@@ -115,10 +175,16 @@ public final class NetViewNetSC {
         final World w;
         final EntityPlayer p;
         final Set<Long> hidden = new HashSet<Long>();
+        final Claims claims;
 
         WorldGraph(World w, EntityPlayer p) {
             this.w = w;
             this.p = p;
+            this.claims = new Claims(w, p);
+        }
+
+        private boolean refused(int x, int y, int z) {
+            return ShieldEventHandler.privateFieldAgainst(w, p, x, y, z) != null || claims.refused(x, y, z);
         }
 
         @Override
@@ -145,7 +211,7 @@ public final class NetViewNetSC {
                 if (hidden.contains(n)) {
                     continue;
                 }
-                if (refused(w, p, nx, ny, nz)) {
+                if (refused(nx, ny, nz)) {
                     hidden.add(n);
                     continue;
                 }
@@ -161,8 +227,9 @@ public final class NetViewNetSC {
         NetViewScanSC.Scan scan = NetViewScanSC.scan(g, NetViewScanSC.pack(start.xCoord, start.yCoord, start.zCoord),
                 NetViewScanSC.MAX_CABLES, NetViewScanSC.MAX_ENDPOINTS);
         Snapshot s = new Snapshot();
-        s.flags = (scan.truncated ? NetViewScanSC.S_TRUNCATED : 0) | (g.hidden.isEmpty() ? 0 : NetViewScanSC.S_HIDDEN);
-        s.hidden = Math.min(0xFFFF, g.hidden.size());
+        // С-2: nothing is said about what lies beyond someone's claim - not that there is anything, nor how much
+        s.flags = scan.truncated ? NetViewScanSC.S_TRUNCATED : 0;
+        s.hidden = 0;
         int n = scan.cables.size(), m = scan.endpoints.size();
         TileEntityConduitBundleSC[] cables = new TileEntityConduitBundleSC[n];
         s.cables(n);

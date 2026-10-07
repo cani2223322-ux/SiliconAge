@@ -81,13 +81,16 @@ public final class NetViewRendererSC {
         }
     }
 
-    /** A click on the network already shown hides it; anything else replaces it. */
+    /**
+     * С-4: a scan replaces what's shown - on the same network that refreshes the numbers; a close (sneak + right-click
+     * with the wrench in the air) hides it; a click too soon for a scan changes nothing.
+     */
     private void take(Snapshot s, Minecraft mc) {
-        boolean same = view != null && view.dim == s.dim && cableSet.contains(NetViewScanSC.pack(s.ox, s.oy, s.oz));
-        if (same || (s.flags & NetViewScanSC.S_PING) != 0) {
-            if (same) {
-                hide();
-            }
+        if ((s.flags & NetViewScanSC.S_CLOSE) != 0) {
+            hide();
+            return;
+        }
+        if ((s.flags & NetViewScanSC.S_PING) != 0) {
             return;
         }
         view = s;

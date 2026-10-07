@@ -29,7 +29,7 @@ public class ContainerSingularStationSC extends Container {
             BTN_FILL = ContainerArmorStationSC.BTN_FILL, BTN_GAS = ContainerArmorStationSC.BTN_GAS, BTN_CHARGE = 14,
             BTN_MODERNISE = 40, BTN_CANCEL = 41, BTN_SYNC = 42, BTN_TRANSFER = 43, BTN_SCHEME_PREV = 44, BTN_SCHEME_NEXT = 45,
             BTN_CONVERT = 46, BTN_LINK = 47, BTN_BRANCH = 50, BTN_CLEAR = ContainerArmorStationSC.BTN_CLEAR, BTN_HELIUM = ContainerArmorStationSC.BTN_HELIUM,
-            BTN_TAB = 60, BTN_TOOL_BRANCH = 70;
+            BTN_TAB = 60, BTN_TOOL_BRANCH = 70, BTN_MOD_TOOL = 73;
     /**
      * The screen's tabs (GuiSingularStationSC); the client tells the server which one is open (BTN_TAB + tab), the
      * slots of the other tabs then take nothing (shift-click included) - what lies in them stays there.
@@ -246,6 +246,7 @@ public class ContainerSingularStationSC extends Container {
             case BTN_FILL: te.toggleFillGases(); return true;
             case BTN_HELIUM: te.toggleHeliumOnly(); return true;
             case BTN_CHARGE: te.toggleCharge(); return true;
+            case BTN_MOD_TOOL: te.toggleModTool(); return true;
             case BTN_MODERNISE: say(player, te.startModernise(player)); return true;
             case BTN_CONVERT: say(player, te.startConvert(player)); return true;
             case BTN_CANCEL: te.cancelProcess(); return true;
@@ -277,7 +278,8 @@ public class ContainerSingularStationSC extends Container {
         for (Gas g : Gas.values()) {
             v[TANKS + g.ordinal()] = te.tankAmount(g);
         }
-        v[SFLAGS] = te.getStabilisers() | (te.hasResonance() ? 1 << 8 : 0) | (te.isPausedOff() ? 1 << 9 : 0) | (te.isChargeOn() ? 1 << 10 : 0);
+        v[SFLAGS] = te.getStabilisers() | (te.hasResonance() ? 1 << 8 : 0) | (te.isPausedOff() ? 1 << 9 : 0) | (te.isChargeOn() ? 1 << 10 : 0)
+                | (te.isModTool() ? 1 << 11 : 0);
         v[SHORT] = te.getShortMask();
         SingularProcessSC p = te.getProcess();
         if (p != null) {
@@ -318,7 +320,7 @@ public class ContainerSingularStationSC extends Container {
             te.setTankClient(id - TANKS, sync.value(id));
         } else if (id <= SHORT) {
             int f = sync.value(SFLAGS);
-            te.setSingularClient(f & 0xFF, (f & 1 << 8) != 0, sync.value(SHORT), (f & 1 << 9) != 0, (f & 1 << 10) != 0);
+            te.setSingularClient(f & 0xFF, (f & 1 << 8) != 0, sync.value(SHORT), (f & 1 << 9) != 0, (f & 1 << 10) != 0, (f & 1 << 11) != 0);
         } else {
             int kind = sync.value(KIND);
             if (kind <= 0) {

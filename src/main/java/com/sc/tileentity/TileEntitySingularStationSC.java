@@ -61,6 +61,8 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
     private final ItemStack[] extra = new ItemStack[SING_SLOTS - ALL_SLOTS];
     private boolean chargeOn = true;
+    /** С-3: «Инструмент тоже» - the modernisation takes the ready tool in the tool slot along (off: the armour alone). */
+    private boolean modTool;
     private SingularProcessSC proc;
     /** Last scan: stabilisers counted (offsets dx, dy, dz each), resonance. */
     private int stabilisers;
@@ -90,6 +92,20 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
     public boolean isChargeOn() {
         return chargeOn;
+    }
+
+    public boolean isModTool() {
+        return modTool;
+    }
+
+    public void toggleModTool() {
+        modTool = !modTool;
+        markDirty();
+    }
+
+    /** The tool's level for the modernisation: ready and «Инструмент тоже» on, else 0. */
+    public int toolModerniseLevel() {
+        return modTool ? toolReadyLevel() : 0;
     }
 
     public void toggleCharge() {
@@ -145,12 +161,13 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
     }
 
     /** Clients (the screen's sync). */
-    public void setSingularClient(int stab, boolean res, int shortBits, boolean off, boolean charge) {
+    public void setSingularClient(int stab, boolean res, int shortBits, boolean off, boolean charge, boolean tool) {
         stabilisers = stab;
         resonance = res;
         shortMask = shortBits;
         pausedOff = off;
         chargeOn = charge;
+        modTool = tool;
     }
 
     /** Clients: the process as the screen's sync sends it (null: none). */
@@ -522,8 +539,8 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             return "sc.singStation.err.busy";
         }
         int[] lv = readyLevels(p);
-        if (SingularStationMath.pieces(lv) == 0 && toolReadyLevel() == 0) {
-            return "sc.singStation.err.noready";
+        if (SingularStationMath.pieces(lv) == 0 && toolModerniseLevel() == 0) {
+            return toolReadyLevel() > 0 ? "sc.singStation.err.tooloff" : "sc.singStation.err.noready";
         }
         return startModerniseFor(lv, p == null ? "" : p.getCommandSenderName());
     }
@@ -544,7 +561,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 mask |= 1 << i;
             }
         }
-        int toolLv = toolReadyLevel(), tool = toolLv > 0 ? toolKindOf(getTool()) : SingularStationMath.TOOL_NONE;
+        int toolLv = toolModerniseLevel(), tool = toolLv > 0 ? toolKindOf(getTool()) : SingularStationMath.TOOL_NONE;
         if (toolLv > 0) {
             mask |= 1 << TOOL_BIT;
         }
@@ -1210,6 +1227,9 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (!chargeOn) {
             nbt.setBoolean("ChargeOff", true);
         }
+        if (modTool) {
+            nbt.setBoolean("ModTool", true);
+        }
         return nbt;
     }
 
@@ -1217,6 +1237,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
     public void readFromItem(NBTTagCompound nbt) {
         super.readFromItem(nbt);
         chargeOn = !nbt.getBoolean("ChargeOff");
+        modTool = nbt.getBoolean("ModTool");
     }
 
     @Override
@@ -1224,6 +1245,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         super.readFromNBT(nbt);
         setTier(Tier.SV);
         chargeOn = !nbt.getBoolean("ChargeOff");
+        modTool = nbt.getBoolean("ModTool");
         java.util.Arrays.fill(extra, null);
         NBTTagList list = nbt.getTagList("SingItems", 10);
         for (int i = 0; i < list.tagCount(); i++) {
@@ -1240,6 +1262,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
         nbt.setBoolean("ChargeOff", !chargeOn);
+        nbt.setBoolean("ModTool", modTool);
         NBTTagList list = new NBTTagList();
         for (int i = 0; i < extra.length; i++) {
             if (extra[i] != null) {
