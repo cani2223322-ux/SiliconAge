@@ -88,6 +88,10 @@ final class BookReferenceSC {
         e.add(BookEl.dim(Lang.tr("sc.book.compat.conv.now", yesNo(com.sc.energy.ForeignEnergySC.rfApi()),
                 yesNo(com.sc.energy.ForeignEnergySC.mekanism()), yesNo(com.sc.energy.ForeignEnergySC.galacticraft()))));
         e.add(BookEl.link("converter", Lang.tr("sc.manual.energy.convhead")));
+        // packs that unify metals: ours hidden, another mod's crafted - what still works and where our blocks come from
+        e.add(BookEl.head(Lang.tr("sc.book.compat.unidicthead"))).addAll(BookContent.paras("sc.book.compat.unidict"));
+        e.add(BookEl.dim(Lang.tr("sc.book.compat.unidict.now", yesNo(cpw.mods.fml.common.Loader.isModLoaded("UniDict")))));
+        e.add(BookEl.link("metalblocks", Lang.tr("sc.manual.ores.blockshead")));
         e.add(BookEl.head(Lang.tr("sc.book.compat.othershead"))).addAll(BookContent.paras("sc.book.compat.others",
                 new Object[]{com.sc.tileentity.TileEntityFieldGeneratorSC.RF_PER_EU}));
         return e;

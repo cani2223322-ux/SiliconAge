@@ -1232,6 +1232,25 @@ public class GuiBook extends GuiScreen {
         return s;
     }
 
+    /**
+     * A machine input the machine takes from any mod (its shared ore-dictionary name: ingotCopper, dustTin...): every
+     * such item in turn, once a second, as the crafting grids do - in a pack that unifies metals (UniDict) ours may
+     * be hidden and another mod's is the one players have.
+     */
+    private static ItemStack equivalent(ItemStack s) {
+        String name = com.sc.init.OreRecipes.sharedName(s);
+        if (name == null) {
+            return s;
+        }
+        List<ItemStack> all = OreDictionary.getOres(name);
+        if (all.size() < 2) {
+            return s;
+        }
+        ItemStack c = all.get((int) (net.minecraft.client.Minecraft.getSystemTime() / 1000L % all.size())).copy();
+        c.stackSize = s.stackSize;
+        return display(c);
+    }
+
     private static ItemStack display(ItemStack s) {
         if (s.getItemDamage() == OreDictionary.WILDCARD_VALUE) {
             ItemStack c = s.copy();
@@ -1250,7 +1269,7 @@ public class GuiBook extends GuiScreen {
         int cx = x + 22;
         for (ItemStack s : r.inputs) {
             cell(cx, y + 1);
-            item(s, cx + 1, y + 2, true);
+            item(equivalent(s), cx + 1, y + 2, true);
             cx += 18;
         }
         cx = fluid(r.fluidInputA, cx, y + 1);

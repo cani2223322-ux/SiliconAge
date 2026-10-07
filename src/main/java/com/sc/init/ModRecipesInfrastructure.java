@@ -133,7 +133,20 @@ public final class ModRecipesInfrastructure {
         registerSputterTarget(Material.COPPER, backing, SCToolType.SPUTTER_TARGET_COPPER);
         registerSputterTarget(Material.ALUMINIUM, backing, SCToolType.SPUTTER_TARGET_ALUMINIUM);
         registerSputterTarget(Material.TUNGSTEN, backing, SCToolType.SPUTTER_TARGET_TUNGSTEN);
+
+        // Blocks of metal: 9 ingots of any mod, no mold. A pack that unifies metals (UniDict) swaps the
+        // crafting table's block for another mod's - a machine recipe of ours it leaves alone, so every block of
+        // the mod stays obtainable there. With a mold in the slot the mold's recipe still wins (more ingredients).
+        for (Material m : com.sc.block.BlockMetalSC.METALS) {
+            register(MachineType.ROLLING_MACHINE, new ItemStack[]{copy(ModItems.ingot.stackOf(m), 9)},
+                    new ItemStack[]{com.sc.block.BlockMetalSC.stackOf(m, 1)}, BLOCK_TICKS, 0f);
+        }
+        register(MachineType.ROLLING_MACHINE, new ItemStack[]{copy(ModItems.ingot.stackOf(Material.LEAD), 9)},
+                new ItemStack[]{new ItemStack(ModBlocks.leadBlock)}, BLOCK_TICKS, 0f);
     }
+
+    /** Pressing 9 ingots into a block. */
+    public static final int BLOCK_TICKS = 160;
 
     private static void registerSputterTarget(Material material, ItemStack backing, SCToolType toolType) {
         register(MachineType.ROLLING_MACHINE,

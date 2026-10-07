@@ -230,28 +230,12 @@ public final class RadiationSC {
         return blockPasses(b, 0);
     }
 
-    /** Blocks by id and meta: registered as "blockLead" (this mod's or another mod's block of lead). */
-    private static final Map<Integer, Boolean> LEAD_BLOCKS = new HashMap<Integer, Boolean>();
-
     /**
      * Any block of lead - ours or another mod's ("blockLead"): a pack that unifies lead (UniDict) crafts only one mod's
      * block, so the reactor shells take any of them too.
      */
     public static boolean isLeadBlock(Block b, int meta) {
-        int key = (Block.getIdFromBlock(b) << 4) | (meta & 15);
-        Boolean known = LEAD_BLOCKS.get(key);
-        if (known == null) {
-            known = false;
-            net.minecraft.item.Item item = net.minecraft.item.Item.getItemFromBlock(b);
-            if (item != null) {
-                int lead = net.minecraftforge.oredict.OreDictionary.getOreID("blockLead");
-                for (int id : net.minecraftforge.oredict.OreDictionary.getOreIDs(new ItemStack(item, 1, meta))) {
-                    known |= id == lead;
-                }
-            }
-            LEAD_BLOCKS.put(key, known);
-        }
-        return known;
+        return com.sc.block.BlockMetalSC.isBlockOf("Lead", b, meta);
     }
 
     public static float blockPasses(Block b, int meta) {
@@ -488,7 +472,7 @@ public final class RadiationSC {
     /** Server stop (and tests): forget every source. */
     public static void clearSources() {
         SOURCES.clear();
-        LEAD_BLOCKS.clear();          // keyed by block id - the next world may number its blocks differently
+        com.sc.block.BlockMetalSC.clearCache();   // keyed by block id - the next world may number its blocks differently
     }
 
     /** A dimension unloads: its sources go. */

@@ -3779,6 +3779,26 @@ public final class SelfTestSC {
         }
         check(bad.length() == 0, "crafting: no recipe of one shared ingredient alone" + (bad.length() > 0 ? " - " + bad : ""));
         // a pack that unifies lead (UniDict) crafts another mod's block: the reactor shells go by "blockLead"
+        // every block of metal is pressed from 9 ingots in the Rolling Machine (UniDict leaves machine recipes alone);
+        // a mold in the slot keeps its own recipe
+        boolean pressed = true;
+        for (Material m : com.sc.block.BlockMetalSC.METALS) {
+            ItemStack nine = ModItems.ingot.stackOf(m);
+            nine.stackSize = 9;
+            MachineRecipe r = RecipeRegistry.findMatch(MachineType.ROLLING_MACHINE, new ItemStack[]{nine}, null, null);
+            pressed &= r != null && r.outputs[0].isItemEqual(com.sc.block.BlockMetalSC.stackOf(m, 1))
+                    && com.sc.block.BlockMetalSC.isBlockOf(m.oreDictName, net.minecraft.block.Block.getBlockFromItem(r.outputs[0].getItem()),
+                    r.outputs[0].getItemDamage());
+        }
+        ItemStack lead9 = ModItems.ingot.stackOf(Material.LEAD), al9 = ModItems.ingot.stackOf(Material.ALUMINIUM);
+        lead9.stackSize = 9;
+        al9.stackSize = 9;
+        MachineRecipe leadR = RecipeRegistry.findMatch(MachineType.ROLLING_MACHINE, new ItemStack[]{lead9}, null, null);
+        MachineRecipe foil = RecipeRegistry.findMatch(MachineType.ROLLING_MACHINE,
+                new ItemStack[]{al9, new ItemStack(ModItems.TOOLS.get(com.sc.util.SCToolType.MOLD_PLATE))}, null, null);
+        check(pressed && leadR != null && leadR.outputs[0].getItem() == net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.leadBlock)
+                        && foil != null && foil.outputs[0].getItem() == ModItems.alFoil,
+                "blocks of metal: pressed from 9 ingots in the Rolling Machine, a mold still wins");
         check(com.sc.radiation.RadiationSC.isLeadBlock(com.sc.init.ModBlocks.leadBlock, 0)
                         && !com.sc.radiation.RadiationSC.isLeadBlock(net.minecraft.init.Blocks.iron_block, 0),
                 "crafting: any block of lead (\"blockLead\") counts as lead - ours and other mods'");

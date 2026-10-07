@@ -31,6 +31,38 @@ public class BlockMetalSC extends Block {
             Material.ALUMINIUM, Material.SILVER, Material.GALLIUM, Material.INDIUM, Material.NIOBIUM, Material.HAFNIUM,
             Material.PALLADIUM, Material.CERIUM, Material.LANTHANUM, Material.STEEL, Material.MAGNESIUM};
 
+    /** isBlockOf's answers: (block id << 4 | meta) -> the ore dictionary names it carries. */
+    private static final java.util.Map<Integer, java.util.Set<String>> NAMES = new java.util.HashMap<Integer, java.util.Set<String>>();
+
+    /**
+     * A block of `metal` ("Lead", "Copper"...) from any mod - ours or another's ("block" + metal in the ore
+     * dictionary). Every structure that needs a block of metal asks this, never one block of ours: a pack that
+     * unifies metals (UniDict) crafts only one mod's block. Cached per block and meta.
+     */
+    public static boolean isBlockOf(String metal, Block b, int meta) {
+        if (b == null) {
+            return false;
+        }
+        int key = (Block.getIdFromBlock(b) << 4) | (meta & 15);
+        java.util.Set<String> names = NAMES.get(key);
+        if (names == null) {
+            names = new java.util.HashSet<String>();
+            net.minecraft.item.Item item = net.minecraft.item.Item.getItemFromBlock(b);
+            if (item != null) {
+                for (int id : net.minecraftforge.oredict.OreDictionary.getOreIDs(new net.minecraft.item.ItemStack(item, 1, meta))) {
+                    names.add(net.minecraftforge.oredict.OreDictionary.getOreName(id));
+                }
+            }
+            NAMES.put(key, names);
+        }
+        return names.contains("block" + metal);
+    }
+
+    /** Forgets isBlockOf's answers (a new world may number its blocks differently). */
+    public static void clearCache() {
+        NAMES.clear();
+    }
+
     private final int offset, count;
     @SideOnly(Side.CLIENT)
     private IIcon[] icons;
