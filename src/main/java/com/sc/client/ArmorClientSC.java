@@ -15,6 +15,7 @@ import com.sc.manual.Lang;
 import com.sc.util.ArmorFeature;
 import com.sc.util.ArmorGasSC;
 import com.sc.util.ArmorSuit;
+import com.sc.util.ToolLevelSC;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -192,7 +193,7 @@ public class ArmorClientSC {
         if (p.isInvisible() || p.ticksExisted % 3 != 0) {
             return;
         }
-        com.sc.util.ArmorSuit set = ArmorLogicSC.bonusSet(p);      // no aura in emergency mode
+        com.sc.util.ArmorSuit set = ArmorLogicSC.activeBonusSet(p);  // no aura in emergency mode or overheated
         ItemStack chest = ArmorLogicSC.piece(p, 1);
         if (set == null || chest == null || !ItemArmorSC.isEnabled(chest, ArmorFeature.SET_AURA) || ItemArmorSC.chargeOf(chest) <= 0) {
             return;
@@ -254,7 +255,7 @@ public class ArmorClientSC {
 
     /** The helmet's HUD: set, charge of every piece, heat, power mode. @return the y under it */
     private static int drawSuit(Minecraft mc, EntityPlayer p, int y) {
-        ArmorSuit set = ArmorLogicSC.bonusSet(p);                // the set line only while its bonus works (not in emergency mode)
+        ArmorSuit set = ArmorLogicSC.activeBonusSet(p);          // the set line only while its bonus works (not in emergency mode or overheated)
         if (set != null) {
             mc.fontRenderer.drawStringWithShadow(Lang.tr("sc.armorhud.set." + set.name().toLowerCase(Locale.ROOT)), 4, y, 0x80FF80);
             y += 10;
@@ -337,8 +338,12 @@ public class ArmorClientSC {
         }
         String a = Lang.tr("sc.armorhud.sing.ready", next, Lang.tr("sc.armorhud.piece." + piece).toLowerCase(Locale.ROOT));
         String b = Lang.tr("sc.armorhud.sing.ready2");
-        mc.fontRenderer.drawStringWithShadow(a, width - 4 - mc.fontRenderer.getStringWidth(a), 4, 0x60FF60);
-        mc.fontRenderer.drawStringWithShadow(b, width - 4 - mc.fontRenderer.getStringWidth(b), 14, 0xB0B0B0);
+        int y0 = 4;
+        if (ToolLevelSC.isDrill(p.getCurrentEquippedItem()) && ArmorKeyBindsSC.hudPos() != ArmorKeyBindsSC.HUD_RIGHT) {
+            y0 += 62 + 3;                                       // under SingularHudSC's drill panel (same corner)
+        }
+        mc.fontRenderer.drawStringWithShadow(a, width - 4 - mc.fontRenderer.getStringWidth(a), y0, 0x60FF60);
+        mc.fontRenderer.drawStringWithShadow(b, width - 4 - mc.fontRenderer.getStringWidth(b), y0 + 10, 0xB0B0B0);
     }
 
     private static final int GAS_BAR_W = 34, GAS_LABEL_W = 22;

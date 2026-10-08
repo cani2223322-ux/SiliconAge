@@ -30,7 +30,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
  * Server -> client: the server's ConfigSC (balance, ore generation...) on joining, so a client's
  * screens, tooltips, NEI and handbook show the server's numbers, not its own .cfg. Every public
  * static non-final primitive field of ConfigSC goes by name (reflection - a new option travels
- * with no change here), except the client's own preferences (sounds); the ore settings too. The
+ * with no change here), except the client's own preferences (sounds, update check); the ore settings too. The
  * client keeps its own values aside and puts them back when it leaves the server. Single player
  * (and the host of a LAN game) shares the fields with its own server: nothing is changed there.
  */
@@ -39,7 +39,7 @@ public final class ConfigSyncSC {
     public static final SimpleNetworkWrapper CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel("SiliconAgeConfig");
 
     /** The client's own preferences: never taken from the server. */
-    private static final String[] CLIENT_ONLY = {"machineSounds", "soundVolume"};
+    private static final String[] CLIENT_ONLY = {"machineSounds", "soundVolume", "updateCheck"};
 
     private static final byte BOOL = 0, INT = 1, FLOAT = 2, DOUBLE = 3, LONG = 4;
 
@@ -63,15 +63,20 @@ public final class ConfigSyncSC {
             if (!Modifier.isPublic(m) || !Modifier.isStatic(m) || Modifier.isFinal(m) || typeOf(f) < 0) {
                 continue;
             }
-            boolean clientOnly = false;
-            for (String n : CLIENT_ONLY) {
-                clientOnly |= n.equals(f.getName());
-            }
-            if (!clientOnly) {
+            if (!clientOnly(f.getName())) {
                 out.add(f);
             }
         }
         return out;
+    }
+
+    private static boolean clientOnly(String name) {
+        for (String n : CLIENT_ONLY) {
+            if (n.equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static byte typeOf(Field f) {
@@ -134,6 +139,9 @@ public final class ConfigSyncSC {
             }
         }
         for (Map.Entry<String, Object> e : msg.values.entrySet()) {
+            if (clientOnly(e.getKey())) {
+                continue;                                   // a server of another version may still send it
+            }
             try {
                 Field f = ConfigSC.class.getField(e.getKey());
                 int m = f.getModifiers();

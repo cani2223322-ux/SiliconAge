@@ -19,7 +19,7 @@ public class TileEntityGravStabiliserSC extends TileEntity {
         return false;
     }
 
-    /** The Singular station this stabiliser counts for (in range), or null. */
+    /** The Singular station this stabiliser counts for (in range and among the ones its scan counted), or null. */
     public TileEntitySingularStationSC station() {
         if (worldObj == null) {
             return null;
@@ -31,7 +31,13 @@ public class TileEntityGravStabiliserSC extends TileEntity {
                     if (worldObj.blockExists(xCoord + x, yCoord + y, zCoord + z)) {
                         TileEntity te = worldObj.getTileEntity(xCoord + x, yCoord + y, zCoord + z);
                         if (te instanceof TileEntitySingularStationSC) {
-                            return (TileEntitySingularStationSC) te;
+                            TileEntitySingularStationSC st = (TileEntitySingularStationSC) te;
+                            byte[] off = st.stabiliserOffsets();    // dx, dy, dz from the station: this one is at -x, -y, -z
+                            for (int i = 0; i + 2 < off.length; i += 3) {
+                                if (off[i] == -x && off[i + 1] == -y && off[i + 2] == -z) {
+                                    return st;
+                                }
+                            }
                         }
                     }
                 }

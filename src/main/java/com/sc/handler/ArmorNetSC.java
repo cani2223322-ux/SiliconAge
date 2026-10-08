@@ -452,31 +452,19 @@ public final class ArmorNetSC {
                 return null;                               // on the death screen: nothing to act with
             }
             switch (msg.action) {
-                case TOGGLE: {
-                    ArmorFeature f = ArmorFeature.of(msg.feature);
-                    ItemStack piece = f == null ? null : ArmorLogicSC.piece(p, f.piece);
-                    if (piece != null && f.availableIn(ArmorLogicSC.suitOf(piece), f.piece)
-                            && (!msg.value || com.sc.util.SingularLevel.unlocked(p, f, piece))) {    // a locked function can't be switched on
-                        ItemArmorSC.setEnabled(piece, f, msg.value);
-                        p.inventoryContainer.detectAndSendChanges();
-                    }
+                case TOGGLE: case POWER_MODE: case DASH: case ANNIHILATE: case REMOVE_CHIPS: case GLOW_COLOR: case GAS_FILL:
+                case GAS_FILL_ALL: case com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION: case PHASE_DASH: case BRANCH:
+                case PROFILE_SELECT: case PROFILE_SAVE: case PROFILE_NEXT: {
+                    final byte action = msg.action, feature = msg.feature;
+                    final boolean value = msg.value;
+                    com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // the world, entities, NBT: on the server thread
+                        @Override
+                        public void run() {
+                            armorAction(p, action, feature, value);
+                        }
+                    });
                     break;
                 }
-                case POWER_MODE: {                        // feature: the mode wanted (0..2), anything else - the next one
-                    ItemStack chest = ArmorLogicSC.piece(p, 1);
-                    if (chest != null) {
-                        int want = msg.feature >= 0 && msg.feature <= 2 ? msg.feature : (ItemArmorSC.powerMode(chest) + 1) % 3;
-                        ItemArmorSC.setPowerMode(chest, want);
-                        p.inventoryContainer.detectAndSendChanges();
-                    }
-                    break;
-                }
-                case DASH:
-                    ArmorLogicSC.dash(p);
-                    break;
-                case ANNIHILATE:
-                    ArmorLogicSC.annihilate(p);
-                    break;
                 case BLADE_TOGGLE: {
                     final com.sc.util.BladeFeature f = com.sc.util.BladeFeature.of(msg.feature);
                     final boolean on = msg.value;
@@ -535,9 +523,6 @@ public final class ArmorNetSC {
                     });
                     break;
                 }
-                case REMOVE_CHIPS:
-                    com.sc.item.ItemArmorChipSC.removeAll(p);
-                    break;
                 case DRILL_TOGGLE: {
                     final com.sc.util.DrillFeature f = com.sc.util.DrillFeature.of(msg.feature);
                     final boolean on = msg.value;
@@ -557,52 +542,88 @@ public final class ArmorNetSC {
                 case DRILL_LASER:                           // the old id: the same generic path as DRILL_ACTION
                     drillAction(p, com.sc.util.DrillFeature.LASER);
                     break;
-                case GLOW_COLOR: {
-                    for (int i = 0; i < 4; i++) {
-                        ItemStack s = ArmorLogicSC.piece(p, i);
-                        if (s != null) {
-                            ItemArmorSC.setGlowColor(s, msg.feature);
-                        }
-                    }
-                    p.inventoryContainer.detectAndSendChanges();
-                    break;
-                }
-                case GAS_FILL:
-                    fillSuit(p, msg.feature);
-                    break;
-                case GAS_FILL_ALL:
-                    fillSuitAll(p);
-                    break;
-                case com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION:   // hydrogen: a second jump in mid-air
-                    com.sc.item.ArmorLogicSC.airJump(p);
-                    break;
-                case PHASE_DASH:
-                    com.sc.item.ArmorLogicSC.phaseDash(p);
-                    break;
                 case GRAV_PRESS: case GRAV_GRAB: case TIME_SLOW: case BLACK_HOLE: case GRAV_DOME: case SINGULARITY:
                     com.sc.item.SingularPowersSC.key(p, featureOfAction(msg.action));   // queued: run on the server thread
-                    break;
-                case BRANCH:                                // Р2: the free first choice; only the station changes it later
-                    if (com.sc.util.SingularLevel.chooseFree(p, msg.feature / 10, msg.feature % 10)) {
-                        p.inventoryContainer.detectAndSendChanges();
-                        p.addChatComponentMessage(new ChatComponentTranslation("sc.armor.sing.branch.chosen",
-                                new ChatComponentTranslation("sc.armorfn." + com.sc.util.SingularLevel.branchFeature(msg.feature / 10, msg.feature % 10)
-                                        .name().toLowerCase(java.util.Locale.ROOT))));
-                    }
-                    break;
-                case PROFILE_SELECT:
-                    com.sc.util.SingularProfiles.serverAction(p, 0, msg.feature);
-                    break;
-                case PROFILE_SAVE:
-                    com.sc.util.SingularProfiles.serverAction(p, 1, msg.feature);
-                    break;
-                case PROFILE_NEXT:
-                    com.sc.util.SingularProfiles.serverAction(p, 2, -1);
                     break;
                 default:
                     break;
             }
             return null;
+        }
+    }
+
+    /** Server thread (queued by the handler): the suit's own actions - they touch the world, entities and NBT. */
+    private static void armorAction(EntityPlayerMP p, byte action, byte feature, boolean value) {
+        switch (action) {
+            case TOGGLE: {
+                ArmorFeature f = ArmorFeature.of(feature);
+                ItemStack piece = f == null ? null : ArmorLogicSC.piece(p, f.piece);
+                if (piece != null && f.availableIn(ArmorLogicSC.suitOf(piece), f.piece)
+                        && (!value || com.sc.util.SingularLevel.unlocked(p, f, piece))) {    // a locked function can't be switched on
+                    ItemArmorSC.setEnabled(piece, f, value);
+                    p.inventoryContainer.detectAndSendChanges();
+                }
+                break;
+            }
+            case POWER_MODE: {                        // feature: the mode wanted (0..2), anything else - the next one
+                ItemStack chest = ArmorLogicSC.piece(p, 1);
+                if (chest != null) {
+                    int want = feature >= 0 && feature <= 2 ? feature : (ItemArmorSC.powerMode(chest) + 1) % 3;
+                    ItemArmorSC.setPowerMode(chest, want);
+                    p.inventoryContainer.detectAndSendChanges();
+                }
+                break;
+            }
+            case DASH:
+                ArmorLogicSC.dash(p);
+                break;
+            case ANNIHILATE:
+                ArmorLogicSC.annihilate(p);
+                break;
+            case REMOVE_CHIPS:
+                com.sc.item.ItemArmorChipSC.removeAll(p);
+                break;
+            case GLOW_COLOR: {
+                for (int i = 0; i < 4; i++) {
+                    ItemStack s = ArmorLogicSC.piece(p, i);
+                    if (s != null) {
+                        ItemArmorSC.setGlowColor(s, feature);
+                    }
+                }
+                p.inventoryContainer.detectAndSendChanges();
+                break;
+            }
+            case GAS_FILL:
+                fillSuit(p, feature);
+                break;
+            case GAS_FILL_ALL:
+                fillSuitAll(p);
+                break;
+            case com.sc.item.ArmorLogicSC.AIR_JUMP_ACTION:   // hydrogen: a second jump in mid-air
+                com.sc.item.ArmorLogicSC.airJump(p);
+                break;
+            case PHASE_DASH:
+                com.sc.item.ArmorLogicSC.phaseDash(p);
+                break;
+            case BRANCH:                                // Р2: the free first choice; only the station changes it later
+                if (com.sc.util.SingularLevel.chooseFree(p, feature / 10, feature % 10)) {
+                    p.inventoryContainer.detectAndSendChanges();
+                    p.addChatComponentMessage(new ChatComponentTranslation("sc.armor.sing.branch.chosen",
+                            new ChatComponentTranslation("sc.armorfn." + com.sc.util.SingularLevel.branchFeature(feature / 10, feature % 10)
+                                    .name().toLowerCase(java.util.Locale.ROOT))));
+                }
+                break;
+            case PROFILE_SELECT:
+                com.sc.util.SingularProfiles.serverAction(p, 0, feature);
+                break;
+            case PROFILE_SAVE:
+                com.sc.util.SingularProfiles.serverAction(p, 1, feature);
+                break;
+            case PROFILE_NEXT:
+                com.sc.util.SingularProfiles.serverAction(p, 2, -1);
+                break;
+            default:
+                break;
         }
     }
 

@@ -77,6 +77,9 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
     private Tier euTier = ForeignEnergySC.BASE_TIER, workTier = ForeignEnergySC.BASE_TIER;
     private int packets = 1, throughput = ForeignEnergySC.BASE_TIER.getVoltage(), lossPct = 5, euCap = ForeignEnergySC.BASE_EU_BUFFER;
     private boolean universal;
+    /** The module slots as refreshModules last saw them (a stack grown or shrunk in place goes past setInventorySlotContents). */
+    private final net.minecraft.item.Item[] seenModule = new net.minecraft.item.Item[MODULE_SLOTS];
+    private final int[] seenModuleMeta = new int[MODULE_SLOTS], seenModuleSize = new int[MODULE_SLOTS];
 
     // ---- the faces' output kinds (recomputeKinds) ----
     private final int[] outKind = new int[6];
@@ -225,6 +228,12 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
 
     /** Works the tiers, throughput, loss and capacity out of the slots again. */
     private void refreshModules() {
+        for (int i = 0; i < MODULE_SLOTS; i++) {
+            ItemStack s = inv[FIRST_MODULE + i];
+            seenModule[i] = s == null ? null : s.getItem();
+            seenModuleMeta[i] = s == null ? 0 : s.getItemDamage();
+            seenModuleSize[i] = s == null ? 0 : s.stackSize;
+        }
         universal = count(UpgradeType.UNIVERSAL_TRANSFORMER) > 0;
         int tr = transformers();
         euTier = ForeignEnergySC.euTier(tr);
@@ -1466,6 +1475,26 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         markDirty();
     }
 
+    /** Any change to the inventory comes here (a module stack grown or shrunk in place too): modulesChanged(). */
+    @Override
+    public void markDirty() {
+        super.markDirty();
+        if (modulesStale()) {
+            modulesChanged();
+        }
+    }
+
+    private boolean modulesStale() {
+        for (int i = 0; i < MODULE_SLOTS; i++) {
+            ItemStack s = inv[FIRST_MODULE + i];
+            if (s == null ? seenModule[i] != null
+                    : s.getItem() != seenModule[i] || s.getItemDamage() != seenModuleMeta[i] || s.stackSize != seenModuleSize[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public String getInventoryName() {
         return "container.siliconage.energyConverter";
@@ -1507,17 +1536,18 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
 
     @Override
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
-        return slot == SLOT_CHARGE && inv[SLOT_CHARGE] == null && isChargeable(stack);
+        return slot == SLOT_CHARGE && inv[SLOT_CHARGE] == null && isChargeable(stack)
+                && TileEntityEnergyStorageSC.tierAllowsAt(stack, workTier);
     }
 
-    /** Automation takes an item out of the charge slot once it's full (nothing more goes in). */
+    /** Automation takes an item out of the charge slot once it's full or can't be charged at this tier (nothing more goes in). */
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
         if (slot != SLOT_CHARGE || stack == null) {
             return slot == SLOT_CHARGE;
         }
         ItemStack probe = stack.copy();
-        if (TileEntityEnergyStorageSC.chargeItemAt(probe, 1000, Tier.max()) > 0) {
+        if (TileEntityEnergyStorageSC.chargeItemAt(probe, 1000, workTier) > 0) {   // the tier the tick charges with
             return false;
         }
         return !(ForeignEnergySC.rfApi() && !ForeignEnergySC.testAllPresent && com.sc.compat.RfOpsSC.charge(stack, 1000, true) > 0);

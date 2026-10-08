@@ -637,6 +637,9 @@ public final class BladeSingularSC {
             if (d > r + e.width / 2 || (d > 0.5 && len > 0.01 && (dx * lx + dz * lz) / (d * len) < 0)) {
                 continue;                                   // behind: the arc is the front half
             }
+            if (!BladeLogicSC.fresh(e)) {
+                continue;                                   // still in its hit frames: not one arc per click
+            }
             BladeLogicSC.areaHit(p, blade, e, damage);
         }
         for (int i = -4; i <= 4; i++) {
@@ -664,7 +667,7 @@ public final class BladeSingularSC {
             for (Object o : p.worldObj.getEntitiesWithinAABBExcludingEntity(p, from.boundingBox.expand(r, r, r))) {
                 Entity e = (Entity) o;
                 double d = e.getDistanceSqToEntity(from);
-                if (d <= best && !done.contains(e) && BladeLogicSC.fair(p, e)) {
+                if (d <= best && !done.contains(e) && BladeLogicSC.fair(p, e) && BladeLogicSC.fresh(e)) {   // not in its hit frames
                     best = d;
                     next = e;
                 }

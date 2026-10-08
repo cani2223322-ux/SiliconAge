@@ -524,13 +524,20 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         return chargeOf(stack) >= damageCost();
     }
 
+    /** EU a point absorbed on `wearer` really costs - what damageArmor takes (combat mode, Quantum set, regeneration). */
+    private double absorbCost(EntityLivingBase wearer) {
+        float mul = wearer instanceof EntityPlayer ? com.sc.item.ArmorLogicSC.absorbCostMul((EntityPlayer) wearer) : 1F;
+        return damageCost() * mul;
+    }
+
     @Override
     public ArmorProperties getProperties(EntityLivingBase player, ItemStack armor, DamageSource source, double damage, int slot) {
-        if (source.isUnblockable() || !powered(armor)) {
+        double cost = absorbCost(player);
+        if (source.isUnblockable() || chargeOf(armor) < cost) {
             return new ArmorProperties(0, 0, 0);
         }
         // Forge works in 1/25ths of a damage point here, so the EU left buys 25 x charge / cost.
-        int absorbMax = (int) Math.min(Integer.MAX_VALUE, 25.0 * chargeOf(armor) / damageCost());
+        int absorbMax = (int) Math.min(Integer.MAX_VALUE, 25.0 * chargeOf(armor) / cost);
         return new ArmorProperties(0, protection(player) / 25.0, absorbMax);
     }
 
@@ -555,8 +562,7 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
     /** Absorbed damage costs EU - less for a full Quantum set and in combat mode (ArmorLogicSC). */
     @Override
     public void damageArmor(EntityLivingBase entity, ItemStack stack, DamageSource source, int damage, int slot) {
-        float mul = entity instanceof EntityPlayer ? com.sc.item.ArmorLogicSC.absorbCostMul((EntityPlayer) entity) : 1F;
-        discharge(stack, (int) Math.ceil(damage * damageCost() * mul));
+        discharge(stack, (int) Math.ceil(damage * absorbCost(entity)));
         if (entity instanceof EntityPlayer && suit == ArmorSuit.SINGULAR) {
             SingularProgressSC.absorbed((EntityPlayer) entity, damage);     // ОЧ3: a point a damage point absorbed
         }

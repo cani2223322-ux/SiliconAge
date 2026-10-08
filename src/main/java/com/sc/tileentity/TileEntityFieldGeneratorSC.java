@@ -197,8 +197,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public void togglePower() {
-        if (!powerOn && refuseForeign(true)) {
-            return;                                 // a stranger's field in the way: stays off
+        if (!powerOn && (refuseForeign(true) || has(F_PRIVATE) && refuseClaimed(true))) {
+            return;                                 // a stranger's field or another mod's claim in the way: stays off
         }
         powerOn = !powerOn;
         com.sc.util.SoundsSC.powerClick(this, powerOn);
@@ -385,6 +385,20 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         net.minecraft.entity.player.EntityPlayerMP p = srv == null ? null : srv.getConfigurationManager().func_152612_a(owner);
         if (p != null && p.getGameProfile() != null && p.getGameProfile().getId() != null) {
             return p.getGameProfile();
+        }
+        if (srv != null && srv.isServerInOnlineMode()) {
+            // offline: the real profile from the server's cache (claim mods compare UUIDs) - a cached name only, no web lookup
+            // (an offline-mode server's players have the offline UUID below; its expired entry would ask Mojang)
+            net.minecraft.server.management.PlayerProfileCache cache = srv.func_152358_ax();
+            for (String n : cache.func_152654_a()) {
+                if (n.equalsIgnoreCase(owner)) {
+                    com.mojang.authlib.GameProfile g = cache.func_152655_a(owner);
+                    if (g != null && g.getId() != null) {
+                        return g;
+                    }
+                    break;
+                }
+            }
         }
         return new com.mojang.authlib.GameProfile(EntityPlayer.func_146094_a(new com.mojang.authlib.GameProfile(null, owner)), owner);
     }
@@ -1100,6 +1114,39 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return null;
     }
 
+    /**
+     * A private field covering the point that refuses this player, or null. Every field there is asked,
+     * not the first found: where private zones overlap, each one's owner and access list must let them in.
+     */
+    public static TileEntityFieldGeneratorSC privateRefusing(World world, EntityPlayer p, double x, double y, double z) {
+        for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
+            if (f.has(F_PRIVATE) && f.fieldContains(x, y, z) && !f.allowed(p)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /** privateRefusing() by name - for a quarry working on its owner's behalf. */
+    public static TileEntityFieldGeneratorSC privateRefusingName(World world, String name, double x, double y, double z) {
+        for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
+            if (f.has(F_PRIVATE) && f.fieldContains(x, y, z) && !f.allowedName(name)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /** A "no spawning" field covering the point that would push this mob out, or null - every such field is asked. */
+    public static TileEntityFieldGeneratorSC noSpawnFor(World world, Entity e, double x, double y, double z) {
+        for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
+            if (f.has(F_NO_SPAWN) && f.fieldContains(x, y, z) && f.targets(e)) {
+                return f;
+            }
+        }
+        return null;
+    }
+
     public FieldMode getMode() {
         return mode;
     }
@@ -1237,13 +1284,19 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return LinkResult.NO_ACCESS;
         }
         List<int[]> incoming = new ArrayList<int[]>(joiningMaster.nodePositions);
-        if (masterTe.nodePositions.size() + incoming.size() > MAX_NODES) {
-            return LinkResult.NODE_CAP;
-        }
         for (int[] pos : incoming) {            // all-or-nothing: every joining node must be reachable
             if (!world.blockExists(pos[0], pos[1], pos[2])) {
                 return LinkResult.UNLOADED;
             }
+        }
+        for (int i = incoming.size() - 1; i >= 0; i--) {
+            TileEntityFieldGeneratorSC n = fieldGeneratorAt(world, incoming.get(i));
+            if (n != joiningMaster && !isMemberOf(n, joiningMaster)) {
+                incoming.remove(i);             // a stale entry: gone, or someone else's generator now
+            }
+        }
+        if (masterTe.nodePositions.size() + incoming.size() > MAX_NODES) {
+            return LinkResult.NODE_CAP;
         }
         // the bigger cluster's zone mustn't reach over a stranger's field (as a power-on / a new zone)
         List<int[]> had = new ArrayList<int[]>(masterTe.nodePositions);
@@ -1254,6 +1307,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
         masterTe.zoneCache = null;
         TileEntityFieldGeneratorSC stranger = masterTe.foreignOverlap(joiningMaster);
+        // nor a private zone over another mod's claim (as toggle(F_PRIVATE) / a new zone)
+        int[] claimed = stranger == null && masterTe.has(F_PRIVATE) ? masterTe.claimedSpot() : null;
         masterTe.nodePositions.clear();
         masterTe.nodePositions.addAll(had);
         masterTe.zoneCache = null;
@@ -1262,6 +1317,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", stranger.getOwner()));
             }
             return LinkResult.FOREIGN;
+        }
+        if (claimed != null) {
+            if (player != null) {
+                player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.claimed",
+                        claimed[0] + " " + claimed[1] + " " + claimed[2]));
+            }
+            return LinkResult.FOREIGN;              // the module stays silent on FOREIGN: link() told them
         }
         int[] masterCoord = {masterTe.xCoord, masterTe.yCoord, masterTe.zCoord};
         for (int[] pos : incoming) {
@@ -1315,6 +1377,11 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nodePositions.add(new int[]{xCoord, yCoord, zCoord});
         changed();
         return this;
+    }
+
+    /** A node whose master is gone (moved/replaced without breakBlock) becomes its own master again; false if it still has one. */
+    public boolean adoptIfOrphan() {
+        return !master && worldObj != null && !worldObj.isRemote && resolveMaster() == this;
     }
 
     /** Master for energy forwarding - only if its chunk is loaded (never force-load it). */
@@ -1392,6 +1459,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (selfIdx >= 0) {
             remaining.remove(selfIdx);
         }
+        for (int i = remaining.size() - 1; i >= 0; i--) {
+            int[] pos = remaining.get(i);
+            if (world.blockExists(pos[0], pos[1], pos[2]) && !isMemberOf(fieldGeneratorAt(world, pos), self)) {
+                remaining.remove(i);    // a stale entry: gone, or someone else's generator now (unloaded ones: pruneNodes)
+            }
+        }
         if (remaining.isEmpty()) {
             return;
         }
@@ -1426,7 +1499,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 continue;               // an unloaded member is adopted later by pruneNodes
             }
             TileEntityFieldGeneratorSC member = fieldGeneratorAt(world, pos);
-            if (member != null) {
+            if (isMemberOf(member, self)) {
                 member.master = false;
                 member.masterPos = new int[]{newMasterPos[0], newMasterPos[1], newMasterPos[2]};
                 member.nodePositions.clear();
@@ -1443,6 +1516,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
         }
         return -1;
+    }
+
+    /** A node of m's cluster: not a master, pointing at m (null: no). */
+    private static boolean isMemberOf(TileEntityFieldGeneratorSC n, TileEntityFieldGeneratorSC m) {
+        return n != null && !n.master && n.masterPos != null
+                && n.masterPos[0] == m.xCoord && n.masterPos[1] == m.yCoord && n.masterPos[2] == m.zCoord;
     }
 
     private static boolean containsPos(List<int[]> list, int[] pos) {
@@ -1472,8 +1551,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
             return;
         }
-        if (worldObj == null || !master) {
-            return; // only the master ticks upkeep/protection for the whole cluster
+        if (worldObj == null || !master && (worldObj.getTotalWorldTime() % 100 != 0 || !adoptIfOrphan())) {
+            return; // only the master ticks upkeep/protection for the whole cluster (an orphaned node re-elects itself every 5 s)
         }
         if (worldObj.getTotalWorldTime() % 100 == 0) {
             pruneNodes();

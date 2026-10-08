@@ -381,13 +381,19 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             TileEntityWirelessSC other = LOADED.get(partnerId);
             if (other != null && other != this && !other.isInvalid() && other.partnerId != id) {
                 unlinkHere();                                     // the other end was linked to someone else
+            } else {
+                TileEntityWirelessSC p = partner();
+                if (p != null && p.worldObj != null && (partnerX != p.xCoord || partnerY != p.yCoord || partnerZ != p.zCoord
+                        || partnerDim != p.worldObj.provider.dimensionId || partnerTier != p.getTier().ordinal())) {
+                    notePartner(p);                               // the other end was moved (wrench) or changed
+                }
             }
         }
         if (kind == TRANSMITTER) {
             tickTransmitter(time);
         } else if (kind == RECEIVER) {
             TileEntityWirelessSC p = partner();
-            status = p == null ? (partnerId == 0 ? ST_NO_LINK : ST_UNLOADED)
+            status = !switchedOn() ? ST_OFF : p == null ? (partnerId == 0 ? ST_NO_LINK : ST_UNLOADED)
                     : p.worldObj != worldObj ? ST_OTHER_DIM : time - receivedAt < 40 ? ST_OK : ST_IDLE;
             if (p != null && p.worldObj == worldObj) {       // no distance to a transmitter in another dimension
                 distance = (int) Math.sqrt(p.getDistanceFrom(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5));
@@ -420,6 +426,10 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         distance = (int) dist;
         if (dist > range(linkTier)) {
             status = ST_TOO_FAR;
+            return;
+        }
+        if (!rx.flowing()) {                                      // a switched-off receiver takes nothing
+            status = ST_PAUSED;
             return;
         }
         int sent = send(rx, dist);
@@ -844,6 +854,11 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         if (kind != QUANTUM && partnerId != 0) {
             nbt.setLong("WId", id);
             nbt.setLong("Partner", partnerId);
+            nbt.setInteger("PX", partnerX);
+            nbt.setInteger("PY", partnerY);
+            nbt.setInteger("PZ", partnerZ);
+            nbt.setInteger("PDim", partnerDim);
+            nbt.setInteger("PTier", partnerTier);
         }
         return nbt;
     }
@@ -856,6 +871,13 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             unregister();
             id = nbt.getLong("WId");
             partnerId = nbt.getLong("Partner");
+            if (nbt.hasKey("PTier")) {                    // older items: filled in once the other end is loaded
+                partnerX = nbt.getInteger("PX");
+                partnerY = nbt.getInteger("PY");
+                partnerZ = nbt.getInteger("PZ");
+                partnerDim = nbt.getInteger("PDim");
+                partnerTier = nbt.getInteger("PTier");
+            }
             LOADED.put(id, this);
         }
         markDirty();

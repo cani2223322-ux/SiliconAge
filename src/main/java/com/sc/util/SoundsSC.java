@@ -88,25 +88,54 @@ public final class SoundsSC {
         }
     }
 
-    /** One tick of a working block: every PERIOD ticks (offset by its position) its loop plays again. */
+    /**
+     * One tick of a working block: every PERIOD ticks (offset by its position) its loop plays again.
+     * The server sends the base volume; each client applies its own settings ({@link ClientFilter}).
+     */
     public static void loop(TileEntity te, Loop loop) {
         World w = te.getWorldObj();
-        if (loop == null || w == null || w.isRemote || !ConfigSC.machineSounds || ConfigSC.soundVolume <= 0F) {
+        if (loop == null || w == null || w.isRemote) {
             return;
         }
         long offset = (te.xCoord * 31L + te.yCoord * 7L + te.zCoord * 17L) & 0x3F;
         if ((w.getTotalWorldTime() + offset) % PERIOD == 0) {
             w.playSoundEffect(te.xCoord + 0.5, te.yCoord + 0.5, te.zCoord + 0.5, Reference.ASSETS + ":" + loop.name,
-                    loop.volume * ConfigSC.soundVolume, loop.pitch);
+                    loop.volume, loop.pitch);
         }
     }
 
-    /** A one-off sound at a place (server side: everyone near hears it). */
+    /** A one-off sound at a place (server side: everyone near hears it, at their own volume setting). */
     public static void play(World w, double x, double y, double z, String name, float volume, float pitch) {
-        if (w == null || w.isRemote || ConfigSC.soundVolume <= 0F) {
+        if (w == null || w.isRemote) {
             return;
         }
-        w.playSoundEffect(x, y, z, Reference.ASSETS + ":" + name, volume * ConfigSC.soundVolume, pitch);
+        w.playSoundEffect(x, y, z, Reference.ASSETS + ":" + name, volume, pitch);
+    }
+
+    /**
+     * Client: the player's own sounds.machines / sounds.volume, applied to every Silicon Age sound as it
+     * starts (a dedicated server's config never decides what a player hears). Registered by the ClientProxy.
+     */
+    public static final class ClientFilter {
+
+        @cpw.mods.fml.common.eventhandler.SubscribeEvent
+        public void onSound(net.minecraftforge.client.event.sound.PlaySoundEvent17 e) {
+            net.minecraft.client.audio.ISound s = e.result;
+            if (s == null || s.getPositionedSoundLocation() == null
+                    || !Reference.ASSETS.equals(s.getPositionedSoundLocation().getResourceDomain())) {
+                return;
+            }
+            String p = s.getPositionedSoundLocation().getResourcePath();
+            boolean working = p.startsWith("machine.") || p.startsWith("gen.") || p.startsWith("quarry.");
+            if (ConfigSC.soundVolume <= 0F || (working && !ConfigSC.machineSounds)) {
+                e.result = null;
+                return;
+            }
+            if (ConfigSC.soundVolume < 1F && s instanceof net.minecraft.client.audio.PositionedSoundRecord) {
+                e.result = new net.minecraft.client.audio.PositionedSoundRecord(s.getPositionedSoundLocation(),
+                        s.getVolume() * ConfigSC.soundVolume, s.getPitch(), s.getXPosF(), s.getYPosF(), s.getZPosF());
+            }
+        }
     }
 
     /** The power switch's click, on or off, at a block. */

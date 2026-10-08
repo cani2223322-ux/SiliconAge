@@ -41,11 +41,23 @@ public final class DrillEventsSC {
         if (e instanceof BlockEvent.MultiPlaceEvent) {
             for (Object o : ((BlockEvent.MultiPlaceEvent) e).getReplacedBlockSnapshots()) {
                 BlockSnapshot s = (BlockSnapshot) o;
+                unpend(e.world, s.x, s.y, s.z);
                 PlacedBlocksSC.mark(e.world, s.x, s.y, s.z);
             }
             return;
         }
+        unpend(e.world, e.x, e.y, e.z);
         PlacedBlocksSC.mark(e.world, e.x, e.y, e.z);
+    }
+
+    /** A placement after a break in the same tick wins: the queued forget would drop the new mark. */
+    private void unpend(World w, int x, int y, int z) {
+        for (Iterator<Pending> it = pending.iterator(); it.hasNext(); ) {
+            Pending q = it.next();
+            if (q.w == w && q.x == x && q.y == y && q.z == z) {
+                it.remove();
+            }
+        }
     }
 
     /**
@@ -124,6 +136,9 @@ public final class DrillEventsSC {
                 if (f.worldObj.blockExists(x, y, z) && !f.worldObj.isAirBlock(x, y, z)) {
                     PlacedBlocksSC.mark(f.worldObj, x, y, z);
                 }
+            } else if (DimensionManager.getWorld(f.worldObj.provider.dimensionId) != f.worldObj
+                    || f.worldObj.getEntityByID(f.getEntityId()) != f) {
+                it.remove(); // its chunk / world unloaded: never dies; a reload re-adds a fresh instance
             }
         }
         for (WorldServer w : DimensionManager.getWorlds()) {
@@ -134,6 +149,12 @@ public final class DrillEventsSC {
                 }
             }
         }
+    }
+
+    /** Server stop: no World kept into the next singleplayer session. */
+    public void clearAll() {
+        pending.clear();
+        falling.clear();
     }
 
     /** Player data: the last placed block broken with the Singular drill in hand {dim, x, y, z} and its world tick. */

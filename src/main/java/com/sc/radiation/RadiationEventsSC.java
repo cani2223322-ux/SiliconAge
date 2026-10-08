@@ -27,6 +27,7 @@ public class RadiationEventsSC {
         } else {
             RadiationSC.copyAfterDeath(event.original, event.entityPlayer);
         }
+        com.sc.item.SingularPowersSC.copyState(event.original, event.entityPlayer);   // К1's boost / weakness go on with the new body
     }
 
     @SubscribeEvent

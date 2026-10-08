@@ -163,6 +163,9 @@ public class BlockFieldGeneratorSC extends Block {
         }
         TileEntityFieldGeneratorSC field = (TileEntityFieldGeneratorSC) te;
 
+        if (!world.isRemote) {
+            field.adoptIfOrphan();   // its master is gone: this node takes over at once
+        }
         if (!field.isMaster()) {
             if (!world.isRemote) {
                 player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.field.node"));
@@ -172,7 +175,7 @@ public class BlockFieldGeneratorSC extends Block {
 
         if (!world.isRemote && field.getOwner().isEmpty()) {
             field.setOwner(player.getCommandSenderName());       // a generator from before owners: the first to use it
-            player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.claimed"));
+            player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.becameowner"));
         }
         if (player.isSneaking()) {
             if (!field.allowed(player)) {

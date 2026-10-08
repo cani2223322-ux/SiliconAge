@@ -904,10 +904,12 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         return mode(ConduitKind.TUBE, dir).extracts(ConduitKind.TUBE) && redstoneAllows(ConduitKind.TUBE, dir);
     }
 
+    /** Every extract side gets its move each tick; the starting side rotates so none always goes first. */
     private void moveItems() {
         ForgeDirection[] dirs = ForgeDirection.VALID_DIRECTIONS;
+        int start = nextSource;
         for (int i = 0; i < dirs.length; i++) {
-            ForgeDirection dir = dirs[(nextSource + i) % dirs.length];
+            ForgeDirection dir = dirs[(start + i) % dirs.length];
             if (!connectorAt(ConduitKind.TUBE, dir)) {
                 continue;
             }
@@ -915,11 +917,9 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             if (!extractsFrom(dir, te)) {
                 continue;
             }
-            if (sendFrom((IInventory) te, dir)) {
-                nextSource = (nextSource + i + 1) % dirs.length;
-                return;
-            }
+            sendFrom((IInventory) te, dir);
         }
+        nextSource = (start + 1) % dirs.length;
     }
 
     /**

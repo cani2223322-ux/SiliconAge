@@ -73,9 +73,18 @@ public class ContainerEnergyConverterSC extends Container {
             return TileEntityEnergyConverterSC.isModule(stack);
         }
 
+        /** Vanilla's clicks ask without a stack: the one on the cursor (going in), else the one in the slot. */
         @Override
         public int getSlotStackLimit() {
-            return 4;
+            ItemStack in = getStack(), s = clicking != null ? clicking : in;
+            if (s == null) {
+                return 4;
+            }
+            int lim = limitFor(s);
+            if (clicking != null && in != null && clicking.isItemEqual(in) && ItemStack.areItemStackTagsEqual(clicking, in)) {
+                lim = Math.max(lim, in.stackSize);  // an old stack past the limit: topping up must not pull the extra out
+            }
+            return lim;
         }
 
         @Override
@@ -213,6 +222,23 @@ public class ContainerEnergyConverterSC extends Container {
         if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
             return null;
         }
-        return super.slotClick(slotId, button, mode, player);
+        clicking = player.inventory.getItemStack();
+        try {
+            return super.slotClick(slotId, button, mode, player);
+        } finally {
+            clicking = null;
+        }
+    }
+
+    /** The cursor's stack during a click: a module slot's limit is that module's (ModuleSlot.getSlotStackLimit). */
+    private ItemStack clicking;
+
+    /** Double-click collecting (mode 6) skips a module that can't come out now (decrStackSize would give null). */
+    @Override
+    public boolean func_94530_a(ItemStack stack, Slot slot) {
+        if (slot instanceof ModuleSlot && te.moduleRemoveBlock(slot.getSlotIndex()) != 0) {
+            return false;
+        }
+        return super.func_94530_a(stack, slot);
     }
 }

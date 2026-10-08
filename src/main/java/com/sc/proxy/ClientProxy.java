@@ -26,6 +26,7 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.ToolWheelSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.NetViewRendererSC.INSTANCE);   // the wrench's network overview (world + HUD)
+        MinecraftForge.EVENT_BUS.register(new com.sc.util.SoundsSC.ClientFilter());   // the player's own sound settings (client only)
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(com.sc.client.ToolWheelSC.INSTANCE);   // ClientTickEvent
         cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(com.sc.client.UpdateClientSC.INSTANCE);   // «Есть обновление»
         if (com.sc.debug.PackCheckSC.wanted()) {        // developer check of a whole pack only (-Dsc.packcheck)

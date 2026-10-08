@@ -272,9 +272,11 @@ public final class ModRecipesComponents {
         // TODO(§14): §14 lists He as a 1 mB trace of air separation, but the Air Separator already
         // uses both of its output tanks for O2 and Ar. Modelled as a separate water-cooled
         // cryogenic run instead; the coolant is also what tells the two recipes apart.
+        // Kr (the other rare-gas trace) rides along in the free second tank - the only source of
+        // it for the helmet functions and the bridge.
         RecipeRegistry.register(new MachineRecipe(MachineType.AIR_SEPARATOR,
                 new ItemStack[0], new FluidStack(FluidRegistry.WATER, 1000), null,
-                new ItemStack[0], new FluidStack(ModFluids.liquidHelium, 100), null,
+                new ItemStack[0], new FluidStack(ModFluids.liquidHelium, 100), new FluidStack(ModFluids.krypton, 25),
                 400, 0f));
     }
 

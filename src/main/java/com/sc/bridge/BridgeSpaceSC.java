@@ -363,7 +363,10 @@ public final class BridgeSpaceSC {
                 if (m.blocksMovement()) {
                     return SOLID;
                 }
-                return PASS;                               // grass, flowers, snow, torches: one walks through them
+                if (b.hasTileEntity(w.getBlockMetadata(x, y, z))) {
+                    return OTHER;                          // a flower pot, a skull...: the vortex never breaks those
+                }
+                return PASS;                               // grass, flowers, snow, torches: one walks through them, the vortex breaks them
             }
 
             @Override

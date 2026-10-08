@@ -64,7 +64,7 @@ public class TileEntityBridgeEnergyPortSC extends TileEntityEnergyBase implement
         return max <= 0 ? 0 : removeEnergy(max);
     }
 
-    /** Self-test / world test: fill the buffer. */
+    /** Self-test / world test, and the charge a placed item brings back (BlockBridgeSC): fill the buffer. */
     public void putForTest(int eu) {
         addEnergy(eu);
     }

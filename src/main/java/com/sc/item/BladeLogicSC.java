@@ -277,7 +277,11 @@ public final class BladeLogicSC {
             }
         }
         p.inventoryContainer.detectAndSendChanges();
-        resendHeld(p);
+        if (p.isUsingItem()) {
+            stopBlock(p);                               // the blade's NBT changed: the block ends on both sides
+        } else {
+            resendHeld(p);
+        }
     }
 
     /** The held slot sent again as it is: the client may have guessed a switch the server refused. */
@@ -323,6 +327,11 @@ public final class BladeLogicSC {
         }
         e.hurtResistantTime = 0;
         return hit(p, blade, e, damage);
+    }
+
+    /** Out of its hit frames (or not living): a per-hit passive (scythe arc, chain) may reset them and hit it. */
+    static boolean fresh(Entity e) {
+        return !(e instanceof EntityLivingBase) || e.hurtResistantTime <= ((EntityLivingBase) e).maxHurtResistantTime / 2;
     }
 
     /**
@@ -407,10 +416,14 @@ public final class BladeLogicSC {
         if (blade == null || !active(p, f) || !actionGap(p)) {
             return null;
         }
-        if (!pay(p, blade, eu)) {
+        if (!canPay(p, blade, eu)) {
             p.addChatComponentMessage(new ChatComponentTranslation("sc.blade.low", eu));
             return null;
         }
+        if (p.isUsingItem()) {
+            stopBlock(p);                               // the blade's NBT changes: the block goes on both sides
+        }
+        pay(p, blade, eu);
         markAction(p);
         heat(p, blade, heat);
         return blade;

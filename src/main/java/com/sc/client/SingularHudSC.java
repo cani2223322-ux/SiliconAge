@@ -47,6 +47,10 @@ public class SingularHudSC {
 
     private static final int BOX = 24, GAP = 4;
     private static final int PURPLE = 0xC080FF, DIM_PURPLE = 0x7A5A99, GREEN = 0x60FF60, RED = 0xFF5050, ORANGE = 0xFFA040, CYAN = 0x60E0FF;
+    /** The height of drawDrillPanel's panel (five lines: 4 + 13 + 4 * 10 + 3 + 2); the overlays under it start lower. */
+    public static final int DRILL_PANEL_H = 62;
+    /** BridgeHudSC's top centre block while a portal is open: its line, the bar and room for its blinking warning. */
+    private static final int BRIDGE_TOP_H = 28;
 
     private static final class Icon {
         String code, text, name;
@@ -306,7 +310,7 @@ public class SingularHudSC {
         for (String s : lines) {
             tw = Math.max(tw, fr.getStringWidth(s));
         }
-        int pw = tw + 10, ph = 4 + 13 + (lines.size() - 1) * 10 + 3 + 2;
+        int pw = tw + 10, ph = DRILL_PANEL_H;                // 4 + 13 + (lines - 1) * 10 + 3 + 2, five lines
         int x = pos == ArmorKeyBindsSC.HUD_RIGHT ? 4 : w - pw - 4, y = 4;
         Gui.drawRect(x, y, x + pw, y + ph, 0xFF000000 | PURPLE);
         Gui.drawRect(x + 1, y + 1, x + pw - 1, y + ph - 1, 0xD8140F1E);
@@ -353,7 +357,8 @@ public class SingularHudSC {
             int total = n * BOX + (n - 1) * GAP;
             x = (w - total) / 2;
             if (pos == ArmorKeyBindsSC.HUD_TOP) {
-                y = 4 + (net.minecraft.entity.boss.BossStatus.bossName != null && net.minecraft.entity.boss.BossStatus.statusBarTime > 0 ? 18 : 0);
+                y = 4 + (net.minecraft.entity.boss.BossStatus.bossName != null && net.minecraft.entity.boss.BossStatus.statusBarTime > 0 ? 18 : 0)
+                        + (com.sc.bridge.BridgeHudDataSC.shown() ? BRIDGE_TOP_H : 0);   // under the bridge's portal line
             } else {                                        // over the hearts / armour / food rows, whatever they take
                 int rows = Math.max(net.minecraftforge.client.GuiIngameForge.left_height, net.minecraftforge.client.GuiIngameForge.right_height);
                 y = h - rows - 4 - 9 - BOX - formH;

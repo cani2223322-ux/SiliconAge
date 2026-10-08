@@ -76,6 +76,15 @@ public abstract class ItemBlockConduitSC extends ItemBlock {
                 || com.sc.ShieldEventHandler.privateFor(world, player, x, y, z)) {
             return false;
         }
+        if (world.isRemote) {
+            return true;    // the server decides (claims, private fields); its sync shows the result
+        }
+        // no block is placed, so Forge fires no PlaceEvent: claim mods (FTB Utilities, GriefPrevention) get one here
+        if (net.minecraftforge.event.ForgeEventFactory.onPlayerBlockPlace(player,
+                net.minecraftforge.common.util.BlockSnapshot.getBlockSnapshot(world, x, y, z),
+                ForgeDirection.getOrientation(side)).isCanceled()) {
+            return false;
+        }
         te.addPart(kind(), stack.getItemDamage());
         placed(stack, world, x, y, z);
         if (kind() == ConduitKind.CABLE) {

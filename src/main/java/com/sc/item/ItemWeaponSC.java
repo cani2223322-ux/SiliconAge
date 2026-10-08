@@ -173,11 +173,20 @@ public class ItemWeaponSC extends Item implements ic2.api.item.ISpecialElectricI
                     new ChatComponentTranslation(getUnlocalizedName() + ".name")));
             return stack;
         }
+        Entity asked = null;
         for (int i = 0; i < type.shotsPerUse && charge >= type.euPerShot; i++) {
             Entity target = findTarget(world, player);
             if (target == null) {
                 charge -= type.euPerShot;        // a miss still spends the shot
                 continue;
+            }
+            // A shot is a player's attack like a left-click: AttackEntityEvent once per target, so a private
+            // field / another mod's claim can refuse it - no damage, no EU spent
+            if (target != asked) {
+                if (!BladeLogicSC.claimed(player, target)) {
+                    break;
+                }
+                asked = target;
             }
             // Burst rounds land in the same tick: without clearing the target's damage cooldown
             // (hurtResistantTime) only the first of the Pulse Emitter's 3 rounds ever counted.

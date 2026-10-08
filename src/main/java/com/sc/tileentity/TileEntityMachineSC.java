@@ -146,12 +146,34 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 / com.sc.util.ConfigSC.machineSpeed));
     }
 
-    /** Energy per working tick: x1.6 per overclocker, x1.25 per quality control. */
+    /** Energy per working tick: x1.6 per overclocker, x1.25 per quality control (rounded up - what the buffer must hold). */
     public int effectiveEuPerTick() {
+        return (int) Math.ceil(exactEuPerTick());
+    }
+
+    /** effectiveEuPerTick() before rounding: what a working tick drains on average (drawEu). */
+    private double exactEuPerTick() {
         double eu = machineType.euPerTick * Math.pow(1.6, upgradeCount(UpgradeType.OVERCLOCKER))
                 * Math.pow(1.25, upgradeCount(UpgradeType.QUALITY)) * com.sc.util.ConfigSC.machineEnergy
                 * com.sc.util.ConfigSC.machineSpeed;                     // faster, not cheaper: EU an operation stays
-        return (int) Math.min(Integer.MAX_VALUE / 4, Math.ceil(eu));
+        return Math.min(Integer.MAX_VALUE / 4, eu);
+    }
+
+    /** The fraction of an EU the working ticks still owe - ceil every tick made a slowed-down machine dearer an operation. */
+    private double euCarry;
+
+    /** Drains `exact` EU, the fraction carried to the next working tick (the caller checked the buffer holds its ceil). */
+    private void drawEu(double exact) {
+        double want = exact + euCarry;
+        int cost = (int) want;
+        euCarry = want - cost;
+        removeEnergy(cost);
+    }
+
+    /** Progress kept as a share of the operation when its duration changes (overclockers in or out, induction heat). */
+    private static int rescale(int progress, int oldTicks, int newTicks) {
+        return oldTicks > 0 && progress > 0 && newTicks != oldTicks
+                ? (int) Math.round((double) progress * newTicks / oldTicks) : progress;
     }
 
     /** A type's EU/t with no upgrades, after the config's machineEnergy / machineSpeed (for NEI - as effectiveEuPerTick). */
@@ -505,7 +527,10 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             dissipateHeat();
             return;
         }
-        currentRecipeTicks = effectiveTicks(recipe);
+        // an overclocker put in mid-operation used to finish it at once, the ticks so far counted in full
+        int ticks = effectiveTicks(recipe);
+        progressTicks = rescale(progressTicks, currentRecipeTicks, ticks);
+        currentRecipeTicks = ticks;
 
         // §13.3: +1 heat per working tick, -2 per idle tick; at capacity the operation pauses
         // (and its defect chance doubles). The pause itself is idle time: no energy drawn, no
@@ -522,7 +547,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
         coolingDown = false;
 
-        removeEnergy(cost);
+        drawEu(exactEuPerTick());
         int heatSinks = upgradeCount(UpgradeType.HEAT_SINK);
         if (machineType.heatCapable && heatSinks > 0 && heat > 0 && worldObj.getTotalWorldTime() % HEAT_SINK_INTERVAL == 0) {
             heat = Math.max(0, heat - heatSinks);           // the sinks carry heat away while it works, too
@@ -564,16 +589,28 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
         // FurnaceRecipes walks its whole list on every call; a smelter asks every tick for every
         // stream, a puller for every neighbouring slot - so the answers are kept by item and damage
-        long key = ((long) net.minecraft.item.Item.getIdFromItem(in.getItem()) << 32) | (in.getItemDamage() & 0xFFFFFFFFL);
-        ItemStack[] known = SMELT_CACHE.get(key);
+        // (by the Item itself, not its numeric id: another world may number its items differently)
+        java.util.Map<Integer, ItemStack[]> byDamage = SMELT_CACHE.get(in.getItem());
+        if (byDamage == null) {
+            byDamage = new java.util.concurrent.ConcurrentHashMap<Integer, ItemStack[]>();
+            SMELT_CACHE.put(in.getItem(), byDamage);
+        }
+        Integer damage = Integer.valueOf(in.getItemDamage());
+        ItemStack[] known = byDamage.get(damage);
         if (known == null) {
             known = new ItemStack[]{net.minecraft.item.crafting.FurnaceRecipes.smelting().getSmeltingResult(in)};
-            SMELT_CACHE.put(key, known);
+            byDamage.put(damage, known);
         }
         return known[0];
     }
 
-    private static final java.util.Map<Long, ItemStack[]> SMELT_CACHE = new java.util.concurrent.ConcurrentHashMap<Long, ItemStack[]>();
+    private static final java.util.Map<net.minecraft.item.Item, java.util.Map<Integer, ItemStack[]>> SMELT_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<net.minecraft.item.Item, java.util.Map<Integer, ItemStack[]>>();
+
+    /** Forgets the furnace answers (server stop: the next world may bring changed furnace recipes - MineTweaker and the like). */
+    public static void clearSmeltCache() {
+        SMELT_CACHE.clear();
+    }
 
     /** The induction furnace's speed from its heat (x1 cold .. x3 hot); 1 for the electric one. */
     public double smeltSpeed() {
@@ -639,7 +676,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             coolInduction();
             return;
         }
-        currentRecipeTicks = smeltTicks();
+        int ticks = smeltTicks();
+        for (int i = 0; i < streams; i++) {
+            smeltProgress[i] = rescale(smeltProgress[i], currentRecipeTicks, ticks);
+        }
+        currentRecipeTicks = ticks;
         boolean[] run = new boolean[streams];
         int active = 0;
         boolean full = false;
@@ -677,8 +718,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             }
             return;
         }
-        int perStream = (int) Math.ceil(effectiveEuPerTick() / (double) streams);
-        while (active > 0 && getEnergyStored() < perStream * active) {   // short of energy: fewer streams, the last first
+        double perStream = exactEuPerTick() / streams;
+        while (active > 0 && getEnergyStored() < (int) Math.ceil(perStream * active)) {   // short of energy: fewer streams, the last first
             for (int i = streams - 1; i >= 0; i--) {
                 if (run[i]) {
                     run[i] = false;
@@ -692,8 +733,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             coolInduction();
             return;
         }
-        int cost = perStream * active;
-        removeEnergy(cost);
+        drawEu(perStream * active);
         if (induction) {
             heat = Math.min(INDUCTION_HEAT_MAX, heat + 1);
         }
@@ -915,7 +955,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (getEnergyStored() >= effectiveEuPerTick()) {
             absorbMatter();                                  // only while it can work: nothing vanishes into an unpowered one
         }
-        currentRecipeTicks = compressTicks();
+        int ticks = compressTicks();
+        progressTicks = rescale(progressTicks, currentRecipeTicks, ticks);
+        currentRecipeTicks = ticks;
         ItemStack capsule = capsuleStack();
         boolean liquid = matterLiquid && com.sc.init.ModFluids.singularMatter != null;
         if (matter < MATTER_PER_CAPSULE || capsule == null && !liquid) {
@@ -933,7 +975,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             status = MachineStatus.NO_POWER;
             return;
         }
-        removeEnergy(cost);
+        drawEu(exactEuPerTick());
         status = MachineStatus.PROCESSING;
         if (++progressTicks >= currentRecipeTicks) {
             progressTicks = 0;
@@ -1029,6 +1071,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     int accepted = handler.fill(dir.getOpposite(), offer, true);
                     if (accepted > 0) {
                         tank.drain(accepted, true);
+                        fluidChanged();
                     }
                 }
             }
@@ -1530,19 +1573,34 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (resource == null || !RecipeRegistry.isValidFluidInput(machineType, resource.getFluid())) {
             return 0;
         }
+        FluidTank target = null;
         if (tankA.getFluid() != null && tankA.getFluid().isFluidEqual(resource)) {
-            return safeFill(tankA, resource, doFill);
+            target = tankA;
+        } else if (tankB.getFluid() != null && tankB.getFluid().isFluidEqual(resource)) {
+            target = tankB;
+        } else if (tankA.getFluid() == null && goesWith(resource, tankB.getFluid())) {
+            target = tankA;
+        } else if (tankB.getFluid() == null && goesWith(resource, tankA.getFluid())) {
+            target = tankB;
         }
-        if (tankB.getFluid() != null && tankB.getFluid().isFluidEqual(resource)) {
-            return safeFill(tankB, resource, doFill);
+        if (target == null) {
+            return 0;
         }
-        if (tankA.getFluid() == null && goesWith(resource, tankB.getFluid())) {
-            return safeFill(tankA, resource, doFill);
+        int n = safeFill(target, resource, doFill);
+        if (doFill && n > 0) {
+            fluidChanged();
         }
-        if (tankB.getFluid() == null && goesWith(resource, tankA.getFluid())) {
-            return safeFill(tankB, resource, doFill);
+        return n;
+    }
+
+    /**
+     * A tank changed from outside (a pipe, the ejector): the chunk must be saved with it, or a
+     * neighbour chunk saved without this one brings the fluid back doubled or gone.
+     */
+    private void fluidChanged() {
+        if (worldObj != null && !worldObj.isRemote) {
+            worldObj.markTileEntityChunkModified(xCoord, yCoord, zCoord, this);
         }
-        return 0;
     }
 
     /**
@@ -1579,7 +1637,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
         for (FluidTank tank : new FluidTank[]{outputTankA, outputTankB}) {
             if (tank.getFluid() != null && resource.isFluidEqual(tank.getFluid())) {
-                return tank.drain(resource.amount, doDrain);
+                FluidStack out = tank.drain(resource.amount, doDrain);
+                if (doDrain && out != null && out.amount > 0) {
+                    fluidChanged();
+                }
+                return out;
             }
         }
         return null;
@@ -1593,7 +1655,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     @Override
     public FluidStack drain(ForgeDirection from, int maxDrain, boolean doDrain) {
         FluidTank fuller = outputTankB.getFluidAmount() > outputTankA.getFluidAmount() ? outputTankB : outputTankA;
-        return fuller.getFluidAmount() > 0 ? fuller.drain(maxDrain, doDrain) : null;
+        FluidStack out = fuller.getFluidAmount() > 0 ? fuller.drain(maxDrain, doDrain) : null;
+        if (doDrain && out != null && out.amount > 0) {
+            fluidChanged();
+        }
+        return out;
     }
 
     @Override

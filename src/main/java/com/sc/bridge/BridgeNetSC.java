@@ -10,9 +10,18 @@ import cpw.mods.fml.common.network.simpleimpl.MessageContext;
 import cpw.mods.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import cpw.mods.fml.relauncher.Side;
 import io.netty.buffer.ByteBuf;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.common.util.FakePlayerFactory;
+import net.minecraftforge.event.world.BlockEvent;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * The Bridge Controller's screen talks to the server here: client -> server an action (with the target's
@@ -108,12 +117,47 @@ public final class BridgeNetSC {
             if (!(te instanceof TileEntityBridgeControllerSC)) {
                 return null;
             }
+            if (com.sc.ShieldEventHandler.privateFieldAgainst(p.worldObj, p, msg.x, msg.y, msg.z) != null
+                    || claimRefused(p, msg.x, msg.y, msg.z)) {
+                return null;                                    // someone's private field / claim: no state, no actions
+            }
             TileEntityBridgeControllerSC c = (TileEntityBridgeControllerSC) te;
             if (msg.action != A_REQUEST) {
                 c.action(p, msg.action, msg.values, msg.text);
             }
             return new State(msg.x, msg.y, msg.z, c.writeState(p));
         }
+    }
+
+    /** How long (ticks) a claim probe's answer for the same player and controller is kept: the screen asks twice a second. */
+    private static final int CLAIM_TICKS = 100;
+    /** player -> {dim, x, y, z, until, refused}. */
+    private static final Map<EntityPlayerMP, long[]> CLAIM_SEEN = Collections.synchronizedMap(new WeakHashMap<EntityPlayerMP, long[]>());
+
+    /**
+     * Other mods' claims (FTB Utilities, GriefPrevention...), asked as NetViewNetSC does: a BreakEvent by a FakePlayer
+     * with the player's profile, nothing broken.
+     */
+    static boolean claimRefused(EntityPlayerMP p, int x, int y, int z) {
+        if (!(p.worldObj instanceof WorldServer)) {
+            return false;
+        }
+        WorldServer w = (WorldServer) p.worldObj;
+        int dim = w.provider.dimensionId;
+        long now = w.getTotalWorldTime();
+        long[] s = CLAIM_SEEN.get(p);
+        if (s != null && s[0] == dim && s[1] == x && s[2] == y && s[3] == z && now < s[4] && now >= s[4] - CLAIM_TICKS) {
+            return s[5] != 0;
+        }
+        EntityPlayer fake = FakePlayerFactory.get(w, p.getGameProfile());
+        if (fake.worldObj != w) {
+            fake.setWorld(w);                                   // Forge caches it by profile only
+        }
+        BlockEvent.BreakEvent ev = new BlockEvent.BreakEvent(x, y, z, w, w.getBlock(x, y, z), w.getBlockMetadata(x, y, z), fake);
+        MinecraftForge.EVENT_BUS.post(ev);
+        boolean refused = ev.isCanceled();
+        CLAIM_SEEN.put(p, new long[]{dim, x, y, z, now + CLAIM_TICKS, refused ? 1 : 0});
+        return refused;
     }
 
     public static class State implements IMessage {

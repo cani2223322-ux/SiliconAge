@@ -192,8 +192,8 @@ public final class DrillLogicSC {
     }
 
     private static boolean areaOn(EntityPlayer p, ItemStack drill) {
-        return ItemDrillSC.isEnabled(drill, DrillFeature.AREA_3X3) || ItemDrillSC.isEnabled(drill, DrillFeature.AREA_5X5)
-                || ItemDrillSC.isEnabled(drill, DrillFeature.TUNNEL) || funnelRadius(p, drill) > 0 || holeSize(p, drill) > 0;
+        return !p.isSneaking() && (ItemDrillSC.isEnabled(drill, DrillFeature.AREA_3X3) || ItemDrillSC.isEnabled(drill, DrillFeature.AREA_5X5)
+                || ItemDrillSC.isEnabled(drill, DrillFeature.TUNNEL) || funnelRadius(p, drill) > 0 || holeSize(p, drill) > 0);
     }
 
     public static int fortune(EntityPlayer p, ItemStack drill) {
@@ -547,7 +547,7 @@ public final class DrillLogicSC {
             ArrayList<ItemStack> got = new ArrayList<ItemStack>();
             boolean silked = false;
             if (silk && canHarvest && block.canSilkHarvest(w, p, x, y, z, meta)) {
-                Item item = Item.getItemFromBlock(block);
+                Item item = Item.getItemFromBlock(norm(block));   // clicked redstone ore is lit: no item of its own
                 if (item != null) {
                     got.add(new ItemStack(item, 1, item.getHasSubtypes() ? block.damageDropped(meta) : 0));
                     silked = true;
@@ -1179,7 +1179,6 @@ public final class DrillLogicSC {
         if (now - data.getLong(LAST_LASER) < DrillFeature.LASER_COOLDOWN) {
             return;
         }
-        data.setLong(LAST_LASER, now);
         Vec3 eyes = Vec3.createVectorHelper(p.posX, p.posY + p.getEyeHeight(), p.posZ);
         Vec3 look = p.getLookVec();
         Set<Long> seen = new LinkedHashSet<Long>();
@@ -1200,6 +1199,10 @@ public final class DrillLogicSC {
             }
         }
         h.deliver(p.posX, p.posY + 0.5, p.posZ);
+        if (h.broken == 0) {
+            return;                                               // nothing cut (no EU / air): no heat, no cooldown, no beam
+        }
+        data.setLong(LAST_LASER, now);
         heat(p, drill, DrillFeature.LASER_HEAT);
         p.worldObj.playSoundAtEntity(p, "mob.ghast.fireball", 0.6F, 2F);
         if (p.worldObj instanceof net.minecraft.world.WorldServer) {

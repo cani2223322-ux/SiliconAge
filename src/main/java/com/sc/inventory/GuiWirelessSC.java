@@ -38,6 +38,17 @@ public class GuiWirelessSC extends GuiContainer {
         return te.getKind() == TileEntityWirelessSC.QUANTUM;
     }
 
+    /** The tier the link works at (range, loss): the lower of the two ends; unlinked, this block's own. */
+    private Tier linkTier() {
+        Tier own = te.getTier();
+        int pt = te.partnerPos()[4];
+        if (quantum() || !te.hasLink() || pt < 0) {
+            return own;
+        }
+        Tier other = Tier.byOrdinal(pt);
+        return other.ordinal() < own.ordinal() ? other : own;
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public void initGui() {
@@ -117,8 +128,7 @@ public class GuiWirelessSC extends GuiContainer {
         }
         rect(x + 12, y + 84, 194, 1, 0xFF1E3444);
         if (te.getKind() == TileEntityWirelessSC.TRANSMITTER && te.getStatus() != TileEntityWirelessSC.ST_NO_LINK) {
-            Tier tier = te.getTier();
-            int range = TileEntityWirelessSC.range(tier);
+            int range = TileEntityWirelessSC.range(linkTier());
             if (range != Integer.MAX_VALUE) {                        // how much of the range the link uses
                 GuiHoloSC.bar(x + 14, y + 76, 86, 3, Math.min(1F, te.getDistance() / (float) range), 16, 0xFF6EE6FF);
             }
@@ -273,7 +283,7 @@ public class GuiWirelessSC extends GuiContainer {
             linkTexts(p, c, dim);
         }
         power.drawGaugeOff(fontRendererObj);
-        small(Lang.tr(quantum() ? "sc.wl.row.q" : "sc.wl.row.a", TileEntityWirelessSC.blocksPerPercent(te.getTier())), 8, 124, 200, 0x505864);
+        small(Lang.tr(quantum() ? "sc.wl.row.q" : "sc.wl.row.a", TileEntityWirelessSC.blocksPerPercent(linkTier())), 8, 124, 200, 0x505864);
     }
 
     private void linkTexts(int[] p, int c, int dim) {
@@ -291,7 +301,7 @@ public class GuiWirelessSC extends GuiContainer {
             return;
         }
         small(Lang.tr("sc.wl.coords", p[0], p[1], p[2]), 14, 54, 86, dim);
-        int range = TileEntityWirelessSC.range(te.getTier());
+        int range = TileEntityWirelessSC.range(linkTier());
         small(range == Integer.MAX_VALUE ? Lang.tr("sc.wl.distinf", te.getDistance())
                 : Lang.tr("sc.wl.dist", te.getDistance(), range), 14, 62, 86, c);
         small(Lang.tr("sc.wl.loss", te.getLossPct()), 14, 69, 86, GuiHoloSC.WARN);

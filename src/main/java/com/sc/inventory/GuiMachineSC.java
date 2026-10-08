@@ -1054,7 +1054,13 @@ public class GuiMachineSC extends GuiContainer {
         if (machine.getStatus() == MachineStatus.OVERHEATED) {
             return Lang.tr("sc.gui.blast.paused", resume, Math.max(1, (heat - resume) / 2 / 20));
         } else if (machine.getStatus() == MachineStatus.PROCESSING) {
-            return Lang.tr("sc.gui.blast.topause", Math.max(0, (cap - heat) * (sinks + 1) / 20));
+            // over I*(n+1) working ticks: +I heat from heating, -n*(n+1) from the sinks
+            int win = TileEntityMachineSC.HEAT_SINK_INTERVAL;
+            int net = win - sinks * (sinks + 1);
+            if (net <= 0) {
+                return Lang.tr("sc.gui.blast.stable");      // 2+ sinks: the heat doesn't climb, no pause
+            }
+            return Lang.tr("sc.gui.blast.topause", Math.max(0, (cap - heat) * win * (sinks + 1) / net / 20));
         }
         return heat > 0 ? Lang.tr("sc.gui.blast.cooling", heat / 2 / 20 + 1) : Lang.tr("sc.gui.blast.cold");
     }

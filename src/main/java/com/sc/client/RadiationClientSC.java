@@ -8,6 +8,9 @@ import com.sc.manual.Lang;
 import com.sc.radiation.RadiationSC;
 import com.sc.radiation.RadiationStateSC;
 import com.sc.util.ArmorFeature;
+import com.sc.util.ArmorGasSC;
+import com.sc.util.SingularLevel;
+import com.sc.util.ToolLevelSC;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
@@ -60,7 +63,7 @@ public class RadiationClientSC {
         if (mc.theWorld.rand.nextFloat() < chance) {
             EntityPlayer p = mc.thePlayer;
             mc.theWorld.playSound(p.posX, p.posY, p.posZ, "siliconage:rad.click",
-                    0.35F * com.sc.util.ConfigSC.soundVolume, 0.85F + mc.theWorld.rand.nextFloat() * 0.4F, false);
+                    0.35F, 0.85F + mc.theWorld.rand.nextFloat() * 0.4F, false);
         }
     }
 
@@ -93,7 +96,7 @@ public class RadiationClientSC {
         }
         EntityPlayer p = mc.thePlayer;
         ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
-        int right = res.getScaledWidth() - 4, y = 4;
+        int right = res.getScaledWidth() - 4, y = topY(p);
         float level = RadiationStateSC.level, dose = RadiationStateSC.dose, through = RadiationStateSC.through();
         int prot = RadiationStateSC.protection, flags = RadiationStateSC.flags;
         boolean blink = (p.ticksExisted / 10) % 2 == 0;
@@ -115,6 +118,30 @@ public class RadiationClientSC {
             y = line(mc, Lang.tr(through > 0.05F ? "sc.radhud.warn" : "sc.radhud.dosehint", RadiationSC.fmt(dose)), right, y, col);
         }
         GL11.glColor4f(1F, 1F, 1F, 1F);
+    }
+
+    /** The height of SingularHudSC.drawDrillPanel (five lines: 4 + 13 + 4 * 10 + 3 + 2). */
+    private static final int DRILL_PANEL_H = 62;
+
+    /**
+     * Where the radiation lines start, under what the earlier overlays put in the top right corner: the
+     * Singular drill's panel (SingularHudSC, unless the icons are on the right) and the suit HUD's
+     * «готово к модернизации» two lines (ArmorClientSC).
+     */
+    private static int topY(EntityPlayer p) {
+        int y = 4;
+        if (ToolLevelSC.isDrill(p.getCurrentEquippedItem()) && ArmorKeyBindsSC.hudPos() != ArmorKeyBindsSC.HUD_RIGHT) {
+            y += DRILL_PANEL_H + 3;
+        }
+        if (ArmorLogicSC.active(p, ArmorFeature.HUD)) {
+            for (int t = 0; t < 4; t++) {
+                if (SingularLevel.readyToUpgrade(p, ArmorGasSC.worn(p, t))) {
+                    y += 22;
+                    break;
+                }
+            }
+        }
+        return y;
     }
 
     private static int line(Minecraft mc, String text, int right, int y, int color) {

@@ -1001,12 +1001,22 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
             }
         } else if (p.kind == SingularProcessSC.KIND_CONVERT) {
             int n = 0;
+            int[] over = new int[Gas.values().length];
             for (int i = 0; i < SLOTS; i++) {
                 ItemStack s = getStackInSlot(i);
                 if (p.locks(i) && isExo(s)) {
-                    super.setInventorySlotContents(i, convertPiece(s));
+                    ItemStack out = convertPiece(s);
+                    for (Gas g : Gas.values()) {             // the Singular tank is smaller: the rest -> the station's tanks
+                        over[g.ordinal()] += Math.max(0, com.sc.util.ArmorGasSC.amount(s, g) - com.sc.util.ArmorGasSC.amount(out, g));
+                    }
+                    super.setInventorySlotContents(i, out);
                     n++;
                 }
+            }
+            int lost = pourIntoTanks(over);
+            if (who != null && lost > 0) {
+                who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.convert.gaslost",
+                        String.valueOf(lost)));
             }
             if (p.locks(TOOL_BIT) && isExoTool(getTool())) {
                 SingularScheme sc = shownScheme();

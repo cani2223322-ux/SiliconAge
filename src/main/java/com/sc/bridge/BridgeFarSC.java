@@ -164,6 +164,11 @@ public final class BridgeFarSC {
         }
     }
 
+    /** A Ground bridge and a point in another dimension (it works in its own world only). */
+    private static boolean groundElsewhere(TileEntityBridgeControllerSC c, int dim) {
+        return c.bridgeKind() == BridgeMathSC.GROUND && dim != c.getWorldObj().provider.dimensionId;
+    }
+
     /**
      * One command from a screen or a key (BridgeNetSC.Far). @return the answer for the screen (null: nothing to say)
      */
@@ -246,9 +251,7 @@ public final class BridgeFarSC {
             }
             return out;
         }
-        if (o != null && o.mode != BridgeMathSC.MODE_HOME && c.bridgeKind() == BridgeMathSC.GROUND && o.hasPoint && o.pdim != c.getWorldObj().provider.dimensionId) {
-            o.pdim = c.getWorldObj().provider.dimensionId;               // a Ground remote has no dimension choice
-        }
+        // a point in another dimension isn't moved to the Ground bridge's world: plan() refuses it (groundDim)
         switch (action) {
             case F_OPEN: {
                 if (o == null) {
@@ -280,21 +283,28 @@ public final class BridgeFarSC {
                 msg(out, m == null ? new BridgeMsgSC("sc.bridge.far.opened") : m);
                 break;
             }
-            case F_PROBE:
+            case F_PROBE: {
+                BridgeMsgSC slow = TileEntityBridgeControllerSC.probeThrottle(p);    // М-3: at most one place check a second
+                if (slow != null) {
+                    msg(out, slow);
+                    break;
+                }
                 probe(p, c, v, out, true);
                 break;
+            }
             case F_CLOSE:
                 c.closeFrom(p);
                 break;
             case F_BM_ADD:
                 if (v.length >= 4) {
-                    BridgeMsgSC m = c.addBookmark(p, text, v[0], v[1], v[2], v[3]);
+                    BridgeMsgSC m = groundElsewhere(c, v[3]) ? c.refuseFar(p, new BridgeMsgSC("sc.bridge.refuse.groundDim"))
+                            : c.addBookmark(p, text, v[0], v[1], v[2], v[3]);
                     msg(out, m == null ? new BridgeMsgSC("sc.bridge.far.bmAdded", text) : m);
                 }
-                return out;
+                break;
             case F_TO_COORD:
                 toCoord(p, v, text, out, r);
-                return out;
+                break;
             default:
                 break;
         }
@@ -491,9 +501,6 @@ public final class BridgeFarSC {
             }
             return out;
         }
-        if (o != null && c.bridgeKind() == BridgeMathSC.GROUND && o.hasPoint) {
-            o.pdim = c.getWorldObj().provider.dimensionId;
-        }
         if (o != null && o.fromFind && !nearFind(p, o)) {
             o.fromFind = false;                                          // only a point the scanner found - not any point a packet claims
         }
@@ -526,7 +533,12 @@ public final class BridgeFarSC {
                 msg(out, m == null ? new BridgeMsgSC("sc.bridge.far.opened") : m);
                 break;
             }
-            case F_PROBE:
+            case F_PROBE: {
+                BridgeMsgSC slow = TileEntityBridgeControllerSC.probeThrottle(p);    // М-3: refused before the helmet's Kr is drained
+                if (slow != null) {
+                    msg(out, slow);
+                    break;
+                }
                 if (ArmorGasSC.drain(h, ArmorGasSC.Gas.KRYPTON, ARMOUR_PROBE_KR, true) < ARMOUR_PROBE_KR && !p.capabilities.isCreativeMode) {
                     msg(out, new BridgeMsgSC("sc.bridge.armour.nokr", ARMOUR_PROBE_KR));
                     break;
@@ -537,12 +549,15 @@ public final class BridgeFarSC {
                 }
                 probe(p, c, v, out, false);
                 break;
+            }
             case F_CLOSE:
                 c.closeFrom(p);
                 break;
             case F_MARK: {
                 int x = (int) Math.floor(p.posX), y = (int) Math.floor(p.boundingBox.minY + 0.001), z = (int) Math.floor(p.posZ);
-                BridgeMsgSC m = c.addBookmark(p, text, x, y, z, p.worldObj.provider.dimensionId);
+                int dim = p.worldObj.provider.dimensionId;
+                BridgeMsgSC m = groundElsewhere(c, dim) ? c.refuseFar(p, new BridgeMsgSC("sc.bridge.refuse.groundDim"))
+                        : c.addBookmark(p, text, x, y, z, dim);
                 BridgeMsgSC said = m == null ? new BridgeMsgSC("sc.bridge.armour.marked", text, x, y, z, c.nameArg()) : m;
                 if (m == null) {
                     p.addChatComponentMessage(said.chat());
@@ -552,7 +567,8 @@ public final class BridgeFarSC {
             }
             case F_BM_ADD:
                 if (v.length >= 4) {
-                    BridgeMsgSC m = c.addBookmark(p, text, v[0], v[1], v[2], v[3]);
+                    BridgeMsgSC m = groundElsewhere(c, v[3]) ? c.refuseFar(p, new BridgeMsgSC("sc.bridge.refuse.groundDim"))
+                            : c.addBookmark(p, text, v[0], v[1], v[2], v[3]);
                     msg(out, m == null ? new BridgeMsgSC("sc.bridge.far.bmAdded", text) : m);
                 }
                 break;

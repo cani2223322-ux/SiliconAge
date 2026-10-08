@@ -84,8 +84,8 @@ public final class ArmorLogicSC {
 
     /**
      * The full set whose set bonuses work (Quantum knockback, cheaper absorbing; Exo food by EU):
-     * none in emergency mode (Quantum / Exo without helium in the loop). Overheating is checked where
-     * the bonus is given (setBonuses).
+     * none in emergency mode (Quantum / Exo without helium in the loop). Overheating is not checked
+     * here: activeBonusSet adds it (the Quantum / Exo bonuses, the HUD's set line).
      */
     public static ArmorSuit bonusSetOf(ItemStack[] worn) {
         ArmorSuit set = fullSetOf(worn);
@@ -94,6 +94,11 @@ public final class ArmorLogicSC {
 
     public static ArmorSuit bonusSet(EntityPlayer p) {
         return bonusSetOf(ArmorGasSC.wornSet(p));
+    }
+
+    /** bonusSet, and none while the suit is overheated either (an overheated suit gives no set bonus). */
+    public static ArmorSuit activeBonusSet(EntityPlayer p) {
+        return overheated(p) ? null : bonusSet(p);
     }
 
     /** The suit's chips (and functions) are shut down by heat. */
@@ -295,14 +300,22 @@ public final class ArmorLogicSC {
         }
         NBTTagCompound data = p.getEntityData();
         long now = p.worldObj.getTotalWorldTime();
-        if (now - data.getLong(O2_SPACE_AT) >= 20 || now < data.getLong(O2_SPACE_AT)) {
-            if (!breathe(ArmorGasSC.wornSet(p))) {
+        if (!spaceBreathed(p)) {
+            if (!pay(p, ArmorFeature.AIR, ArmorFeature.AIR.euPerSecond) || !breathe(ArmorGasSC.wornSet(p))) {
                 return false;
             }
             data.setLong(O2_SPACE_AT, now);
             data.setBoolean(O2_USED, true);
+            addHeat(p, ArmorFeature.AIR.heat);
         }
         return true;
+    }
+
+    /** breatheInSpace already paid for this second's breathing (oxygen, EU, heat). */
+    private static boolean spaceBreathed(EntityPlayer p) {
+        NBTTagCompound data = p.getEntityData();
+        long now = p.worldObj.getTotalWorldTime();
+        return data.hasKey(O2_SPACE_AT) && now - data.getLong(O2_SPACE_AT) < 20 && now >= data.getLong(O2_SPACE_AT);
     }
 
     /** Suffocating inside a block: the helmet's oxygen stops it (paid once a second in perSecond). */
@@ -371,7 +384,7 @@ public final class ArmorLogicSC {
     /** Energy multiplier for absorbing damage: the Quantum set and combat mode make it cheaper; regeneration triples it. */
     public static float absorbCostMul(EntityPlayer p) {
         float mul = powerMode(p) == 2 ? 0.8F : 1F;
-        return (bonusSet(p) == ArmorSuit.QUANTUM ? mul * 0.7F : mul) * regenMul(p);     // no set bonus in emergency mode
+        return (activeBonusSet(p) == ArmorSuit.QUANTUM ? mul * 0.7F : mul) * regenMul(p);     // no set bonus in emergency mode or overheated
     }
 
     /**
@@ -958,22 +971,29 @@ public final class ArmorLogicSC {
         // only while it's needed: the air going down (not in creative, not with water breathing), able to suffocate
         boolean underwater = p.isInsideOfMaterial(Material.water) && p.getAir() < 300;
         boolean inWall = p.isEntityInsideOpaqueBlock() && !p.capabilities.disableDamage;
-        if ((underwater || inWall) && canBreathe(p) && pay(p, ArmorFeature.AIR, ArmorFeature.AIR.euPerSecond)
-                && breathe(ArmorGasSC.wornSet(p))) {
+        boolean paidInSpace = spaceBreathed(p);                       // this second already paid by breatheInSpace
+        if ((underwater || inWall) && (paidInSpace || canBreathe(p) && pay(p, ArmorFeature.AIR, ArmorFeature.AIR.euPerSecond)
+                && breathe(ArmorGasSC.wornSet(p)))) {
             if (underwater) {
                 p.setAir(300);
             }
             data.setBoolean(O2_USED, true);
-            heat += ArmorFeature.AIR.heat;
+            if (!paidInSpace) {
+                heat += ArmorFeature.AIR.heat;
+            }
         }
         oxygenWarning(p);
         if (p.isPotionActive(Potion.wither)) {
             witherOff(p);                                            // К9: cheaper than the cleanse, so first
         }
         if (active(p, ArmorFeature.CLEANSE)) {
+            // Quantum / Exo: a whole effect's oxygen in the suit, not a last drop
+            ItemStack cleanser = piece(p, ArmorFeature.CLEANSE.piece);
+            int o2Need = strict(suitOf(cleanser))
+                    ? Math.max(1, Math.round(ArmorGasSC.O2_CLEANSE * ArmorGasSC.gasUseMul(cleanser))) : 1;
             for (Potion bad : new Potion[]{Potion.poison, Potion.wither, Potion.hunger, Potion.confusion, Potion.blindness}) {
                 if (p.isPotionActive(bad) && !com.sc.radiation.RadiationSC.sicknessHolds(p, bad.id)
-                        && ArmorGasSC.suitAmount(p, Gas.OXYGEN) > 0 && pay(p, ArmorFeature.CLEANSE, ArmorFeature.CLEANSE_COST)) {
+                        && ArmorGasSC.suitAmount(p, Gas.OXYGEN) >= o2Need && pay(p, ArmorFeature.CLEANSE, ArmorFeature.CLEANSE_COST)) {
                     p.removePotionEffect(bad.id);
                     spendGas(p, ArmorFeature.CLEANSE);               // oxygen, per effect
                 }
@@ -1079,7 +1099,10 @@ public final class ArmorLogicSC {
                 }
             }
         }
-        if (p.handleLavaMovement() && !active(p, ArmorFeature.FIRE_PROOF) && !fireHarmless(p) && ArmorGasSC.suitAmount(p, Gas.ARGON) > 0) {
+        long sinceShield = p.worldObj.getTotalWorldTime() - p.getEntityData().getLong("scExoShieldAt");
+        boolean shieldTakesLava = p.getEntityData().hasKey("scExoShieldAt") && sinceShield >= 0 && sinceShield < 20;   // exoStops cancels the hits
+        if (p.handleLavaMovement() && !active(p, ArmorFeature.FIRE_PROOF) && !fireHarmless(p) && !shieldTakesLava
+                && ArmorGasSC.suitAmount(p, Gas.ARGON) > 0) {
             ArmorGasSC.drainFractionUse(ArmorGasSC.wornSet(p), Gas.ARGON, ArmorGasSC.ARGON_LAVA_PER_SECOND);   // half the lava's damage meanwhile
         }
         ArmorSuit legs = suitOf(piece(p, 2));
@@ -1254,7 +1277,7 @@ public final class ArmorLogicSC {
     }
 
     private static void setBonuses(EntityPlayer p) {
-        ArmorSuit set = overheated(p) ? null : bonusSet(p);     // an overheated suit (or emergency mode) gives no set bonus
+        ArmorSuit set = activeBonusSet(p);                      // an overheated suit (or emergency mode) gives no set bonus
         // Exo: never hungry - the chestplate's energy stands in for food
         if (ArmorSuit.exoClass(set)) {                           // Exo and Singular
             ItemStack chest = piece(p, 1);
@@ -1324,6 +1347,13 @@ public final class ArmorLogicSC {
         int want = (int) Math.ceil(points * share);
         int can = (int) (ItemArmorSC.chargeOf(piece(p, 3)) / Math.max(1F, ArmorFeature.FALL_COST_PER_POINT * costMul(p)));
         int absorbed = Math.min(want, can);
+        if (strict(boots)) {
+            // Quantum / Exo: no more points than the hydrogen in the suit pays for
+            float perPoint = ArmorGasSC.H2_FALL_DAMPING_PER_POINT * ArmorGasSC.gasUseMul(piece(p, 3));
+            if (perPoint > 0) {
+                absorbed = Math.min(absorbed, (int) (ArmorGasSC.amountOf(ArmorGasSC.wornSet(p), Gas.HYDROGEN) / perPoint + 0.001F));
+            }
+        }
         pay(p, ArmorFeature.FALL_DAMPING, absorbed * ArmorFeature.FALL_COST_PER_POINT);
         if (absorbed > 0) {
             // Quantum / Exo: a hydrogen burst by the damage absorbed - 1 mB a point, at least 1

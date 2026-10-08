@@ -441,7 +441,28 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     void setIgnitionEUSC(long eu) {
-        ignitionEU = Math.max(0L, eu);
+        long v = Math.max(0L, eu);
+        if (v != ignitionEU) {
+            ignitionEU = v;
+            ignitionChanged();
+        }
+    }
+
+    /** World tick the chunk was last told the ignition charge changed. */
+    private long lastIgnitionMark = -1;
+
+    /**
+     * The ignition charge changes without markDirty(): tell the chunk it has something to save (once
+     * a tick at most) - else the charge comes back as it was at the last save.
+     */
+    private void ignitionChanged() {
+        if (worldObj != null && !worldObj.isRemote) {
+            long now = worldObj.getTotalWorldTime();
+            if (now != lastIgnitionMark) {
+                lastIgnitionMark = now;
+                worldObj.markTileEntityChunkModified(xCoord, yCoord, zCoord, this);
+            }
+        }
     }
 
     void setIgnitedSC(boolean lit) {
@@ -1265,12 +1286,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         shutDown(GeneratorStatus.DISRUPTED);
     }
 
-    /** EU a tick the ignition charge draws from the port storages (5 million in about 40 s). */
+    /** EU a tick the ignition charge draws from the port storages, over all of them together (5 million in about 2 s). */
     public static final int PORT_CHARGE_PER_TICK = 131072;
 
     /** The ignition charge taken out of the port storages (the tokamak can't be reached by a cable any more). */
     private void chargeFromPorts() {
-        long need = ignitionNeed() - ignitionEU;
+        long need = Math.min(PORT_CHARGE_PER_TICK, ignitionNeed() - ignitionEU);
         for (int[] p : storePorts) {
             if (need <= 0) {
                 return;
@@ -1280,9 +1301,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
             if (te instanceof TileEntityEnergyStorageSC && ((TileEntityEnergyStorageSC) te).isPowerOn()) {
-                int took = ((TileEntityEnergyStorageSC) te).extractForItemCharging((int) Math.min(need, PORT_CHARGE_PER_TICK));
+                int took = ((TileEntityEnergyStorageSC) te).extractForItemCharging((int) need);
                 if (took > 0) {
                     ignitionEU += took;
+                    ignitionChanged();
                     need -= took;
                     te.markDirty();
                 }
@@ -1326,6 +1348,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return false;
         }
         if (!w.isRemote) {
+            if (com.sc.ShieldEventHandler.privateFor(w, p, t.xCoord, t.yCoord, t.zCoord)
+                    || com.sc.ShieldEventHandler.privateFor(w, p, x, y, z)) {
+                return true;                                  // someone else's private field: the click is eaten (privateFor has told the player)
+            }
             p.openGui(com.sc.SCMod.instance, com.sc.handler.GuiHandlerSC.GENERATOR_GUI_ID, w, t.xCoord, t.yCoord, t.zCoord);
         }
         return true;
@@ -1553,8 +1579,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         int room = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, ignitionNeed() - ignitionEU));
         int accepted = Math.max(0, Math.min(room, amount));
-        if (!simulate) {
+        if (!simulate && accepted > 0) {
             ignitionEU += accepted;
+            ignitionChanged();
         }
         return accepted;
     }
@@ -1590,7 +1617,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 scanBig();
             }
         }
-        if (generatorType == GeneratorType.TOKAMAK && (!scannedOnce || worldObj.getTotalWorldTime() % 20 == 0)) {
+        if (generatorType == GeneratorType.TOKAMAK && (!scannedOnce || worldObj.getTotalWorldTime() % 20 == 0)
+                && worldObj.checkChunksExist(xCoord - 1, yCoord, zCoord - 1, xCoord + 1, yCoord, zCoord + 1)) {   // the ring half unloaded: the last scan stands
             scannedOnce = true;
             sideInfo = tokamakMask();
             structureOk = sideInfo == 0xFF;
@@ -1635,14 +1663,14 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (generatorType != GeneratorType.CREATIVE) {
             lastOutput = Math.max(0, getEnergyStored() - before);
         }
+        if (chargeBattery(slots[SLOT_BATTERY]) > 0) {
+            markDirty();                                     // before the ports: they'd empty the buffer first
+        }
         if (xv() && !storePorts.isEmpty() && !bigFrozen) {
             pushToPorts();                                   // after the count: the screen shows what it made
         }
         if (status == GeneratorStatus.GENERATING) {
             com.sc.util.SoundsSC.loop(this, com.sc.util.SoundsSC.of(generatorType));
-        }
-        if (chargeBattery(slots[SLOT_BATTERY]) > 0) {
-            markDirty();
         }
     }
 
@@ -1652,6 +1680,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int before = getEnergyStored();
         s.tick(switchedOn());
         lastOutput = Math.max(0, getEnergyStored() - before);
+        if (chargeBattery(slots[SLOT_BATTERY]) > 0) {
+            markDirty();                                     // before the ports: they'd empty the buffer first
+        }
         if (!storePorts.isEmpty()) {
             pushToPorts();
         }
@@ -1667,9 +1698,6 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (s.hasHole() && status == GeneratorStatus.GENERATING) {
             com.sc.util.SoundsSC.loop(this, SINGULAR_HUM);
-        }
-        if (chargeBattery(slots[SLOT_BATTERY]) > 0) {
-            markDirty();
         }
     }
 
@@ -1833,7 +1861,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             status = GeneratorStatus.NO_ROTOR;
             return;
         }
-        if (!outputWorkedOut || worldObj.getTotalWorldTime() % 20 == 0) {
+        if ((!outputWorkedOut || worldObj.getTotalWorldTime() % 20 == 0)
+                && worldObj.checkChunksExist(xCoord - 2, yCoord - 2, zCoord - 2, xCoord + 2, yCoord + 2, zCoord + 2)) {
             outputWorkedOut = true;                          // the first tick after loading too, not a second later
             int height = yCoord - 64;
             int blocked = 0;
@@ -1884,6 +1913,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int flowing = 0, sides = 0, i = 0;
         for (ForgeDirection d : new ForgeDirection[]{ForgeDirection.NORTH, ForgeDirection.SOUTH, ForgeDirection.EAST, ForgeDirection.WEST}) {
             int x = xCoord + d.offsetX, z = zCoord + d.offsetZ;
+            if (!worldObj.blockExists(x, yCoord, z)) {
+                i++;
+                continue;                                     // an unloaded chunk next door: not loaded for this
+            }
             Block b = worldObj.getBlock(x, yCoord, z);
             int state = 0;
             if (b.getMaterial() == Material.water) {
@@ -1945,6 +1978,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Kelvin of a block next to the generator, 0 if it neither heats nor cools. */
     private int temperatureAt(int x, int y, int z) {
+        if (!worldObj.blockExists(x, y, z)) {
+            return 0;                                         // an unloaded chunk next door: not loaded for this
+        }
         Block b = worldObj.getBlock(x, y, z);
         if (b.getMaterial() == Material.lava) {
             return 1300;
@@ -2212,7 +2248,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 if (dx == 0 && dz == 0) {
                     continue;
                 }
-                if (worldObj.getBlock(xCoord + dx, yCoord, zCoord + dz) == com.sc.init.ModBlocks.tokamakCoil) {
+                if (worldObj.blockExists(xCoord + dx, yCoord, zCoord + dz)
+                        && worldObj.getBlock(xCoord + dx, yCoord, zCoord + dz) == com.sc.init.ModBlocks.tokamakCoil) {
                     mask |= 1 << k;
                 }
                 k++;
@@ -2228,7 +2265,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-                if ((dx != 0 || dz != 0) && worldObj.getBlock(xCoord + dx, yCoord, zCoord + dz) != com.sc.init.ModBlocks.tokamakCoil) {
+                if ((dx != 0 || dz != 0) && (!worldObj.blockExists(xCoord + dx, yCoord, zCoord + dz)
+                        || worldObj.getBlock(xCoord + dx, yCoord, zCoord + dz) != com.sc.init.ModBlocks.tokamakCoil)) {
                     return false;
                 }
             }
@@ -2451,14 +2489,21 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return 0;
         }
         if (fitsTank1(resource.getFluid())) {
-            int n = fuelTank.fill(resource, doFill);
+            int n = TileEntityMachineSC.safeFill(fuelTank, resource, doFill);     // over capacity (extensions out): takes nothing, keeps it all
             if (doFill) {
                 inflowWindow += n;
+                if (n > 0) {
+                    fluidChanged();
+                }
             }
             return n;
         }
         if (fitsTank2(resource.getFluid())) {
-            return fuelTank2.fill(resource, doFill);
+            int n = TileEntityMachineSC.safeFill(fuelTank2, resource, doFill);
+            if (doFill && n > 0) {
+                fluidChanged();
+            }
+            return n;
         }
         return 0;
     }
@@ -2471,7 +2516,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (resource == null || outTank.getFluid() == null || !resource.isFluidEqual(outTank.getFluid())) {
             return null;
         }
-        return outTank.drain(resource.amount, doDrain);
+        FluidStack out = outTank.drain(resource.amount, doDrain);
+        if (doDrain && out != null && out.amount > 0) {
+            fluidChanged();
+        }
+        return out;
     }
 
     @Override
@@ -2479,7 +2528,24 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (singular()) {
             return drainSingularMatter(maxDrain, doDrain);
         }
-        return generatorType == GeneratorType.FUEL_CELL ? outTank.drain(maxDrain, doDrain) : null;
+        if (generatorType != GeneratorType.FUEL_CELL) {
+            return null;
+        }
+        FluidStack out = outTank.drain(maxDrain, doDrain);
+        if (doDrain && out != null && out.amount > 0) {
+            fluidChanged();
+        }
+        return out;
+    }
+
+    /**
+     * A tank changed through a pipe, without markDirty(): tell the chunk it has something to save -
+     * else the fluid comes back doubled (the pipe end saved, this one not) or gone.
+     */
+    private void fluidChanged() {
+        if (worldObj != null && !worldObj.isRemote) {
+            worldObj.markTileEntityChunkModified(xCoord, yCoord, zCoord, this);
+        }
     }
 
     private FluidStack drainSingularMatter(int max, boolean doDrain) {

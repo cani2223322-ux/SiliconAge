@@ -41,7 +41,7 @@ public final class NetViewNetSC {
     public static final SimpleNetworkWrapper CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel("SiliconAgeNetView");
 
     private static final NetViewScanSC.Clicks CLICKS = new NetViewScanSC.Clicks();
-    /** С-4: whose overview is on screen (as the client hides it: dimension, origin, until which tick). */
+    /** С-4: whose overview is on screen (as the client hides it: dimension, origin, until when - wall clock, as the client counts). */
     private static final java.util.Map<EntityPlayer, long[]> SHOWN = new java.util.WeakHashMap<EntityPlayer, long[]>();
 
     /** Client: the last snapshot heard, taken by the renderer (handed over between threads). */
@@ -91,7 +91,7 @@ public final class NetViewNetSC {
         s.oy = y;
         s.oz = z;
         if ((s.flags & NetViewScanSC.S_PING) == 0) {
-            SHOWN.put(p, new long[]{s.dim, x, y, z, world.getTotalWorldTime() + NetViewScanSC.LIFE_TICKS});
+            SHOWN.put(p, new long[]{s.dim, x, y, z, System.currentTimeMillis() + NetViewScanSC.LIFE_TICKS * 50L});
         }
         CHANNEL.sendTo(new Message(s), p);
         return true;
@@ -106,7 +106,7 @@ public final class NetViewNetSC {
             return false;
         }
         long[] v = SHOWN.remove(player);
-        if (v == null || v[0] != world.provider.dimensionId || world.getTotalWorldTime() >= v[4]) {
+        if (v == null || v[0] != world.provider.dimensionId || System.currentTimeMillis() >= v[4]) {   // the client's clock: a pause or low TPS doesn't stretch it
             return false;
         }
         double dx = player.posX - v[1] - 0.5, dy = player.posY - v[2] - 0.5, dz = player.posZ - v[3] - 0.5;

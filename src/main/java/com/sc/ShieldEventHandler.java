@@ -163,9 +163,8 @@ public class ShieldEventHandler {
         if (event.world.isRemote) {
             return;
         }
-        TileEntityFieldGeneratorSC f = TileEntityFieldGeneratorSC.fieldWith(event.world, TileEntityFieldGeneratorSC.F_NO_SPAWN,
-                event.x, event.y + event.entityLiving.height / 2, event.z);
-        if (f != null && f.targets(event.entityLiving)) {
+        if (TileEntityFieldGeneratorSC.noSpawnFor(event.world, event.entityLiving,
+                event.x, event.y + event.entityLiving.height / 2, event.z) != null) {
             event.setResult(cpw.mods.fml.common.eventhandler.Event.Result.DENY);
         }
     }
@@ -191,8 +190,7 @@ public class ShieldEventHandler {
         if (w == null || w.isRemote || p == null) {
             return null;
         }
-        TileEntityFieldGeneratorSC f = TileEntityFieldGeneratorSC.fieldWith(w, TileEntityFieldGeneratorSC.F_PRIVATE, x + 0.5, y + 0.5, z + 0.5);
-        return f == null || f.allowed(p) ? null : f;
+        return TileEntityFieldGeneratorSC.privateRefusing(w, p, x + 0.5, y + 0.5, z + 0.5);
     }
 
     /** A private field: only its owner and access list may break or place blocks inside it or open its containers. */
@@ -200,8 +198,8 @@ public class ShieldEventHandler {
         if (w.isRemote || p == null) {
             return false;
         }
-        TileEntityFieldGeneratorSC f = TileEntityFieldGeneratorSC.fieldWith(w, TileEntityFieldGeneratorSC.F_PRIVATE, x + 0.5, y + 0.5, z + 0.5);
-        if (f == null || f.allowed(p)) {
+        TileEntityFieldGeneratorSC f = TileEntityFieldGeneratorSC.privateRefusing(w, p, x + 0.5, y + 0.5, z + 0.5);
+        if (f == null) {
             return false;
         }
         long now = w.getTotalWorldTime();
@@ -238,11 +236,18 @@ public class ShieldEventHandler {
     @SubscribeEvent
     public void onLightning(net.minecraftforge.event.entity.EntityStruckByLightningEvent event) {
         net.minecraft.entity.Entity en = event.entity, bolt = event.lightning;
-        // the bolt's place counts: one falling into a field strikes no one round it, even just outside
-        if (!en.worldObj.isRemote && (TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, bolt.posX, bolt.posY, bolt.posZ) != null
-                || TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, en.posX, en.posY, en.posZ) != null)) {
+        // the bolt's place counts: one falling into a field strikes no one round it, even just outside.
+        // Only a shield that can pay for the bolt takes it; a bolt the world tick already saw (SCShieldSeen)
+        // and left alive wasn't paid for, so it strikes as usual.
+        if (!en.worldObj.isRemote && ((!bolt.getEntityData().getBoolean("SCShieldSeen")
+                && canTakeBolt(TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, bolt.posX, bolt.posY, bolt.posZ)))
+                || canTakeBolt(TileEntityFieldGeneratorSC.rainShieldAt(en.worldObj, en.posX, en.posY, en.posZ)))) {
             event.setCanceled(true);
         }
+    }
+
+    private static boolean canTakeBolt(TileEntityFieldGeneratorSC f) {
+        return f != null && f.getEnergyStored() >= TileEntityFieldGeneratorSC.LIGHTNING_COST;
     }
 
     @SubscribeEvent

@@ -218,8 +218,10 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     }
 
     /**
-     * The strongest voltage a neighbour can bring in on a face that takes energy: a cable, or an
-     * energy source touching it; null when there's none. Works on the client too (for the screens).
+     * The strongest voltage a neighbour can bring in on a face that takes energy: a cable whose side
+     * here gives energy into the block, or (only on IC2's net - ours never overvolts on direct
+     * contact) an energy source whose output face touches it; null when there's none. Works on the
+     * client too (for the screens).
      */
     public Tier lineTier() {
         Tier best = null;
@@ -233,11 +235,17 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
             }
             net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y, z);
             Tier t = null;
-            if (te instanceof com.sc.tileentity.TileEntityConduitBundleSC && ((com.sc.tileentity.TileEntityConduitBundleSC) te).getCable() != null) {
-                t = ((com.sc.tileentity.TileEntityConduitBundleSC) te).getCable().tier;
+            if (te instanceof com.sc.tileentity.TileEntityConduitBundleSC) {
+                com.sc.tileentity.TileEntityConduitBundleSC b = (com.sc.tileentity.TileEntityConduitBundleSC) te;
+                ForgeDirection side = dir.getOpposite();
+                if (b.getCable() != null && b.cableOpen(side)
+                        && b.mode(com.sc.conduit.ConduitKind.CABLE, side).inserts(com.sc.conduit.ConduitKind.CABLE)) {
+                    t = b.getCable().tier;              // OFF / extract-only sides give it nothing
+                }
             } else if (te instanceof com.sc.tileentity.TileEntityCableSC && ((com.sc.tileentity.TileEntityCableSC) te).getCableType() != null) {
                 t = ((com.sc.tileentity.TileEntityCableSC) te).getCableType().tier;
-            } else if (te instanceof TileEntityEnergyBase && ((TileEntityEnergyBase) te).isEnergySource()) {
+            } else if (te instanceof TileEntityEnergyBase && Loader.isModLoaded(Reference.IC2_MODID)
+                    && ((TileEntityEnergyBase) te).isEnergySource() && ((TileEntityEnergyBase) te).isOutputFace(dir.getOpposite())) {
                 t = ((TileEntityEnergyBase) te).outputTier();
             }
             if (t != null && (best == null || t.ordinal() > best.ordinal())) {

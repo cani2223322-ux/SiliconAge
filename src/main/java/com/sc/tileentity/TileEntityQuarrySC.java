@@ -380,7 +380,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     /** Settings changed: start the area over. */
-    /** The area the cursor was walking (not saved: after a load the saved cursor is trusted). */
+    /** The area the cursor was walking (saved: an area changed while stopped resets the cursor after a load too). */
     private int[] areaSeen;
     /** A whole water body / lake was pumped this tick - one a tick (hundreds of block changes each). */
     private boolean bodyPumped;
@@ -398,8 +398,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     // ------------------------------------------------------------------ what gets dug
 
+    /** Lit redstone ore (a mob walked on it) has no item: it counts as the plain ore. */
+    private static Block oreBlock(Block b) {
+        return b == Blocks.lit_redstone_ore ? Blocks.redstone_ore : b;
+    }
+
     public static boolean isOre(Block block, int meta) {
-        Item item = Item.getItemFromBlock(block);
+        Item item = Item.getItemFromBlock(oreBlock(block));
         if (item == null) {
             return false;
         }
@@ -434,7 +439,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (filterMode == FILTER_ORE) {
             return isOre(block, meta);
         }
-        Item item = Item.getItemFromBlock(block);
+        Item item = Item.getItemFromBlock(oreBlock(block));
         boolean listed = false;
         for (ItemStack f : filter) {
             if (f != null && item != null && f.getItem() == item && (!f.getHasSubtypes() || f.getItemDamage() == block.damageDropped(meta))) {
@@ -510,8 +515,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Another player's private field zone, or another mod's protection, forbids breaking there. */
     private boolean forbidden(int x, int y, int z) {
-        TileEntityFieldGeneratorSC field = TileEntityFieldGeneratorSC.fieldWith(worldObj, TileEntityFieldGeneratorSC.F_PRIVATE, x + 0.5, y + 0.5, z + 0.5);
-        if (field != null && !field.allowedName(owner)) {
+        if (TileEntityFieldGeneratorSC.privateRefusingName(worldObj, owner, x + 0.5, y + 0.5, z + 0.5) != null) {
             return true;
         }
         if (worldObj instanceof WorldServer) {
@@ -571,9 +575,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         dig();
         holdChunks();
-        if (status == Status.RUNNING) {
+        if (status == Status.RUNNING && !silent()) {
             com.sc.util.SoundsSC.loop(this, isExo() ? RIG_SOUND : DRILL_SOUND);
         }
+    }
+
+    /** The Silence module's switch is on: no digging sounds or particles. */
+    private boolean silent() {
+        return has(F_SILENT) && moduleCount(ItemQuarryModuleSC.Kind.SILENT) > 0;
     }
 
     private void setStatus(Status s) {
@@ -596,6 +605,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         if (!running) {
+            if (powerOn && !isExo() && headKind() != null && repairing()) {
+                return;                                    // the head is mended while stopped too
+            }
             setStatus(autoStopped ? Status.BUFFER_FULL : done ? Status.DONE : Status.PAUSED);
             return;
         }
@@ -647,8 +659,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             layerY = a[4];
             cursor = 0;
         }
+        if (cursor < 0 || cursor >= cellsPerLayer(a)) {
+            cursor = 0;                                      // an old save's cursor from a bigger area: the layer over
+        }
         progress = Math.min(progress + blocksPerSecond() / 20.0, 16);
         int checks = 0, dug = 0;
+        boolean blocked = false;
         bodyPumped = false;
         while (progress >= 1 && checks < 512 && dug < 16 && !bodyPumped) {
             if (layerY < a[5]) {
@@ -676,7 +692,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             if (forbidden(x, y, z)) {
                 skippedPrivate++;
-                setStatus(Status.BLOCKED_BY_FIELD);
+                blocked = true;
                 advance(a);
                 continue;
             }
@@ -710,7 +726,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 return;
             }
         }
-        setStatus(Status.RUNNING);
+        setStatus(blocked && dug == 0 ? Status.BLOCKED_BY_FIELD : Status.RUNNING);   // nothing but protected blocks this tick
     }
 
     // ------------------------------------------------------------------ the Exo Drilling Rig
@@ -992,7 +1008,6 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
      * full tank: the Tank full setting (leave it / pause / destroy / make ice or obsidian).
      */
     private int pumpBody(int x0, int y0, int z0, Fluid fluid, boolean vein) {
-        bodyPumped = true;
         int[] a = area();
         int r = vein ? fluidVeinReach() : 0;
         java.util.ArrayDeque<int[]> open = new java.util.ArrayDeque<int[]>();
@@ -1026,7 +1041,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                         tanks[t].fill(got, true);
                     }
                 } else if (tankFull == FULL_PAUSE) {
-                    return taken > 0 ? PUMP_OK : PUMP_WAIT;
+                    if (taken > 0) {
+                        bodyPumped = true;
+                        markDirty();
+                        return PUMP_OK;
+                    }
+                    return PUMP_WAIT;
                 } else if (tankFull == FULL_VOID && active(ItemQuarryModuleSC.Kind.TRASH, F_TRASH)
                         && getEnergyStored() >= cost + TRASH_COST) {
                     removeEnergy(TRASH_COST);
@@ -1056,6 +1076,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         if (taken > 0) {
+            bodyPumped = true;                       // one body a tick; a refusal at the first source goes on digging
             if (vein) {
                 fluidVeinLast = taken;
                 fluidVeinTotal += taken;
@@ -1275,16 +1296,19 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                         if (y < 1 || y > 255 || Math.abs(x - x0) > 32 || Math.abs(z - z0) > 32 || !seen.add(posKey(x, y, z))) {
                             continue;
                         }
-                        if (!worldObj.blockExists(x, y, z) || worldObj.getBlock(x, y, z) != ore || worldObj.getBlockMetadata(x, y, z) != meta
-                                || touchesMe(x, y, z)) {
+                        if (!worldObj.blockExists(x, y, z)) {
                             continue;
                         }
-                        int cost = payable(costFor(ore.getBlockHardness(worldObj, x, y, z)));
+                        Block nb = worldObj.getBlock(x, y, z);
+                        if (oreBlock(nb) != oreBlock(ore) || worldObj.getBlockMetadata(x, y, z) != meta || touchesMe(x, y, z)) {
+                            continue;                        // lit and plain redstone ore are one vein
+                        }
+                        int cost = payable(costFor(nb.getBlockHardness(worldObj, x, y, z)));
                         if (cost < 0 || forbidden(x, y, z) || taken >= VEIN_MAX || headKind() == null) {
                             return taken;
                         }
                         removeEnergy(cost);
-                        mineOne(x, y, z, ore);
+                        mineOne(x, y, z, nb);
                         taken++;
                         open.add(new int[]{x, y, z});
                     }
@@ -1307,7 +1331,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 continue;
             }
             boolean inArea = a != null && nx >= a[0] && nx <= a[2] && nz >= a[1] && nz <= a[3] && ny <= a[4] && ny >= a[5];
-            if (pump && inArea && worldObj.getBlockMetadata(nx, ny, nz) == 0) {
+            if (pump && inArea && worldObj.getBlockMetadata(nx, ny, nz) == 0 && pumpWillTake(a, nx, ny, nz)) {
                 continue;
             }
             if (forbidden(nx, ny, nz)) {
@@ -1319,6 +1343,31 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             removeEnergy(GUARD_COST);
             worldObj.setBlock(nx, ny, nz, Blocks.stone, 0, 3);
         }
+    }
+
+    /**
+     * Will the pump take this source of the area later: the cursor has yet to reach its cell, and the
+     * lava switch, the fluid filter and a full tank's setting let it (else the guard turns it to stone).
+     */
+    private boolean pumpWillTake(int[] a, int x, int y, int z) {
+        Fluid f = fluidOf(worldObj.getBlock(x, y, z));
+        if (f == null || f == FluidRegistry.LAVA && !has(F_PUMP_LAVA)) {
+            return false;
+        }
+        int i = (z - a[1]) * (a[2] - a[0] + 1) + (x - a[0]);
+        if (y > layerY || y == layerY && i <= cursor || cell(a, i) == null) {
+            return false;                                   // the cursor is past it (or the shape leaves it out)
+        }
+        if (!fluidWanted(f)) {
+            return fluidFilterRemove != 0;
+        }
+        if (tankFull == FULL_PAUSE || compartmentFor(new FluidStack(f, 1000)) >= 0) {
+            return true;
+        }
+        if (tankFull == FULL_VOID) {
+            return active(ItemQuarryModuleSC.Kind.TRASH, F_TRASH);
+        }
+        return tankFull == FULL_BLOCK && (f == FluidRegistry.WATER || f == FluidRegistry.LAVA);
     }
 
     private void mineOne(int x, int y, int z, Block block) {
@@ -1335,13 +1384,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         boolean ore = isOre(block, meta);
-        if (!has(F_SILENT) || moduleCount(ItemQuarryModuleSC.Kind.SILENT) == 0) {
+        if (!silent()) {
             worldObj.playAuxSFX(2001, x, y, z, Block.getIdFromBlock(block) + (meta << 12));
         }
         replaceAfter(x, y, z);
         guardFluids(x, y, z);
         if (ore) {
-            String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(block)) + "@" + block.damageDropped(meta);
+            String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(oreBlock(block))) + "@" + block.damageDropped(meta);
             Integer n = oreCounts.get(key);
             if (n != null) {
                 if (n <= 1) {
@@ -1362,7 +1411,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             head.setItemDamage(head.getItemDamage() + (active(ItemQuarryModuleSC.Kind.DOUBLE, F_DOUBLE) ? 2 : 1));
             if (head.getItemDamage() >= head.getMaxDamage()) {
                 slots[SLOT_HEAD] = null;
-                worldObj.playSoundEffect(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, "random.break", 1F, 0.8F);
+                if (!silent()) {
+                    worldObj.playSoundEffect(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5, "random.break", 1F, 0.8F);
+                }
                 warn(Status.NO_HEAD);
             }
         }
@@ -1576,8 +1627,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Not out of another player's private field zone the owner has no access to. */
     public boolean magnetMay(net.minecraft.entity.Entity e) {
-        TileEntityFieldGeneratorSC field = TileEntityFieldGeneratorSC.fieldWith(worldObj, TileEntityFieldGeneratorSC.F_PRIVATE, e.posX, e.posY, e.posZ);
-        return field == null || field.allowedName(owner);
+        return TileEntityFieldGeneratorSC.privateRefusingName(worldObj, owner, e.posX, e.posY, e.posZ) == null;
     }
 
     // ------------------------------------------------------------------ the scanner
@@ -1620,7 +1670,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 Block b = worldObj.getBlock(c[0], scanY, c[1]);
                 int meta = worldObj.getBlockMetadata(c[0], scanY, c[1]);
                 if (!b.isAir(worldObj, c[0], scanY, c[1]) && isOre(b, meta)) {
-                    String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(b)) + "@" + b.damageDropped(meta);
+                    String key = Item.itemRegistry.getNameForObject(Item.getItemFromBlock(oreBlock(b))) + "@" + b.damageDropped(meta);
                     Integer n = oreCounts.get(key);
                     oreCounts.put(key, n == null ? 1 : n + 1);
                 }
@@ -2294,7 +2344,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     @Override
     public int fill(ForgeDirection from, FluidStack resource, boolean doFill) {
-        return resource != null && resource.getFluid() == FluidRegistry.WATER ? TileEntityMachineSC.safeFill(water, resource, doFill) : 0;
+        int done = resource != null && resource.getFluid() == FluidRegistry.WATER ? TileEntityMachineSC.safeFill(water, resource, doFill) : 0;
+        if (doFill && done > 0) {
+            fluidChanged();
+        }
+        return done;
     }
 
     @Override
@@ -2304,7 +2358,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         for (int i = 0; i < TANKS; i++) {
             if (sideAllows(i, from) && resource.isFluidEqual(tanks[i].getFluid())) {
-                return tanks[i].drain(resource.amount, doDrain);
+                FluidStack out = tanks[i].drain(resource.amount, doDrain);
+                if (doDrain && out != null && out.amount > 0) {
+                    fluidChanged();
+                }
+                return out;
             }
         }
         return null;
@@ -2314,10 +2372,21 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     public FluidStack drain(ForgeDirection from, int maxDrain, boolean doDrain) {
         for (int i = 0; i < TANKS; i++) {
             if (sideAllows(i, from) && tanks[i].getFluidAmount() > 0) {
-                return tanks[i].drain(maxDrain, doDrain);
+                FluidStack out = tanks[i].drain(maxDrain, doDrain);
+                if (doDrain && out != null && out.amount > 0) {
+                    fluidChanged();
+                }
+                return out;
             }
         }
         return null;
+    }
+
+    /** A pipe moved fluid in or out: the chunk must be saved, or the change is lost on unload. */
+    private void fluidChanged() {
+        if (worldObj != null && !worldObj.isRemote) {
+            worldObj.markTileEntityChunkModified(xCoord, yCoord, zCoord, this);
+        }
     }
 
     @Override
@@ -2525,6 +2594,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         done = nbt.getBoolean("Done");
         layerY = nbt.getInteger("LayerY");
         cursor = nbt.getInteger("Cursor");
+        int[] seen = nbt.getIntArray("AreaSeen");
+        areaSeen = seen.length == 6 ? seen : null;
         mined = nbt.getLong("Mined");
         xp = nbt.getInteger("Xp");
         progress = nbt.getDouble("Progress");
@@ -2573,6 +2644,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setBoolean("Done", done);
         nbt.setInteger("LayerY", layerY);
         nbt.setInteger("Cursor", cursor);
+        if (areaSeen != null) {
+            nbt.setIntArray("AreaSeen", areaSeen);           // a load still sees an area changed while stopped
+        }
         nbt.setLong("Mined", mined);
         nbt.setInteger("Xp", xp);
         nbt.setDouble("Progress", progress);

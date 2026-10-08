@@ -1862,7 +1862,7 @@ public class GuiArmorSC extends GuiScreen {
                 List<String> tip = new ArrayList<String>();
                 float cool = ArmorGasSC.coolingFactor(p);
                 tip.add(cool <= 0F ? Lang.tr("sc.lifegui.cool.none")
-                        : Lang.tr("sc.lifegui.cool", String.format(Locale.ROOT, "%.2f", cool), Math.round(ArmorGasSC.RADIATOR_BONUS * 100)));
+                        : Lang.tr("sc.lifegui.cool", String.format(Locale.ROOT, "%.2f", cool), radiatorPct(p)));
                 tip.add("§7" + Lang.tr("sc.lifegui.cool.tip"));
                 TextFitSC.hover(x, sy, w, 13, tip);
             } else {
@@ -1939,7 +1939,7 @@ public class GuiArmorSC extends GuiScreen {
                 ly += lp;
             }
             if (t != ArmorGasSC.CHEST && ArmorGasSC.baseCapacity(w, Gas.HELIUM) > 0) {
-                pieceTip.add("§b" + Lang.tr("sc.lifegui.part.radiator", Math.round(ArmorGasSC.RADIATOR_BONUS * 100)));
+                pieceTip.add("§b" + Lang.tr("sc.lifegui.part.radiator", Math.round(ArmorGasSC.radiatorBonus(ArmorLogicSC.suitOf(w)) * 100)));
             } else if (t == ArmorGasSC.CHEST && ArmorGasSC.baseCapacity(w, Gas.HELIUM) > 0) {
                 pieceTip.add("§b" + Lang.tr("sc.lifegui.part.loop"));
             }
@@ -2084,7 +2084,7 @@ public class GuiArmorSC extends GuiScreen {
         // helium cooling
         float cool = ArmorGasSC.coolingFactor(p);
         String coolText = cool <= 0F ? Lang.tr("sc.lifegui.cool.none")
-                : Lang.tr("sc.lifegui.cool", String.format(Locale.ROOT, "%.2f", cool), Math.round(ArmorGasSC.RADIATOR_BONUS * 100));
+                : Lang.tr("sc.lifegui.cool", String.format(Locale.ROOT, "%.2f", cool), radiatorPct(p));
         fit(coolText, x, coolY, tableW, cool <= 0F ? 0x808080 : 0x8FE3FF);
         if (sysHeadY >= 0) {
             fit(Lang.tr("sc.lifegui.systems"), sysX, sysHeadY, sysW, HEAD);
@@ -2100,14 +2100,28 @@ public class GuiArmorSC extends GuiScreen {
         }
     }
 
+    /** Cooling per worn radiator, %: by the radiators' own suits (a Singular one cools more), averaged; none worn - by the chestplate. */
+    private static int radiatorPct(EntityPlayer p) {
+        float sum = 0F;
+        int n = 0;
+        for (int t : new int[]{ArmorGasSC.HELMET, ArmorGasSC.LEGS, ArmorGasSC.BOOTS}) {
+            ItemStack w = ArmorGasSC.worn(p, t);
+            if (w != null) {
+                sum += ArmorGasSC.radiatorBonus(ArmorLogicSC.suitOf(w));
+                n++;
+            }
+        }
+        float b = n > 0 ? sum / n : ArmorGasSC.radiatorBonus(ArmorLogicSC.suitOf(ArmorGasSC.worn(p, ArmorGasSC.CHEST)));
+        return Math.round(b * 100);
+    }
+
     /** Tooltips of the life support tab: the cooling line, a fill button. */
     private List<String> lifeTip(int mouseX, int mouseY) {
         EntityPlayer p = mc.thePlayer;
         List<String> tip = new ArrayList<String>();
         if (mouseX >= tableX && mouseX < tableX + tableW && mouseY >= coolY && mouseY < coolY + 9) {
             tip.add(Lang.tr("sc.lifegui.cool.tip"));
-            ItemStack coolChest = ArmorGasSC.worn(p, ArmorGasSC.CHEST);       // a Singular suit's radiators cool more
-            tip.add("§7" + Lang.tr("sc.lifegui.cool.tip2", Math.round(ArmorGasSC.radiatorBonus(ArmorLogicSC.suitOf(coolChest)) * 100)));
+            tip.add("§7" + Lang.tr("sc.lifegui.cool.tip2", radiatorPct(p)));
             return tip;
         }
         for (Object o : buttonList) {
@@ -2579,7 +2593,7 @@ public class GuiArmorSC extends GuiScreen {
                     bonus = Lang.tr("sc.bladegui.set." + ItemBladeSC.typeOf(b).key());
                 }
             } else {
-                ArmorSuit set = ArmorLogicSC.bonusSet(mc.thePlayer);
+                ArmorSuit set = ArmorLogicSC.activeBonusSet(mc.thePlayer);   // no set line while overheated
                 if (set != null) {
                     bonus = Lang.tr("sc.armorgui.set." + set.name().toLowerCase(Locale.ROOT));
                 }

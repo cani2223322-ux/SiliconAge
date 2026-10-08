@@ -78,8 +78,21 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         }
         if (!dimSet && bridge() != null) {
             int[] pos = bridge().getIntArray("pos");
-            dim = mc.thePlayer != null ? mc.thePlayer.dimension : pos.length == 4 ? pos[3] : 0;
+            // a Ground bridge's typed X / Z mean its own world; a Space one starts at the player's
+            dim = !space() && pos.length == 4 ? pos[3] : mc.thePlayer != null ? mc.thePlayer.dimension : pos.length == 4 ? pos[3] : 0;
             dimSet = true;
+        }
+    }
+
+    /** A Ground bridge: the target's dimension goes back to the bridge's own (a typed X / Z mean its world). */
+    protected void groundDimReset() {
+        NBTTagCompound b = bridge();
+        if (b == null || space()) {
+            return;
+        }
+        int[] pos = b.getIntArray("pos");
+        if (pos.length == 4) {
+            dim = pos[3];
         }
     }
 
@@ -148,7 +161,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
             String ys = text(fy).trim();
             int y = ys.length() == 0 || ys.equalsIgnoreCase("auto") || ys.equalsIgnoreCase(Lang.tr("sc.bridge.gui.auto"))
                     ? TileEntityBridgeControllerSC.AUTO_Y : Integer.parseInt(ys);
-            return new int[]{x, y, z, space() ? dim : mc.thePlayer.dimension};
+            return new int[]{x, y, z, dim};
         } catch (NumberFormatException e) {
             return null;
         }
@@ -371,6 +384,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
                     targetName = "";
                     fromFind = false;
                     place = null;
+                    groundDimReset();
                 }
                 typed = true;
             }

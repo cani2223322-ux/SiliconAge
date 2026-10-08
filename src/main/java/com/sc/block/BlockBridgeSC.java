@@ -199,7 +199,12 @@ public class BlockBridgeSC extends Block {
         } else if (te instanceof TileEntityBridgeCapacitorSC && tag != null) {
             ((TileEntityBridgeCapacitorSC) te).setEnergy(tag.getLong("BridgeEU"));
         } else if (te instanceof TileEntityBridgeEnergyPortSC) {
-            ((TileEntityBridgeEnergyPortSC) te).setPowerOn(false);
+            TileEntityBridgeEnergyPortSC p = (TileEntityBridgeEnergyPortSC) te;
+            p.setPowerOn(false);
+            if (tag != null && tag.getInteger("EnergySC") > 0) {
+                p.putForTest(tag.getInteger("EnergySC"));       // the buffer the item kept (capped at it)
+                p.markDirty();
+            }
         }
     }
 
@@ -215,7 +220,22 @@ public class BlockBridgeSC extends Block {
         }
     }
 
-    // ---- the item keeps the controller's tanks / bookmarks and the capacitor's charge: drop while the tile still exists ----
+    // ---- the item keeps the controller's tanks / bookmarks, the capacitor's charge and the energy port's buffer: drop while the tile still exists ----
+
+    /**
+     * Always harvestable: Material.iron with harvest level 2 otherwise drops nothing to a lower pickaxe (which
+     * PickaxeOnlySC still lets break it) - the part vanished with its charge / tanks / bookmarks.
+     */
+    @Override
+    public boolean canHarvestBlock(EntityPlayer player, int meta) {
+        return true;
+    }
+
+    /** An explosion's drop chance (1 / size) would lose the controller's tanks / bookmarks and the charge: always dropped. */
+    @Override
+    public void dropBlockAsItemWithChance(World world, int x, int y, int z, int meta, float chance, int fortune) {
+        super.dropBlockAsItemWithChance(world, x, y, z, meta, 1.0F, fortune);
+    }
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
@@ -248,6 +268,10 @@ public class BlockBridgeSC extends Block {
         } else if (te instanceof TileEntityBridgeCapacitorSC && ((TileEntityBridgeCapacitorSC) te).getEnergy() > 0) {
             NBTTagCompound nbt = new NBTTagCompound();
             nbt.setLong("BridgeEU", ((TileEntityBridgeCapacitorSC) te).getEnergy());
+            stack.setTagCompound(nbt);
+        } else if (te instanceof TileEntityBridgeEnergyPortSC && ((TileEntityBridgeEnergyPortSC) te).getEnergyStored() > 0) {
+            NBTTagCompound nbt = new NBTTagCompound();
+            nbt.setInteger("EnergySC", ((TileEntityBridgeEnergyPortSC) te).getEnergyStored());
             stack.setTagCompound(nbt);
         }
         drops.add(stack);

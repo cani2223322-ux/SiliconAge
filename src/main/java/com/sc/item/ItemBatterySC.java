@@ -133,7 +133,7 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
                     stack.setTagCompound(new NBTTagCompound());
                 }
                 stack.getTagCompound().setInteger(MODE, mode);
-                world.playSoundAtEntity(player, Reference.ASSETS + ":battery.mode", 0.5F * com.sc.util.ConfigSC.soundVolume,
+                world.playSoundAtEntity(player, Reference.ASSETS + ":battery.mode", 0.5F,
                         mode == MODE_OFF ? 0.8F : 1.2F);
                 player.addChatComponentMessage(new ChatComponentTranslation("sc.battery.modeset",
                         new ChatComponentTranslation("sc.battery.mode." + mode)));
@@ -162,8 +162,8 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
         }
         if (mode == MODE_HELD || mode == MODE_ALL) {
             ItemStack hand = p.getCurrentEquippedItem();
-            // not while it digs: a changed tag restarts the block's breaking on the client
-            if (hand != null && !DrillLogicSC.digging(p, hand) && !p.isSwingInProgress) {
+            // not while it digs or blocks: a changed tag restarts the block's breaking / drops the block on the client
+            if (hand != null && !p.isUsingItem() && !DrillLogicSC.digging(p, hand) && !p.isSwingInProgress) {
                 spent += give(hand, budget - spent, stack);
             }
         }

@@ -72,7 +72,8 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                 list.add(new GenEntry(type, solidFuel != null ? solidFuel : new ItemStack(Items.coal)));
                 continue;
             }
-            if (type.kind == GeneratorType.Kind.FLUID_FUEL) {
+            if (type.kind == GeneratorType.Kind.FLUID_FUEL || type.kind == GeneratorType.Kind.DUAL_FLUID
+                    || type.kind == GeneratorType.Kind.EXO) {
                 ItemStack drop = ItemFluidDropSC.stackOf(FluidRegistry.getFluid(type.fuelFluidName));
                 list.add(new GenEntry(type, drop));
             } else {
@@ -197,6 +198,12 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                 fuelStacks.add(new PositionedStack(new ItemStack(ModBlocks.gravityCoil, 16), fuelStacks.isEmpty() ? FUEL_X : FUEL2_X, SLOT_Y));
             } else if (fuel != null) {
                 fuelStacks.add(new PositionedStack(fuel, FUEL_X, SLOT_Y));
+                if (type.kind == GeneratorType.Kind.DUAL_FLUID && type.fuel2FluidName != null) {
+                    ItemStack drop2 = ItemFluidDropSC.stackOf(FluidRegistry.getFluid(type.fuel2FluidName));
+                    if (drop2 != null) {
+                        fuelStacks.add(new PositionedStack(drop2, FUEL2_X, SLOT_Y));
+                    }
+                }
             }
             result = new PositionedStack(generatorStack(), GEN_X, SLOT_Y);
         }

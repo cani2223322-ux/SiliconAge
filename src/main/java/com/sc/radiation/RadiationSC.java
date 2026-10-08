@@ -337,8 +337,10 @@ public final class RadiationSC {
                 flags |= F_FIELD;
             }
         }
+        float leadKeep = 1F;                                // the part the lead pieces let through
         if (left > 0.01F && LeadSuitSC.parts(p) > 0) {
-            left *= 1F - leadShare(p);
+            leadKeep = 1F - leadShare(p);
+            left *= leadKeep;
             flags |= F_LEAD;
         }
         // heavy water in the leggings (docs/plan-armor-gases.md): an Exo piece stops the wall-piercing
@@ -351,7 +353,7 @@ public final class RadiationSC {
             com.sc.util.ArmorGasSC.drainFractionUse(worn, com.sc.util.ArmorGasSC.Gas.HEAVY_WATER,
                     left * com.sc.util.ArmorGasSC.HEAVY_WATER_PER_LEVEL_MIN / 60F);
             if (left > 0.01F && ArmorSuit.exoClass(ArmorLogicSC.suitOf(worn[com.sc.util.ArmorGasSC.LEGS]))) {
-                float pierce = Math.min(left, piercingAt(p));
+                float pierce = Math.min(left, piercingAt(p) * leadKeep);  // the flashes are past the lead too
                 if (pierce > 0F) {
                     left -= pierce;
                     flags |= F_ARMOR;

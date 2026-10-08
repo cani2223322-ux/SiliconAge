@@ -35,11 +35,13 @@ public class ContainerQuarrySC extends Container {
             FIRST_PLAYER = FIRST_LENS + TileEntityQuarrySC.LENSES;
 
     private final TileEntityQuarrySC quarry;
+    private final EntityPlayer viewer;
     private final InventoryBasic view = new InventoryBasic("filter", false, TileEntityQuarrySC.FILTER_SLOTS);
     private final int[] shownX, group;
 
     public ContainerQuarrySC(InventoryPlayer playerInv, TileEntityQuarrySC quarry) {
         this.quarry = quarry;
+        this.viewer = playerInv.player;
         for (int i = 0; i < TileEntityQuarrySC.FILTER_SLOTS; i++) {
             view.setInventorySlotContents(i, quarry.getFilter()[i]);
             addSlotToContainer(new SlotGhost(view, i, FILTER_X + i * 18, FILTER_Y + TOP));
@@ -64,11 +66,10 @@ public class ContainerQuarrySC extends Container {
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, INV_Y + TOP + 58));
         }
-        final TileEntityQuarrySC q = quarry;
         addSlotToContainer(new SlotBatterySC(quarry, TileEntityQuarrySC.SLOT_BATTERY, BATTERY_X, BATTERY_Y + TOP) {   // last: every tab
             @Override
             public boolean canTakeStack(EntityPlayer player) {
-                return q.allowed(player);           // a stranger's double-click (mode 6) doesn't gather it either
+                return may(player);                 // a stranger's double-click (mode 6) doesn't gather it either
             }
         });
         shownX = new int[inventorySlots.size()];
@@ -82,6 +83,14 @@ public class ContainerQuarrySC extends Container {
 
     public TileEntityQuarrySC getQuarry() {
         return quarry;
+    }
+
+    /** The server's word on this viewer's access (an op passes only there - the client has no op list). */
+    private boolean mayClient;
+
+    /** Owner / access list / op: the server asks the quarry, the client also takes the server's word. */
+    public boolean may(EntityPlayer p) {
+        return quarry.allowed(p) || p.worldObj.isRemote && mayClient;
     }
 
     /** Client: only these slot groups on screen (the others off it, not hoverable or clickable). */
@@ -101,7 +110,7 @@ public class ContainerQuarrySC extends Container {
     // ---- filter examples: a copy of the cursor's item, never the item itself ----
 
     private void setExample(int i, ItemStack s, EntityPlayer player) {
-        if (!quarry.allowed(player)) {
+        if (!may(player)) {
             return;                                 // a stranger's click changes nothing, not even their view
         }
         ItemStack one = s == null ? null : s.copy();
@@ -109,7 +118,7 @@ public class ContainerQuarrySC extends Container {
             one.stackSize = 1;
         }
         view.setInventorySlotContents(i, one);
-        if (!player.worldObj.isRemote && quarry.allowed(player)) {
+        if (!player.worldObj.isRemote && may(player)) {
             quarry.setFilterStack(i, one);
         }
     }
@@ -120,7 +129,7 @@ public class ContainerQuarrySC extends Container {
             setExample(slotId, player.inventory.getItemStack(), player);
             return null;
         }
-        if ((slotId >= 0 && slotId < FIRST_PLAYER || slotId == inventorySlots.size() - 1) && !quarry.allowed(player)) {
+        if ((slotId >= 0 && slotId < FIRST_PLAYER || slotId == inventorySlots.size() - 1) && !may(player)) {
             return null;                            // only the owner takes the output or changes the modules
         }
         if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
@@ -148,7 +157,7 @@ public class ContainerQuarrySC extends Container {
             return null;
         }
         // the quarry's slots only for the owner / access list; anyone may move their own items main <-> hotbar
-        boolean allowed = quarry.allowed(player);
+        boolean allowed = may(player);
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
         int battery = inventorySlots.size() - 1, end = battery, hotbar = FIRST_PLAYER + 27;
@@ -175,10 +184,13 @@ public class ContainerQuarrySC extends Container {
     // ---- live numbers ----
 
     /** 0..12 as before (8 / 9: the first compartment), 13..18: the other compartments' fluid and amount. */
-    private static final int COUNT = 23;             // 19, 20: the fluid vein's counters; 21: blocks a private field kept; 22: chunks held
+    private static final int COUNT = 24;             // 19, 20: the fluid vein's counters; 21: blocks a private field kept; 22: chunks held; 23: may use
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
     private int value(int id) {
+        if (id == 23) {
+            return quarry.allowed(viewer) ? 1 : 0;
+        }
         if (id == 22) {
             return quarry.getChunksHeld();
         }
@@ -216,6 +228,15 @@ public class ContainerQuarrySC extends Container {
 
     @Override
     public void detectAndSendChanges() {
+        if (!viewer.worldObj.isRemote) {
+            // the examples as the quarry has them now: another viewer's click, a tank's fluid sent to the filter
+            ItemStack[] f = quarry.getFilter();
+            for (int i = 0; i < TileEntityQuarrySC.FILTER_SLOTS; i++) {
+                if (!ItemStack.areItemStacksEqual(view.getStackInSlot(i), f[i])) {
+                    view.setInventorySlotContents(i, f[i] == null ? null : f[i].copy());
+                }
+            }
+        }
         super.detectAndSendChanges();
         int[] v = new int[COUNT];
         for (int i = 0; i < COUNT; i++) {
@@ -235,6 +256,8 @@ public class ContainerQuarrySC extends Container {
         }
         if (id == 0) {
             quarry.setEnergyStoredClient(sync.value(0));
+        } else if (id == 23) {
+            mayClient = sync.value(23) != 0;
         } else if (id == 22) {
             quarry.setChunksHeldClient(sync.value(22));
         } else if (id == 21) {
@@ -277,7 +300,7 @@ public class ContainerQuarrySC extends Container {
     }
 
     /** The buffer: take from it, never put into it. */
-    private static class SlotBuffer extends Slot {
+    private class SlotBuffer extends Slot {
         SlotBuffer(TileEntityQuarrySC q, int index, int x, int y) {
             super(q, index, x, y);
         }
@@ -289,7 +312,7 @@ public class ContainerQuarrySC extends Container {
 
         @Override
         public boolean canTakeStack(EntityPlayer player) {
-            return ((TileEntityQuarrySC) inventory).allowed(player);
+            return may(player);
         }
     }
 
@@ -328,7 +351,7 @@ public class ContainerQuarrySC extends Container {
 
         @Override
         public boolean canTakeStack(EntityPlayer player) {
-            return quarry.allowed(player);
+            return may(player);
         }
 
         /**

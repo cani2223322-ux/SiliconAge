@@ -43,10 +43,12 @@ import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.IChatComponent;
+import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.DimensionManager;
 
 /**
  * The Singular suit's key functions of stage 2b (docs/plan-singular-armor.md §3-§5): Н10 gravity
@@ -296,6 +298,12 @@ public final class SingularPowersSC {
         SingularProgressSC.keyUsed(p, f);                       // ОЧ5: points for the use
     }
 
+    /** The private field covering the entity that refuses this player, or null: Н8 doesn't take its mobs, Н3 its items. */
+    private static com.sc.tileentity.TileEntityFieldGeneratorSC guardField(EntityPlayer p, Entity e) {
+        return com.sc.ShieldEventHandler.privateFieldAgainst(e.worldObj, p, MathHelper.floor_double(e.posX),
+                MathHelper.floor_double(e.posY + e.height / 2), MathHelper.floor_double(e.posZ));
+    }
+
     private static WorldServer ws(World w) {
         return w instanceof WorldServer ? (WorldServer) w : null;
     }
@@ -452,6 +460,15 @@ public final class SingularPowersSC {
         ArmorFeature f = ArmorFeature.GRAV_GRAB;
         Entity t = lookEntity(p, ArmorFeature.GRAB_RANGE, true, true);
         if (t == null) {
+            ArmorLogicSC.warnArgs(p, "sc.armor.grab.none", 20);
+            return;
+        }
+        com.sc.tileentity.TileEntityFieldGeneratorSC fg = guardField(p, t);
+        if (fg != null) {
+            ArmorLogicSC.warnArgs(p, "sc.field.private", 20, fg.getOwner());
+            return;
+        }
+        if (!BladeLogicSC.claimed(p, t)) {                      // another mod's claim refused it
             ArmorLogicSC.warnArgs(p, "sc.armor.grab.none", 20);
             return;
         }
@@ -628,6 +645,9 @@ public final class SingularPowersSC {
                         fb.accelerationX *= k;
                         fb.accelerationY *= k;
                         fb.accelerationZ *= k;
+                        d.setDouble(SLOWED + "X", fb.accelerationX);  // slowFinish restores only an untouched one
+                        d.setDouble(SLOWED + "Y", fb.accelerationY);
+                        d.setDouble(SLOWED + "Z", fb.accelerationZ);
                         fld.slowed.add(fb);
                     }
                     e.velocityChanged = true;
@@ -650,10 +670,17 @@ public final class SingularPowersSC {
         float back = 1F / ArmorFeature.SLOW_FACTOR;
         for (EntityFireball fb : fld.slowed) {
             if (!fb.isDead) {
-                fb.accelerationX *= back;
-                fb.accelerationY *= back;
-                fb.accelerationZ *= back;
-                fb.getEntityData().removeTag(SLOWED);
+                NBTTagCompound d = fb.getEntityData();
+                if (fb.accelerationX == d.getDouble(SLOWED + "X") && fb.accelerationY == d.getDouble(SLOWED + "Y")
+                        && fb.accelerationZ == d.getDouble(SLOWED + "Z")) {    // hit back meanwhile: already at full speed
+                    fb.accelerationX *= back;
+                    fb.accelerationY *= back;
+                    fb.accelerationZ *= back;
+                }
+                d.removeTag(SLOWED);
+                d.removeTag(SLOWED + "X");
+                d.removeTag(SLOWED + "Y");
+                d.removeTag(SLOWED + "Z");
             }
         }
     }
@@ -776,6 +803,9 @@ public final class SingularPowersSC {
                     }
                 }
             } else if (e instanceof EntityItem || e instanceof EntityXPOrb) {
+                if (guardField(fld.owner, e) != null) {
+                    continue;                                   // someone else's private field
+                }
                 if (d < 0.8) {
                     e.setPosition(fld.x, fld.y - e.height / 2, fld.z);
                     e.motionX = e.motionY = e.motionZ = 0;
@@ -798,7 +828,7 @@ public final class SingularPowersSC {
         }
     }
 
-    /** The collapse: a blow to the mobs within HOLE_COLLAPSE_RADIUS (scaled with the hole), every item at the point; no blocks touched. */
+    /** The collapse: a blow to the mobs within HOLE_COLLAPSE_RADIUS (scaled with the hole), every item in sight (not in another's private field) at the point; no blocks touched. */
     private static void holeFinish(Field fld) {
         double rc = ArmorFeature.HOLE_COLLAPSE_RADIUS * fld.r / ArmorFeature.HOLE_RADIUS;
         double r = fld.r;
@@ -812,7 +842,9 @@ public final class SingularPowersSC {
             if (e instanceof EntityLivingBase && e instanceof IMob && d <= rc) {
                 ((EntityLivingBase) e).hurtResistantTime = 0;
                 hurt(fld.owner, (EntityLivingBase) e, ArmorFeature.HOLE_COLLAPSE_DAMAGE);
-            } else if ((e instanceof EntityItem || e instanceof EntityXPOrb) && d <= r) {
+            } else if ((e instanceof EntityItem || e instanceof EntityXPOrb) && d <= r && guardField(fld.owner, e) == null
+                    && fld.world.func_147447_a(Vec3.createVectorHelper(fld.x, fld.y, fld.z),
+                    Vec3.createVectorHelper(e.posX, e.posY + e.height / 2, e.posZ), false, true, false) == null) {   // not through walls
                 e.setPosition(fld.x, fld.y - e.height / 2, fld.z);
                 e.motionX = e.motionY = e.motionZ = 0;
                 e.velocityChanged = true;
@@ -952,8 +984,8 @@ public final class SingularPowersSC {
         for (Iterator<Field> it = FIELDS.iterator(); it.hasNext(); ) {
             Field fld = it.next();
             if (fld.world != w) {
-                if (now > fld.end + 100) {
-                    it.remove();                                // its world stopped ticking (unloaded)
+                if (DimensionManager.getWorld(fld.world.provider.dimensionId) != fld.world) {
+                    it.remove();                                // its world was unloaded (or the server it ran on stopped)
                 }
                 continue;
             }
@@ -984,6 +1016,34 @@ public final class SingularPowersSC {
                 release(g, false);
             }
         }
+    }
+
+    /**
+     * The player entity remade (a death, leaving the End): К1's boost and weakness go on with the new one - dying
+     * doesn't end the weakness. Н4 stays with the old body (its field stops), so SLOW_END isn't copied.
+     */
+    public static void copyState(EntityPlayer from, EntityPlayer to) {
+        if (from == null || to == null) {
+            return;
+        }
+        NBTTagCompound o = from.getEntityData(), n = to.getEntityData();
+        if (o.hasKey(BOOST_END)) {
+            n.setLong(BOOST_END, o.getLong(BOOST_END));
+        }
+        if (o.hasKey(WEAK_END)) {
+            n.setLong(WEAK_END, o.getLong(WEAK_END));
+        }
+        if (o.hasKey(BOOST_STATE)) {
+            n.setInteger(BOOST_STATE, o.getInteger(BOOST_STATE));
+        }
+    }
+
+    /** The server stopped: no field, held mob, pinned mob or queued key of its worlds is kept. */
+    public static void clearAll() {
+        PENDING.clear();
+        PINNED.clear();
+        GRABS.clear();
+        FIELDS.clear();
     }
 
     /** How many fields (time slowing, black holes, domes) run now - the self-test. */

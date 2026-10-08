@@ -214,9 +214,11 @@ public final class BridgeItemDataSC {
             }
         }
         l.setTag("L", now);
-        if (l.getInteger("Sel") >= now.tagCount()) {
-            l.setInteger("Sel", Math.max(0, now.tagCount() - 1));
+        int sel = l.getInteger("Sel");
+        if (index >= 0 && index < list.tagCount() && index < sel) {
+            sel--;                                       // the links after the removed one moved up: keep the same bridge
         }
+        l.setInteger("Sel", Math.max(0, Math.min(sel, now.tagCount() - 1)));
     }
 
     public static void clearLinks(ItemStack helmet) {

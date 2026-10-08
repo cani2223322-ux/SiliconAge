@@ -129,6 +129,9 @@ public class SCMod {
         com.sc.bridge.BridgeConsentSC.reset();
         com.sc.tileentity.TileEntityBridgeControllerSC.TEST_PLAYERS.clear();
         com.sc.item.BladeSingularSC.clearAll();          // the Singular tools' queued keys, collapses, tethers, per-player state
+        com.sc.item.SingularPowersSC.clearAll();         // the Singular suit's queued keys, pinned / held mobs, fields
+        com.sc.item.DrillEventsSC.INSTANCE.clearAll();   // the drill's queued forgets and tracked falling blocks (no World kept between sessions)
+        com.sc.tileentity.TileEntityMachineSC.clearSmeltCache();   // furnace answers: the next world may bring changed furnace recipes
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */

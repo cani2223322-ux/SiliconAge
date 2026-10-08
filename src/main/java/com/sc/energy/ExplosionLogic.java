@@ -1,6 +1,14 @@
 package com.sc.energy;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.item.EntityXPOrb;
+import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.world.World;
 
 /**
@@ -87,7 +95,39 @@ public final class ExplosionLogic {
                 world.setBlockToAir(te.xCoord, te.yCoord, te.zCoord);
             }
         } else {
+            // what breakBlock throws out (contents, a smelter's xp) waits until the blast has hit
+            // everything around - spawned before it, the blast would destroy it on the spot
+            AxisAlignedBB box = AxisAlignedBB.getBoundingBox(te.xCoord - 1, te.yCoord - 1, te.zCoord - 1,
+                    te.xCoord + 2, te.yCoord + 2, te.zCoord + 2);
+            List before = world.getEntitiesWithinAABB(Entity.class, box);
             world.setBlockToAir(te.xCoord, te.yCoord, te.zCoord);
+            List<Entity> held = new ArrayList<Entity>();
+            for (Object o : world.getEntitiesWithinAABB(Entity.class, box)) {
+                if ((o instanceof EntityItem || o instanceof EntityXPOrb) && !before.contains(o)) {
+                    ((Entity) o).setDead();
+                    held.add((Entity) o);
+                }
+            }
+            world.createExplosion(null, x, y, z, power, breakBlocks);
+            for (Entity e : held) {
+                Entity copy;
+                if (e instanceof EntityItem) {
+                    ItemStack stack = ((EntityItem) e).getEntityItem();
+                    if (stack == null) {
+                        continue;
+                    }
+                    EntityItem item = new EntityItem(world, e.posX, e.posY, e.posZ, stack.copy());
+                    item.delayBeforeCanPickup = ((EntityItem) e).delayBeforeCanPickup;
+                    copy = item;
+                } else {
+                    copy = new EntityXPOrb(world, e.posX, e.posY, e.posZ, ((EntityXPOrb) e).getXpValue());
+                }
+                copy.motionX = e.motionX;
+                copy.motionY = e.motionY;
+                copy.motionZ = e.motionZ;
+                world.spawnEntityInWorld(copy);
+            }
+            return;
         }
         world.createExplosion(null, x, y, z, power, breakBlocks);
     }

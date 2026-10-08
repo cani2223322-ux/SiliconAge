@@ -173,8 +173,9 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             }
             return stack;
         }
+        long now = world.getTotalWorldTime(), at = player.getEntityData().getLong("scWrenchAt");
         if (!world.isRemote && tier == Tier.QUANTUM && modeOf(stack) == MODE_DISMANTLE
-                && player.getEntityData().getLong("scWrenchAt") != world.getTotalWorldTime()) {   // not the click just used on a block
+                && (now - at > 3 || now < at)) {   // not the click just used on a block (its air packet may land a tick or two later)
             MovingObjectPosition hit = lookedAt(world, player, REMOTE_RANGE);
             if (hit != null && hit.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
                     && dismantlable(world, hit.blockX, hit.blockY, hit.blockZ)) {
@@ -352,6 +353,9 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         if (world.isRemote || modeOf(stack) != MODE_ROTATE) {
             return false;
         }
+        if (com.sc.ShieldEventHandler.privateFor(world, player, x, y, z)) {
+            return true;                                  // someone else's private field: no turning (blocks without a TE pass its click guard)
+        }
         Block block = world.getBlock(x, y, z);
         return block.rotateBlock(world, x, y, z, ForgeDirection.getOrientation(side));
     }
@@ -527,8 +531,8 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             while (want > 0) {
                 int slot = upgradeSlotFor(m, type);
                 int from = inventorySlotWith(p, type);
-                if (slot < 0 || from < 0) {
-                    missing += want;
+                if (slot < 0 || from < 0 || !m.isItemValidForSlot(slot, p.inventory.getStackInSlot(from))) {
+                    missing += want;                      // none left / no room / this machine refuses that upgrade
                     break;
                 }
                 ItemStack there = m.getStackInSlot(slot);

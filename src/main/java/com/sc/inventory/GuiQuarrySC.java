@@ -255,7 +255,7 @@ public class GuiQuarrySC extends GuiContainer {
     }
 
     private void refresh() {
-        boolean may = quarry.allowed(mc.thePlayer);
+        boolean may = container.may(mc.thePlayer);
         boolean card = quarry.usesCard();
         for (Object o : buttonList) {
             GuiButton b = (GuiButton) o;
@@ -543,7 +543,7 @@ public class GuiQuarrySC extends GuiContainer {
     /** The sliders' colour goes to the server when it changes (checked each frame, sent at most every few ticks). */
     private void sendSliders() {
         int c = sliderColor();
-        if (c < 0 || c == lastSent || !quarry.allowed(mc.thePlayer)) {
+        if (c < 0 || c == lastSent || !container.may(mc.thePlayer)) {
             return;
         }
         int now = targetPlane ? quarry.getColorPlane() : quarry.getColorFrame();
@@ -641,7 +641,9 @@ public class GuiQuarrySC extends GuiContainer {
             } else {
                 quarryScene(x + 104, y + 40, 100, 88, t);
             }
-            card(x + 110, y + 164, 92, 16);                      // the head: shown, not a button
+            if (!exo) {
+                card(x + 110, y + 164, 92, 16);                  // the head: shown, not a button (the rig has none)
+            }
             if (exo) {
                 GuiHoloSC.bar(x + 15, y + 199, 186, 4, (float) quarry.getWater().getFluidAmount() / Math.max(1, quarry.waterCapacity()),
                         36, 0xFF4A8AE8);
@@ -1015,7 +1017,6 @@ public class GuiQuarrySC extends GuiContainer {
         small(Lang.tr("sc.quarrygui.rig.line1"), 14, 96, 88, DIM);
         small(Lang.tr("sc.quarrygui.rig.line2"), 14, 104, 88, DIM);
         chunksLine(112);
-        headCard();
         caption("sc.quarrygui.cap.wash", 14, 186);
         small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 208, 188, DIM);
         owner();
@@ -1040,7 +1041,7 @@ public class GuiQuarrySC extends GuiContainer {
     }
 
     private void owner() {
-        if (!quarry.allowed(mc.thePlayer)) {
+        if (!container.may(mc.thePlayer)) {
             small(Lang.tr("sc.quarrygui.owneronly"), 14, 230, 188, GuiHoloSC.BAD);
         }
         small(Lang.tr("sc.fieldgui.owner", quarry.getOwner().isEmpty() ? "-" : quarry.getOwner()), 14, 242, 188, 0x465A6E);

@@ -90,6 +90,17 @@ public class CommonEventHandler {
         }
     }
 
+    /**
+     * A respawn (after a death, or leaving the End): the client's copy of the function cooldowns and
+     * states is cleared and sent again - the HUD drops the dead body's stale values.
+     */
+    @SubscribeEvent
+    public void onRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (event.player != null && !event.player.worldObj.isRemote) {
+            com.sc.util.SingularCooldowns.syncAll(event.player);
+        }
+    }
+
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END || event.player == null) {

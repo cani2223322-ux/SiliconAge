@@ -93,7 +93,7 @@ public class ItemEntangledCrystalSC extends Item {
                     player.dropPlayerItemWithRandomChoice(h, false);
                 }
             }
-            world.playSoundAtEntity(player, Reference.ASSETS + ":battery.mode", 0.6F * com.sc.util.ConfigSC.soundVolume, 0.7F);
+            world.playSoundAtEntity(player, Reference.ASSETS + ":battery.mode", 0.6F, 0.7F);
             player.inventoryContainer.detectAndSendChanges();
         }
         return stack;

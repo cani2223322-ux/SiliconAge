@@ -21,8 +21,9 @@ import net.minecraftforge.fluids.FluidStack;
  * Simplifications (§14 itself is already TODO-filled by analogy, see the design doc):
  * - Chlor-Alkali Electrolyzer only outputs H2 (feeds CVD Chamber/GaAs, already built in step
  *   5) - Cl2 and NaOH aren't modelled yet since nothing in the mod consumes them so far.
- * - Air Separator only outputs O2+Ar (the two gases already consumed elsewhere in the mod,
- *   §3/§13) - N2 and He aren't modelled yet for the same reason.
+ * - Air Separator's air run only outputs O2+Ar (the two gases already consumed elsewhere in the
+ *   mod, §3/§13); He and Kr come from its water-cooled cryogenic run (ModRecipesComponents).
+ *   N2 isn't modelled - nothing consumes it.
  * - Refinery's Tar byproduct isn't modelled (pure waste, nothing consumes it).
  * - Fluid Cell Filler's "any empty cell" concept is simplified to one concrete pairing
  *   (vanilla Bucket -> Liquid He Cell) rather than a generic cell-filling system.

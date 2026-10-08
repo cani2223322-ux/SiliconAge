@@ -98,7 +98,7 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
             Page p = new Page(s);
             p.text(Lang.tr("sc.nei.obtain.world"));
             p.text(Lang.tr("sc.manual.ores.where", OreGenSC.LIMESTONE_MIN_Y, OreGenSC.LIMESTONE_MAX_Y, OreGenSC.LIMESTONE_VEIN_SIZE,
-                    OreGenSC.LIMESTONE_VEINS_PER_CHUNK));
+                    OreGenSC.LIMESTONE_VEINS_PER_CHUNK) + com.sc.block.ItemBlockOreSC.dimensionsSuffix());
             p.text(Lang.tr("sc.manual.ores.biomes", Lang.tr("sc.manual.ores.anybiome")));
             p.text(Lang.tr("sc.manual.ores.tool", Lang.tr("sc.manual.ores.tool.stone")));
             p.text(Lang.tr("sc.nei.obtain.limestone"));
@@ -138,7 +138,7 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (g.veinsPerChunk <= 0) {
             p.text(Lang.tr("sc.nei.obtain.off"));
         } else {
-            p.text(Lang.tr("sc.manual.ores.where", g.minY, g.maxY, g.veinSize, g.veinsPerChunk));
+            p.text(Lang.tr("sc.manual.ores.where", g.minY, g.maxY, g.veinSize, g.veinsPerChunk) + com.sc.block.ItemBlockOreSC.dimensionsSuffix());
         }
         p.text(Lang.tr("sc.manual.ores.biomes", BookContent.biomes(ore)));
         p.text(Lang.tr("sc.manual.ores.tool", Lang.tr("sc.manual.ores.tool." + ore.tool.name().toLowerCase(java.util.Locale.ROOT))));

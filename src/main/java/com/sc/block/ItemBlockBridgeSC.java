@@ -44,6 +44,9 @@ public class ItemBlockBridgeSC extends ItemBlock {
         if (nbt != null && nbt.getLong("BridgeEU") > 0) {
             list.add(Lang.tr("sc.bridge.tooltip.charge", BridgeMathSC.group(nbt.getLong("BridgeEU")), BridgeMathSC.group(BridgeMathSC.CAPACITOR_EU)));
         }
+        if (nbt != null && nbt.getInteger("EnergySC") > 0) {
+            list.add(Lang.tr("sc.machine.tooltip.energy", BridgeMathSC.group(nbt.getInteger("EnergySC"))));
+        }
         if (nbt != null && nbt.hasKey("BridgeTanks")) {
             int[] t = nbt.getIntArray("BridgeTanks");
             for (int i = 0; i < t.length && i < BridgeMathSC.GASES.length; i++) {

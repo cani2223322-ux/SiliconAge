@@ -1,5 +1,7 @@
 package com.sc.client;
 
+import java.lang.ref.WeakReference;
+
 import org.lwjgl.opengl.GL11;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -7,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.world.World;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.common.MinecraftForge;
 
@@ -18,6 +21,8 @@ public final class BridgeHighlightSC {
 
     private static int[] pos;
     private static long until;
+    /** The world the position belongs to: a portal / server change drops the outline. */
+    private static WeakReference<World> world;
 
     private BridgeHighlightSC() {
     }
@@ -30,15 +35,23 @@ public final class BridgeHighlightSC {
         if (p != null && p.length == 3) {
             pos = p.clone();
             until = System.currentTimeMillis() + Math.max(1, ticks) * 50L;
+            world = new WeakReference<World>(Minecraft.getMinecraft().theWorld);
         }
     }
 
     @SubscribeEvent
     public void render(RenderWorldLastEvent e) {
         if (pos == null || System.currentTimeMillis() > until) {
+            pos = null;
+            world = null;
             return;
         }
         Minecraft mc = Minecraft.getMinecraft();
+        if (mc.theWorld == null || world == null || world.get() != mc.theWorld) {
+            pos = null;
+            world = null;
+            return;
+        }
         EntityLivingBase v = mc.renderViewEntity;
         if (v == null) {
             return;
@@ -55,8 +68,10 @@ public final class BridgeHighlightSC {
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GL11.glLineWidth(3F);
-        float a = 0.6F + 0.4F * (float) Math.sin(System.currentTimeMillis() / 150.0);
-        RenderGlobal.drawOutlinedBoundingBox(box, ((int) (a * 255) << 24) | 0xFF3030);
+        float a = 0.8F + 0.2F * (float) Math.sin(System.currentTimeMillis() / 150.0);
+        // -1: the tessellator keeps the GL colour (an int colour goes through setColorOpaque_I and loses alpha)
+        GL11.glColor4f(1F, 0x30 / 255F, 0x30 / 255F, a);
+        RenderGlobal.drawOutlinedBoundingBox(box, -1);
         GL11.glPopAttrib();
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
