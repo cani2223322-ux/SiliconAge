@@ -16,7 +16,7 @@
 
 ### Возможности
 - **Производство полупроводников:** цепочка от кварца и руд до кремниевых пластин, кристаллов, чипов и контроллеров. 32 машины уровней LV–IV, улучшения машин, брак и побочные продукты.
-- **Руды и переработка:** 16 руд, дробление, промывка, центрифуга, химия и жидкости; ванильные руды тоже идут в машины (железо и золото — 2 слитка с руды). **22 блока металлов** из слитков мода (9 слитков ↔ блок, основание маяка; прокатный станок прессует блок из слитков любого мода).
+- **Руды и переработка:** 16 руд, дробление, промывка, центрифуга, химия и жидкости; ванильные руды тоже идут в машины (железо и золото — около 2,5 слитка с руды: мойка и центрифуга иногда дают лишнюю пыль); у побочных металлов (германий, индий, цинк, палладий) есть свои рецепты. **22 блока металлов** из слитков мода (9 слитков ↔ блок, основание маяка; прокатный станок прессует блок из слитков любого мода).
 - **Электропечь (LV) и индукционная печь (MV):** плавят всё, что обычная печь, без топлива; индукционная — два предмета сразу и разогрев до x3; опыт копится в печи.
 - **Электролиз и тяжёлая вода:** водород и кислород из воды, тяжёлая вода и дейтерий для термоядерных реакторов.
 - **Энергия LV → SV:** восемь уровней напряжения — LV, MV, HV, EV, **IV**, **QV (Квант)**, **XV (Экзо)** и **SV (Сингулярный)** до 131 072 EU/t.
@@ -62,7 +62,7 @@
   - **Крупицы** и **сгусток сингулярности**: очки уровня бура, оплата модернизации в станции, 100 мБ сингулярной материи в Компрессоре.
 - **Генератор поля:** кластер до 8 узлов, 5 форм поля.
   - Защита от мобов, снарядов и взрывов.
-  - Запрет спавна, приватная зона со списком доступа (защищены и животные, рамки, вагонетки), лечение союзников; поле нельзя развернуть поверх чужого.
+  - Запрет спавна, приватная зона со списком доступа (защищены и животные, рамки, вагонетки; переключатель «Запретить механизмы» — двери, рычаги, кнопки), лечение союзников; поле нельзя развернуть поверх чужого, даже выключенного.
   - **Беспроводная зарядка** предметов мода, IC2 и RF: модуль усилителя, приоритет, резерв буфера, искры.
   - Модули энергонакопителя и трансформатора, управление редстоуном, схема поля в экране генератора.
   - Вкладка **«Зона»**: радиус, высота, смещение, центр и форма поля с предпросмотром; граница, бегущий пунктир, анимация, яркость, лучи между узлами, гудение, три цвета RGB и 24 готовых цвета.
@@ -72,7 +72,8 @@
 - **Энергонакопители:** компаратор, выход поворачивается ключом, слот разрядки, модули (трансформатор, объём, форсаж, **расширитель выхода** — до 3 выходных граней, **адаптивный трансформатор** — повышает выход до уровня самого слабого потребителя, **универсальный трансформатор**), до 4 слотов зарядки на старших уровнях.
 - **Жидкости:** вёдра для всех 22 жидкостей мода, заливка и слив ведром или капсулой по машине, модуль расширенного бака и очистка баков за энергию.
 - **Иллюстрированный справочник инженера:** 14 разделов плитками, больше 175 статей с иконками предметов, сетками крафта, рецептами машин, картами руд, схемами мультиблоков и рисунками; **поиск по всему тексту** (Ctrl+F или «/», список найденного с подсветкой), **закладки**, «первые шаги» с галочками. **«Путь развития»** с маршрутами по уровням энергии, реакторам и броне, раздел **«Компоненты»** (все детали и материалы: где делаются и куда идут), **«Справочная»** (клавиши, совместимость, жидкости и газы, все модули), отдельный раздел о мосте. У каждого предмета мода есть статья. Выдаётся при первом крафте любого предмета мода.
-- **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое); на сервере настройки приходят игрокам с сервера; список измерений, где генерируются руды (`worldgen.oreDimensions`). Блоки с содержимым ломаются только киркой — рукой ничего не потеряешь.
+- **Звуки** работающих машин и генераторов, **WAILA** для всех блоков, **настройки баланса** в конфиге (скорость и расход машин, ёмкости, дальность беспроводной энергии и другое); на сервере настройки приходят игрокам с сервера; список измерений, где генерируются руды (`worldgen.oreDimensions`). Блоки с содержимым ломаются только киркой — рукой ничего не потеряешь; карьер, генератор поля, беспроводные блоки и преобразователь с владельцем ломает только владелец (и оператор). Снятые ключом машины, генераторы и накопители сохраняют улучшения и режимы, а крафт улучшенного блока переносит заряд, баки и настройки.
+- **Настройки сервера:** раздел `energy` — взрывы машин от перегрузки (можно выключить: блок только дымит), сила взрыва, разрушение блоков; `bridge` — мосты вкл/выкл, переходы в другие измерения, множитель цены; `singular` — множители EU, газов, времени и очков Сингулярной брони и станции; `balance.ic2CableCurrentLimit` — кабели под IC2 горят и от превышения тока. Клиентские настройки (звук, проверка обновлений, сообщение о сайте) сервер не перезаписывает.
 
 ### Управление
 | Клавиша | Действие |
@@ -89,7 +90,7 @@
 
 ### Требования и установка
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (или новее для 1.7.10), Java 8.
-2. Скачайте `SiliconAgeBeta-0.1.10.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
+2. Скачайте `SiliconAgeBeta-0.2.0.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
 
 ### Моды, которые помогут (необязательны)
 | Мод | Что даёт вместе с Silicon Age |
@@ -105,6 +106,8 @@
 **Сборки с UniDict** (объединение металлов): слитки и блоки мода заменяются вариантом главного мода сборки — все рецепты мода их принимают, блоки металлов мода прессуются в прокатном станке, реакторы строятся из свинца любого мода. Крафты мода проверены против большой сборки (Thermal, Ender IO, IC2, AE2, Forestry и др.) — пересечений нет.
 
 **Проверка обновлений:** раз за запуск игры мод запрашивает номер последней версии с silicon-age.site и, если вышла новая, пишет об этом в чат (на сервере — операторам и в лог). О игроке ничего не отправляется; выключается в конфиге: `updates.check = false`.
+
+**Сайт мода — [silicon-age.site](https://silicon-age.site/):** гайды для новичков, справочник по всем машинам, генераторам, броне и мостам, калькулятор, сравнение техники, карта руд, все настройки конфига и FAQ. При входе в мир мод напоминает о нём в чате со ссылками; выключается в конфиге: `site.message = false`.
 
 **Для администраторов серверов:** перед осмотром сети ключом, переходом через мост, чутьём Сингулярной брони и включением приватной зоны генератора поля Silicon Age спрашивает моды приватов через `BlockEvent.BreakEvent` от ненастоящего игрока `com.sc.handler.NetViewNetSC$ProbePlayerSC` (FakePlayer с профилем игрока или владельца). Блок при этом не ломается — логгерам, квестам и статистике стоит игнорировать такие события (`instanceof ProbePlayerSC` / `NetViewNetSC.ProbePlayerSC.isProbe`). Проверку для поля можно выключить в конфиге: `balance.fieldClaimCheck = false`.
 
@@ -132,7 +135,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 
 ### Features
 - **Semiconductor fabrication:** a chain from quartz and ores to silicon wafers, crystals, chips and controllers. 32 machines from LV to IV, machine upgrades, defects and by-products.
-- **Ores and processing:** 16 ores, crushing, washing, centrifuge, chemistry and fluids; vanilla ores go into the machines too (iron and gold - 2 ingots per ore). **22 metal blocks** from the mod's ingots (9 ingots ↔ a block, a beacon base; the Rolling Machine presses a block from any mod's ingots).
+- **Ores and processing:** 16 ores, crushing, washing, centrifuge, chemistry and fluids; vanilla ores go into the machines too (iron and gold - about 2.5 ingots per ore: the washer and centrifuge sometimes give an extra dust); by-product metals (germanium, indium, zinc, palladium) have their own recipes. **22 metal blocks** from the mod's ingots (9 ingots ↔ a block, a beacon base; the Rolling Machine presses a block from any mod's ingots).
 - **Electric Furnace (LV) and Induction Furnace (MV):** they smelt everything a furnace does, without fuel; the induction one takes two items at once and heats up to x3; smelting XP is stored in the furnace.
 - **Electrolysis and heavy water:** hydrogen and oxygen from water, heavy water and deuterium for the fusion reactors.
 - **Energy LV → SV:** eight voltage tiers - LV, MV, HV, EV, **IV**, **QV (Quantum)**, **XV (Exo)** and **SV (Singular)**, up to 131,072 EU/t.
@@ -178,7 +181,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
   - **Crumbs** and the **Singular Clot**: drill level points, paying for modernisation in the station, 100 mB of Singular Matter in the Compressor.
 - **Field generator:** a cluster of up to 8 nodes, 5 field shapes.
   - Protection from mobs, projectiles and explosions.
-  - No spawning, a private zone with an access list (animals, frames and carts protected too), healing of allies; a field can't be deployed over someone else's.
+  - No spawning, a private zone with an access list (animals, frames and carts protected too; a "No mechanisms" switch - doors, levers, buttons), healing of allies; a field can't be deployed over someone else's, even a switched-off one.
   - **Wireless charging** of the mod's, IC2 and RF items: a charge booster upgrade, priority, a buffer reserve, sparks.
   - Energy storage and transformer upgrades, redstone control, a map of the field on its screen.
   - A **Zone** tab: the field's radius, height, offset, centre and shape with a preview; outline, running dashes, animation, brightness, node beams, hum, three RGB colours and 24 ready colours.
@@ -188,7 +191,8 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 - **Energy storages:** comparator output, the output face turned with a wrench, a discharge slot, upgrades (transformer, capacity, overdrive, **output splitter** - up to 3 output faces, **adaptive transformer** - raises the output up to the weakest consumer's tier, **universal transformer**), up to 4 charge slots on the higher tiers.
 - **Fluids:** buckets for all 22 of the mod's fluids, filling and draining machines with a bucket or a cell, a tank extension upgrade and clearing tanks for energy.
 - **Illustrated engineer's handbook:** 14 chapter tiles, 175+ articles with item icons, crafting grids, machine recipes, ore cards, multiblock layouts and pictures; **full-text search** (Ctrl+F or "/", a result list with highlights), **bookmarks**, "first steps" with ticks. A **Progression** chapter with routes through the energy tiers, reactors and suits, a **Components** chapter (every part and material: where it is made and what it goes into), a **Reference** chapter (keys, compatibility, fluids and gases, every module), a chapter on the bridge. Every item of the mod has an article. Given on the first craft of any item of the mod.
-- **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more); on a server the players get the server's settings; the list of dimensions where ores generate (`worldgen.oreDimensions`). Blocks that hold things break only with a pickaxe - nothing is lost by hand.
+- **Sounds** for working machines and generators, **WAILA** for every block, **balance settings** in the config (machine speed and energy, capacities, wireless range and more); on a server the players get the server's settings; the list of dimensions where ores generate (`worldgen.oreDimensions`). Blocks that hold things break only with a pickaxe - nothing is lost by hand; an owned quarry, field generator, wireless block or converter can be broken only by its owner (and ops). Machines, generators and storage dismantled with a wrench keep their upgrades and modes, and crafting an upgraded block carries the charge, tanks and settings.
+- **Server settings:** section `energy` - machine overload explosions (can be off: the block just smokes), blast power, block damage; `bridge` - bridges on/off, trips to other dimensions, a cost multiplier; `singular` - EU, gas, time and score multipliers for the Singular armour and station; `balance.ic2CableCurrentLimit` - under IC2 cables burn from too much current too. Client options (sound, update check, the site message) are never overwritten by the server.
 
 ### Controls
 | Key | Action |
@@ -205,7 +209,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 
 ### Requirements and installation
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (or newer for 1.7.10), Java 8.
-2. Download `SiliconAgeBeta-0.1.10.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
+2. Download `SiliconAgeBeta-0.2.0.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
 
 ### Mods that help (optional)
 | Mod | What it adds with Silicon Age |
@@ -221,6 +225,8 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 **UniDict packs** (unified metals): the mod's ingots and blocks are swapped for the pack's main mod's variant - every recipe of the mod takes them, the mod's metal blocks are pressed in the Rolling Machine, reactors are built of any mod's lead. The mod's recipes are checked against a large pack (Thermal, Ender IO, IC2, AE2, Forestry and more) - no clashes.
 
 **Update check:** once a game session the mod asks silicon-age.site for the latest version number and, when a newer one is out, says so in the chat (on a server - to operators and in the log). Nothing about the player is sent; turn it off in the config: `updates.check = false`.
+
+**The mod's site - [silicon-age.site](https://silicon-age.site/):** beginner guides, a handbook on every machine, generator, armour and bridge, a calculator, vehicle comparison, an ore map, every config option and a FAQ. On joining a world the mod mentions it in the chat with links; turn it off in the config: `site.message = false`.
 
 **For server admins:** before a wrench network view, a bridge trip, the Singular armour's senses and switching on a field generator's private zone, Silicon Age asks claim mods via a `BlockEvent.BreakEvent` posted by a fake player, `com.sc.handler.NetViewNetSC$ProbePlayerSC` (a FakePlayer with the player's or the owner's profile). Nothing is broken - break loggers, quest and stats mods should ignore such events (`instanceof ProbePlayerSC` / `NetViewNetSC.ProbePlayerSC.isProbe`). The field's check can be turned off in the config: `balance.fieldClaimCheck = false`.
 
