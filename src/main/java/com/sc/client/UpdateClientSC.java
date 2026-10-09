@@ -27,6 +27,11 @@ public final class UpdateClientSC {
     private UpdateClientSC() {
     }
 
+    /** Nothing more will come into the chat this session (said, nothing to say, or the check is off) - SiteMessageSC goes after it. */
+    public static boolean settled() {
+        return INSTANCE.told || !com.sc.util.ConfigSC.updateCheck;
+    }
+
     @SubscribeEvent
     public void onClientTick(TickEvent.ClientTickEvent e) {
         if (told || e.phase != TickEvent.Phase.END) {

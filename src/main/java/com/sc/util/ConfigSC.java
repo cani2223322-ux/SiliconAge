@@ -65,6 +65,9 @@ public final class ConfigSC {
     @com.sc.handler.ConfigSyncSC.ClientOnly
     public static boolean updateCheck = true;
     public static String updateChannel = "beta", updateUrl = UpdateCheckSC.DEFAULT_URL;
+    /** «У мода есть свой сайт»: a chat line with links on every world / server join (SiteMessageSC). */
+    @com.sc.handler.ConfigSyncSC.ClientOnly
+    public static boolean siteMessage = true;
     /** Bridges (section "bridge", docs/plan-ground-bridge.md §10): on at all; Space Bridge trips to other dimensions; EU and gases x this. */
     public static boolean bridgeEnabled = true, bridgeCrossDimension = true;
     public static float bridgeCostMultiplier = 1F;
@@ -117,6 +120,9 @@ public final class ConfigSC {
                     "beta = every release, stable = only stable ones / beta - обо всех версиях, stable - только о стабильных",
                     new String[]{"beta", "stable"});
             updateUrl = config.getString("url", up, UpdateCheckSC.DEFAULT_URL, "Where the version file is / Адрес файла версии");
+            siteMessage = config.getBoolean("message", "site", true,
+                    "On joining a world or server, tell in the chat about the mod's site (guides, handbook, calculator) with links"
+                    + " / При входе в мир или на сервер писать в чате о сайте мода (гайды, справочник, калькулятор) со ссылками");
             machineSounds = config.getBoolean("machines", "sounds", true,
                     "Working machines, generators and quarries make their sound");
             soundVolume = num(config, "volume", "sounds", 1F, 0F, 1F,

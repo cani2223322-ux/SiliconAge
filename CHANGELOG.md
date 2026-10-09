@@ -6,6 +6,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- **Сайт мода в чате:** при каждом входе в мир или на сервер в чате (только у вас) появляется строка о сайте silicon-age.site — что там есть — и ссылки [Открыть сайт] [Гайды] [Справочник]. Отключается в конфиге: `site.message = false`.
 - **Доработки по итогам проверки: 134 пункта** (полный список — `docs/nedorabotki-2026-10-09-sdelano.md`).
   - *Баланс:* газовая турбина тратит 2 мБ водорода в тик; стабильность Токамака XV — восстановление минус штраф форсажа, без дейтерия он тратит гелий, бланкет изнашивается по мощности, сломанный горящий XV гаснет; жидкотопливные генераторы дожигают остаток бака; мойка (15%) и центрифуга (10%) иногда дают лишнюю пыль — около 2,5 слитка с руды; удача карьера работает и на «блочные» руды; побочные металлы (германий, индий, цинк, палладий) получили рецепты; первый выбор ветки нагрудника бесплатный; рывок Экзо в воздухе — один раз до приземления.
   - *Новые настройки конфига:* раздел energy (взрывы машин, сила взрыва, разрушение блоков), bridge (включение, межпространственные переходы, множитель цены), singular (множители EU, газов, времени и очков), fieldClaimCheck, ic2CableCurrentLimit; клиентские настройки больше не перезаписываются сервером.
@@ -24,6 +25,7 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - **Проверка обновлений:** раз за запуск игры мод спрашивает у сайта (silicon-age.site/version.json) номер последней версии и, если вышла новая, пишет в чат «Доступна новая версия … [Скачать] [Что нового]» и до трёх пунктов «что нового» на языке игрока; на выделенном сервере — операторам при входе и в лог. Без сети молчит, игру не задерживает. Конфиг: `updates.check`, `updates.channel` (beta / stable), `updates.url`.
 
 ### English
+- **The mod's site in the chat:** on every world or server join the chat (yours only) tells about silicon-age.site - what's there - with [Open the site] [Guides] [Handbook] links. Off in the config: `site.message = false`.
 - **Improvements from the audit: 134 items** (full list in `docs/nedorabotki-2026-10-09-sdelano.md`).
   - *Balance:* the gas turbine burns 2 mB of hydrogen a tick; Tokamak XV stability is recovery minus the overclock penalty, without deuterium it still burns helium, the blanket wears by power, a burning XV that is broken goes out; liquid-fuel generators burn the tank to the end; the washer (15%) and centrifuge (10%) sometimes give an extra dust - about 2.5 ingots per ore; quarry Fortune works on block-dropping ores too; by-product metals (germanium, indium, zinc, palladium) got recipes; the first chestplate branch is free; the Exo air dash is once per landing.
   - *New config options:* section energy (machine explosions, blast power, block damage), bridge (on/off, cross-dimension, cost multiplier), singular (EU, gas, time and score multipliers), fieldClaimCheck, ic2CableCurrentLimit; client-only options are no longer overwritten by the server.
