@@ -55,8 +55,8 @@ import net.minecraftforge.common.DimensionManager;
  * press, Н8 gravity grab, Н4 time slowing, Н3 black hole, Н17 gravity dome, К1 "Singularity" mode -
  * and the К1 multipliers the other Singular functions ask (singularBoost, rangeMul, costMul).
  *
- * Server only. The key's network message only queues the press (the network thread must not touch
- * the world); worldTick runs it and every effect that lasts (pinned mobs, the held mob, the fields)
+ * Server only. The key's network message only queues the press (run on the next world tick, capped
+ * per player); worldTick runs it and every effect that lasts (pinned mobs, the held mob, the fields)
  * on the server thread. Nothing here breaks blocks.
  */
 public final class SingularPowersSC {
@@ -79,7 +79,7 @@ public final class SingularPowersSC {
     private static final Map<UUID, Grab> GRABS = new HashMap<UUID, Grab>();
     /** Н4, Н3, Н17 while they last. */
     private static final List<Field> FIELDS = new ArrayList<Field>();
-    /** Key presses from the network thread, run on the server thread. */
+    /** Key presses from the packet handler, run on the next world tick (capped per player). */
     private static final ConcurrentLinkedQueue<Object[]> PENDING = new ConcurrentLinkedQueue<Object[]>();
 
     private SingularPowersSC() {
@@ -171,11 +171,18 @@ public final class SingularPowersSC {
 
     // ================================================================== the keys
 
-    /** From the network thread: the key of a Singular key function was pressed - queued for the server thread. */
+    /** From the packet handler (already the server thread): queued for the next world tick, at most BladeSingularSC.QUEUE_MAX a player. */
     public static void key(EntityPlayerMP p, ArmorFeature f) {
-        if (p != null && f != null) {
-            PENDING.add(new Object[]{p, f});
+        if (p == null || f == null) {
+            return;
         }
+        int mine = 0;
+        for (Object[] k : PENDING) {
+            if (k[0] == p && ++mine >= BladeSingularSC.QUEUE_MAX) {
+                return;                                         // a flood of packets: the rest is dropped
+            }
+        }
+        PENDING.add(new Object[]{p, f});
     }
 
     private static void runKey(EntityPlayerMP p, ArmorFeature f) {
@@ -327,14 +334,17 @@ public final class SingularPowersSC {
         }
         payAll(p, f, g, mb, ArmorFeature.PRESS_EU, 0F);
         double r = ArmorFeature.PRESS_RADIUS * rangeMul(singularBoost(p));
-        long end = p.worldObj.getTotalWorldTime() + ArmorFeature.PRESS_TICKS;
+        long now = p.worldObj.getTotalWorldTime();
         int n = 0;
         for (EntityLivingBase e : ArmorLogicSC.mobsAround(p, r)) {
-            PINNED.put(e, end);
-            e.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, ArmorFeature.PRESS_TICKS, 4));
+            int ticks = boss(e) ? ArmorFeature.PRESS_TICKS / 2 : ArmorFeature.PRESS_TICKS;     // СБ-2: a boss half as long
+            PINNED.put(e, now + ticks);
+            e.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, ticks, 4));
             e.motionX = 0;
             e.motionZ = 0;
-            e.motionY = -0.8;
+            if (!boss(e)) {
+                e.motionY = -0.8;                               // a boss isn't pulled down
+            }
             e.velocityChanged = true;
             particles(p.worldObj, "largesmoke", e.posX, e.posY + 0.2, e.posZ, 6, 0.3, 0.02);
             n++;
@@ -362,6 +372,9 @@ public final class SingularPowersSC {
     private static void pinTick(EntityLivingBase e) {
         e.motionX = 0;
         e.motionZ = 0;
+        if (boss(e)) {
+            return;                                             // СБ-2: held in place, a flying boss not pulled down
+        }
         if (!e.onGround) {
             e.motionY = Math.min(e.motionY, -0.5);             // flying ones come down too
         } else if (e.motionY > 0) {
@@ -407,6 +420,15 @@ public final class SingularPowersSC {
             }
         }
         return found;
+    }
+
+    /**
+     * A boss (the Wither, the Dragon, another mod's IBossDisplayData): Н8 doesn't take it, СБ-2 the
+     * rest act on it weakened - Н10 half as long without pulling it down, Н4 slows it less, Н3 only
+     * hurts it (no pull), Н17 pushes it out half as hard.
+     */
+    static boolean boss(Entity e) {
+        return e instanceof IBossDisplayData;
     }
 
     /** Н8 takes a mob or an animal - not a player, not a boss. */
@@ -496,7 +518,8 @@ public final class SingularPowersSC {
         EntityPlayer p = g.p;
         EntityLiving e = g.e;
         if (p.isDead || !e.isEntityAlive() || e.worldObj != p.worldObj || p.getDistanceSqToEntity(e) > 16 * 16
-                || !SingularLevel.isSingular(ArmorGasSC.worn(p, ArmorGasSC.CHEST))) {      // СБ-5: the chestplate taken off - let go
+                || !SingularLevel.isSingular(ArmorGasSC.worn(p, ArmorGasSC.CHEST))      // СБ-5: the chestplate taken off - let go
+                || !ArmorLogicSC.active(p, ArmorFeature.GRAV_GRAB)) {                  // switched off, overheated, emergency, no charge
             release(g, false);
             return;
         }
@@ -624,13 +647,16 @@ public final class SingularPowersSC {
             }
             if (e instanceof EntityLivingBase && !(e instanceof EntityPlayer)) {
                 EntityLivingBase l = (EntityLivingBase) e;
+                boolean boss = boss(l);
                 if (refresh) {
-                    l.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, 25, 4));    // -75%: about x0.2 on foot
+                    // -75%: about x0.2 on foot; СБ-2: a boss -30%
+                    l.addPotionEffect(new PotionEffect(Potion.moveSlowdown.id, 25, boss ? 1 : 4));
                 }
                 if (!l.onGround) {                                                     // flying, falling, knocked back
-                    l.motionX *= 0.6;
-                    l.motionZ *= 0.6;
-                    l.motionY *= 0.6;
+                    double k = boss ? 0.85 : 0.6;
+                    l.motionX *= k;
+                    l.motionZ *= k;
+                    l.motionY *= k;
                 }
             } else if (projectile(e) && !stuckInGround(e) && !ArmorLogicSC.shooterIs(e, p)) {
                 NBTTagCompound d = e.getEntityData();
@@ -793,8 +819,8 @@ public final class SingularPowersSC {
                 continue;
             }
             if (e instanceof EntityLivingBase && e instanceof IMob) {
-                if (d > 0.3) {
-                    pull(e, dx, dy, dz, d, r, 0.05, 0.6);
+                if (d > 0.3 && !boss(e)) {
+                    pull(e, dx, dy, dz, d, r, 0.05, 0.6);              // СБ-2: a boss is only hurt, not pulled in
                 }
                 if (age % 10 == 0) {
                     float dmg = holeDamage(d, r, age, ArmorFeature.HOLE_TICKS);
@@ -891,9 +917,10 @@ public final class SingularPowersSC {
                         dx = 1;
                         h = 1;
                     }
-                    e.motionX = dx / h * 0.6;
-                    e.motionZ = dz / h * 0.6;
-                    e.motionY = Math.max(e.motionY, 0.2);
+                    double push = boss(e) ? 0.3 : 0.6;          // СБ-2: a boss half as hard
+                    e.motionX = dx / h * push;
+                    e.motionZ = dz / h * push;
+                    e.motionY = Math.max(e.motionY, boss(e) ? 0.1 : 0.2);
                     e.velocityChanged = true;
                 }
             } else if (projectile(e) && d < r + 1 && !stuckInGround(e) && !ArmorLogicSC.shooterIs(e, fld.owner)) {

@@ -51,6 +51,7 @@ public class ItemLeadSuitSC extends ItemArmor {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add("§a" + Lang.tr("sc.leadsuit.tooltip.prot", com.sc.util.ConfigSC.leadSuitPartProtection));
         list.add("§c" + Lang.tr("sc.leadsuit.tooltip.weight", (int) Math.round(LeadSuitSC.SPEED_PER_PART * 100)));
-        com.sc.util.TooltipSC.more(list, Lang.tr("sc.leadsuit.tooltip.full"), null);
+        int full = 4 * Math.max(0, Math.min(25, com.sc.util.ConfigSC.leadSuitPartProtection));   // as RadiationSC.leadShare
+        com.sc.util.TooltipSC.more(list, Lang.tr("sc.leadsuit.tooltip.full", full), null);
     }
 }

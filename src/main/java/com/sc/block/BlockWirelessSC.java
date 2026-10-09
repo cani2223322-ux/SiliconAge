@@ -52,11 +52,29 @@ public class BlockWirelessSC extends Block {
         setHarvestLevel("pickaxe", 0);
     }
 
-    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). A stranger's: not at all. */
     @Override
     public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world,
                                                 int x, int y, int z) {
+        if (refusesBreak(world, player, x, y, z)) {
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.owneronly", ((TileEntityWirelessSC) world.getTileEntity(x, y, z)).getOwner());
+            return 0F;
+        }
         return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
+    /**
+     * БП-3: a block with an owner is broken or dismantled by the owner (anyone in creative, as its
+     * settings) and server ops only - it used to go to anyone, energy and link included. Server
+     * side (false on the client). Also asked by the wrench's dismantle.
+     */
+    public static boolean refusesBreak(World world, EntityPlayer player, int x, int y, int z) {
+        if (world == null || world.isRemote || player == null) {
+            return false;
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof TileEntityWirelessSC && !((TileEntityWirelessSC) te).getOwner().isEmpty()
+                && !((TileEntityWirelessSC) te).allowed(player) && !BlockQuarrySC.isOp(player);
     }
 
     public int getKind() {
@@ -124,12 +142,13 @@ public class BlockWirelessSC extends Block {
 
     /**
      * Other mods' wrenches (BuildCraft, Thermal, Ender IO...): a quarter turn round the vertical
-     * axis; a front our wrench turned up or down comes back to north.
+     * axis; a front our wrench turned up or down comes back to north. They don't say who turns it,
+     * so a block with an owner isn't turned this way at all (the owner uses our wrench).
      */
     @Override
     public boolean rotateBlock(World world, int x, int y, int z, ForgeDirection axis) {
         TileEntity te = world.getTileEntity(x, y, z);
-        if (!(te instanceof TileEntityWirelessSC)) {
+        if (!(te instanceof TileEntityWirelessSC) || !((TileEntityWirelessSC) te).getOwner().isEmpty()) {
             return false;
         }
         TileEntityWirelessSC w = (TileEntityWirelessSC) te;
@@ -148,6 +167,11 @@ public class BlockWirelessSC extends Block {
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (refusesBreak(world, player, x, y, z)) {
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.owneronly", ((TileEntityWirelessSC) world.getTileEntity(x, y, z)).getOwner());
+            world.markBlockForUpdate(x, y, z);
+            return false;
+        }
         if (willHarvest) {
             return true;
         }

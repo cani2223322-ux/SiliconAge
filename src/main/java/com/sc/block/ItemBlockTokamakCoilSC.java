@@ -19,6 +19,7 @@ public class ItemBlockTokamakCoilSC extends ItemBlock {
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add("§7" + Lang.tr("sc.tokamakCoil.tooltip"));
+        PickaxeOnlySC.tooltip(list);
         com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.tokamakCoil.tooltip.howto"));
     }
 }

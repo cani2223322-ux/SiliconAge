@@ -1,5 +1,9 @@
 package com.sc.handler;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -30,7 +34,8 @@ import net.minecraft.entity.player.EntityPlayerMP;
  * Server -> client: the server's ConfigSC (balance, ore generation...) on joining, so a client's
  * screens, tooltips, NEI and handbook show the server's numbers, not its own .cfg. Every public
  * static non-final primitive field of ConfigSC goes by name (reflection - a new option travels
- * with no change here), except the client's own preferences (sounds, update check); the ore settings too. The
+ * with no change here), except the client's own preferences - fields marked {@link ClientOnly} (sounds, update
+ * check; a new HUD / sound / effect option must carry it too); the ore settings too. The
  * client keeps its own values aside and puts them back when it leaves the server. Single player
  * (and the host of a LAN game) shares the fields with its own server: nothing is changed there.
  */
@@ -38,7 +43,16 @@ public final class ConfigSyncSC {
 
     public static final SimpleNetworkWrapper CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel("SiliconAgeConfig");
 
-    /** The client's own preferences: never taken from the server. */
+    /**
+     * Marks a ConfigSC field as the client's own preference: never sent, never taken from the server. Every new
+     * client-side option (HUD, sound, effects) gets it, or the server's value silently replaces the player's.
+     */
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.FIELD)
+    public @interface ClientOnly {
+    }
+
+    /** The same by name: the fields marked before {@link ClientOnly} existed (kept so they stay local regardless). */
     private static final String[] CLIENT_ONLY = {"machineSounds", "soundVolume", "updateCheck"};
 
     private static final byte BOOL = 0, INT = 1, FLOAT = 2, DOUBLE = 3, LONG = 4;
@@ -63,11 +77,15 @@ public final class ConfigSyncSC {
             if (!Modifier.isPublic(m) || !Modifier.isStatic(m) || Modifier.isFinal(m) || typeOf(f) < 0) {
                 continue;
             }
-            if (!clientOnly(f.getName())) {
+            if (!clientOnly(f)) {
                 out.add(f);
             }
         }
         return out;
+    }
+
+    private static boolean clientOnly(Field f) {
+        return f.isAnnotationPresent(ClientOnly.class) || clientOnly(f.getName());
     }
 
     private static boolean clientOnly(String name) {
@@ -144,6 +162,9 @@ public final class ConfigSyncSC {
             }
             try {
                 Field f = ConfigSC.class.getField(e.getKey());
+                if (clientOnly(f)) {
+                    continue;                               // marked on this side, whatever the server thinks
+                }
                 int m = f.getModifiers();
                 Byte type = msg.types.get(e.getKey());
                 if (Modifier.isStatic(m) && !Modifier.isFinal(m) && type != null && typeOf(f) == type) {

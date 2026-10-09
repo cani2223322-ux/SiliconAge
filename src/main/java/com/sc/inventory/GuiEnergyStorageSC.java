@@ -37,6 +37,33 @@ public class GuiEnergyStorageSC extends GuiContainer {
         buttonList.clear();
         power = new GuiPowerSC(storage, ContainerEnergyStorageSC.BTN_POWER, ContainerEnergyStorageSC.BTN_REDSTONE);
         power.addButtons(buttonList, guiLeft, guiTop);
+        if (storage instanceof com.sc.tileentity.TileEntityChargePadSC) {   // ЭН-7: who the pad charges
+            buttonList.add(new PadModeButton(guiLeft + PAD_BTN_X, guiTop + PAD_BTN_Y));
+        }
+    }
+
+    /** The pad's mode switch, bottom right of the info column (a pad has no module lines there). */
+    private static final int PAD_BTN_X = 90 + 112 / 2, PAD_BTN_Y = 103, PAD_BTN_W = 112 / 2, PAD_BTN_H = 10;
+
+    /** A flat holo switch: "everyone" / "owner and team", lit in the owner-only mode. */
+    private class PadModeButton extends net.minecraft.client.gui.GuiButton {
+        PadModeButton(int x, int y) {
+            super(ContainerEnergyStorageSC.BTN_PAD_MODE, x, y, PAD_BTN_W, PAD_BTN_H, "");
+        }
+
+        @Override
+        public void drawButton(net.minecraft.client.Minecraft mc, int mx, int my) {
+            if (!visible) {
+                return;
+            }
+            boolean over = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+            boolean lit = ((com.sc.tileentity.TileEntityChargePadSC) storage).isOwnerOnly();
+            drawRect(xPosition, yPosition, xPosition + width, yPosition + height, over ? GuiHoloSC.CYAN : lit ? GuiHoloSC.CYAN_MID : 0xFF343C48);
+            drawRect(xPosition + 1, yPosition + 1, xPosition + width - 1, yPosition + height - 1, lit ? 0xFF0E2A36 : 0xFF141C26);
+            TextFitSC.drawCentered(mc.fontRenderer, Lang.tr(lit ? "sc.pad.mode.team" : "sc.pad.mode.all"), xPosition + 2,
+                    yPosition + (height - 8) / 2, width - 4, lit ? GuiHoloSC.VALUE : GuiHoloSC.IDLE, false, 0, 0);
+            org.lwjgl.opengl.GL11.glColor4f(1F, 1F, 1F, 1F);
+        }
     }
 
     @Override
@@ -200,6 +227,10 @@ public class GuiEnergyStorageSC extends GuiContainer {
             small(Lang.tr("sc.storage.gui.adaptive", tier, Lang.tr("sc.storage.gui.adaptive.by." + ADAPT_KEYS[why])),
                     INFO_X, line, CARD_W, GuiHoloSC.VALUE);
         }
+        if (storage instanceof com.sc.tileentity.TileEntityChargePadSC) {   // left of the mode switch
+            String owner = ((com.sc.tileentity.TileEntityChargePadSC) storage).getOwner();
+            small(Lang.tr("sc.pad.owner", owner.isEmpty() ? "-" : owner), INFO_X, PAD_BTN_Y + 3, PAD_BTN_X - INFO_X - 3, GuiHoloSC.LABEL);
+        }
         power.drawGaugeOff(fontRendererObj);
         power.drawWarning(fontRendererObj, INFO_X, 84, CARD_W, guiLeft, guiTop);
     }
@@ -218,6 +249,11 @@ public class GuiEnergyStorageSC extends GuiContainer {
             return powerTip;
         }
         List<String> lines = new ArrayList<String>();
+        if (storage instanceof com.sc.tileentity.TileEntityChargePadSC && GuiGaugeSC.isOver(PAD_BTN_X, PAD_BTN_Y, PAD_BTN_W, PAD_BTN_H, mx, my)) {
+            lines.add(Lang.tr(((com.sc.tileentity.TileEntityChargePadSC) storage).isOwnerOnly() ? "sc.pad.mode.team" : "sc.pad.mode.all"));
+            lines.add(Lang.tr("sc.pad.mode.hint"));
+            return lines;
+        }
         if (GuiGaugeSC.isOver(INFO_X, 74, CARD_W, 18, mx, my) || GuiGaugeSC.isOver(INFO_X, 95, CARD_W, 6, mx, my)) {
             lines.add(Lang.tr("sc.storage.tooltip.io", storage.outputTier().getVoltage()));
             lines.add(Lang.tr("sc.storage.tooltip.wrench"));

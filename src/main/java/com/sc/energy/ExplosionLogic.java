@@ -13,14 +13,13 @@ import net.minecraft.world.World;
 
 /**
  * Overvoltage / overcurrent explosion logic, per design doc 01_recipes.md §9.3.
- * All the numbers here are the doc's TODO-filled defaults ("по аналогии", not yet confirmed
- * by the original spec author) and are meant to move into Forge Configuration once step 1
- * is wired up to ConfigSC - see the TODO on EXPLOSION_BASE_POWER below.
+ * The powers below are the doc's defaults; the server tunes them in ConfigSC's "energy" category:
+ * explosions off (the block stays and only fizzles), a power multiplier, and whether an
+ * overheat blast breaks the blocks around.
  */
 public final class ExplosionLogic {
 
-    /** Base explosion power added on top of excessTiers (§9.3: "Сила взрыва = 2 + excessTiers"). */
-    // TODO(config): move to ConfigSC once the energy config category is added.
+    /** Base explosion power added on top of excessTiers (§9.3: "Сила взрыва = 2 + excessTiers"), before ConfigSC.explosionPower. */
     public static final float EXPLOSION_BASE_POWER = 2.0F;
 
     /** Fixed power for heat-related explosions (§13.3) - deliberately NOT excessTiers-based;
@@ -32,8 +31,9 @@ public final class ExplosionLogic {
 
     /**
      * Call before actually delivering a packet to a receiver of the given tier. Returns true
-     * if the packet overvolted the receiver and an explosion was triggered (caller should not
-     * deliver the energy in that case - the receiver is gone).
+     * if the packet overvolted the receiver (caller should not deliver the energy in that case):
+     * it exploded and is gone, or - explosions off in the config - it stays and refuses the packet
+     * with smoke and a hiss (receiver.isInvalid() tells the two apart).
      */
     public static boolean checkOvervoltageAndExplode(TileEntity receiver, Tier receiverTier, Tier packetTier) {
         int excessTiers = receiverTier.excessTiersOf(packetTier);
@@ -67,6 +67,11 @@ public final class ExplosionLogic {
         if (bundle.isEmpty()) {
             world.setBlockToAir(x, y, z);
         }
+        fizzle(world, x, y, z);
+    }
+
+    /** Smoke and a hiss at a block - a burnt cable, or an overload with explosions off. */
+    private static void fizzle(World world, int x, int y, int z) {
         world.playSoundEffect(x + 0.5, y + 0.5, z + 0.5, "random.fizz", 1.0F, 0.6F);
         if (world instanceof net.minecraft.world.WorldServer) {
             ((net.minecraft.world.WorldServer) world).func_147487_a("largesmoke", x + 0.5, y + 0.5, z + 0.5, 12, 0.25, 0.25, 0.25, 0.01);
@@ -74,15 +79,25 @@ public final class ExplosionLogic {
     }
 
     public static void explodeFromOverheat(TileEntity te) {
-        explode(te, HEAT_EXPLOSION_POWER, true);
+        explode(te, HEAT_EXPLOSION_POWER, com.sc.util.ConfigSC.overheatBreaksBlocks);
     }
 
-    /** @param breakBlocks false: the blast still hurts and knocks back, but breaks no block around (overvoltage) */
+    /**
+     * @param breakBlocks false: the blast still hurts and knocks back, but breaks no block around (overvoltage)
+     * Explosions off in the config: the block stays, smoke and a hiss instead (at most once a second each).
+     */
     private static void explode(TileEntity te, float power, boolean breakBlocks) {
         World world = te.getWorldObj();
         if (world == null || world.isRemote) {
             return;
         }
+        if (!com.sc.util.ConfigSC.explosions) {
+            if ((world.getTotalWorldTime() + te.xCoord + te.yCoord + te.zCoord) % 20 == 0) {
+                fizzle(world, te.xCoord, te.yCoord, te.zCoord);
+            }
+            return;
+        }
+        power *= com.sc.util.ConfigSC.explosionPower;
         double x = te.xCoord + 0.5D;
         double y = te.yCoord + 0.5D;
         double z = te.zCoord + 0.5D;

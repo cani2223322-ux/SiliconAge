@@ -58,7 +58,14 @@ public final class EnergyNetSC {
     private final Map<World, List<Network>> networks = new WeakHashMap<World, List<Network>>();
     /** Tiles touching other energy tiles face to face (direct trade, no cable). */
     private final Map<World, List<Direct>> directs = new WeakHashMap<World, List<Direct>>();
+    /**
+     * Change counter: a change stamps its world (changedAt) or, with no world known, every world
+     * (allChangedAt); a world rebuilds once its builtVersion is older than either stamp - a change
+     * in one dimension no longer rebuilds the networks of all the others.
+     */
     private int version;
+    private int allChangedAt;
+    private final Map<World, Integer> changedAt = new WeakHashMap<World, Integer>();
     private final Map<World, Integer> builtVersion = new WeakHashMap<World, Integer>();
     /** The built networks by cable (weakestSinkOn) - rebuilt with them. */
     private final Map<World, Map<TileEntityConduitBundleSC, Network>> netOfCable = new WeakHashMap<World, Map<TileEntityConduitBundleSC, Network>>();
@@ -70,29 +77,38 @@ public final class EnergyNetSC {
         return INSTANCE;
     }
 
-    /** Something that changes a network's shape happened - rebuild before the next tick. */
+    /** Something that changes a network's shape happened, world unknown - every world rebuilds before its next tick. */
     public void invalidate() {
-        version++;
+        allChangedAt = ++version;
+    }
+
+    /** Something that changes a network's shape happened in `world` - only it rebuilds (null: all of them). */
+    public void invalidate(World world) {
+        if (world == null) {
+            invalidate();
+        } else {
+            changedAt.put(world, ++version);
+        }
     }
 
     public void addTile(TileEntityEnergyBase tile) {
         tiles.add(tile);
-        invalidate();
+        invalidate(tile.getWorldObj());
     }
 
     public void removeTile(TileEntityEnergyBase tile) {
         tiles.remove(tile);
-        invalidate();
+        invalidate(tile.getWorldObj());
     }
 
     public void addCable(TileEntityConduitBundleSC cable) {
         cables.add(cable);
-        invalidate();
+        invalidate(cable.getWorldObj());
     }
 
     public void removeCable(TileEntityConduitBundleSC cable) {
         cables.remove(cable);
-        invalidate();
+        invalidate(cable.getWorldObj());
     }
 
     public int tileCount() {
@@ -105,7 +121,8 @@ public final class EnergyNetSC {
             return;
         }
         Integer built = builtVersion.get(world);
-        if (built == null || built != version) {
+        Integer changed = changedAt.get(world);
+        if (built == null || built < allChangedAt || (changed != null && built < changed)) {
             List<Network> rebuilt = build(world);
             networks.put(world, rebuilt);
             directs.put(world, buildDirect(world));
@@ -133,7 +150,7 @@ public final class EnergyNetSC {
         if (nets != null) {
             for (Network net : nets) {
                 if (!net.tick(world, sent)) {
-                    invalidate();         // something blew up or went away - rebuild next tick
+                    invalidate(world);    // something blew up or went away - rebuild next tick
                 }
             }
         }
@@ -141,7 +158,7 @@ public final class EnergyNetSC {
         if (direct != null) {
             for (Direct d : direct) {
                 if (!d.tick(sent)) {
-                    invalidate();
+                    invalidate(world);
                 }
             }
         }
@@ -158,6 +175,7 @@ public final class EnergyNetSC {
         directs.remove(event.world);
         netOfCable.remove(event.world);
         builtVersion.remove(event.world);
+        changedAt.remove(event.world);
     }
 
     /**

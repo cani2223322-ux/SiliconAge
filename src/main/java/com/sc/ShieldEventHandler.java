@@ -103,9 +103,16 @@ public class ShieldEventHandler {
         }
     }
 
-    /** Full Exo set: the energy shield lets nothing through, explosion proofing stops explosions (ArmorLogicSC.exoStops). */
+    /**
+     * Full Exo set: the energy shield lets nothing through, explosion proofing stops explosions (ArmorLogicSC.exoStops).
+     * First, a private field zone: a stranger's shot at an animal, villager or golem in it does nothing (ПЛ-2).
+     */
     @SubscribeEvent
     public void onAttacked(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
+        if (com.sc.tileentity.TileEntityFieldGeneratorSC.guardsFromShot(event.entityLiving, event.source)) {
+            event.setCanceled(true);       // a stranger's shot at an animal, villager or golem in a private zone
+            return;
+        }
         if (!(event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer)) {
             return;
         }
@@ -124,7 +131,7 @@ public class ShieldEventHandler {
             for (Iterator<net.minecraft.entity.Entity> it = event.getAffectedEntities().iterator(); it.hasNext(); ) {
                 net.minecraft.entity.Entity e = it.next();
                 if (e instanceof net.minecraft.entity.player.EntityPlayer
-                        && (com.sc.item.ArmorLogicSC.explosionProof((net.minecraft.entity.player.EntityPlayer) e)
+                        && (com.sc.item.ArmorLogicSC.explosionProof((net.minecraft.entity.player.EntityPlayer) e, event.explosion)
                         || com.sc.item.ArmorLogicSC.anchorExplosion((net.minecraft.entity.player.EntityPlayer) e, event.explosion))) {
                     it.remove();                    // П3: the anchor did the damage itself - no push
                 }
@@ -198,7 +205,36 @@ public class ShieldEventHandler {
         if (w.isRemote || p == null) {
             return false;
         }
-        TileEntityFieldGeneratorSC f = TileEntityFieldGeneratorSC.privateRefusing(w, p, x + 0.5, y + 0.5, z + 0.5);
+        return refused(w, p, TileEntityFieldGeneratorSC.privateRefusing(w, p, x + 0.5, y + 0.5, z + 0.5));
+    }
+
+    /**
+     * ПЛ-1: a private field with "No mechanisms" on refuses this player doors, trapdoors, gates, levers,
+     * buttons, repeaters / comparators and beds at x,y,z (every such field there is asked).
+     */
+    public static boolean mechanismsFor(net.minecraft.world.World w, net.minecraft.entity.player.EntityPlayer p, int x, int y, int z) {
+        if (w.isRemote || p == null) {
+            return false;
+        }
+        for (TileEntityFieldGeneratorSC f : TileEntityFieldGeneratorSC.activeFieldsIn(w)) {
+            if (f.has(TileEntityFieldGeneratorSC.F_PRIVATE) && f.has(TileEntityFieldGeneratorSC.F_NO_MECHANISMS)
+                    && f.fieldContains(x + 0.5, y + 0.5, z + 0.5) && !f.allowed(p)) {
+                return refused(w, p, f);
+            }
+        }
+        return false;
+    }
+
+    /** Vanilla mechanisms by class - other mods' blocks only when they extend these. */
+    public static boolean isMechanism(net.minecraft.block.Block b) {
+        return b instanceof net.minecraft.block.BlockDoor || b instanceof net.minecraft.block.BlockTrapDoor
+                || b instanceof net.minecraft.block.BlockFenceGate || b instanceof net.minecraft.block.BlockLever
+                || b instanceof net.minecraft.block.BlockButton || b instanceof net.minecraft.block.BlockRedstoneDiode
+                || b instanceof net.minecraft.block.BlockBed;
+    }
+
+    /** f refuses p (null: nothing refuses) - the owner's name in chat, once a second at most. */
+    private static boolean refused(net.minecraft.world.World w, net.minecraft.entity.player.EntityPlayer p, TileEntityFieldGeneratorSC f) {
         if (f == null) {
             return false;
         }
@@ -262,6 +298,12 @@ public class ShieldEventHandler {
             event.setCanceled(true);
             return;
         }
+        // "No mechanisms": doors, levers, buttons and the like have no tile entity
+        if (isMechanism(event.world.getBlock(event.x, event.y, event.z))
+                && mechanismsFor(event.world, event.entityPlayer, event.x, event.y, event.z)) {
+            event.setCanceled(true);
+            return;
+        }
         // fire and fluids aren't "placing a block" (no PlaceEvent): flint and steel, fire charges, buckets
         net.minecraft.item.ItemStack held = event.entityPlayer.getCurrentEquippedItem();
         if (held != null && (held.getItem() instanceof net.minecraft.item.ItemFlintAndSteel
@@ -298,7 +340,7 @@ public class ShieldEventHandler {
         return false;
     }
 
-    /** A private field zone: strangers can't hit or use frames, paintings, animals, carts and boats in it. */
+    /** A private field zone: strangers can't hit or use frames, paintings, animals, carts and boats in it (shots: onAttacked). */
     @SubscribeEvent
     public void onAttackEntity(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
         if (com.sc.tileentity.TileEntityFieldGeneratorSC.guardsEntity(event.entityPlayer, event.target)) {

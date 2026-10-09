@@ -22,6 +22,7 @@ public class ItemBlockGravStabiliserSC extends ItemBlock {
     @SuppressWarnings("unchecked")
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add("§7" + Lang.tr("sc.gravStabiliser.tooltip"));
+        PickaxeOnlySC.tooltip(list);
         com.sc.util.TooltipSC.more(list,
                 Lang.tr("sc.gravStabiliser.details", SingularStationMath.STABILISER_PERCENT, SingularStationMath.MAX_STABILISERS),
                 Lang.tr("sc.gravStabiliser.howto", TileEntitySingularStationSC.STAB_RADIUS, TileEntitySingularStationSC.STAB_DY));

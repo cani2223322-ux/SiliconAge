@@ -186,6 +186,8 @@ public class GuiSingularStationSC extends GuiContainer {
         boolean process, can;
         int ready, candidates, pointsFull, taskLevel;
         boolean taskDone, catalystNeeded, catalystOk, setDiscount;
+        /** Every level the armour candidates go to (bit l), and those whose task is done: the server checks each piece (СБ-4). */
+        int taskLevels, taskDoneLevels;
         int[] readyLv = new int[4];
         int convMask;
         boolean matOk;
@@ -351,6 +353,14 @@ public class GuiSingularStationSC extends GuiContainer {
         p.setDiscount = SingularStationMath.pieces(lv) >= 4;
         p.taskLevel = p.armCand == 0 ? 0 : alo + 1;
         p.taskDone = p.taskLevel > 0 && SingularLevel.taskDone(me(), p.taskLevel);
+        for (int i = 0; i < 4; i++) {
+            ItemStack s = te.getStackInSlot(i);
+            if (SingularLevel.isSingular(s) && SingularLevel.levelOf(s) < SingularLevel.MAX) {
+                int t = SingularLevel.levelOf(s) + 1;
+                p.taskLevels |= 1 << t;
+                p.taskDoneLevels |= SingularLevel.taskDone(me(), t) ? 1 << t : 0;
+            }
+        }
         p.catalystNeeded = SingularStationMath.needsCatalyst(lv) || p.toolLv == 4;
         ItemStack core = te.getStackInSlot(TileEntitySingularStationSC.CATALYST_SLOT);
         p.catalystOk = TileEntitySingularStationSC.isCore(core);
@@ -453,6 +463,18 @@ public class GuiSingularStationSC extends GuiContainer {
                     p.pointsFull > 0 ? OK : BAD, p.pointsFull > 0 ? TEXT : BAD, TIP_POINTS));
             if (p.armCand == 0) {                           // the tool alone: no task
                 out.add(new Row(Lang.tr("sc.singStation.row.task"), "-", DIM, DIM, TIP_TASK));
+            } else if (Integer.bitCount(p.taskLevels) > 1) {      // pieces of different levels: each level's task
+                StringBuilder b = new StringBuilder();
+                for (int t = 1; t < 32; t++) {
+                    if ((p.taskLevels & 1 << t) != 0) {
+                        boolean done = (p.taskDoneLevels & 1 << t) != 0;
+                        b.append(b.length() == 0 ? "" : "§7, ").append(done ? "§a" : "§c")
+                                .append(Lang.tr("sc.singStation.row.task.lv", t, done ? "+" : "-"));
+                    }
+                }
+                boolean all = p.taskDoneLevels == p.taskLevels, none = p.taskDoneLevels == 0;
+                out.add(new Row(Lang.tr("sc.singStation.row.task"), b.toString(), all ? OK : none ? BAD : WARN, all ? TEXT : none ? BAD : WARN,
+                        TIP_TASK));
             } else {
                 out.add(new Row(Lang.tr("sc.singStation.row.task"), Lang.tr(p.taskDone ? "sc.singStation.row.task.done"
                         : "sc.singStation.row.task.todo", p.taskLevel), p.taskDone ? OK : BAD, p.taskDone ? TEXT : BAD, TIP_TASK));
@@ -726,7 +748,7 @@ public class GuiSingularStationSC extends GuiContainer {
             boolean current = SingularLevel.branchChoice(chest, level) == side;
             branch[k].selected = current;
             branch[k].enabled = SingularLevel.isSingular(chest) && SingularLevel.levelOf(chest) >= level && !current
-                    && !te.isLocked(com.sc.util.ArmorGasSC.CHEST) && te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.BRANCH_SM;
+                    && !te.isLocked(com.sc.util.ArmorGasSC.CHEST) && (SingularLevel.branchChoice(chest, level) == SingularLevel.BRANCH_NONE || te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.branchSm());
         }
         ItemStack tool = te.getTool();
         int tn = com.sc.util.ToolLevelSC.branchCount(tool), tbw = tn <= 0 ? 0 : (L.pw - 10 - 4 * (tn - 1)) / tn, tbh = L.big ? 13 : 11;
@@ -739,7 +761,7 @@ public class GuiSingularStationSC extends GuiContainer {
             boolean current = com.sc.util.ToolLevelSC.branchOf(tool) == b;
             t.selected = current;
             t.enabled = tn > 0 && com.sc.util.ToolLevelSC.levelOf(tool) >= com.sc.util.ToolLevelSC.BRANCH_LEVEL && !current
-                    && !te.isLocked(TileEntitySingularStationSC.TOOL_SLOT) && te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.BRANCH_SM;
+                    && !te.isLocked(TileEntitySingularStationSC.TOOL_SLOT) && te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.branchSm();
         }
         boolean danger = !te.isPowerOn() && te.lineTooStrong();
         powerBtn.displayString = Lang.tr("sc.singStation.btn.power", Lang.tr(te.isPowerOn() ? "sc.singStation.on" : "sc.singStation.off"));
@@ -1275,7 +1297,7 @@ public class GuiSingularStationSC extends GuiContainer {
             return Lang.tr("sc.singStation.link.hint");
         }
         if (tab == T_BRANCH) {
-            return Lang.tr("sc.singStation.branches.cost", SingularStationMath.BRANCH_SM);
+            return Lang.tr("sc.singStation.branches.cost", SingularStationMath.branchSm());
         }
         String res = Lang.tr(te.hasResonance() ? "sc.singStation.yes" : "sc.singStation.no");
         int stab = te.getStabilisers();
@@ -1311,7 +1333,7 @@ public class GuiSingularStationSC extends GuiContainer {
         }
         int smY = branchSmY();
         small(Lang.tr("sc.singStation.branches.sm", te.tankAmount(Gas.SINGULAR_MATTER)), L.px + 6, smY, L.pw - 12,
-                te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.BRANCH_SM ? OK : WARN);
+                te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.branchSm() ? OK : WARN);
     }
 
     private void drawRight() {
@@ -1475,7 +1497,7 @@ public class GuiSingularStationSC extends GuiContainer {
             }
             if (tab == T_BRANCH) {
                 tip.add(Lang.tr("sc.singStation.btn.branches"));
-                tip.add(Lang.tr("sc.singStation.branches.hint", SingularStationMath.BRANCH_SM));
+                tip.add(Lang.tr("sc.singStation.branches.hint", SingularStationMath.branchSm()));
                 return tip;
             }
             if (tab == T_MODERN) {
@@ -1514,7 +1536,8 @@ public class GuiSingularStationSC extends GuiContainer {
                     tip.add("§7" + Lang.tr("sc.armorfn." + f.name().toLowerCase(java.util.Locale.ROOT) + ".desc"));
                 }
                 tip.add(branch[k].selected ? "§a" + Lang.tr("sc.singStation.branches.current")
-                        : Lang.tr("sc.singStation.branches.pick", SingularStationMath.BRANCH_SM));
+                        : SingularLevel.branchChoice(te.getStackInSlot(com.sc.util.ArmorGasSC.CHEST), k < 2 ? 3 : 5) == SingularLevel.BRANCH_NONE
+                        ? Lang.tr("sc.singStation.branches.pickfree") : Lang.tr("sc.singStation.branches.pick", SingularStationMath.branchSm()));
                 return tip;
             }
         }
@@ -1524,7 +1547,7 @@ public class GuiSingularStationSC extends GuiContainer {
                 tip.add("§7" + Lang.tr("sc.singStation.toolbranch." + (com.sc.util.ToolLevelSC.isBlade(te.getTool()) ? "blade" : "drill")
                         + "." + (k + 1) + ".hint"));
                 tip.add(toolBranch[k].selected ? "§a" + Lang.tr("sc.singStation.branches.current")
-                        : Lang.tr("sc.singStation.branches.pick", SingularStationMath.BRANCH_SM));
+                        : Lang.tr("sc.singStation.branches.pick", SingularStationMath.branchSm()));
                 if (com.sc.util.ToolLevelSC.levelOf(te.getTool()) < com.sc.util.ToolLevelSC.BRANCH_LEVEL) {
                     tip.add("§c" + Lang.tr("sc.singStation.err.branchlevel"));
                 }
@@ -1783,6 +1806,7 @@ public class GuiSingularStationSC extends GuiContainer {
         if (proc.kind != SingularProcessSC.KIND_CONVERT && proc.catalystEu > 0) {
             tip.add("§7" + Lang.tr("sc.singStation.cancel.core", amount(SingularStationMath.refund(proc.catalystEu))));
         }
+        tip.add("§7" + Lang.tr("sc.singStation.cancel.who"));
         tip.add("§e" + Lang.tr("sc.singStation.cancel.twice"));
         return tip;
     }
@@ -1987,7 +2011,11 @@ public class GuiSingularStationSC extends GuiContainer {
                 for (int i = 0; i < 4; i++) {
                     ItemStack s = te.getStackInSlot(i);
                     if (SingularLevel.isSingular(s) && SingularLevel.levelOf(s) < SingularLevel.MAX) {
-                        targets.add(SingularLevel.levelOf(s) + 1);
+                        int t = SingularLevel.levelOf(s) + 1;
+                        targets.add(t);
+                        boolean done = SingularLevel.taskDone(me(), t);       // each piece needs its own next level's task
+                        tip.add((done ? "§a" : "§c") + Lang.tr("sc.armorhud.piece." + i) + ": "
+                                + Lang.tr(done ? "sc.singStation.row.task.done" : "sc.singStation.row.task.todo", t));
                     }
                 }
                 for (int t : targets) {

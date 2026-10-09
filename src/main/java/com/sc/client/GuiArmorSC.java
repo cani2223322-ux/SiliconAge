@@ -24,6 +24,7 @@ import com.sc.util.ArmorSuit;
 import com.sc.util.BladeFeature;
 import com.sc.util.BladeForm;
 import com.sc.util.BladeType;
+import com.sc.util.ChipType;
 import com.sc.util.DrillFeature;
 import com.sc.util.DrillType;
 import com.sc.util.PowerModeKey;
@@ -117,6 +118,8 @@ public class GuiArmorSC extends GuiScreen {
     private static final int BRANCH_A_ID = 1004, BRANCH_B_ID = 1005;
     /** Life support tab: "fill from this inventory slot" buttons (FILL_BASE + slot, under BIND_BASE). */
     private static final int FILL_BASE = 1100, FILL_MAX = 5;
+    /** БР-1, chestplate tab: "remove this chip" (CHIP_ONE_BASE + ChipType ordinal; above FILL_BASE's 64, under TL_PAGE). */
+    private static final int CHIP_ONE_BASE = 1170, CHIP_ROW_H = 18;
     /** "Fill everything": the count on its button stops at this many containers (the server pours them all with one GAS_FILL_ALL). */
     private static final int FILL_ALL_MAX = 64;
     /**
@@ -204,6 +207,11 @@ public class GuiArmorSC extends GuiScreen {
     private int levelPage, lvLx, lvLw, lvRx, lvRw, lvPageW, lvBranchY = -1, lvBranchRows, lvNoteY = -1, lvProfHeadY = -1, lvKeyY = -1, lvBonusY = -1;
     /** The "remove chips" button is on screen (rebuilt when the chips come or go). */
     private boolean chipsShown;
+    /** The ChipsSC tag the chip rows were built for (rebuilt when one chip comes out). */
+    private String chipsSig = "";
+    /** БР-1: the installed chips' rows over the chestplate's button row: {x, y, width} and their captions. */
+    private final List<int[]> chipRows = new ArrayList<int[]>();
+    private final List<String> chipLabels = new ArrayList<String>();
     // ---- Singular tool tabs (set by initGui / initToolInfo) ----
     /** 0: the functions (rows), 1: level, form / mode, branch, gas. */
     private int toolPage;
@@ -251,6 +259,8 @@ public class GuiArmorSC extends GuiScreen {
         rows.clear();
         heads.clear();
         modeDescs.clear();
+        chipRows.clear();
+        chipLabels.clear();
         fills.clear();
         fillHeadY = -1;
         sysHeadY = -1;
@@ -360,7 +370,9 @@ public class GuiArmorSC extends GuiScreen {
             }
             boolean chest = selectedPiece == 1;
             int branchLevel = chest ? pendingBranch() : 0;
-            int[] r = chooseRows(list.size(), chips ? 150 : 140, chest ? (branchLevel > 0 ? 40 : 20) : 0);
+            ItemStack chestStack = chest ? ArmorLogicSC.piece(mc.thePlayer, 1) : null;
+            List<ChipType> installed = installedChips(chestStack);
+            int[] r = chooseRows(list.size(), chips ? 150 : 140, chest ? (branchLevel > 0 ? 40 : 20) + installed.size() * CHIP_ROW_H : 0);
             int cols = r[0];
             int colW = (contentW - (cols - 1) * COL_GAP) / cols;
             if (cols == 1) {
@@ -380,8 +392,21 @@ public class GuiArmorSC extends GuiScreen {
                 addToolPageButton();
             }
             int y = rowsY + per * r[1] + 4;
-            chipsShown = chest && ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1));
+            chipsShown = chest && ItemArmorChipSC.hasChips(chestStack);
+            chipsSig = chipsSig(chestStack);
             if (chest) {                                   // chips out / light colour / power mode, in one row
+                int rowSpan = cols == 1 ? colW : contentW;
+                List<String> names = ItemArmorChipSC.installedNames(chestStack);   // the same chips, in ChipType order
+                String one = Lang.tr("sc.armorgui.chips.one");
+                int oneW = Math.min(rowSpan / 3, fontRendererObj.getStringWidth(one) + 10);
+                for (int i = 0; i < installed.size() && i < names.size(); i++) {   // БР-1: one chip at a time
+                    ChipType type = installed.get(i);
+                    int tier = com.sc.util.ArmorGasSC.chipTier(chestStack, type);
+                    chipLabels.add(Lang.tr("sc.armorgui.chips.row", names.get(i), tier * ArmorSuit.CHIP_EU_PER_TIER_SECOND, tier));
+                    chipRows.add(new int[]{contentX, y + 4, rowSpan - oneW - 4});
+                    buttonList.add(new TextFitSC.Button(CHIP_ONE_BASE + type.ordinal(), contentX + rowSpan - oneW, y, oneW, 16, one));
+                    y += CHIP_ROW_H;
+                }
                 List<Integer> ids = new ArrayList<Integer>();
                 if (chipsShown) {
                     ids.add(CHIPS_ID);
@@ -405,6 +430,23 @@ public class GuiArmorSC extends GuiScreen {
             }
         }
         refresh();
+    }
+
+    /** БР-1: the chips installed in that chestplate, in ChipType order (read-only: safe on the client). */
+    private static List<ChipType> installedChips(ItemStack chest) {
+        List<ChipType> out = new ArrayList<ChipType>();
+        if (ItemArmorChipSC.hasChips(chest)) {
+            for (ChipType type : ChipType.values()) {
+                if (chest.getTagCompound().getCompoundTag("ChipsSC").hasKey(type.name())) {
+                    out.add(type);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static String chipsSig(ItemStack chest) {
+        return ItemArmorChipSC.hasChips(chest) ? chest.getTagCompound().getCompoundTag("ChipsSC").toString() : "";
     }
 
     private int panelW(int mode) {
@@ -1165,7 +1207,7 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (lvNoteY >= 0 && lvNoteY + 9 <= bottom) {
             String note = creative ? Lang.tr("sc.levelgui.branch.creative") : chest == null ? Lang.tr("sc.levelgui.nochest")
-                    : Lang.tr("sc.levelgui.branch.note", com.sc.util.SingularStationMath.BRANCH_SM);
+                    : Lang.tr("sc.levelgui.branch.note", com.sc.util.SingularStationMath.branchSm());
             fit(note, x, lvNoteY, cw, 0x808080);
         }
         if (lvProfHeadY >= 0) {
@@ -1225,8 +1267,8 @@ public class GuiArmorSC extends GuiScreen {
                 tip.add("§7" + Lang.tr("sc.armorfn." + fkey(f) + ".desc"));
                 int ch = com.sc.util.SingularLevel.branchChoice(chest, bl);
                 tip.add(creative ? "§a" + Lang.tr("sc.levelgui.branch.creative") : chest == null ? "§c" + Lang.tr("sc.levelgui.nochest")
-                        : ch == c ? "§a" + Lang.tr("sc.levelgui.branch.tip.chosen", com.sc.util.SingularStationMath.BRANCH_SM)
-                        : ch != 0 ? "§7" + Lang.tr("sc.levelgui.branch.tip.other", com.sc.util.SingularStationMath.BRANCH_SM)
+                        : ch == c ? "§a" + Lang.tr("sc.levelgui.branch.tip.chosen", com.sc.util.SingularStationMath.branchSm())
+                        : ch != 0 ? "§7" + Lang.tr("sc.levelgui.branch.tip.other", com.sc.util.SingularStationMath.branchSm())
                         : com.sc.util.SingularLevel.levelOf(chest) >= bl ? "§d" + Lang.tr("sc.levelgui.branch.tip.pick")
                         : "§7" + Lang.tr("sc.levelgui.branch.tip.later", bl));
             } else if (b.id >= LV_PROF && b.id < LV_PROF + com.sc.util.SingularProfiles.COUNT) {
@@ -1971,6 +2013,10 @@ public class GuiArmorSC extends GuiScreen {
 
     private void drawRows() {
         EntityPlayer p = mc.thePlayer;
+        for (int i = 0; i < chipRows.size(); i++) {             // БР-1: the installed chips, each with its own "remove"
+            int[] c = chipRows.get(i);
+            fit(chipLabels.get(i), c[0], c[1], c[2], 0xE0E0E0);
+        }
         for (int[] h : heads) {
             fit(Lang.tr("sc.armorgui.col.function"), h[0], h[1], h[2], HEAD);
             if (h[3] == 1) {
@@ -2423,6 +2469,10 @@ public class GuiArmorSC extends GuiScreen {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.REMOVE_CHIPS, 0));   // the button goes once the chestplate comes back without them
             return;
         }
+        if (b.id >= CHIP_ONE_BASE && b.id < CHIP_ONE_BASE + ChipType.values().length) {   // feature = ordinal + 1: that one chip
+            ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.REMOVE_CHIPS, b.id - CHIP_ONE_BASE + 1));
+            return;
+        }
         if (b.id == MODE_ID) {
             cyclePowerMode();
         } else if (b.id >= BIND_BASE) {
@@ -2478,6 +2528,12 @@ public class GuiArmorSC extends GuiScreen {
     @Override
     protected void keyTyped(char c, int key) {
         if (capturing == null) {
+            // K or the inventory key closes the screen too, like vanilla screens
+            if (key != 0 && (key == ArmorClientSC.KEY_ARMOR.getKeyCode() || key == mc.gameSettings.keyBindInventory.getKeyCode())) {
+                mc.displayGuiScreen(null);
+                mc.setIngameFocus();
+                return;
+            }
             super.keyTyped(c, key);
             return;
         }
@@ -2534,7 +2590,8 @@ public class GuiArmorSC extends GuiScreen {
         String sig = signature();
         if (selectedPiece == LEVEL_TAB && !com.sc.util.SingularLevel.wearsSingular(mc.thePlayer)
                 || selectedPiece == BLADE_TAB && blade() == null || selectedPiece == DRILL_TAB && drill() == null || selectedPiece == MODE_TAB && ArmorLogicSC.piece(mc.thePlayer, 1) == null
-                || selectedPiece == 1 && chipsShown != ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1))) {
+                || selectedPiece == 1 && (chipsShown != ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1))
+                        || !chipsSig.equals(chipsSig(ArmorLogicSC.piece(mc.thePlayer, 1))))) {
             initGui();                                           // the blade left the hand / the chips came out
         } else if (selectedPiece == LIFE_TAB && !anyPieceWorn() || !layoutSig.equals(sig)) {
             initGui();                                           // other pieces worn, a container used up or picked up

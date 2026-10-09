@@ -40,6 +40,12 @@ public class BlockGravStabiliserSC extends Block {
         setLightOpacity(0);
     }
 
+    /** Broken only with a pickaxe: a stray punch doesn't lose it (PickaxeOnlySC). */
+    @Override
+    public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, World world, int x, int y, int z) {
+        return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
     @Override
     public boolean isOpaqueCube() {
         return false;

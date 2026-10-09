@@ -38,6 +38,11 @@ public class BlockChargePadSC extends BlockEnergyStorageSC {
     public void onBlockPlacedBy(World world, int x, int y, int z, EntityLivingBase placer, ItemStack stack) {
         super.onBlockPlacedBy(world, x, y, z, placer, stack);
         TileEntity te = world.getTileEntity(x, y, z);
+        if (!world.isRemote && placer instanceof net.minecraft.entity.player.EntityPlayer
+                && !(placer instanceof net.minecraftforge.common.util.FakePlayer) && te instanceof TileEntityChargePadSC) {
+            // ЭН-7: the placer owns the pad (its "owner and team" mode)
+            ((TileEntityChargePadSC) te).setOwner(((net.minecraft.entity.player.EntityPlayer) placer).getCommandSenderName());
+        }
         if (te instanceof TileEntityEnergyStorageSC && ((TileEntityEnergyStorageSC) te).getFacing() == ForgeDirection.UP) {
             // looking down at it: the side facing the placer instead
             int quarter = net.minecraft.util.MathHelper.floor_double(placer.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;

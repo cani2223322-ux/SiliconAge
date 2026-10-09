@@ -31,7 +31,7 @@ public class ItemBlockGeneratorSC extends ItemBlock {
         return super.getUnlocalizedName() + "." + type.name().toLowerCase(java.util.Locale.ROOT);
     }
 
-    /** What a broken generator kept (BlockGeneratorSC.getDrops): its buffer, its fuel, the reactor's ignition. */
+    /** What a broken generator kept (BlockGeneratorSC.getDrops): its buffer, its fuel, the reactor's ignition, its upgrades. */
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         GeneratorType type = ((BlockGeneratorSC) field_150939_a).typeFor(stack.getItemDamage());
@@ -70,6 +70,13 @@ public class ItemBlockGeneratorSC extends ItemBlock {
         } else if (nbt.getLong("IgnitionEU") > 0) {
             list.add(Lang.tr("sc.generator.tooltip.ignition", String.valueOf(nbt.getLong("IgnitionEU")),
                     String.valueOf(type.ignitionThreshold())));
+        }
+        if (nbt.hasKey(TileEntityGeneratorSC.ITEM_UPGRADES_KEY)) {      // the upgrades ride in the item, as a machine's
+            for (ItemStack up : com.sc.tileentity.TileEntityMachineSC.upgradesOf(nbt.getCompoundTag(TileEntityGeneratorSC.ITEM_UPGRADES_KEY))) {
+                if (up != null) {
+                    list.add(Lang.tr("sc.machine.tooltip.upgrade", up.getDisplayName()));
+                }
+            }
         }
         if (nbt.getInteger("SmStored") > 0) {                            // МК-4: the Singular reactor's inner by-product tank
             list.add("§d" + Lang.tr("sc.generator.tooltip.sm", String.valueOf(nbt.getInteger("SmStored")),

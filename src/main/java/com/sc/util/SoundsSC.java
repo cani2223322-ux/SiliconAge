@@ -84,6 +84,7 @@ public final class SoundsSC {
             case TOKAMAK: return new Loop("gen.reactor", 0.75F, 0.9F);
             case TOKAMAK_XV: return new Loop("gen.reactor", 0.85F, 0.8F);
             case EXO_REACTOR: return new Loop("gen.reactor", 0.8F, 0.8F);
+            case SINGULAR_REACTOR: return new Loop("gen.reactor", 0.9F, 0.6F);
             default: return null;
         }
     }

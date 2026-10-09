@@ -21,10 +21,7 @@ import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.IIcon;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
-import net.minecraftforge.common.util.ForgeDirection;
-import net.minecraftforge.fluids.FluidContainerRegistry;
 import net.minecraftforge.fluids.FluidStack;
-import net.minecraftforge.fluids.IFluidContainerItem;
 
 /**
  * Portable tanks (Thermal Expansion style), metadata = tier: steel 8 000 mB, titanium 32 000,
@@ -164,72 +161,15 @@ public class BlockTankSC extends Block {
             }
             return true;
         }
-        boolean container = FluidContainerRegistry.isContainer(held) || held.getItem() instanceof IFluidContainerItem;
-        if (!container) {
+        if (!com.sc.util.FluidHandSC.isContainer(held)) {
             return false;
         }
         if (!world.isRemote) {
-            useContainer(te, player, held);
+            // the machines' bucket / cell logic: part-filled cells topped up, a chat line for every outcome,
+            // creative hands unchanged
+            com.sc.util.FluidHandSC.use(world, x, y, z, player, te, held);
         }
         return true;
-    }
-
-    private static void useContainer(TileEntityTankSC te, EntityPlayer player, ItemStack held) {
-        boolean creative = player.capabilities.isCreativeMode;
-        if (FluidContainerRegistry.isFilledContainer(held)) {                   // bucket / cell in
-            FluidStack in = FluidContainerRegistry.getFluidForFilledItem(held);
-            if (in != null && te.fill(ForgeDirection.UNKNOWN, in, false) == in.amount) {
-                te.fill(ForgeDirection.UNKNOWN, in, true);
-                if (!creative) {
-                    swap(player, held, FluidContainerRegistry.drainFluidContainer(held));
-                }
-            }
-            return;
-        }
-        if (FluidContainerRegistry.isEmptyContainer(held)) {                    // bucket / cell out
-            FluidStack inside = te.getTank().getFluid();
-            if (inside == null) {
-                return;
-            }
-            ItemStack filled = FluidContainerRegistry.fillFluidContainer(inside.copy(), held);
-            FluidStack taken = filled == null ? null : FluidContainerRegistry.getFluidForFilledItem(filled);
-            if (taken != null && te.drain(ForgeDirection.UNKNOWN, taken.amount, false) != null
-                    && te.drain(ForgeDirection.UNKNOWN, taken.amount, false).amount == taken.amount) {
-                te.drain(ForgeDirection.UNKNOWN, taken.amount, true);
-                if (!creative) {
-                    swap(player, held, filled);
-                }
-            }
-            return;
-        }
-        if (held.getItem() instanceof IFluidContainerItem && held.stackSize == 1) { // tanks-in-an-item
-            IFluidContainerItem item = (IFluidContainerItem) held.getItem();
-            FluidStack carried = item.getFluid(held);
-            if (carried != null && carried.amount > 0) {
-                int room = te.fill(ForgeDirection.UNKNOWN, carried, false);
-                FluidStack poured = item.drain(held, room, true);
-                if (poured != null) {
-                    te.fill(ForgeDirection.UNKNOWN, poured, true);
-                }
-            } else if (te.getTank().getFluid() != null) {
-                int took = item.fill(held, te.getTank().getFluid().copy(), true);
-                te.drain(ForgeDirection.UNKNOWN, took, true);
-            }
-            player.inventoryContainer.detectAndSendChanges();
-        }
-    }
-
-    /** Takes one of `held` and hands `result` back (in the same slot if it was the last one). */
-    private static void swap(EntityPlayer player, ItemStack held, ItemStack result) {
-        if (held.stackSize == 1) {
-            player.inventory.setInventorySlotContents(player.inventory.currentItem, result);
-        } else {
-            held.stackSize--;
-            if (result != null && !player.inventory.addItemStackToInventory(result)) {
-                player.dropPlayerItemWithRandomChoice(result, false);
-            }
-        }
-        player.inventoryContainer.detectAndSendChanges();
     }
 
     // ---- light, comparator ----

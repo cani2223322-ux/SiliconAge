@@ -141,9 +141,9 @@ public final class BladeSingularSC {
     }
 
     private static final Map<UUID, State> STATES = new HashMap<UUID, State>();
-    /** Key presses and form changes from the network thread, run on the server thread. */
+    /** Key presses and form changes from the packet handler, run on the next server tick. */
     private static final ConcurrentLinkedQueue<Object[]> PENDING = new ConcurrentLinkedQueue<Object[]>();
-    /** How many of PENDING are each player's (at most QUEUE_MAX: more is a flood, dropped on the network thread). */
+    /** How many of PENDING are each player's (at most QUEUE_MAX: more is a flood, dropped in queue()). */
     private static final java.util.concurrent.ConcurrentHashMap<UUID, java.util.concurrent.atomic.AtomicInteger> QUEUED =
             new java.util.concurrent.ConcurrentHashMap<UUID, java.util.concurrent.atomic.AtomicInteger>();
     static final int QUEUE_MAX = 8;
@@ -172,12 +172,13 @@ public final class BladeSingularSC {
             STATES.remove(p.getUniqueID());
             TETHERS.remove(p.getUniqueID());
             QUEUED.remove(p.getUniqueID());
+            HUD_SENT.remove(p.getUniqueID());
         }
     }
 
     // ================================================================== the queue and the server tick
 
-    /** From the network thread: a BladeFeature (key) or an Integer (form wheel delta). */
+    /** From the packet handler: a BladeFeature (key) or an Integer (form wheel delta). */
     static void queue(EntityPlayerMP p, Object what) {
         if (p == null || what == null) {
             return;
@@ -198,8 +199,8 @@ public final class BladeSingularSC {
     }
 
     /**
-     * From the network thread: any other tool task (the drill's keys / mode, the tools' branch choice) - run on the
-     * server thread in the same queue, with the same per-player cap.
+     * From the packet handler: any other tool task (the drill's keys / mode, the tools' branch choice) - run on the
+     * next server tick in the same queue, with the same per-player cap.
      */
     public static void queueTask(EntityPlayerMP p, Runnable task) {
         queue(p, task);
@@ -228,6 +229,7 @@ public final class BladeSingularSC {
         COLLAPSES.clear();
         STATES.clear();
         TETHERS.clear();
+        HUD_SENT.clear();
     }
 
     /** Server tick (BladeEventsSC): the queued keys, the collapses, the tethers. */
@@ -300,10 +302,53 @@ public final class BladeSingularSC {
                 MathHelper.floor_double(e.posY + e.height / 2), MathHelper.floor_double(e.posZ)) != null;
     }
 
-    /** The living thing looked at within `range` (not behind a block) that may be hit, or null. */
+    /**
+     * The nearest living thing on the line of sight within `range` (not behind a block) that may be hit, or null.
+     * One that may not (the player's pet, a villager, a player PvP spares, a claim) doesn't shield the one behind it.
+     */
     private static Entity target(EntityPlayer p, double range) {
-        Entity e = SingularPowersSC.lookEntity(p, range, true, false);
-        return e != null && BladeLogicSC.fair(p, e) && BladeLogicSC.claimed(p, e) ? e : null;
+        Vec3 eye = Vec3.createVectorHelper(p.posX, p.posY + 1.62, p.posZ);
+        Vec3 look = p.getLookVec();
+        Vec3 end = eye.addVector(look.xCoord * range, look.yCoord * range, look.zCoord * range);
+        MovingObjectPosition block = p.worldObj.rayTraceBlocks(Vec3.createVectorHelper(eye.xCoord, eye.yCoord, eye.zCoord),
+                Vec3.createVectorHelper(end.xCoord, end.yCoord, end.zCoord));
+        double limit = block != null && block.hitVec != null ? eye.distanceTo(block.hitVec) : range;
+        List<Entity> found = new ArrayList<Entity>();
+        final Map<Entity, Double> dist = new HashMap<Entity, Double>();
+        for (Object o : p.worldObj.getEntitiesWithinAABBExcludingEntity(p,
+                p.boundingBox.addCoord(look.xCoord * range, look.yCoord * range, look.zCoord * range).expand(1, 1, 1))) {
+            Entity e = (Entity) o;
+            if (!e.isEntityAlive() || !(e instanceof EntityLivingBase)) {
+                continue;
+            }
+            AxisAlignedBB bb = e.boundingBox.expand(0.3, 0.3, 0.3);
+            double d;
+            if (bb.isVecInside(eye)) {
+                d = 0;
+            } else {
+                MovingObjectPosition hit = bb.calculateIntercept(eye, end);
+                if (hit == null) {
+                    continue;
+                }
+                d = eye.distanceTo(hit.hitVec);
+            }
+            if (d < limit) {
+                found.add(e);
+                dist.put(e, d);
+            }
+        }
+        java.util.Collections.sort(found, new java.util.Comparator<Entity>() {
+            @Override
+            public int compare(Entity a, Entity b) {
+                return Double.compare(dist.get(a), dist.get(b));
+            }
+        });
+        for (Entity e : found) {                            // claimed (an event) asked only of the fair ones, nearest first
+            if (BladeLogicSC.fair(p, e) && BladeLogicSC.claimed(p, e)) {
+                return e;
+            }
+        }
+        return null;
     }
 
     private static double eyeDistance(EntityPlayer p, Entity e) {
@@ -363,6 +408,7 @@ public final class BladeSingularSC {
         if (p.ticksExisted % 20 == 13) {
             second(p, s, sing ? blade : null, now);
         }
+        syncHud(p, s, sing, now);
     }
 
     private static void blockStarted(State s, long now) {
@@ -468,6 +514,62 @@ public final class BladeSingularSC {
     public static int horizonCharges(EntityPlayer p) {
         State s = p == null ? null : STATES.get(p.getUniqueID());
         return s == null ? 0 : s.horizon;
+    }
+
+    // ---- the HUD's view of the State: sent to its player when it changes (SingularHudSC draws it)
+
+    /** HUD values: horizon charges, cascade stacks, seconds left of the charged strike / parry / riposte bonus. */
+    public static final int HUD_HORIZON = 0, HUD_CASCADE = 1, HUD_CHARGED = 2, HUD_PARRY = 3, HUD_RIPOSTE = 4, HUD_N = 5;
+    /** Server: what each player was sent last. */
+    private static final Map<UUID, int[]> HUD_SENT = new HashMap<UUID, int[]>();
+    /** Client: what came last (common code, no client classes - ArmorNetSC's handler sets it). */
+    private static volatile int[] clientHud = new int[HUD_N];
+
+    /** Pure: the HUD values of a State at world tick `now` (none without the Singular blade in hand). */
+    static int[] hudValues(State s, boolean sing, long now) {
+        int[] v = new int[HUD_N];
+        if (s == null || !sing) {
+            return v;
+        }
+        v[HUD_HORIZON] = s.horizon;
+        v[HUD_CASCADE] = s.cascadeStacks > 0 && now >= s.cascadeAt && now - s.cascadeAt <= BladeFeature.CASCADE_RESET ? s.cascadeStacks : 0;
+        v[HUD_CHARGED] = s.chargedUntil > now ? secondsLeft(s.chargedUntil - now)
+                : s.blocking && s.chargeCued ? secondsLeft(BladeFeature.BONUS_KEEP) : 0;   // ready: let go and strike
+        v[HUD_PARRY] = s.parryUntil > now ? secondsLeft(s.parryUntil - now) : 0;
+        v[HUD_RIPOSTE] = s.riposte > 0 && s.riposteUntil > now ? secondsLeft(s.riposteUntil - now) : 0;
+        return v;
+    }
+
+    private static int secondsLeft(long ticks) {
+        return (int) Math.max(1, Math.min(99, (ticks + 19) / 20));
+    }
+
+    private static void syncHud(EntityPlayer p, State s, boolean sing, long now) {
+        if (!(p instanceof EntityPlayerMP)) {
+            return;
+        }
+        int[] v = hudValues(s, sing, now);
+        int[] old = HUD_SENT.get(p.getUniqueID());
+        if (old != null && java.util.Arrays.equals(old, v)) {
+            return;                                         // unchanged: nothing sent (the first tick always is - a stale client)
+        }
+        HUD_SENT.put(p.getUniqueID(), v);
+        com.sc.handler.ArmorNetSC.CHANNEL.sendTo(new com.sc.handler.ArmorNetSC.BladeHudMessage(v), (EntityPlayerMP) p);
+    }
+
+    /** Client: the values from the server (BladeHudMessage); missing ones are 0. */
+    public static void clientSetHud(int[] v) {
+        int[] c = new int[HUD_N];
+        for (int i = 0; v != null && i < Math.min(HUD_N, v.length); i++) {
+            c[i] = Math.max(0, v[i]);
+        }
+        clientHud = c;
+    }
+
+    /** Client: one HUD value (HUD_HORIZON .. HUD_RIPOSTE) as last sent. */
+    public static int clientHud(int i) {
+        int[] c = clientHud;
+        return i >= 0 && i < c.length ? c[i] : 0;
     }
 
     /** BladeLogicSC.onHurt while blocking: `amount` before, `left` after the energy block (vanilla then halves: (1 + left) / 2). */

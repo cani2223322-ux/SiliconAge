@@ -125,7 +125,8 @@ public final class NetViewNetSC {
     /**
      * С-2: other mods' claims (FTB Utilities, GriefPrevention...). As the field generator asks them: a BreakEvent by a
      * FakePlayer with the clicking player's profile, nothing broken - one probe a chunk (claims are by chunk), cached
-     * for the scan.
+     * for the scan. The FakePlayer is a {@link ProbePlayerSC}: break loggers, quest and stats mods can tell the probe
+     * from a real break and skip it.
      */
     private static final class Claims {
         final World w;
@@ -136,10 +137,7 @@ public final class NetViewNetSC {
             this.w = w;
             EntityPlayer f = null;
             if (w instanceof net.minecraft.world.WorldServer) {
-                f = net.minecraftforge.common.util.FakePlayerFactory.get((net.minecraft.world.WorldServer) w, p.getGameProfile());
-                if (f.worldObj != w) {
-                    f.setWorld(w);                          // Forge caches it by profile only
-                }
+                f = new ProbePlayerSC((net.minecraft.world.WorldServer) w, p.getGameProfile());
             }
             this.fake = f;
         }
@@ -158,6 +156,23 @@ public final class NetViewNetSC {
                 chunks.put(key, r);
             }
             return r.booleanValue();
+        }
+    }
+
+    /**
+     * СТ-3: the FakePlayer of a claim probe - a BreakEvent posted only to ask claim / protection mods whether the
+     * player may touch a block; nothing is ever broken. It carries the player's real profile (claims go by UUID), so
+     * a mod logging breaks, counting quests or punishing griefers should skip `instanceof ProbePlayerSC`
+     * (or {@link #isProbe}). Never spawned in the world, never cached: one per scan.
+     */
+    public static final class ProbePlayerSC extends net.minecraftforge.common.util.FakePlayer {
+        public ProbePlayerSC(net.minecraft.world.WorldServer w, com.mojang.authlib.GameProfile profile) {
+            super(w, profile);
+        }
+
+        /** The player behind an event is only Silicon Age's claim probe. */
+        public static boolean isProbe(EntityPlayer p) {
+            return p instanceof ProbePlayerSC;
         }
     }
 

@@ -532,6 +532,23 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         }
     }
 
+    /** БП-3: who placed it ("" for a converter from before owners - shared, as before). Not kept in the item. */
+    private String owner = "";
+
+    public String getOwner() {
+        return owner;
+    }
+
+    public void setOwner(String name) {
+        owner = name == null ? "" : name;
+        markDirty();
+    }
+
+    /** May this player change the settings, the slots, turn or break it: the owner, anyone in creative, anyone if ownerless. */
+    public boolean allowed(EntityPlayer p) {
+        return owner.isEmpty() || owner.equals(p.getCommandSenderName()) || p.capabilities.isCreativeMode;
+    }
+
     /** EU come in through this face (Вход, the buffer EU or Авто, the filter lets EU through). */
     @Override
     public boolean acceptsFrom(ForgeDirection side) {
@@ -1079,21 +1096,31 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
 
     // ---- Mekanism (IStrictEnergyAcceptor, ICableOutputter) ----
 
+    /**
+     * БП-6: Mekanism's cables pull J as getEnergy() then setEnergy(getEnergy() - taken), so the buffer
+     * they see is only what this tick's output room lets out (throughput, the EU-first priority) - as
+     * RF / gJ pulls (provideForeign). Cutting the pull in setEnergy instead would dupe: the cable has
+     * already booked all it took.
+     */
     @Override
     public double getEnergy() {
-        return pairKind() == Kind.J ? foreign : 0;
+        if (pairKind() != Kind.J) {
+            return 0;
+        }
+        beginTick();
+        return Math.max(0, Math.min(foreign, foreignOutRoom()));
     }
 
     /**
-     * Mekanism's cables pull J by setting the buffer lower (ICableOutputter): what left is booked as this
-     * tick's output (the stats, the faces - shared among the J output faces, the cable doesn't say which);
-     * not limited. A raise is booked as input the same way.
+     * Mekanism's cables pull J by setting the buffer lower (ICableOutputter), relative to the part
+     * getEnergy() shows: what left is booked as this tick's output (the stats, the faces - shared among
+     * the J output faces, the cable doesn't say which). A raise is booked as input the same way.
      */
     @Override
     public void setEnergy(double energy) {
         if (pairKind() == Kind.J) {
             double before = foreign;
-            foreign = Math.max(0, Math.min(foreignCapacity(), energy));
+            foreign = Math.max(0, Math.min(foreignCapacity(), foreign + (energy - getEnergy())));
             foreignChanged();
             double moved = foreign - before;
             if (moved != 0) {
@@ -1127,9 +1154,10 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         }
     }
 
+    /** Less the part getEnergy() hides, so getMaxEnergy() - getEnergy() is still the true room for J coming in. */
     @Override
     public double getMaxEnergy() {
-        return pairKind() == Kind.J ? foreignCapacity() : 0;
+        return pairKind() == Kind.J ? Math.max(0, foreignCapacity() - (foreign - getEnergy())) : 0;
     }
 
     @Override
@@ -1555,9 +1583,15 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
 
     // ------------------------------------------------------------------ the item: buffers, modules, settings
 
-    /** Everything the dropped block keeps: both buffers, the pair and the settings, the modules. */
+    /**
+     * Everything the dropped block keeps: both buffers, the pair and the settings, the modules. An
+     * empty tag for a blank converter (БП-5) - the block drops it without one, so it stacks with new ones.
+     */
     public NBTTagCompound writeToItem() {
         NBTTagCompound t = new NBTTagCompound();
+        if (isBlank()) {
+            return t;
+        }
         if (getEnergyStored() > 0) {
             t.setInteger("EnergySC", getEnergyStored());
         }
@@ -1581,6 +1615,35 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         }
         modulesInItemTick = worldObj != null ? worldObj.getTotalWorldTime() : -1;
         return t;
+    }
+
+    /**
+     * Both buffers empty, no modules, the pair the one a new converter picks (fixPair) and the faces
+     * and switches as a new one's (compared with a fresh create()). readFromItem without a tag changes nothing.
+     */
+    private boolean isBlank() {
+        if (getEnergyStored() > 0 || foreign > 0) {
+            return false;
+        }
+        for (int i = FIRST_MODULE; i < SLOT_COUNT; i++) {
+            if (inv[i] != null) {
+                return false;
+            }
+        }
+        int first = -1;
+        for (Kind k : Kind.values()) {
+            if (pairAvailable(k)) {                            // no modules: the same as a new converter's
+                first = k.ordinal();
+                break;
+            }
+        }
+        if (pair != -1 && pair != first) {
+            return false;
+        }
+        NBTTagCompound mine = new NBTTagCompound(), fresh = new NBTTagCompound();
+        writeSettings(mine);
+        create().writeSettings(fresh);
+        return mine.equals(fresh);
     }
 
     /** The block is gone (its contents dropped or in the item): the slots emptied, no rules asked. */
@@ -1664,6 +1727,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         readSettings(nbt);
         ForgeDirection f = ForgeDirection.getOrientation(nbt.getInteger("Facing"));
         facing = f == ForgeDirection.UNKNOWN ? ForgeDirection.NORTH : f;
+        owner = nbt.getString("ConvOwner");
         if (nbt.hasKey("ConvOutKinds")) {                         // the client: what the faces send (the screen's and the texture's)
             int ok = nbt.getInteger("ConvOutKinds");
             for (int s = 0; s < 6; s++) {
@@ -1685,6 +1749,9 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         nbt.setInteger("ConvPair", pair);
         writeSettings(nbt);
         nbt.setInteger("Facing", facing.ordinal());
+        if (!owner.isEmpty()) {
+            nbt.setString("ConvOwner", owner);
+        }
         int ok = 0;
         for (int s = 0; s < 6; s++) {
             ok |= outKind[s] << 2 * s;

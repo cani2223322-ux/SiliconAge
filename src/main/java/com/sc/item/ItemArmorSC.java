@@ -356,6 +356,15 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             case 1:
                 list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
                 com.sc.util.TooltipSC.pairs(list, names, on);
+                if (armorType == 1) {                           // БР-1: which chips are in, and their tiers
+                    java.util.List<String> chips = ItemArmorChipSC.installedNames(stack);
+                    StringBuilder sb = new StringBuilder();
+                    for (String c : chips) {
+                        sb.append(sb.length() > 0 ? ", " : "").append(c);
+                    }
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.chips",
+                            chips.isEmpty() ? Lang.tr("sc.tooltip.armor.chips.none") : sb.toString()), "§7");
+                }
                 gasLines(stack, list);
                 if (suit == ArmorSuit.SINGULAR) {               // K10: the Exo functions on less gas; stage 3: the level
                     com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.legacy",

@@ -183,7 +183,13 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (slot >= 0 && slot < SLOTS) {
             return proc.locks(slot);
         }
-        return slot == DONOR_SLOT ? proc.locks(DONOR_BIT) : slot == TOOL_SLOT ? proc.locks(TOOL_BIT) : slot == CATALYST_SLOT;
+        return slot == DONOR_SLOT ? proc.locks(DONOR_BIT) : slot == TOOL_SLOT ? proc.locks(TOOL_BIT) : slot == CATALYST_SLOT && holdsCatalyst(proc);
+    }
+
+    /** СБ-6: the catalyst slot is held only while a cancel would put a core back there (a modernisation with the core, Б-1). */
+    private static boolean holdsCatalyst(SingularProcessSC p) {
+        return p.kind == SingularProcessSC.KIND_CONVERT
+                || (p.kind == SingularProcessSC.KIND_MODERNISE && (p.catalystEu > 0 || SingularStationMath.needsCatalyst(p.levels)));
     }
 
     // ------------------------------------------------------------------ tanks, energy, charging
@@ -783,7 +789,31 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         long eu = Math.min(coreEu, q.cost[SingularStationMath.R_EU]);   // the cores' charge pays the EU first
         q.catalystEu = eu;
         q.drawn[SingularStationMath.R_EU] = eu;
+        long keep = eu;                                     // СБ-3: the cores keep only the counted part; the rest -> the buffer
+        for (ItemStack s : q.items) {
+            int k = materialKind(s);
+            if (k == SingularStationMath.M_EXO_CORE || k == SingularStationMath.M_SING_CORE) {
+                long c = Math.min(keep, com.sc.item.ItemBatterySC.chargeOf(s));
+                com.sc.item.ItemBatterySC.setCharge(s, c);
+                keep -= c;
+            }
+        }
+        long over = coreEu - eu, lost = 0;
+        if (over > 0) {
+            long put = Math.min(over, Math.max(0L, (long) getMaxEnergyStored() - getEnergyStored()));
+            if (put > 0) {
+                addEnergy((int) Math.min(Integer.MAX_VALUE, put));
+            }
+            lost = over - put;
+        }
         begin(q);
+        if (lost > 0 && worldObj != null && !worldObj.isRemote && !q.starter.isEmpty()) {
+            EntityPlayer who = worldObj.getPlayerEntityByName(q.starter);
+            if (who != null) {
+                who.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.singStation.catalyst.lost",
+                        String.valueOf(lost)));
+            }
+        }
         return null;
     }
 
@@ -935,8 +965,21 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
                 fillTank(SingularStationMath.GAS[r], (int) Math.min(Integer.MAX_VALUE, g), true);
             }
         }
+        long coreEu = 0;
+        for (ItemStack s : p.items) {
+            int k = materialKind(s);
+            if (k == SingularStationMath.M_EXO_CORE || k == SingularStationMath.M_SING_CORE) {
+                coreEu += com.sc.item.ItemBatterySC.chargeOf(s);
+            }
+        }
+        boolean counted = convert && coreEu <= p.catalystEu;    // СБ-3: the cores hold only the counted charge (an older save: all of it)
         for (ItemStack s : p.items) {                       // Б-1 materials (the cores with their charge), the drill's crumbs: whole
-            putBack(s.copy());
+            ItemStack ret = s.copy();
+            int k = materialKind(ret);
+            if (counted && (k == SingularStationMath.M_EXO_CORE || k == SingularStationMath.M_SING_CORE)) {
+                com.sc.item.ItemBatterySC.setCharge(ret, SingularStationMath.refund(com.sc.item.ItemBatterySC.chargeOf(ret)));   // as the catalyst
+            }
+            putBack(ret);
         }
         if (!convert && (p.catalystEu > 0 || (p.kind == SingularProcessSC.KIND_MODERNISE && SingularStationMath.needsCatalyst(p.levels)))
                 && com.sc.init.ModItems.battery != null) {         // the core used up at the start comes back as a new one
@@ -1151,7 +1194,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
 
     // ------------------------------------------------------------------ Ф3 branches, the colour scheme
 
-    /** Ф3: the chestplate in the slot takes branch `choice` at `level` (3 / 5) for BRANCH_SM mB of singular matter. */
+    /** Ф3: the chestplate in the slot takes branch `choice` at `level` (3 / 5) for BRANCH_SM mB of singular matter (the first choice: free). */
     public String changeBranch(int level, int choice) {
         ItemStack chest = getStackInSlot(com.sc.util.ArmorGasSC.CHEST);
         if (!SingularLevel.isSingular(chest) || (level != 3 && level != 5) || (choice != SingularLevel.BRANCH_A && choice != SingularLevel.BRANCH_B)) {
@@ -1166,10 +1209,13 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (SingularLevel.branchChoice(chest, level) == choice) {
             return "sc.singStation.err.samebranch";
         }
-        if (tankAmount(Gas.SINGULAR_MATTER) < SingularStationMath.BRANCH_SM) {
+        boolean free = SingularLevel.branchChoice(chest, level) == SingularLevel.BRANCH_NONE;   // СБ-7: the first choice is free, as in the K menu
+        if (!free && tankAmount(Gas.SINGULAR_MATTER) < SingularStationMath.branchSm()) {
             return "sc.singStation.err.nosm";
         }
-        getTank(Gas.SINGULAR_MATTER).drain(SingularStationMath.BRANCH_SM, true);
+        if (!free) {
+            getTank(Gas.SINGULAR_MATTER).drain(SingularStationMath.branchSm(), true);
+        }
         SingularLevel.setBranch(chest, level, choice);
         markDirty();
         return null;
@@ -1190,10 +1236,10 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (com.sc.util.ToolLevelSC.branchOf(t) == choice) {
             return "sc.singStation.err.samebranch";
         }
-        if (tankAmount(Gas.SINGULAR_MATTER) < SingularStationMath.BRANCH_SM) {
+        if (tankAmount(Gas.SINGULAR_MATTER) < SingularStationMath.branchSm()) {
             return "sc.singStation.err.nosm";
         }
-        getTank(Gas.SINGULAR_MATTER).drain(SingularStationMath.BRANCH_SM, true);
+        getTank(Gas.SINGULAR_MATTER).drain(SingularStationMath.branchSm(), true);
         com.sc.util.ToolLevelSC.setBranch(t, choice);
         markDirty();
         return null;

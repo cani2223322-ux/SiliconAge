@@ -230,6 +230,13 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         this.currentRecipeTicks = value;
     }
 
+    /** Server side: the progress a dropped machine's item carried (see BlockMachineSC.onBlockPlacedBy). */
+    public void loadProgressFromItem(int progress, int ofTicks) {
+        currentRecipeTicks = Math.max(0, ofTicks);
+        progressTicks = Math.max(0, progress);
+        markDirty();
+    }
+
     public void setHeatClient(int value) {
         this.heat = value;
     }
@@ -461,7 +468,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         if (upgradeCount(UpgradeType.EJECTOR) > 0) {
             eject();
         }
-        if (upgradeCount(UpgradeType.PULLER) > 0 && worldObj.getTotalWorldTime() % PULL_INTERVAL == 0) {
+        // МШ-1: a switched-off (or redstone-stopped) machine takes nothing new in; the ejector still empties it
+        if (upgradeCount(UpgradeType.PULLER) > 0 && worldObj.getTotalWorldTime() % PULL_INTERVAL == 0 && powerOn && redstoneAllows()) {
             pull();
         }
         if (feedFromBattery(slots[SLOT_BATTERY]) > 0) {
@@ -590,6 +598,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         // FurnaceRecipes walks its whole list on every call; a smelter asks every tick for every
         // stream, a puller for every neighbouring slot - so the answers are kept by item and damage
         // (by the Item itself, not its numeric id: another world may number its items differently)
+        int recipes = net.minecraft.item.crafting.FurnaceRecipes.smelting().getSmeltingList().size();
+        if (recipes != smeltRecipeCount) {               // МШ-8: recipes added or removed (MineTweaker reload, a late mod) - ask again
+            SMELT_CACHE.clear();
+            smeltRecipeCount = recipes;
+        }
         java.util.Map<Integer, ItemStack[]> byDamage = SMELT_CACHE.get(in.getItem());
         if (byDamage == null) {
             byDamage = new java.util.concurrent.ConcurrentHashMap<Integer, ItemStack[]>();
@@ -607,9 +620,13 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     private static final java.util.Map<net.minecraft.item.Item, java.util.Map<Integer, ItemStack[]>> SMELT_CACHE =
             new java.util.concurrent.ConcurrentHashMap<net.minecraft.item.Item, java.util.Map<Integer, ItemStack[]>>();
 
-    /** Forgets the furnace answers (server stop: the next world may bring changed furnace recipes - MineTweaker and the like). */
+    /** Size of the furnace recipe list the cached answers were taken from (-1: none yet). */
+    private static volatile int smeltRecipeCount = -1;
+
+    /** Forgets the furnace answers (server start / stop: the world may bring changed furnace recipes - MineTweaker and the like). */
     public static void clearSmeltCache() {
         SMELT_CACHE.clear();
+        smeltRecipeCount = -1;
     }
 
     /** The induction furnace's speed from its heat (x1 cold .. x3 hot); 1 for the electric one. */
@@ -707,7 +724,12 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             int warm = com.sc.util.ConfigSC.scale(KEEP_WARM_EU, com.sc.util.ConfigSC.machineEnergy, 1);
             if (full) {
                 status = MachineStatus.OUTPUT_FULL;              // said first: warm or not, the output wants emptying
-                coolInduction();
+                if (induction && keepWarm && getEnergyStored() >= warm) {
+                    removeEnergy(warm);                          // МШ-9: keeping warm goes on while the output waits
+                    heat = Math.min(INDUCTION_HEAT_MAX, heat + 1);
+                } else {
+                    coolInduction();
+                }
             } else if (induction && keepWarm && getEnergyStored() >= warm) {
                 removeEnergy(warm);
                 heat = Math.min(INDUCTION_HEAT_MAX, heat + 1);
@@ -856,9 +878,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
      * The mass one piece of `stack` gives the compressor, or 0 when it doesn't take it at all: nothing
      * with NBT (a charged battery, a configured tool, a machine with upgrades inside - it would be
      * destroyed with everything on it), and never the capsule itself. Nor what would be a pity to burn
-     * by accident: anything with a container (fluid buckets, cells), the mod's own machines, generators,
-     * storages and tanks (its blocks with a tile entity), anything not of common rarity, and the
-     * valuables of VALUABLES. A block 9, any other item 1; lead, tungsten, hafnium, tantalum, iron and
+     * by accident: anything with a container (fluid buckets, cells), any mod's machines, generators,
+     * storages, tanks and chests (blocks with a tile entity), diamond tools and armour, anything not of
+     * common rarity, and the valuables of VALUABLES. A block 9, any other item 1; lead, tungsten, hafnium, tantalum, iron and
      * gold (ingot, dust, plate, crushed ore, block) x4.
      */
     public static int matterMass(ItemStack stack) {
@@ -872,7 +894,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             return 0;
         }
         if (stack.getItem().hasContainerItem(stack) || stack.getRarity() != net.minecraft.item.EnumRarity.common
-                || isValuable(stack) || isModTileBlock(stack)) {
+                || isValuable(stack) || isTileBlock(stack) || isDiamondGear(stack)) {
             return 0;
         }
         int mass = stack.getItem() instanceof net.minecraft.item.ItemBlock ? MASS_BLOCK : MASS_ITEM;
@@ -893,13 +915,30 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 || i == net.minecraft.item.Item.getItemFromBlock(net.minecraft.init.Blocks.dragon_egg);
     }
 
-    /** The mod's machines, generators, storages, tanks...: its blocks with a tile entity (lead blocks and the like still go in). */
-    private static boolean isModTileBlock(ItemStack stack) {
+    /** МШ-3: machines, generators, storages, tanks, chests... of any mod: blocks with a tile entity (lead blocks and the like still go in). */
+    private static boolean isTileBlock(ItemStack stack) {
         if (!(stack.getItem() instanceof net.minecraft.item.ItemBlock)) {
             return false;
         }
         net.minecraft.block.Block b = net.minecraft.block.Block.getBlockFromItem(stack.getItem());
-        return b != null && b.getClass().getName().startsWith("com.sc.") && b.hasTileEntity(stack.getItem().getMetadata(stack.getItemDamage()));
+        return b != null && b.hasTileEntity(stack.getItem().getMetadata(stack.getItemDamage()));
+    }
+
+    /** МШ-3: tools, weapons and armour of the diamond material (a fresh one has no NBT and common rarity). */
+    private static boolean isDiamondGear(ItemStack stack) {
+        net.minecraft.item.Item i = stack.getItem();
+        String diamond = net.minecraft.item.Item.ToolMaterial.EMERALD.toString();
+        if (i instanceof net.minecraft.item.ItemTool) {
+            return diamond.equals(((net.minecraft.item.ItemTool) i).getToolMaterialName());
+        }
+        if (i instanceof net.minecraft.item.ItemSword) {
+            return diamond.equals(((net.minecraft.item.ItemSword) i).getToolMaterialName());
+        }
+        if (i instanceof net.minecraft.item.ItemHoe) {
+            return diamond.equals(((net.minecraft.item.ItemHoe) i).getToolMaterialName());
+        }
+        return i instanceof net.minecraft.item.ItemArmor
+                && ((net.minecraft.item.ItemArmor) i).getArmorMaterial() == net.minecraft.item.ItemArmor.ArmorMaterial.DIAMOND;
     }
 
     /** The mod's own tile entities (machines, generators, storages, the quarry, tanks...): the compressor's puller leaves them alone. */
@@ -1068,7 +1107,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     }
                     FluidStack offer = held.copy();
                     offer.amount = Math.min(FLUID_MOVE, held.amount);
-                    int accepted = handler.fill(dir.getOpposite(), offer, true);
+                    int accepted = Math.min(offer.amount, handler.fill(dir.getOpposite(), offer, true));   // СХ-5 (as Э-4): never trust more than offered
                     if (accepted > 0) {
                         tank.drain(accepted, true);
                         fluidChanged();
@@ -1081,16 +1120,17 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     /** Puller upgrade: ingredients this machine has a recipe for, out of every neighbour that gives them (PULL_ITEMS per pull in all). */
     private void pull() {
         int budget = PULL_ITEMS;
+        boolean inputsFull = inputsFull();                 // МШ-7: nothing can come in - don't walk the neighbours' slots
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
             net.minecraft.tileentity.TileEntity te = neighbour(dir);
-            if (te instanceof IInventory && budget > 0 && !(machineType.isCompressor() && isModTile(te))) {
+            if (te instanceof IInventory && budget > 0 && !inputsFull && !(machineType.isCompressor() && isModTile(te))) {
                 IInventory source = (IInventory) te;      // the compressor: only from other inventories (chests...), never the mod's own
                 for (int slot : InvUtilSC.slots(source, dir)) {
                     ItemStack stack = source.getStackInSlot(slot);
                     if (budget <= 0) {
                         break;
                     }
-                    if (stack == null || !RecipeRegistry.isValidInput(machineType, stack) || !InvUtilSC.canTake(source, slot, stack, dir)) {
+                    if (stack == null || !pullable(stack) || !InvUtilSC.canTake(source, slot, stack, dir)) {
                         continue;
                     }
                     // never trust another mod's inventory: take only what fits, move what it really gave
@@ -1114,13 +1154,60 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     int room = can == null ? 0 : fill(ForgeDirection.UNKNOWN, can, false);
                     if (room > 0) {
                         FluidStack got = source.drain(dir.getOpposite(), new FluidStack(there.getFluid(), room), true);
-                        if (got != null) {
-                            fill(ForgeDirection.UNKNOWN, got, true);
+                        if (got != null && got.amount > 0) {
+                            // СХ-5 (as Э-4): a foreign tank may hand out more (or another fluid) than asked - what doesn't fit goes back
+                            int put = fill(ForgeDirection.UNKNOWN, got, true);
+                            if (put < got.amount) {
+                                FluidStack back = got.copy();
+                                back.amount = got.amount - put;
+                                source.fill(dir.getOpposite(), back, true);
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    /** What the puller takes: an ingredient, or (МШ-2) a singularity clot for a compressor in the liquid mode. */
+    private boolean pullable(ItemStack stack) {
+        if (machineType.isCompressor() && com.sc.item.ItemSingularClotSC.isClot(stack)) {
+            return matterLiquid;
+        }
+        return RecipeRegistry.isValidInput(machineType, stack);
+    }
+
+    /**
+     * МШ-7: no input slot can take another item - each is full to its limit, or empty where no recipe
+     * has room for one more ingredient beside what's already in (fitsSomeRecipe would refuse it anyway).
+     */
+    private boolean inputsFull() {
+        int usable = machineType.isSmelter() ? machineType.smeltStreams() : INPUT_SLOTS;
+        java.util.List<ItemStack> present = new java.util.ArrayList<ItemStack>();
+        boolean empty = false;
+        for (int i = 0; i < usable; i++) {
+            ItemStack s = slots[i];
+            if (s == null) {
+                empty = true;
+            } else if (s.stackSize < Math.min(getInventoryStackLimit(), s.getMaxStackSize())) {
+                return false;
+            } else {
+                present.add(s);
+            }
+        }
+        if (!empty) {
+            return true;
+        }
+        if (machineType.isSmelter() || machineType.isCompressor()) {
+            return false;
+        }
+        for (MachineRecipe recipe : RecipeRegistry.recipesFor(machineType)) {
+            if (present.size() < recipe.inputs.length
+                    && assignIngredients(present, 0, recipe.inputs, new boolean[recipe.inputs.length])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void dissipateHeat() {
@@ -1459,6 +1546,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                     // a heat sink only where there's heat, a tank extension only where there are tanks
                     // (only new ones are refused - what an older world already has in the slots stays)
                     && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.HEAT_SINK && !machineType.heatCapable)
+                    // МШ-4: quality only where some recipe can come out defective
+                    && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.QUALITY && !hasDefects(machineType))
                     // (the Matter Compressor has no recipes, but its singular-matter tank takes extensions - tankCapacity)
                     && !(com.sc.item.ItemUpgradeSC.typeOf(stack) == UpgradeType.TANK_EXTENSION && !usesAnyTank(machineType)
                             && !machineType.isCompressor());
@@ -1470,6 +1559,16 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             return slot < INPUT_SLOTS && (matterMass(stack) > 0 || com.sc.item.ItemSingularClotSC.isClot(stack));
         }
         return slot < INPUT_SLOTS && RecipeRegistry.isValidInput(machineType, stack);
+    }
+
+    /** Whether any recipe of this type has a defect chance (the quality upgrade has something to improve). */
+    private static boolean hasDefects(MachineType type) {
+        for (MachineRecipe recipe : RecipeRegistry.recipesFor(type)) {
+            if (recipe.defectChance > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether any recipe of this type uses any of the four tanks (as ContainerMachineSC.usesTanks). */
@@ -1492,6 +1591,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
         if (slot == SLOT_BATTERY) {
             return slots[SLOT_BATTERY] == null && com.sc.item.BatteryFeedSC.accepts(stack);   // a full one in
+        }
+        if (machineType.isCompressor() && com.sc.item.ItemSingularClotSC.isClot(stack) && !matterLiquid) {
+            return false;                                    // МШ-2: in the capsule mode a clot only waits - automation would jam the inputs with them
         }
         if (machineType.isSmelter() || machineType.isCompressor()) {
             return isItemValidForSlot(slot, stack) && (slots[slot] == null || slots[slot].isItemEqual(stack));

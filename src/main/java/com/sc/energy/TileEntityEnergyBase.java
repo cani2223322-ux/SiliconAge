@@ -153,6 +153,30 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
         markDirty();
     }
 
+    /** RedstoneMode / BatteryMode into a dropped block's item NBT - only when not the default. */
+    public void writeCommonItem(NBTTagCompound tag) {
+        if (redstoneMode != 0) {
+            tag.setInteger("RedstoneMode", redstoneMode);
+        }
+        if (batteryMode != 0) {
+            tag.setInteger("BatteryMode", batteryMode);
+        }
+    }
+
+    /** Puts back what writeCommonItem() saved (a key missing - the default stays). */
+    public void readCommonItem(NBTTagCompound tag) {
+        if (tag == null) {
+            return;
+        }
+        if (tag.hasKey("RedstoneMode")) {
+            redstoneMode = Math.max(0, Math.min(2, tag.getInteger("RedstoneMode")));
+        }
+        if (tag.hasKey("BatteryMode")) {
+            batteryMode = Math.max(0, Math.min(com.sc.item.BatteryFeedSC.MODES - 1, tag.getInteger("BatteryMode")));
+        }
+        markDirty();
+    }
+
     /** Whether the battery in the slot gives energy now (also on the client, for the screen's arrows). */
     public boolean batteryFeeds(ItemStack battery) {
         if (!powerOn || battery == null || com.sc.item.BatteryFeedSC.chargeOf(battery) <= 0) {
@@ -287,9 +311,9 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
                 return 0;
             }
             ExplosionLogic.checkOvervoltageAndExplode(this, inputTier(), packetTier);
-            // Receiver no longer exists (block was replaced with air by the explosion) -
-            // report the whole packet as "accepted" so callers don't try to redirect it.
-            return amount;
+            // Exploded: the receiver is gone - report the whole packet as "accepted" so callers don't
+            // try to redirect it. Explosions off in the config: it stays and refuses the packet.
+            return isInvalid() ? amount : 0;
         }
         int room = Math.max(0, getMaxEnergyStored() - energyStored);
         int accepted = Math.max(0, Math.min(room, amount));

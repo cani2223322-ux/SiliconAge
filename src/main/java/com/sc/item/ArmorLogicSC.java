@@ -107,6 +107,21 @@ public final class ArmorLogicSC {
         return chest != null && chest.hasTagCompound() && chest.getTagCompound().getBoolean("ChipsOffSC");
     }
 
+    /** EU a second the chestplate's chips draw: CHIP_EU_PER_TIER_SECOND x tier each, regeneration x3. */
+    public static int chipsCost(EntityPlayer p, ItemStack chest) {
+        int cost = 0;
+        for (ChipType type : ChipType.values()) {
+            cost += ArmorGasSC.chipTier(chest, type) * ArmorSuit.CHIP_EU_PER_TIER_SECOND;
+        }
+        return (int) Math.ceil(cost * regenMul(p));
+    }
+
+    /** The chips have something to run and the chestplate holds enough for their next second. */
+    public static boolean chipsPowered(EntityPlayer p, ItemStack chest) {
+        int cost = chipsCost(p, chest);
+        return cost > 0 && ItemArmorSC.chargeOf(chest) >= cost;
+    }
+
     /**
      * Worn, switched on, the suit isn't overheated, and the piece holds enough for the function's
      * next payment - a nearly empty piece used to keep flying (or showing ores) for free. The solar
@@ -132,11 +147,16 @@ public final class ArmorLogicSC {
         if (!gasAllows(ArmorGasSC.wornSet(p), f)) {
             return false;                 // Quantum / Exo: no gas of its own, or emergency mode (no helium)
         }
+        return ItemArmorSC.chargeOf(s) >= euNeed(p, f);
+    }
+
+    /** The charge a function's piece must hold for it to work (its next second). */
+    private static int euNeed(EntityPlayer p, ArmorFeature f) {
         int need = f.euPerSecond > 0 ? (int) Math.ceil(f.euPerSecond * costMul(p)) : f == ArmorFeature.SOLAR || f.gasPowered() ? 0 : 1;
         if (f == ArmorFeature.FLIGHT && boostedFlight(p)) {
             need = 0;                     // the engine boost flies on hydrogen, not EU
         }
-        return ItemArmorSC.chargeOf(s) >= need;
+        return need;
     }
 
     /** О2: the piece holds under SING_LOW_CHARGE of its capacity. */
@@ -331,7 +351,7 @@ public final class ArmorLogicSC {
     }
 
     private static final String O2_SPACE_AT = "scO2SpaceAt", O2_USED = "scO2Used", FUSION_ON = "scFusionOn",
-            AIR_JUMPED = "scAirJumped", AIR_JUMP_AT = "scAirJumpAt", ARGON_AT = "scArgonAt", WARN_PREFIX = "scGasWarn_";
+            AIR_JUMPED = "scAirJumped", AIR_DASHED = "scAirDashed", AIR_JUMP_AT = "scAirJumpAt", ARGON_AT = "scArgonAt", WARN_PREFIX = "scGasWarn_";
     /** The searchlight's light: where it stands (player data), and when it was last pointed at. */
     public static final String LIGHT_X = "scLightX", LIGHT_Y = "scLightY", LIGHT_Z = "scLightZ", LIGHT_DIM = "scLightDim",
             LIGHT_AT = "scLightAt", LIGHT_ON = "scLightOn", LIGHT_MOVED = "scLightMoved";
@@ -432,6 +452,7 @@ public final class ArmorLogicSC {
         }
         if (p.onGround || p.capabilities.isFlying || p.isInWater() || p.isOnLadder()) {
             data.removeTag(AIR_JUMPED);                       // one air jump per time off the ground
+            data.removeTag(AIR_DASHED);                       // and one dash in mid-air
         }
         stabilizer(p);                                         // both sides: the client moves the player
         antigravity(p);
@@ -743,11 +764,11 @@ public final class ArmorLogicSC {
             p.sendPlayerAbilities();
         } else if (!can && data.getBoolean(FLIGHT_FLAG)) {
             data.removeTag(FLIGHT_FLAG);
-            if (!p.capabilities.isCreativeMode && p.capabilities.isFlying && !p.onGround
-                    && flightCutByGas(ArmorGasSC.wornSet(p))) {
-                // cut in mid-air by the gases: a few seconds of slowed fall (the client slows it, see softDescent)
+            String cut = !p.capabilities.isCreativeMode && p.capabilities.isFlying && !p.onGround ? flightCutReason(p) : null;
+            if (cut != null) {
+                // cut in mid-air by the gases, the heat or the charge: a few seconds of slowed fall (the client slows it, see softDescent)
                 data.setInteger(DESCENT, SOFT_DESCENT_TICKS);
-                warn(p, "sc.gas.warn.flightcut", 100);
+                warn(p, cut, 100);
             }
             if (!p.capabilities.isCreativeMode) {
                 p.capabilities.allowFlying = false;
@@ -811,12 +832,35 @@ public final class ArmorLogicSC {
     }
 
     /**
-     * Every tick, both sides (the player's own client, the server). The gases cut the flight in
-     * mid-air: for SOFT_DESCENT_TICKS the fall is slowed to SOFT_DESCENT_SPEED (the client, which
+     * The flight cut by the suit, not by the wearer: the gases (flightCutByGas), or a switched-on
+     * flight shut down by the overheat or by too little charge for its next second.
+     * @return the warning's key, null when the flight wasn't cut that way
+     */
+    public static String flightCutReason(EntityPlayer p) {
+        ItemStack[] worn = ArmorGasSC.wornSet(p);
+        if (flightCutByGas(worn)) {
+            return "sc.gas.warn.flightcut";
+        }
+        ItemStack chest = worn[ArmorGasSC.CHEST];
+        boolean on = ItemArmorSC.isEnabled(chest, ArmorFeature.FLIGHT) || ItemArmorSC.isEnabled(chest, ArmorFeature.GRAV_FLIGHT);
+        if (!on) {
+            return null;
+        }
+        if (overheated(p)) {
+            return "sc.gas.warn.flightcut.heat";
+        }
+        boolean flat = ItemArmorSC.isEnabled(chest, ArmorFeature.FLIGHT) && ItemArmorSC.chargeOf(chest) < euNeed(p, ArmorFeature.FLIGHT)
+                || ItemArmorSC.isEnabled(chest, ArmorFeature.GRAV_FLIGHT) && ItemArmorSC.chargeOf(chest) < euNeed(p, ArmorFeature.GRAV_FLIGHT);
+        return flat ? "sc.gas.warn.flightcut.charge" : null;
+    }
+
+    /**
+     * Every tick, both sides (the player's own client, the server). The gases, the overheat or too
+     * little charge cut the flight in mid-air: for SOFT_DESCENT_TICKS the fall is slowed to SOFT_DESCENT_SPEED (the client, which
      * moves its player) and that landing does no damage (the server: fall distance kept at 0, and
      * fall() lets the landing through). It only limits falling - never lifts - and comes once per cut:
      * the server starts it in flight(), the client when its flight is taken away (abilities from the
-     * server) with the same gas check. Over on the ground, in water / lava, on a ladder, flying again.
+     * server) with the same check (flightCutReason). Over on the ground, in water / lava, on a ladder, flying again.
      */
     private static void softDescent(EntityPlayer p) {
         NBTTagCompound data = p.getEntityData();
@@ -824,7 +868,7 @@ public final class ArmorLogicSC {
             boolean was = data.getBoolean(WAS_FLYING), now = p.capabilities.isFlying;
             data.setBoolean(WAS_FLYING, now);
             if (was && !now && !p.capabilities.allowFlying && !p.capabilities.isCreativeMode && !p.onGround
-                    && flightCutByGas(ArmorGasSC.wornSet(p))) {
+                    && flightCutReason(p) != null) {
                 data.setInteger(DESCENT, SOFT_DESCENT_TICKS);
             }
         }
@@ -950,7 +994,8 @@ public final class ArmorLogicSC {
         } else {
             ItemStack chest = piece(p, 1);
             boolean sensorChip = !sight && chest != null && chest.hasTagCompound() && !overheated(p) && !emergency(ArmorGasSC.wornSet(p))
-                    && chest.getTagCompound().getCompoundTag("ChipsSC").hasKey(com.sc.util.ChipType.SENSOR.name());
+                    && chest.getTagCompound().getCompoundTag("ChipsSC").hasKey(com.sc.util.ChipType.SENSOR.name())
+                    && chipsPowered(p, chest);                     // too little EU for the chips: they're off, the effect goes too
             if (sensorChip) {
                 // a running Sensor chip gives the same effect (CommonEventHandler) - it's ours too, left on
                 data.setBoolean(NIGHT_VISION_FLAG, true);
@@ -1479,7 +1524,23 @@ public final class ArmorLogicSC {
 
     /** An explosion about to push / hurt entities: a player it can't touch (explosion proofing) is taken off its list. */
     public static boolean explosionProof(EntityPlayer p) {
-        return !p.worldObj.isRemote && ArmorSuit.exoClass(fullSet(p)) && active(p, ArmorFeature.EXPLOSION_PROOF)
+        return explosionProof(p, null);
+    }
+
+    /**
+     * The same, paid only when the blast can reach the player: within its reach (the list Detonate
+     * gives is a box round twice that), and not in creative / invulnerable - out of reach it does no
+     * damage and no push anyway, so the player is just left on the list. `ex` null: no reach check.
+     */
+    public static boolean explosionProof(EntityPlayer p, net.minecraft.world.Explosion ex) {
+        if (p.worldObj.isRemote || p.capabilities.disableDamage || p.isEntityInvulnerable()) {
+            return false;
+        }
+        if (ex != null && (ex.explosionSize <= 0                // already doubled when Detonate fires (see anchorExplosion)
+                || p.getDistance(ex.explosionX, ex.explosionY, ex.explosionZ) / ex.explosionSize > 1.0)) {
+            return false;
+        }
+        return ArmorSuit.exoClass(fullSet(p)) && active(p, ArmorFeature.EXPLOSION_PROOF)
                 && pay(p, ArmorFeature.EXPLOSION_PROOF, ArmorFeature.EXPLOSION_PROOF_COST)
                 && addHeatAnd(p, ArmorFeature.EXPLOSION_PROOF.heat);
     }
@@ -1507,6 +1568,10 @@ public final class ArmorLogicSC {
         if (!active(p, ArmorFeature.DASH)) {
             return;
         }
+        boolean inAir = !p.onGround && !p.capabilities.isFlying && !p.isInWater() && !p.isOnLadder();
+        if (inAir && data.getBoolean(AIR_DASHED)) {
+            return;                                        // one dash in mid-air per time off the ground, like the air jump
+        }
         // the engine boost: half as far again, on hydrogen instead of EU
         ItemStack[] worn = ArmorGasSC.wornSet(p);
         boolean boost = boosterOn(p) && ArmorGasSC.drainExactUse(worn, Gas.HYDROGEN, ArmorGasSC.H2_DASH);
@@ -1522,6 +1587,9 @@ public final class ArmorLogicSC {
         }
         double push = boost ? 1.8 * 1.5 : 1.8;
         data.setLong("scDashAt", now);
+        if (inAir) {
+            data.setBoolean(AIR_DASHED, true);
+        }
         p.motionX = look.xCoord / len * push;
         p.motionZ = look.zCoord / len * push;
         p.motionY = Math.max(p.motionY, 0.35);

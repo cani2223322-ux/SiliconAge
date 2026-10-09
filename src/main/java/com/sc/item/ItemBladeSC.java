@@ -361,6 +361,10 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
                     list.add("\u00a7d" + Lang.tr("sc.tooltip.tool.sing.formattack", Lang.tr(form.langKey()),
                             Lang.tr(BladeFeature.formAttackKey(form))));
                     singularDetails(list, true);
+                    int b = ToolLevelSC.branchOf(stack);
+                    if (b != ToolLevelSC.BRANCH_NONE) {        // as the drill: what the chosen branch gives
+                        com.sc.util.TooltipSC.wrap(list, Lang.tr(ToolLevelSC.branchLangKey(stack, b) + ".desc"), "\u00a77");
+                    }
                 }
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;

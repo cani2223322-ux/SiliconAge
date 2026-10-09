@@ -280,7 +280,30 @@ public class SingularHudSC {
         com.sc.util.BladeForm form = com.sc.item.BladeSingularSC.effectiveForm(p, held);
         String s = Lang.tr("sc.toolhud.form", Lang.tr(form.langKey()), Lang.tr(BladeFeature.formAttackKey(form)));
         fr.drawStringWithShadow(s, (w - fr.getStringWidth(s)) / 2, h - rows - 11, PURPLE);
-        return 11;
+        List<String> parts = new ArrayList<String>();
+        hudPart(parts, com.sc.item.BladeSingularSC.HUD_HORIZON, "§b", "sc.toolhud.blade.horizon");
+        hudPart(parts, com.sc.item.BladeSingularSC.HUD_CASCADE, "§6", "sc.toolhud.blade.cascade");
+        hudPart(parts, com.sc.item.BladeSingularSC.HUD_CHARGED, "§e", "sc.toolhud.blade.charged");
+        hudPart(parts, com.sc.item.BladeSingularSC.HUD_PARRY, "§a", "sc.toolhud.blade.parry");
+        hudPart(parts, com.sc.item.BladeSingularSC.HUD_RIPOSTE, "§c", "sc.toolhud.blade.riposte");
+        if (parts.isEmpty()) {
+            return 11;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            sb.append(sb.length() > 0 ? "§7 · " : "").append(part);
+        }
+        String line = sb.toString();
+        fr.drawStringWithShadow(line, (w - fr.getStringWidth(line)) / 2, h - rows - 22, PURPLE);
+        return 22;
+    }
+
+    /** The blade's hidden state from the server (BladeSingularSC.clientHud): a count, or seconds left. */
+    private static void hudPart(List<String> parts, int i, String color, String key) {
+        int v = com.sc.item.BladeSingularSC.clientHud(i);
+        if (v > 0) {
+            parts.add(color + Lang.tr(key, v));
+        }
     }
 
     /** Top right (top left while the icons are on the right): the Singular drill's mode, the crumb, SM in the armour, heat. */

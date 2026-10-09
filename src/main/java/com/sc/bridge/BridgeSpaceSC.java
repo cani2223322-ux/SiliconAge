@@ -135,6 +135,37 @@ public final class BridgeSpaceSC {
         return r;
     }
 
+    /**
+     * МС-11: only whether (x, y, z) is free - stops at the first blocking cell (the nearest-place search). The same
+     * answer as check().free: no lava, water, ring or blocked cell in the volume and no lava under it.
+     */
+    public static boolean isFree(Cells c, int x, int y, int z, int w, int axis) {
+        int h = (w - 1) / 2;
+        if (y < 1 || y + w > c.height()) {
+            return false;
+        }
+        for (int v = 0; v < w; v++) {
+            for (int u = -h; u <= h; u++) {
+                for (int d = 0; d < DEPTH; d++) {
+                    int[] p = pos(x, y, z, axis, u, v, d);
+                    int k = c.cell(p[0], p[1], p[2]);
+                    if (k != AIR && k != PASS) {
+                        return false;
+                    }
+                }
+            }
+        }
+        for (int u = -h; u <= h; u++) {
+            for (int d = 0; d < DEPTH; d++) {
+                int[] p = pos(x, y - 1, z, axis, u, 0, d);
+                if (c.cell(p[0], p[1], p[2]) == LAVA) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     /** Nothing but air in this column from y down to 0. */
     public static boolean nothingBelow(Cells c, int x, int y, int z) {
         for (int yy = y; yy >= 0; yy--) {
@@ -155,6 +186,9 @@ public final class BridgeSpaceSC {
     public static int autoY(Cells c, int x, int z, int w, int axis, int depth) {
         int top = Math.min(c.height() - w, c.top(x, z) + 1);
         for (int y = top; y >= Math.max(1, top - depth); y--) {
+            if (!isFree(c, x, y, z, w, axis)) {
+                continue;                                 // МС-11: the cheap test first
+            }
             Result r = check(c, x, y, z, w, axis);
             if (r.free && r.onGround) {
                 return y;
@@ -229,7 +263,7 @@ public final class BridgeSpaceSC {
                             if (score >= best) {
                                 continue;
                             }
-                            if (check(c, px, py, pz, w, axis).free) {
+                            if (isFree(c, px, py, pz, w, axis)) {
                                 best = score;
                                 bestDist = dist;
                                 bx = px;

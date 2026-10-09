@@ -16,7 +16,6 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.event.world.BlockEvent;
 
 import java.util.Collections;
@@ -149,10 +148,7 @@ public final class BridgeNetSC {
         if (s != null && s[0] == dim && s[1] == x && s[2] == y && s[3] == z && now < s[4] && now >= s[4] - CLAIM_TICKS) {
             return s[5] != 0;
         }
-        EntityPlayer fake = FakePlayerFactory.get(w, p.getGameProfile());
-        if (fake.worldObj != w) {
-            fake.setWorld(w);                                   // Forge caches it by profile only
-        }
+        EntityPlayer fake = new com.sc.handler.NetViewNetSC.ProbePlayerSC(w, p.getGameProfile());   // a probe loggers can tell
         BlockEvent.BreakEvent ev = new BlockEvent.BreakEvent(x, y, z, w, w.getBlock(x, y, z), w.getBlockMetadata(x, y, z), fake);
         MinecraftForge.EVENT_BUS.post(ev);
         boolean refused = ev.isCanceled();

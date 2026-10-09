@@ -144,4 +144,12 @@ public final class BridgeSoftLandSC {
             event.distance = 0F;
         }
     }
+
+    /** МС-8: a dimension loaded - the controllers' dimension list is built anew (it is cached for 60 s otherwise). */
+    @SubscribeEvent
+    public void onWorldLoad(net.minecraftforge.event.world.WorldEvent.Load e) {
+        if (!e.world.isRemote) {
+            com.sc.tileentity.TileEntityBridgeControllerSC.invalidateDims();
+        }
+    }
 }

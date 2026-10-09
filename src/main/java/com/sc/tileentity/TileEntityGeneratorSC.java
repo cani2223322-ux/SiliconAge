@@ -86,6 +86,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private int moduleLifeRemaining;
     /** Ticks of fusion left from the deuterium cell already fed in (fractional under Overdrive / Economizer). */
     private double cellBurnRemaining;
+    /** Fusion: empty buckets of the deuterium cells burnt, not yet put into the fuel slot (see giveBuckets). */
+    private int bucketsOwed;
     /** Ticks of burning left on the solid fuel item (fractional for the same reason). */
     private double solidBurnTicks;
     /** The piece burning now: the ticks it gave, and what it was (item id << 16 | damage) - for the screen. */
@@ -323,6 +325,53 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     // ---- upgrades ----
+
+    /** NBT key the generator's item carries its upgrades under - they come back with it on placement. */
+    public static final String ITEM_UPGRADES_KEY = "UpgradesSC";
+    /** Set once the upgrades went into the dropped item, so breakBlock doesn't drop them loose too. */
+    private boolean upgradesInItem;
+    /** World tick upgradesForItem() ran in: a getDrops() from another tick (another mod asking) mustn't stick. */
+    private long upgradesInItemTick = -1;
+
+    /**
+     * The upgrade slots as an item NBT compound (null when empty), as a machine's: the buffer and
+     * tanks the item keeps were filled with them in.
+     */
+    public NBTTagCompound upgradesForItem() {
+        NBTTagList list = new NBTTagList();
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            ItemStack s = slots[FIRST_UPGRADE_SLOT + i];
+            if (s != null) {
+                NBTTagCompound t = s.writeToNBT(new NBTTagCompound());
+                t.setByte("Slot", (byte) i);
+                list.appendTag(t);
+            }
+        }
+        upgradesInItem = list.tagCount() > 0;
+        upgradesInItemTick = worldObj != null ? worldObj.getTotalWorldTime() : -1;
+        if (!upgradesInItem) {
+            return null;
+        }
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setTag("Items", list);
+        return tag;
+    }
+
+    /** Whether breakBlock should leave the upgrade slots alone (they're in the dropped item). */
+    public boolean upgradesInItem() {
+        return upgradesInItem && (worldObj == null || upgradesInItemTick == worldObj.getTotalWorldTime());
+    }
+
+    /** Puts back what upgradesForItem() saved (on placement, before the charge and the tanks). */
+    public void loadUpgradesFromItem(NBTTagCompound tag) {
+        ItemStack[] ups = TileEntityMachineSC.upgradesOf(tag);    // same layout, UPGRADE_SLOTS slots too
+        for (int i = 0; i < ups.length && i < UPGRADE_SLOTS; i++) {
+            if (ups[i] != null) {
+                slots[FIRST_UPGRADE_SLOT + i] = ups[i];
+            }
+        }
+        markDirty();
+    }
 
     public int upgradeCount(UpgradeType type) {
         int n = 0;
@@ -625,6 +674,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private float stability = 100F;
     private int burstTicks, warnedAt = 100;
     private double heDebt, h2Debt, dDebt;
+    /** The Tokamak XV's blanket wear owed, under one tick of life (it follows the power). */
+    private double blanketDebt;
     /** The last scan: coils (24 bits), walls fine (24), walls that are ports (24); caps missing, tanks, storages, weak storages. */
     private int coilMask, wallMask, portMask, capMissing, portTanks, portStores, weakStores;
     /** What the port tanks hold, mB: helium, hydrogen, argon, deuterium (the screen's gauges). */
@@ -708,7 +759,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (portTaken ? 4 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
                 | bigEvent << 5 | (svOut ? 128 : 0);
         return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
-                capMissing | Math.round(stability * 10) << 8, portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
+                capMissing | Math.round(stability * 10) << 8 | (nearBuild ? 1 << 30 : 0), portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
     }
 
     public void setBigClient(int[] v) {
@@ -731,7 +782,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         portStores = v[2] >>> 27 & 3;
         weakStores = v[2] >>> 29 & 3;
         capMissing = v[3] & 0xFF;
-        stability = (v[3] >>> 8) / 10F;
+        stability = (v[3] >>> 8 & 0x3FFFFF) / 10F;
+        nearBuild = (v[3] & 1 << 30) != 0;
         for (int i = 0; i < 4; i++) {
             portFluid[i] = v[4 + i];
         }
@@ -986,10 +1038,47 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         weakStores = weak;
         portTaken = taken;
         holdPorts();
+        nearBuild = !ignited && otherBuildNear(worldObj, x0, y0, z0, 1, this);   // checked for the lighting only
         bigReady = coils == 0xFFFFFF && walls == 0xFFFFFF && caps == 0 && stores > 0 && weak == 0;
         for (int i = 0; i < 4; i++) {
             portFluid[i] = portAmount(PORT_FLUIDS[i]);
         }
+    }
+
+    /** The last scan found another big build in this one's zone or a block from it: not lit (the screen says so). */
+    private boolean nearBuild;
+
+    public boolean isNearBuild() {
+        return nearBuild;
+    }
+
+    /**
+     * Another Tokamak XV (7x7x3) or Singular Reactor (7x7x5) whose build is inside this one's zone
+     * plus a block - two builds would share a lead wall, a cap or a floor. halfHeight: this build's
+     * levels over its centre (1 the XV, 2 the Singular). Unloaded places don't count.
+     */
+    public static boolean otherBuildNear(net.minecraft.world.World w, int x, int y, int z, int halfHeight, TileEntityGeneratorSC self) {
+        int reach = 3 + 1 + 3, up = halfHeight + 1 + 2;
+        for (int dy = -up; dy <= up; dy++) {
+            for (int dz = -reach; dz <= reach; dz++) {
+                for (int dx = -reach; dx <= reach; dx++) {
+                    if ((dx == 0 && dy == 0 && dz == 0) || !w.blockExists(x + dx, y + dy, z + dz)
+                            || !(w.getBlock(x + dx, y + dy, z + dz) instanceof com.sc.block.BlockGeneratorSC)) {
+                        continue;
+                    }
+                    net.minecraft.tileentity.TileEntity te = w.getTileEntity(x + dx, y + dy, z + dz);
+                    if (!(te instanceof TileEntityGeneratorSC) || te == self) {
+                        continue;
+                    }
+                    GeneratorType t = ((TileEntityGeneratorSC) te).generatorType;
+                    int otherHalf = t == GeneratorType.TOKAMAK_XV ? 1 : t == GeneratorType.SINGULAR_REACTOR ? 2 : -1;
+                    if (otherHalf >= 0 && Math.abs(dy) <= halfHeight + 1 + otherHalf) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     // ---- ports held by one Tokamak XV only (two builds side by side) ----
@@ -1156,7 +1245,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return mb - left;
     }
 
-    /** A tick of the big mode's supplies and, once a second, its stability. @return false: it went out */
+    /** A tick of the big mode's supplies and, once a second, its stability. @return false: it went out, or no deuterium this tick */
     private boolean bigTick() {
         double fm = Math.max(0.01, fuelMultiplier());
         // deuterium and hydrogen follow the power really given (throttled down when the buffer and
@@ -1175,23 +1264,30 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 }
             }
         }
+        boolean noD = false;
         if (!fluidD) {                                          // otherwise the cells, burnt faster
             if (cellBurnRemaining <= 0) {
                 ItemStack cell = slots[SLOT_FUEL];
                 if (cell == null || cell.getItem() != com.sc.init.ModItems.deuteriumCell) {
+                    // no fuel: the power fades, but the helium and the stability go on below - no free pause
                     heat = Math.max(0, heat - 2);
                     ramp = Math.max(0, ramp - 2);
                     status = GeneratorStatus.NO_DEUTERIUM;
-                    return false;
+                    noD = true;
+                } else {
+                    cell.stackSize--;
+                    if (cell.stackSize <= 0) {
+                        slots[SLOT_FUEL] = null;
+                    }
+                    bucketsOwed++;                              // the cell's bucket comes back
+                    giveBuckets();
+                    cellBurnRemaining += CELL_BURN_TICKS;
+                    markDirty();
                 }
-                cell.stackSize--;
-                if (cell.stackSize <= 0) {
-                    slots[SLOT_FUEL] = null;
-                }
-                cellBurnRemaining += CELL_BURN_TICKS;
-                markDirty();
             }
-            cellBurnRemaining -= fm * BIG_CELL_MUL * load;
+            if (!noD) {
+                cellBurnRemaining -= fm * BIG_CELL_MUL * load;
+            }
         }
         heDebt += BIG_HE_PER_TICK;
         int he = (int) heDebt;
@@ -1221,11 +1317,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (!bigReady) {
                 delta -= STAB_BROKEN;
             }
-            delta -= STAB_OVERDRIVE * effectiveOverdrive();
             if (heat > HEAT_LIMIT * 9 / 10) {
                 delta -= STAB_HOT;
             }
-            stability = Math.max(0F, Math.min(100F, stability + (delta == 0F ? STAB_RECOVER : delta)));
+            // overdrive works against the recovery: one or two hold it, three or four pull it down
+            delta = (delta == 0F ? STAB_RECOVER : delta) - STAB_OVERDRIVE * effectiveOverdrive();
+            stability = Math.max(0F, Math.min(100F, stability + delta));
             warnAt(40, "sc.chat.tok.warn40");
             warnAt(20, "sc.chat.tok.warn20");
             if (stability > 45) {
@@ -1243,7 +1340,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
             markDirty();
         }
-        return true;
+        return !noD;
     }
 
     private void warnAt(int level, String key) {
@@ -1629,7 +1726,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (worldObj.getTotalWorldTime() % 20 == 7) {
             float rad = radiationLevel();
-            if (rad > 0) {
+            if (rad > 0 && xv() && burstTicks > 0) {               // a breakdown's burst goes through the walls, as the Singular's flashes
+                com.sc.radiation.RadiationSC.reportPiercing(worldObj, xCoord, yCoord, zCoord, rad, radiationRadiusNow());
+            } else if (rad > 0) {
                 com.sc.radiation.RadiationSC.report(worldObj, xCoord, yCoord, zCoord, rad, radiationRadiusNow());
             }
         }
@@ -1761,6 +1860,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 status = GeneratorStatus.GENERATING;
                 return;
             }
+            // less than a tick's portion left (Overdrive burns a lot a tick): the rest burns for its share of the output
+            int rest = held.amount;                         // read first: the drain takes it out of this very stack
+            fuelTank.drain(rest, true);
+            addEnergy((int) Math.round(ratedOutput() * (rest / need)));
+            fuelDebt = 0;
+            status = GeneratorStatus.GENERATING;
+            return;
         }
         if (generatorType == GeneratorType.COMBUSTION && burnSolid(SOLID_FUEL_DIVISOR)) {
             addEnergy(ratedOutput());
@@ -1790,9 +1896,19 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         double need1 = fuelDebt + generatorType.fuelRatePerTick * fm;
         double need2 = fuel2Debt + generatorType.fuel2RatePerTick * fm;
         int mb1 = (int) need1, mb2 = (int) need2;
-        if (fuelTank.getFluidAmount() < Math.max(1, mb1) || fuelTank2.getFluidAmount() < Math.max(1, mb2)) {
-            status = GeneratorStatus.NO_FUEL;
-            return;
+        int have1 = fuelTank.getFluidAmount(), have2 = fuelTank2.getFluidAmount();
+        double share = 1;
+        if (have1 < Math.max(1, mb1) || have2 < Math.max(1, mb2)) {
+            if (have1 <= 0 || have2 <= 0) {
+                status = GeneratorStatus.NO_FUEL;
+                return;
+            }
+            // less than a tick's portion left: the rest burns for its share of the output - the short tank empties
+            share = Math.min(need1 > 0 ? have1 / need1 : 1, need2 > 0 ? have2 / need2 : 1);
+            mb1 = Math.min(have1, (int) Math.round(need1 * share));
+            mb2 = Math.min(have2, (int) Math.round(need2 * share));
+            need1 = mb1;                                     // no debt carried past the last of it
+            need2 = mb2;
         }
         if (generatorType == GeneratorType.FUEL_CELL && mb2 > 0) {
             Fluid water = FluidRegistry.WATER;
@@ -1810,7 +1926,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         fuelDebt = need1 - mb1;
         fuel2Debt = need2 - mb2;
-        addEnergy(ratedOutput());
+        addEnergy(share < 1 ? (int) Math.round(ratedOutput() * share) : ratedOutput());
         status = GeneratorStatus.GENERATING;
     }
 
@@ -2164,13 +2280,47 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return true;
     }
 
+    /**
+     * Fusion: the owed buckets of burnt deuterium cells go into the fuel slot once it is empty or
+     * already holds buckets (16 at most). A bucket there means no deuterium until a player or a
+     * hopper takes it out.
+     */
+    private void giveBuckets() {
+        if (bucketsOwed <= 0) {
+            return;
+        }
+        ItemStack s = slots[SLOT_FUEL];
+        int n = 0;
+        if (s == null) {
+            n = Math.min(16, bucketsOwed);
+            slots[SLOT_FUEL] = new ItemStack(Items.bucket, n);
+        } else if (s.getItem() == Items.bucket && s.stackSize < 16) {
+            n = Math.min(16 - s.stackSize, bucketsOwed);
+            s.stackSize += n;
+        }
+        if (n > 0) {
+            bucketsOwed -= n;
+            markDirty();
+        }
+    }
+
+    /** Breaking the block: the buckets still owed, to drop beside it (zeroed here). */
+    public int takeBucketsOwed() {
+        int n = bucketsOwed;
+        bucketsOwed = 0;
+        return n;
+    }
+
     private void updateFusion() {
+        if (bucketsOwed > 0 && worldObj.getTotalWorldTime() % 20 == 0) {
+            giveBuckets();                                     // once the slot has been emptied
+        }
         if (!ignited) {
             heat = Math.max(0, heat - 5);
             if (xv() && bigFrozen) {
                 return;                                        // part of the build unloaded: wait
             }
-            if (generatorType == GeneratorType.TOKAMAK && !structureOk || xv() && !bigReady) {
+            if (generatorType == GeneratorType.TOKAMAK && !structureOk || xv() && (!bigReady || nearBuild)) {
                 status = GeneratorStatus.NO_STRUCTURE;          // the XV: the screen says what's missing
                 return;
             }
@@ -2200,12 +2350,15 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (!bigTick()) {                                  // helium, hydrogen, stability - full buffer or not
                 return;
             }
-            moduleLifeRemaining -= BIG_BLANKET_WEAR - 1;           // the big mode wears the blanket twice as fast
+            // the big mode wears the blanket twice as fast at full power - by the power, as the deuterium
+            blanketDebt += BIG_BLANKET_WEAR * Math.max(0, Math.min(RAMP_FULL, ramp)) / (double) RAMP_FULL;
+            int wear = (int) blanketDebt;
+            blanketDebt -= wear;
+            moduleLifeRemaining -= wear;
             if (moduleLifeRemaining <= 0) {
                 shutDown(GeneratorStatus.BLANKET_DEPLETED);
                 return;
             }
-            moduleLifeRemaining--;
             if (!overheating()) {
                 burnPlasma(600);
             }
@@ -2226,6 +2379,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (cell.stackSize <= 0) {
                 slots[SLOT_FUEL] = null;
             }
+            bucketsOwed++;                                      // the cell's bucket comes back
+            giveBuckets();
             cellBurnRemaining += CELL_BURN_TICKS;
             markDirty();
         }
@@ -2405,6 +2560,24 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return type != GeneratorType.CREATIVE && type != GeneratorType.SINGULAR_REACTOR;
     }
 
+    /**
+     * An upgrade this generator's slots take (the screen lists them too): the lead casing only where
+     * there's radiation, a Tank Extension only where there are fuel tanks (the XV's are its ports).
+     */
+    public static boolean acceptsUpgrade(GeneratorType type, UpgradeType up) {
+        if (!hasUpgradeSlots(type) || up == null || !up.forGenerators()) {
+            return false;
+        }
+        if (up == UpgradeType.RAD_SHIELDING) {
+            return radiationBase(type) > 0;
+        }
+        if (up == UpgradeType.TANK_EXTENSION) {
+            return type.kind == GeneratorType.Kind.FLUID_FUEL || type.kind == GeneratorType.Kind.DUAL_FLUID
+                    || type.kind == GeneratorType.Kind.EXO;
+        }
+        return true;
+    }
+
     @Override
     public boolean isItemValidForSlot(int slot, ItemStack stack) {
         if (stack == null) {
@@ -2414,9 +2587,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             return com.sc.item.BatteryFeedSC.accepts(stack);
         }
         if (slot >= FIRST_UPGRADE_SLOT) {
-            return hasUpgradeSlots(generatorType) && stack.getItem() instanceof com.sc.item.ItemUpgradeSC
-                    && com.sc.item.ItemUpgradeSC.typeOf(stack).forGenerators()
-                    && (com.sc.item.ItemUpgradeSC.typeOf(stack) != UpgradeType.RAD_SHIELDING || radiationBase(generatorType) > 0);
+            return stack.getItem() instanceof com.sc.item.ItemUpgradeSC && acceptsUpgrade(generatorType, com.sc.item.ItemUpgradeSC.typeOf(stack));
         }
         if (!usesSlot(generatorType, slot)) {
             return false;
@@ -2459,10 +2630,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (slot == SLOT_BATTERY) {                                  // a full one out
             return stack != null && com.sc.item.BatteryFeedSC.chargeOf(stack) >= com.sc.item.BatteryFeedSC.capacityOf(stack);
         }
-        // Only what's left behind: the empty bucket from lava, a furnace fuel's container.
+        // Only what's left behind: the empty bucket from lava, a furnace fuel's container,
+        // a fusion reactor's buckets from the deuterium cells.
         return slot == SLOT_FUEL && stack != null && !isItemValidForSlot(slot, stack)
                 && (generatorType == GeneratorType.COMBUSTION || generatorType == GeneratorType.SOLID_FUEL
-                || generatorType == GeneratorType.GEOTHERMAL);
+                || generatorType == GeneratorType.GEOTHERMAL
+                || generatorType.kind == GeneratorType.Kind.FUSION && stack.getItem() == Items.bucket);
     }
 
     // ---- IFluidHandler: fuel in, the Fuel Cell's water out ----
@@ -2601,7 +2774,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (outTank.getFluidAmount() > 0) {
             nbt.setTag("OutTank", outTank.writeToNBT(new NBTTagCompound()));
         }
-        // for the item's tooltip (ItemBlockGeneratorSC): the sizes it had - its upgrades drop as items beside it
+        NBTTagCompound ups = upgradesForItem();             // the upgrades go with the block, as a machine's
+        if (ups != null) {
+            nbt.setTag(ITEM_UPGRADES_KEY, ups);
+        }
+        // for the item's tooltip (ItemBlockGeneratorSC): the sizes it had with its upgrades
         if (nbt.hasKey("EnergySC") && getMaxEnergyStored() > baseBuffer(generatorType)) {
             nbt.setInteger(ITEM_BUFFER_KEY, getMaxEnergyStored());
         }
@@ -2615,11 +2792,23 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (getSingular().getSmStored() > 0) {
                 nbt.setInteger("SmStored", getSingular().getSmStored());   // СМ2: the by-product's inner tank isn't lost on breaking
             }
+            // the screen's settings and the accident latch ("Allow lighting" still needed after placing)
+            if (getSingular().getFeedMode() != SingularReactorSC.MODE_NORMAL) {
+                nbt.setInteger("SingFeed", getSingular().getFeedMode());
+            }
+            if (!getSingular().isAuto()) {
+                nbt.setBoolean("SingManual", true);
+            }
+            if (getSingular().getEvent() != SingularReactorSC.EVENT_NONE) {
+                nbt.setInteger("SingEvent", getSingular().getEvent());
+            }
         } else if (generatorType.needsIgnition()) {
+            // a lit Tokamak XV goes out when broken: only its blanket, cell and charge ride in the item - the next build lights it anew
+            boolean lit = ignited && !xv();
             if (ignitionEU > 0) {
                 nbt.setLong("IgnitionEU", ignitionEU);
             }
-            if (ignited) {
+            if (lit) {
                 nbt.setBoolean("Ignited", true);
                 nbt.setInteger("Ramp", ramp);
             }
@@ -2629,13 +2818,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             if (ignited || cellBurnRemaining > 0) {
                 nbt.setInteger("CellBurn", (int) cellBurnRemaining);
             }
-            if (heat > 0) {
+            if (heat > 0 && !(ignited && xv())) {
                 nbt.setInteger("Heat", heat);
             }
             if (coolingDown) {
                 nbt.setBoolean("CoolingDown", true);
             }
-            if (xv()) {
+            if (xv() && !ignited) {
                 if (stability < 100F) {
                     nbt.setFloat("Stability", stability);
                 }
@@ -2663,6 +2852,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Placed from an item that carries writeToItem()'s data. */
     public void readFromItem(NBTTagCompound nbt) {
+        if (nbt.hasKey(ITEM_UPGRADES_KEY)) {
+            loadUpgradesFromItem(nbt.getCompoundTag(ITEM_UPGRADES_KEY));   // first: a storage upgrade makes room for the charge
+            syncTankCapacity();
+        }
         restoreEnergy(nbt.getInteger("EnergySC"));
         if (nbt.hasKey("OutTank")) {
             outTank.readFromNBT(nbt.getCompoundTag("OutTank"));
@@ -2675,11 +2868,20 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         }
         if (singular()) {
             ignitionEU = Math.max(0L, Math.min(generatorType.ignitionThreshold(), nbt.getLong("IgnitionEU")));
-            getSingular().setSmForTest(nbt.getInteger("SmStored"));    // СМ2: the inner tank the item carried
+            // СМ2: the inner tank the item carried; the feed mode, "Auto" and the accident latch. A placed reactor
+            // is fresh (no hole, idle), so its state read from just these keys is the same but for them.
+            NBTTagCompound s = new NBTTagCompound();
+            s.setInteger("SmStored", nbt.getInteger("SmStored"));
+            s.setInteger("Feed", nbt.hasKey("SingFeed") ? nbt.getInteger("SingFeed") : SingularReactorSC.MODE_NORMAL);
+            s.setBoolean("Auto", !nbt.getBoolean("SingManual"));
+            s.setInteger("Event", nbt.getInteger("SingEvent"));
+            NBTTagCompound wrap = new NBTTagCompound();
+            wrap.setTag("Singular", s);
+            getSingular().read(wrap);
         } else if (generatorType.needsIgnition()) {
             ignitionEU = Math.max(0L, Math.min(generatorType.ignitionThreshold(), nbt.getLong("IgnitionEU")));
             boolean was = ignited;
-            ignited = nbt.getBoolean("Ignited");
+            ignited = nbt.getBoolean("Ignited") && !xv();       // an XV broken lit by an older version: it comes back out
             moduleLifeRemaining = Math.max(0, Math.min(MODULE_LIFE_TICKS, nbt.getInteger("ModuleLife")));
             cellBurnRemaining = Math.max(0, Math.min(CELL_BURN_TICKS, nbt.getInteger("CellBurn")));
             if (ignited) {
@@ -2708,6 +2910,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         GeneratorType[] types = GeneratorType.values();
         int ordinal = nbt.getInteger("GeneratorType");
         generatorType = types[ordinal >= 0 && ordinal < types.length ? ordinal : 0];
+        bucketsOwed = nbt.getInteger("BucketsOwed");                // older saves: none
         setTier(generatorType.tier);         // follows the type (as in setGeneratorType), not a missing "TierSC" (LV)
         fuelTank.readFromNBT(nbt.getCompoundTag("FuelTank"));
         fuelTank2.readFromNBT(nbt.getCompoundTag("FuelTank2"));
@@ -2759,6 +2962,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
         nbt.setInteger("GeneratorType", generatorType.ordinal());
+        nbt.setInteger("BucketsOwed", bucketsOwed);
         nbt.setTag("FuelTank", fuelTank.writeToNBT(new NBTTagCompound()));
         nbt.setTag("FuelTank2", fuelTank2.writeToNBT(new NBTTagCompound()));
         nbt.setTag("OutTank", outTank.writeToNBT(new NBTTagCompound()));

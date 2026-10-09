@@ -178,6 +178,10 @@ public final class ModRecipesInfrastructure {
     }
 
     private static void registerFluidCellFiller() {
+        // РЦ-9: a cell is a filled bucket - spent in a crafting grid, it leaves the bucket behind
+        // (the reactors give theirs back as they burn deuterium cells)
+        ModItems.liquidHeCell.setContainerItem(Items.bucket);
+        ModItems.deuteriumCell.setContainerItem(Items.bucket);
         RecipeRegistry.register(new MachineRecipe(MachineType.FLUID_CELL_FILLER,
                 new ItemStack[]{new ItemStack(Items.bucket)}, new FluidStack(ModFluids.liquidHelium, 1000), null,
                 new ItemStack[]{new ItemStack(ModItems.liquidHeCell)}, null, null,

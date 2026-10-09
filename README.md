@@ -106,6 +106,8 @@
 
 **Проверка обновлений:** раз за запуск игры мод запрашивает номер последней версии с silicon-age.site и, если вышла новая, пишет об этом в чат (на сервере — операторам и в лог). О игроке ничего не отправляется; выключается в конфиге: `updates.check = false`.
 
+**Для администраторов серверов:** перед осмотром сети ключом, переходом через мост, чутьём Сингулярной брони и включением приватной зоны генератора поля Silicon Age спрашивает моды приватов через `BlockEvent.BreakEvent` от ненастоящего игрока `com.sc.handler.NetViewNetSC$ProbePlayerSC` (FakePlayer с профилем игрока или владельца). Блок при этом не ломается — логгерам, квестам и статистике стоит игнорировать такие события (`instanceof ProbePlayerSC` / `NetViewNetSC.ProbePlayerSC.isProbe`). Проверку для поля можно выключить в конфиге: `balance.fieldClaimCheck = false`.
+
 MJ, Universal Electricity и Botania не поддерживаются.
 
 ### Сборка из исходников
@@ -219,6 +221,8 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 **UniDict packs** (unified metals): the mod's ingots and blocks are swapped for the pack's main mod's variant - every recipe of the mod takes them, the mod's metal blocks are pressed in the Rolling Machine, reactors are built of any mod's lead. The mod's recipes are checked against a large pack (Thermal, Ender IO, IC2, AE2, Forestry and more) - no clashes.
 
 **Update check:** once a game session the mod asks silicon-age.site for the latest version number and, when a newer one is out, says so in the chat (on a server - to operators and in the log). Nothing about the player is sent; turn it off in the config: `updates.check = false`.
+
+**For server admins:** before a wrench network view, a bridge trip, the Singular armour's senses and switching on a field generator's private zone, Silicon Age asks claim mods via a `BlockEvent.BreakEvent` posted by a fake player, `com.sc.handler.NetViewNetSC$ProbePlayerSC` (a FakePlayer with the player's or the owner's profile). Nothing is broken - break loggers, quest and stats mods should ignore such events (`instanceof ProbePlayerSC` / `NetViewNetSC.ProbePlayerSC.isProbe`). The field's check can be turned off in the config: `balance.fieldClaimCheck = false`.
 
 MJ, Universal Electricity and Botania are not supported.
 

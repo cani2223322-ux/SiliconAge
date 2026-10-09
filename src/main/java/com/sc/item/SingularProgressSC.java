@@ -30,6 +30,8 @@ public final class SingularProgressSC {
     public static final double MAX_FLY_PER_SECOND = 150;
     /** Nether task: the suit's heat under this percent. */
     public static final int NETHER_HEAT_PCT = 50;
+    /** СБ-9: only the first this many dimensions visited give points (packs with generated dimensions). */
+    public static final int DIMS_WITH_POINTS = 8;
     /** The counters go to the client every this many seconds while a Singular piece is worn. */
     private static final int SYNC_EVERY = 5;
 
@@ -108,8 +110,8 @@ public final class SingularProgressSC {
         if (biome != null && addOnce(s, SingularLevel.C_BIOMES, biome.biomeID, 256)) {
             pts += SingularLevel.BIOME_POINTS;
         }
-        if (addOnce(s, SingularLevel.C_DIMS, p.dimension, 256)) {
-            pts += SingularLevel.DIMENSION_POINTS;
+        if (addOnce(s, SingularLevel.C_DIMS, p.dimension, 256) && s.getIntArray(SingularLevel.C_DIMS).length <= DIMS_WITH_POINTS) {
+            pts += SingularLevel.DIMENSION_POINTS;              // СБ-9: past the first few, still counted for the tasks
         }
         award(p, pts);
         if (p.ticksExisted % (20 * SYNC_EVERY) < 20) {

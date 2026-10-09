@@ -21,9 +21,51 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
     private static final int EVERY = 5;
 
     private boolean active;
+    /** Who placed it ("" for a pad from before owners) and whether it charges only them and their team (ЭН-7). */
+    private String owner = "";
+    private boolean ownerOnly;
 
     public boolean isActive() {
         return active;
+    }
+
+    public String getOwner() {
+        return owner;
+    }
+
+    /** BlockChargePadSC.onBlockPlacedBy - the placer. */
+    public void setOwner(String name) {
+        owner = name == null ? "" : name;
+        markDirty();
+    }
+
+    public boolean isOwnerOnly() {
+        return ownerOnly;
+    }
+
+    /** The screen's "charge: everyone / owner and team" switch (ContainerEnergyStorageSC). */
+    public void setOwnerOnly(boolean on) {
+        ownerOnly = on;
+        markDirty();
+        if (worldObj != null) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);     // the screen shows the mode
+        }
+    }
+
+    /**
+     * May this player be charged from the pad? Never inside a private field that refuses them (the
+     * same rule as sneak-click charging, but silent - it runs every few ticks); in owner-only mode
+     * just the owner and players on the owner's scoreboard team. An ownerless pad charges everyone.
+     */
+    public boolean mayCharge(EntityPlayer p) {
+        if (com.sc.ShieldEventHandler.privateFieldAgainst(worldObj, p, xCoord, yCoord, zCoord) != null) {
+            return false;
+        }
+        if (!ownerOnly || owner.isEmpty() || owner.equalsIgnoreCase(p.getCommandSenderName())) {
+            return true;
+        }
+        net.minecraft.scoreboard.Team mine = worldObj.getScoreboard().getPlayersTeam(owner);
+        return mine != null && mine.isSameTeam(p.getTeam());
     }
 
     @Override
@@ -55,7 +97,11 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
             if (budget <= 0) {
                 break;
             }
-            int used = chargePlayer((EntityPlayer) o, budget);
+            EntityPlayer p = (EntityPlayer) o;
+            if (!mayCharge(p)) {
+                continue;
+            }
+            int used = chargePlayer(p, budget);
             budget -= used;
             charged |= used > 0;
         }
@@ -93,17 +139,21 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
         return start - budget;
     }
 
-    // ---- NBT: the lit top goes to the client with the block ----
+    // ---- NBT: the lit top and the charge mode go to the client with the block ----
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
         active = nbt.getBoolean("PadActive");
+        owner = nbt.getString("PadOwner");
+        ownerOnly = nbt.getBoolean("PadOwnerOnly");
     }
 
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
         nbt.setBoolean("PadActive", active);
+        nbt.setString("PadOwner", owner);
+        nbt.setBoolean("PadOwnerOnly", ownerOnly);
     }
 }

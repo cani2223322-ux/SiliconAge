@@ -104,6 +104,17 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
     private int fluidRoutesVersion = -1;
     private int nextFluidRoute;
 
+    /**
+     * ЭН-5: an extracting side (tube 0..5, pipe 6..11) that moved nothing waits before it tries again,
+     * longer each time (IDLE_PAUSES, as Ender IO); a move, or any tube / pipe network change, ends it. Not saved.
+     */
+    private static final int[] IDLE_PAUSES = {5, 10, 20, 40};
+    private final long[] idleUntil = new long[12];
+    private final byte[] idleStep = new byte[12];
+    private int idleTubeVersion = -1, idlePipeVersion = -1;
+    /** ЭН-1: checks in a row the IC2 current through this cable was above its rating (not saved). */
+    private int overCurrentChecks;
+
     // client fluid sync
     private String sentFluid;
     private int sentAmount;
@@ -529,7 +540,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
                 pipeVersion++;
             }
             if (cable != null && !Loader.isModLoaded(Reference.IC2_MODID)) {
-                EnergyNetSC.instance().invalidate();
+                EnergyNetSC.instance().invalidate(worldObj);
             }
         }
         if (cable != null && Loader.isModLoaded(Reference.IC2_MODID)) {
@@ -621,6 +632,11 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
 
     /** Extract connectors pull from their tank, up to the pipe's rating per tick. */
     private void extractFluid() {
+        long now = worldObj.getTotalWorldTime();
+        if (idlePipeVersion != pipeVersion) {
+            idlePipeVersion = pipeVersion;
+            clearIdle(6);
+        }
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
             if (!mode(ConduitKind.PIPE, dir).extracts(ConduitKind.PIPE) || !connectorAt(ConduitKind.PIPE, dir)
                     || !redstoneAllows(ConduitKind.PIPE, dir)) {
@@ -630,6 +646,10 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             if (room <= 0) {
                 return;
             }
+            int k = 6 + dir.ordinal();
+            if (now < idleUntil[k]) {
+                continue;                                  // ЭН-5: nothing to take or nowhere to put it lately
+            }
             IFluidHandler source = (IFluidHandler) neighbour(dir);
             ForgeDirection face = dir.getOpposite();
             FluidStack held = tank().getFluid();
@@ -637,19 +657,23 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
                     ? source.drain(face, new FluidStack(held.getFluid(), room), false)
                     : source.drain(face, room, false);
             if (drained == null || drained.amount <= 0) {
+                idle(k, now);
                 continue;
             }
             // only what the network can deliver somewhere: a full or unwilling target leaves the fluid in its source
             int wanted = deliverable(drained, room);
             if (wanted <= 0) {
+                idle(k, now);
                 continue;
             }
             drained = drained.copy();
             drained.amount = Math.min(drained.amount, wanted);
             int fits = tank().fill(drained, false);
             if (fits <= 0) {
+                idle(k, now);
                 continue;
             }
+            idleStep[k] = 0;
             FluidStack taken = held != null
                     ? source.drain(face, new FluidStack(held.getFluid(), fits), true)
                     : source.drain(face, fits, true);
@@ -904,22 +928,51 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         return mode(ConduitKind.TUBE, dir).extracts(ConduitKind.TUBE) && redstoneAllows(ConduitKind.TUBE, dir);
     }
 
-    /** Every extract side gets its move each tick; the starting side rotates so none always goes first. */
+    /**
+     * Every extract side gets its move each tick (ЭН-5: but one that moved nothing pauses, see
+     * IDLE_PAUSES); the starting side rotates so none always goes first.
+     */
     private void moveItems() {
+        long now = worldObj.getTotalWorldTime();
+        if (idleTubeVersion != tubeVersion) {
+            idleTubeVersion = tubeVersion;
+            clearIdle(0);
+        }
         ForgeDirection[] dirs = ForgeDirection.VALID_DIRECTIONS;
         int start = nextSource;
         for (int i = 0; i < dirs.length; i++) {
             ForgeDirection dir = dirs[(start + i) % dirs.length];
-            if (!connectorAt(ConduitKind.TUBE, dir)) {
+            int k = dir.ordinal();
+            if (now < idleUntil[k] || !connectorAt(ConduitKind.TUBE, dir)) {
                 continue;
             }
             TileEntity te = neighbour(dir);
             if (!extractsFrom(dir, te)) {
                 continue;
             }
-            sendFrom((IInventory) te, dir);
+            if (sendFrom((IInventory) te, dir)) {
+                idleStep[k] = 0;
+            } else {
+                idle(k, now);
+            }
         }
         nextSource = (start + 1) % dirs.length;
+    }
+
+    /** ЭН-5: side `k` moved nothing - its next try after the next pause in IDLE_PAUSES (the last one repeats). */
+    private void idle(int k, long now) {
+        idleUntil[k] = now + IDLE_PAUSES[idleStep[k]];
+        if (idleStep[k] < IDLE_PAUSES.length - 1) {
+            idleStep[k]++;
+        }
+    }
+
+    /** The six sides from `first` try again right away (their network changed). */
+    private void clearIdle(int first) {
+        for (int k = first; k < first + 6; k++) {
+            idleUntil[k] = 0;
+            idleStep[k] = 0;
+        }
     }
 
     /**
@@ -1225,7 +1278,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         unregisterEnergy();
         registerEnergy();
         if (!Loader.isModLoaded(Reference.IC2_MODID)) {
-            EnergyNetSC.instance().invalidate();
+            EnergyNetSC.instance().invalidate(worldObj);
         }
     }
 
@@ -1257,7 +1310,32 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         int ic2Tier = ic2.api.energy.EnergyNet.instance.getTierFromPower(stats.getVoltage());
         if (ic2Tier > 0 && ic2Tier > cable.tier.toIc2Tier()) {
             ExplosionLogic.burnCable(this);
+            return;
         }
+        // ЭН-1: the current too (the mod's own net's voltage x amps), only when the config asks for it -
+        // off by default, so lines built under IC2 keep working; burns after OVER_CURRENT_CHECKS in a row
+        if (!com.sc.util.ConfigSC.ic2CableCurrentLimit) {
+            overCurrentChecks = 0;
+            return;
+        }
+        if (Math.max(stats.getEnergyIn(), stats.getEnergyOut()) > cable.maxThroughput()) {
+            if (++overCurrentChecks >= OVER_CURRENT_CHECKS) {
+                ExplosionLogic.burnCable(this);
+            }
+        } else {
+            overCurrentChecks = 0;
+        }
+    }
+
+    /** Checks (every other tick) in a row above the rating before the cable burns - not on a single spike. */
+    private static final int OVER_CURRENT_CHECKS = 3;
+
+    /**
+     * ЭН-1: with IC2 the cables are checked for voltage only, not current (unless the config's
+     * ic2CableCurrentLimit) - WAILA, the tooltip and the handbook say so.
+     */
+    public static boolean ic2CurrentUnchecked() {
+        return Loader.isModLoaded(Reference.IC2_MODID) && !com.sc.util.ConfigSC.ic2CableCurrentLimit;
     }
 
     // ---- IC2 IEnergyConductor: §9.1's amps/loss mapped onto IC2's model ----

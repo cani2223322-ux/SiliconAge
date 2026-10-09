@@ -54,6 +54,8 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
     private String owner = "";
     private ForgeDirection facing = ForgeDirection.SOUTH;
     private boolean beam = true, paused, giving = true;
+    /** Client: the server's chunk ticket is held (bit 16), chunk loading is on in the config (bit 32). */
+    private boolean chunkHeldClient, chunkCfgClient = true;
     private final ItemStack[] slots = new ItemStack[SLOTS];
     private ForgeChunkManager.Ticket ticket;
     // what the screen shows (synced by ContainerWirelessSC)
@@ -526,9 +528,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         }
         if (!giving) {
             status = time - receivedAt < 40 ? ST_OK : ST_IDLE;
-            if (time - receivedAt < 40 || getEnergyStored() >= getMaxEnergyStored()) {   // full: the link stays up, idle
-                linkedAt = time;
-            }
+            linkedAt = time;                              // БП-1: the giving half is there and on - the link is up, sending or not
             return;
         }
         int room = p.getMaxEnergyStored() - p.getEnergyStored();
@@ -538,6 +538,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             return;
         }
         if (getEnergyStored() < quantumUpkeep()) {
+            linkedAt = time;                              // БП-1: short of the upkeep is still a link - both chunks kept (a night on solar)
             status = ST_NO_ENERGY;
             return;
         }
@@ -698,10 +699,23 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         this.paused = (bits & 2) != 0;
         this.giving = (bits & 4) != 0;
         this.partnerId = (bits & 8) != 0 ? 1 : 0;
+        this.chunkHeldClient = (bits & 16) != 0;
+        this.chunkCfgClient = (bits & 32) != 0;
     }
 
     public int screenBits() {
-        return (beam ? 1 : 0) | (paused ? 2 : 0) | (giving ? 4 : 0) | (partnerId != 0 ? 8 : 0);
+        return (beam ? 1 : 0) | (paused ? 2 : 0) | (giving ? 4 : 0) | (partnerId != 0 ? 8 : 0) | (ticket != null ? 16 : 0)
+                | (com.sc.util.ConfigSC.quantumChunkLoading ? 32 : 0);
+    }
+
+    /** Client (screen): whether the server holds this block's chunk right now. */
+    public boolean isChunkHeld() {
+        return worldObj != null && !worldObj.isRemote ? ticket != null : chunkHeldClient;
+    }
+
+    /** Client (screen): quantumChunkLoading as the server has it. */
+    public boolean isChunkLoadingOn() {
+        return worldObj != null && !worldObj.isRemote ? com.sc.util.ConfigSC.quantumChunkLoading : chunkCfgClient;
     }
 
     // ------------------------------------------------------------------ inventory: the crystal half, a battery
@@ -777,14 +791,20 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         return kind == RECEIVER ? new int[0] : new int[]{SLOT_BATTERY};
     }
 
+    /** БП-4: a quantum half set to take never drains its battery (only the giving one does). */
+    private boolean batteryIdle() {
+        return kind == QUANTUM && !giving;
+    }
+
     @Override
     public boolean canInsertItem(int slot, ItemStack stack, int side) {
-        return slot == SLOT_BATTERY && slots[SLOT_BATTERY] == null && isItemValidForSlot(slot, stack);
+        return slot == SLOT_BATTERY && slots[SLOT_BATTERY] == null && !batteryIdle() && isItemValidForSlot(slot, stack);
     }
 
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
-        return slot == SLOT_BATTERY && com.sc.item.BatteryFeedSC.chargeOf(stack) <= 0;       // an empty one out; never the crystal
+        // an empty one out (a taking quantum half: any - it would sit there); never the crystal
+        return slot == SLOT_BATTERY && (batteryIdle() || com.sc.item.BatteryFeedSC.chargeOf(stack) <= 0);
     }
 
     @Override

@@ -53,8 +53,26 @@ public class ItemUpgradeSC extends Item {
                     Lang.tr("sc.upgrade.tooltip.howto." + name) + "\n" + Lang.tr("sc.upgrade.tooltip.slot.storage"));
             return;
         }
-        com.sc.util.TooltipSC.more(list, details,
-                Lang.tr(typeOf(stack).fieldOnly() ? "sc.upgrade.tooltip.slot.field" : "sc.upgrade.tooltip.slot"));
+        com.sc.util.TooltipSC.more(list, details, Lang.tr("sc.upgrade.tooltip.slot.where", where(stack)));
+    }
+
+    /** "machines, generators, storages, the field generator" - every block whose upgrade slots take it (their own checks). */
+    private static String where(ItemStack stack) {
+        UpgradeType t = typeOf(stack);
+        StringBuilder sb = new StringBuilder();
+        if (!t.generatorOnly() && !t.fieldOnly() && !t.storageOnly()) {
+            sb.append(Lang.tr("sc.book.modules.w.machines"));
+        }
+        if (t.forGenerators()) {
+            sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr("sc.book.modules.w.generators"));
+        }
+        if (com.sc.tileentity.TileEntityEnergyStorageSC.acceptsUpgrade(stack)) {
+            sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr("sc.book.modules.w.storages"));
+        }
+        if (com.sc.tileentity.TileEntityFieldGeneratorSC.isFieldUpgrade(stack)) {
+            sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr("sc.book.modules.w.field"));
+        }
+        return sb.toString();
     }
 
     @Override

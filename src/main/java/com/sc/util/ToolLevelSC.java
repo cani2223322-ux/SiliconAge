@@ -92,7 +92,7 @@ public final class ToolLevelSC {
 
     /** Pure: points a blade (or a drill) at `level` needs for the next one (0 at 5 / out of range). */
     public static int threshold(boolean blade, int level) {
-        return level >= MIN && level < MAX ? (blade ? BLADE_THRESHOLD : DRILL_THRESHOLD)[level] : 0;
+        return level >= MIN && level < MAX ? ConfigSC.scale((blade ? BLADE_THRESHOLD : DRILL_THRESHOLD)[level], ConfigSC.singularScore, 1) : 0;
     }
 
     /** Points this tool at `level` needs for the next one (its kind's table; not a Singular tool: 0). */

@@ -1,5 +1,6 @@
 package com.sc.block;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.sc.Reference;
@@ -15,6 +16,7 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.IIcon;
@@ -70,7 +72,14 @@ public class BlockTransformerSC extends Block {
     public void onBlockPlacedBy(World world, int x, int y, int z, EntityLivingBase placer, ItemStack stack) {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityTransformerSC) {
-            ((TileEntityTransformerSC) te).setFacing(facingToward(placer));
+            TileEntityTransformerSC t = (TileEntityTransformerSC) te;
+            t.setFacing(facingToward(placer));
+            if (stack.hasTagCompound()) {                     // what the dropped item kept (see getDrops)
+                NBTTagCompound tag = stack.getTagCompound();
+                t.readCommonItem(tag);
+                t.setStepUp(tag.getBoolean("StepUp"));
+                t.markDirty();
+            }
             world.markBlockForUpdate(x, y, z);
             com.sc.energy.CableWarningSC.sourcePlaced(world, x, y, z, placer);
         }
@@ -113,6 +122,7 @@ public class BlockTransformerSC extends Block {
         }
         transformer.markDirty();
         world.markBlockForUpdate(x, y, z);
+        com.sc.energy.CableWarningSC.outputRaised(transformer, player);   // a weaker cable now at the output face
         return true;
     }
 
@@ -146,6 +156,41 @@ public class BlockTransformerSC extends Block {
     @Override
     public int damageDropped(int meta) {
         return meta;
+    }
+
+    @Override
+    public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (willHarvest) {
+            return true;              // harvestBlock drops (reading the tile) and then removes the block
+        }
+        return super.removedByPlayer(world, player, x, y, z, willHarvest);
+    }
+
+    @Override
+    public void harvestBlock(World world, EntityPlayer player, int x, int y, int z, int meta) {
+        super.harvestBlock(world, player, x, y, z, meta);
+        world.setBlockToAir(x, y, z);
+    }
+
+    /** The item keeps the redstone mode and step-up, when not the default. */
+    @Override
+    public ArrayList<ItemStack> getDrops(World world, int x, int y, int z, int meta, int fortune) {
+        ArrayList<ItemStack> drops = new ArrayList<ItemStack>();
+        ItemStack stack = new ItemStack(this, 1, damageDropped(meta));
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityTransformerSC) {
+            TileEntityTransformerSC t = (TileEntityTransformerSC) te;
+            NBTTagCompound nbt = new NBTTagCompound();
+            t.writeCommonItem(nbt);
+            if (t.isStepUp()) {
+                nbt.setBoolean("StepUp", true);
+            }
+            if (!nbt.hasNoTags()) {
+                stack.setTagCompound(nbt);
+            }
+        }
+        drops.add(stack);
+        return drops;
     }
 
     @Override

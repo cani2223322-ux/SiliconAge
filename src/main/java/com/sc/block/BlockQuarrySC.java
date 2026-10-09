@@ -49,11 +49,53 @@ public class BlockQuarrySC extends Block {
         setHarvestLevel("pickaxe", 0);
     }
 
-    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    /**
+     * Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC).
+     * A stranger's doesn't break at all - the server says no (the client can't tell an op).
+     */
     @Override
     public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world,
                                                 int x, int y, int z) {
+        if (refusesBreak(world, player, x, y, z)) {
+            TileEntity te = world.getTileEntity(x, y, z);
+            tellRefused(player, "sc.chat.break.owneronly", ((TileEntityQuarrySC) te).getOwner());
+            return 0F;
+        }
         return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
+    /**
+     * КР-6: a quarry with an owner is broken or dismantled by the owner and server ops only - it
+     * used to go to anyone, with its charge, tanks and settings, and the placer became the owner.
+     * Server side (false on the client). Also asked by the wrench's dismantle.
+     */
+    public static boolean refusesBreak(World world, EntityPlayer player, int x, int y, int z) {
+        if (world == null || world.isRemote || player == null) {
+            return false;
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof TileEntityQuarrySC && !((TileEntityQuarrySC) te).getOwner().isEmpty()
+                && !((TileEntityQuarrySC) te).allowed(player);       // allowed: the owner, or an op
+    }
+
+    /** A server op (the ops list; single player with cheats too). */
+    public static boolean isOp(EntityPlayer player) {
+        net.minecraft.server.MinecraftServer srv = net.minecraft.server.MinecraftServer.getServer();
+        return player instanceof net.minecraft.entity.player.EntityPlayerMP && srv != null
+                && srv.getConfigurationManager().func_152596_g(((net.minecraft.entity.player.EntityPlayerMP) player).getGameProfile());
+    }
+
+    /** Why a stranger's block won't break - at most once a second while they keep at it. Server side. */
+    public static void tellRefused(EntityPlayer player, String key, String owner) {
+        if (player == null || player.worldObj == null || player.worldObj.isRemote) {
+            return;
+        }
+        long now = player.worldObj.getTotalWorldTime();
+        long last = player.getEntityData().getLong("scOwnedMsg");
+        if (now - last >= 20 || now < last) {
+            player.getEntityData().setLong("scOwnedMsg", now);
+            player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key, owner));
+        }
     }
 
     /** The next horizontal side clockwise: north -> east -> south -> west. */
@@ -175,6 +217,11 @@ public class BlockQuarrySC extends Block {
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (refusesBreak(world, player, x, y, z)) {       // a creative stranger's instant break
+            tellRefused(player, "sc.chat.break.owneronly", ((TileEntityQuarrySC) world.getTileEntity(x, y, z)).getOwner());
+            world.markBlockForUpdate(x, y, z);
+            return false;
+        }
         if (willHarvest) {
             return true;
         }

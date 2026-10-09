@@ -118,6 +118,12 @@ public final class BridgeFarSC {
         return p.length == 4 ? p : null;
     }
 
+    /** The helmet's link entry i itself (changes go into the helmet), or null. */
+    private static NBTTagCompound linkEntry(ItemStack helmet, int i) {
+        NBTTagList l = BridgeItemDataSC.links(helmet);
+        return i < 0 || i >= l.tagCount() ? null : l.getCompoundTagAt(i);
+    }
+
     private static long linkId(ItemStack helmet, int i) {
         NBTTagList l = BridgeItemDataSC.links(helmet);
         return i < 0 || i >= l.tagCount() ? 0 : l.getCompoundTagAt(i).getLong("id");
@@ -340,27 +346,32 @@ public final class BridgeFarSC {
         out.setTag("item", it);
     }
 
-    private static void probe(EntityPlayer p, TileEntityBridgeControllerSC c, int[] v, NBTTagCompound out, boolean fromBridge) {
+    /** @return whether the place was checked */
+    private static boolean probe(EntityPlayer p, TileEntityBridgeControllerSC c, int[] v, NBTTagCompound out, boolean fromBridge) {
         if (v.length < 4) {
-            return;
+            return false;
         }
         NBTTagCompound place = c.probeAt(p, v[0], v[1], v[2], v[3], fromBridge);
         if (place == null) {
             msg(out, c.refuseFar(p, fromBridge ? new BridgeMsgSC("sc.bridge.refuse.probekr", BridgeMathSC.PROBE_KR)
                     : new BridgeMsgSC("sc.bridge.refuse.nodim", v[3])));
-            return;
+            return false;
         }
         out.setTag("place", place);
         msg(out, BridgeMsgSC.read(place.getCompoundTag("msg")));
+        return true;
     }
 
-    /** «В координатор»: the point into the coordinator inside the remote, else one in the inventory (an empty one first). */
+    /** «В координатор»: the point into the coordinator inside the remote, else the one in hand, else an empty one - a filled one is never overwritten unasked. */
     private static void toCoord(EntityPlayer p, int[] v, String text, NBTTagCompound out, ItemStack remote) {
         if (v.length < 4) {
             return;
         }
         ItemStack inside = remote == null ? null : BridgeItemDataSC.inside(remote, "Coord");
         ItemStack target = inside;
+        if (target == null && ItemCoordinatorSC.isCoordinator(p.getHeldItem())) {
+            target = p.getHeldItem();
+        }
         if (target == null) {
             ItemStack[] inv = p.inventory.mainInventory;
             for (int i = 0; i < inv.length && target == null; i++) {
@@ -368,14 +379,9 @@ public final class BridgeFarSC {
                     target = inv[i];
                 }
             }
-            for (int i = 0; i < inv.length && target == null; i++) {
-                if (ItemCoordinatorSC.isCoordinator(inv[i])) {
-                    target = inv[i];
-                }
-            }
         }
         if (target == null) {
-            msg(out, new BridgeMsgSC("sc.bridge.refuse.nocoord"));
+            msg(out, new BridgeMsgSC("sc.bridge.refuse.noemptycoord"));
             return;
         }
         int y = v[1];
@@ -478,7 +484,12 @@ public final class BridgeFarSC {
         if (action == F_HOME) {
             o = order(new int[]{BridgeMathSC.MODE_HOME, 0, 0, 0, 0, 0, 0}, "", BridgeMathSC.SRC_ARMOUR);
         } else if (action == F_LAST) {
-            NBTTagCompound last = BridgeItemDataSC.helmetLink(h).getCompoundTag("Last");
+            NBTTagCompound e = linkEntry(h, sel), hl = BridgeItemDataSC.helmetLink(h);
+            if (e != null && !e.hasKey("Last") && hl.hasKey("Last")) {
+                e.setTag("Last", hl.getCompoundTag("Last"));          // МС-4: an old helmet's shared Last goes to the selected bridge
+                hl.removeTag("Last");
+            }
+            NBTTagCompound last = e == null ? new NBTTagCompound() : e.getCompoundTag("Last");
             o = last.hasNoTags() ? null : TileEntityBridgeControllerSC.Order.read(last);
             if (o == null) {
                 msg(out, new BridgeMsgSC("sc.bridge.armour.nolast"));
@@ -524,7 +535,11 @@ public final class BridgeFarSC {
                     NBTTagCompound l = BridgeItemDataSC.helmetLink(h);
                     NBTTagCompound last = o.write();
                     last.removeTag("c");
-                    l.setTag("Last", last);
+                    NBTTagCompound e = linkEntry(h, sel);
+                    if (e != null) {
+                        e.setTag("Last", last);                     // МС-4: each linked bridge keeps its own last order
+                        l.removeTag("Last");
+                    }
                     if (o.hasPoint && BridgeMathSC.needsPoint(o.mode)) {
                         BridgeItemDataSC.pushHistory(l, new int[]{o.px, o.py, o.pz, o.pdim}, o.pointName);
                     }
@@ -543,11 +558,10 @@ public final class BridgeFarSC {
                     msg(out, new BridgeMsgSC("sc.bridge.armour.nokr", ARMOUR_PROBE_KR));
                     break;
                 }
-                if (!p.capabilities.isCreativeMode) {
+                if (probe(p, c, v, out, false) && !p.capabilities.isCreativeMode) {     // МС-12: Kr paid only for a check that took place
                     ArmorGasSC.drain(h, ArmorGasSC.Gas.KRYPTON, ARMOUR_PROBE_KR, false);
                     p.inventoryContainer.detectAndSendChanges();
                 }
-                probe(p, c, v, out, false);
                 break;
             }
             case F_CLOSE:

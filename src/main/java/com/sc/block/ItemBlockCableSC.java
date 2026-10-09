@@ -47,6 +47,9 @@ public class ItemBlockCableSC extends ItemBlockConduitSC {
         int meta = stack.getItemDamage();
         CableType type = values[meta >= 0 && meta < values.length ? meta : 0];
         list.add("§7" + Lang.tr("sc.manual.energy.cableline", type.tier.name(), type.tier.getVoltage(), type.maxThroughput(), type.maxAmps, type.lossPerBlock));
+        if (com.sc.tileentity.TileEntityConduitBundleSC.ic2CurrentUnchecked()) {
+            list.add(Lang.tr("sc.cable.ic2.nocurrent"));    // ЭН-1: IC2's net checks only the voltage (client config; the server's in SP)
+        }
         com.sc.util.TooltipSC.more(list, Lang.trOr("sc.cable.tooltip." + type.name().toLowerCase(java.util.Locale.ROOT), null), null);
     }
 }

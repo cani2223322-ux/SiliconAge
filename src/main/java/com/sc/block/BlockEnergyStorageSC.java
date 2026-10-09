@@ -29,8 +29,9 @@ import net.minecraftforge.common.util.ForgeDirection;
 
 /**
  * Energy storage LV / MV / HV / EV (metadata = Tier ordinal). The front (output) face turns to
- * the player on placement; the item keeps the stored charge ("EnergySC" in its NBT) when the
- * block is broken and restores it when placed again.
+ * the player on placement; the item keeps the stored charge ("EnergySC" in its NBT), the
+ * upgrades, the redstone / battery modes and the extra outputs (relative to the front) when the
+ * block is broken and restores them when placed again.
  */
 public class BlockEnergyStorageSC extends Block {
 
@@ -85,11 +86,57 @@ public class BlockEnergyStorageSC extends Block {
                 storage.loadUpgradesFromItem(stack.getTagCompound().getCompoundTag("UpgradesSC"));
             }
             storage.setStoredFromItem(stack.getTagCompound().getInteger("EnergySC"));
+            storage.readCommonItem(stack.getTagCompound());    // redstone and battery modes
+            restoreOutFaces(storage, stack.getTagCompound().getInteger("OutFaces"));
         }
         world.markBlockForUpdate(x, y, z);
         if (!(this instanceof BlockChargePadSC)) {            // the pad warns after turning its face
             com.sc.energy.CableWarningSC.sourcePlaced(world, x, y, z, placer);
         }
+    }
+
+    /**
+     * Item "OutFaces": the Output Splitters' extra outputs relative to the front (as if it faced
+     * south), 3 bits each (ordinal + 1), the first set in the lowest bits - so they turn with the
+     * front when the storage is placed facing elsewhere.
+     */
+    private static int outFacesForItem(TileEntityEnergyStorageSC s) {
+        ForgeDirection[] out = s.outputFaces();
+        int code = 0;
+        for (int i = 1; i < out.length; i++) {
+            code |= (toFrontSouth(out[i], s.getFacing()).ordinal() + 1) << 3 * (i - 1);
+        }
+        return code;
+    }
+
+    /** After the facing and the upgrades (the splitters) are in: the extra outputs back, turned with the front. */
+    private static void restoreOutFaces(TileEntityEnergyStorageSC s, int code) {
+        ForgeDirection front = s.getFacing();
+        for (int i = 0; i < 6 && (code >> 3 * i & 7) != 0; i++) {
+            ForgeDirection rel = ForgeDirection.getOrientation((code >> 3 * i & 7) - 1);
+            for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+                if (toFrontSouth(d, front) == rel) {
+                    if (d != front && !s.isOutputFace(d)) {
+                        s.toggleExtraOutput(d);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /** `face` turned the way that brings `front` to south (a vertical front: first a quarter turn round east-west). */
+    private static ForgeDirection toFrontSouth(ForgeDirection face, ForgeDirection front) {
+        if (front.offsetY != 0) {
+            ForgeDirection axis = front.getRotation(ForgeDirection.EAST) == ForgeDirection.SOUTH ? ForgeDirection.EAST : ForgeDirection.WEST;
+            face = face.getRotation(axis);
+            front = front.getRotation(axis);
+        }
+        for (int i = 0; i < 4 && front != ForgeDirection.SOUTH; i++) {
+            face = face.getRotation(ForgeDirection.UP);
+            front = front.getRotation(ForgeDirection.UP);
+        }
+        return face;
     }
 
     /** The horizontal face (or top/bottom when looking steeply) that points back at the placer. */
@@ -118,6 +165,7 @@ public class BlockEnergyStorageSC extends Block {
                 ((TileEntityEnergyStorageSC) te).setFacing(face);     // a pad's top is where one stands, never its output
                 te.markDirty();
                 world.markBlockForUpdate(x, y, z);
+                com.sc.energy.CableWarningSC.outputRaised((TileEntityEnergyStorageSC) te, player);   // ЭН-4: a weaker cable at the new face
             }
             return true;
         }
@@ -211,6 +259,11 @@ public class BlockEnergyStorageSC extends Block {
             NBTTagCompound ups = s.upgradesForItem();        // the upgrades go with the block, as a machine's
             if (ups != null) {
                 nbt.setTag("UpgradesSC", ups);
+            }
+            s.writeCommonItem(nbt);                           // redstone and battery modes, when not the default
+            int outFaces = outFacesForItem(s);
+            if (outFaces != 0) {
+                nbt.setInteger("OutFaces", outFaces);
             }
             if (!nbt.hasNoTags()) {
                 stack.setTagCompound(nbt);

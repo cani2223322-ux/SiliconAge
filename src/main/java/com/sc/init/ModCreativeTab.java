@@ -19,9 +19,10 @@ import net.minecraft.item.Item;
 /**
  * The mod's creative tab, in a fixed order of its own - not by item ID. Vanilla lists a tab by
  * the numeric IDs, and a world that hands the mod's items IDs from scattered free slots (an old
- * world after the mod id changed) got them all jumbled. The order: ores -> materials -> parts ->
- * tools and upgrades -> machines -> energy -> logistics -> field generator -> suits, blades and
- * drills tier by tier -> ranged weapons; anything not listed here comes last (nothing is lost).
+ * world after the mod id changed) got them all jumbled. The order: ores -> materials (metal blocks
+ * after the ingots) -> parts -> tools and upgrades -> machines -> energy (batteries, wireless, the
+ * converter) -> logistics -> field generator -> radiation -> the bridge -> suits, blades and drills
+ * tier by tier -> ranged weapons; anything not listed here comes last (nothing is lost).
  */
 public class ModCreativeTab extends CreativeTabs {
 
@@ -44,7 +45,7 @@ public class ModCreativeTab extends CreativeTabs {
         add(order, ModBlocks.oreSC, ModBlocks.limestoneSC);
         // materials
         add(order, ModItems.crushedOre, ModItems.purifiedCrushedOre, ModItems.dust, ModItems.dustTiny, ModItems.ingot,
-                ModItems.siliconMaterial, ModItems.coke, ModItems.rubber, ModItems.rubberBlue, ModItems.rubberHeatResist,
+                ModBlocks.metalBlock, ModBlocks.metalBlock2, ModItems.siliconMaterial, ModItems.coke, ModItems.rubber, ModItems.rubberBlue, ModItems.rubberHeatResist,
                 ModItems.compound, ModItems.alFoil, ModItems.leadFrame3, ModItems.leadFrame16, ModItems.leadFrame40,
                 ModItems.liquidHeCell, ModItems.deuteriumCell, ModItems.singularCell, ModItems.singularCrumb, ModItems.singularClot,
                 ModItems.fluidBucket);
@@ -54,14 +55,23 @@ public class ModCreativeTab extends CreativeTabs {
         order.addAll(ModItems.TOOLS.values());
         order.addAll(ModItems.WRENCHES);
         add(order, ModItems.upgrade, ModItems.tubeSpeedUpgrade, ModItems.itemFilter, ModItems.armorChip,
-                ModItems.fieldLinkModule, ModItems.manual);
+                ModItems.fieldLinkModule, ModItems.windRotor, ModItems.isotopeCapsule, ModItems.manual);
         // machines, energy, logistics, the field
         add(order, ModBlocks.machineSC, ModBlocks.machineSC2);
-        add(order, ModBlocks.generatorSC, ModBlocks.generatorSC2, ModBlocks.tokamakCoil, ModBlocks.cableSC, ModBlocks.transformerSC, ModBlocks.energyStorageSC, ModBlocks.chargePadSC);
+        add(order, ModBlocks.generatorSC, ModBlocks.generatorSC2, ModBlocks.tokamakCoil, ModBlocks.gravityCoil, ModBlocks.cableSC, ModBlocks.transformerSC, ModBlocks.energyStorageSC, ModBlocks.chargePadSC);
+        // energy on the move: batteries, wireless links, the converter
+        add(order, ModItems.battery, ModBlocks.wirelessTx, ModBlocks.wirelessRx, ModBlocks.quantumTranslator, ModItems.linkCard,
+                ModItems.entangledCrystal, ModBlocks.energyConverter, ModItems.converterModule);
         add(order, ModBlocks.quarrySC, ModItems.quarryModule, ModItems.oreScanner, ModItems.areaCard, ModItems.oreLens);
         order.addAll(ModItems.DRILL_HEADS);
         add(order, ModBlocks.pipeSC, ModBlocks.tubeItemPneumatic, ModBlocks.conduitBundle, ModBlocks.tankSC);
         add(order, ModBlocks.fieldGeneratorSC);
+        // radiation: lead, the suit, the dosimeter, the radioprotector, the shower
+        add(order, ModBlocks.leadBlock, ModBlocks.leadGlass);
+        add(order, (Object[]) ModItems.leadSuit);
+        add(order, ModItems.dosimeter, ModItems.radioprotector, ModBlocks.shower);
+        // the bridge: its parts, the remotes, the coordinator, the armour link module
+        add(order, ModBlocks.bridge, ModItems.bridgeRemote, ModItems.coordinator, ModItems.bridgeLinkModule);
         // gear, tier by tier: the suit, its blade, its drill
         for (int tier = 0; tier < ArmorSuit.values().length; tier++) {
             ItemArmorSC[] pieces = ModItems.ARMOR.get(ArmorSuit.values()[tier]);

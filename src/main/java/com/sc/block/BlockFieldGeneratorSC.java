@@ -31,10 +31,62 @@ public class BlockFieldGeneratorSC extends Block {
         setHarvestLevel("pickaxe", 0);
     }
 
-    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). */
+    /** Broken only with a pickaxe: by hand it doesn't break at all, nothing inside is lost (PickaxeOnlySC). A stranger's: not at all. */
     @Override
     public float getPlayerRelativeBlockHardness(EntityPlayer player, World world, int x, int y, int z) {
+        String owner = refusingOwner(world, player, x, y, z);
+        if (owner != null) {
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.fieldaccess", owner);
+            return 0F;
+        }
         return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
+    /**
+     * ПЛ-3: any node of a cluster with an owner is broken or dismantled only by the owner, the
+     * access list and server ops - wherever the zone is (an offset zone or one round a point left
+     * the generators outside their own protection, and whoever took one became its owner, charge
+     * and settings included). Server side (false on the client). Also asked by the wrench's dismantle.
+     */
+    public static boolean refusesBreak(World world, EntityPlayer player, int x, int y, int z) {
+        return refusingOwner(world, player, x, y, z) != null;
+    }
+
+    /** The owner who refuses `player` this node, or null (no owner, allowed, an op, the client). */
+    private static String refusingOwner(World world, EntityPlayer player, int x, int y, int z) {
+        if (world == null || world.isRemote || player == null) {
+            return null;
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (!(te instanceof TileEntityFieldGeneratorSC)) {
+            return null;
+        }
+        TileEntityFieldGeneratorSC node = (TileEntityFieldGeneratorSC) te;
+        if (!node.getOwner().isEmpty() && node.allowed(player)) {
+            return null;                            // the usual case, no master lookup
+        }
+        TileEntityFieldGeneratorSC master = node.isMaster() ? node : masterOf(world, node);
+        boolean owned = !node.getOwner().isEmpty() || master != null && !master.getOwner().isEmpty();
+        if (!owned || master != null && !master.getOwner().isEmpty() && master.allowed(player)   // the master's list is the live one
+                || BlockQuarrySC.isOp(player)) {                                             // an abandoned one: an op removes it
+            return null;
+        }
+        return master != null && !master.getOwner().isEmpty() ? master.getOwner() : node.getOwner();
+    }
+
+    /** A linked node's master, if loaded (its position read from the node's saved form), else null. */
+    private static TileEntityFieldGeneratorSC masterOf(World world, TileEntityFieldGeneratorSC node) {
+        net.minecraft.nbt.NBTTagCompound tag = new net.minecraft.nbt.NBTTagCompound();
+        node.writeToNBT(tag);
+        if (!tag.hasKey("MasterX")) {
+            return null;
+        }
+        int mx = tag.getInteger("MasterX"), my = tag.getInteger("MasterY"), mz = tag.getInteger("MasterZ");
+        if (!world.blockExists(mx, my, mz)) {
+            return null;
+        }
+        TileEntity m = world.getTileEntity(mx, my, mz);
+        return m instanceof TileEntityFieldGeneratorSC && ((TileEntityFieldGeneratorSC) m).isMaster() ? (TileEntityFieldGeneratorSC) m : null;
     }
 
     @Override
@@ -87,6 +139,12 @@ public class BlockFieldGeneratorSC extends Block {
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        String owner = refusingOwner(world, player, x, y, z);
+        if (owner != null) {                        // a creative stranger's instant break
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.fieldaccess", owner);
+            world.markBlockForUpdate(x, y, z);
+            return false;
+        }
         if (willHarvest) {
             return true;                            // harvestBlock drops it while the tile entity still exists
         }
@@ -185,7 +243,14 @@ public class BlockFieldGeneratorSC extends Block {
                 return true;
             }
             if (!world.isRemote) {
-                field.cycleMode();
+                com.sc.energy.FieldMode was = field.getMode();
+                field.cycleMode(player);
+                if (field.getMode() == was) {
+                    // the new zone would cover a stranger's field or another mod's claim: the old shape stays - say so
+                    player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.field.mode.kept",
+                            new net.minecraft.util.ChatComponentTranslation("sc.field.mode." + was.name().toLowerCase(java.util.Locale.ROOT))));
+                    return true;
+                }
                 player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.field.mode",
                         new net.minecraft.util.ChatComponentTranslation("sc.field.mode." + field.getMode().name().toLowerCase(java.util.Locale.ROOT)),
                         field.getNodeCount(),

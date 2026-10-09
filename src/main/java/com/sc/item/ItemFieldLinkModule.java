@@ -1,7 +1,10 @@
 package com.sc.item;
 
+import java.util.List;
+
 import com.sc.Reference;
 import com.sc.init.ModCreativeTab;
+import com.sc.manual.Lang;
 import com.sc.tileentity.TileEntityFieldGeneratorSC;
 
 import net.minecraft.client.renderer.texture.IIconRegister;
@@ -63,6 +66,11 @@ public class ItemFieldLinkModule extends net.minecraft.item.Item {
         int[] from = {nbt.getInteger("PendingX"), nbt.getInteger("PendingY"), nbt.getInteger("PendingZ")};
         int pendingDim = nbt.getInteger("PendingDim");
         int[] to = {x, y, z};
+        if (pendingDim == world.provider.dimensionId && from[0] == x && from[1] == y && from[2] == z) {
+            // the same generator again: keep the selection, link() would only say "not a field generator"
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.link.samenode"));
+            return true;
+        }
         clearPending(nbt);
         // The first point is only meaningful in the world it was picked in - otherwise the same
         // coordinates were looked up (and chunk-loaded) in whatever dimension the second click was.
@@ -107,6 +115,26 @@ public class ItemFieldLinkModule extends net.minecraft.item.Item {
             cancel(stack, player);
         }
         return stack;
+    }
+
+    /** Glows while a first node is picked - the pending state shows right on the hotbar. */
+    @Override
+    public boolean hasEffect(ItemStack stack, int pass) {
+        return stack.hasTagCompound() && stack.getTagCompound().hasKey("PendingX");
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
+        list.add("§7" + Lang.tr("sc.fieldlink.tooltip.short"));
+        if (stack.hasTagCompound() && stack.getTagCompound().hasKey("PendingX")) {
+            NBTTagCompound n = stack.getTagCompound();
+            list.add("§b" + Lang.tr("sc.fieldlink.tooltip.selected", n.getInteger("PendingX"), n.getInteger("PendingY"),
+                    n.getInteger("PendingZ"), n.getInteger("PendingDim")));
+        }
+        com.sc.util.TooltipSC.more(list,
+                Lang.tr("sc.fieldlink.tooltip.details", TileEntityFieldGeneratorSC.MAX_LINK_DISTANCE, TileEntityFieldGeneratorSC.MAX_NODES),
+                Lang.tr("sc.fieldlink.tooltip.howto"));
     }
 
     private static boolean cancel(ItemStack stack, EntityPlayer player) {

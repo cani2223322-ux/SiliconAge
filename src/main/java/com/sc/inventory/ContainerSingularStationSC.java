@@ -249,7 +249,11 @@ public class ContainerSingularStationSC extends Container {
             case BTN_MOD_TOOL: te.toggleModTool(); return true;
             case BTN_MODERNISE: say(player, te.startModernise(player)); return true;
             case BTN_CONVERT: say(player, te.startConvert(player)); return true;
-            case BTN_CANCEL: te.cancelProcess(); return true;
+            case BTN_CANCEL:
+                if (mayCancel(player)) {
+                    te.cancelProcess();
+                }
+                return true;
             case BTN_SYNC: say(player, te.startSync(player)); return true;
             case BTN_TRANSFER: say(player, te.startTransfer(player)); return true;
             case BTN_LINK: say(player, te.linkModule(player)); return true;
@@ -257,6 +261,18 @@ public class ContainerSingularStationSC extends Container {
             case BTN_SCHEME_NEXT: te.cycleScheme(1); return true;
             default: return false;
         }
+    }
+
+    /** «Отменить» is for whoever started the process (or an op): a stranger can't throw away half of it (СБ-1). */
+    private boolean mayCancel(EntityPlayer player) {
+        SingularProcessSC p = te.getProcess();
+        if (p == null || p.starter == null || p.starter.isEmpty() || p.starter.equals(player.getCommandSenderName())
+                || player instanceof net.minecraft.entity.player.EntityPlayerMP && net.minecraft.server.MinecraftServer.getServer()
+                        .getConfigurationManager().func_152596_g(((net.minecraft.entity.player.EntityPlayerMP) player).getGameProfile())) {
+            return true;
+        }
+        player.addChatComponentMessage(new ChatComponentTranslation("sc.singStation.cancel.notyours", p.starter));
+        return false;
     }
 
     /** Why a button did nothing, in the chat. */

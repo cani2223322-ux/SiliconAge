@@ -43,6 +43,10 @@ public class BlockMachineSC extends Block {
     private IIcon[] frontIcons;
     private IIcon[] casingIcons;
 
+    /** NBT keys in a machine's item: the battery slot's mode, the induction furnace's keep-warm, the compressor's capsule progress (of its ticks). */
+    public static final String ITEM_BATTERY_KEY = "BatteryModeSC", ITEM_KEEP_WARM_KEY = "KeepWarmSC",
+            ITEM_PROGRESS_KEY = "ProgressSC", ITEM_PROGRESS_OF_KEY = "ProgressOfSC";
+
     /** Machine types the two blocks hold: machineSC ordinals 0-15, machineSC2 16-31. */
     public static final int MAX_TYPES = 32;
 
@@ -215,6 +219,23 @@ public class BlockMachineSC extends Block {
         if (te instanceof TileEntityMachineSC && stack.hasTagCompound() && stack.getTagCompound().getBoolean(TileEntityMachineSC.ITEM_LIQUID_KEY)) {
             ((TileEntityMachineSC) te).setMatterLiquid(true);   // СМ1: the compressor's liquid mode
         }
+        if (te instanceof TileEntityMachineSC && stack.hasTagCompound()) {
+            TileEntityMachineSC machine = (TileEntityMachineSC) te;
+            net.minecraft.nbt.NBTTagCompound tag = stack.getTagCompound();
+            int battery = tag.getInteger(ITEM_BATTERY_KEY);
+            for (int i = 0; i < com.sc.item.BatteryFeedSC.MODES && machine.getBatteryMode() != battery; i++) {
+                machine.cycleBatteryMode();                      // (an unknown mode stays at the default)
+            }
+            machine.readCommonItem(tag);                         // "RedstoneMode"/"BatteryMode" - newer items; win over the old keys
+            if (tag.getBoolean(ITEM_KEEP_WARM_KEY) != machine.isKeepWarm()) {
+                machine.toggleKeepWarm();
+            }
+            int progress = tag.getInteger(ITEM_PROGRESS_KEY);
+            if (progress > 0 && machine.getMachineType() == MachineType.MATTER_COMPRESSOR) {
+                // the half-pressed capsule goes on; its own tick count, so overclockers rescale it as usual
+                machine.loadProgressFromItem(progress, tag.getInteger(ITEM_PROGRESS_OF_KEY));
+            }
+        }
         // the charge last: the upgrades above set how much the buffer holds
         if (te instanceof TileEntityMachineSC && stack.hasTagCompound()
                 && stack.getTagCompound().hasKey(TileEntityMachineSC.ITEM_ENERGY_KEY)) {
@@ -256,10 +277,24 @@ public class BlockMachineSC extends Block {
         int energy = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getEnergyStored() : 0;
         int matter = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getMatter() : 0;
         boolean liquid = te instanceof TileEntityMachineSC && ((TileEntityMachineSC) te).isMatterLiquid();
-        if (tanks != null || ups != null || redstone != 0 || energy > 0 || matter > 0 || liquid) {
+        int battery = te instanceof TileEntityMachineSC ? ((TileEntityMachineSC) te).getBatteryMode() : 0;
+        boolean warm = te instanceof TileEntityMachineSC && ((TileEntityMachineSC) te).isKeepWarm();
+        // the compressor's half-pressed capsule: its mass is already swallowed, nothing of it drops
+        boolean compressor = te instanceof TileEntityMachineSC
+                && ((TileEntityMachineSC) te).getMachineType() == MachineType.MATTER_COMPRESSOR;
+        int progress = compressor ? ((TileEntityMachineSC) te).getProgressTicks() : 0;
+        if (tanks != null || ups != null || redstone != 0 || energy > 0 || matter > 0 || liquid
+                || battery != 0 || warm || progress > 0) {
             net.minecraft.nbt.NBTTagCompound nbt = new net.minecraft.nbt.NBTTagCompound();
-            if (redstone != 0) {
-                nbt.setInteger(TileEntityMachineSC.ITEM_REDSTONE_KEY, redstone);
+            // redstone and battery-slot modes, when not the default (the old RedstoneSC / BatteryModeSC
+            // keys are only read now, for items dropped before)
+            ((TileEntityMachineSC) te).writeCommonItem(nbt);
+            if (warm) {                                              // the induction furnace's "keep warm" (its heat is not kept)
+                nbt.setBoolean(ITEM_KEEP_WARM_KEY, true);
+            }
+            if (progress > 0) {
+                nbt.setInteger(ITEM_PROGRESS_KEY, progress);
+                nbt.setInteger(ITEM_PROGRESS_OF_KEY, ((TileEntityMachineSC) te).getCurrentRecipeTicks());
             }
             if (energy > 0) {                                        // the buffer's charge rides along, as a storage's
                 nbt.setInteger(TileEntityMachineSC.ITEM_ENERGY_KEY, energy);
@@ -301,10 +336,14 @@ public class BlockMachineSC extends Block {
         }
         if (com.sc.util.FluidHandSC.isContainer(player.getCurrentEquippedItem())) {    // a bucket / cell: pour in or take out
             TileEntity te = world.getTileEntity(x, y, z);
-            if (!world.isRemote && te instanceof net.minecraftforge.fluids.IFluidHandler) {
-                com.sc.util.FluidHandSC.use(world, x, y, z, player, (net.minecraftforge.fluids.IFluidHandler) te, player.getCurrentEquippedItem());
+            if (te instanceof net.minecraftforge.fluids.IFluidHandler
+                    && canExchange((net.minecraftforge.fluids.IFluidHandler) te, player.getCurrentEquippedItem())) {
+                if (!world.isRemote) {
+                    com.sc.util.FluidHandSC.use(world, x, y, z, player, (net.minecraftforge.fluids.IFluidHandler) te, player.getCurrentEquippedItem());
+                }
+                return true;
             }
-            return true;
+            // nothing to pour either way (the capsule filler's empty buckets as an ingredient): the screen opens
         }
         if (player.isSneaking() && player.getCurrentEquippedItem() == null) {
             TileEntity te = world.getTileEntity(x, y, z);
@@ -330,6 +369,43 @@ public class BlockMachineSC extends Block {
             player.openGui(SCMod.instance, GuiHandlerSC.MACHINE_GUI_ID, world, x, y, z);
         }
         return true;
+    }
+
+    /**
+     * Whether a container in the hand has anything to trade with the machine, simulated only: a full
+     * one some room for its fluid, an empty one something to take, a part-filled cell either. When
+     * not, the click opens the screen instead of a "nothing there" chat line.
+     */
+    private static boolean canExchange(net.minecraftforge.fluids.IFluidHandler te, ItemStack held) {
+        net.minecraftforge.common.util.ForgeDirection any = net.minecraftforge.common.util.ForgeDirection.UNKNOWN;
+        if (net.minecraftforge.fluids.FluidContainerRegistry.isFilledContainer(held)) {
+            net.minecraftforge.fluids.FluidStack in = net.minecraftforge.fluids.FluidContainerRegistry.getFluidForFilledItem(held);
+            return in != null && te.canFill(any, in.getFluid()) && te.fill(any, in, false) > 0;
+        }
+        if (net.minecraftforge.fluids.FluidContainerRegistry.isEmptyContainer(held)) {
+            net.minecraftforge.fluids.FluidStack avail = te.drain(any, Integer.MAX_VALUE, false);
+            return avail != null && avail.amount > 0;
+        }
+        if (held.getItem() instanceof net.minecraftforge.fluids.IFluidContainerItem && held.stackSize == 1) {
+            net.minecraftforge.fluids.IFluidContainerItem item = (net.minecraftforge.fluids.IFluidContainerItem) held.getItem();
+            net.minecraftforge.fluids.FluidStack carried = item.getFluid(held);
+            if (carried != null && carried.amount > 0) {
+                if (te.canFill(any, carried.getFluid()) && te.fill(any, carried, false) > 0) {
+                    return true;                                  // pours in
+                }
+                if (carried.amount >= item.getCapacity(held)) {
+                    return false;                                 // full, and nowhere to pour it
+                }
+                net.minecraftforge.fluids.FluidStack same = te.drain(any, new net.minecraftforge.fluids.FluidStack(carried, 1), false);
+                if (same == null || !same.isFluidEqual(carried) || same.amount <= 0) {
+                    same = te.drain(any, 1, false);               // handlers that only drain by amount
+                }
+                return same != null && same.isFluidEqual(carried) && same.amount > 0;   // a top-up
+            }
+            net.minecraftforge.fluids.FluidStack avail = te.drain(any, Integer.MAX_VALUE, false);
+            return avail != null && avail.amount > 0 && item.fill(held, avail.copy(), false) > 0;
+        }
+        return false;
     }
 
     /** Other mods' wrenches (BuildCraft, Thermal, Ender IO...): a quarter turn round the vertical axis. */

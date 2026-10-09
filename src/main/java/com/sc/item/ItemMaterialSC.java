@@ -23,6 +23,9 @@ public class ItemMaterialSC extends Item {
     private final MaterialItemKind kind;
     private final Material[] materials;
     private IIcon[] icons;
+    /** Client: per meta, the machines whose recipes make it (found once). */
+    private final java.util.Map<Integer, List<com.sc.machine.MachineType>> madeIn =
+            new java.util.HashMap<Integer, List<com.sc.machine.MachineType>>();
 
     public ItemMaterialSC(MaterialItemKind kind) {
         this.kind = kind;
@@ -86,6 +89,22 @@ public class ItemMaterialSC extends Item {
     private boolean usesIc2DustLook() {
         return (kind == MaterialItemKind.DUST || kind == MaterialItemKind.DUST_TINY)
                 && DustLookSC.available() && DustLookSC.icon(kind == MaterialItemKind.DUST_TINY) != null;
+    }
+
+    /** What it is for: "sc.item.<kind>.tooltip" when the .lang has it; under Ctrl the machines that make this one. */
+    @Override
+    public void addInformation(ItemStack stack, net.minecraft.entity.player.EntityPlayer player, List list, boolean advanced) {
+        String what = com.sc.manual.Lang.trOr("sc.item." + kind.prefix + ".tooltip", null);
+        if (what != null) {
+            com.sc.util.TooltipSC.wrap(list, what, "\u00a77");
+        }
+        int meta = stack.getItemDamage();
+        List<com.sc.machine.MachineType> m = madeIn.get(meta);
+        if (m == null) {
+            m = ItemSimpleSC.machinesMaking(this, meta);
+            madeIn.put(meta, m);
+        }
+        ItemSimpleSC.madeInLines(list, m);
     }
 
     @Override

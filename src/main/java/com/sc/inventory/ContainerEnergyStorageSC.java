@@ -33,6 +33,8 @@ public class ContainerEnergyStorageSC extends Container {
     private final IntSyncSC sync = new IntSyncSC(4);   // energy, flow per tick, the power switch, the adaptive tier
     /** The power switch and the redstone mode (GuiPowerSC). */
     public static final int BTN_POWER = 10, BTN_REDSTONE = 11;
+    /** A charge pad's "charge: everyone / owner and team" switch (ЭН-7). */
+    public static final int BTN_PAD_MODE = 12;
 
     @Override
     public boolean enchantItem(EntityPlayer player, int id) {
@@ -46,6 +48,19 @@ public class ContainerEnergyStorageSC extends Container {
         }
         if (id == BTN_REDSTONE) {
             storage.setRedstoneMode((storage.getRedstoneMode() + 1) % 3);
+            return true;
+        }
+        if (id == BTN_PAD_MODE && storage instanceof com.sc.tileentity.TileEntityChargePadSC) {
+            com.sc.tileentity.TileEntityChargePadSC pad = (com.sc.tileentity.TileEntityChargePadSC) storage;
+            String name = player.getCommandSenderName();
+            if (pad.getOwner().isEmpty()) {
+                pad.setOwner(name);                        // a pad from before owners: the first to switch it claims it
+            }
+            if (!pad.getOwner().equalsIgnoreCase(name) && !player.capabilities.isCreativeMode) {
+                player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.pad.owneronly", pad.getOwner()));
+                return false;
+            }
+            pad.setOwnerOnly(!pad.isOwnerOnly());          // marks the block for update: the screen follows
             return true;
         }
         return false;

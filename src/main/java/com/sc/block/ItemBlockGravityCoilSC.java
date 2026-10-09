@@ -19,6 +19,7 @@ public class ItemBlockGravityCoilSC extends ItemBlock {
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add("§7" + Lang.tr("sc.gravityCoil.tooltip"));
+        PickaxeOnlySC.tooltip(list);
         com.sc.util.TooltipSC.more(list, Lang.tr("sc.gravityCoil.tooltip.more"), Lang.tr("sc.gravityCoil.tooltip.howto"));
     }
 }

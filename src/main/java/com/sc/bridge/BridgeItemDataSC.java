@@ -9,7 +9,7 @@ import net.minecraft.nbt.NBTTagList;
  *  - the Coordinator: "Pt" {x, y, z, dim}, "Nm" its name, "Safe" (the place check passed when it was recorded);
  *  - the remotes: "Br" {x, y, z, dim} of the bound controller, "BrId" its id, "BrNm" / "BrKind", "Charge" (EU),
  *    "Coord" (the inserted coordinator's stack), "Key" (the Space remote's Singular Matter cell), "Hist" (targets);
- *  - the Singular helmet's link (Armour Link Module, §8): "BrLink" {"Mod", "L" [{p, id, n, k}], "Sel", "Last", "Hist"}.
+ *  - the Singular helmet's link (Armour Link Module, §8): "BrLink" {"Mod", "L" [{p, id, n, k, Last}], "Sel", "Last" (old shared, migrated into L[Sel]), "Hist"}.
  * A link's entry and a history entry: {"p": {x, y, z, dim}, "n": name}; a link adds "id" (the controller's id) and "k" (kind).
  */
 public final class BridgeItemDataSC {

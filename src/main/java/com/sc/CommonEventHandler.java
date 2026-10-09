@@ -146,13 +146,7 @@ public class CommonEventHandler {
         ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(player);
         // emergency mode (Quantum / Exo without helium in the loop): the chips are off too - no effect, no EU, no heat
         if (!shutDown && !com.sc.item.ArmorLogicSC.emergency(worn)) {
-            int cost = 0;
-            for (ChipType type : ChipType.values()) {
-                if (chips.hasKey(type.name())) {
-                    cost += chipTier(chips, type) * ArmorSuit.CHIP_EU_PER_TIER_SECOND;
-                }
-            }
-            cost = (int) Math.ceil(cost * com.sc.item.ArmorLogicSC.regenMul(player));   // regeneration: x3
+            int cost = com.sc.item.ArmorLogicSC.chipsCost(player, chest);   // tier x CHIP_EU_PER_TIER_SECOND each, regeneration: x3
             if (cost > 0 && ItemArmorSC.chargeOf(chest) >= cost) {
                 ItemArmorSC.discharge(chest, cost);
                 for (ChipType type : ChipType.values()) {

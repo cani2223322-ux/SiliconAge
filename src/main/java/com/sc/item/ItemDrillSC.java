@@ -126,11 +126,16 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
     }
 
     public static void setEnabled(ItemStack stack, DrillFeature f, boolean on) {
-        if (f == DrillFeature.BLACK_HOLE) {                // the mode: on - the smallest zone unless one is set, off - none
+        if (f == DrillFeature.BLACK_HOLE) {                // the mode: on - the last zone (or the smallest), off - none
+            int cur = blackHoleSize(stack);
             if (!on) {
+                if (cur > 0) {
+                    tag(stack).setInteger(HOLE_LAST, cur);
+                }
                 setBlackHoleSize(stack, 0);
-            } else if (blackHoleSize(stack) == 0) {
-                setBlackHoleSize(stack, com.sc.util.DrillZoneSC.HOLE_SIZES[1]);
+            } else if (cur == 0) {
+                int last = stack.hasTagCompound() ? stack.getTagCompound().getInteger(HOLE_LAST) : 0;
+                setBlackHoleSize(stack, last == 5 || last == 9 || last == 12 ? last : com.sc.util.DrillZoneSC.HOLE_SIZES[1]);
             }
             return;
         }
@@ -168,8 +173,8 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         }
     }
 
-    /** Singular, NBT "SingHole": the black hole mode's zone - 0 (off), 5, 9 or 12. Client-safe. */
-    public static final String HOLE = "SingHole", HOLE_DEPTH = "SingHoleDepth";
+    /** Singular, NBT "SingHole": the black hole mode's zone - 0 (off), 5, 9 or 12. Client-safe. "SingHoleLast": the zone it had when switched off. */
+    public static final String HOLE = "SingHole", HOLE_DEPTH = "SingHoleDepth", HOLE_LAST = "SingHoleLast";
 
     public static int blackHoleSize(ItemStack stack) {
         int v = stack != null && stack.hasTagCompound() ? stack.getTagCompound().getInteger(HOLE) : 0;
@@ -231,6 +236,22 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         }
         NBTTagCompound n = stack.getTagCompound();
         return new int[]{n.getInteger("LinkX"), n.getInteger("LinkY"), n.getInteger("LinkZ"), n.getInteger("LinkDim")};
+    }
+
+    /** Drops the linked storage (Shift + right-click a block with no inventory). */
+    public static void unlink(ItemStack stack) {
+        if (stack != null && stack.hasTagCompound()) {
+            NBTTagCompound n = stack.getTagCompound();
+            n.removeTag("LinkX");
+            n.removeTag("LinkY");
+            n.removeTag("LinkZ");
+            n.removeTag("LinkDim");
+        }
+    }
+
+    /** A dimension's name for a chat line, translated on the client (sc.wl.dim.*). */
+    private static ChatComponentTranslation dimText(int dim) {
+        return dim >= -1 && dim <= 1 ? new ChatComponentTranslation("sc.wl.dim." + dim) : new ChatComponentTranslation("sc.wl.dim.other", dim);
     }
 
     // ---- look ----
@@ -303,6 +324,11 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
             mode += ", " + Lang.tr("sc.drillfn.fortune") + " " + Lang.tr("enchantment.level." + type.fortune);
         }
         list.add(Lang.tr(overheated(stack) ? "sc.tooltip.drill.statehot" : "sc.tooltip.drill.state", mode, heatPercent(stack)));
+        int[] link = DrillFeature.LINK.availableIn(type) ? link(stack) : null;
+        if (link != null) {                                 // where the dug blocks go (grey while the link is switched off)
+            list.add((isEnabled(stack, DrillFeature.LINK) ? "\u00a77" : "\u00a78") + Lang.tr("sc.tooltip.drill.link", link[0], link[1], link[2],
+                    Lang.trOr("sc.wl.dim." + link[3], Lang.tr("sc.wl.dim.other", link[3]))));
+        }
         boolean sing = type == DrillType.SINGULAR;
         if (sing) {
             ItemBladeSC.singularSummary(stack, list);
@@ -420,7 +446,7 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         return true;
     }
 
-    // ---- right-click: a torch; sneak: charge from a machine / link a chest ----
+    // ---- right-click: a torch; sneak: charge from a machine / link a chest / unlink on any other block ----
 
     @Override
     public boolean onItemUse(ItemStack stack, EntityPlayer player, World world, int x, int y, int z, int side,
@@ -445,7 +471,14 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
                     n.setInteger("LinkY", y);
                     n.setInteger("LinkZ", z);
                     n.setInteger("LinkDim", world.provider.dimensionId);
-                    player.addChatComponentMessage(new ChatComponentTranslation("sc.drill.linked", x, y, z));
+                    player.addChatComponentMessage(new ChatComponentTranslation("sc.drill.linked", x, y, z, dimText(world.provider.dimensionId)));
+                }
+                return true;
+            }
+            if (link(stack) != null && !(te instanceof IInventory)) {  // a block with no inventory: the link is dropped
+                if (!world.isRemote) {
+                    unlink(stack);
+                    player.addChatComponentMessage(new ChatComponentTranslation("sc.drill.unlinked"));
                 }
                 return true;
             }
@@ -454,7 +487,7 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
         return isEnabled(stack, DrillFeature.TORCH) && DrillLogicSC.placeTorch(player, world, x, y, z, side, hitX, hitY, hitZ);
     }
 
-    /** Singular: Shift + right-click in the air (or on a block that took nothing) - the black hole's depth 1 <-> 3. */
+    /** Singular: Shift + right-click in the air (or on a block that took nothing, no link to drop) - the black hole's depth 1 <-> 3. */
     @Override
     public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
         if (type == DrillType.SINGULAR && player.isSneaking() && !world.isRemote) {

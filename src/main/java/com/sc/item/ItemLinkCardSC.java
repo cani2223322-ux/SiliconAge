@@ -90,6 +90,12 @@ public class ItemLinkCardSC extends Item {
         TileEntityWirelessSC.link(tx, w);
         stack.setTagCompound(null);
         say(player, "sc.chat.wl.linked", (int) dist, TileEntityWirelessSC.lossPct(dist, t));
+        if (tx.getTier() != w.getTier()) {
+            // different tiers: the pair runs at the lower one - say so, the screens only show each block's own badge
+            int range = TileEntityWirelessSC.range(t);
+            say(player, "sc.chat.wl.linktier", t.name(), t.getVoltage(), range == Integer.MAX_VALUE
+                    ? new ChatComponentTranslation("sc.wl.rangeall") : new ChatComponentTranslation("sc.chat.wl.range", range));
+        }
         return true;
     }
 

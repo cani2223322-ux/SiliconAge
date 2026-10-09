@@ -39,10 +39,12 @@ final class SelfTestConverterSC {
         allFaces();
         palette();
         itemNbt();
+        blankItem();
         conversionTick();
         rfWhole();
         firstNetJoin();
         mekPullCounted();
+        mekShown();
         unknownSide();
         switchCache();
         converterNeighbour();
@@ -100,6 +102,39 @@ final class SelfTestConverterSC {
         } finally {
             ForeignEnergySC.testAllPresent = was;
         }
+    }
+
+    /** БП-6: a Mekanism cable sees only what may go out this tick, and setting it lower takes exactly that much. */
+    private static void mekShown() {
+        boolean was = ForeignEnergySC.testAllPresent;
+        ForeignEnergySC.testAllPresent = true;
+        try {
+            TileEntityEnergyConverterSC te = TileEntityEnergyConverterSC.create();
+            te.setInventorySlotContents(TileEntityEnergyConverterSC.FIRST_MODULE, ModItems.converterModule.stackOf(ItemConverterModuleSC.Kind.CARD_MEKANISM));
+            te.refreshForTest();
+            te.setPairForTest(Kind.J.ordinal());
+            te.setMode(3, TileEntityEnergyConverterSC.MODE_OUT);
+            te.setBuf(3, TileEntityEnergyConverterSC.BUF_X);
+            te.recomputeKinds();
+            te.setForeignForTest(te.foreignCapacity());
+            te.nextTickForTest();
+            double shown = te.getEnergy(), before = te.getForeign(), x = shown / 2;
+            te.setEnergy(te.getEnergy() - x);
+            check(shown <= before && near(before - te.getForeign(), x),
+                    "a Mekanism pull: " + shown + " J shown of " + before + ", setting it " + x + " lower takes " + (before - te.getForeign()));
+        } finally {
+            ForeignEnergySC.testAllPresent = was;
+        }
+    }
+
+    /** БП-5: a blank converter's item has no tag (stacks with new ones); one with energy still keeps a full one. */
+    private static void blankItem() {
+        boolean blank = TileEntityEnergyConverterSC.create().writeToItem().hasNoTags();
+        TileEntityEnergyConverterSC a = TileEntityEnergyConverterSC.create();
+        a.addEnergyForTest(1000);
+        NBTTagCompound t = a.writeToItem();
+        boolean full = !t.hasNoTags() && t.getInteger("EnergySC") == 1000;
+        check(blank && full, "a blank converter's item has no tag (" + blank + "), one with 1000 EU keeps it (" + full + ")");
     }
 
     /** No face given (a wireless charger): energy only comes in when some face is an input for it (mode, buffer, filter). */

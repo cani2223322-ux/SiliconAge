@@ -113,10 +113,15 @@ public final class DrillEventsSC {
         }
     }
 
+    /** Server ticks counted for the piston scan (every other tick). */
+    private int pistonTick;
+
     /**
      * End of every server tick: broken blocks that are really gone lose their mark; a block a piston is moving
-     * counts as placed where it arrives (Б-4: no Forge event for either); landed falling blocks likewise.
+     * counts as placed where it arrives (Б-4: no Forge event for either; checked every other tick); landed falling
+     * blocks likewise.
      */
+
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent e) {
         if (e.phase != TickEvent.Phase.END) {
@@ -140,6 +145,9 @@ public final class DrillEventsSC {
                     || f.worldObj.getEntityByID(f.getEntityId()) != f) {
                 it.remove(); // its chunk / world unloaded: never dies; a reload re-adds a fresh instance
             }
+        }
+        if (++pistonTick % 2 != 0) {
+            return;                                         // a moving block's piston tile lives 2-3 ticks: every other tick finds it
         }
         for (WorldServer w : DimensionManager.getWorlds()) {
             for (Object o : w.loadedTileEntityList) {

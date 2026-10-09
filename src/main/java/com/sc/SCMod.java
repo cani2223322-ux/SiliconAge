@@ -137,6 +137,7 @@ public class SCMod {
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
     @Mod.EventHandler
     public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {
+        com.sc.tileentity.TileEntityMachineSC.clearSmeltCache();   // МШ-8: furnace answers are taken afresh for this world (MineTweaker scripts and the like)
         event.registerServerCommand(new com.sc.debug.CommandEnergySC());
         if (event.getServer().isDedicatedServer()) {
             com.sc.util.UpdateCheckSC.start();               // operators hear about a newer version as they log in

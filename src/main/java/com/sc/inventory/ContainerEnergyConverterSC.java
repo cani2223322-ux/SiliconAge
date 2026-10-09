@@ -47,6 +47,11 @@ public class ContainerEnergyConverterSC extends Container {
             public int getSlotStackLimit() {
                 return 1;
             }
+
+            @Override
+            public boolean canTakeStack(EntityPlayer player) {
+                return ContainerEnergyConverterSC.this.te.allowed(player);   // БП-3: a stranger's double-click doesn't gather it either
+            }
         });
         for (int i = 0; i < TileEntityEnergyConverterSC.MODULE_SLOTS; i++) {
             addSlotToContainer(new ModuleSlot(te, TileEntityEnergyConverterSC.FIRST_MODULE + i, modX(i), modY(i)));
@@ -94,6 +99,9 @@ public class ContainerEnergyConverterSC extends Container {
 
         @Override
         public boolean canTakeStack(EntityPlayer player) {
+            if (!te.allowed(player)) {
+                return false;                       // БП-3: the owner's modules
+            }
             ItemStack cur = player.inventory.getItemStack(), in = getStack();
             if (cur != null && in != null && cur.isItemEqual(in) && ItemStack.areItemStackTagsEqual(cur, in)) {
                 return true;
@@ -119,6 +127,10 @@ public class ContainerEnergyConverterSC extends Container {
     @Override
     public boolean enchantItem(EntityPlayer player, int id) {
         if (!canInteractWith(player)) {
+            return false;
+        }
+        if (!te.allowed(player)) {                  // БП-3: a stranger sees the screen but changes nothing
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.conv.msg.owneronly", te.getOwner()));
             return false;
         }
         if (id == BTN_POWER) {
@@ -191,7 +203,8 @@ public class ContainerEnergyConverterSC extends Container {
         if (slot == null || !slot.getHasStack()) {
             return null;
         }
-        if (slotIndex < tileSlots && !slot.canTakeStack(player)) {
+        boolean allowed = te.allowed(player);
+        if (slotIndex < tileSlots && (!allowed || !slot.canTakeStack(player))) {
             return null;
         }
         ItemStack original = slot.getStack();
@@ -200,7 +213,7 @@ public class ContainerEnergyConverterSC extends Container {
             if (!mergeItemStack(original, tileSlots, inventorySlots.size(), true)) {
                 return null;
             }
-        } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, tileSlots)) {
+        } else if (!(allowed && SlotMergeSC.mergeValid(inventorySlots, original, 0, tileSlots))) {   // a stranger: inventory <-> hotbar only
             int hotbarStart = tileSlots + 27;
             boolean moved = slotIndex < hotbarStart
                     ? mergeItemStack(original, hotbarStart, inventorySlots.size(), false)
@@ -221,6 +234,9 @@ public class ContainerEnergyConverterSC extends Container {
     public ItemStack slotClick(int slotId, int button, int mode, EntityPlayer player) {
         if (SlotMergeSC.refuseHotbarSwap(this, slotId, button, mode, player)) {
             return null;
+        }
+        if (slotId >= 0 && slotId < tileSlots && !te.allowed(player)) {
+            return null;                            // БП-3: the owner's slots
         }
         clicking = player.inventory.getItemStack();
         try {

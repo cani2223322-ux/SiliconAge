@@ -33,7 +33,8 @@ import net.minecraftforge.common.util.ForgeDirection;
  * - inserting: the colour channel (tubes) and the priority (pipes, tubes).
  * Left click steps forward, right click back; shift + click on the priority steps by 10.
  * A tube connector also has its item slots: extract filter + speed upgrades while it extracts,
- * insert filter while it inserts (the slots that don't apply are moved out of sight).
+ * insert filter while it inserts. A slot that doesn't apply is moved out of sight - unless it still
+ * holds something: then it stays, dimmed, so the item can be taken out (nothing can be put in).
  */
 public class GuiConduitSC extends GuiContainer {
 
@@ -51,6 +52,7 @@ public class GuiConduitSC extends GuiContainer {
     /** What the layout was built for - rebuilt when the mode or the bundle's conduits change. */
     private ConduitMode builtMode;
     private boolean builtConnector;
+    private boolean[] builtShown = new boolean[ContainerConduitSC.CONNECTOR_SLOTS];
     private int extractRow = -1, insertRow = -1;
     private int prioX;
 
@@ -130,16 +132,26 @@ public class GuiConduitSC extends GuiContainer {
         }
     }
 
-    /** Which connector slots show: a tube connector's extract filter + speed while extracting, insert filter while inserting. */
-    private boolean[] connectorSlotsShown() {
+    /** Which connector slots work: a tube connector's extract filter + speed while extracting, insert filter while inserting. */
+    private boolean[] connectorSlotsUsed() {
         boolean tube = selected == ConduitKind.TUBE && connector();
         ConduitMode m = bundle.has(ConduitKind.TUBE) ? bundle.mode(ConduitKind.TUBE, side) : ConduitMode.OFF;
         boolean out = tube && m.extracts(ConduitKind.TUBE), in = tube && m.inserts(ConduitKind.TUBE);
         return new boolean[]{out, out, in};
     }
 
+    /** Which connector slots show: the working ones, and on the tube's tab the idle ones still holding an item. */
+    private boolean[] connectorSlotsShown() {
+        boolean[] shown = connectorSlotsUsed();
+        for (int i = 0; i < shown.length; i++) {
+            shown[i] |= selected == ConduitKind.TUBE && ((net.minecraft.inventory.Slot) inventorySlots.inventorySlots.get(i)).getHasStack();
+        }
+        return shown;
+    }
+
     private void placeConnectorSlots() {
         boolean[] shown = connectorSlotsShown();
+        builtShown = shown;
         for (int i = 0; i < ContainerConduitSC.CONNECTOR_SLOTS; i++) {
             net.minecraft.inventory.Slot slot = (net.minecraft.inventory.Slot) inventorySlots.inventorySlots.get(i);
             slot.xDisplayPosition = shown[i] ? ContainerConduitSC.SLOT_POS[i][0] : -2000;
@@ -159,7 +171,8 @@ public class GuiConduitSC extends GuiContainer {
         if (!kinds.contains(selected)) {
             selected = kinds.get(0);
         }
-        if (!before.equals(kinds) || bundle.mode(selected, side) != builtMode || connector() != builtConnector) {
+        if (!before.equals(kinds) || bundle.mode(selected, side) != builtMode || connector() != builtConnector
+                || !java.util.Arrays.equals(connectorSlotsShown(), builtShown)) {
             initGui();
         }
     }
@@ -296,6 +309,23 @@ public class GuiConduitSC extends GuiContainer {
         String sideName = Lang.tr("sc.side." + side.name().toLowerCase(Locale.ROOT));
         String where = Lang.tr("sc.conduit.gui.where", sideName, targetName());
         TextFitSC.draw(fontRendererObj, where, 8, TEXT_BOTTOM, W - 16, 0x606060, guiLeft, guiTop);
+        // idle slots that still hold an item: dimmed, with a note to take it out
+        boolean[] used = connectorSlotsUsed(), shown = connectorSlotsShown();
+        boolean idle = false;
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        for (int i = 0; i < ContainerConduitSC.CONNECTOR_SLOTS; i++) {
+            if (shown[i] && !used[i]) {
+                int x = ContainerConduitSC.SLOT_POS[i][0], y = ContainerConduitSC.SLOT_POS[i][1];
+                drawRect(x, y, x + 16, y + 16, 0xA0303030);
+                idle = true;
+            }
+        }
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glColor4f(1F, 1F, 1F, 1F);
+        if (idle) {
+            TextFitSC.draw(fontRendererObj, Lang.tr("sc.conduit.gui.slot.idle"), 82, 88, W - 90, 0x8B2020, guiLeft, guiTop);
+        }
     }
 
     /** Name of the block on this side (what the connector plugs into). */

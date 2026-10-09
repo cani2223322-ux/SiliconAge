@@ -2114,16 +2114,18 @@ public final class SelfTestSC {
                 == (com.sc.util.SingularSenseData.Analysis.WEAK_WATER | com.sc.util.SingularSenseData.Analysis.FIRE_IMMUNE)
                 && all == 63 && com.sc.util.SingularSenseData.fresh(1000, 1500, 1000) && !com.sc.util.SingularSenseData.fresh(1000, 2501, 1000)
                 && !com.sc.util.SingularSenseData.fresh(0, 10, 1000) && !com.sc.util.SingularSenseData.fresh(2000, 1000, 1000);
+        // СБ-10: only a field really up (isActive - the upkeep paid) and switched on counts, not just switched on with some EU
         com.sc.tileentity.TileEntityFieldGeneratorSC field = new com.sc.tileentity.TileEntityFieldGeneratorSC();
-        field.setPowerOn(false);
         field.setEnergyStoredClient(5000);
+        field.setPowerOn(true);
+        int down = com.sc.item.SingularSensesSC.resonanceKind(field);
+        field.setClientState(field.getMode().ordinal(), 1, true, field.getRange());
+        field.setPowerOn(false);
         int off = com.sc.item.SingularSensesSC.resonanceKind(field);
         field.setPowerOn(true);
         int on = com.sc.item.SingularSensesSC.resonanceKind(field);
-        field.setEnergyStoredClient(0);
-        int empty = com.sc.item.SingularSensesSC.resonanceKind(field);
-        senses &= off == 0 && on == 1 && empty == 0 && com.sc.item.SingularSensesSC.resonanceKind(null) == 0;
-        check(senses, "analyzer weakness flags; resonance: a powered, switched-on field generator counts (" + off + "/" + on + "/" + empty + ")");
+        senses &= down == 0 && off == 0 && on == 1 && com.sc.item.SingularSensesSC.resonanceKind(null) == 0;
+        check(senses, "analyzer weakness flags; resonance: only a switched-on field generator with the field up counts (" + down + "/" + off + "/" + on + ")");
 
         // the new messages: action bytes, and written / read back
         boolean net = com.sc.handler.ArmorNetSC.featureOfAction(com.sc.handler.ArmorNetSC.BLACK_HOLE) == com.sc.util.ArmorFeature.BLACK_HOLE
@@ -2510,7 +2512,7 @@ public final class SelfTestSC {
                 && com.sc.util.SingularScheme.of(sing) == com.sc.util.SingularScheme.A && com.sc.item.ItemArmorSC.chargeOf(sing) == 12345
                 && com.sc.util.ArmorGasSC.amount(sing, com.sc.util.ArmorGasSC.Gas.HELIUM) == Math.min(300, heCapExo)
                 && sing.getTagCompound().getCompoundTag("ChipsSC").getInteger("NIGHT_VISION") == 2;
-        // the chest: its Singular core's charge pays the EU first; cancelled - the core comes back with all of it
+        // the chest: its Singular core's charge pays the EU first; cancelled - the core comes back with half of it (СБ-3, as the catalyst)
         com.sc.tileentity.TileEntitySingularStationSC sc = new com.sc.tileentity.TileEntitySingularStationSC();
         sc.setInventorySlotContents(1, new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[1]));
         ItemStack core6 = new ItemStack(ModItems.battery, 1, 6);
@@ -2524,11 +2526,11 @@ public final class SelfTestSC {
                 && sc.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT) == null;
         sc.cancelProcess();
         ItemStack coreBack = sc.getStackInSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT);
-        coreEu &= coreBack != null && com.sc.item.ItemBatterySC.chargeOf(coreBack) == 100000000L && sc.getEnergyStored() == 0;
+        coreEu &= coreBack != null && com.sc.item.ItemBatterySC.chargeOf(coreBack) == 50000000L && sc.getEnergyStored() == 0;
         check("sc.singStation.err.noexo".equals(noExo) && "sc.singStation.err.nomaterials".equals(noMat) && valid && took && procNbt && back && piece && coreEu,
                 "Singular conversion: refused without Exo / materials, starts taking the materials whole (slot locked), the process with its items survives NBT,"
                         + " «Отменить» gives them back whole, the new piece is level 1 / scheme A with the charge, helium and chips; the chest's core pays the EU"
-                        + " and comes back whole (" + noExo + "/" + noMat + "/" + valid + "/" + took + "/" + procNbt + "/" + back + "/" + piece + "/" + coreEu + ")");
+                        + " and a cancel gives it back with half (" + noExo + "/" + noMat + "/" + valid + "/" + took + "/" + procNbt + "/" + back + "/" + piece + "/" + coreEu + ")");
 
         // Б-1, six material slots: a whole Exo set in one process; one kind spread over several slots; the two new slots in NBT
         final int TS = com.sc.tileentity.TileEntitySingularStationSC.MATERIAL_SLOT;
@@ -3045,13 +3047,16 @@ public final class SelfTestSC {
                 && !st.isItemValidForSlot(com.sc.tileentity.TileEntitySingularStationSC.CATALYST_SLOT, new ItemStack(ModItems.battery, 1, 5));
         st.fillTank(smG, 4500, true);
         boolean smCap = st.tankAmount(smG) == 4000;
+        String e0 = st.changeBranch(3, com.sc.util.SingularLevel.BRANCH_A);     // СБ-7: the first choice is free, as in the K menu
+        boolean firstFree = e0 == null && com.sc.util.SingularLevel.branchChoice(chest, 3) == com.sc.util.SingularLevel.BRANCH_A
+                && st.tankAmount(smG) == 4000;
         String e1 = st.changeBranch(3, com.sc.util.SingularLevel.BRANCH_B);
         String e2 = st.changeBranch(3, com.sc.util.SingularLevel.BRANCH_B);
         String e3 = st.changeBranch(5, com.sc.util.SingularLevel.BRANCH_A);
-        boolean branch = e1 == null && com.sc.util.SingularLevel.branchChoice(chest, 3) == com.sc.util.SingularLevel.BRANCH_B
+        boolean branch = firstFree && e1 == null && com.sc.util.SingularLevel.branchChoice(chest, 3) == com.sc.util.SingularLevel.BRANCH_B
                 && st.tankAmount(smG) == 3900 && "sc.singStation.err.samebranch".equals(e2) && "sc.singStation.err.branchlevel".equals(e3);
-        check(base && smCap && branch, "Singular station: SV, SM tank 4000 mB, donor / catalyst slots take only their items, branch change for 100 mB SM ("
-                + e1 + "/" + e2 + "/" + e3 + ")");
+        check(base && smCap && branch, "Singular station: SV, SM tank 4000 mB, donor / catalyst slots take only their items, the first branch choice free,"
+                + " a change for 100 mB SM (" + e0 + "/" + e1 + "/" + e2 + "/" + e3 + ")");
 
         boolean scheme = st.cycleScheme(1) && com.sc.util.SingularScheme.of(chest) == com.sc.util.SingularScheme.B
                 && com.sc.util.SingularScheme.of(helm) == com.sc.util.SingularScheme.B && st.cycleScheme(-1)
@@ -3860,16 +3865,20 @@ public final class SelfTestSC {
             MachineRecipe spin = RecipeRegistry.findMatch(MachineType.CENTRIFUGE, new ItemStack[]{ModItems.purifiedCrushedOre.stackOf(m)}, null, null);
             chain &= crush != null && crush.outputs[0].isItemEqual(ModItems.crushedOre.stackOf(m)) && crush.outputs[0].stackSize == 2
                     && wash != null && wash.outputs[0].isItemEqual(ModItems.purifiedCrushedOre.stackOf(m))
+                    && wash.byproducts.length == 1 && wash.byproducts[0].isItemEqual(ModItems.dust.stackOf(m))      // РЦ-5: 15% extra dust
+                    && Math.abs(wash.byproductChances[0] - 0.15f) < 1e-6
                     && spin != null && spin.outputs[0].isItemEqual(ModItems.dust.stackOf(m))
-                    && (m == Material.IRON ? spin.byproducts.length == 0
-                        : spin.byproducts.length == 1 && spin.byproducts[0].isItemEqual(ModItems.dustTiny.stackOf(Material.SILVER))
+                    && (m == Material.IRON ? spin.byproducts.length == 1
+                        : spin.byproducts.length == 2 && spin.byproducts[0].isItemEqual(ModItems.dustTiny.stackOf(Material.SILVER))
                           && Math.abs(spin.byproductChances[0] - 0.10f) < 1e-6)
+                    && spin.byproducts[spin.byproducts.length - 1].isItemEqual(ModItems.dust.stackOf(m))          // РЦ-5: 10% second dust
+                    && Math.abs(spin.byproductChances[spin.byproducts.length - 1] - 0.10f) < 1e-6
                     && fr.getSmeltingResult(ModItems.dust.stackOf(m)) != null && fr.getSmeltingResult(ModItems.dust.stackOf(m)).getItem() == ingot
                     && fr.getSmeltingResult(ModItems.crushedOre.stackOf(m)).getItem() == ingot
                     && fr.getSmeltingResult(ModItems.purifiedCrushedOre.stackOf(m)).getItem() == ingot
                     && ModItems.ingot.stackOf(m) == null;
         }
-        check(chain, "vanilla ores: iron/gold ore -> 2 crushed -> purified -> dust (+10% tiny silver for gold) -> vanilla ingot");
+        check(chain, "vanilla ores: iron/gold ore -> 2 crushed -> purified (+15% dust) -> dust (+10% tiny silver for gold, +10% dust) -> vanilla ingot");
 
         boolean gems = true;
         net.minecraft.block.Block[] ores = {net.minecraft.init.Blocks.coal_ore, net.minecraft.init.Blocks.redstone_ore, net.minecraft.init.Blocks.lapis_ore,

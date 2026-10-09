@@ -163,6 +163,10 @@ public class GuiBook extends GuiScreen {
         if (resultsView && searching()) {
             return "s:" + query;
         }
+        if (entry != null && entry.chapter == BookChapter.RECIPES && chapter == BookChapter.RECIPES
+                && query.trim().length() > 0) {
+            return "r:" + query;                                      // ИФ-2: the recipe search keeps its query
+        }
         if (entry != null) {
             return "e:" + entry.id;
         }
@@ -189,6 +193,9 @@ public class GuiBook extends GuiScreen {
         } else if ("marks".equals(s)) {
             marksView = true;
             return;
+        } else if (s.startsWith("r:")) {                              // the "Recipes" chapter with its query
+            setQuery(s.substring(2));
+            s = "e:recipes";
         }
         if (s.startsWith("e:")) {
             BookEntry e = BookContent.byId(s.substring(2));
@@ -218,7 +225,7 @@ public class GuiBook extends GuiScreen {
             history.push(now);
         }
         restore(s);
-        if (!s.startsWith("s:")) {
+        if (!s.startsWith("s:") && !s.startsWith("r:")) {
             setQuery("");
         }
         scrollListTo();
@@ -706,30 +713,40 @@ public class GuiBook extends GuiScreen {
         BookChapter[] chs = BookChapter.values();
         int cols = Math.max(1, Math.min(5, (w - 8) / 86)), tw = (w - 8 - (cols - 1) * 6) / cols;
         int tileRows = (chs.length + cols - 1) / cols;
-        int th = Math.max(30, Math.min(52, (bh - HEADER - 2 * PAD - 52) / tileRows - 6));
+        int th = Math.min(52, (bh - HEADER - 2 * PAD - 52) / tileRows - 6);
+        boolean compact = th < 40;                                    // ИФ-1: big GUI scale / small window
+        int gap = compact ? 3 : 6;
+        if (compact) {
+            th = 20;                                                  // a 16 px icon and the title on one line
+        }
         boolean big = th >= 48;
         for (int i = 0; i < chs.length; i++) {
-            int tx = left + 4 + (i % cols) * (tw + 6), ty = top + 6 + (i / cols) * (th + 6);
+            int tx = left + 4 + (i % cols) * (tw + 6), ty = top + 6 + (i / cols) * (th + gap);
             boolean over = mx >= tx && my >= ty && mx < tx + tw && my < ty + th;
             drawRect(tx, ty, tx + tw, ty + th, over ? 0xFFE8D9B0 : 0xFFEADFC3);
             frame(tx, ty, tw, th, over ? 0xFF8A6A2A : PAPER_EDGE);
-            GL11.glPushMatrix();
-            GL11.glTranslatef(tx + tw / 2F - (big ? 16 : 8), ty + 3, 0F);
-            if (big) {
-                GL11.glScalef(2F, 2F, 1F);
-            }
-            item(BookContent.chapterIcon(chs[i]), 0, 0, false);
-            GL11.glPopMatrix();
             String title = chs[i].title();
-            float k = Math.min(1F, (tw - 4) / (float) fontRendererObj.getStringWidth(title));
-            fit(title, tx + (int) (tw - fontRendererObj.getStringWidth(title) * k) / 2, ty + th - 11, tw - 4, INK_HEAD, 1F);
+            if (compact) {
+                item(BookContent.chapterIcon(chs[i]), tx + 2, ty + 2, false);
+                fit(title, tx + 20, ty + 6, tw - 22, INK_HEAD, 1F);
+            } else {
+                GL11.glPushMatrix();
+                GL11.glTranslatef(tx + tw / 2F - (big ? 16 : 8), ty + 3, 0F);
+                if (big) {
+                    GL11.glScalef(2F, 2F, 1F);
+                }
+                item(BookContent.chapterIcon(chs[i]), 0, 0, false);
+                GL11.glPopMatrix();
+                float k = Math.min(1F, (tw - 4) / (float) fontRendererObj.getStringWidth(title));
+                fit(title, tx + (int) (tw - fontRendererObj.getStringWidth(title) * k) / 2, ty + th - 11, tw - 4, INK_HEAD, 1F);
+            }
             click(tx, ty, tw, th, chs[i]);
             if (over) {
                 hoverLines = lines(chs[i].title(), "§7" + chs[i].description(),
                         "§8" + Lang.tr("sc.book.articles", BookContent.chapter(chs[i]).size()));
             }
         }
-        int y = top + 6 + ((chs.length + cols - 1) / cols) * (th + 6) + 4;
+        int y = top + 6 + tileRows * (th + gap) + 4;
         int done = BookProgressSC.doneCount(), all = BookContent.STEPS.length;
         fontRendererObj.drawString(Lang.tr("sc.book.progress", done, all), left + 6, y, INK_HEAD);
         int pw = 120, px = left + 6 + fontRendererObj.getStringWidth(Lang.tr("sc.book.progress", done, all)) + 8;
@@ -761,7 +778,9 @@ public class GuiBook extends GuiScreen {
             click(ix, y, 16, 16, e);
             ix += 18;
         }
-        fontRendererObj.drawString(Lang.tr("sc.book.hint"), left + 6, by + bh - PAD - 11, INK_DIM);
+        if (y + 18 <= by + bh - PAD - 11) {                           // no room under the bookmarks: no hint
+            fontRendererObj.drawString(Lang.tr("sc.book.hint"), left + 6, by + bh - PAD - 11, INK_DIM);
+        }
     }
 
     // ------------------------------------------------------------------ the list on the left

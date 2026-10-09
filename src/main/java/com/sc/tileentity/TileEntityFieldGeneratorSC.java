@@ -45,6 +45,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public static final int BASE_EU_PER_FACE = 2;
     // TODO(design doc): no link range is specified - 16 blocks per axis keeps a cluster to a
     // base-sized area (and stops a 10k-block "cluster" whose bounding box is scanned every tick).
+    // Every node must lie this close to the master (link()), so a chain of links can't stretch it.
     public static final int MAX_LINK_DISTANCE = 16;
 
     /**
@@ -83,7 +84,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             /** Rain shield: while it rains over the field, upkeep +25% (+50% in a storm); no rain inside, no snow or ice, lightning taken. */
             F_RAIN = 32768,
             /** Radiation shield: players inside take no radiation; RadiationSC.FIELD_EU_PER_LEVEL a second for each level stopped. */
-            F_RADIATION = 65536;
+            F_RADIATION = 65536,
+            /** ПЛ-1, with the private zone: strangers can't use doors, trapdoors, gates, levers, buttons, repeaters / comparators, beds (ShieldEventHandler.isMechanism). */
+            F_NO_MECHANISMS = 131072;
     /** The rain shield's extra upkeep, % of the field's, in rain and in a thunderstorm; and what a lightning bolt costs. */
     public static final int RAIN_PCT = 25, THUNDER_PCT = 50, LIGHTNING_COST = 2000;
     /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell and charging sparks shown. */
@@ -172,7 +175,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public void toggle(int flag) {
-        if (flag == F_PRIVATE && !has(F_PRIVATE) && refuseClaimed(true)) {
+        if (flag == F_PRIVATE && !has(F_PRIVATE) && refuseClaimed(true, null)) {
             return;                                 // another mod's protection there: no private zone over it
         }
         flags ^= flag;
@@ -197,7 +200,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public void togglePower() {
-        if (!powerOn && (refuseForeign(true) || has(F_PRIVATE) && refuseClaimed(true))) {
+        if (!powerOn && (refuseForeign(true, null) || has(F_PRIVATE) && refuseClaimed(true, null))) {
             return;                                 // a stranger's field or another mod's claim in the way: stays off
         }
         powerOn = !powerOn;
@@ -307,7 +310,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         } else {
             anchor = a;
         }
-        keepShape(before, point);                   // over a stranger's field: the old zone stays (they're told)
+        keepShape(before, point, null);             // over a stranger's field: the old zone stays (they're told)
         changed();
         return ok;
     }
@@ -339,10 +342,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         zoneCache = null;
     }
 
-    /** After a change of shape: back to the saved one if the new zone overlaps a stranger's field. @return true if kept */
-    private boolean keepShape(int[] before, int[] point) {
+    /**
+     * After a change of shape: back to the saved one if the new zone overlaps a stranger's field. `by`
+     * (may be null) hears why too, even without the screen open. @return true if kept
+     */
+    private boolean keepShape(int[] before, int[] point, EntityPlayer by) {
         zoneCache = null;
-        if (refuseForeign(true) || has(F_PRIVATE) && refuseClaimed(true)) {
+        if (refuseForeign(true, by) || has(F_PRIVATE) && refuseClaimed(true, by)) {
             restoreShape(before, point);
             changed();
             return false;
@@ -372,6 +378,221 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
         }
         return null;
+    }
+
+    /**
+     * The owner of a stranger's zone this one would overlap, or null: the fields up right now
+     * (foreignOverlap) and every switched-on field in ZoneRegistry - down for want of energy or by
+     * redstone, or in an unloaded chunk - so one coming back up never lands inside a stranger's zone.
+     */
+    private String strangerZoneOwner(TileEntityFieldGeneratorSC ignore) {
+        TileEntityFieldGeneratorSC up = foreignOverlap(ignore);
+        if (up != null) {
+            return up.getOwner();
+        }
+        if (worldObj == null || worldObj.isRemote || !master) {
+            return null;
+        }
+        ZoneRegistry reg = ZoneRegistry.get(worldObj);
+        if (reg == null) {
+            return null;
+        }
+        int dim = worldObj.provider.dimensionId;
+        for (Zone z : new ArrayList<Zone>(reg.zones)) {
+            if (z.dim != dim || z.x == xCoord && z.y == yCoord && z.z == zCoord
+                    || ignore != null && z.x == ignore.xCoord && z.y == ignore.yCoord && z.z == ignore.zCoord) {
+                continue;
+            }
+            if (worldObj.blockExists(z.x, z.y, z.z)) {
+                // loaded: the field itself has the last word (an entry whose block is gone is dropped)
+                TileEntityFieldGeneratorSC f = fieldGeneratorAt(worldObj, new int[]{z.x, z.y, z.z});
+                if (f == null || !f.master) {
+                    reg.remove(dim, z.x, z.y, z.z);
+                    continue;
+                }
+                if (f == this || f == ignore || !f.powerOn || f.owner.isEmpty() || f.allowedName(owner)) {
+                    continue;
+                }
+                if (FieldShapeSC.overlaps(mode, zoneNodes(), range, height, f.mode, f.zoneNodes(), f.range, f.height)) {
+                    return f.getOwner();
+                }
+            } else if (!z.allows(owner) && FieldShapeSC.overlaps(mode, zoneNodes(), range, height,
+                    FieldMode.values()[Math.max(0, Math.min(FieldMode.values().length - 1, z.mode))], z.nodes, z.range, z.height)) {
+                return z.owner;
+            }
+        }
+        return null;
+    }
+
+    /** This master's entry in ZoneRegistry: written while it is switched on and has an owner, dropped otherwise. */
+    private void syncZoneEntry() {
+        if (worldObj == null || worldObj.isRemote) {
+            return;
+        }
+        ZoneRegistry reg = ZoneRegistry.get(worldObj);
+        if (reg == null) {
+            return;
+        }
+        int dim = worldObj.provider.dimensionId;
+        if (!master || !powerOn || owner.isEmpty() || isInvalid()) {
+            reg.remove(dim, xCoord, yCoord, zCoord);
+        } else {
+            reg.put(new Zone(dim, xCoord, yCoord, zCoord, owner, access, mode.ordinal(), range, height, zoneNodes()));
+        }
+    }
+
+    /** One switched-on master's zone as ZoneRegistry keeps it. */
+    static final class Zone {
+        final int dim, x, y, z, mode, range, height;
+        final String owner;
+        final List<String> access;
+        final List<int[]> nodes;
+
+        Zone(int dim, int x, int y, int z, String owner, List<String> access, int mode, int range, int height, List<int[]> nodes) {
+            this.dim = dim;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.owner = owner;
+            this.access = new ArrayList<String>(access);
+            this.mode = mode;
+            this.range = range;
+            this.height = height;
+            this.nodes = new ArrayList<int[]>();
+            for (int[] n : nodes) {
+                this.nodes.add(n.clone());
+            }
+        }
+
+        /** allowedName() as the field had it. */
+        boolean allows(String name) {
+            String n = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+            return owner.isEmpty() || owner.equalsIgnoreCase(n) || access.contains(n);
+        }
+
+        boolean sameAs(Zone o) {
+            if (o.dim != dim || o.x != x || o.y != y || o.z != z || o.mode != mode || o.range != range || o.height != height
+                    || !o.owner.equals(owner) || !o.access.equals(access) || o.nodes.size() != nodes.size()) {
+                return false;
+            }
+            for (int i = 0; i < nodes.size(); i++) {
+                if (!java.util.Arrays.equals(nodes.get(i), o.nodes.get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    /**
+     * Every switched-on master's zone on the server (owner, access list, shape; the global map storage,
+     * "SiliconAgeFieldZones", by dimension): the "no field over a stranger's" check sees fields that are
+     * down or unloaded too. A master writes its entry on each change (changed()) and drops it when switched
+     * off, linked into another cluster or broken; an entry whose block is gone (a world edited outside the
+     * game) is dropped the next time its chunk is looked at. Fields from older saves join once loaded.
+     */
+    public static class ZoneRegistry extends net.minecraft.world.WorldSavedData {
+
+        public static final String NAME = "SiliconAgeFieldZones";
+        final List<Zone> zones = new ArrayList<Zone>();
+
+        public ZoneRegistry(String name) {
+            super(name);
+        }
+
+        static ZoneRegistry get(World w) {
+            if (w == null || w.mapStorage == null) {
+                return null;
+            }
+            ZoneRegistry r = (ZoneRegistry) w.mapStorage.loadData(ZoneRegistry.class, NAME);
+            if (r == null) {
+                r = new ZoneRegistry(NAME);
+                w.mapStorage.setData(NAME, r);
+            }
+            return r;
+        }
+
+        private int indexOf(int dim, int x, int y, int z) {
+            for (int i = 0; i < zones.size(); i++) {
+                Zone e = zones.get(i);
+                if (e.dim == dim && e.x == x && e.y == y && e.z == z) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        void put(Zone zone) {
+            int i = indexOf(zone.dim, zone.x, zone.y, zone.z);
+            if (i >= 0 && zones.get(i).sameAs(zone)) {
+                return;
+            }
+            if (i >= 0) {
+                zones.set(i, zone);
+            } else {
+                zones.add(zone);
+            }
+            markDirty();
+        }
+
+        void remove(int dim, int x, int y, int z) {
+            int i = indexOf(dim, x, y, z);
+            if (i >= 0) {
+                zones.remove(i);
+                markDirty();
+            }
+        }
+
+        @Override
+        public void readFromNBT(NBTTagCompound nbt) {
+            zones.clear();
+            NBTTagList list = nbt.getTagList("Zones", 10);
+            for (int i = 0; i < list.tagCount(); i++) {
+                NBTTagCompound t = list.getCompoundTagAt(i);
+                List<String> acc = new ArrayList<String>();
+                NBTTagList names = t.getTagList("Access", 8);
+                for (int k = 0; k < names.tagCount(); k++) {
+                    acc.add(names.getStringTagAt(k));
+                }
+                int[] flat = t.getIntArray("Nodes");
+                List<int[]> nodes = new ArrayList<int[]>();
+                for (int k = 0; k + 2 < flat.length; k += 3) {
+                    nodes.add(new int[]{flat[k], flat[k + 1], flat[k + 2]});
+                }
+                if (!nodes.isEmpty() && !t.getString("Owner").isEmpty()) {
+                    zones.add(new Zone(t.getInteger("Dim"), t.getInteger("X"), t.getInteger("Y"), t.getInteger("Z"), t.getString("Owner"),
+                            acc, t.getInteger("Mode"), FieldShapeSC.clampRange(t.getInteger("Range")), t.getInteger("Height"), nodes));
+                }
+            }
+        }
+
+        @Override
+        public void writeToNBT(NBTTagCompound nbt) {
+            NBTTagList list = new NBTTagList();
+            for (Zone e : zones) {
+                NBTTagCompound t = new NBTTagCompound();
+                t.setInteger("Dim", e.dim);
+                t.setInteger("X", e.x);
+                t.setInteger("Y", e.y);
+                t.setInteger("Z", e.z);
+                t.setString("Owner", e.owner);
+                NBTTagList names = new NBTTagList();
+                for (String n : e.access) {
+                    names.appendTag(new net.minecraft.nbt.NBTTagString(n));
+                }
+                t.setTag("Access", names);
+                t.setInteger("Mode", e.mode);
+                t.setInteger("Range", e.range);
+                t.setInteger("Height", e.height);
+                int[] flat = new int[e.nodes.size() * 3];
+                for (int k = 0; k < e.nodes.size(); k++) {
+                    System.arraycopy(e.nodes.get(k), 0, flat, k * 3, 3);
+                }
+                t.setIntArray("Nodes", flat);
+                list.appendTag(t);
+            }
+            nbt.setTag("Zones", list);
+        }
     }
 
     // ---- no private zone over another mod's protection (claims, spawn protection) ----
@@ -417,17 +638,16 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * A spot of the zone where breaking a block as the owner is cancelled (BlockEvent.BreakEvent through a
      * FakePlayer with the owner's profile: another mod's claim, spawn protection), or null. Points: a grid
      * over the zone's box every CLAIM_STEP blocks (column corners in, at most CLAIM_MAX_POINTS) that lie in
-     * the zone, and the zone's nodes. Server side; a field with no owner isn't checked.
+     * the zone, and the zone's nodes. Server side; a field with no owner isn't checked, nor any field
+     * with ConfigSC.fieldClaimCheck off (a server whose block loggers or quests take the events for real breaks).
      */
     public int[] claimedSpot() {
-        if (!(worldObj instanceof net.minecraft.world.WorldServer) || owner.isEmpty()) {
+        if (!com.sc.util.ConfigSC.fieldClaimCheck || !(worldObj instanceof net.minecraft.world.WorldServer) || owner.isEmpty()) {
             return null;
         }
         net.minecraft.world.WorldServer ws = (net.minecraft.world.WorldServer) worldObj;
-        net.minecraftforge.common.util.FakePlayer fake = net.minecraftforge.common.util.FakePlayerFactory.get(ws, ownerProfile());
-        if (fake.worldObj != worldObj) {
-            fake.setWorld(worldObj);                // Forge caches it by profile only
-        }
+        // a probe (NetViewNetSC.ProbePlayerSC) that break loggers / quest mods can tell from a real break
+        net.minecraftforge.common.util.FakePlayer fake = new com.sc.handler.NetViewNetSC.ProbePlayerSC(ws, ownerProfile());
         AxisAlignedBB b = zoneBounds();
         int x0 = net.minecraft.util.MathHelper.floor_double(b.minX), x1 = net.minecraft.util.MathHelper.floor_double(b.maxX);
         int z0 = net.minecraft.util.MathHelper.floor_double(b.minZ), z1 = net.minecraft.util.MathHelper.floor_double(b.maxZ);
@@ -473,47 +693,49 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return ev.isCanceled();
     }
 
-    /** claimedSpot(); with `tell`, the players on this field's screen hear where. @return true if refused */
-    private boolean refuseClaimed(boolean tell) {
+    /** claimedSpot(); with `tell`, the players on this field's screen (and `by`, may be null) hear where. @return true if refused */
+    private boolean refuseClaimed(boolean tell, EntityPlayer by) {
         if (worldObj == null || worldObj.isRemote || !master) {
             return false;
         }
         int[] spot = claimedSpot();
         if (spot != null && tell) {
-            tellViewers("sc.field.claimed", spot[0] + " " + spot[1] + " " + spot[2]);
+            tellViewers(by, "sc.field.claimed", spot[0] + " " + spot[1] + " " + spot[2]);
         }
         return spot != null;
     }
 
-    private void tellViewers(String key, Object... args) {
+    /** The players with this field's screen open, and `by` (may be null) if not one of them. */
+    private void tellViewers(EntityPlayer by, String key, Object... args) {
         for (Object o : worldObj.playerEntities) {
             EntityPlayer p = (EntityPlayer) o;
-            if (p.openContainer instanceof com.sc.inventory.ContainerFieldGeneratorSC
-                    && ((com.sc.inventory.ContainerFieldGeneratorSC) p.openContainer).getField() == this) {
+            if (isViewer(p)) {
                 p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key, args));
             }
         }
+        if (by != null && !isViewer(by)) {
+            by.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key, args));
+        }
+    }
+
+    private boolean isViewer(EntityPlayer p) {
+        return p.openContainer instanceof com.sc.inventory.ContainerFieldGeneratorSC
+                && ((com.sc.inventory.ContainerFieldGeneratorSC) p.openContainer).getField() == this;
     }
 
     /**
      * Sets the "stranger's field near" status from foreignOverlap(); with `tell`, the players with
-     * this field's screen open hear why. @return true if there is such a field (the caller refuses)
+     * this field's screen open (and `by`, may be null) hear why. @return true if there is such a field (the caller refuses)
      */
-    private boolean refuseForeign(boolean tell) {
+    private boolean refuseForeign(boolean tell, EntityPlayer by) {
         if (worldObj == null || worldObj.isRemote) {
             return false;                           // the server decides (a client copy keeps the synced status)
         }
-        TileEntityFieldGeneratorSC f = foreignOverlap();
+        String f = strangerZoneOwner(null);
         boolean was = foreignNear;
         foreignNear = f != null;
         if (f != null && tell) {
-            for (Object o : worldObj.playerEntities) {
-                EntityPlayer p = (EntityPlayer) o;
-                if (p.openContainer instanceof com.sc.inventory.ContainerFieldGeneratorSC
-                        && ((com.sc.inventory.ContainerFieldGeneratorSC) p.openContainer).getField() == this) {
-                    p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", f.getOwner()));
-                }
-            }
+            tellViewers(by, "sc.field.foreign", f);
         }
         if (was != foreignNear) {
             changed();
@@ -526,13 +748,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * switched off. @return the stranger's field's owner, or null if all is well
      */
     public String placedNearForeign() {
-        TileEntityFieldGeneratorSC f = foreignOverlap();
+        String f = strangerZoneOwner(null);
         foreignNear = f != null;
         if (f != null) {
             powerOn = false;
         }
         changed();
-        return f == null ? null : f.getOwner();
+        return f;
     }
 
     /** The points the shape is built round: the anchors, shifted by the offset. */
@@ -740,6 +962,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return x < x0 || z < z0 || x >= x0 + w || z >= z0 + d ? -1 : (z - z0) * w + (x - x0);
     }
 
+    /** The most columns the snow and ice sweep keeps track of: one node at the largest range fits. */
+    public static final long SNOW_MAX_COLUMNS = (2L * FieldShapeSC.MAX_RANGE + 1) * (2L * FieldShapeSC.MAX_RANGE + 1);
+
+    /** The zone is too wide for keepSnowOff(): the rain shield still keeps the rain off, but not new snow and ice (the screen says so). */
+    public boolean snowTooBig() {
+        AxisAlignedBB box = zoneBounds();
+        long w = net.minecraft.util.MathHelper.floor_double(box.maxX) - net.minecraft.util.MathHelper.floor_double(box.minX) + 1L;
+        long d = net.minecraft.util.MathHelper.floor_double(box.maxZ) - net.minecraft.util.MathHelper.floor_double(box.minZ) + 1L;
+        return w * d > SNOW_MAX_COLUMNS;
+    }
+
     /**
      * No new snow or ice under the shield: the zone's columns are swept, 64 a tick; a column seen
      * clear that has snow on top (or ice on its water) now got it from the weather, and loses it.
@@ -749,7 +982,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         AxisAlignedBB box = zoneBounds();
         int x0 = net.minecraft.util.MathHelper.floor_double(box.minX), z0 = net.minecraft.util.MathHelper.floor_double(box.minZ);
         int w = net.minecraft.util.MathHelper.floor_double(box.maxX) - x0 + 1, d = net.minecraft.util.MathHelper.floor_double(box.maxZ) - z0 + 1;
-        if (w <= 0 || d <= 0 || (long) w * d > (1 << 18)) {
+        if (w <= 0 || d <= 0 || (long) w * d > SNOW_MAX_COLUMNS) {
             return;
         }
         if (snowBox == null || !snowBox.toString().equals(box.toString())) {
@@ -995,16 +1228,35 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         writeZone(nbt);
     }
 
-    /** The Quantum Wrench's paste (the caller checked allowed()); a zone over a stranger's field isn't taken. */
+    /** importSettings(nbt, null). */
     public void importSettings(NBTTagCompound nbt) {
+        importSettings(nbt, null);
+    }
+
+    /**
+     * The Quantum Wrench's paste (the caller checked allowed()), all or nothing: a zone over a stranger's
+     * field or another mod's claim leaves every setting as it was, and `by` (may be null) hears why.
+     * @return true if pasted
+     */
+    public boolean importSettings(NBTTagCompound nbt, EntityPlayer by) {
+        NBTTagCompound undo = new NBTTagCompound();
+        exportSettings(undo);
         int[] before = saveShape();
         int[] point = anchorPoint;
+        int oldFlags = flags;
         applySettings(nbt);
-        keepShape(before, point);
+        if (!keepShape(before, point, by)) {
+            applySettings(undo);
+            restoreShape(before, point);
+            flags = oldFlags;
+            changed();
+            return false;
+        }
         if (has(F_PRIVATE) && claimedSpot() != null) {
             flags &= ~F_PRIVATE;                    // the pasted private zone over another mod's claim: not private
         }
         changed();
+        return true;
     }
 
     private void applySettings(NBTTagCompound nbt) {
@@ -1104,6 +1356,21 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                 net.minecraft.util.MathHelper.floor_double(target.posY + target.height / 2), net.minecraft.util.MathHelper.floor_double(target.posZ));
     }
 
+    /**
+     * guardsEntity() for a shot (LivingAttackEvent): a stranger's arrow, snowball or splash potion
+     * hurting an animal, villager or golem in a private zone does nothing - wherever the stranger stands.
+     * Nothing is turned back, and players aren't covered (PvP stays as it was). Frames, paintings,
+     * carts and boats get no such event: protectRegion() puts out the shots about to hit them.
+     * @return true if the event must be cancelled
+     */
+    public static boolean guardsFromShot(Entity target, net.minecraft.util.DamageSource src) {
+        if (src == null || !(src.getEntity() instanceof EntityPlayer) || src.getSourceOfDamage() == null
+                || src.getSourceOfDamage() == src.getEntity()) {
+            return false;                           // not a shot (a blow by hand is AttackEntityEvent's)
+        }
+        return guardsEntity((EntityPlayer) src.getEntity(), target);
+    }
+
     /** The first active field in the world with that switch on that covers the point, or null. */
     public static TileEntityFieldGeneratorSC fieldWith(World world, int flag, double x, double y, double z) {
         for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
@@ -1161,15 +1428,20 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (next != range) {
             int[] before = saveShape();
             range = next;
-            keepShape(before, anchorPoint);
+            keepShape(before, anchorPoint, null);
             changed();
         }
     }
 
     public void cycleMode() {
+        cycleMode(null);
+    }
+
+    /** The next shape; refused over a stranger's field or a claim, `by` (may be null) hearing why. */
+    public void cycleMode(EntityPlayer by) {
         int[] before = saveShape();
         mode = mode.next();
-        keepShape(before, anchorPoint);
+        keepShape(before, anchorPoint, by);
         changed();
     }
 
@@ -1298,6 +1570,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (masterTe.nodePositions.size() + incoming.size() > MAX_NODES) {
             return LinkResult.NODE_CAP;
         }
+        for (int[] pos : incoming) {            // the whole cluster within reach of its master, not a chain of 16-block links
+            if (Math.abs(pos[0] - masterTe.xCoord) > MAX_LINK_DISTANCE || Math.abs(pos[1] - masterTe.yCoord) > MAX_LINK_DISTANCE
+                    || Math.abs(pos[2] - masterTe.zCoord) > MAX_LINK_DISTANCE) {
+                return LinkResult.TOO_FAR;
+            }
+        }
         // the bigger cluster's zone mustn't reach over a stranger's field (as a power-on / a new zone)
         List<int[]> had = new ArrayList<int[]>(masterTe.nodePositions);
         for (int[] pos : incoming) {
@@ -1306,7 +1584,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
         }
         masterTe.zoneCache = null;
-        TileEntityFieldGeneratorSC stranger = masterTe.foreignOverlap(joiningMaster);
+        String stranger = masterTe.strangerZoneOwner(joiningMaster);
         // nor a private zone over another mod's claim (as toggle(F_PRIVATE) / a new zone)
         int[] claimed = stranger == null && masterTe.has(F_PRIVATE) ? masterTe.claimedSpot() : null;
         masterTe.nodePositions.clear();
@@ -1314,7 +1592,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         masterTe.zoneCache = null;
         if (stranger != null) {
             if (player != null) {
-                player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", stranger.getOwner()));
+                player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.foreign", stranger));
             }
             return LinkResult.FOREIGN;
         }
@@ -1556,6 +1834,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
         if (worldObj.getTotalWorldTime() % 100 == 0) {
             pruneNodes();
+            syncZoneEntry();                        // a field from an older save joins ZoneRegistry here
         }
         if (feedFromBattery(battery) > 0) {
             markDirty();
@@ -2035,6 +2314,48 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             worldObj.playSoundEffect(e.posX, e.posY, e.posZ, "random.fizz", 0.6F, 1.6F);
             flash(e.posX, e.posY, e.posZ);
         }
+        if (has(F_PRIVATE)) {
+            stopStrangersShots(box, all);
+        }
+    }
+
+    /**
+     * A private zone's frames, paintings, carts and boats: a stranger's shot about to hit one (within
+     * the ticks until the next scan) fizzles out - they get no LivingAttackEvent for guardsFromShot().
+     */
+    private void stopStrangersShots(AxisAlignedBB box, List<Entity> inBox) {
+        List<Entity> guarded = new ArrayList<Entity>();
+        for (Entity t : inBox) {
+            if ((t instanceof net.minecraft.entity.EntityHanging || t instanceof net.minecraft.entity.item.EntityMinecart
+                    || t instanceof net.minecraft.entity.item.EntityBoat) && !t.isDead
+                    && fieldContains(t.posX, t.posY + t.height / 2, t.posZ)) {
+                guarded.add(t);
+            }
+        }
+        if (guarded.isEmpty()) {
+            return;
+        }
+        int ticks = (range <= 32 ? 1 : 4) + 1;     // protectRegion()'s interval, and one to spare
+        List<Entity> shots = worldObj.getEntitiesWithinAABB(Entity.class, box.expand(16, 16, 16));
+        for (Entity s : shots) {
+            Entity shooter = shooterOf(s);
+            if (!isProjectile(s) || s.isDead || !(shooter instanceof EntityPlayer) || allowed((EntityPlayer) shooter)
+                    || s.motionX * s.motionX + s.motionY * s.motionY + s.motionZ * s.motionZ <= 0.01) {
+                continue;
+            }
+            net.minecraft.util.Vec3 from = net.minecraft.util.Vec3.createVectorHelper(s.posX, s.posY, s.posZ);
+            net.minecraft.util.Vec3 to = net.minecraft.util.Vec3.createVectorHelper(s.posX + s.motionX * ticks,
+                    s.posY + s.motionY * ticks, s.posZ + s.motionZ * ticks);
+            for (Entity t : guarded) {
+                AxisAlignedBB tb = t.boundingBox.expand(0.3, 0.3, 0.3);
+                if (tb.isVecInside(from) || tb.calculateIntercept(from, to) != null) {
+                    s.setDead();
+                    worldObj.playSoundEffect(s.posX, s.posY, s.posZ, "random.fizz", 0.6F, 1.6F);
+                    flash(s.posX, s.posY, s.posZ);
+                    break;
+                }
+            }
+        }
     }
 
     /** Push away from the nearest node for bubbles, from the middle of the field otherwise. */
@@ -2054,17 +2375,28 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return best;
     }
 
-    private static boolean isHostileProjectile(Entity e) {
-        Entity owner;
+    private static boolean isProjectile(Entity e) {
+        return e instanceof net.minecraft.entity.projectile.EntityArrow || e instanceof net.minecraft.entity.projectile.EntityFireball
+                || e instanceof net.minecraft.entity.projectile.EntityThrowable;
+    }
+
+    /** Who fired an arrow, fireball or thrown thing (null: no shooter saved, or not a projectile). */
+    private static Entity shooterOf(Entity e) {
         if (e instanceof net.minecraft.entity.projectile.EntityArrow) {
-            owner = ((net.minecraft.entity.projectile.EntityArrow) e).shootingEntity;
+            return ((net.minecraft.entity.projectile.EntityArrow) e).shootingEntity;
         } else if (e instanceof net.minecraft.entity.projectile.EntityFireball) {
-            owner = ((net.minecraft.entity.projectile.EntityFireball) e).shootingEntity;
+            return ((net.minecraft.entity.projectile.EntityFireball) e).shootingEntity;
         } else if (e instanceof net.minecraft.entity.projectile.EntityThrowable) {
-            owner = ((net.minecraft.entity.projectile.EntityThrowable) e).getThrower();
-        } else {
+            return ((net.minecraft.entity.projectile.EntityThrowable) e).getThrower();
+        }
+        return null;
+    }
+
+    private static boolean isHostileProjectile(Entity e) {
+        if (!isProjectile(e)) {
             return false;
         }
+        Entity owner = shooterOf(e);
         // Everything not fired by a player, as the manual says: mobs' shots, dispensers, and projectiles
         // with no shooter at all (arrows don't save theirs, so any arrow reloaded from a save). A
         // player's own reloaded arrow is turned back too - it can't be told apart any more.
@@ -2308,6 +2640,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         markDirty();
         if (worldObj != null && !worldObj.isRemote) {
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+            syncZoneEntry();
         }
     }
 
@@ -2368,6 +2701,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public void invalidate() {
         if (worldObj == null || !worldObj.isRemote) {   // the set is server-side only (single-player shares the JVM)
             ACTIVE.remove(this);
+        }
+        if (worldObj != null && !worldObj.isRemote && worldObj.blockExists(xCoord, yCoord, zCoord)
+                && !(worldObj.getBlock(xCoord, yCoord, zCoord) instanceof com.sc.block.BlockFieldGeneratorSC)) {
+            ZoneRegistry reg = ZoneRegistry.get(worldObj);   // broken or replaced (not a chunk unloading): its zone is gone
+            if (reg != null) {
+                reg.remove(worldObj.provider.dimensionId, xCoord, yCoord, zCoord);
+            }
         }
         super.invalidate();
     }

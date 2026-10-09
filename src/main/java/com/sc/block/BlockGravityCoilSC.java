@@ -37,6 +37,12 @@ public class BlockGravityCoilSC extends Block {
         setHarvestLevel("pickaxe", 2);
     }
 
+    /** Broken only with a pickaxe: a stray punch doesn't lose it (PickaxeOnlySC). */
+    @Override
+    public float getPlayerRelativeBlockHardness(net.minecraft.entity.player.EntityPlayer player, net.minecraft.world.World world, int x, int y, int z) {
+        return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
     /** A coil of a Singular Reactor's build: the reactor's screen (empty hand); of a bridge ring: the bridge controller's. */
     @Override
     public boolean onBlockActivated(World w, int x, int y, int z, net.minecraft.entity.player.EntityPlayer p,

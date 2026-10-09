@@ -1,6 +1,7 @@
 package com.sc.init;
 
 import com.sc.block.BlockEnergyStorageSC;
+import com.sc.item.ItemBatterySC;
 import com.sc.tileentity.TileEntityEnergyStorageSC;
 
 import net.minecraft.block.Block;
@@ -12,8 +13,9 @@ import net.minecraftforge.oredict.ShapedOreRecipe;
 
 /**
  * Crafting a storage into the next tier, or into a charge pad (the old storage sits in the
- * recipe): its stored charge ("EnergySC") comes along, capped at what the result holds. Like
- * TankUpgradeRecipeSC, with the same OreDict swap for materials as OreRecipes.shaped.
+ * recipe): its stored charge ("EnergySC") comes along, capped at what the result holds - and so does
+ * the charge of any battery built in (РЦ-3: the SV storage's two Exo cores), as in ChargeCarryRecipeSC.
+ * Like TankUpgradeRecipeSC, with the same OreDict swap for materials as OreRecipes.shaped.
  */
 public class StorageUpgradeRecipeSC extends ShapedOreRecipe {
 
@@ -24,8 +26,9 @@ public class StorageUpgradeRecipeSC extends ShapedOreRecipe {
     private static Object[] convert(Object[] in) {
         Object[] out = new Object[in.length];
         for (int i = 0; i < in.length; i++) {
-            // the storage ingredient itself stays an exact stack - only generic materials are swapped
-            out[i] = in[i] instanceof ItemStack && !isStorage((ItemStack) in[i]) ? OreRecipes.oreName((ItemStack) in[i]) : in[i];
+            // the storage and battery ingredients stay exact stacks - only generic materials are swapped
+            out[i] = in[i] instanceof ItemStack && !isStorage((ItemStack) in[i]) && !ItemBatterySC.isBattery((ItemStack) in[i])
+                    ? OreRecipes.oreName((ItemStack) in[i]) : in[i];
         }
         return out;
     }
@@ -47,6 +50,8 @@ public class StorageUpgradeRecipeSC extends ShapedOreRecipe {
                 if (s.getTagCompound().hasKey("UpgradesSC")) {
                     ups = (NBTTagCompound) s.getTagCompound().getCompoundTag("UpgradesSC").copy();
                 }
+            } else if (ItemBatterySC.isBattery(s)) {
+                stored += ItemBatterySC.chargeOf(s);           // the cores' charge goes into the buffer too
             }
         }
         if (out != null && (stored > 0 || ups != null)) {

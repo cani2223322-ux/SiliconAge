@@ -249,6 +249,7 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             s.setFacing(next);
             s.markDirty();
             world.markBlockForUpdate(x, y, z);
+            com.sc.energy.CableWarningSC.outputRaised(s, player);   // a weaker cable now at the output face
             return true;
         }
         return false;                                    // machines, transformers, conduits handle the wrench themselves
@@ -356,6 +357,17 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         if (com.sc.ShieldEventHandler.privateFor(world, player, x, y, z)) {
             return true;                                  // someone else's private field: no turning (blocks without a TE pass its click guard)
         }
+        TileEntity rte = world.getTileEntity(x, y, z);
+        if (rte instanceof com.sc.tileentity.TileEntityWirelessSC) {
+            // BlockWirelessSC.rotateBlock refuses an owned block (it gets no player): its owner turns it here
+            com.sc.tileentity.TileEntityWirelessSC w = (com.sc.tileentity.TileEntityWirelessSC) rte;
+            if (w.allowed(player)) {
+                ForgeDirection f = w.getFacing();
+                w.setFacing(f == null || f.offsetY != 0 || f == ForgeDirection.UNKNOWN ? ForgeDirection.NORTH : f.getRotation(ForgeDirection.UP));
+                world.markBlockForUpdate(x, y, z);
+            }
+            return true;
+        }
         Block block = world.getBlock(x, y, z);
         return block.rotateBlock(world, x, y, z, ForgeDirection.getOrientation(side));
     }
@@ -387,6 +399,22 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         }
         if (player instanceof EntityPlayerMP && net.minecraftforge.common.ForgeHooks.onBlockBreakEvent(world,
                 ((EntityPlayerMP) player).theItemInWorldManager.getGameType(), (EntityPlayerMP) player, x, y, z).isCanceled()) {
+            return;
+        }
+        // КР-6, БП-3, ПЛ-3: an owned quarry / wireless block / field generator - only its owner (and ops)
+        if (com.sc.block.BlockQuarrySC.refusesBreak(world, player, x, y, z)
+                || com.sc.block.BlockWirelessSC.refusesBreak(world, player, x, y, z)
+                || com.sc.block.BlockEnergyConverterSC.refusesBreak(world, player, x, y, z)) {
+            TileEntity owned = world.getTileEntity(x, y, z);
+            String owner = owned instanceof com.sc.tileentity.TileEntityQuarrySC ? ((com.sc.tileentity.TileEntityQuarrySC) owned).getOwner()
+                    : owned instanceof com.sc.tileentity.TileEntityEnergyConverterSC ? ((com.sc.tileentity.TileEntityEnergyConverterSC) owned).getOwner()
+                    : ((com.sc.tileentity.TileEntityWirelessSC) owned).getOwner();
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.break.owneronly", owner));
+            return;
+        }
+        if (com.sc.block.BlockFieldGeneratorSC.refusesBreak(world, player, x, y, z)) {
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.break.fieldaccess",
+                    ((TileEntityFieldGeneratorSC) world.getTileEntity(x, y, z)).getOwner()));
             return;
         }
         if (com.sc.block.BlockGeneratorSC.holdsHole(world, x, y, z)) {
@@ -504,10 +532,18 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             return true;
         }
         if (te instanceof TileEntityFieldGeneratorSC) {
-            ((TileEntityFieldGeneratorSC) te).importSettings(data);
+            if (!((TileEntityFieldGeneratorSC) te).importSettings(data, player)) {
+                // ПЛ-8: the zone would cover a stranger's field or a claim - nothing changed, the charge goes back
+                if (!player.capabilities.isCreativeMode) {
+                    charge(stack, tier.dismantleCost / 5);
+                }
+                player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.paste.refused"));
+                return true;
+            }
         } else if (te instanceof TileEntityTransformerSC) {
             ((TileEntityTransformerSC) te).setStepUp(data.getBoolean("StepUp"));
             te.markDirty();
+            com.sc.energy.CableWarningSC.outputRaised((TileEntityTransformerSC) te, player);
         } else {
             int missing = fillUpgrades((TileEntityMachineSC) te, player, data);
             if (missing > 0) {

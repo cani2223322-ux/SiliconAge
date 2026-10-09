@@ -69,8 +69,8 @@ public class WailaSC implements IWailaDataProvider {
         if (t.hasKey("scIgnition")) {
             // an unlit fusion reactor: what counts is how far its ignition charge has got, not the buffer
             tip.add(Lang.tr("sc.waila.ignition", String.valueOf(t.getLong("scIgnition")), String.valueOf(t.getLong("scIgnitionMax"))));
-        } else if (t.hasKey("scEnergy")) {
-            tip.add(Lang.tr("sc.waila.energy", t.getInteger("scEnergy"), t.getInteger("scMax")));
+        } else if (t.hasKey("scEnergy")) {                         // a field node: its master's buffer (its own stays empty)
+            tip.add(Lang.tr(t.getBoolean("scFieldMasterE") ? "sc.waila.field.energy" : "sc.waila.energy", t.getInteger("scEnergy"), t.getInteger("scMax")));
         }
         if (t.hasKey("scEnergy")) {
             Tier in = tier(t.getInteger("scIn"));
@@ -135,11 +135,71 @@ public class WailaSC implements IWailaDataProvider {
             if (c >= 0 && c < com.sc.energy.CableType.values().length) {   // a newer server's cable on an older client: skip
                 com.sc.energy.CableType type = com.sc.energy.CableType.values()[c];
                 tip.add(Lang.tr("sc.waila.cable", type.tier.name(), type.tier.getVoltage(), type.maxThroughput(), type.maxAmps));
+                if (t.getBoolean("scCableNoAmps")) {                      // ЭН-1: the server's IC2 checks only the voltage
+                    tip.add(Lang.tr("sc.cable.ic2.nocurrent"));
+                }
             }
             net.minecraftforge.fluids.Fluid fluid = t.hasKey("scFluid") ? FluidRegistry.getFluid(t.getString("scFluid")) : null;
             if (fluid != null) {
                 FluidStack inPipe = new FluidStack(fluid, t.getInteger("scFluidAmount"));
                 tip.add(Lang.tr("sc.waila.fluid", inPipe.getLocalizedName(), inPipe.amount, t.getInteger("scFluidCap")));
+            }
+        }
+        if (t.hasKey("scPipe")) {                                       // ЭН-8: which pipe, the tube, the modes on the side looked at
+            int p = t.getInteger("scPipe");
+            if (p >= 0 && p < com.sc.util.PipeType.values().length) {
+                com.sc.util.PipeType pt = com.sc.util.PipeType.values()[p];
+                tip.add(Lang.tr("sc.waila.pipe", Lang.tr("tile.siliconage.pipeSC." + pt.name().toLowerCase(java.util.Locale.ROOT) + ".name"),
+                        pt.throughput));
+            }
+            if (t.getBoolean("scTube")) {
+                tip.add(Lang.tr("sc.waila.tube"));
+            }
+            net.minecraftforge.common.util.ForgeDirection side = accessor.getSide();
+            if (side != null && side != net.minecraftforge.common.util.ForgeDirection.UNKNOWN) {
+                for (ConduitKind kind : ConduitKind.values()) {
+                    int[] modes = t.getIntArray("scCm" + kind.ordinal());
+                    int v = modes.length == 6 ? modes[side.ordinal()] : -1;
+                    if (v >= 0) {
+                        String k = kind.name().toLowerCase(java.util.Locale.ROOT);
+                        tip.add(Lang.tr("sc.conduit.mode", Lang.tr("sc.conduit.kind." + k), Lang.tr("sc.side." + side.name().toLowerCase(java.util.Locale.ROOT)),
+                                Lang.tr("sc.conduit.mode." + com.sc.conduit.ConduitMode.of(v & 15).menuKey(kind, (v & 16) != 0))));
+                    }
+                }
+            }
+        }
+        if (t.hasKey("scQuarrySt")) {                                   // КР-11: the quarry / the Exo rig
+            com.sc.tileentity.TileEntityQuarrySC.Status[] all = com.sc.tileentity.TileEntityQuarrySC.Status.values();
+            com.sc.tileentity.TileEntityQuarrySC.Status s = all[Math.max(0, Math.min(all.length - 1, t.getInteger("scQuarrySt")))];
+            boolean exo = t.getBoolean("scQuarryExo");
+            tip.add(exo && s == com.sc.tileentity.TileEntityQuarrySC.Status.NO_AREA ? Lang.tr("sc.quarry.status.exo_nothing")
+                    : Lang.tr("sc.quarry.status." + s.name().toLowerCase(java.util.Locale.ROOT)));
+            if (exo) {
+                tip.add(Lang.tr("sc.waila.quarry.hauls", String.format(java.util.Locale.ROOT, "%.2f", t.getDouble("scQuarryHauls"))));
+            } else if (t.hasKey("scQuarryLayer")) {
+                tip.add(Lang.tr("sc.waila.quarry.layer", t.getInteger("scQuarryLayer"), t.getInteger("scQuarryBottom")));
+            }
+            if (t.getString("scOwner").length() > 0) {
+                tip.add(Lang.tr("sc.waila.owner", t.getString("scOwner")));
+            }
+        }
+        if (t.hasKey("scFieldRole")) {                                  // ПЛ-6: the field generator
+            if (t.getBoolean("scFieldMaster")) {
+                tip.add(Lang.tr("sc.waila.field.master"));
+            } else if (t.hasKey("scFieldMX")) {
+                tip.add(Lang.tr("sc.waila.field.node", t.getInteger("scFieldMX"), t.getInteger("scFieldMY"), t.getInteger("scFieldMZ")));
+            } else {
+                tip.add(Lang.tr("sc.waila.field.node.nomaster"));
+            }
+            if (t.hasKey("scFieldSt")) {
+                tip.add(Lang.tr("sc.waila.field.state." + t.getInteger("scFieldSt")));
+                com.sc.energy.FieldMode[] modes = com.sc.energy.FieldMode.values();
+                com.sc.energy.FieldMode m = modes[Math.max(0, Math.min(modes.length - 1, t.getInteger("scFieldMode")))];
+                tip.add(Lang.tr("sc.waila.field.shape", Lang.trOr("sc.field.mode." + m.name().toLowerCase(java.util.Locale.ROOT), m.name()),
+                        t.getInteger("scFieldNodes")));
+            }
+            if (t.getString("scOwner").length() > 0) {
+                tip.add(Lang.tr("sc.waila.owner", t.getString("scOwner")));
             }
         }
         if (t.hasKey("scWlKind")) {
@@ -314,17 +374,54 @@ public class WailaSC implements IWailaDataProvider {
         if (te instanceof TileEntityConduitBundleSC) {
             TileEntityConduitBundleSC b = (TileEntityConduitBundleSC) te;
             tag.setInteger("scCable", b.has(ConduitKind.CABLE) ? b.getCable().ordinal() : -1);
+            if (b.has(ConduitKind.CABLE) && TileEntityConduitBundleSC.ic2CurrentUnchecked()) {
+                tag.setBoolean("scCableNoAmps", true);
+            }
             FluidStack fluid = b.getFluid();
             if (fluid != null && fluid.amount > 0) {
                 tag.setString("scFluid", fluid.getFluid().getName());
                 tag.setInteger("scFluidAmount", fluid.amount);
                 tag.setInteger("scFluidCap", b.getFluidCapacity());
             }
+            tag.setInteger("scPipe", b.has(ConduitKind.PIPE) ? b.getPipe().ordinal() : -1);
+            tag.setBoolean("scTube", b.hasTube());
+            for (ConduitKind kind : ConduitKind.values()) {                // each side: mode | 16 at a connector, -1 = nothing there
+                if (!b.has(kind)) {
+                    continue;
+                }
+                int[] modes = new int[6];
+                for (int i = 0; i < 6; i++) {
+                    net.minecraftforge.common.util.ForgeDirection dir = net.minecraftforge.common.util.ForgeDirection.getOrientation(i);
+                    com.sc.conduit.ConduitMode mode = b.mode(kind, dir);
+                    boolean connector = b.connectorAt(kind, dir);
+                    modes[i] = mode == com.sc.conduit.ConduitMode.OFF || connector || b.linksTo(kind, dir)
+                            ? mode.ordinal() | (connector ? 16 : 0) : -1;
+                }
+                tag.setIntArray("scCm" + kind.ordinal(), modes);
+            }
+        }
+        if (te instanceof com.sc.tileentity.TileEntityQuarrySC) {
+            com.sc.tileentity.TileEntityQuarrySC q = (com.sc.tileentity.TileEntityQuarrySC) te;
+            tag.setInteger("scQuarrySt", q.getStatus().ordinal());
+            tag.setString("scOwner", q.getOwner() == null ? "" : q.getOwner());
+            if (q.isExo()) {
+                tag.setBoolean("scQuarryExo", true);
+                tag.setDouble("scQuarryHauls", q.haulsPerSecond());
+            } else {
+                int[] a = q.area();
+                if (a != null && !q.isDone() && q.getLayerY() >= a[5]) {
+                    tag.setInteger("scQuarryLayer", Math.min(q.getLayerY(), a[4]));
+                    tag.setInteger("scQuarryBottom", a[5]);
+                }
+            }
+        }
+        if (te instanceof com.sc.tileentity.TileEntityFieldGeneratorSC) {
+            field((com.sc.tileentity.TileEntityFieldGeneratorSC) te, tag);
         }
         if (te instanceof TileEntityEnergyBase && !(te instanceof com.sc.tileentity.TileEntityFieldGeneratorSC)
                 && !(te instanceof com.sc.tileentity.TileEntityShowerSC) && !(te instanceof com.sc.tileentity.TileEntityWirelessSC)
-                && !(te instanceof com.sc.tileentity.TileEntityArmorStationSC)
-                && !((TileEntityEnergyBase) te).isPowerOn()) {                // (the shower and wireless say so in their status)
+                && !(te instanceof com.sc.tileentity.TileEntityArmorStationSC) && !(te instanceof com.sc.tileentity.TileEntityQuarrySC)
+                && !((TileEntityEnergyBase) te).isPowerOn()) {                // (the shower, wireless and quarry say so in their status)
             tag.setBoolean("scOff", true);
         }
         if (te instanceof com.sc.tileentity.TileEntityGeneratorSC
@@ -455,7 +552,10 @@ public class WailaSC implements IWailaDataProvider {
     /** A transmitter / receiver: status, the other end, distance and loss; a translator: pair, role, the other end, crystal. */
     private static void wireless(NBTTagCompound t, List<String> tip) {
         int kind = t.getInteger("scWlKind"), st = t.getInteger("scWlSt");
-        tip.add(Lang.tr("sc.wl.status." + st));
+        // a receiving end that works says "Receiving", not "Sending"
+        boolean rx = kind == com.sc.tileentity.TileEntityWirelessSC.RECEIVER
+                || kind == com.sc.tileentity.TileEntityWirelessSC.QUANTUM && !t.getBoolean("scWlGiving");
+        tip.add(Lang.tr("sc.wl.status." + st + (st == com.sc.tileentity.TileEntityWirelessSC.ST_OK && rx ? ".rx" : "")));
         if (kind == com.sc.tileentity.TileEntityWirelessSC.QUANTUM) {
             if (t.hasKey("scWlPair")) {
                 tip.add(Lang.tr("sc.waila.wl.pair", t.getString("scWlPair"), Lang.tr(t.getBoolean("scWlGiving") ? "sc.wl.btn.give" : "sc.wl.btn.take"),
@@ -480,6 +580,47 @@ public class WailaSC implements IWailaDataProvider {
         if (t.getInteger("scWlFlow") > 0) {
             tip.add(Lang.tr("sc.waila.wl.flow", t.getInteger("scWlFlow")));
         }
+    }
+
+    /**
+     * A field generator: master or node (and where its master is), the field's state, shape, nodes and
+     * owner. A node hands all its energy on, so it shows its master's buffer - or none if that isn't loaded.
+     */
+    private static void field(com.sc.tileentity.TileEntityFieldGeneratorSC f, NBTTagCompound tag) {
+        tag.setBoolean("scFieldRole", true);
+        tag.setBoolean("scFieldMaster", f.isMaster());
+        com.sc.tileentity.TileEntityFieldGeneratorSC m = f.isMaster() ? f : null;
+        if (!f.isMaster()) {
+            NBTTagCompound saved = new NBTTagCompound();               // the master's position isn't exposed: read it from the save
+            f.writeToNBT(saved);
+            if (saved.hasKey("MasterX")) {
+                int mx = saved.getInteger("MasterX"), my = saved.getInteger("MasterY"), mz = saved.getInteger("MasterZ");
+                tag.setInteger("scFieldMX", mx);
+                tag.setInteger("scFieldMY", my);
+                tag.setInteger("scFieldMZ", mz);
+                World w = f.getWorldObj();
+                TileEntity at = w != null && w.blockExists(mx, my, mz) ? w.getTileEntity(mx, my, mz) : null;
+                if (at instanceof com.sc.tileentity.TileEntityFieldGeneratorSC && ((com.sc.tileentity.TileEntityFieldGeneratorSC) at).isMaster()) {
+                    m = (com.sc.tileentity.TileEntityFieldGeneratorSC) at;
+                }
+            }
+            if (m != null) {
+                tag.setInteger("scEnergy", m.getEnergyStored());
+                tag.setInteger("scMax", m.getMaxEnergyStored());
+                tag.setBoolean("scFieldMasterE", true);
+            } else {
+                for (String k : new String[]{"scEnergy", "scMax", "scIn", "scOut", "scSource", "scSink"}) {
+                    tag.removeTag(k);
+                }
+            }
+        }
+        if (m != null) {
+            tag.setInteger("scFieldSt", m.isActive() ? 0 : m.isForeignNear() ? 4 : !m.isPowerOn() ? 3 : m.isRedstoneOff() ? 2 : 1);
+            tag.setInteger("scFieldMode", m.getMode().ordinal());
+            tag.setInteger("scFieldNodes", m.getNodeCount());
+        }
+        String owner = m != null ? m.getOwner() : f.getOwner();
+        tag.setString("scOwner", owner == null ? "" : owner);
     }
 
     private static Tier tier(int ordinal) {

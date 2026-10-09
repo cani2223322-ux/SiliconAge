@@ -275,7 +275,7 @@ public class GuiWirelessSC extends GuiContainer {
         String caption = Lang.tr(quantum() ? "sc.wl.cap.q" : te.getKind() == TileEntityWirelessSC.TRANSMITTER ? "sc.wl.cap.tx" : "sc.wl.cap.rx");
         fontRendererObj.drawString(caption, 14, 25, cap);
         int cw = fontRendererObj.getStringWidth(caption);
-        small(Lang.tr("sc.wl.status." + st), 18 + cw, 26, 206 - 18 - cw - 2, statusColor(st));
+        small(Lang.tr("sc.wl.status." + st + (st == TileEntityWirelessSC.ST_OK && te.isEnergySource() ? ".rx" : "")), 18 + cw, 26, 206 - 18 - cw - 2, statusColor(st));
         int[] p = te.partnerPos();
         if (quantum()) {
             quantumTexts(p, c, dim);
@@ -305,6 +305,7 @@ public class GuiWirelessSC extends GuiContainer {
         small(range == Integer.MAX_VALUE ? Lang.tr("sc.wl.distinf", te.getDistance())
                 : Lang.tr("sc.wl.dist", te.getDistance(), range), 14, 62, 86, c);
         small(Lang.tr("sc.wl.loss", te.getLossPct()), 14, 69, 86, GuiHoloSC.WARN);
+        small(Lang.tr("sc.wl.rate", linkTier().getVoltage()), 14, 81, 86, dim);           // under the distance bar
         int flow = te.getFlow(), keep = 100 - te.getLossPct();
         String[][] cols = tx
                 ? new String[][]{{"sc.wl.flow.air", flow + " EU/t"}, {"sc.wl.flow.lost", "-" + (flow - flow * keep / 100) + " EU/t"},
@@ -338,10 +339,14 @@ public class GuiWirelessSC extends GuiContainer {
         }
         small(Lang.tr("sc.wl.noloss"), 14, 76, 86, dim);
         int life = crystal == null ? -1 : (int) Math.ceil(ItemEntangledCrystalSC.lifeOf(crystal) * 100.0 / ItemEntangledCrystalSC.LIFE_MAX);
+        // the chunk: what the server's ticket really does, or the config switching it off
+        boolean held = pair != 0 && te.isChunkLoadingOn() && te.isChunkHeld();
+        String chunk = pair == 0 ? "-" : !te.isChunkLoadingOn() ? Lang.tr("sc.wl.chunk.cfgoff")
+                : Lang.tr(held ? "sc.wl.chunk.held" : "sc.wl.chunk.none");
         String[][] cols = {{"sc.wl.upkeep", te.isGiving() ? TileEntityWirelessSC.quantumUpkeep() + " EU/t" : "-"},
-                {"sc.wl.chunk", pair == 0 || st == TileEntityWirelessSC.ST_PAUSED || st == TileEntityWirelessSC.ST_OFF ? "-" : Lang.tr("sc.wl.chunk.held")},
+                {"sc.wl.chunk", chunk},
                 {"sc.wl.crystal", life < 0 ? "-" : life + "%"}};
-        int[] colors = {GuiHoloSC.WARN, c, life >= 0 && life <= 20 ? GuiHoloSC.BAD : GuiHoloSC.CYAN & 0xFFFFFF};
+        int[] colors = {GuiHoloSC.WARN, held ? c : GuiHoloSC.IDLE, life >= 0 && life <= 20 ? GuiHoloSC.BAD : GuiHoloSC.CYAN & 0xFFFFFF};
         for (int i = 0; i < 3; i++) {
             small(Lang.tr(cols[i][0]), 14 + i * 42, 88, 40, dim);
             fit(cols[i][1], 14 + i * 42, 94, 40, colors[i]);

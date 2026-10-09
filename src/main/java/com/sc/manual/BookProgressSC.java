@@ -11,6 +11,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.oredict.OreDictionary;
 
@@ -158,7 +159,7 @@ public final class BookProgressSC {
         }
     }
 
-    /** Every 2 s: a step's item in the inventory ticks the step. */
+    /** Every 2 s: a step's item in the inventory, armour or on the cursor ticks the step. */
     public static void tick() {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null || mc.theWorld == null || ++ticks % 40 != 0
@@ -173,7 +174,7 @@ public final class BookProgressSC {
             if (done.contains(key)) {
                 continue;
             }
-            if (has(mc.thePlayer.inventory.mainInventory, BookContent.stepItems(i))) {
+            if (has(mc.thePlayer.inventory, BookContent.stepItems(i))) {
                 done.add(key);
                 changed = true;
             }
@@ -181,7 +182,7 @@ public final class BookProgressSC {
         String[] path = BookPathSC.stepIds();               // the "Path" chapter's steps, ticked the same way
         for (int i = 0; i < path.length; i++) {
             String key = w + "|" + path[i];
-            if (!done.contains(key) && has(mc.thePlayer.inventory.mainInventory, BookPathSC.stepItems(i))) {
+            if (!done.contains(key) && has(mc.thePlayer.inventory, BookPathSC.stepItems(i))) {
                 done.add(key);
                 changed = true;
             }
@@ -189,6 +190,12 @@ public final class BookProgressSC {
         if (changed) {
             save();
         }
+    }
+
+    /** Main inventory, armour slots and the stack on the cursor. */
+    private static boolean has(InventoryPlayer inv, ItemStack[] want) {
+        return has(inv.mainInventory, want) || has(inv.armorInventory, want)
+                || has(new ItemStack[] {inv.getItemStack()}, want);
     }
 
     private static boolean has(ItemStack[] inv, ItemStack[] want) {

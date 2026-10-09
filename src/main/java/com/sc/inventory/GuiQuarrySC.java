@@ -126,6 +126,9 @@ public class GuiQuarrySC extends GuiContainer {
                 buttonList.add(holo(B_RESET, x + 78, y + 144, 54, 16, Lang.tr("sc.quarrygui.reset")));
                 buttonList.add(holo(B_XP, x + 136, y + 144, 66, 16, ""));
                 buttonList.add(holo(B_POWER, x + 14, y + 164, 92, 16, ""));
+                if (exo) {                                      // the rig has no Tanks tab: pour the washing water out here
+                    buttonList.add(holo(B_WASH_CLEAR, x + 166, y + 206, 36, 11, ""));
+                }
                 break;
             case 1: {
                 int[] steps = {-16, -1, 1, 16};
@@ -275,7 +278,8 @@ public class GuiQuarrySC extends GuiContainer {
             } else if (id == B_POWER) {
                 b.displayString = Lang.tr("sc.quarrygui.power", Lang.tr("sc.quarrygui.power." + quarry.getPowerMode()));
             } else if (id >= B_STEP) {
-                b.enabled = may && !card;
+                int row = (id - B_STEP) / 10;
+                b.enabled = may && !card && sizeRowUsed(row);
             } else if (id == B_SHAPE) {
                 b.displayString = Lang.tr("sc.quarrygui.shape", Lang.tr("sc.quarrygui.shape." + quarry.getShape()));
                 b.enabled = may && !card;
@@ -324,7 +328,7 @@ public class GuiQuarrySC extends GuiContainer {
             } else if (id == B_WASH_FEED) {
                 b.displayString = (quarry.isWashFromTanks() ? "§a" : "§7") + Lang.tr("sc.quarrygui.wash.feed");
             } else if (id == B_WASH_CLEAR) {
-                b.displayString = Lang.tr("sc.quarrygui.tank.clear");
+                b.displayString = Lang.tr(tab == 0 ? "sc.quarrygui.wash.pour" : "sc.quarrygui.tank.clear");
                 b.enabled = may && quarry.getWater().getFluidAmount() > 0
                         && quarry.getEnergyStored() >= quarry.clearCost(TileEntityQuarrySC.TANKS);
             } else if (id >= B_TANK_FILTER && id < B_TANK_FILTER + TileEntityQuarrySC.TANKS) {
@@ -1018,7 +1022,7 @@ public class GuiQuarrySC extends GuiContainer {
         small(Lang.tr("sc.quarrygui.rig.line2"), 14, 104, 88, DIM);
         chunksLine(112);
         caption("sc.quarrygui.cap.wash", 14, 186);
-        small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 208, 188, DIM);
+        small(Lang.tr("sc.quarrygui.water", quarry.getWater().getFluidAmount(), quarry.waterCapacity()), 14, 208, 148, DIM);
         owner();
     }
 
@@ -1055,16 +1059,38 @@ public class GuiQuarrySC extends GuiContainer {
             return;
         }
         caption("sc.quarrygui.cap.area", 14, 38);
-        String[] rows = {Lang.tr("sc.quarrygui.sizex", quarry.getSizeX(), quarry.maxSize()),
-                Lang.tr("sc.quarrygui.sizez", quarry.getSizeZ(), quarry.maxSize()),
+        // the size the quarry really digs: capped by the radius modules, a circle by its diameter, a shaft 1x1
+        int max = quarry.maxSize(), shape = quarry.getShape();
+        int sx = shape == TileEntityQuarrySC.SHAPE_SHAFT ? 1 : Math.max(1, Math.min(quarry.getSizeX(), max));
+        int sz = shape == TileEntityQuarrySC.SHAPE_SHAFT ? 1 : shape == TileEntityQuarrySC.SHAPE_CIRCLE ? sx
+                : Math.max(1, Math.min(quarry.getSizeZ(), max));
+        String[] rows = {Lang.tr(shape == TileEntityQuarrySC.SHAPE_CIRCLE ? "sc.quarrygui.diameter" : "sc.quarrygui.sizex", sx, max),
+                Lang.tr("sc.quarrygui.sizez", sz, max),
                 Lang.tr("sc.quarrygui.offx", quarry.getOffX()), Lang.tr("sc.quarrygui.offz", quarry.getOffZ()),
                 Lang.tr("sc.quarrygui.bottom", quarry.getBottomY())};
         for (int r = 0; r < rows.length; r++) {
-            small(rows[r], 14, 53 + r * 26, 90, C);
+            small(rows[r], 14, 53 + r * 26, 90, sizeRowUsed(r) ? C : 0x465A6E);
         }
         if (quarry.usesCard()) {
             small(Lang.tr("sc.quarrygui.bycard"), 14, 224, 90, INFO);
         }
+    }
+
+    /** Whether the Area tab's row r means anything for the shape: a circle has no Z size, a shaft no size at all. */
+    private boolean sizeRowUsed(int r) {
+        int shape = quarry.getShape();
+        return r == 0 ? shape != TileEntityQuarrySC.SHAPE_SHAFT : r != 1 || shape == TileEntityQuarrySC.SHAPE_SQUARE;
+    }
+
+    /** A pour-out button's tooltip: what goes, what it costs (i = TANKS: the washing water). */
+    private List<String> clearTip(int i) {
+        List<String> lines = new ArrayList<String>();
+        int amount = i == TileEntityQuarrySC.TANKS ? quarry.getWater().getFluidAmount() : quarry.getTank(i).getFluidAmount();
+        lines.add(Lang.tr("sc.quarrygui.tank.clear.tip", amount));
+        int cost = quarry.clearCost(i);
+        lines.add((quarry.getEnergyStored() >= cost ? "§e" : "§c")
+                + Lang.tr("sc.quarrygui.tank.clear.cost", cost, quarry.getEnergyStored()));
+        return lines;
     }
 
     /** The Map tab's legend column: what's what, the scan, the ore found. */
@@ -1087,14 +1113,19 @@ public class GuiQuarrySC extends GuiContainer {
         small(pct < 0 ? Lang.tr("sc.quarrygui.notscanned") : pct < 100 ? Lang.tr("sc.quarrygui.scanning", pct)
                 : Lang.tr("sc.quarrygui.orefound"), lx, 96, room - 10, pct == 100 ? C : INFO);
         TextFitSC.help(fontRendererObj, SX + SW - 12, 94, Lang.tr("sc.quarrygui.scan.help", TileEntityQuarrySC.SCAN_COST), guiLeft, guiTop);
+        int skip = quarry.getScanSkippedClient();
+        boolean skipLine = pct >= 0 && skip > 0;
+        if (skipLine) {
+            small(Lang.tr("sc.quarrygui.scan.unloaded", skip), lx, 105, room - 10, GuiHoloSC.WARN);
+        }
         int row = 0;
         RenderHelper.enableGUIStandardItemLighting();
         for (Map.Entry<String, Integer> e : quarry.getOreCounts().entrySet()) {
-            if (row >= 7) {
+            if (row >= (skipLine ? 6 : 7)) {
                 break;
             }
             ItemStack st = stackOf(e.getKey());
-            int ry = 106 + row * 17;
+            int ry = (skipLine ? 115 : 106) + row * 17;
             if (st != null) {
                 itemRender.renderItemAndEffectIntoGUI(fontRendererObj, mc.getTextureManager(), st, lx, ry);
             }
@@ -1190,6 +1221,35 @@ public class GuiQuarrySC extends GuiContainer {
         }
         RenderHelper.disableStandardItemLighting();
         small(Lang.tr("sc.quarrygui.exo.lensgreen"), 14, 94, 72, DIM);
+        hauled();
+    }
+
+    /** The rig's Lenses tab, left column: what it has brought up (the haul log), the 6 most first. */
+    private void hauled() {
+        Map<String, Integer> log = quarry.getOreCounts();
+        if (log.isEmpty()) {
+            return;
+        }
+        small(Lang.tr("sc.quarrygui.exo.hauled"), 14, 106, 72, CAP);
+        List<Map.Entry<String, Integer>> top = new ArrayList<Map.Entry<String, Integer>>(log.entrySet());
+        java.util.Collections.sort(top, new java.util.Comparator<Map.Entry<String, Integer>>() {
+            @Override
+            public int compare(Map.Entry<String, Integer> a, Map.Entry<String, Integer> b) {
+                return b.getValue().compareTo(a.getValue());
+            }
+        });
+        RenderHelper.enableGUIStandardItemLighting();
+        for (int i = 0; i < Math.min(6, top.size()); i++) {
+            int x = 14 + i % 2 * 36, ry = 116 + i / 2 * 16;
+            ItemStack st = stackOf(top.get(i).getKey());
+            if (st != null) {
+                itemRender.renderItemAndEffectIntoGUI(fontRendererObj, mc.getTextureManager(), st, x, ry);
+            }
+            GL11.glDisable(GL11.GL_LIGHTING);
+            small("x" + com.sc.util.NetViewScanSC.compact(top.get(i).getValue()), x + 17, ry + 5, 18, C);
+            RenderHelper.enableGUIStandardItemLighting();
+        }
+        RenderHelper.disableStandardItemLighting();
     }
 
     private static ItemStack stackOf(String key) {
@@ -1313,6 +1373,14 @@ public class GuiQuarrySC extends GuiContainer {
                 }
             }
         }
+        if (tab == 0 && quarry.isExo()) {
+            for (Object o : buttonList) {
+                GuiButton b = (GuiButton) o;
+                if (b.id == B_WASH_CLEAR && over(b, mx, my)) {
+                    return clearTip(TileEntityQuarrySC.TANKS);
+                }
+            }
+        }
         if (tab == TAB_TANKS) {
             for (Object o : buttonList) {
                 GuiButton b = (GuiButton) o;
@@ -1342,13 +1410,7 @@ public class GuiQuarrySC extends GuiContainer {
                 GuiButton b = (GuiButton) o;
                 boolean clear = b.id >= B_TANK_CLEAR && b.id < B_TANK_CLEAR + TileEntityQuarrySC.TANKS || b.id == B_WASH_CLEAR;
                 if (clear && over(b, mx, my)) {
-                    int i = b.id == B_WASH_CLEAR ? TileEntityQuarrySC.TANKS : b.id - B_TANK_CLEAR;
-                    int amount = i == TileEntityQuarrySC.TANKS ? quarry.getWater().getFluidAmount() : quarry.getTank(i).getFluidAmount();
-                    lines.add(Lang.tr("sc.quarrygui.tank.clear.tip", amount));
-                    int cost = quarry.clearCost(i);
-                    lines.add((quarry.getEnergyStored() >= cost ? "§e" : "§c")
-                            + Lang.tr("sc.quarrygui.tank.clear.cost", cost, quarry.getEnergyStored()));
-                    return lines;
+                    return clearTip(b.id == B_WASH_CLEAR ? TileEntityQuarrySC.TANKS : b.id - B_TANK_CLEAR);
                 }
             }
         }

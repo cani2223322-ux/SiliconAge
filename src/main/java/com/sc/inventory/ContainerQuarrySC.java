@@ -79,6 +79,13 @@ public class ContainerQuarrySC extends Container {
             group[i] = i < FIRST_BUFFER ? G_FILTER : i < FIRST_UPGRADE ? G_BUFFER : i < FIRST_TOOLS ? G_UPGRADES
                     : i < FIRST_LENS ? G_TOOLS : i < FIRST_PLAYER ? G_LENS : i < FIRST_PLAYER + 36 ? G_PLAYER : G_BATTERY;
         }
+        quarry.openInventory();                     // counts the screens open on it (the rig's haul log is sent to them)
+    }
+
+    @Override
+    public void onContainerClosed(EntityPlayer p) {
+        super.onContainerClosed(p);
+        quarry.closeInventory();
     }
 
     public TileEntityQuarrySC getQuarry() {

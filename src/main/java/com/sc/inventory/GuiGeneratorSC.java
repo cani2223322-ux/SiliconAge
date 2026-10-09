@@ -2001,8 +2001,18 @@ public class GuiGeneratorSC extends GuiContainer {
         if (upgrades() && GuiGaugeSC.isOver(GuiBigSC.UPG_LABEL_X, GuiBigSC.UPG_Y - 1, GuiBigSC.GAUGE_X - 4 - GuiBigSC.UPG_LABEL_X, 18, mouseX, mouseY)
                 && !GuiBigSC.overUpgradeSlot(mouseX, mouseY, TileEntityGeneratorSC.UPGRADE_SLOTS)) {
             lines.add(Lang.tr("sc.gui.upgrades"));
-            lines.add(Lang.tr("sc.gui.gen.upgrades.hint"));
+            lines.add(upgradesFit());
             return lines;
+        }
+        if (upgrades()) {                                    // an empty upgrade slot: what fits in it
+            for (int i = 0; i < TileEntityGeneratorSC.UPGRADE_SLOTS; i++) {
+                if (generator.getStackInSlot(TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + i) == null
+                        && GuiGaugeSC.isOver(GuiBigSC.UPG_X - 1 + i * 18, GuiBigSC.UPG_Y - 1, 18, 18, mouseX, mouseY)) {
+                    lines.add(Lang.tr("sc.gui.upgrades"));
+                    lines.add(upgradesFit());
+                    return lines;
+                }
+            }
         }
 
         // What belongs in each slot while it's still empty.
@@ -2019,6 +2029,20 @@ public class GuiGeneratorSC extends GuiContainer {
             }
         }
         return null;
+    }
+
+    /** "Fits: ..." - the upgrade modules this generator takes. */
+    private String upgradesFit() {
+        StringBuilder fit = new StringBuilder();
+        for (com.sc.machine.UpgradeType u : com.sc.machine.UpgradeType.values()) {
+            if (TileEntityGeneratorSC.acceptsUpgrade(type, u)) {
+                if (fit.length() > 0) {
+                    fit.append(", ");
+                }
+                fit.append(com.sc.init.ModItems.upgrade.stackOf(u).getDisplayName());
+            }
+        }
+        return Lang.tr("sc.gui.gen.upgrades.fit", fit.toString());
     }
 
     private String slotKey(int slot) {

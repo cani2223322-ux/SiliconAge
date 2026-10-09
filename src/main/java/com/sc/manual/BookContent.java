@@ -838,7 +838,11 @@ public final class BookContent {
             ItemStack s = new ItemStack(ModBlocks.cableSC, 1, type.ordinal());
             cables.row(s, s.getDisplayName(), type.tier.name(), String.valueOf(type.maxAmps), String.valueOf(type.maxThroughput()), String.valueOf(type.lossPerBlock));
         }
-        ce.add(BookEl.title(Lang.tr("sc.manual.energy.cables"))).add(cables).addAll(paras("sc.manual.energy.rules"))
+        ce.add(BookEl.title(Lang.tr("sc.manual.energy.cables"))).add(cables);
+        if (!ConfigSC.ic2CableCurrentLimit) {   // ЭН-1: with IC2 only the voltage burns a cable (the server's ic2CableCurrentLimit adds the current)
+            ce.add(BookEl.dim(Lang.tr("sc.cable.ic2.nocurrent").replace("§7", "")));
+        }
+        ce.addAll(paras("sc.manual.energy.rules"))
                 .addAll(paras("sc.manual.energy.cablesv")).add(BookEl.link("bundles", Lang.tr("sc.manual.energy.bundlehead")))
                 .about(new ItemStack(ModBlocks.cableSC, 1, OreDictionary.WILDCARD_VALUE));
         list.add(ce);
@@ -1274,7 +1278,7 @@ public final class BookContent {
         }
         // branches: chosen at level 3, the same choice's perk at 5
         e.add(BookEl.head(Lang.tr("sc.manual.singtool.branchhead"))).addAll(paras("sc.manual.singtool.branch",
-                new Object[]{com.sc.util.ToolLevelSC.BRANCH_LEVEL, com.sc.util.ToolLevelSC.BRANCH_PERK_LEVEL, com.sc.util.SingularStationMath.BRANCH_SM}));
+                new Object[]{com.sc.util.ToolLevelSC.BRANCH_LEVEL, com.sc.util.ToolLevelSC.BRANCH_PERK_LEVEL, com.sc.util.SingularStationMath.branchSm()}));
         for (int b = 1; b <= com.sc.util.ToolLevelSC.branchCount(true); b++) {
             e.add(BookEl.item(null, Lang.tr("sc.toolbranch.blade." + b), Lang.tr("sc.singStation.toolbranch.blade." + b + ".hint")));
         }
@@ -1328,7 +1332,7 @@ public final class BookContent {
         e.add(BookEl.link("singularcrumb", Lang.tr("sc.manual.singcrumb.head")));
         // branches
         e.add(BookEl.head(Lang.tr("sc.manual.singtool.branchhead"))).addAll(paras("sc.manual.singtool.branch",
-                new Object[]{com.sc.util.ToolLevelSC.BRANCH_LEVEL, com.sc.util.ToolLevelSC.BRANCH_PERK_LEVEL, com.sc.util.SingularStationMath.BRANCH_SM}));
+                new Object[]{com.sc.util.ToolLevelSC.BRANCH_LEVEL, com.sc.util.ToolLevelSC.BRANCH_PERK_LEVEL, com.sc.util.SingularStationMath.branchSm()}));
         for (int b = 1; b <= com.sc.util.ToolLevelSC.branchCount(false); b++) {
             e.add(BookEl.item(null, Lang.tr("sc.toolbranch.drill." + b), Lang.tr("sc.toolbranch.drill." + b + ".desc")));
         }
@@ -1374,11 +1378,11 @@ public final class BookContent {
         for (int lvl = 1; lvl <= 4; lvl++) {
             long[] r = com.sc.util.SingularStationMath.row(lvl);
             e.add(BookEl.dim(Lang.tr("sc.manual.singstation.row", lvl, lvl + 1, com.sc.util.SingularStationMath.shortAmount(r[0], Lang.tr("sc.singStation.unit.k"), Lang.tr("sc.singStation.unit.m"), Lang.tr("sc.singStation.unit.b")),
-                    r[1], r[2], r[3], r[4], com.sc.util.SingularStationMath.minutes(lvl))));
+                    r[1], r[2], r[3], r[4], com.sc.util.SingularStationMath.moderniseTicks(new int[]{lvl}) / com.sc.util.SingularStationMath.TICKS_PER_MINUTE)));
         }
         e.add(BookEl.para(Lang.tr("sc.manual.singstation.process")));
         e.add(BookEl.head(Lang.tr("sc.manual.singstation.morehead")));
-        e.add(BookEl.para(Lang.tr("sc.manual.singstation.more", com.sc.util.SingularStationMath.BRANCH_SM,
+        e.add(BookEl.para(Lang.tr("sc.manual.singstation.more", com.sc.util.SingularStationMath.branchSm(),
                 com.sc.util.SingularStationMath.TRANSFER_PERCENT)));
         e.add(BookEl.head(stab.getDisplayName(), stab));
         e.add(BookEl.para(Lang.tr("sc.manual.singstation.stab", com.sc.tileentity.TileEntitySingularStationSC.STAB_RADIUS,
@@ -1395,7 +1399,7 @@ public final class BookContent {
         e.add(BookEl.head(Lang.tr("sc.manual.singstation.toolhead"))).addAll(paras("sc.manual.singstation.tool", null,
                 new Object[]{toolShare(com.sc.util.SingularStationMath.TOOL_BLADE), toolShare(com.sc.util.SingularStationMath.TOOL_DRILL),
                         com.sc.util.SingularStationMath.CRUMB_SM, com.sc.util.SingularStationMath.CRUMB_MAX_PERCENT,
-                        com.sc.util.SingularStationMath.BRANCH_SM}));
+                        com.sc.util.SingularStationMath.branchSm()}));
         toolConvertCard(e, com.sc.util.SingularStationMath.TOOL_BLADE);
         toolConvertCard(e, com.sc.util.SingularStationMath.TOOL_DRILL);
         e.add(BookEl.link("singularblade", new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR)).getDisplayName()))
@@ -1648,7 +1652,7 @@ public final class BookContent {
     /** Machine and crafting-table recipes whose machine, ingredients or products match the query (at most `limit`). */
     public static List<BookEl> recipes(String query, int limit) {
         List<BookEl> out = new ArrayList<BookEl>();
-        String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        String needle = BookSearchSC.norm(query);          // ИФ-2: «ё» = «е», no §-codes - as the main search
         if (needle.length() < 2) {
             out.add(BookEl.dim(Lang.tr("sc.book.recipes.type")));
             return out;
@@ -1679,7 +1683,7 @@ public final class BookContent {
     }
 
     private static boolean matches(MachineType type, MachineRecipe r, String needle) {
-        if (type.localizedName().toLowerCase(Locale.ROOT).contains(needle)) {
+        if (fold(type.localizedName()).contains(needle)) {
             return true;
         }
         for (ItemStack[] group : new ItemStack[][]{r.inputs, r.outputs, r.byproducts}) {
@@ -1690,16 +1694,21 @@ public final class BookContent {
             }
         }
         for (FluidStack f : new FluidStack[]{r.fluidInputA, r.fluidInputB, r.fluidOutputA, r.fluidOutputB}) {
-            if (f != null && f.getFluid() != null && f.getFluid().getLocalizedName(f).toLowerCase(Locale.ROOT).contains(needle)) {
+            if (f != null && f.getFluid() != null && fold(f.getFluid().getLocalizedName(f)).contains(needle)) {
                 return true;
             }
         }
         return false;
     }
 
+    /** A name as the recipe search compares it. */
+    private static String fold(String s) {
+        return BookSearchSC.fold(BookSearchSC.plain(s));
+    }
+
     private static String name(ItemStack s) {
         try {
-            return s.getDisplayName().toLowerCase(Locale.ROOT);
+            return fold(s.getDisplayName());
         } catch (Throwable t) {
             return "";
         }

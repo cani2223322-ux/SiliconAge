@@ -1,6 +1,7 @@
 package com.sc.client;
 
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
 
 import com.sc.manual.BookContent;
 import com.sc.manual.BookEntry;
@@ -114,11 +115,13 @@ public class BookKeySC {
             }
             return;
         }
-        if (!(mc.currentScreen instanceof GuiContainer) || KEY_BOOK.getKeyCode() <= 0) {
+        int code = KEY_BOOK.getKeyCode();
+        if (!(mc.currentScreen instanceof GuiContainer) || code == 0) {
             wasDown = false;
             return;
         }
-        boolean down = Keyboard.isKeyDown(KEY_BOOK.getKeyCode());
+        // a mouse button is code - 100 in 1.7.10 key bindings
+        boolean down = code < 0 ? Mouse.isButtonDown(code + 100) : Keyboard.isKeyDown(code);
         boolean pressed = down && !wasDown;
         wasDown = down;
         if (!pressed || typing(mc.currentScreen)) {

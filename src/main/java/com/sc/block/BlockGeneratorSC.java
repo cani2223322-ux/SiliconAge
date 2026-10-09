@@ -156,6 +156,7 @@ public class BlockGeneratorSC extends Block {
         generator.setFacing(toPlacer[quarter]);
         if (!world.isRemote && stack.hasTagCompound()) {
             generator.readFromItem(stack.getTagCompound());
+            generator.readCommonItem(stack.getTagCompound());     // redstone and battery modes
         }
         // placed switched off, as a machine: nothing can overvolt it (or flood the line) before it is checked and switched on
         generator.setPowerOn(false);
@@ -198,7 +199,11 @@ public class BlockGeneratorSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityGeneratorSC) {
             NBTTagCompound nbt = ((TileEntityGeneratorSC) te).writeToItem();
-            if (nbt != null) {
+            if (nbt == null) {
+                nbt = new NBTTagCompound();
+            }
+            ((TileEntityGeneratorSC) te).writeCommonItem(nbt);    // redstone and battery modes, when not the default
+            if (!nbt.hasNoTags()) {
                 stack.setTagCompound(nbt);
             }
         }
@@ -263,11 +268,20 @@ public class BlockGeneratorSC extends Block {
         if (te instanceof TileEntityGeneratorSC) {
             TileEntityGeneratorSC generator = (TileEntityGeneratorSC) te;
             for (int slot = 0; slot < generator.getSizeInventory(); slot++) {
+                if (generator.upgradesInItem() && slot >= TileEntityGeneratorSC.FIRST_UPGRADE_SLOT
+                        && slot < TileEntityGeneratorSC.FIRST_UPGRADE_SLOT + TileEntityGeneratorSC.UPGRADE_SLOTS) {
+                    continue;   // they ride in the dropped item
+                }
                 ItemStack stack = generator.getStackInSlot(slot);
                 if (stack != null) {
                     world.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(world, x + 0.5, y + 0.5, z + 0.5, stack));
                     generator.setInventorySlotContents(slot, null);    // no second copy for a GUI still open
                 }
+            }
+            // a fusion reactor's empty deuterium-cell buckets not yet given out
+            for (int owed = generator.takeBucketsOwed(); owed > 0; owed -= 16) {
+                world.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(world, x + 0.5, y + 0.5, z + 0.5,
+                        new ItemStack(net.minecraft.init.Items.bucket, Math.min(16, owed))));
             }
         }
         super.breakBlock(world, x, y, z, block, meta);

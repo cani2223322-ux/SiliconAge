@@ -3,10 +3,13 @@ package com.sc.bridge;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.sc.block.BlockBridgeSC;
+
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldSavedData;
+import net.minecraftforge.common.DimensionManager;
 
 /**
  * Where the Receiver Beacons and Interdimensional Anchors stand, in every dimension (the server's global
@@ -58,10 +61,11 @@ public class BridgeMarksSC extends WorldSavedData {
     /** A mark of this kind within `radius` blocks (straight) of x y z in `dim`. */
     public boolean near(int kind, int dim, int x, int y, int z, int radius) {
         long r2 = (long) radius * radius;
-        for (int[] m : marks) {
+        for (int i = marks.size() - 1; i >= 0; i--) {
+            int[] m = marks.get(i);
             if (m[0] == kind && m[1] == dim) {
                 long dx = m[2] - x, dy = y == Integer.MIN_VALUE ? 0 : m[3] - y, dz = m[4] - z;     // «Y авто»: across only
-                if (dx * dx + dy * dy + dz * dz <= r2) {
+                if (dx * dx + dy * dy + dz * dz <= r2 && stillThere(i)) {
                     return true;
                 }
             }
@@ -71,11 +75,28 @@ public class BridgeMarksSC extends WorldSavedData {
 
     /** Any mark of this kind in `dim`. */
     public boolean any(int kind, int dim) {
-        for (int[] m : marks) {
-            if (m[0] == kind && m[1] == dim) {
+        for (int i = marks.size() - 1; i >= 0; i--) {
+            int[] m = marks.get(i);
+            if (m[0] == kind && m[1] == dim && stillThere(i)) {
                 return true;
             }
         }
+        return false;
+    }
+
+    /** МС-10: false (and the mark dropped) when its chunk is loaded and the block is gone; an unloaded chunk is trusted. */
+    private boolean stillThere(int i) {
+        int[] m = marks.get(i);
+        World w = DimensionManager.getWorld(m[1]);
+        if (w == null || !w.getChunkProvider().chunkExists(m[2] >> 4, m[4] >> 4)) {
+            return true;
+        }
+        int meta = m[0] == BEACON ? BlockBridgeSC.BEACON : BlockBridgeSC.ANCHOR;
+        if (w.getBlock(m[2], m[3], m[4]) instanceof BlockBridgeSC && w.getBlockMetadata(m[2], m[3], m[4]) == meta) {
+            return true;
+        }
+        marks.remove(i);
+        markDirty();
         return false;
     }
 

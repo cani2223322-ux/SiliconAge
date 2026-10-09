@@ -43,6 +43,12 @@ public final class ModRecipesCrafting {
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         net.minecraftforge.oredict.RecipeSorter.register("siliconage:coordinatorcopy", CoordinatorCopyRecipeSC.class,
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPELESS, "after:forge:shapelessore");
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:carry", CarryRecipe.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
+        if (!returnsRegistered) {
+            returnsRegistered = true;
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new CarryReturns());
+        }
         cablesAndPipes();
         baseMaterials();
         passiveComponents();
@@ -278,22 +284,23 @@ public final class ModRecipesCrafting {
         OreRecipes.shaped(generator(GeneratorType.SOLAR_EXO), "SHS", "CXC", "SHS",
                 'S', generator(GeneratorType.SOLAR_QUANTUM), 'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', controller);
         // IV: two plasma generators and Nb3Sn coils
-        OreRecipes.shaped(generator(GeneratorType.PLASMA_REACTOR), "NGN", "CXC", "NGN",
+        // РЦ-2: the reactors below are built round generators - their EU and fuel go into the new one (CarryRecipe)
+        carry(GeneratorType.PLASMA_REACTOR, "NGN", "CXC", "NGN",
                 'N', comp("nb3SnCoil"), 'G', generator(GeneratorType.PLASMA_GENERATOR), 'C', cable(CableType.NIOBIUM_TITANIUM), 'X', controller);
         // QV: the fusion reactor made a tokamak; its coils (8 around it)
-        OreRecipes.shaped(generator(GeneratorType.TOKAMAK), "NCN", "XFX", "NCN",
+        carry(GeneratorType.TOKAMAK, "NCN", "XFX", "NCN",
                 'N', comp("nb3SnCoil"), 'C', cable(CableType.QUANTUM), 'X', controller, 'F', generator(GeneratorType.FUSION_REACTOR));
         OreRecipes.shaped(new ItemStack(ModBlocks.tokamakCoil), "NTN", "CHC", "NTN",
                 'N', comp("nb3SnCoil"), 'T', comp("tiCasing"), 'C', cable(CableType.NIOBIUM_TITANIUM), 'H', new ItemStack(ModItems.liquidHeCell));
         // XV: the Tokamak XV - a tokamak with Nb3Sn coils, Exo cable and two fusion cores
-        OreRecipes.shaped(generator(GeneratorType.TOKAMAK_XV), "NCN", "FTF", "NCN",
+        carry(GeneratorType.TOKAMAK_XV, "NCN", "FTF", "NCN",
                 'N', comp("nb3SnCoil"), 'C', cable(CableType.EXO), 'F', comp("fusionCore"), 'T', generator(GeneratorType.TOKAMAK));
         // XV: a tokamak with a second fusion core, hafnium and Exo cable
-        OreRecipes.shaped(generator(GeneratorType.EXO_REACTOR), "HCH", "XTX", "HFH",
+        carry(GeneratorType.EXO_REACTOR, "HCH", "XTX", "HFH",
                 'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', controller, 'T', generator(GeneratorType.TOKAMAK),
                 'F', comp("fusionCore"));
         // SV: the Singular Reactor - an Exo Reactor and a Tokamak XV round a fusion core, a nether star, Singular cable
-        OreRecipes.shaped(generator(GeneratorType.SINGULAR_REACTOR), "CNC", "EFT", "CCC",
+        carry(GeneratorType.SINGULAR_REACTOR, "CNC", "EFT", "CCC",
                 'C', cable(CableType.SINGULAR), 'N', new ItemStack(Items.nether_star), 'E', generator(GeneratorType.EXO_REACTOR),
                 'F', comp("fusionCore"), 'T', generator(GeneratorType.TOKAMAK_XV));
         // its gravity coils (16 in the build), two at a time: tokamak coils, hafnium, Singular cable, a fusion core
@@ -320,26 +327,30 @@ public final class ModRecipesCrafting {
     private static void quarry() {
         ItemStack transistor = silicon(SiliconMaterial.TRANSISTOR), controller = silicon(SiliconMaterial.CONTROLLER);
         ItemStack wire = cable(CableType.COPPER_INSULATED);
-        ItemStack[] heads = new ItemStack[ModItems.DRILL_HEADS.size()];
+        // РЦ-4: as ingredients the heads and the diamond blade fit at any wear (their damage is the wear)
+        ItemStack[] heads = new ItemStack[ModItems.DRILL_HEADS.size()], worn = new ItemStack[heads.length];
         for (int i = 0; i < heads.length; i++) {
             heads[i] = new ItemStack(ModItems.DRILL_HEADS.get(i));
+            worn[i] = new ItemStack(ModItems.DRILL_HEADS.get(i), 1, net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE);
         }
         OreRecipes.shaped(heads[0], "S S", "SXS", " S ", 'S', ingot(Material.STEEL), 'X', comp("steelCasing"));
-        OreRecipes.shaped(heads[1], "W W", "WXW", " W ", 'W', ingot(Material.TUNGSTEN), 'X', heads[0]);
+        OreRecipes.shaped(heads[1], "W W", "WXW", " W ", 'W', ingot(Material.TUNGSTEN), 'X', worn[0]);
         OreRecipes.shaped(heads[2], "D D", "DXD", " D ",
-                'D', new ItemStack(ModItems.TOOLS.get(com.sc.util.SCToolType.DIAMOND_BLADE)), 'X', heads[1]);
+                'D', new ItemStack(ModItems.TOOLS.get(com.sc.util.SCToolType.DIAMOND_BLADE), 1, net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE),
+                'X', worn[1]);
         OreRecipes.shaped(heads[3], "HEH", "CXC", "HEH",
-                'H', ingot(Material.HAFNIUM), 'E', comp("energyCellHV"), 'C', controller, 'X', heads[2]);
+                'H', ingot(Material.HAFNIUM), 'E', comp("energyCellHV"), 'C', controller, 'X', worn[2]);
         ItemStack lv = new ItemStack(ModBlocks.quarrySC, 1, 0), mv = new ItemStack(ModBlocks.quarrySC, 1, 1),
                 hv = new ItemStack(ModBlocks.quarrySC, 1, 2), ev = new ItemStack(ModBlocks.quarrySC, 1, 3);
         OreRecipes.shaped(lv, "STS", "KXK", "CHC",
-                'S', ingot(Material.STEEL), 'T', transistor, 'K', comp("copperCoil"), 'X', comp("steelCasing"), 'C', wire, 'H', heads[0]);
-        OreRecipes.shaped(mv, "PCP", "KXK", "PCP",
-                'P', comp("tiPlate"), 'C', cable(CableType.SILVER), 'K', comp("copperCoil"), 'X', lv);
-        OreRecipes.shaped(hv, "PCP", "KXK", "PCP",
-                'P', comp("wTiPlate"), 'C', cable(CableType.TUNGSTEN), 'K', controller, 'X', mv);
-        OreRecipes.shaped(ev, "PCP", "KXK", "PCP",
-                'P', comp("tiCasing"), 'C', cable(CableType.SUPERCONDUCTOR), 'K', comp("nb3SnCoil"), 'X', hv);
+                'S', ingot(Material.STEEL), 'T', transistor, 'K', comp("copperCoil"), 'X', comp("steelCasing"), 'C', wire, 'H', worn[0]);
+        // РЦ-2: a quarry a tier up keeps the old one's EU, tanks, settings and filter (CarryRecipe.COPY)
+        GameRegistry.addRecipe(new CarryRecipe(mv, CarryRecipe.COPY, com.sc.block.BlockQuarrySC.class, null, "PCP", "KXK", "PCP",
+                'P', comp("tiPlate"), 'C', cable(CableType.SILVER), 'K', comp("copperCoil"), 'X', lv));
+        GameRegistry.addRecipe(new CarryRecipe(hv, CarryRecipe.COPY, com.sc.block.BlockQuarrySC.class, null, "PCP", "KXK", "PCP",
+                'P', comp("wTiPlate"), 'C', cable(CableType.TUNGSTEN), 'K', controller, 'X', mv));
+        GameRegistry.addRecipe(new CarryRecipe(ev, CarryRecipe.COPY, com.sc.block.BlockQuarrySC.class, null, "PCP", "KXK", "PCP",
+                'P', comp("tiCasing"), 'C', cable(CableType.SUPERCONDUCTOR), 'K', comp("nb3SnCoil"), 'X', hv));
 
         com.sc.item.ItemQuarryModuleSC m = ModItems.quarryModule;
         Object[][] modules = {
@@ -359,7 +370,7 @@ public final class ModRecipesCrafting {
                 {com.sc.item.ItemQuarryModuleSC.Kind.CENTRIFUGE, m.stackOf(com.sc.item.ItemQuarryModuleSC.Kind.WASH),
                         ModRecipesMachineBlocks.block(com.sc.machine.MachineType.CENTRIFUGE)},
                 {com.sc.item.ItemQuarryModuleSC.Kind.VEIN, comp("sensor"), new ItemStack(ModItems.oreScanner)},
-                {com.sc.item.ItemQuarryModuleSC.Kind.DOUBLE, comp("nb3SnCoil"), heads[1]},
+                {com.sc.item.ItemQuarryModuleSC.Kind.DOUBLE, comp("nb3SnCoil"), worn[1]},
                 {com.sc.item.ItemQuarryModuleSC.Kind.FLUID_GUARD, comp("ptfeSheet"), comp("steelCasing")},
                 {com.sc.item.ItemQuarryModuleSC.Kind.GENTLE, comp("sensor"), comp("lens")},
                 {com.sc.item.ItemQuarryModuleSC.Kind.REPAIR, controller, ingot(Material.TUNGSTEN)},
@@ -372,13 +383,20 @@ public final class ModRecipesCrafting {
                 {com.sc.item.ItemQuarryModuleSC.Kind.CHUNK_LOADER, new ItemStack(Items.ender_eye), new ItemStack(Blocks.obsidian)},
         };
         for (Object[] r : modules) {
-            OreRecipes.shaped(m.stackOf((com.sc.item.ItemQuarryModuleSC.Kind) r[0]), " A ", "WMW", " T ",
+            ItemStack out = m.stackOf((com.sc.item.ItemQuarryModuleSC.Kind) r[0]);
+            if (r[0] == com.sc.item.ItemQuarryModuleSC.Kind.TANK) {     // РЦ-2: the module keeps no fluid - an empty tank only
+                GameRegistry.addRecipe(new CarryRecipe(out, CarryRecipe.EMPTY, com.sc.block.BlockTankSC.class, null, " A ", "WMW", " T ",
+                        'A', r[1], 'W', wire, 'M', r[2], 'T', transistor));
+                continue;
+            }
+            OreRecipes.shaped(out, " A ", "WMW", " T ",
                     'A', r[1], 'W', wire, 'M', r[2], 'T', transistor);
         }
-        // the Exo Drilling Rig: an EV quarry round a fusion core, Exo cable and an Exo drill head
-        OreRecipes.shaped(new ItemStack(ModBlocks.quarrySC, 1, 4), "HFH", "XQX", "CEC",
+        // the Exo Drilling Rig: an EV quarry round a fusion core, Exo cable and an Exo drill head (the quarry's contents come along)
+        GameRegistry.addRecipe(new CarryRecipe(new ItemStack(ModBlocks.quarrySC, 1, 4), CarryRecipe.COPY, com.sc.block.BlockQuarrySC.class, null,
+                "HFH", "XQX", "CEC",
                 'H', ingot(Material.HAFNIUM), 'F', comp("fusionCore"), 'X', controller, 'Q', ev,
-                'C', cable(CableType.EXO), 'E', heads[3]);
+                'C', cable(CableType.EXO), 'E', worn[3]));
         // its ore lenses: a lens, a controller and four of that ore
         for (com.sc.util.OreEntry o : com.sc.util.OreEntry.values()) {
             ItemStack ore = new ItemStack(ModBlocks.oreSC, 1, o.meta());
@@ -392,6 +410,11 @@ public final class ModRecipesCrafting {
 
     private static ItemStack generator(GeneratorType type) {
         return ModBlocks.generatorStack(type, 1);
+    }
+
+    /** A reactor built round generators (CarryRecipe.GENERATOR). */
+    private static void carry(GeneratorType type, Object... recipe) {
+        GameRegistry.addRecipe(new CarryRecipe(generator(type), CarryRecipe.GENERATOR, com.sc.block.BlockGeneratorSC.class, type, recipe));
     }
 
     // ---- §6 (Nano base corpus + Chip tier I - Quantum/Exo/tier II/III are Upgrade Station recipes) ----
@@ -527,16 +550,20 @@ public final class ModRecipesCrafting {
             }
             CableType wire = cableOf(t);
             ItemStack storage = new ItemStack(ModBlocks.energyStorageSC, 1, t.ordinal());
-            OreRecipes.shaped(new ItemStack(ModBlocks.wirelessTx, 1, t.ordinal()), " E ", "CSC", "IXI",
+            // РЦ-2: the storage's charge goes into the new block, its upgrades back to the crafter
+            GameRegistry.addRecipe(new CarryRecipe(new ItemStack(ModBlocks.wirelessTx, 1, t.ordinal()), CarryRecipe.ENERGY,
+                    com.sc.block.BlockEnergyStorageSC.class, null, " E ", "CSC", "IXI",
                     'E', new ItemStack(Items.ender_pearl), 'C', cable(wire), 'S', storage,
-                    'I', new ItemStack(Items.iron_ingot), 'X', silicon(SiliconMaterial.CONTROLLER));
-            OreRecipes.shaped(new ItemStack(ModBlocks.wirelessRx, 1, t.ordinal()), " E ", "CSC", "IXI",
+                    'I', new ItemStack(Items.iron_ingot), 'X', silicon(SiliconMaterial.CONTROLLER)));
+            GameRegistry.addRecipe(new CarryRecipe(new ItemStack(ModBlocks.wirelessRx, 1, t.ordinal()), CarryRecipe.ENERGY,
+                    com.sc.block.BlockEnergyStorageSC.class, null, " E ", "CSC", "IXI",
                     'E', new ItemStack(Items.ender_eye), 'C', cable(wire), 'S', storage,
-                    'I', new ItemStack(Items.iron_ingot), 'X', silicon(SiliconMaterial.CONTROLLER));
+                    'I', new ItemStack(Items.iron_ingot), 'X', silicon(SiliconMaterial.CONTROLLER)));
         }
-        OreRecipes.shaped(new ItemStack(ModBlocks.quantumTranslator), "HCH", "XSX", "HCH",
+        GameRegistry.addRecipe(new CarryRecipe(new ItemStack(ModBlocks.quantumTranslator), CarryRecipe.ENERGY,
+                com.sc.block.BlockEnergyStorageSC.class, null, "HCH", "XSX", "HCH",
                 'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', silicon(SiliconMaterial.CONTROLLER),
-                'S', new ItemStack(ModBlocks.energyStorageSC, 1, com.sc.energy.Tier.XV.ordinal()));
+                'S', new ItemStack(ModBlocks.energyStorageSC, 1, com.sc.energy.Tier.XV.ordinal())));
         OreRecipes.shaped(new ItemStack(ModItems.entangledCrystal), "PDP", "EQE", "PMP",
                 'P', new ItemStack(Items.ender_pearl), 'D', new ItemStack(Items.diamond), 'E', new ItemStack(Items.ender_eye),
                 'Q', new ItemStack(ModItems.battery, 1, 4), 'M', silicon(SiliconMaterial.MEMORY_CHIP));
@@ -778,8 +805,9 @@ public final class ModRecipesCrafting {
                 'I', ingot(Material.TIN), 'P', Blocks.sticky_piston, 'W', wire, 'T', transistor);
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.HEAT_SINK), "AAA", "ACA", "ATA",
                 'A', ingot(Material.ALUMINIUM), 'C', ingot(Material.COPPER), 'T', transistor);
-        OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION), "IGI", "WXW", " T ",
-                'I', ingot(Material.TIN), 'G', Blocks.glass, 'W', wire, 'X', new ItemStack(ModBlocks.tankSC, 1, 0), 'T', transistor);
+        GameRegistry.addRecipe(new CarryRecipe(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.TANK_EXTENSION), CarryRecipe.EMPTY,
+                com.sc.block.BlockTankSC.class, null, "IGI", "WXW", " T ",
+                'I', ingot(Material.TIN), 'G', Blocks.glass, 'W', wire, 'X', new ItemStack(ModBlocks.tankSC, 1, 0), 'T', transistor));
         OreRecipes.shaped(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.QUALITY), " L ", "SXS", " T ",
                 'L', comp("lens"), 'S', comp("sensor"), 'X', silicon(SiliconMaterial.CONTROLLER), 'T', transistor);
         // energy storage modules, both on a Transformer upgrade: the Output Splitter between two HV-EV
@@ -847,8 +875,9 @@ public final class ModRecipesCrafting {
         // 3. the energy port
         OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.ENERGY_PORT, 1), "TET", "EXE", "TET", 'T', tp, 'E', exo, 'X', ctl);
         // 4. the gas port: titanium pipes round a steel tank
-        OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.GAS_PORT, 1), "TPT", "PBP", "TPT",
-                'T', tp, 'P', pipe(PipeType.TITANIUM), 'B', new ItemStack(ModBlocks.tankSC, 1, 0));
+        GameRegistry.addRecipe(new CarryRecipe(part(com.sc.block.BlockBridgeSC.GAS_PORT, 1), CarryRecipe.EMPTY,
+                com.sc.block.BlockTankSC.class, null, "TPT", "PBP", "TPT",
+                'T', tp, 'P', pipe(PipeType.TITANIUM), 'B', new ItemStack(ModBlocks.tankSC, 1, 0)));
         // 5. focusers, two at a time
         OreRecipes.shaped(part(com.sc.block.BlockBridgeSC.FOCUSER, 2), "NZN", "SMS", "NZN",
                 'N', nb, 'Z', new ItemStack(Items.nether_star), 'S', sing, 'M', cap);
@@ -888,5 +917,228 @@ public final class ModRecipesCrafting {
 
     private static ItemStack part(int meta, int count) {
         return com.sc.block.BlockBridgeSC.stack(meta, count);
+    }
+
+    // ---- РЦ-2: crafts that keep what their block ingredients held ----
+
+    private static boolean returnsRegistered;
+
+    /**
+     * A block built round blocks that keep their contents in item NBT: what fits goes into the result,
+     * nothing is lost silently.
+     *  - COPY: the same kind of block a tier up (the quarry) - the carried item's NBT goes over as is;
+     *  - ENERGY: a block with a buffer of its own round a storage (wireless Tx / Rx, the translator) - the
+     *    storage's EU (capped on placement); its upgrades have no place there and go back to the crafter
+     *    (CarryReturns);
+     *  - GENERATOR: a reactor round generators - their EU summed, their fuel into the new one's tank for
+     *    that fluid (a fuel it can't burn has nowhere to go); the ignition starts over;
+     *  - EMPTY: a part that keeps no fluid round a tank (a quarry module, an upgrade, the gas port) - only
+     *    an empty tank fits: a fluid could not come back as an item.
+     * Generic materials go by their ore names as in OreRecipes.shaped; the carried blocks stay exact stacks.
+     */
+    public static final class CarryRecipe extends net.minecraftforge.oredict.ShapedOreRecipe {
+
+        public static final int COPY = 0, ENERGY = 1, GENERATOR = 2, EMPTY = 3;
+        private static final String[] GEN_TANKS = {"FuelTank", "FuelTank2", "OutTank"};
+
+        private final int mode;
+        private final Class<? extends net.minecraft.block.Block> carry;
+        /** GENERATOR: the reactor made. */
+        private final GeneratorType into;
+
+        public CarryRecipe(ItemStack result, int mode, Class<? extends net.minecraft.block.Block> carry, GeneratorType into,
+                           Object... recipe) {
+            super(result, convert(recipe, carry));
+            this.mode = mode;
+            this.carry = carry;
+            this.into = into;
+        }
+
+        private static Object[] convert(Object[] in, Class<? extends net.minecraft.block.Block> carry) {
+            Object[] out = new Object[in.length];
+            for (int i = 0; i < in.length; i++) {
+                out[i] = in[i] instanceof ItemStack && !isOf((ItemStack) in[i], carry) ? OreRecipes.oreName((ItemStack) in[i]) : in[i];
+            }
+            return out;
+        }
+
+        static boolean isOf(ItemStack s, Class<? extends net.minecraft.block.Block> carry) {
+            return s != null && s.getItem() instanceof net.minecraft.item.ItemBlock
+                    && carry.isInstance(net.minecraft.block.Block.getBlockFromItem(s.getItem()));
+        }
+
+        /** Whether the result takes over something of its ingredients (not EMPTY). */
+        public boolean carries() {
+            return mode != EMPTY;
+        }
+
+        @Override
+        public boolean matches(net.minecraft.inventory.InventoryCrafting grid, net.minecraft.world.World world) {
+            if (!super.matches(grid, world)) {
+                return false;
+            }
+            if (mode == EMPTY) {
+                for (int i = 0; i < grid.getSizeInventory(); i++) {
+                    ItemStack s = grid.getStackInSlot(i);
+                    if (isOf(s, carry) && com.sc.block.ItemBlockTankSC.contents(s) != null) {
+                        return false;                   // a filled tank: empty it first, its fluid would be lost
+                    }
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public ItemStack getCraftingResult(net.minecraft.inventory.InventoryCrafting grid) {
+            ItemStack out = super.getCraftingResult(grid);
+            if (out == null || mode == EMPTY) {
+                return out;
+            }
+            net.minecraft.nbt.NBTTagCompound tag = out.hasTagCompound() ? out.getTagCompound() : new net.minecraft.nbt.NBTTagCompound();
+            long eu = 0;
+            net.minecraftforge.fluids.FluidStack f1 = null, f2 = null;
+            for (int i = 0; i < grid.getSizeInventory(); i++) {
+                ItemStack s = grid.getStackInSlot(i);
+                if (!isOf(s, carry) || !s.hasTagCompound()) {
+                    continue;
+                }
+                net.minecraft.nbt.NBTTagCompound t = s.getTagCompound();
+                if (mode == COPY) {
+                    for (Object k : t.func_150296_c()) {        // getKeySet
+                        String key = (String) k;
+                        if (!"display".equals(key) && !"RepairCost".equals(key) && !"ench".equals(key)) {
+                            tag.setTag(key, t.getTag(key).copy());
+                        }
+                    }
+                    break;
+                }
+                eu += Math.max(0, t.getInteger("EnergySC"));
+                if (mode == GENERATOR) {
+                    for (String key : GEN_TANKS) {
+                        net.minecraftforge.fluids.FluidStack f = t.hasKey(key)
+                                ? net.minecraftforge.fluids.FluidStack.loadFluidStackFromNBT(t.getCompoundTag(key)) : null;
+                        if (f == null || f.getFluid() == null || f.amount <= 0) {
+                            continue;
+                        }
+                        if (fitsFuel(into, f.getFluid().getName())) {
+                            f1 = add(f1, f);
+                        } else if (fitsFuel2(into, f.getFluid().getName())) {
+                            f2 = add(f2, f);
+                        }
+                    }
+                }
+            }
+            if (eu > 0) {
+                tag.setInteger("EnergySC", (int) Math.min(Integer.MAX_VALUE, eu));
+            }
+            if (f1 != null) {
+                tag.setTag("FuelTank", f1.writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+            }
+            if (f2 != null) {
+                tag.setTag("FuelTank2", f2.writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+            }
+            if (!tag.hasNoTags()) {
+                out.setTagCompound(tag);
+            }
+            return out;
+        }
+
+        private static net.minecraftforge.fluids.FluidStack add(net.minecraftforge.fluids.FluidStack sum,
+                                                                net.minecraftforge.fluids.FluidStack f) {
+            if (sum == null) {
+                return f.copy();
+            }
+            if (sum.isFluidEqual(f)) {
+                sum.amount += f.amount;     // fuller than the tank holds: it takes nothing in until it burns down
+            }
+            return sum;
+        }
+
+        /** What goes into a generator's first tank (as TileEntityGeneratorSC.fitsTank1). */
+        private static boolean fitsFuel(GeneratorType type, String fluid) {
+            switch (type.kind) {
+                case FLUID_FUEL: return type.euPerMb(fluid) > 0;
+                case DUAL_FLUID:
+                case EXO: return fluid.equals(type.fuelFluidName);
+                default: return false;
+            }
+        }
+
+        private static boolean fitsFuel2(GeneratorType type, String fluid) {
+            return type.kind == GeneratorType.Kind.DUAL_FLUID && fluid.equals(type.fuel2FluidName);
+        }
+
+        /** ENERGY: the upgrades of the storages in `grid` - they have no place in the result. */
+        java.util.List<ItemStack> leftovers(net.minecraft.inventory.IInventory grid) {
+            java.util.List<ItemStack> out = new java.util.ArrayList<ItemStack>();
+            if (mode != ENERGY) {
+                return out;
+            }
+            for (int i = 0; i < grid.getSizeInventory(); i++) {
+                ItemStack s = grid.getStackInSlot(i);
+                if (!isOf(s, carry) || !s.hasTagCompound() || !s.getTagCompound().hasKey("UpgradesSC")) {
+                    continue;
+                }
+                net.minecraft.nbt.NBTTagList list = s.getTagCompound().getCompoundTag("UpgradesSC").getTagList("Items", 10);
+                for (int k = 0; k < list.tagCount(); k++) {
+                    ItemStack u = ItemStack.loadItemStackFromNBT(list.getCompoundTagAt(k));
+                    if (u != null) {
+                        out.add(u);
+                    }
+                }
+            }
+            return out;
+        }
+    }
+
+    /**
+     * Gives the crafter back what a CarryRecipe's result has no place for (a storage's upgrades). The
+     * grid is still whole when the event fires (SlotCrafting fires it before using the ingredients up).
+     */
+    public static final class CarryReturns {
+
+        @cpw.mods.fml.common.eventhandler.SubscribeEvent
+        public void onCrafted(cpw.mods.fml.common.gameevent.PlayerEvent.ItemCraftedEvent e) {
+            if (e.player == null || e.player.worldObj.isRemote || !(e.craftMatrix instanceof net.minecraft.inventory.InventoryCrafting)) {
+                return;
+            }
+            net.minecraft.inventory.InventoryCrafting grid = (net.minecraft.inventory.InventoryCrafting) e.craftMatrix;
+            for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+                if (o instanceof CarryRecipe && ((CarryRecipe) o).mode == CarryRecipe.ENERGY && ((CarryRecipe) o).matches(grid, e.player.worldObj)) {
+                    for (ItemStack u : ((CarryRecipe) o).leftovers(grid)) {
+                        if (!e.player.inventory.addItemStackToInventory(u) && u.stackSize > 0) {
+                            e.player.dropPlayerItemWithRandomChoice(u, false);
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    private static java.util.Set<String> carryResults;
+
+    /**
+     * РЦ-7: whether `s` is made by a craft that takes over its ingredients' charge or contents (a carry
+     * recipe of any kind) - for the "contents come along" line in its tooltip. Built on first use.
+     */
+    public static boolean carriesContents(ItemStack s) {
+        if (s == null || s.getItem() == null) {
+            return false;
+        }
+        if (carryResults == null) {
+            java.util.Set<String> set = new java.util.HashSet<String>();
+            for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+                boolean carry = o instanceof CarryRecipe ? ((CarryRecipe) o).carries()
+                        : o instanceof StorageUpgradeRecipeSC || o instanceof TankUpgradeRecipeSC || o instanceof ChargeCarryRecipeSC
+                        || o instanceof BridgeChargeRecipeSC || o instanceof BatteryRecipeSC;
+                ItemStack r = carry ? ((net.minecraft.item.crafting.IRecipe) o).getRecipeOutput() : null;
+                if (r != null && r.getItem() != null) {
+                    set.add(net.minecraft.item.Item.getIdFromItem(r.getItem()) + ":" + r.getItemDamage());
+                }
+            }
+            carryResults = set;
+        }
+        return carryResults.contains(net.minecraft.item.Item.getIdFromItem(s.getItem()) + ":" + s.getItemDamage());
     }
 }

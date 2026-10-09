@@ -883,6 +883,9 @@ public class GuiSingularSC extends GuiContainer {
             if (sing.isPortTaken()) {
                 add(k, l, 2, Lang.tr("sc.gui.xv.st.porttaken"));
             }
+            if (sing.isNearBuild()) {
+                add(k, l, 2, Lang.tr("sc.gui.big.st.nearbuild"));
+            }
             int gaps = 72 - sing.getWallCount() + sing.getCapMissing();
             if (gaps > 0) {
                 add(k, l, 2, Lang.tr("sc.gui.big.st.needshell", gaps));

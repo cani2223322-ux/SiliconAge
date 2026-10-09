@@ -632,7 +632,8 @@ public class GuiMachineSC extends GuiContainer {
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             int[] ld = stationLadder();
             int[] cols = ld[0] == 1 ? ST_CHIP : ST_GEAR;
-            for (int i = 0; i < 3; i++) {
+            boolean assembly = ld[1] < 0 && ld[3] == 1;                // the recipe makes neither gear nor a chip: no ladder
+            for (int i = 0; i < 3 && !assembly; i++) {
                 int bx = x + ST_X + i * (ST_STEP_W + 4), by = y + CAPTION_Y - 1;
                 boolean now = i == ld[1], done = i < ld[1] && ld[1] >= 0, lock = i > ld[2];
                 drawRect(bx, by, bx + ST_STEP_W, by + 12, now ? 0xFF2A6A8A : done ? 0xFF1E4A30 : 0xFF1A2430);
@@ -1530,7 +1531,11 @@ public class GuiMachineSC extends GuiContainer {
     /** The Upgrade Station: the steps' names, what goes in, what comes out and the time, the step it can't make. */
     private void drawStationText() {
         int[] ld = stationLadder();
-        for (int i = 0; i < 3; i++) {
+        boolean assembly = ld[1] < 0 && ld[3] == 1;                    // the recipe makes neither gear nor a chip
+        if (assembly) {
+            smallFit(Lang.tr("sc.gui.station.assembly"), ST_X + 2, CAPTION_Y + 2, GuiBigSC.SCREEN_RIGHT - ST_X - 4, 0x96F0FF);
+        }
+        for (int i = 0; i < 3 && !assembly; i++) {
             boolean now = i == ld[1], done = i < ld[1] && ld[1] >= 0, lock = i > ld[2];
             String s = Lang.tr((ld[0] == 1 ? "sc.gui.station.chip." : "sc.gui.station.gear.") + i);
             smallFit(s, ST_X + i * (ST_STEP_W + 4) + 11, CAPTION_Y + 2, ST_STEP_W - 13,
@@ -1558,7 +1563,7 @@ public class GuiMachineSC extends GuiContainer {
             smallFit(Lang.tr("sc.gui.station.out", r.outputs[0].getDisplayName(), Math.max(1, machine.effectiveTicks(r) / 20)),
                     ST_X + 2, y0 + 8, w, 0x6AA8C8);
         }
-        if (ld[2] < 2) {
+        if (ld[2] < 2 && !assembly) {
             String next = Lang.tr((ld[0] == 1 ? "sc.gui.station.chip." : "sc.gui.station.gear.") + (ld[2] + 1));
             smallFit(Lang.tr("sc.gui.station.locked", next, ld[0] == 1 ? "HV" : ld[2] == 0 ? "HV" : "EV"), ST_X + 2, y0 + 16, w, 0x465A6E);
         }

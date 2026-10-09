@@ -18,6 +18,8 @@ public final class BridgeConsentSC {
     public static final int PENDING = 0, ACCEPTED = 1, DECLINED = 2, EXPIRED = 3, USED = 4;
     /** answer(): not found / not yours / no longer pending. */
     public static final int NOT_FOUND = -1, NOT_YOURS = -2, CLOSED = -3;
+    /** МС-3: after «Отклонить», requests from the same player to the same player are refused this long (ticks). */
+    public static final int DECLINE_BLOCK_TICKS = 5 * 60 * 20;
 
     public static final class Request {
         public final int id;
@@ -37,6 +39,8 @@ public final class BridgeConsentSC {
     }
 
     private final Map<Integer, Request> map = new LinkedHashMap<Integer, Request>();
+    /** МС-3: "from>to" (lower case) - the tick until which `from` may not ask `to` again. */
+    private final Map<String, Long> declined = new java.util.HashMap<String, Long>();
     private int nextId = 1;
     private final int ttl;
 
@@ -80,6 +84,30 @@ public final class BridgeConsentSC {
                 it.remove();
             }
         }
+        for (Iterator<Long> it = declined.values().iterator(); it.hasNext(); ) {
+            long u = it.next();
+            if (now >= u || now < u - DECLINE_BLOCK_TICKS) {
+                it.remove();                        // over, or the world's clock went back
+            }
+        }
+    }
+
+    private static String pair(String from, String to) {
+        return from.toLowerCase(java.util.Locale.ROOT) + ">" + to.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** МС-3: ticks left before `from` may ask `to` again after a decline (0 - may ask now). */
+    public long blockedLeft(String from, String to, long now) {
+        String k = pair(from, to);
+        Long until = declined.get(k);
+        if (until == null) {
+            return 0;
+        }
+        if (now >= until || now < until - DECLINE_BLOCK_TICKS) {
+            declined.remove(k);
+            return 0;
+        }
+        return until - now;
     }
 
     /**
@@ -99,6 +127,9 @@ public final class BridgeConsentSC {
             return CLOSED;
         }
         r.state = accept ? ACCEPTED : DECLINED;
+        if (!accept) {
+            declined.put(pair(r.from, r.to), now + DECLINE_BLOCK_TICKS);
+        }
         return r.state;
     }
 

@@ -52,7 +52,24 @@ public class BlockEnergyConverterSC extends Block {
 
     @Override
     public float getPlayerRelativeBlockHardness(EntityPlayer player, World world, int x, int y, int z) {
+        if (refusesBreak(world, player, x, y, z)) {
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.owneronly", ((TileEntityEnergyConverterSC) world.getTileEntity(x, y, z)).getOwner());
+            return 0F;
+        }
         return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
+    /**
+     * БП-3: a converter with an owner is broken or dismantled by the owner (anyone in creative) and
+     * server ops only, as BlockWirelessSC. Server side (false on the client).
+     */
+    public static boolean refusesBreak(World world, EntityPlayer player, int x, int y, int z) {
+        if (world == null || world.isRemote || player == null) {
+            return false;
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof TileEntityEnergyConverterSC && !((TileEntityEnergyConverterSC) te).getOwner().isEmpty()
+                && !((TileEntityEnergyConverterSC) te).allowed(player) && !BlockQuarrySC.isOp(player);
     }
 
     @Override
@@ -77,6 +94,9 @@ public class BlockEnergyConverterSC extends Block {
         if (stack.hasTagCompound()) {
             c.readFromItem(stack.getTagCompound());
         }
+        if (placer instanceof EntityPlayer) {
+            c.setOwner(((EntityPlayer) placer).getCommandSenderName());   // БП-3: the placer owns it
+        }
         world.markBlockForUpdate(x, y, z);
     }
 
@@ -99,7 +119,7 @@ public class BlockEnergyConverterSC extends Block {
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
         TileEntity te = world.getTileEntity(x, y, z);
         if (BlockConduitSC.isWrench(player.getCurrentEquippedItem())) {         // a wrench: the front to the clicked face
-            if (!world.isRemote && te instanceof TileEntityEnergyConverterSC) {
+            if (!world.isRemote && te instanceof TileEntityEnergyConverterSC && ((TileEntityEnergyConverterSC) te).allowed(player)) {
                 ((TileEntityEnergyConverterSC) te).setFacing(ForgeDirection.getOrientation(side));
                 world.markBlockForUpdate(x, y, z);
             }
@@ -134,6 +154,9 @@ public class BlockEnergyConverterSC extends Block {
             return false;
         }
         TileEntityEnergyConverterSC c = (TileEntityEnergyConverterSC) te;
+        if (!c.getOwner().isEmpty()) {
+            return false;                              // БП-3: no player here - an owned one is turned by its owner's wrench only
+        }
         ForgeDirection f = c.getFacing();
         c.setFacing(f.offsetY != 0 ? ForgeDirection.NORTH : f.getRotation(ForgeDirection.UP));
         world.markBlockForUpdate(x, y, z);
@@ -155,6 +178,11 @@ public class BlockEnergyConverterSC extends Block {
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (refusesBreak(world, player, x, y, z)) {
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.owneronly", ((TileEntityEnergyConverterSC) world.getTileEntity(x, y, z)).getOwner());
+            world.markBlockForUpdate(x, y, z);
+            return false;
+        }
         if (willHarvest) {
             return true;
         }
@@ -179,7 +207,9 @@ public class BlockEnergyConverterSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityEnergyConverterSC) {
             NBTTagCompound nbt = ((TileEntityEnergyConverterSC) te).writeToItem();
-            stack.setTagCompound(nbt);
+            if (!nbt.hasNoTags()) {                    // БП-5: a blank one stacks with new ones
+                stack.setTagCompound(nbt);
+            }
         }
         drops.add(stack);
         return drops;

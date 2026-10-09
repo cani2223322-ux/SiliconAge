@@ -91,7 +91,7 @@ public final class SingularLevel {
 
     /** Points needed at `level` for the next level (0 at the top level). */
     public static int threshold(int level) {
-        return level >= MIN && level < MAX ? THRESHOLD[level] : 0;
+        return level >= MIN && level < MAX ? ConfigSC.scale(THRESHOLD[level], ConfigSC.singularScore, 1) : 0;
     }
 
     /** The piece's points towards its next level. */

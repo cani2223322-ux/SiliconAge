@@ -15,7 +15,9 @@ public enum GeneratorType {
     COMBUSTION("CombustionGenerator", Tier.LV, 32, Kind.FLUID_FUEL, "diesel", 2),
     SOLAR_SI("SolarPanelSi", Tier.LV, 8, Kind.PASSIVE, null, 0),
     STEAM_TURBINE("SteamTurbine", Tier.MV, 128, Kind.FLUID_FUEL, "steam", 40),
-    GAS_TURBINE("GasTurbine", Tier.MV, 128, Kind.FLUID_FUEL, "hydrogen", 20),
+    // Balance: §15's 20 mB/t gave 6.4 EU per mB against the electrolyzer's 54-144 EU per mB spent -
+    // a sure loss. 2 mB/t is 64 EU/mB: a small profit on halite hydrogen, still below the Fuel Cell.
+    GAS_TURBINE("GasTurbine", Tier.MV, 128, Kind.FLUID_FUEL, "hydrogen", 2),
     SOLAR_GAAS("SolarPanelGaAs", Tier.HV, 64, Kind.PASSIVE, null, 0),
     // TODO(§15/§14 balance): the doc pairs "Ar 10 mB/t" here with an Air Separator that yields
     // 49 mB of argon per 400-tick operation (0.12 mB/t). Taken literally that is ~82 separators

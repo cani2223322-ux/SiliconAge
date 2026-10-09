@@ -175,10 +175,11 @@ public class GuiFieldGeneratorSC extends GuiContainer {
             case 2: {
                 buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_PRIVATE), x, y + 14, 96, 20, ""));
                 buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_PUSH_PLAYERS), x + 100, y + 14, 98, 20, ""));
+                buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_NO_MECHANISMS), x, y + 36, CW, 16, ""));
                 List<String> names = field.getAccess();
                 for (int i = 0; i < names.size() && i < TileEntityFieldGeneratorSC.MAX_ACCESS; i++) {
                     int col = i % 3, row = i / 3;
-                    GuiButton b = new HoloButton(REMOVE_BASE + i, x + 2 + col * 65, y + 56 + row * 16, 63, 15, "");
+                    GuiButton b = new HoloButton(REMOVE_BASE + i, x + 2 + col * 65, y + 64 + row * 16, 63, 15, "");
                     b.enabled = mayEditAccess();
                     buttonList.add(b);
                 }
@@ -751,6 +752,9 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 int rainCol = dim;
                 if (!field.has(TileEntityFieldGeneratorSC.F_RAIN)) {
                     rain = Lang.tr("sc.fieldgui.sum.rain.off");
+                } else if (field.snowTooBig()) {
+                    rain = Lang.tr("sc.fieldgui.sum.rain.big");     // wider than SNOW_MAX_COLUMNS: snow and ice stay
+                    rainCol = GuiHoloSC.WARN;
                 } else if (!field.rainOverField()) {
                     rain = Lang.tr("sc.fieldgui.sum.rain.dry");
                 } else if (field.isRainShield()) {
@@ -775,12 +779,12 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 break;
             case 2: {
                 fit(Lang.tr("sc.fieldgui.owner", field.getOwner().isEmpty() ? "-" : field.getOwner()), 100, 15, CW - 92, c);
-                fit(Lang.tr("sc.fieldgui.access.list", field.getAccess().size(), TileEntityFieldGeneratorSC.MAX_ACCESS), 8, 72, CW, dim);
+                fit(Lang.tr("sc.fieldgui.access.list", field.getAccess().size(), TileEntityFieldGeneratorSC.MAX_ACCESS), 8, 82, CW, dim);
                 if (field.getAccess().isEmpty()) {
-                    fit(Lang.tr("sc.fieldgui.access.empty"), 12, 90, CW - 8, 0x465A6E);
+                    fit(Lang.tr("sc.fieldgui.access.empty"), 12, 98, CW - 8, 0x465A6E);
                 }
                 if (!mayEditAccess()) {
-                    fit(Lang.tr("sc.fieldgui.access.ownerOnly"), 8, H - 38, CW, GuiHoloSC.BAD);
+                    fit(Lang.tr("sc.fieldgui.access.ownerOnly"), 8, H - 36, CW, GuiHoloSC.BAD);   // under the 6th name row
                 }
                 break;
             }

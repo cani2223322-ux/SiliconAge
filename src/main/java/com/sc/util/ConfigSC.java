@@ -16,12 +16,21 @@ public final class ConfigSC {
 
     private static final Map<OreEntry, OreGenSettings> ORE_SETTINGS = new EnumMap<OreEntry, OreGenSettings>(OreEntry.class);
 
-    /** Sounds: working machines / generators / quarries play their loops; the volume of every mod sound (0..1). */
+    /**
+     * Sounds: working machines / generators / quarries play their loops; the volume of every mod sound (0..1).
+     * A client's own preference gets @ConfigSyncSC.ClientOnly - else a server overwrites it on joining.
+     */
+    @com.sc.handler.ConfigSyncSC.ClientOnly
     public static boolean machineSounds = true;
+    @com.sc.handler.ConfigSyncSC.ClientOnly
     public static float soundVolume = 1F;
     /** Radiation: reactors and RTGs irradiate players nearby (off: no dose, no effects); every level multiplied by this. */
     public static boolean radiation = true;
     public static float radiationMultiplier = 1F;
+    /** Energy: machines explode on overvoltage / overheat (off: the block stays, smokes and refuses the energy); blast power x this; an overheat blast breaks the blocks around. */
+    public static boolean explosions = true;
+    public static float explosionPower = 1F;
+    public static boolean overheatBreaksBlocks = true;
 
     /** Balance (section "balance"), all 1 = as designed. Machines: work speed, EU a tick. */
     public static float machineSpeed = 1F, machineEnergy = 1F;
@@ -36,8 +45,12 @@ public final class ConfigSC {
     /** Wireless: transmitter range (XV stays unlimited), the loss over distance, the quantum pair's upkeep; translators load chunks. */
     public static float wirelessRange = 1F, wirelessLoss = 1F, quantumUpkeep = 1F;
     public static boolean quantumChunkLoading = true;
+    /** With IC2: a cable also burns out when the current through it stays above its rating for a few ticks. */
+    public static boolean ic2CableCurrentLimit = false;
     /** The Exo blade's execute finishes off players too (off: a player takes the plain blow). */
     public static boolean bladeExecutePlayers = false;
+    /** A private field zone is refused over other mods' claims (BreakEvent probes as the owner). */
+    public static boolean fieldClaimCheck = true;
     /** A drill stops drawing on the chestplate once its charge is below this %; an overheated chestplate never feeds it. */
     public static int drillArmorReserve = 15;
     /**
@@ -49,8 +62,17 @@ public final class ConfigSC {
     /** Dimensions the mod's ores and limestone generate in (worldgen is server-side: not synced). */
     public static int[] oreDimensions = {0};
     /** «Есть обновление»: ask the site for the latest version (UpdateCheckSC); which releases to tell about; where. */
+    @com.sc.handler.ConfigSyncSC.ClientOnly
     public static boolean updateCheck = true;
     public static String updateChannel = "beta", updateUrl = UpdateCheckSC.DEFAULT_URL;
+    /** Bridges (section "bridge", docs/plan-ground-bridge.md §10): on at all; Space Bridge trips to other dimensions; EU and gases x this. */
+    public static boolean bridgeEnabled = true, bridgeCrossDimension = true;
+    public static float bridgeCostMultiplier = 1F;
+    /**
+     * The Singular armour and its station (section "singular", SingularStationMath / SingularLevel): modernisation, Б-1
+     * and branch costs - EU and gases apart; process time; level score thresholds. The tables stay in code, scaled.
+     */
+    public static float singularEnergy = 1F, singularGas = 1F, singularTime = 1F, singularScore = 1F;
 
     /** A whole number scaled by a multiplier, at least `min`, capped to an int. */
     public static int scale(int base, float mul, int min) {
@@ -79,7 +101,7 @@ public final class ConfigSC {
                 int veinSize = config.getInt("veinSize", category, ore.defaultVeinSize, 1, 32,
                         "Blocks per vein for " + ore.oreName);
                 int veinsPerChunk = config.getInt("veinsPerChunk", category, 4, 0, 64,
-                        "Attempted veins per chunk for " + ore.oreName + " (TODO: not specified in design doc, defaulted)");
+                        "Attempted veins per chunk / Попыток жил на чанк");
                 ORE_SETTINGS.put(ore, new OreGenSettings(minY, maxY, veinSize, veinsPerChunk));
             }
             oreDimensions = config.get("worldgen", "oreDimensions", new int[] {0},
@@ -103,6 +125,16 @@ public final class ConfigSC {
                     "RTGs and reactors irradiate players nearby: a dose builds up and makes them ill (lead, suits and fields protect)");
             radiationMultiplier = num(config, "multiplier", "radiation", 1F, 0F, 10F,
                     "Every radiation level is multiplied by this (0.5 = half as strong)");
+            String en = "energy";
+            config.setCategoryComment(en, "Overvoltage and overheat explosions / Взрывы от перенапряжения и перегрева");
+            explosions = config.getBoolean("explosions", en, true,
+                    "Overloaded machines explode (off: the block stays, smokes and refuses the energy; cables still burn out)"
+                    + " / Перегруженные машины взрываются (выкл.: блок остаётся, дымит и не принимает энергию; кабели сгорают как раньше)");
+            explosionPower = num(config, "explosionPower", en, 1F, 0.1F, 10F,
+                    "Explosion power, times this / Сила взрыва, множитель");
+            overheatBreaksBlocks = config.getBoolean("overheatBreaksBlocks", en, true,
+                    "An overheat explosion breaks the blocks around (off: it only hurts and knocks back, like overvoltage)"
+                    + " / Взрыв от перегрева ломает блоки вокруг (выкл.: только ранит и отбрасывает, как при перенапряжении)");
             String b = "balance";
             config.setCategoryComment(b, "Multipliers on the mod's balance (1 = as designed). On a server, give the clients the same file"
                     + " so their screens and tooltips show the same numbers.");
@@ -118,12 +150,18 @@ public final class ConfigSC {
             leadSuitPartProtection = config.getInt("leadSuitPartProtection", b, 22, 0, 25,
                     "Radiation each lead suit piece stops, % (4 pieces at 25 = all of it) / Защита от радиации за каждую часть свинцового костюма, %");
             fieldUpkeep = num(config, "fieldUpkeep", b, 1F, 0.1F, 10F, "The field generator's upkeep, times this");
+            fieldClaimCheck = config.getBoolean("fieldClaimCheck", b, true,
+                    "A private field zone can't be switched on over other mods' claims (checked with fake BreakEvents as the owner; off if block loggers or quests count them)"
+                    + " / Приватную зону поля нельзя включить поверх клеймов других модов (проверка ложными BreakEvent от имени владельца; выкл., если их считают логгеры или квесты)");
             quarrySpeed = num(config, "quarrySpeed", b, 1F, 0.1F, 10F, "Quarries and the Exo Drilling Rig dig this many times faster");
             wirelessRange = num(config, "wirelessRange", b, 1F, 0.1F, 10F, "Wireless transmitters reach this many times as far (XV stays unlimited)");
             wirelessLoss = num(config, "wirelessLoss", b, 1F, 0F, 10F, "Wireless loss over distance, times this (0 = no loss)");
             quantumUpkeep = num(config, "quantumUpkeep", b, 1F, 0F, 10F, "The quantum translator pair's upkeep, times this");
             quantumChunkLoading = config.getBoolean("quantumChunkLoading", b, true,
                     "Quantum translators keep their chunks loaded (off: both ends must be loaded by players)");
+            ic2CableCurrentLimit = config.getBoolean("ic2CableCurrentLimit", b, false,
+                    "With IC2: a cable also burns when the current through it stays above its rating (voltage x amps) for a few ticks, not only on overvoltage"
+                    + " / С IC2 кабель сгорает и при превышении тока (напряжение x ток) несколько тиков подряд, а не только при перенапряжении");
             bladeExecutePlayers = config.getBoolean("bladeExecutePlayers", b, false,
                     "The Exo blade's execute (absolute blow below 20% health) works on players too (off: players take the plain blow)"
                     + " / Казнь клинка Экзо действует и на игроков (выкл.: по игроку обычный удар)");
@@ -138,6 +176,26 @@ public final class ConfigSC {
                     "Galacticraft gJ for one EU; 0 = Galacticraft's own rate (16 / 2.44 without it) / gJ Galacticraft за 1 EU; 0 - курс самого Galacticraft");
             converterLoss = config.getInt("lossPercent", cv, 5, 0, 50,
                     "Conversion loss, %; each Efficiency module takes 2 off (at most 2 count) / Потери преобразования, %; модуль КПД снимает 2 (до 2 шт.)");
+            String br = "bridge";
+            config.setCategoryComment(br, "Ground and Space Bridges / Наземный и Космический мосты");
+            bridgeEnabled = config.getBoolean("enabled", br, true,
+                    "Bridges can open (off: every order is refused) / Мосты открываются (выкл.: любой приказ отклоняется)");
+            bridgeCrossDimension = config.getBoolean("crossDimension", br, true,
+                    "The Space Bridge may lead to other dimensions (off: its own dimension only) / Космический мост ведёт в другие измерения (выкл.: только в своё)");
+            bridgeCostMultiplier = num(config, "costMultiplier", br, 1F, 0.1F, 10F,
+                    "EU and gases of opening and holding a bridge, times this / Множитель EU и газов на открытие и удержание моста");
+            String sg = "singular";
+            config.setCategoryComment(sg, "The Singular armour and the Singular Service Station (1 = as designed)"
+                    + " / Сингулярная броня и Сингулярная станция обслуживания (1 - как задумано)");
+            singularEnergy = num(config, "energy", sg, 1F, 0.1F, 10F,
+                    "EU of modernisation, conversion (Б-1), transfer and sync, times this / Множитель EU модернизации, переделки (Б-1), переноса и синхронизации");
+            singularGas = num(config, "gases", sg, 1F, 0.1F, 10F,
+                    "Singular matter, helium, deuterium and krypton of the same processes and of a branch change, times this"
+                    + " / Множитель сингулярной материи, гелия, дейтерия и криптона тех же процессов и смены ветки");
+            singularTime = num(config, "time", sg, 1F, 0.1F, 10F,
+                    "The station's process time, times this / Множитель времени процессов станции");
+            singularScore = num(config, "score", sg, 1F, 0.1F, 10F,
+                    "Points the Singular armour and tools need for each level, times this / Множитель очков на каждый уровень сингулярной брони и инструментов");
         } finally {
             if (config.hasChanged()) {
                 config.save();

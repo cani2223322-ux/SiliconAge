@@ -178,9 +178,25 @@ public final class ArmorKeyBindsSC {
         return sb.toString();
     }
 
+    /**
+     * The key is held with at least the binding's modifiers (a plain F still fires while sprinting / sneaking),
+     * unless another binding on the same key with more of the held modifiers matches better (Ctrl+F beats F).
+     */
     private static boolean isDown(int[] b) {
         boolean key = b[0] < 0 ? Mouse.isButtonDown(b[0] - MOUSE_BASE) : b[0] > 0 && Keyboard.isKeyDown(b[0]);
-        return key && modifiersDown() == b[1];
+        if (!key) {
+            return false;
+        }
+        int held = modifiersDown();
+        if ((held & b[1]) != b[1]) {
+            return false;
+        }
+        for (int[] o : BINDS.values()) {
+            if (o != b && o[0] == b[0] && (held & o[1]) == o[1] && (o[1] & b[1]) == b[1] && o[1] != b[1]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** A function's name for the armour screen, with its tab ("Blade: Sweep", "Mode: Combat"). */

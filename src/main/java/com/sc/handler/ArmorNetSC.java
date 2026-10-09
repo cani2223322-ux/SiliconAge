@@ -155,6 +155,7 @@ public final class ArmorNetSC {
         CHANNEL.registerMessage(ThreatHandler.class, ThreatMessage.class, 3, Side.CLIENT);
         CHANNEL.registerMessage(AnalyzeHandler.class, AnalyzeMessage.class, 4, Side.CLIENT);
         CHANNEL.registerMessage(LevelHandler.class, LevelMessage.class, 5, Side.CLIENT);
+        CHANNEL.registerMessage(BladeHudHandler.class, BladeHudMessage.class, 6, Side.CLIENT);
     }
 
     // ------------------------------------------------------------------ server -> client: the Singular helmet's senses (stage 2b)
@@ -402,6 +403,44 @@ public final class ArmorNetSC {
         }
     }
 
+    /** Server -> client: the Singular blade's HUD values (BladeSingularSC.HUD_*), kept in BladeSingularSC (common code). */
+    public static class BladeHudMessage implements IMessage {
+        public int[] values = new int[0];
+
+        public BladeHudMessage() {
+        }
+
+        public BladeHudMessage(int[] values) {
+            this.values = values;
+        }
+
+        @Override
+        public void fromBytes(ByteBuf buf) {
+            int n = Math.max(0, Math.min(16, buf.readUnsignedByte()));
+            values = new int[n];
+            for (int i = 0; i < n; i++) {
+                values[i] = buf.readUnsignedByte();
+            }
+        }
+
+        @Override
+        public void toBytes(ByteBuf buf) {
+            int n = Math.min(16, values.length);
+            buf.writeByte(n);
+            for (int i = 0; i < n; i++) {
+                buf.writeByte(Math.max(0, Math.min(255, values[i])));
+            }
+        }
+    }
+
+    public static class BladeHudHandler implements IMessageHandler<BladeHudMessage, IMessage> {
+        @Override
+        public IMessage onMessage(BladeHudMessage msg, MessageContext ctx) {
+            com.sc.item.BladeSingularSC.clientSetHud(msg.values);
+            return null;
+        }
+    }
+
     public static class CooldownHandler implements IMessageHandler<CooldownMessage, IMessage> {
         @Override
         public IMessage onMessage(CooldownMessage msg, MessageContext ctx) {
@@ -444,6 +483,11 @@ public final class ArmorNetSC {
         }
     }
 
+    /**
+     * Forge 1.7.10 runs this handler on the server thread already (FMLProxyPacket goes through the vanilla packet
+     * queue). The key functions are still queued (BladeSingularSC.queueTask, SingularPowersSC.key) and run on the
+     * next server tick: one order for every key and a per-player cap (QUEUE_MAX) against a flood of packets.
+     */
     public static class Handler implements IMessageHandler<Message, IMessage> {
         @Override
         public IMessage onMessage(Message msg, MessageContext ctx) {
@@ -457,7 +501,7 @@ public final class ArmorNetSC {
                 case PROFILE_SELECT: case PROFILE_SAVE: case PROFILE_NEXT: {
                     final byte action = msg.action, feature = msg.feature;
                     final boolean value = msg.value;
-                    com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // the world, entities, NBT: on the server thread
+                    com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // capped per player, run on the next server tick
                         @Override
                         public void run() {
                             armorAction(p, action, feature, value);
@@ -469,7 +513,7 @@ public final class ArmorNetSC {
                     final com.sc.util.BladeFeature f = com.sc.util.BladeFeature.of(msg.feature);
                     final boolean on = msg.value;
                     if (f != null) {
-                        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // the tool's NBT: on the server thread
+                        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // capped per player, next server tick
                             @Override
                             public void run() {
                                 ItemStack blade = com.sc.item.BladeLogicSC.held(p);
@@ -504,7 +548,7 @@ public final class ArmorNetSC {
                 case DRILL_MODE:
                     if (com.sc.util.ToolLevelSC.isDrill(com.sc.item.DrillLogicSC.held(p)) && step(msg.feature) != 0) {
                         final int delta = step(msg.feature);
-                        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // the world / NBT: on the server thread
+                        com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {    // capped per player, next server tick
                             @Override
                             public void run() {
                                 com.sc.item.DrillLogicSC.cycleMode(p, delta);
@@ -543,7 +587,7 @@ public final class ArmorNetSC {
                     drillAction(p, com.sc.util.DrillFeature.LASER);
                     break;
                 case GRAV_PRESS: case GRAV_GRAB: case TIME_SLOW: case BLACK_HOLE: case GRAV_DOME: case SINGULARITY:
-                    com.sc.item.SingularPowersSC.key(p, featureOfAction(msg.action));   // queued: run on the server thread
+                    com.sc.item.SingularPowersSC.key(p, featureOfAction(msg.action));   // queued (capped per player): the next world tick
                     break;
                 default:
                     break;
@@ -552,7 +596,7 @@ public final class ArmorNetSC {
         }
     }
 
-    /** Server thread (queued by the handler): the suit's own actions - they touch the world, entities and NBT. */
+    /** Queued by the handler, run on the next server tick: the suit's own actions - they touch the world, entities and NBT. */
     private static void armorAction(EntityPlayerMP p, byte action, byte feature, boolean value) {
         switch (action) {
             case TOGGLE: {
@@ -581,7 +625,11 @@ public final class ArmorNetSC {
                 ArmorLogicSC.annihilate(p);
                 break;
             case REMOVE_CHIPS:
-                com.sc.item.ItemArmorChipSC.removeAll(p);
+                if (feature >= 1 && feature <= com.sc.util.ChipType.values().length) {
+                    com.sc.item.ItemArmorChipSC.removeOne(p, com.sc.util.ChipType.values()[feature - 1]);   // ordinal + 1: that one chip
+                } else {
+                    com.sc.item.ItemArmorChipSC.removeAll(p);   // 0: every chip
+                }
                 break;
             case GLOW_COLOR: {
                 for (int i = 0; i < 4; i++) {
@@ -636,7 +684,7 @@ public final class ArmorNetSC {
         }
     }
 
-    /** A drill key function: the same checks - queued, run on the server thread (it digs). */
+    /** A drill key function: the same checks - queued (capped per player), run on the next server tick (it digs). */
     private static void drillAction(final EntityPlayerMP p, final com.sc.util.DrillFeature f) {
         if (f == null || !f.isAction()) {
             return;

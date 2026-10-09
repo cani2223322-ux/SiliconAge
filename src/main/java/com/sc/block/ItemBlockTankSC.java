@@ -56,6 +56,9 @@ public class ItemBlockTankSC extends ItemBlock {
         PickaxeOnlySC.tooltip(list);
         if (com.sc.util.TooltipSC.ctrl()) {
             com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tank.tooltip.howto"), "\u00a77");
+            if (fluid != null) {                    // those crafts take only an empty tank
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tank.tooltip.craftempty"), "\u00a77");
+            }
         } else {
             com.sc.util.TooltipSC.hintUse(list);
         }

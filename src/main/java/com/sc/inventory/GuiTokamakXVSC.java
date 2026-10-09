@@ -790,6 +790,9 @@ public class GuiTokamakXVSC extends GuiContainer {
             if (gen.isPortTaken()) {
                 add(k, l, 2, Lang.tr("sc.gui.xv.st.porttaken"));
             }
+            if (gen.isNearBuild()) {
+                add(k, l, 2, Lang.tr("sc.gui.big.st.nearbuild"));
+            }
             if (walls() < 24 || sc[3] > 0) {
                 add(k, l, 2, Lang.tr("sc.gui.big.st.needshell", 24 - walls() + sc[3]));
             }

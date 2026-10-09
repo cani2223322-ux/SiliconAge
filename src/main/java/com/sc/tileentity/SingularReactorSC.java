@@ -285,6 +285,8 @@ public class SingularReactorSC {
 
     // the last scan (not saved but portMem)
     private boolean ready, frozen, scanned, portTaken;
+    /** Another XV or Singular build next to this one (they'd share walls): not lit while it stands there. */
+    private boolean nearBuild;
     private final int[] walls = new int[3], ports = new int[3], junk = new int[3];
     private int coils, capMissing, tanks, stores, weak;
     private long capTop, capBottom;
@@ -355,6 +357,10 @@ public class SingularReactorSC {
 
     public boolean isPortTaken() {
         return portTaken;
+    }
+
+    public boolean isNearBuild() {
+        return nearBuild;
     }
 
     /** The hole exists (running, being eaten, or about to be thrown out). */
@@ -469,7 +475,7 @@ public class SingularReactorSC {
 
     /** Everything is there to press "Lighting" (the charge may still be missing from the storages - see chargeOk). */
     public boolean canLight() {
-        return phase == PHASE_IDLE && event == EVENT_NONE && ready && portFluid[0] >= HE_START && portFluid[1] >= D_IGNITION
+        return phase == PHASE_IDLE && event == EVENT_NONE && ready && !nearBuild && portFluid[0] >= HE_START && portFluid[1] >= D_IGNITION
                 && hasCapsule() && chargeOk();
     }
 
@@ -1125,6 +1131,7 @@ public class SingularReactorSC {
         storeRoom = room;
         portTaken = taken;
         g.holdPortsSC();
+        nearBuild = phase == PHASE_IDLE && TileEntityGeneratorSC.otherBuildNear(w, x0, y0, z0, 2, g);   // checked for the lighting only
         ready = coilBits == 0xFFFF && wl[0] == 0xFFFFFF && wl[1] == 0xFFFFFF && wl[2] == 0xFFFFFF && caps == 0
                 && jk[0] == 0 && jk[1] == 0 && jk[2] == 0 && nStores > 0 && nWeak == 0;
         for (int i = 0; i < 3; i++) {
@@ -1140,7 +1147,7 @@ public class SingularReactorSC {
     public int[] sync() {
         int[] v = new int[SYNC];
         v[0] = phase | event << 3 | feedMode << 5 | (auto ? 128 : 0) | (ready ? 256 : 0) | (heShort ? 512 : 0) | (dShort ? 1024 : 0)
-                | (noCapsule ? 2048 : 0) | (portTaken ? 4096 : 0) | (frozen ? 8192 : 0);
+                | (noCapsule ? 2048 : 0) | (portTaken ? 4096 : 0) | (frozen ? 8192 : 0) | (nearBuild ? 16384 : 0);
         v[1] = (int) Math.round(mass * 1000000);
         v[2] = Math.round(containment * 100);
         v[3] = phaseTicks;
@@ -1195,6 +1202,7 @@ public class SingularReactorSC {
         noCapsule = (v[0] & 2048) != 0;
         portTaken = (v[0] & 4096) != 0;
         frozen = (v[0] & 8192) != 0;
+        nearBuild = (v[0] & 16384) != 0;
         mass = v[1] / 1000000.0;
         containment = v[2] / 100F;
         phaseTicks = v[3];

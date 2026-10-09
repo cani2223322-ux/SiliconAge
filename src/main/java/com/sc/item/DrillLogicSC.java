@@ -57,8 +57,9 @@ import net.minecraftforge.oredict.OreDictionary;
  * dimension, SM a stack), drain (water / lava in and around the dug zone removed - the armour has no water / lava
  * tanks, so it is just gone), replace (the block in the hotbar slot right of the drill goes where one was dug), the
  * phase dig (its key: the ore looked at through rock) - and the black hole mode (Shift + wheel: cycleMode, sizes and
- * the depth 1 / 3 in one cycle; the depth alone: Shift + right-click in the air or the black hole's key, toggleDepth): everything in the zone destroyed, no
- * drops, no XP, singularity crumbs for the natural blocks instead. Its gases come from the worn armour (ToolGasSC);
+ * the depth 1 / 3 in one cycle; the depth alone: Shift + right-click in the air, toggleDepth; its key: the mode
+ * off / on, back to the last zone, ItemDrillSC.setEnabled): everything in the zone destroyed, no drops, no XP,
+ * singularity crumbs for the natural blocks instead. Its gases come from the worn armour (ToolGasSC);
  * 1 level point per BLOCKS_PER_POINT blocks it digs in any mode. Branches: Miner (lv 3: +25% speed, no 12x12
  * cooldown; lv 5: an 11x11 funnel), Prospector (lv 3: the phase dig reaches 12; lv 5: fortune VI, veins up to 256).
  * Full Singular suit: the drill's heat goes into the suit (its helium loop), cooldowns -25% (ToolLevelSC).
@@ -1096,7 +1097,7 @@ public final class DrillLogicSC {
 
     /**
      * A drill key function (DRILL_ACTION): the laser, the phase dig (their switches are safety catches); the black
-     * hole's key toggles its depth. Functions the drill lacks or its level hasn't opened do nothing.
+     * hole's key is a plain toggle (DRILL_TOGGLE). Functions the drill lacks or its level hasn't opened do nothing.
      */
     public static void action(EntityPlayerMP p, DrillFeature f) {
         ItemStack drill = held(p);
@@ -1109,9 +1110,6 @@ public final class DrillLogicSC {
                 break;
             case PHASE_DIG:
                 phaseDig(p);
-                break;
-            case BLACK_HOLE:
-                toggleDepth(p);
                 break;
             default:
                 break;
@@ -1135,7 +1133,7 @@ public final class DrillLogicSC {
         p.inventoryContainer.detectAndSendChanges();
     }
 
-    /** The black hole's depth: 1 <-> 3 (a tunnel). Shift + right-click in the air with the drill, or the black hole's key. */
+    /** The black hole's depth: 1 <-> 3 (a tunnel). Shift + right-click in the air with the drill. */
     public static void toggleDepth(EntityPlayer p) {
         ItemStack drill = held(p);
         if (!ToolLevelSC.isDrill(drill) || p.worldObj.isRemote) {

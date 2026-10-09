@@ -20,8 +20,8 @@ import net.minecraftforge.fluids.FluidStack;
  * unobtainable, which in turn blocked practically every component, machine and cable recipe -
  * Ore Washer and Centrifuge existed purely as empty blocks for the same reason.
  *
- * Ore -> Crusher -> crushedOre x2 -> [Ore Washer + water -> purifiedCrushedOre] -> Centrifuge ->
- * dust (+ §11.2's chanced by-product) -> Furnace -> ingot.
+ * Ore -> Crusher -> crushedOre x2 -> [Ore Washer + water -> purifiedCrushedOre (+ a chanced extra
+ * dust)] -> Centrifuge -> dust (+ §11.2's chanced by-product, + a chanced second dust) -> Furnace -> ingot.
  *
  * TODO(§4): several metals are specified with much longer real-chemistry routes - Ti via
  * TiCl4/Kroll, W via WO3 + H2 reduction, Ge via a Zone Refiner, Al via Chem Reactor + Calciner.
@@ -37,6 +37,13 @@ public final class ModRecipesOreProcessing {
     private static final int WASHER_TICKS = 150;
     private static final int CENTRIFUGE_TICKS = 250;
     private static final int WASH_WATER_MB = 1000;
+    /**
+     * РЦ-5, IC2-style: the washer's chance of a whole extra dust of the main metal (the main metals
+     * have no tiny dust form), and the centrifuge's of a second one. A block through the whole chain
+     * then gives ~2.5 ingots (2.2 where there is no washing step) instead of the crusher's flat 2.
+     */
+    private static final float WASH_BONUS = 0.15f;
+    private static final float CENTRIFUGE_BONUS = 0.10f;
 
     private ModRecipesOreProcessing() {
     }
@@ -102,6 +109,40 @@ public final class ModRecipesOreProcessing {
         registerMagnesium();
         registerTitanium();
         registerVanillaOres();
+        registerByproductUses();
+    }
+
+    /**
+     * РЦ-1: consumers for the chain's by-products that nothing else used. Germanium: IR optics (two
+     * lenses from one ingot) and an IR detector (a sensor without the focus lens' diamond). Indium:
+     * the ITO coat of a GaAs panel (one wafer less). Zinc: galvanised steel pipe (twice the pipe).
+     * Palladium: the refinery's polymer catalyst, as platinum. Cerium / lanthanum: a cracking
+     * catalyst - more diesel from the same crude.
+     */
+    private static void registerByproductUses() {
+        ItemStack ge = ModItems.ingot.stackOf(Material.GERMANIUM);
+        ItemStack lens = new ItemStack(ModItems.component("lens"));
+        OreRecipes.shapeless(new ItemStack(ModItems.component("lens"), 2), Blocks.glass, Blocks.glass, ge);
+        OreRecipes.shapeless(new ItemStack(ModItems.component("sensor")),
+                ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.DIE), lens, ge);
+        ItemStack wafer = ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.GAAS_WAFER);
+        OreRecipes.shapeless(ModBlocks.generatorStack(com.sc.energy.GeneratorType.SOLAR_GAAS, 1),
+                wafer, wafer, wafer, ModItems.ingot.stackOf(Material.INDIUM), new ItemStack(ModItems.component("tiFrame")),
+                new ItemStack(ModBlocks.cableSC, 1, com.sc.energy.CableType.TUNGSTEN.ordinal()));
+        ItemStack steel = ModItems.ingot.stackOf(Material.STEEL);
+        OreRecipes.shaped(new ItemStack(ModBlocks.pipeSC, 2, com.sc.util.PipeType.STEEL.ordinal()), " X ", "XZX", " X ",
+                'X', steel, 'Z', ModItems.ingot.stackOf(Material.ZINC));
+        RecipeRegistry.register(new MachineRecipe(MachineType.REFINERY,
+                new ItemStack[]{ModItems.dust.stackOf(Material.PALLADIUM)}, new FluidStack(ModFluids.crudeOil, 1000), null,
+                new ItemStack[]{new ItemStack(ModItems.component("polymerPlate"), 2), new ItemStack(ModItems.component("ptfeSheet"), 2)},
+                new FluidStack(ModFluids.photoresist, 500), null,
+                500, 0f));
+        for (Material m : new Material[]{Material.CERIUM, Material.LANTHANUM}) {
+            RecipeRegistry.register(new MachineRecipe(MachineType.REFINERY,
+                    new ItemStack[]{ModItems.dust.stackOf(m)}, new FluidStack(ModFluids.crudeOil, 1000), null,
+                    new ItemStack[]{new ItemStack(ModItems.rubber, 3)}, new FluidStack(ModFluids.diesel, 800), null,
+                    500, 0f));
+        }
     }
 
     /**
@@ -128,11 +169,11 @@ public final class ModRecipesOreProcessing {
                     new ItemStack[]{stack(ModItems.crushedOre, metal, 1)},
                     new FluidStack(FluidRegistry.WATER, WASH_WATER_MB), null,
                     new ItemStack[]{stack(ModItems.purifiedCrushedOre, metal, 1)}, null, null,
-                    WASHER_TICKS, 0f));
+                    WASHER_TICKS, 0f, new ItemStack[]{ModItems.dust.stackOf(metal)}, new float[]{WASH_BONUS}));
             RecipeRegistry.register(new MachineRecipe(MachineType.CENTRIFUGE,
                     new ItemStack[]{stack(ModItems.purifiedCrushedOre, metal, 1)}, null, null,
                     new ItemStack[]{ModItems.dust.stackOf(metal)}, null, null,
-                    CENTRIFUGE_TICKS, 0f, traces, chances));
+                    CENTRIFUGE_TICKS, 0f, withBonus(traces, ModItems.dust.stackOf(metal)), withBonus(chances, CENTRIFUGE_BONUS)));
             GameRegistry.addSmelting(ModItems.crushedOre.stackOf(metal), ingot.copy(), 0.3F);
             GameRegistry.addSmelting(ModItems.purifiedCrushedOre.stackOf(metal), ingot.copy(), 0.3F);
             GameRegistry.addSmelting(ModItems.dust.stackOf(metal), ingot.copy(), 0.3F);
@@ -204,11 +245,19 @@ public final class ModRecipesOreProcessing {
         ItemStack centrifugeInput = stack(ModItems.crushedOre, yield.main, 1);
         if (yield.main.hasPurifiedCrushedOre) {
             ItemStack purified = stack(ModItems.purifiedCrushedOre, yield.main, 1);
+            // РЦ-5: a chance of an extra main dust, and now and then the first trace (at half its centrifuge chance)
+            ItemStack[] wash = {ModItems.dust.stackOf(yield.main)};
+            float[] washChance = {WASH_BONUS};
+            if (yield.traces.length > 0) {
+                Material trace = yield.traces[0];
+                wash = withBonus(wash, stack(trace.hasTinyDust ? ModItems.dustTiny : ModItems.dust, trace, 1));
+                washChance = withBonus(washChance, yield.chances[0] / 2f);
+            }
             RecipeRegistry.register(new MachineRecipe(MachineType.ORE_WASHER,
                     new ItemStack[]{stack(ModItems.crushedOre, yield.main, 1)},
                     new FluidStack(FluidRegistry.WATER, WASH_WATER_MB), null,
                     new ItemStack[]{purified}, null, null,
-                    WASHER_TICKS, 0f));
+                    WASHER_TICKS, 0f, wash, washChance));
             centrifugeInput = stack(ModItems.purifiedCrushedOre, yield.main, 1);
         }
 
@@ -223,7 +272,21 @@ public final class ModRecipesOreProcessing {
         RecipeRegistry.register(new MachineRecipe(MachineType.CENTRIFUGE,
                 new ItemStack[]{centrifugeInput}, null, null,
                 new ItemStack[]{stack(ModItems.dust, yield.main, 1)}, null, null,
-                CENTRIFUGE_TICKS, 0f, traces, yield.chances));
+                CENTRIFUGE_TICKS, 0f, withBonus(traces, stack(ModItems.dust, yield.main, 1)), withBonus(yield.chances, CENTRIFUGE_BONUS)));
+    }
+
+    private static ItemStack[] withBonus(ItemStack[] in, ItemStack extra) {
+        ItemStack[] out = new ItemStack[in.length + 1];
+        System.arraycopy(in, 0, out, 0, in.length);
+        out[in.length] = extra;
+        return out;
+    }
+
+    private static float[] withBonus(float[] in, float extra) {
+        float[] out = new float[in.length + 1];
+        System.arraycopy(in, 0, out, 0, in.length);
+        out[in.length] = extra;
+        return out;
     }
 
     /**

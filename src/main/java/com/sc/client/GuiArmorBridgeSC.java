@@ -12,6 +12,7 @@ import com.sc.manual.Lang;
 import com.sc.util.ArmorFeature;
 import com.sc.util.SingularLevel;
 
+import net.minecraft.client.settings.GameSettings;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 
@@ -299,11 +300,14 @@ public class GuiArmorBridgeSC extends GuiBridgeFarSC {
         } else {
             fit(whereLine(), 6, 191, 296, TEXT);
             Object[] pl = planLine();
-            small((String) pl[0] + ((Integer) pl[1] == OK ? "  " + Lang.tr("sc.bridge.armour.precise", BridgeMathSC.ARMOUR_DISCOUNT) : ""), 6, 203, 296,
+            NBTTagCompound pb = bridge();
+            // the armour discount only applies when one end is your near end (pct from the server)
+            int pct = pb == null ? 0 : pb.getInteger("pct");
+            small((String) pl[0] + ((Integer) pl[1] == OK && pct > 0 ? "  " + Lang.tr("sc.bridge.armour.precise", pct) : ""), 6, 203, 296,
                     (Integer) pl[1]);
         }
-        small(Lang.tr("sc.bridge.armour.keys", keyName(ArmorClientSC.KEY_BRIDGE_HOME), keyName(ArmorClientSC.KEY_BRIDGE_LAST),
-                keyName(ArmorClientSC.KEY_BRIDGE_LAST)), 6, 232, 296, DIM);
+        small(Lang.tr("sc.bridge.armour.keys", keyName(ArmorClientSC.KEY_BRIDGE_HOME), keyName(ArmorClientSC.KEY_BRIDGE_LAST), markKey()), 6, 232, 296,
+                DIM);
         if (lastMsg != null && System.currentTimeMillis() - lastMsgAt < 15000) {
             small(lastMsg.text(), 6, 241, 460, WARN);
         } else {
@@ -314,7 +318,22 @@ public class GuiArmorBridgeSC extends GuiBridgeFarSC {
     }
 
     private static String keyName(net.minecraft.client.settings.KeyBinding k) {
-        return k == null || k.getKeyCode() == 0 ? "-" : Keyboard.getKeyName(k.getKeyCode());
+        return bound(k) ? GameSettings.getKeyDisplayString(k.getKeyCode()) : "-";
+    }
+
+    private static boolean bound(net.minecraft.client.settings.KeyBinding k) {
+        return k != null && k.getKeyCode() != 0;
+    }
+
+    /** «Remember the spot»: its own key if bound, else Shift+last target, else a hint to bind one. */
+    private static String markKey() {
+        if (bound(ArmorClientSC.KEY_BRIDGE_MARK)) {
+            return keyName(ArmorClientSC.KEY_BRIDGE_MARK);
+        }
+        if (bound(ArmorClientSC.KEY_BRIDGE_LAST)) {
+            return "Shift+" + keyName(ArmorClientSC.KEY_BRIDGE_LAST);
+        }
+        return Lang.tr("sc.bridge.armour.keys.unbound");
     }
 
     private void drawRight() {

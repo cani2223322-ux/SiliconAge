@@ -592,8 +592,19 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         for (int k = 0; list != null && k < list.tagCount(); k++) {
             NBTTagCompound t = list.getCompoundTagAt(k);
             int i = t.getByte("Slot");
-            if (i >= 0 && i < UPGRADE_SLOTS) {
-                upgradeSlots[i] = ItemStack.loadItemStackFromNBT(t);
+            ItemStack s = ItemStack.loadItemStackFromNBT(t);
+            if (s == null) {
+                continue;
+            }
+            UpgradeType type = s.getItem() instanceof com.sc.item.ItemUpgradeSC ? com.sc.item.ItemUpgradeSC.typeOf(s) : null;
+            // Overdrive / Splitter already in stay put where IC2 without Industrial Upgrade refuses new ones
+            boolean kept = type == UpgradeType.OVERDRIVE
+                    || (type == UpgradeType.OUTPUT_SPLITTER && !overdriveWorks() && !(this instanceof TileEntityChargePadSC));
+            if (i >= 0 && i < UPGRADE_SLOTS && (acceptsUpgradeHere(s) || kept)) {
+                upgradeSlots[i] = s;
+            } else if (worldObj != null && !worldObj.isRemote) {
+                // СХ-4: a module this block can't use (a storage-only one in a charge pad) drops beside it
+                worldObj.spawnEntityInWorld(new net.minecraft.entity.item.EntityItem(worldObj, xCoord + 0.5, yCoord + 1.0, zCoord + 0.5, s));
             }
         }
         markDirty();

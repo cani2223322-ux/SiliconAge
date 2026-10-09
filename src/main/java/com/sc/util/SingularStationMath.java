@@ -23,6 +23,9 @@ package com.sc.util;
  * and CONVERT_MATERIALS (items, taken whole at the start and given back whole on «Отменить»);
  * several pieces at once - summed, the longest time. No set discount, no resonance EU discount
  * (stabilisers and resonance only speed it up).
+ *
+ * The tables are as designed; ConfigSC's "singular" multipliers scale them where they are read: EU (singularEnergy),
+ * the gases (singularGas, BRANCH_SM too - branchSm()) and the ticks (singularTime). minutes() stays the table's.
  */
 public final class SingularStationMath {
 
@@ -47,7 +50,7 @@ public final class SingularStationMath {
     public static final int RESONANCE_EU_PERCENT = 90, RESONANCE_SPEED_PERCENT = 30;
     /** Stabilisers: +25% speed each, at most 4 counted. */
     public static final int STABILISER_PERCENT = 25, MAX_STABILISERS = 4;
-    /** Ф3: a branch change costs this much singular matter, mB. */
+    /** Ф3: a branch change costs this much singular matter, mB (the table's; branchSm() is what is paid). */
     public static final int BRANCH_SM = 100;
     /** Ф4: the transfer pays this share (percent) of the rows. */
     public static final int TRANSFER_PERCENT = 50;
@@ -77,6 +80,26 @@ public final class SingularStationMath {
         {2, 0, 2, 0, 2, 0, 0},
     };
 
+    /** Ф3: what a branch change costs now, mB - BRANCH_SM x the config's gas multiplier. */
+    public static int branchSm() {
+        return ConfigSC.scale(BRANCH_SM, ConfigSC.singularGas, 1);
+    }
+
+    /** A cost row x the config's multipliers (EU / the gases), in place; a zero stays zero. */
+    private static long[] scaled(long[] r) {
+        for (int i = 0; i < RESOURCES; i++) {
+            if (r[i] > 0) {
+                r[i] = ConfigSC.scale(r[i], i == R_EU ? ConfigSC.singularEnergy : ConfigSC.singularGas);
+            }
+        }
+        return r;
+    }
+
+    /** `minutes` of the table as ticks x the config's time multiplier (0: 0). */
+    private static int ticks(int minutes) {
+        return minutes <= 0 ? 0 : ConfigSC.scale(minutes * TICKS_PER_MINUTE, ConfigSC.singularTime, 1);
+    }
+
     /** Б-1: the cost of converting the Exo pieces of `mask` (bit per armour type) at once - the pieces' rows summed. */
     public static long[] convertCost(int mask) {
         long[] out = new long[RESOURCES];
@@ -87,7 +110,7 @@ public final class SingularStationMath {
                 }
             }
         }
-        return out;
+        return scaled(out);
     }
 
     /** Ticks at speed 1: the longest piece. */
@@ -98,7 +121,7 @@ public final class SingularStationMath {
                 m = Math.max(m, CONVERT_MINUTES[t]);
             }
         }
-        return m * TICKS_PER_MINUTE;
+        return ticks(m);
     }
 
     /** The materials the pieces of `mask` need, summed: count per M_* kind. */
@@ -152,11 +175,11 @@ public final class SingularStationMath {
         if (toolKind(tool)) {
             System.arraycopy(TOOL_CONVERT[tool - 1], 0, out, 0, RESOURCES);
         }
-        return out;
+        return scaled(out);
     }
 
     public static int toolConvertTicks(int tool) {
-        return toolKind(tool) ? TOOL_CONVERT_MINUTES[tool - 1] * TICKS_PER_MINUTE : 0;
+        return toolKind(tool) ? ticks(TOOL_CONVERT_MINUTES[tool - 1]) : 0;
     }
 
     public static int[] toolConvertMaterials(int tool) {
@@ -205,7 +228,7 @@ public final class SingularStationMath {
     }
 
     public static int toolModerniseTicks(int tool, int level) {
-        return toolKind(tool) ? minutes(level) * TICKS_PER_MINUTE : 0;
+        return toolKind(tool) ? ticks(minutes(level)) : 0;
     }
 
     /** Crumbs the drill's modernisation takes when `have` lie in the slots and its SM part is `drillSm`: at most 50% of it. */
@@ -236,13 +259,13 @@ public final class SingularStationMath {
     private SingularStationMath() {
     }
 
-    /** The whole set's row for going from `level` (1..4) to the next; zeros otherwise. */
+    /** The whole set's row for going from `level` (1..4) to the next (x the config's multipliers); zeros otherwise. */
     public static long[] row(int level) {
         long[] out = new long[RESOURCES];
         if (level >= 1 && level <= 4) {
             System.arraycopy(TABLE[level - 1], 0, out, 0, RESOURCES);
         }
-        return out;
+        return scaled(out);
     }
 
     public static int minutes(int level) {
@@ -301,7 +324,7 @@ public final class SingularStationMath {
         for (int lvl : levels) {
             m = Math.max(m, minutes(lvl));
         }
-        return m * TICKS_PER_MINUTE;
+        return ticks(m);
     }
 
     /** Some piece goes 4 -> 5: the Singular core is needed. */
@@ -346,7 +369,7 @@ public final class SingularStationMath {
         for (int l = 1; l < donorLevel && l <= 4; l++) {
             m += minutes(l);
         }
-        return m * TICKS_PER_MINUTE / 2;
+        return ticks(m) / 2;
     }
 
     /** The highest level among `levels` (0 = no piece). */
@@ -386,7 +409,7 @@ public final class SingularStationMath {
             }
             m = Math.max(m, s);
         }
-        return m * TICKS_PER_MINUTE;
+        return ticks(m);
     }
 
     /** Cancelling: half of what was drawn comes back (rounded down). */

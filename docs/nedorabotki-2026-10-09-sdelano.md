@@ -1,0 +1,277 @@
+# Недоработки: что сделано (2026-10-09)
+
+Реализованы варианты, выбранные по отчёту `audit-2026-10-08-nedorabotki.md`. Формат: код, выбранный вариант, что изменилось.
+
+- **МШ-1 (Б)** Выключенная или остановленная редстоуном машина больше не затягивает сырьё из соседних инвентарей и баков, а выталкиватель по-прежнему выгружает продукцию.
+- **МШ-2 (А)** Воронки и трубы кладут сгусток сингулярности в компрессор только в жидком режиме, а затягиватель компрессора в жидком режиме теперь берёт сгустки; руками сгусток можно положить как раньше.
+- **МШ-3 (А)** Компрессор материи больше не принимает блоки с тайл-энтити любых модов (машины, сундуки и т.п.) и алмазные инструменты, оружие и броню.
+- **МШ-4 (А)** Модуль качества больше нельзя поставить в машину, у которой нет рецептов с шансом брака; уже стоящие модули остаются на месте.
+- **МШ-5 (А)** Подсказка шкалы нагрева машин больше не обещает взрыв: на 100 машина встаёт на паузу, пока не остынет до 70, а брак этой операции удваивается.
+- **МШ-6 (Б)** Подсказка модуля по Ctrl теперь перечисляет все места, куда он ставится (машины, генераторы, накопители, генератор поля), - форсаж, экономайзер и радиационная защита больше не «кладутся в машину».
+- **МШ-7 (А)** Затягиватель не перебирает слоты соседних инвентарей, когда входы машины уже не могут принять ни одного предмета, что снижает нагрузку на сервер.
+- **МШ-8 (А)** Электро- и индукционная печь, затягиватель и проверка слотов подхватывают новые и удалённые печные рецепты (например, после /mt reload) без перезапуска игры.
+- **МШ-9 (А)** Индукционная печь с включённым «Подогревом» держит тепло и при полном выходе, расходуя энергию на подогрев; статус остаётся «выход полон».
+- **МШ-10 (А)** Станция улучшения больше не рисует «лестницу брони» (Нано > Квант > Экзо) для сборочных рецептов вроде термоядерного ядра и универсального трансформатора - вместо неё надпись «Сборка».
+- **МШ-11 (А)** Если машине нечего отдать в ведро или ячейку в руке и нечего из них принять, ПКМ открывает её экран, а не пишет «пусто» в чат (например, заполнитель капсул с пустыми вёдрами).
+- **МШ-12 (Б)** Разобранная машина сохраняет в предмете режим батарейного слота, «Подогрев» индукционной печи и прогресс капсулы компрессора материи; нагрев индукционной печи по-прежнему сбрасывается.
+- **ГН-1 (А)** Газовая турбина теперь тратит 2 мБ водорода в тик вместо 20 (64 EU с 1 мБ): на водороде из галита она выходит в небольшой плюс, но остаётся слабее Топливного элемента.
+- **ГН-2 (А)** Стабильность Токамака XV теперь считается как восстановление минус штраф форсажа (+1 - 0,5 за модуль в секунду): с 1-2 форсажами она держится или растёт, с 3-4 падает.
+- **ГН-3 (Б)** Сломанный горящий Токамак XV гаснет: в предмете остаются только бланкет, ячейка и заряд розжига, в новой постройке нужен новый розжиг.
+- **ГН-4 (А)** Токамак XV без дейтерия больше не стоит на бесплатной паузе: гелий тратится и стабильность считается, так что без гелия или с нарушенной оболочкой он гаснет или срывается.
+- **ГН-5 (А)** Бланкет Токамака XV изнашивается по мощности (вдвое быстрее только на полной), при полных накопителях почти не тратится.
+- **ГН-6 (А)** Токамак XV не зажигается, если в зоне его постройки плюс блок стоит другой Токамак XV или Сингулярный реактор: общие стены, крышка и дно больше не работают.
+- **ГН-7 (Б)** Модуль расширения бака теперь ставится только в генераторы с баками (жидкотопливные, на двух жидкостях, Экзо-реактор).
+- **ГН-8 (Б)** Сингулярный реактор при разборке сохраняет режим подачи, «Авто» и защёлку аварии; горящий кусок топлива по-прежнему теряется, как у печи.
+- **ГН-9 (А)** Жидкотопливные генераторы и генераторы на двух жидкостях дожигают остаток топлива меньше порции на такт с пропорционально меньшей выдачей, бак опустошается до конца.
+- **ГН-10 (А)** Вспышка излучения при срыве Токамака XV теперь проходит сквозь свинцовые стены, как у Сингулярного реактора.
+- **КР-1 (А)** Удача в карьере теперь работает и на руды, которые выпадают самим блоком (железо, золото, руды мода): при включённом дроблении выход дробления умножается на случайный множитель 1..(1+уровень удачи), как у экзо-установки.
+- **КР-2 (А)** На вкладке «Линзы» экзо-установки появился блок «Поднято» - какие руды и сколько уже поднято; данные обновляются раз в 3 секунды, пока меню открыто.
+- **КР-3 (А)** У экзо-установки кнопка режима фильтра перебирает только три режима: всё, только эти, всё кроме этих (режим «только руда» у неё ничем не отличался от «всё»).
+- **КР-4 (А)** Кнопки уровня удачи карьера больше не «молчат»: уровень ограничен числом модулей удачи, и первое нажатие «-» сразу снижает показанный уровень.
+- **КР-5 (А)** Владелец карьера теперь определяется по UUID: после смены ника доступ сохраняется (имя в карьере обновляется), а игрок, занявший старый ник, доступа не получает.
+- **КР-6 (А)** Карьер с владельцем может сломать только владелец или оператор сервера; чужим игрокам он не поддаётся.
+- **КР-7 (А)** Тексты карьера уточнены: в подсказке модулей перечислены все 24 модуля, утилизатор упоминает дёрн, удержание чанков - что без энергии и при полном буфере чанки отпускаются через 10 с, линзы руды - x5/x9 и x7/x13 со стабилизатором, статус «нет области» - карту из другого измерения.
+- **КР-8 (А)** В режиме «Оставлять: как было» фильтр добычи больше не отключается: карьер копает только руду, которая проходит фильтр («только эти» / «кроме этих»).
+- **КР-9 (А)** На главной вкладке экзо-установки рядом со строкой воды для промывки появилась кнопка «Вылить» (с подсказкой о цене в EU).
+- **КР-10 (А)** Вкладка «Область» карьера показывает реальный размер (не больше максимума от модулей радиуса); у круга строка X подписана «Диаметр», а неиспользуемые строки и кнопки размера у круга и шахты 1x1 затемнены и отключены.
+- **КР-11 (А)** WAILA на карьере показывает статус, текущий и нижний слой и владельца, а на экзо-буровой - рейсы в секунду; лишняя строка «Выключен» у карьера убрана (это видно в статусе).
+- **КР-12 (А)** Глубинный сканер буровой установки: руды других модов теперь вместе занимают фиксированные 25% рейсов (вес делится между ними поровну), поэтому большая сборка больше не вытесняет руды мода.
+- **ПЛ-1 (Б)** На вкладке «Доступ» генератора поля появился переключатель «Запретить механизмы»: при включённой приватной зоне чужие игроки не могут пользоваться дверями, люками, калитками, рычагами, кнопками, повторителями, компараторами и кроватями внутри поля.
+- **ПЛ-2 (Б)** Приватное поле теперь защищает животных, жителей и големов от стрел и зелий чужих игроков (урон просто отменяется, снаряды не отражаются), а стрелы и снежки чужаков, летящие в рамки, картины, вагонетки и лодки внутри зоны, гаснут; PvP не затронут.
+- **ПЛ-3 (А)** Любой узел генератора поля с владельцем могут сломать только владелец, игроки из его списка доступа и операторы сервера - где бы ни была зона.
+- **ПЛ-4 (А)** Поле больше нельзя развернуть поверх зоны чужого поля, даже если то сейчас выключено нехваткой энергии или редстоуном или стоит в незагруженном чанке: зоны всех включённых полей хранятся в реестре мира.
+- **ПЛ-5 (А)** При связывании все узлы кластера должны стоять не дальше 16 блоков от главного узла по каждой оси, так что цепочкой связей кластер больше не растягивается; уже построенные кластеры остаются как есть.
+- **ПЛ-6 (А)** WAILA на генераторе поля показывает, главный это узел или обычный (с координатами главного), состояние поля (работает / нет энергии / выключено редстоуном / выключено / рядом чужое поле), форму, число узлов и владельца; у узла вместо пустого собственного буфера - заряд главного узла (или ничего, если его чанк не загружен).
+- **ПЛ-7 (Б)** У модуля связи поля появилась подсказка (сводка, Shift, Ctrl) со строкой выбранного узла, предмет светится, пока выбран первый узел, а повторный клик по тому же генератору просит выбрать другой и не сбрасывает выбор.
+- **ПЛ-8 (Б)** Shift+ПКМ по генератору поля, когда новая форма задела бы чужое поле или приват, пишет «форма не изменена» вместо ложного «Режим поля»; вставка настроек ключом станет атомарной после правки ключа.
+- **ПЛ-9 (Б)** Защита от дождя теперь убирает новый снег и лёд и на поле с максимальным радиусом (до 513x513 столбцов); для ещё больших зон экран поля пишет, что снег и лёд не убираются.
+- **ПЛ-10 (А)** В конфиге появился пункт fieldClaimCheck: проверку чужих приватов (клеймов) при включении приватной зоны можно отключить, если она мешает другим модам.
+- **ЭН-1 (В)** С IC2 кабели по-прежнему проверяются только на напряжение, но в конфиге появилась опция ic2CableCurrentLimit (по умолчанию выключена): если её включить, кабель сгорает и при превышении тока несколько тиков подряд; в WAILA, подсказке и справочнике появится пояснение, что с IC2 предел тока не действует.
+- **ЭН-2 (Б)** В конфиге появился раздел energy: можно выключить взрывы машин (перегруженный блок остаётся, только дымит и шипит и не принимает энергию), задать множитель силы взрыва и отдельно запретить взрыву от перегрева ломать блоки вокруг.
+- **ЭН-3 (Б)** Фильтр и ускорители пневмотрубы больше не пропадают при смене режима стороны: неиспользуемые слоты с предметами остаются на экране затемнёнными с подписью - положить в них нельзя, забрать можно.
+- **ЭН-4 (А)** Переключение трансформатора на повышение и поворот его выхода (ПКМ рукой или ключом) предупреждают в чате, если кабель у выхода не выдержит.
+- **ЭН-5 (Б)** Пневмотрубы и трубы, которым нечего забрать или некуда отдать, делают паузу перед следующей попыткой (5 → 10 → 20 → 40 тиков); после первого удачного переноса или любого изменения сети паузы сбрасываются, поэтому простаивающие сортировочные системы почти не нагружают сервер.
+- **ЭН-6 (А)** Собственная энергосеть мода (без IC2) теперь перестраивается только в том измерении, где что-то изменилось: полёты и загрузка чанков в одном мире больше не нагружают базы в других.
+- **ЭН-7 (Б)** Зарядная плита запоминает, кто её поставил, и не заряжает игроков внутри чужого приват-поля; на экране плиты можно переключить «Заряжать: всех / владельца и команду» (по умолчанию «всех»).
+- **ЭН-8 (А)** WAILA на связке проводов показывает тип трубы и её пропускную способность (мБ/т), наличие пневмотрубы и режим каждого канала на той стороне, куда смотрит игрок.
+- **БП-1 (А)** Квантовая пара больше не отпускает чанки, когда отдающей стороне не хватает энергии на поддержание или принимающей нечего принимать: пока вторая половинка найдена и роли верные, связь считается живой (кнопка «Пауза» и выключение по-прежнему отпускают чанк).
+- **БП-2 (А)** Колонка «чанк» на экране квантового транслятора показывает настоящее состояние: «держит 1», «нет» или «выкл. в конфиге».
+- **БП-3 (Б)** Беспроводные блоки с владельцем не ломаются чужими (только владелец, любой в творческом режиме и оператор), а ключи других модов их не поворачивают; у преобразователя энергии появится владелец после правок его классов.
+- **БП-4 (Б)** Автоматика больше не вставляет батарею в квантовый транслятор в роли «берёт» и может забрать из него любую батарею, так что батарея не застревает.
+- **БП-5 (А)** Снятый пустой преобразователь энергии с настройками по умолчанию больше не несёт NBT и складывается с новыми.
+- **БП-6 (А)** Кабель Mekanism в режиме Pull теперь забирает джоули из преобразователя не больше его пропускной способности и с учётом приоритета «EU первым», как RF и gJ.
+- **БП-7 (А)** При связывании передатчика и приёмника разных уровней карта связи пишет, по какому уровню работает связь: скорость до N EU/t и дальность.
+- **БП-8 (А)** Приёмник и берущий квантовый транслятор пишут статус «Принимает» вместо «Передаёт».
+- **МС-1 (А)** Появились серверные настройки мостов: их можно выключить, запретить переходы в другие измерения и изменить множитель EU и газов.
+- **МС-2 (А)** На публичном мосту посторонние больше не могут выключать питание, сливать баки, удалять и переименовывать закладки и запускать ремонт - это доступно только владельцу и друзьям; выбор цели, проверка места, открытие и закрытие остаются для всех.
+- **МС-3 (Б)** После «Отклонить» новые запросы согласия от того же игрока тому же игроку 5 минут отклоняются сразу, не доходя до чата адресата.
+- **МС-4 (А)** Шлем теперь помнит «последнюю цель» отдельно для каждого привязанного моста: приказ одного моста больше не уходит другому; старая общая цель при первом использовании переносится выбранному мосту.
+- **МС-5 (А)** «В координатор» больше не стирает чужую точку: точка пишется в координатор в пульте, в руке или в пустой, иначе мост сообщает, что пустого координатора нет.
+- **МС-6 (Б)** Если игрок верхом (или его транспорт) касается вихря, раз в 3 секунды он получает сообщение «спешьтесь - верхом через мост не пройти».
+- **МС-7 (А)** Во вкладке «Мост» экрана брони подпись «из брони -N%, точно» теперь показывается только когда скидка действительно есть (один из концов - ваш), и с процентом, который прислал сервер.
+- **МС-8 (А)** Список измерений Космического моста больше не собирается заново в каждом пакете состояния - он кэшируется на минуту.
+- **МС-9 (А)** Конденсатор или порт, касающийся двух мостов, остаётся за первым мостом; второй его не учитывает и показывает проблему «деталь принадлежит другому мосту» с координатами - пропали мигание привязки и двойной счёт энергии.
+- **МС-10 (А)** Метки маяков и якорей, чей блок пропал (мир правили вне игры), теперь удаляются при обращении к ним, если их чанк загружен.
+- **МС-11 (А)** Предпросмотр на пульте и в броне ищет свободное место рядом лишь в радиусе 6 блоков, полный поиск (16/32) - только при «Открыть», поэтому сервер не тормозит при ходьбе с открытым экраном.
+- **МС-12 (А)** Проверка места бронёй списывает криптон только если проверка действительно прошла (например, не при «нет измерения»).
+- **БР-1 (В)** На Shift-странице подсказки нагрудника показаны установленные чипы с тирами; на сервере добавлено извлечение одного чипа по типу (с проверкой, что он стоит, и места в инвентаре).
+- **БР-2 (А)** Подсказка чипа брони показывает эффект и его уровень (у чипа питания ещё +% к солнечной плёнке), расход EU/с и нагрев, по Shift - в каких костюмах работает, по Ctrl - как установить.
+- **БР-3 (А)** Если полёт Кванта или Экзо обрывается от перегрева или из-за нехватки заряда, включается тот же плавный спуск на 5 секунд, что и при нехватке газа, а в чате пишется причина.
+- **БР-4 (А)** Клавиши функций брони, клинка, бура и режимов без модификаторов теперь срабатывают и при беге или приседе (с зажатыми Ctrl/Shift), а привязка с модификаторами по-прежнему отличается и при совпадении побеждает более точная.
+- **БР-5 (А)** Экран брони (K) теперь закрывается и повторным нажатием K или клавиши инвентаря, а не только Esc.
+- **БР-6 (А)** Воронки и трубы забирают броню из станции обслуживания только готовой: полностью заряженной и заправленной всеми включёнными газами; если какого-то газа в станции нет, часть всё равно отдаётся.
+- **БР-7 (А)** Рывок Экзо в воздухе теперь можно сделать только один раз до приземления (как прыжок в воздухе), так что цепочкой рывков больше нельзя лететь и гасить падение.
+- **БР-8 (Б)** Взрывозащита Экзо больше не берёт 5000 EU за взрывы, которые не достают до игрока, а также в творческом режиме и при неуязвимости.
+- **СБ-1 (Б)** Отменить процесс на сингулярной станции может только игрок, который его запустил, или оператор сервера; остальным в чат приходит сообщение, в подсказке кнопки это написано.
+- **СБ-2 (Б)** Функции Сингулярной брони действуют на боссов ослабленно: пресс держит их вдвое короче и не тянет к земле, замедление слабее, чёрная дыра их только ранит без затягивания, купол выталкивает вдвое слабее.
+- **СБ-3 (А)** Преобразование Б-1: заряд ядер сверх стоимости теперь уходит в буфер станции (что не влезло - сообщение в чате), а при отмене ядра возвращаются только с засчитанной частью заряда (половина, как у катализатора).
+- **СБ-4 (А)** Строка «Задание» на вкладке модернизации сингулярной станции показывает задание для каждого уровня среди частей (например «ур. 2 +, ур. 5 -»), а подсказка перечисляет задание каждой части.
+- **СБ-5 (А)** Гравитационный захват отпускает моба (без броска), если функцию выключили в меню K, костюм перегрелся, ушёл в аварийный режим или разрядился.
+- **СБ-6 (А)** Слот катализатора Сингулярной станции теперь блокируется только при модернизации с ядром и при преобразовании Б-1; во время синхронизации, переноса и модернизации без ядра в него можно класть ядро.
+- **СБ-7 (А)** Первый выбор ветки нагрудника на Сингулярной станции теперь бесплатный, как в меню K; платной остаётся только смена уже выбранной ветки.
+- **СБ-8 (Б)** В подсказках кнопок «Синхронизация» и «Перенос уровня» добавлено предупреждение, что накопленные очки части будут сброшены.
+- **СБ-9 (А)** Очки уровня за новые измерения даются только за первые 8 измерений, остальные засчитываются в задания без очков.
+- **СБ-10 (А)** Резонанс К2 работает от генератора поля только тогда, когда поле действительно поднято и генератор платит за его поддержку.
+- **СБ-11 (А)** В конфиге появился раздел singular: множители EU, газов, времени процессов Сингулярной станции и очков на уровни сингулярной брони и инструментов.
+- **ИН-1 (Б)** Клавиша «Чёрной дыры» по-прежнему включает и выключает режим, но бур теперь запоминает выбранный размер зоны (5x5/9x9/12x12) и возвращает его при включении.
+- **ИН-2 (А)** На странице Shift сингулярного клинка теперь описано, что даёт выбранная ветка (Разрушитель, Дуэлянт, Страж), как у бура.
+- **ИН-3 (А)** Над хотбаром у сингулярного клинка показываются заряды горизонта событий, стаки каскада и оставшиеся секунды заряженного удара, парирования и ответного удара.
+- **ИН-4 (А)** Притяжение, разрез пространства, привязка и атака формы берут ближайшую допустимую цель на линии взгляда: свой питомец, житель или игрок без PvP больше не заслоняют врага за ними.
+- **ИН-5 (А)** Поиск движущихся поршней для защиты от фарма идёт раз в 2 тика вместо каждого - меньше нагрузка на сервер.
+- **ИН-6 (Б)** Подсказка бура показывает связанное хранилище с координатами и измерением (серым, если связь выключена), сообщение о связи называет измерение, а Shift + ПКМ по блоку без инвентаря снимает связь.
+- **ПР-1 (А)** Простые предметы мода (кокс, резина, рамки, фольга, ячейки гелия и дейтерия, сканер руды, компоненты) получили подсказку «для чего», а под Ctrl - список машин, где они делаются.
+- **ПР-2 (А)** Переносная цистерна работает с вёдрами и ячейками как машины: дозаливает неполные ячейки, пишет результат в чат и в творческом режиме не меняет ячейку в руке.
+- **ПР-3 (А)** Подсказка душа и его статья в справочнике говорят, что душ ставится выключенным и включается кнопкой в меню.
+- **ПР-4 (А)** Гравитационный стабилизатор больше не ломается рукой - только киркой, поэтому случайным ударом его не потерять.
+- **ПР-5 (А)** Радиопротектор не начинает поедаться при дозе меньше 1%, а если доза ушла во время поедания - не тратится; в чат пишется «Дозы нет».
+- **ПР-6 (А)** Подсказка свинцового костюма под Shift показывает защиту полного костюма (4 x защита части, по умолчанию 88%) и предупреждает, что каждая часть ускоряет голод.
+- **ПР-7 (А)** В подсказке известняка под Shift теперь указано, где он генерируется: высоты, размер жилы, число жил на чанк и измерения.
+- **ПР-8 (А)** Справочник уточняет, что излучают только капсулы и монацит в инвентаре игрока, а в сундуке или на земле - нет.
+- **СТ-1 (В)** Добавлена аннотация @ClientOnly для клиентских настроек: такие настройки (звуки, проверка обновлений) больше не заменяются значениями сервера, и новую клиентскую настройку достаточно пометить ею.
+- **СТ-2 (А)** Сингулярные силы (гравипресс, захват, замедление времени, чёрная дыра, купол, «Сингулярность») теперь, как и клавиши клинка, ограничены 8 нажатиями в очереди на игрока - поток пакетов больше не забивает сервер.
+- **СТ-3 (Б)** Проверка чужих приватов при осмотре сети ключом теперь идёт от отдельного «зонда» ProbePlayerSC, который моды-логгеры и квесты могут отличить от настоящего ломания блока.
+- **СТ-4 (Б)** Извлечение чипов отменяется с сообщением «освободите N слотов», если в инвентаре не хватает места, - чипы больше не выпадают под ноги.
+- **СТ-5 (А)** Описание настройки veinsPerChunk в конфиге стало обычным двуязычным пояснением без рабочей пометки TODO.
+- **СТ-6 (А)** Ночное зрение от чипа «Сенсор» теперь пропадает через секунду, когда в нагруднике кончается заряд на чипы, а не держится ещё до 13 секунд.
+- **ИФ-1 (А)** При крупном интерфейсе или маленьком окне первая страница справочника переходит в компактный режим: плитки глав - иконка и название в одну строку, а нижняя подсказка прячется, если под неё нет места.
+- **ИФ-2 (А)** Поиск рецептов в справочнике не различает «ё» и «е» и игнорирует коды форматирования, как основной поиск, а запрос сохраняется при переходе в статью и возвращается по «Назад».
+- **ИФ-3 (А)** Шаги «Первых шагов» и «Пути» в справочнике теперь засчитываются и за предметы в слотах брони или на курсоре.
+- **ИФ-4 (А)** Клавиша справочника, назначенная на кнопку мыши, теперь работает и в инвентарях: наведите на предмет и нажмите.
+- **ИФ-5 (А)** Строка клавиш во вкладке «Мост» показывает отдельную клавишу «Запомнить точку», если она назначена (иначе Shift+клавиша последней цели или подсказку назначить её в «Управлении»), а клавиши на кнопках мыши больше не роняют игру.
+- **РЦ-1 (А)** У побочных металлов появилось применение: германий - линзы (2 из слитка) и ИК-сенсор без алмаза, индий - ITO-покрытие для панели GaAs (на пластину меньше), цинк - оцинкованная стальная труба (2 вместо 1), пыль палладия - катализатор полимеров в нефтепереработке, пыль церия или лантана - катализатор крекинга (800 мБ дизеля вместо 500).
+- **РЦ-2 (А)** Крафт вокруг блока больше не стирает его содержимое: карьер при улучшении сохраняет энергию, баки, настройки и фильтр; реакторы получают энергию и подходящее топливо генераторов-ингредиентов; беспроводные Tx/Rx и квантовый транслятор берут заряд накопителя, а его улучшения возвращаются в инвентарь; для модулей с баком и газового порта моста нужен пустой бак.
+- **РЦ-3 (А)** При крафте Сингулярного накопителя заряд двух Экзо-ядер переходит в накопитель вместе с зарядом XV-накопителя, в пределах ёмкости.
+- **РЦ-4 (А)** Изношенные буровые головки и алмазный диск подходят в крафт следующей головки, LV-карьера, модуля DOUBLE и Экзо-буровой.
+- **РЦ-5 (А)** Мойка теперь с шансом 15% даёт лишнюю пыль основного металла (иногда и побочный металл), центрифуга - с шансом 10% вторую пыль: полная цепочка даёт около 2,5 слитка с блока руды вместо 2.
+- **РЦ-6 (А)** В творческой вкладке новые предметы стоят на своих местах: блоки металлов после слитков, аккумуляторы, беспроводка, преобразователь и гравитационные катушки - в энергии, отдельные группы для радиации и моста, ветряной ротор и изотопная капсула - к улучшениям.
+- **РЦ-7 (А)** В подсказке координатора (Shift) объяснено, как сделать копию; у блоков из рецептов с переносом появляется строка о том, что заряд и содержимое ингредиентов переходят в результат.
+- **РЦ-8 (А)** Сингулярный реактор теперь гудит при работе, как остальные реакторы, - громче и ниже Экзо-реактора.
+- **РЦ-9 (Б)** Ячейки гелия и дейтерия при крафте на верстаке оставляют пустое ведро, а термоядерные реакторы возвращают вёдра от сожжённых ячеек дейтерия.
+- **СХ-1 (Б)** Снятый контроллер моста теперь помнит имя и идентификатор моста: поставленный на прежнее место, он остаётся «своим» для пультов и шлемов; владелец, друзья, доступ и цель задаются заново.
+- **СХ-2 (А)** Улучшения генератора при снятии уходят вместе с ним в предмете и возвращаются при установке, как у машин.
+- **СХ-3 (Б)** Хранилище энергии при снятии сохраняет в предмете режим красного камня, режим слота батареи и дополнительные выходы Output Splitter (они поворачиваются вместе с фронтом при установке).
+- **СХ-4 (В)** Модули, которые зарядной площадке не подходят (Output Splitter, Adaptive Transformer), при её установке выпадают рядом, а не оседают мёртвым грузом в слотах.
+- **СХ-5 (А)** Машины больше не теряют жидкость при обмене с чужими баками, которые заявляют, что приняли или отдали больше запрошенного.
+- **МП-1 (В)** В справочнике и подсказке карьера (и экзо-установки) теперь сказано, что добыча уходит в любой соседний инвентарь (воронки, трубы, сундуки), поэтому карьер нужно ставить внутри своей приватной зоны с запасом в 1 блок.
+- **МП-2 (А)** Гравитационный сканер Ш1 больше не показывает сундуки и спавнеры под чужим приватным полем или в чужом привате других модов (и не заносит их в «Находки сканера» моста); руды видны как раньше.
+- **МП-3 (А)** Перед открытием мост опрашивает приваты других модов (FTB Utilities, GriefPrevention и т.п.) от имени владельца на всех клетках вихря и выхода и не открывается в чужой привате; разброс конца тоже не уводит его в привату.
+- **МП-4 (А)** Скан руды больше не берёт энергию за клетки в незагруженных чанках и не выдаёт неполную карту за полную: на вкладке «Карта» показывается «Не просканировано (не загружено): N%».
+- **МП-5 (А)** Не потребовалось: уже реализовано.
+
+# Shortcomings: what was done (2026-10-09)
+
+- **МШ-1 (Б)** A machine that is switched off or stopped by redstone no longer pulls ingredients from neighbouring inventories and tanks; the ejector still unloads its products.
+- **МШ-2 (А)** Hoppers and pipes insert a singularity clot into the compressor only in liquid mode, and the compressor's puller now takes clots in liquid mode; players can still put clots in by hand.
+- **МШ-3 (А)** The Matter Compressor no longer accepts blocks with a tile entity from any mod (machines, chests and so on) or diamond tools, weapons and armour.
+- **МШ-4 (А)** The Quality upgrade can no longer be installed in a machine that has no recipes with a defect chance; upgrades already installed stay in place.
+- **МШ-5 (А)** The machine heat gauge hint no longer threatens an explosion: at 100 the machine pauses until it cools to 70, and that operation's defect chance doubles.
+- **МШ-6 (Б)** An upgrade's Ctrl tooltip now lists every place it fits (machines, generators, storages, the field generator) - Overdrive, Economizer and Rad Shielding no longer claim to go into a machine.
+- **МШ-7 (А)** The puller no longer scans neighbouring inventories when the machine's inputs cannot take another item, reducing server load.
+- **МШ-8 (А)** The electric and induction furnaces, the puller and slot checks pick up added or removed furnace recipes (for example after /mt reload) without restarting the game.
+- **МШ-9 (А)** The induction furnace with Keep Warm on stays hot even when its output is full, spending the keep-warm energy; the status still reads output full.
+- **МШ-10 (А)** The Upgrade Station no longer draws the armour tier ladder (Nano > Quantum > Exo) for assembly recipes such as the fusion core and the universal transformer - it shows «Assembly» instead.
+- **МШ-11 (А)** When a machine has nothing to pour into or take from the bucket or cell in your hand, right-click opens its screen instead of a "nothing there" chat line (e.g. the capsule filler with empty buckets).
+- **МШ-12 (Б)** A dismantled machine keeps its battery slot mode, the induction furnace's keep-warm and the matter compressor's capsule progress in its item; the induction furnace's heat still resets.
+- **ГН-1 (А)** The Gas Turbine now burns 2 mB of hydrogen a tick instead of 20 (64 EU per mB): on halite hydrogen it turns a small profit, still below the Fuel Cell.
+- **ГН-2 (А)** Tokamak XV stability is now recovery minus the overdrive penalty (+1 - 0.5 per module a second): with 1-2 overdrives it holds or rises, with 3-4 it falls.
+- **ГН-3 (Б)** A lit Tokamak XV goes out when broken: the item keeps only the blanket, the cell and the ignition charge, and a new build needs lighting again.
+- **ГН-4 (А)** A Tokamak XV without deuterium no longer sits on a free pause: helium is still used and stability still counted, so without helium or with a broken shell it goes out or breaks down.
+- **ГН-5 (А)** The Tokamak XV blanket wears by the power (twice as fast only at full power) and barely wears with full storages.
+- **ГН-6 (А)** A Tokamak XV won't light if another Tokamak XV or Singular Reactor build is within its zone plus a block: shared walls, caps and floors no longer work.
+- **ГН-7 (Б)** The Tank Extension upgrade now only fits generators with tanks (fluid fuel, two-fluid, Exo Reactor).
+- **ГН-8 (Б)** The Singular Reactor keeps its feed mode, Auto and the accident latch when broken; a burning fuel piece is still lost, as in a furnace.
+- **ГН-9 (А)** Fluid-fuel and two-fluid generators burn the last of the fuel below one tick's portion for a matching share of the output, emptying the tank fully.
+- **ГН-10 (А)** The Tokamak XV breakdown radiation burst now goes through lead walls, like the Singular Reactor's.
+- **КР-1 (А)** Quarry fortune now also works on ores that drop as their own block (iron, gold, mod ores): with crushing on, the crushed output is multiplied by a random 1..(1 + fortune level), as in the Exo rig.
+- **КР-2 (А)** The Exo rig's Lenses tab now shows a "Brought up" block - which ores and how many were hauled; it refreshes every 3 seconds while the screen is open.
+- **КР-3 (А)** On the Exo rig the filter mode button cycles only three modes: everything, only these, all but these ("ore only" was the same as "everything" there).
+- **КР-4 (А)** The quarry's fortune level buttons no longer seem dead: the level is capped by the number of fortune modules, so the first "-" press lowers the shown level right away.
+- **КР-5 (А)** The quarry's owner is now checked by UUID: a renamed owner keeps access (the stored name updates), and a player who takes the old name gets none.
+- **КР-6 (А)** A quarry with an owner can only be broken by its owner or a server op; strangers can't break it.
+- **КР-7 (А)** Quarry texts corrected: the modules hint lists all 24 modules, trash disposal mentions grass, chunk keeping says chunks are let go after 10 s when out of power or the buffer is full, ore lenses show x5/x9 and x7/x13 with the stabilizer, and the no-area status mentions a card from another dimension.
+- **КР-8 (А)** With "Leave: as it was" the output filter is no longer ignored: the quarry digs only ore that passes the filter (only these / all but these).
+- **КР-9 (А)** The exo rig's main tab now has a «Pour out» button next to the washing water line (with the EU cost in its tooltip).
+- **КР-10 (А)** The quarry's Area tab shows the real size (capped by the radius modules); a circle's X row reads «Diameter», and the size rows and buttons a circle or a 1x1 shaft doesn't use are greyed out and disabled.
+- **КР-11 (А)** WAILA on a quarry now shows its status, current and bottom layer and owner, and on the Exo rig its hauls per second; the duplicate "Off" line is gone (the status says it).
+- **КР-12 (А)** Exo Drilling Rig deep scanner: other mods' ores now share a fixed 25% of the hauls (the weight is split evenly between them), so a big modpack no longer crowds out the mod's own ores.
+- **ПЛ-1 (Б)** The field generator's Access tab has a new "No mechanisms" switch: with the private zone on, strangers can't use doors, trapdoors, fence gates, levers, buttons, repeaters, comparators or beds inside the field.
+- **ПЛ-2 (Б)** A private field now shields animals, villagers and golems from strangers' arrows and potions (the damage is simply cancelled, nothing is deflected), and strangers' shots about to hit frames, paintings, carts and boats inside the zone fizzle out; PvP is unchanged.
+- **ПЛ-3 (А)** Any node of a field generator with an owner can only be broken by the owner, players on their access list and server ops - wherever the zone is.
+- **ПЛ-4 (А)** A field can no longer be raised over a stranger's zone even when that field is down for lack of energy or by redstone, or sits in an unloaded chunk: the zones of all switched-on fields are kept in a world registry.
+- **ПЛ-5 (А)** When linking, every node of the cluster must be within 16 blocks of the master on each axis, so a chain of links can no longer stretch a cluster; clusters already built stay as they are.
+- **ПЛ-6 (А)** WAILA on a field generator now shows whether it is the master or a node (with the master's coordinates), the field state (running / no energy / redstone off / off / foreign field nearby), shape, node count and owner; a node shows its master's charge instead of its own empty buffer (or nothing if the master's chunk isn't loaded).
+- **ПЛ-7 (Б)** The Field Link Module got a tooltip (summary, Shift, Ctrl) showing the picked node, glows while a first node is picked, and clicking the same generator again asks for another one instead of failing and keeps the selection.
+- **ПЛ-8 (Б)** Sneak-right-click on a field generator whose new shape would cover a stranger's field or a claim now says the shape wasn't changed instead of a false "Field mode"; wrench paste becomes all-or-nothing once the wrench change is in.
+- **ПЛ-9 (Б)** The rain shield now clears new snow and ice on a field at the largest range too (up to 513x513 columns); for even larger zones the field screen says snow and ice are not cleared.
+- **ПЛ-10 (А)** New config option fieldClaimCheck: the check for other mods' claims when a private zone is switched on can be turned off if it upsets other mods.
+- **ЭН-1 (В)** With IC2 cables are still checked for voltage only, but a new config option ic2CableCurrentLimit (off by default) also burns a cable whose current stays above its rating for a few ticks; WAILA, the tooltip and the handbook note that the current limit doesn't apply under IC2.
+- **ЭН-2 (Б)** New energy config section: machine explosions can be turned off (an overloaded block stays, only smokes and hisses and refuses the energy), their power scaled, and overheat blasts kept from breaking the blocks around.
+- **ЭН-3 (Б)** A tube connector's filter and speed upgrades no longer vanish when the side's mode changes: idle slots that still hold items stay on screen, dimmed and labelled - nothing can be put in, but the items can be taken out.
+- **ЭН-4 (А)** Switching a transformer to step-up or turning its output (right-click by hand or wrench) warns in chat if the cable at the output can't take it.
+- **ЭН-5 (Б)** Tubes and pipes with nothing to take or nowhere to put it now wait before trying again (5 -> 10 -> 20 -> 40 ticks); the first successful move or any network change resets the wait, so idle sorting systems barely load the server.
+- **ЭН-6 (А)** The mod's own energy net (without IC2) now rebuilds only in the dimension where something changed: flying around and chunk loading in one world no longer churns bases in the others.
+- **ЭН-7 (Б)** The charge pad remembers who placed it and doesn't charge players a private field refuses; its screen can switch between charging everyone and only the owner and their team (everyone by default).
+- **ЭН-8 (А)** WAILA on a conduit bundle now shows the pipe type and its throughput (mB/t), whether a pneumatic tube is present, and each channel's mode on the side the player is looking at.
+- **БП-1 (А)** A quantum pair no longer releases its chunks when the giving half is short of upkeep energy or the taking half has nothing coming in: while the other half is found with the right role the link counts as up (Pause or switching it off still releases the chunk).
+- **БП-2 (А)** The quantum translator screen's «chunk» column shows the real state: «keeps 1», «no» or «off in config».
+- **БП-3 (Б)** Owned wireless blocks can't be broken by strangers (only the owner, anyone in creative and ops), and other mods' wrenches don't turn them; the energy converter gets an owner once its classes are changed.
+- **БП-4 (Б)** Automation no longer inserts a battery into a quantum translator set to take, and can pull any battery out of it, so a battery can't get stuck.
+- **БП-5 (А)** A dismantled empty energy converter with default settings no longer carries NBT and stacks with new ones.
+- **БП-6 (А)** A Mekanism cable in Pull mode now takes joules from the converter only within its throughput and the EU-first priority, like RF and gJ.
+- **БП-7 (А)** Linking a transmitter and receiver of different tiers now tells which tier the link runs at: up to N EU/t and its range.
+- **БП-8 (А)** Receivers and taking quantum translators now show the status «Receiving» instead of «Sending».
+- **МС-1 (А)** Bridges got server settings: they can be turned off, trips to other dimensions forbidden and the EU and gas costs scaled.
+- **МС-2 (А)** On a public bridge strangers can no longer toggle power, empty tanks, delete or rename bookmarks or start a repair - only the owner and friends can; choosing the target, checking the place, opening and closing stay open to all.
+- **МС-3 (Б)** After «Decline», new consent requests from the same player to the same player are refused at once for 5 minutes, without reaching the asked player's chat.
+- **МС-4 (А)** The helmet now remembers the «last target» separately for each linked bridge, so one bridge's order is no longer sent to another; an old shared target moves to the selected bridge on first use.
+- **МС-5 (А)** «To coordinator» no longer erases a stored point: the point goes into the coordinator in the remote, in hand or an empty one, otherwise the bridge reports there is no empty coordinator.
+- **МС-6 (Б)** When a mounted player (or their mount) touches the vortex, they are told to dismount, at most once every 3 seconds.
+- **МС-7 (А)** In the armour's «Bridge» tab the «from the armour -N%, precise» note now shows only when the discount actually applies (one end is your own), with the percentage sent by the server.
+- **МС-8 (А)** The Space Bridge's dimension list is no longer rebuilt for every state packet - it is cached for a minute.
+- **МС-9 (А)** A capacitor or port touching two bridges stays with the first bridge; the second doesn't count it and shows the problem «the part belongs to another bridge» with its coordinates - no more relink flicker or double-counted energy.
+- **МС-10 (А)** Beacon and anchor marks whose block is gone (world edited outside the game) are now dropped when looked up, if their chunk is loaded.
+- **МС-11 (А)** The remote's and the armour's preview looks for a nearby free place only within 6 blocks, the full search (16/32) runs only on «Open», so walking with the screen open no longer lags the server.
+- **МС-12 (А)** The armour's place check now takes krypton only when the check actually happened (not on «no dimension»).
+- **БР-1 (В)** The chestplate's Shift tooltip page now lists the installed chips with their tiers; the server can now take out a single chip by type (checked that it is installed and fits in the inventory).
+- **БР-2 (А)** An armour chip's tooltip now shows its effect and level (the Power chip also its solar bonus), EU/s and heat; Shift - which suits run it, Ctrl - how to install it.
+- **БР-3 (А)** When Quantum or Exo flight is cut by overheating or by too little charge, the same 5-second soft descent as for running out of gas kicks in, and chat says why.
+- **БР-4 (А)** Suit, blade, drill and mode function keys without modifiers now also fire while sprinting or sneaking (Ctrl/Shift held), while bindings with modifiers still differ and the most specific match wins.
+- **БР-5 (А)** The armour screen (K) now also closes on pressing K again or the inventory key, not only Esc.
+- **БР-6 (А)** Hoppers and tubes take armour out of the service station only when it's finished: fully charged and full of every enabled gas; a gas the station has none of doesn't hold the piece back.
+- **БР-7 (А)** The Exo dash can now be used only once in mid-air before landing (like the air jump), so chained dashes no longer fly or cancel falls.
+- **БР-8 (Б)** Exo explosion proofing no longer takes 5000 EU for explosions that can't reach the player, nor in creative mode or while invulnerable.
+- **СБ-1 (Б)** Only the player who started a Singular Station process, or a server operator, can cancel it; others get a chat message, and the button's tooltip says so.
+- **СБ-2 (Б)** Singular armour functions act on bosses weakened: the press holds them half as long without pulling them down, time slowing is weaker, the black hole only hurts them without pulling them in, the dome pushes them half as hard.
+- **СБ-3 (А)** Б-1 conversion: the cores' charge above the cost now goes into the station's buffer (what does not fit is reported in chat), and a cancel gives the cores back with only the counted charge (half of it, as the catalyst).
+- **СБ-4 (А)** The Singular Station's «Task» row now shows the task for every level among the pieces (e.g. «lv 2 +, lv 5 -»), and its tooltip lists each piece's task.
+- **СБ-5 (А)** The gravity grab drops the mob (no throw) when the function is switched off in the K menu, the suit overheats, goes into emergency mode or runs out of charge.
+- **СБ-6 (А)** The Singular Station's catalyst slot is now locked only during a modernisation that uses the core and during the Б-1 conversion; during sync, transfer and a core-less modernisation a core can be put in.
+- **СБ-7 (А)** The first branch choice of the chestplate at the Singular Station is now free, as in the K menu; only switching an already chosen branch costs singular matter.
+- **СБ-8 (Б)** The «Sync» and «Level transfer» button hints now warn that the piece's accumulated points will be reset.
+- **СБ-9 (А)** Level points for new dimensions are given only for the first 8 dimensions; further ones still count for the tasks but give no points.
+- **СБ-10 (А)** K2 resonance works from a field generator only while its field is really up and the generator pays its upkeep.
+- **СБ-11 (А)** The config got a singular section: multipliers for the Singular Service Station's EU, gases and process time and for the points Singular armour and tools need per level.
+- **ИН-1 (Б)** The black hole key still toggles the mode, but the drill now remembers the chosen zone size (5x5/9x9/12x12) and restores it when switched back on.
+- **ИН-2 (А)** The Singular blade's Shift page now describes what the chosen branch (Destroyer, Duelist, Guardian) gives, like the drill's.
+- **ИН-3 (А)** The Singular blade's HUD now shows event horizon charges, cascade stacks and the seconds left of the charged strike, parry and riposte bonuses.
+- **ИН-4 (А)** Gravity pull, rift step, tether and the form attack now take the nearest allowed target on the line of sight: your pet, a villager or a PvP-protected player no longer shields the enemy behind them.
+- **ИН-5 (А)** The moving-piston scan for the anti-farm protection now runs every other tick instead of every tick - less server load.
+- **ИН-6 (Б)** The drill's tooltip shows the linked storage with coordinates and dimension (grey while the link is off), the link message names the dimension, and sneak + right-click on a block with no inventory unlinks it.
+- **ПР-1 (А)** The mod's simple items (coke, rubber, frames, foil, helium and deuterium cells, ore scanner, components) got a "what for" tooltip line, and under Ctrl the machines that make them.
+- **ПР-2 (А)** The portable tank handles buckets and cells like machines: it tops up part-filled cells, reports every outcome in chat and leaves the cell in a creative hand unchanged.
+- **ПР-3 (А)** The shower's hint and its handbook article now say it is placed switched off and is switched on with the button in its screen.
+- **ПР-4 (А)** The Gravitational Stabiliser can no longer be broken by hand - only with a pickaxe, so a stray punch no longer loses it.
+- **ПР-5 (А)** The radioprotector is not eaten with a dose below 1%, and if the dose is gone while it is being eaten it is not spent; the chat says there is no dose.
+- **ПР-6 (А)** The lead suit's Shift tooltip shows the full suit's protection (4 x a piece's, 88% by default) and warns that every piece makes you hungry faster.
+- **ПР-7 (А)** Limestone's tooltip now shows under Shift where it generates: heights, vein size, veins per chunk and dimensions.
+- **ПР-8 (А)** The handbook now states that only isotope capsules and monazite in the player's inventory give off radiation, not ones in a chest or on the ground.
+- **СТ-1 (В)** Added a @ClientOnly annotation for client-side options: such options (sounds, update check) are never overwritten by the server's values, and a new client option only needs the mark.
+- **СТ-2 (А)** Singular powers (gravity press, grab, time slowing, black hole, dome, Singularity) now share the blade's limit of 8 queued presses per player, so a packet flood can no longer pile up on the server.
+- **СТ-3 (Б)** The claim check when inspecting a network with the wrench now runs from a dedicated ProbePlayerSC probe, which break loggers and quest mods can tell apart from a real block break.
+- **СТ-4 (Б)** Removing chips is refused with a 'free N slots' message when the inventory lacks room - chips are no longer dropped at your feet.
+- **СТ-5 (А)** The veinsPerChunk option in the config now has a plain bilingual comment instead of a developer TODO.
+- **СТ-6 (А)** Night vision from the Sensor chip now goes within a second once the chestplate runs out of charge for its chips, instead of lingering up to 13 seconds.
+- **ИФ-1 (А)** With a large GUI scale or a small window the handbook's first page switches to a compact layout: chapter tiles become an icon and a one-line title, and the bottom hint is hidden when there is no room for it.
+- **ИФ-2 (А)** The handbook's recipe search now treats «ё» and «е» alike and ignores formatting codes like the main search, and its query is kept when opening an article and restored on Back.
+- **ИФ-3 (А)** Handbook "First steps" and "Path" steps now also count items worn in armour slots or held on the cursor.
+- **ИФ-4 (А)** A handbook key bound to a mouse button now works in inventories too: hover over an item and press it.
+- **ИФ-5 (А)** The keys line in the «Bridge» tab shows the separate «Remember the spot» key when bound (otherwise Shift+last-target key, or a hint to bind it in «Controls»), and keys bound to mouse buttons no longer crash the game.
+- **РЦ-1 (А)** By-product metals now have uses: germanium makes lenses (2 per ingot) and a diamond-free IR sensor, indium gives an ITO coat for the GaAs panel (one wafer less), zinc makes galvanised steel pipe (2 instead of 1), palladium dust is a polymer catalyst in the refinery, cerium or lanthanum dust is a cracking catalyst (800 mB of diesel instead of 500).
+- **РЦ-2 (А)** Crafting round a block no longer wipes what it held: an upgraded quarry keeps its energy, tanks, settings and filter; reactors take the energy and suitable fuel of the generators in the recipe; wireless Tx/Rx and the quantum translator take the storage's charge, and its upgrades go back to your inventory; tank modules and the bridge gas port need an empty tank.
+- **РЦ-3 (А)** Crafting the Singular storage now carries the charge of the two Exo cores into it, together with the XV storage's charge, up to its capacity.
+- **РЦ-4 (А)** Worn drill heads and the diamond blade now fit the recipes of the next head, the LV quarry, the DOUBLE module and the Exo Drilling Rig.
+- **РЦ-5 (А)** The ore washer now has a 15% chance of an extra dust of the main metal (and sometimes the by-product), the centrifuge a 10% chance of a second dust: the full chain gives about 2.5 ingots per ore block instead of 2.
+- **РЦ-6 (А)** The creative tab now lists newer items in place: metal blocks after the ingots, batteries, wireless, the converter and gravity coils with energy, separate radiation and bridge groups, the wind rotor and isotope capsule with the upgrades.
+- **РЦ-7 (А)** The coordinator's tooltip (Shift) now explains how to copy it; blocks made by carry recipes get a line saying the ingredients' charge and contents go into the result.
+- **РЦ-8 (А)** The Singular Reactor now hums while running like the other reactors - louder and lower than the Exo Reactor.
+- **РЦ-9 (Б)** Helium and deuterium cells now leave an empty bucket when used in a crafting grid, and fusion reactors give back the buckets of the deuterium cells they burn.
+- **СХ-1 (Б)** A removed bridge controller now keeps the bridge's name and id: put back on its old place it is the same bridge for remotes and helmets; the owner, friends, access and target are set anew.
+- **СХ-2 (А)** A generator's upgrades now ride in its item when broken and come back on placement, as with machines.
+- **СХ-3 (Б)** Energy storage now keeps its redstone mode, battery slot mode and Output Splitter extra outputs in the item when broken (the outputs turn with the front when placed).
+- **СХ-4 (В)** Modules a charge pad can't use (Output Splitter, Adaptive Transformer) now drop beside it when it is placed instead of sitting dead in its slots.
+- **СХ-5 (А)** Machines no longer lose fluid when exchanging with foreign tanks that report accepting or giving more than requested.
+- **МП-1 (В)** The handbook and the quarry's (and Exo rig's) tooltip now say the output goes into any adjacent inventory (hoppers, pipes, chests), so the quarry belongs inside your own private zone with a 1-block margin.
+- **МП-2 (А)** The gravity scanner no longer shows chests and spawners under someone else's private field or another mod's claim (nor lists them in the bridge's scanner finds); ores are shown as before.
+- **МП-3 (А)** Before opening, the bridge asks other mods' claims (FTB Utilities, GriefPrevention etc.) as the owner on every vortex and exit cell and won't open into someone else's claim; the end's scatter never moves it into a claim either.
+- **МП-4 (А)** The ore scan no longer charges energy for cells in unloaded chunks and no longer passes an incomplete map off as complete: the Map tab shows "Not scanned (not loaded): N%".
+- **МП-5 (А)** Not needed: already implemented.

@@ -477,6 +477,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             return scan;
         }
         BridgeStructureSC.Scan s = BridgeStructureSC.scan(view(), xCoord, yCoord, zCoord);
+        dropForeign(s);
         scan = s;
         relink(s);
         if (calibSig != 0 && s.signature != calibSig && !open) {
@@ -490,6 +491,40 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             litCoils(s, false);
         }
         return s;
+    }
+
+    /**
+     * МС-9: a capacitor / port touching two bridges stays with the controller that took it first: while that one
+     * stands (or its chunk isn't loaded), this bridge doesn't count the part and shows a problem with its place.
+     */
+    private void dropForeign(BridgeStructureSC.Scan s) {
+        List<int[]> foreign = new ArrayList<int[]>();
+        for (List<int[]> l : java.util.Arrays.asList(s.capacitors, s.energyPorts, s.gasPorts)) {
+            for (java.util.Iterator<int[]> it = l.iterator(); it.hasNext(); ) {
+                int[] p = it.next();
+                TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+                int[] c = te instanceof IBridgePartSC ? ((IBridgePartSC) te).controllerPos() : null;
+                if (c != null && !(c[0] == xCoord && c[1] == yCoord && c[2] == zCoord) && otherController(c)) {
+                    it.remove();
+                    foreign.add(p);
+                }
+            }
+        }
+        for (int[] p : foreign) {
+            s.problems.add(new BridgeStructureSC.Problem("sc.bridge.problem.shared",
+                    new String[]{String.valueOf(p[0]), String.valueOf(p[1]), String.valueOf(p[2])}, p));
+        }
+        if (!foreign.isEmpty()) {
+            s.valid = false;
+        }
+    }
+
+    /** МС-9: another controller stands at c (close by - a part can't belong further; unloaded counts as standing). */
+    private boolean otherController(int[] c) {
+        if (Math.abs(c[0] - xCoord) > 16 || Math.abs(c[1] - yCoord) > 16 || Math.abs(c[2] - zCoord) > 16) {
+            return false;
+        }
+        return !worldObj.blockExists(c[0], c[1], c[2]) || worldObj.getTileEntity(c[0], c[1], c[2]) instanceof TileEntityBridgeControllerSC;
     }
 
     /** The parts of this check point to this controller; the ones it no longer counts let go. */
@@ -1005,7 +1040,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     /** «Ремонт» (С2): the wear back to 0 for helium and EU, at once. */
     public BridgeMsgSC repair(EntityPlayer p) {
-        if (!allowed(p)) {
+        if (!trusted(p)) {                                   // МС-2: spends the owner's helium and EU - owner / friends only
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
         }
         if (open) {
@@ -1518,12 +1553,19 @@ public class TileEntityBridgeControllerSC extends TileEntity {
      */
     public Plan plan(EntityPlayer p, Order o, boolean preview) {
         Plan pl = new Plan();
+        if (!com.sc.util.ConfigSC.bridgeEnabled) {
+            pl.refuse = new BridgeMsgSC("sc.bridge.refuse.disabled");          // МС-1: the remote / armour previews say it too
+            return pl;
+        }
         int kind = bridgeKind(), w = BridgeMathSC.vortexSize(kind);
         int[] kinds = BridgeMathSC.modeEnds(o.mode, o.toMe);
         int friendAt = BridgeMathSC.friendEnd(o.mode, o.toMe);
         String me = nameOf(p);
         int[] c = ringCentre();
         int radius = scan != null && scan.nav ? BridgeSpaceSC.NEAR_RADIUS_NAV : BridgeSpaceSC.NEAR_RADIUS;
+        if (preview) {
+            radius = Math.min(radius, PREVIEW_NEAR_RADIUS);  // МС-11: the screens' poll looks close by; «Открыть» searches the full radius
+        }
         End[] ends = new End[2];
         List<Long> dists = new ArrayList<Long>();
         List<Integer> pct = new ArrayList<Integer>();
@@ -1550,6 +1592,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 e.dim = kind == BridgeMathSC.SPACE ? o.pdim : ownDim();
                 if (kind == BridgeMathSC.GROUND && o.pdim != ownDim()) {
                     pl.refuse = new BridgeMsgSC("sc.bridge.refuse.groundDim");
+                    return pl;
+                }
+                if (!com.sc.util.ConfigSC.bridgeCrossDimension && e.dim != ownDim()) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.crossDim");      // МС-1: the server keeps bridges in their own dimension
                     return pl;
                 }
                 ws = worldFor(e.dim);
@@ -1607,6 +1653,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 e.dim = who.worldObj.provider.dimensionId;
                 if (kind == BridgeMathSC.GROUND && e.dim != ownDim()) {
                     pl.refuse = new BridgeMsgSC("sc.bridge.refuse.groundDim");
+                    return pl;
+                }
+                if (!com.sc.util.ConfigSC.bridgeCrossDimension && e.dim != ownDim()) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.crossDim");
                     return pl;
                 }
                 ws = worldFor(e.dim);
@@ -1691,7 +1741,69 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             refreshEnv();
         }
         BridgeMathSC.adjust(pl.cost, pl.fam[1], envRes);
+        float mul = com.sc.util.ConfigSC.bridgeCostMultiplier;   // МС-1: the server's price of a bridge (energy and gases)
+        if (mul != 1F) {
+            BridgeMathSC.Cost k = pl.cost;
+            k.eu = k.eu > 0 ? com.sc.util.ConfigSC.scale(k.eu, mul) : 0;
+            k.sm = k.sm > 0 ? com.sc.util.ConfigSC.scale(k.sm, mul, 1) : 0;
+            k.d = k.d > 0 ? com.sc.util.ConfigSC.scale(k.d, mul, 1) : 0;
+            k.kr = k.kr > 0 ? com.sc.util.ConfigSC.scale(k.kr, mul, 1) : 0;
+            k.ar = k.ar > 0 ? com.sc.util.ConfigSC.scale(k.ar, mul, 1) : 0;
+            k.holdEu = k.holdEu > 0 ? com.sc.util.ConfigSC.scale(k.holdEu, mul, 1) : 0;
+            k.heSec = k.heSec > 0 ? com.sc.util.ConfigSC.scale(k.heSec, mul, 1) : 0;
+            k.arSec = k.arSec > 0 ? com.sc.util.ConfigSC.scale(k.arSec, mul, 1) : 0;
+            k.d2oSec = k.d2oSec > 0 ? com.sc.util.ConfigSC.scale(k.d2oSec, mul, 1) : 0;
+        }
         return pl;
+    }
+
+    /**
+     * МП-3: who other mods' claims are asked for - the owner (online: his profile; offline: the offline UUID of his
+     * name, as the quarry does), an ownerless controller - the opener; null - nobody to ask for (the server itself).
+     */
+    private com.mojang.authlib.GameProfile claimProfile(EntityPlayer p) {
+        if (owner.length() == 0) {
+            return p == null || p instanceof net.minecraftforge.common.util.FakePlayer ? null : p.getGameProfile();
+        }
+        MinecraftServer srv = MinecraftServer.getServer();
+        EntityPlayer on = srv == null ? null : srv.getConfigurationManager().func_152612_a(owner);
+        if (on != null && on.getGameProfile() != null && on.getGameProfile().getId() != null) {
+            return on.getGameProfile();
+        }
+        return new com.mojang.authlib.GameProfile(EntityPlayer.func_146094_a(new com.mojang.authlib.GameProfile(null, owner)), owner);
+    }
+
+    /**
+     * МП-3: a claim of another mod refuses an end - a BreakEvent by a probe FakePlayer (nothing broken) on every cell of
+     * the vortex and the exit cell in front of it, as the quarry and the network overview ask. The ring's own end isn't asked.
+     */
+    private boolean claimRefused(End e, com.mojang.authlib.GameProfile as) {
+        if (as == null || e == null || e.kind == BridgeMathSC.END_RING) {
+            return false;
+        }
+        World ew = DimensionManager.getWorld(e.dim);
+        if (!(ew instanceof WorldServer)) {
+            return false;
+        }
+        EntityPlayer fake = new com.sc.handler.NetViewNetSC.ProbePlayerSC((WorldServer) ew, as);
+        int h = (e.w - 1) / 2;
+        for (int v = 0; v < e.w; v++) {
+            for (int u = -h; u <= h; u++) {
+                for (int d = 0; d < BridgeSpaceSC.DEPTH; d++) {
+                    int x = e.axis == 0 ? e.x + u : e.x + d, y = e.y + v, z = e.axis == 0 ? e.z + d : e.z + u;
+                    if (y < 0 || y >= ew.getHeight() || !ew.blockExists(x, y, z)) {
+                        continue;
+                    }
+                    net.minecraftforge.event.world.BlockEvent.BreakEvent ev = new net.minecraftforge.event.world.BlockEvent.BreakEvent(
+                            x, y, z, ew, ew.getBlock(x, y, z), ew.getBlockMetadata(x, y, z), fake);
+                    net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+                    if (ev.isCanceled()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /** The consent request last sent (the world test answers it). */
@@ -1702,6 +1814,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     }
 
     private BridgeMsgSC askConsent(EntityPlayer p, Order o, String who) {
+        // МС-3: a declined request blocks new ones from the same player to the same player for a while (no chat spam)
+        long blocked = com.sc.bridge.BridgeConsentSC.server().blockedLeft(nameOf(p), who, com.sc.bridge.BridgeFarSC.now());
+        if (blocked > 0) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.declinedRecently", who, (blocked + 1199) / 1200));
+        }
         NBTTagCompound order = o.write();
         order.setIntArray("ctrl", new int[]{xCoord, yCoord, zCoord, ownDim()});
         com.sc.bridge.BridgeConsentSC.Request r = com.sc.bridge.BridgeConsentSC.server().ask(nameOf(p), who, com.sc.bridge.BridgeFarSC.now(), order);
@@ -1724,6 +1841,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     public BridgeMsgSC openOrder(EntityPlayer p, Order o) {
         if (worldObj == null || worldObj.isRemote) {
             return null;
+        }
+        if (!com.sc.util.ConfigSC.bridgeEnabled) {
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.disabled"));     // МС-1: the server turned bridges off
         }
         boolean far = o.source != BridgeMathSC.SRC_CONTROLLER;
         if (far ? !trusted(p) : !allowed(p)) {
@@ -1772,16 +1892,30 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (st0 < BridgeMathSC.STAB_FOLD) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.unstable", st0, BridgeMathSC.STAB_FOLD));
         }
+        // МП-3: other mods' claims (FTB Utilities, GriefPrevention...) at the ends' vortex and exit cells, asked as the owner
+        com.mojang.authlib.GameProfile claimAs = claimProfile(p);
+        for (End e : new End[]{pl.a, pl.b}) {
+            if (claimRefused(e, claimAs)) {
+                return refuse(p, new BridgeMsgSC("sc.bridge.refuse.place", e.x, e.y, e.z).part("sc.bridge.place.claim"));
+            }
+        }
         // С5 / С7: an unfamiliar point (or a first trip into a dimension) scatters the far end to a free place near it
         int shift = 0;
         End pt = pl.b.kind == BridgeMathSC.END_POINT ? pl.b : pl.a.kind == BridgeMathSC.END_POINT ? pl.a : null;
         if (pt != null && pl.fam[2] > 0) {
             int[] at = scatterEnd(pt, pt == pl.b ? pl.a : pl.b, pl.fam[2], p, o);
             if (at != null) {
-                shift = (int) BridgeMathSC.distance(pt.x, 0, pt.z, at[0], 0, at[2]);
+                int[] was = {pt.x, pt.y, pt.z};
                 pt.x = at[0];
                 pt.y = at[1];
                 pt.z = at[2];
+                if (claimRefused(pt, claimAs)) {
+                    pt.x = was[0];                                   // МП-3: not scattered into a claim - stays where it was checked
+                    pt.y = was[1];
+                    pt.z = was[2];
+                } else {
+                    shift = (int) BridgeMathSC.distance(was[0], 0, was[2], at[0], 0, at[2]);
+                }
             }
         }
         // everything is there: the singularity is born now
@@ -2211,6 +2345,16 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             return;
         }
         if (e.ridingEntity != null || e.riddenByEntity != null) {
+            // МС-6: riders and their mounts don't pass - the riding player is told so, at most once in 3 s
+            Entity rider = e instanceof EntityPlayer ? e : e.riddenByEntity;
+            if (rider instanceof EntityPlayer && !(rider instanceof net.minecraftforge.common.util.FakePlayer)) {
+                NBTTagCompound rd = rider.getEntityData();
+                long t = e.worldObj.getTotalWorldTime();
+                if (rd.getLong("scBridgeRideMsg") <= t) {
+                    rd.setLong("scBridgeRideMsg", t + 60);
+                    tell((EntityPlayer) rider, new BridgeMsgSC("sc.bridge.msg.dismount"));
+                }
+            }
             return;
         }
         boolean player = e instanceof EntityPlayer;
@@ -2580,6 +2724,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
     }
 
+    /** МС-2: what a public bridge keeps from strangers - the power, the tanks, deleting / renaming bookmarks (owner / friends only). */
+    private static boolean trustedOnly(int a) {
+        return a == A_POWER || a == A_CLEAR || a == A_BM_RENAME || a == A_BM_DELETE;
+    }
+
     public void action(EntityPlayer p, int a, int[] v, String s) {
         if (needsOwner(a) && ownerlessRefusal(p) != null) {
             return;
@@ -2660,7 +2809,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             default:
                 break;
         }
-        if (!allowed(p)) {
+        if (!allowed(p) || trustedOnly(a) && !trusted(p)) {
             refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
             return;
         }
@@ -2748,11 +2897,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     /** The coordinators in a player's inventory: «Из коорд.» (the first with a point), «В коорд.», copy one into an empty one. */
     private void coordAction(EntityPlayer p, int a, int[] v, String s) {
         net.minecraft.item.ItemStack[] inv = p.inventory.mainInventory;
-        int withPoint = -1, empty = -1, any = -1;
+        int withPoint = -1, empty = -1;
         net.minecraft.item.ItemStack held = p.getHeldItem();
         for (int i = 0; i < inv.length; i++) {
             if (com.sc.item.ItemCoordinatorSC.isCoordinator(inv[i])) {
-                any = any < 0 ? i : any;
                 if (com.sc.bridge.BridgeItemDataSC.point(inv[i]) != null) {
                     withPoint = withPoint < 0 ? i : withPoint;
                 } else if (empty < 0) {
@@ -2773,9 +2921,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 m = new BridgeMsgSC("sc.bridge.msg.fromCoord", pt[0], pt[1], pt[2]);
             }
         } else if (a == A_TO_COORD) {
-            net.minecraft.item.ItemStack c = com.sc.item.ItemCoordinatorSC.isCoordinator(held) ? held : empty >= 0 ? inv[empty] : any >= 0 ? inv[any] : null;
+            // МС-5: a filled coordinator is overwritten only from the hand, never picked from the bag
+            net.minecraft.item.ItemStack c = com.sc.item.ItemCoordinatorSC.isCoordinator(held) ? held : empty >= 0 ? inv[empty] : null;
             if (c == null || v.length < 4) {
-                m = new BridgeMsgSC("sc.bridge.refuse.nocoord");
+                m = new BridgeMsgSC(c == null ? "sc.bridge.refuse.noemptycoord" : "sc.bridge.refuse.nocoord");
             } else {
                 World w = DimensionManager.getWorld(bridgeKind() == BridgeMathSC.SPACE ? v[3] : ownDim());
                 if (w != null && !w.checkChunksExist(v[0] - 2, 0, v[2] - 2, v[0] + 2, 255, v[2] + 2)) {
@@ -2912,6 +3061,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         return t;
     }
 
+    /** МС-11: the nearest-free-place radius of a preview plan (the full one only on «Открыть»). */
+    public static final int PREVIEW_NEAR_RADIUS = 6;
     /** М-2: how long a remote's / the armour's preview plan is kept (ticks). */
     public static final int PREVIEW_CACHE_TICKS = 30;
     /** М-2: the preview plans by key (viewer, his block and look, the order) - {world time, Plan}. */
@@ -2969,8 +3120,26 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         t.setBoolean("turb", turbulent);
     }
 
-    /** The registered dimensions with their names (the Space bridge's choice). */
+    /** МС-8: the dimension list kept a minute (not rebuilt for every state packet); a world load drops it. */
+    private static NBTTagList dimCache;
+    private static long dimCacheAt;
+
+    /** МС-8: a world was loaded (WorldEvent.Load) - the next state packet lists the dimensions anew. */
+    public static void invalidateDims() {
+        dimCache = null;
+    }
+
+    /** The registered dimensions with their names (the Space bridge's choice), cached for 60 s (МС-8). */
     private static NBTTagList dimList() {
+        long now = com.sc.bridge.BridgeFarSC.now();
+        if (dimCache == null || now < dimCacheAt || now - dimCacheAt >= 1200) {
+            dimCache = buildDimList();
+            dimCacheAt = now;
+        }
+        return (NBTTagList) dimCache.copy();
+    }
+
+    private static NBTTagList buildDimList() {
         NBTTagList dims = new NBTTagList();
         for (Integer id : DimensionManager.getStaticDimensionIDs()) {
             NBTTagCompound d = new NBTTagCompound();
@@ -3308,7 +3477,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         nbt.setTag("Bookmarks", bm);
     }
 
-    /** The item keeps the tanks and the bookmarks, and the ring's wear and cooling (М-4 / С12: not undone by moving the controller). */
+    /**
+     * The item keeps the tanks and the bookmarks, and the ring's wear and cooling (М-4 / С12: not undone by moving the controller);
+     * СХ-1: also the name and the bridge's id - put back on its old place it is the same bridge for remotes and helmets
+     * (they find it by place and id). The owner, friends, access and the target are set anew.
+     */
     public NBTTagCompound writeToItem() {
         NBTTagCompound nbt = new NBTTagCompound();
         boolean any = false;
@@ -3327,6 +3500,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (coolTicks > 0) {
             nbt.setIntArray("BridgeCool", new int[]{coolTicks, coolTotal, heatAtClose, overheatLock ? 1 : 0});
         }
+        if (name.length() > 0) {
+            nbt.setString("Name", name);
+        }
+        if (bridgeId != 0) {
+            nbt.setLong("BridgeId", bridgeId);
+        }
         return nbt;
     }
 
@@ -3341,6 +3520,12 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             heatAtClose = Math.max(0, c[2]);
             overheatLock = c[3] != 0;
             heat = BridgeMathSC.coolingHeat(heatAtClose, coolTicks, coolTotal);
+        }
+        if (nbt.hasKey("Name")) {
+            name = cut(nbt.getString("Name"));
+        }
+        if (nbt.getLong("BridgeId") != 0) {
+            bridgeId = nbt.getLong("BridgeId");
         }
         markDirty();
     }

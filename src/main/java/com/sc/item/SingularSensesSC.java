@@ -122,6 +122,12 @@ public final class SingularSensesSC {
      * spawners always).
      */
     static List<int[]> scanBlocks(World w, int cx, int cy, int cz, int r, int limit) {
+        return scanBlocks(w, cx, cy, cz, r, limit, null);
+    }
+
+    /** The same for this player: МП-2 - no chests and spawners under someone else's private field or claim (ores still shown). */
+    static List<int[]> scanBlocks(World w, int cx, int cy, int cz, int r, int limit, EntityPlayer p) {
+        Guard guard = p == null ? null : new Guard(w, p);
         List<int[]> out = new ArrayList<int[]>();
         int y0 = Math.max(0, cy - r), y1 = Math.min(255, cy + r), ores = 0;
         for (int chX = (cx - r) >> 4; chX <= (cx + r) >> 4; chX++) {
@@ -133,7 +139,8 @@ public final class SingularSensesSC {
                 for (Object o : c.chunkTileEntityMap.values()) {
                     TileEntity te = (TileEntity) o;
                     int kind = te instanceof TileEntityChest ? SingularSenseData.CHEST : te instanceof TileEntityMobSpawner ? SingularSenseData.SPAWNER : -1;
-                    if (kind >= 0 && Math.abs(te.xCoord - cx) <= r && Math.abs(te.zCoord - cz) <= r && te.yCoord >= y0 && te.yCoord <= y1) {
+                    if (kind >= 0 && Math.abs(te.xCoord - cx) <= r && Math.abs(te.zCoord - cz) <= r && te.yCoord >= y0 && te.yCoord <= y1
+                            && (guard == null || !guard.refused(te.xCoord, te.yCoord, te.zCoord))) {
                         out.add(new int[]{te.xCoord, te.yCoord, te.zCoord, kind, dist2(te.xCoord - cx, te.yCoord - cy, te.zCoord - cz)});
                     }
                 }
@@ -171,6 +178,45 @@ public final class SingularSensesSC {
         return out;
     }
 
+    /**
+     * МП-2: a private field refusing the player, or another mod's claim (asked as the network view
+     * asks it, NetViewNetSC: a BreakEvent by a ProbePlayerSC with the player's profile, nothing broken
+     * - one probe a chunk, cached for the pulse).
+     */
+    private static final class Guard {
+        final World w;
+        final EntityPlayer p;
+        EntityPlayer fake;
+        final java.util.Map<Long, Boolean> chunks = new java.util.HashMap<Long, Boolean>();
+
+        Guard(World w, EntityPlayer p) {
+            this.w = w;
+            this.p = p;
+        }
+
+        boolean refused(int x, int y, int z) {
+            if (com.sc.ShieldEventHandler.privateFieldAgainst(w, p, x, y, z) != null) {
+                return true;
+            }
+            if (!(w instanceof net.minecraft.world.WorldServer) || !w.blockExists(x, y, z)) {
+                return false;
+            }
+            Long key = Long.valueOf(((long) (x >> 4) << 32) | ((z >> 4) & 0xFFFFFFFFL));
+            Boolean r = chunks.get(key);
+            if (r == null) {
+                if (fake == null) {
+                    fake = new com.sc.handler.NetViewNetSC.ProbePlayerSC((net.minecraft.world.WorldServer) w, p.getGameProfile());
+                }
+                net.minecraftforge.event.world.BlockEvent.BreakEvent ev = new net.minecraftforge.event.world.BlockEvent.BreakEvent(
+                        x, y, z, w, w.getBlock(x, y, z), w.getBlockMetadata(x, y, z), fake);
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(ev);
+                r = Boolean.valueOf(ev.isCanceled());
+                chunks.put(key, r);
+            }
+            return r.booleanValue();
+        }
+    }
+
     private static int dist2(int dx, int dy, int dz) {
         return dx * dx + dy * dy + dz * dz;
     }
@@ -192,7 +238,7 @@ public final class SingularSensesSC {
     private static void pulse(EntityPlayerMP p) {
         int r = ArmorFeature.SCANNER_RADIUS;
         int cx = MathHelper.floor_double(p.posX), cy = MathHelper.floor_double(p.posY), cz = MathHelper.floor_double(p.posZ);
-        List<int[]> blocks = capScan(scanBlocks(p.worldObj, cx, cy, cz, r, 4096), ArmorFeature.SCANNER_MAX_BLOCKS);
+        List<int[]> blocks = capScan(scanBlocks(p.worldObj, cx, cy, cz, r, 4096, p), ArmorFeature.SCANNER_MAX_BLOCKS);
         com.sc.bridge.BridgeFarSC.noteFinds(p, blocks);                 // the bridge link's «Находки сканера» (chests first: capScan's order)
         int[] b = new int[blocks.size() * 4];
         for (int i = 0; i < blocks.size(); i++) {
@@ -394,7 +440,7 @@ public final class SingularSensesSC {
 
     // ------------------------------------------------------------------ К2 resonance
 
-    /** What a tile entity gives the resonance: 2 a running Singular reactor, 1 a powered, switched-on field generator, 0 nothing. */
+    /** What a tile entity gives the resonance: 2 a running Singular reactor, 1 a field generator with its field up (paying its upkeep), 0 nothing. */
     public static int resonanceKind(TileEntity te) {
         if (te instanceof com.sc.tileentity.TileEntityGeneratorSC) {
             com.sc.tileentity.TileEntityGeneratorSC g = (com.sc.tileentity.TileEntityGeneratorSC) te;
@@ -404,8 +450,8 @@ public final class SingularSensesSC {
         }
         if (te instanceof com.sc.tileentity.TileEntityFieldGeneratorSC) {
             com.sc.tileentity.TileEntityFieldGeneratorSC f = (com.sc.tileentity.TileEntityFieldGeneratorSC) te;
-            if (f.isPowerOn() && !f.isRedstoneOff() && f.getEnergyStored() > 0) {
-                return 1;
+            if (f.isActive() && f.isPowerOn() && !f.isRedstoneOff()) {
+                return 1;                                   // СБ-10: the field really up - not just switched on with 1 EU
             }
         }
         return 0;

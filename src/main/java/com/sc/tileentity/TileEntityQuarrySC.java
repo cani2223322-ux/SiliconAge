@@ -147,6 +147,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     private int scanY, scanIndex;
     /** The scan's progress: blocks looked at and in all (for the screen's percentage). */
     private long scanned, scanTotal;
+    /** Of those, cells passed over unloaded (not counted in, no energy taken). */
+    private long scanSkipped;
     /** EU the scanner spends per block it looks at - it is no free X-ray. */
     public static final int SCAN_COST = 8;
     private final Map<String, Integer> oreCounts = new LinkedHashMap<String, Integer>();
@@ -430,14 +432,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Does the filter let this block be dug? (Everything else stays where it is.) */
     private boolean passesFilter(Block block, int meta) {
-        if (replace == REPLACE_ASWAS) {
-            return isOre(block, meta);
+        if (replace == REPLACE_ASWAS && !isOre(block, meta)) {
+            return false;                                  // "as it was": ore only - and the filter on top
         }
         if (!has(F_FILTER) || filterMode == FILTER_ALL) {
             return true;
         }
         if (filterMode == FILTER_ORE) {
-            return isOre(block, meta);
+            return replace == REPLACE_ASWAS || isOre(block, meta);
         }
         Item item = Item.getItemFromBlock(oreBlock(block));
         boolean listed = false;
@@ -818,6 +820,10 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** One tick of the rig: hauls ore up while it has the energy - fortune adds copies, crushing / washing as the quarry's. */
     private void haul() {
+        if (haulLogChanged && viewers > 0 && worldObj.getTotalWorldTime() % 60 == 0) {
+            haulLogChanged = false;
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the Lenses tab's "Brought up" - every 3 s while a screen is open
+        }
         int total = totalWeight();
         if (total <= 0) {
             setStatus(Status.NO_AREA);
@@ -855,10 +861,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             String key = Item.itemRegistry.getNameForObject(ore.getItem()) + "@" + ore.getItemDamage();
             Integer n = oreCounts.get(key);
             oreCounts.put(key, n == null ? 1 : n + 1);
+            haulLogChanged = true;
             markDirty();
         }
         setStatus(Status.RUNNING);
     }
+
+    /** A haul since the log last went to the client. */
+    private boolean haulLogChanged;
 
     /**
      * Head repair: while its switch is on (with the module in), the quarry mends the head instead of
@@ -1400,7 +1410,11 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 }
             }
         }
+        int f = fortune();
         for (ItemStack d : drops) {
+            if (f > 0 && d != null && isOre(d) && active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
+                d.stackSize *= 1 + worldObj.rand.nextInt(f + 1);   // the ore block itself (iron, gold, mod ores): fortune multiplies what crushing gives, as the rig's
+            }
             for (ItemStack out : process(d)) {
                 store(out);
             }
@@ -1656,17 +1670,23 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             scanIndex = 0;
             scanDirty = false;
             scanned = 0;
+            scanSkipped = 0;
             scanTotal = (long) (a[4] - a[5] + 1) * cellsPerLayer(a);
         }
         int budget = 1024, cells = cellsPerLayer(a);
         while (budget-- > 0 && scanY >= a[5]) {
-            if (getEnergyStored() < SCAN_COST) {
-                return;                            // waits for energy
-            }
-            removeEnergy(SCAN_COST);
-            scanned++;
             int[] c = cell(a, scanIndex);
-            if (c != null && worldObj.blockExists(c[0], scanY, c[1])) {
+            boolean loaded = c == null || worldObj.blockExists(c[0], scanY, c[1]);
+            if (loaded) {
+                if (getEnergyStored() < SCAN_COST) {
+                    return;                        // waits for energy
+                }
+                removeEnergy(SCAN_COST);
+            } else {
+                scanSkipped++;                     // its chunk isn't loaded: not looked at, not paid for, shown apart
+            }
+            scanned++;
+            if (c != null && loaded) {
                 Block b = worldObj.getBlock(c[0], scanY, c[1]);
                 int meta = worldObj.getBlockMetadata(c[0], scanY, c[1]);
                 if (!b.isAir(worldObj, c[0], scanY, c[1]) && isOre(b, meta)) {
@@ -1694,16 +1714,27 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return scanTotal <= 0 ? -1 : (int) Math.min(100, scanned * 100 / scanTotal);
     }
 
+    /** The share of the area the scan passed over unloaded (0-100; at least 1 if any cell was). */
+    public int scanSkippedPercent() {
+        return scanTotal <= 0 || scanSkipped <= 0 ? 0 : (int) Math.max(1, Math.min(100, scanSkipped * 100 / scanTotal));
+    }
+
     /** Old counts go (a new area, the scanner taken out, a reload); nothing is scanned until asked. */
     private void clearScan() {
         oreCounts.clear();
         scanDirty = false;
         scanY = 0;
         scanned = 0;
+        scanSkipped = 0;
         scanTotal = 0;
     }
 
-    private int scanPercentClient = -1;
+    private int scanPercentClient = -1, scanSkippedClient;
+
+    /** "Not scanned (not loaded): N%" on the Map tab; it comes with the block's description packet. */
+    public int getScanSkippedClient() {
+        return scanSkippedClient;
+    }
 
     public int getScanPercentClient() {
         return scanPercentClient;
@@ -1934,9 +1965,34 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return ownerProfile;
     }
 
+    /** The owner by UUID once it is known (a renamed owner keeps access, a newcomer with the old name gets none); by name before that. */
     public boolean allowed(EntityPlayer p) {
-        return owner.isEmpty() || owner.equalsIgnoreCase(p.getCommandSenderName())
+        return owner.isEmpty() || isOwner(p)
                 || p instanceof EntityPlayerMP && net.minecraft.server.MinecraftServer.getServer().getConfigurationManager().func_152596_g(((EntityPlayerMP) p).getGameProfile());
+    }
+
+    private boolean isOwner(EntityPlayer p) {
+        boolean server = worldObj != null && !worldObj.isRemote;
+        if (!ownerId.isEmpty() && p.getUniqueID() != null) {
+            if (!ownerId.equalsIgnoreCase(p.getUniqueID().toString())) {
+                return false;
+            }
+            if (server && !owner.equals(p.getCommandSenderName())) {
+                owner = p.getCommandSenderName();          // the owner was renamed: the name follows
+                ownerProfile = null;
+                markDirty();
+            }
+            return true;
+        }
+        if (!owner.equalsIgnoreCase(p.getCommandSenderName())) {
+            return false;
+        }
+        if (server && p instanceof EntityPlayerMP && p.getUniqueID() != null) {
+            ownerId = p.getUniqueID().toString();          // an old quarry: the owner's UUID, now known for sure
+            ownerProfile = null;
+            markDirty();
+        }
+        return true;
     }
 
     private void warn(Status s) {
@@ -2015,8 +2071,17 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                     }
                 }
                 break;
-            case A_FORTUNE: fortuneLevel = clamp(fortuneLevel + value, 1, 5); break;
-            case A_FILTER_MODE: filterMode = (filterMode + 1) % 4; break;
+            case A_FORTUNE: {
+                int n = moduleCount(ItemQuarryModuleSC.Kind.FORTUNE), cap = n > 0 ? Math.min(5, n) : 5;
+                fortuneLevel = clamp(Math.min(fortuneLevel, cap) + value, 1, cap);   // down to what the modules give first
+                break;
+            }
+            case A_FILTER_MODE:
+                filterMode = (filterMode + 1) % 4;
+                if (isExo() && filterMode == FILTER_ORE) {
+                    filterMode = FILTER_ONLY;            // the rig brings up ore only: "ore only" is "everything"
+                }
+                break;
             case A_OUT_SIDE: outSide = outSide >= 5 ? -1 : outSide + 1; break;
             case A_SHOW: show = (show + 1) % 4; break;
             case A_VFLAG: vflags ^= value & (V_DASH | V_PLANE); break;
@@ -2264,12 +2329,17 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 && player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= 64;
     }
 
+    /** Screens open on it now (server; ContainerQuarrySC opens and closes): the rig's haul log is sent only while someone looks. */
+    private int viewers;
+
     @Override
     public void openInventory() {
+        viewers++;
     }
 
     @Override
     public void closeInventory() {
+        viewers = Math.max(0, viewers - 1);
     }
 
     @Override
@@ -2727,6 +2797,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             c.appendTag(t);
         }
         nbt.setTag("OreCounts", c);
+        nbt.setInteger("ScanSkip", scanSkippedPercent());
         return new net.minecraft.network.play.server.S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
     }
 
@@ -2759,6 +2830,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         for (int i = 0; i < c.tagCount(); i++) {
             oreCounts.put(c.getCompoundTagAt(i).getString("K"), c.getCompoundTagAt(i).getInteger("N"));
         }
+        scanSkippedClient = nbt.getInteger("ScanSkip");
     }
 
     // ------------------------------------------------------------------ rendering

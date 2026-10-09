@@ -467,8 +467,10 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
                 }
                 needGas = true;
                 if (tankAmount(g) <= 0) {
+                    noGas[g.ordinal()] = true;             // even after the pull: automation may take the piece unfilled
                     continue;
                 }
+                noGas[g.ordinal()] = false;
                 if (affordableGas(getEnergyStored()) <= 0) {
                     starved = true;
                     continue;
@@ -848,9 +850,34 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         return slot < SLOTS && slots[slot] == null && fits(slot, stack);
     }
 
+    /** Per gas: the last round wanted it and the tank stayed dry after pulling (not saved - held until the first round). */
+    private final boolean[] noGas = new boolean[Gas.values().length];
+
+    /**
+     * БР-6: hoppers and tubes take only a finished piece - fully charged, and full of every gas the
+     * station fills (switched on, not switched off for it) that the piece has a tank for. A gas the
+     * station has none of (its tank dry after pulling) doesn't hold the piece.
+     */
+    public boolean pieceReady(ItemStack s) {
+        if (s == null) {
+            return false;
+        }
+        if (tierAllows(s) && ItemArmorSC.chargeOf(s) < ItemArmorSC.capacityOf(s)) {
+            return false;
+        }
+        if (fillGases) {
+            for (Gas g : Gas.values()) {
+                if (gasEnabled(g) && !noGas[g.ordinal()] && ArmorGasSC.amount(s, g) < ArmorGasSC.capacity(s, g)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     @Override
     public boolean canExtractItem(int slot, ItemStack stack, int side) {
-        return slot < SLOTS;
+        return slot < SLOTS && pieceReady(stack);
     }
 
     // ------------------------------------------------------------------ gases pushed in by pipes
