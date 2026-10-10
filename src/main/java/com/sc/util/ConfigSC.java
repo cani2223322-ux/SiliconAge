@@ -76,6 +76,14 @@ public final class ConfigSC {
      * and branch costs - EU and gases apart; process time; level score thresholds. The tables stay in code, scaled.
      */
     public static float singularEnergy = 1F, singularGas = 1F, singularTime = 1F, singularScore = 1F;
+    /**
+     * ПЭ-1 «Подавитель электроники» (section "weapons.pe1", docs/plan-pe1.md §9; server-side, synced to clients): the gun works
+     * at all; it affects players; suppression time, siphon speed, ПЭ-1 heat and helium boil-off x these; the siphon's base loss, %;
+     * the immunity after a suppression, seconds.
+     */
+    public static boolean empEnabled = true, empAffectsPlayers = true;
+    public static float empDurationMultiplier = 1F, empSiphonRateMultiplier = 1F, empHeatMultiplier = 1F, empHeliumBoilMultiplier = 1F;
+    public static int empSiphonLoss = 25, empImmunitySeconds = 20;
 
     /** A whole number scaled by a multiplier, at least `min`, capped to an int. */
     public static int scale(int base, float mul, int min) {
@@ -202,6 +210,24 @@ public final class ConfigSC {
                     "The station's process time, times this / Множитель времени процессов станции");
             singularScore = num(config, "score", sg, 1F, 0.1F, 10F,
                     "Points the Singular armour and tools need for each level, times this / Множитель очков на каждый уровень сингулярной брони и инструментов");
+            String pe = "weapons.pe1";
+            config.setCategoryComment(pe, "PE-1 electronics suppressor gun (1 = as designed) / ПЭ-1 «Подавитель электроники» (1 - как задумано)");
+            empEnabled = config.getBoolean("enabled", pe, true,
+                    "The PE-1 works at all (off: it never fires) / ПЭ-1 работает (выкл.: не стреляет)");
+            empAffectsPlayers = config.getBoolean("affectsPlayers", pe, true,
+                    "The PE-1 affects players (off: mobs only, Slowness) / ПЭ-1 действует на игроков (выкл.: только мобы, Медлительность)");
+            empDurationMultiplier = num(config, "durationMultiplier", pe, 1F, 0.1F, 10F,
+                    "Suppression time, times this / Множитель времени подавления");
+            empSiphonRateMultiplier = num(config, "siphonRateMultiplier", pe, 1F, 0.1F, 10F,
+                    "Siphon speed, times this / Множитель скорости сифона");
+            empSiphonLoss = config.getInt("siphonLoss", pe, 25, 0, 90,
+                    "Siphon loss, % (the Efficient siphon module: 10/25 of it; a suppressed suit: none) / Потери сифона, % (модуль «Эффективный сифон»: 10/25 от них; по подавленной броне - 0)");
+            empImmunitySeconds = config.getInt("immunitySeconds", pe, 20, 0, 600,
+                    "Immunity after a suppression ends, seconds / Невосприимчивость после конца подавления, секунд");
+            empHeatMultiplier = num(config, "heatMultiplier", pe, 1F, 0F, 10F,
+                    "Heat the PE-1 gives the target's suit, times this / Множитель нагрева брони цели от ПЭ-1");
+            empHeliumBoilMultiplier = num(config, "heliumBoilMultiplier", pe, 1F, 0F, 10F,
+                    "Extra helium boil-off from the PE-1, times this / Множитель усиленного выкипания гелия от ПЭ-1");
         } finally {
             if (config.hasChanged()) {
                 config.save();

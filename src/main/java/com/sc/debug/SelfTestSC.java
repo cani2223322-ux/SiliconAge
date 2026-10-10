@@ -107,6 +107,7 @@ public final class SelfTestSC {
             bridgeRecipes();
             bridgeVortexLook();
             SelfTestConverterSC.run();
+            SelfTestEmpSC.run();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();

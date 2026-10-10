@@ -15,6 +15,7 @@ public class ClientProxy extends CommonProxy {
         super.preInit();
         MinecraftForge.EVENT_BUS.register(new FluidTextureHandler());
         com.sc.client.ArmorClientSC.register();
+        com.sc.emp.client.EmpClientSC.register();           // ПЭ-1: model, HUD, effects, keys
         com.sc.client.RainShieldClientSC.register();
         com.sc.client.RadiationClientSC.register();
         com.sc.client.BookKeySC.register();

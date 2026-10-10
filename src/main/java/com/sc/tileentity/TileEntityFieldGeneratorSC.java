@@ -86,7 +86,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             /** Radiation shield: players inside take no radiation; RadiationSC.FIELD_EU_PER_LEVEL a second for each level stopped. */
             F_RADIATION = 65536,
             /** ПЛ-1, with the private zone: strangers can't use doors, trapdoors, gates, levers, buttons, repeaters / comparators, beds (ShieldEventHandler.isMechanism). */
-            F_NO_MECHANISMS = 131072;
+            F_NO_MECHANISMS = 131072,
+            /** ЭМИ-экран (ПЭ-1): beams and siphon streams from outside die at the border; EmpMathSC.screenCost EU from the buffer each (EmpRulesSC.screenAbsorbs). */
+            F_EMP_SCREEN = 262144;
     /** The rain shield's extra upkeep, % of the field's, in rain and in a thunderstorm; and what a lightning bolt costs. */
     public static final int RAIN_PCT = 25, THUNDER_PCT = 50, LIGHTNING_COST = 2000;
     /** A new field (and one from before the switches): mobs pushed and hurt, warnings on, shell and charging sparks shown. */
@@ -1392,6 +1394,26 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             }
         }
         return null;
+    }
+
+    /**
+     * ПЭ-1's "one of us": `a` owns a switched-on field (ZoneRegistry - any dimension, loaded or not) with `b` on its
+     * access list, or the other way round. Server side; false where there's no registry.
+     */
+    public static boolean accessFriends(World world, String a, String b) {
+        ZoneRegistry reg = ZoneRegistry.get(world);
+        if (reg == null || a == null || b == null || a.isEmpty() || b.isEmpty()) {
+            return false;
+        }
+        for (Zone z : new ArrayList<Zone>(reg.zones)) {
+            if (z.owner.isEmpty()) {
+                continue;
+            }
+            if (z.owner.equalsIgnoreCase(a) && z.allows(b) || z.owner.equalsIgnoreCase(b) && z.allows(a)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** privateRefusing() by name - for a quarry working on its owner's behalf. */

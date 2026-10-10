@@ -392,7 +392,7 @@ public final class BladeLogicSC {
      * БР-2: an area blow is a player's attack like a left-click - Forge's AttackEntityEvent goes out
      * for each target, and one somebody cancels (a private field, another mod's claim) is skipped.
      */
-    static boolean claimed(EntityPlayer p, Entity e) {
+    public static boolean claimed(EntityPlayer p, Entity e) {
         return !net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.player.AttackEntityEvent(p, e));
     }
 

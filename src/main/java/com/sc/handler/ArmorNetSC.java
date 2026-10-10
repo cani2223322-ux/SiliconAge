@@ -156,6 +156,7 @@ public final class ArmorNetSC {
         CHANNEL.registerMessage(AnalyzeHandler.class, AnalyzeMessage.class, 4, Side.CLIENT);
         CHANNEL.registerMessage(LevelHandler.class, LevelMessage.class, 5, Side.CLIENT);
         CHANNEL.registerMessage(BladeHudHandler.class, BladeHudMessage.class, 6, Side.CLIENT);
+        com.sc.emp.EmpNetSC.register(CHANNEL);                  // ПЭ-1: discriminators 7..10
     }
 
     // ------------------------------------------------------------------ server -> client: the Singular helmet's senses (stage 2b)

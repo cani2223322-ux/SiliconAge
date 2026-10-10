@@ -32,6 +32,9 @@ public final class ItemChargeSC {
             ItemWeaponSC w = (ItemWeaponSC) s.getItem();
             return w.getType().tier.ordinal() <= tier.ordinal() ? ItemWeaponSC.charge(s, w.getType(), max) : 0;
         }
+        if (com.sc.emp.ItemEmpGunSC.isGun(s)) {
+            return com.sc.emp.EmpMathSC.CHARGE_TIER.ordinal() <= tier.ordinal() ? com.sc.emp.ItemEmpGunSC.charge(s, max) : 0;
+        }
         if (ItemWrenchSC.isElectric(s)) {
             return ItemWrenchSC.tierOf(s).chargeTier.ordinal() <= tier.ordinal() ? ItemWrenchSC.charge(s, max) : 0;
         }

@@ -18,8 +18,9 @@ import net.minecraftforge.client.event.MouseEvent;
  * Shift + mouse wheel with a Singular tool in hand (docs/plan-singular-tools.md): the blade's form (BLADE_FORM),
  * the drill's mode - normal / black hole size (DRILL_MODE); the hotbar doesn't scroll then. The blade's next form
  * is known here (BladeForm.cycle, the server's own rule): set at once and named on the action bar; the drill's
- * mode is named once the server's answer comes back (its rules are the drill's own). Client only; on the Forge
- * bus (MouseEvent) and on FML's (ClientTickEvent).
+ * mode is named once the server's answer comes back (its rules are the drill's own). The ПЭ-1's mode
+ * (docs/plan-pe1.md §1, CYCLE_MODE): the next one switched on in the K menu, the same rule as the server's
+ * (ItemEmpGunSC.step), set at once and named. Client only; on the Forge bus (MouseEvent) and on FML's (ClientTickEvent).
  */
 public class ToolWheelSC {
 
@@ -51,7 +52,8 @@ public class ToolWheelSC {
         }
         ItemStack held = mc.thePlayer.getCurrentEquippedItem();
         int delta = event.dwheel > 0 ? -1 : 1;              // the hotbar's direction: up = back
-        if (!ToolLevelSC.isBlade(held) && !ToolLevelSC.isDrill(held)) {
+        boolean gun = com.sc.emp.ItemEmpGunSC.isGun(held);
+        if (!ToolLevelSC.isBlade(held) && !ToolLevelSC.isDrill(held) && !gun) {
             return;
         }
         event.setCanceled(true);                            // the hotbar doesn't scroll with a Singular tool in hand
@@ -59,7 +61,15 @@ public class ToolWheelSC {
             return;                                         // mid-block the form stays (the server refuses it too); too fast: dropped
         }
         sentAt = ticks;
-        if (ToolLevelSC.isBlade(held)) {
+        if (gun) {
+            com.sc.emp.EmpMode from = com.sc.emp.ItemEmpGunSC.modeOf(held);
+            com.sc.emp.EmpMode to = com.sc.emp.ItemEmpGunSC.step(held, from, delta);   // switched-off modes skipped, as on the server
+            if (to != from) {
+                com.sc.emp.EmpNetSC.send(com.sc.emp.EmpNetSC.CYCLE_MODE, delta, 0);
+                com.sc.emp.ItemEmpGunSC.setMode(held, to);                           // shown at once; the server's copy follows
+            }
+            mc.ingameGUI.func_110326_a(Lang.tr("sc.emp.wheel", Lang.tr("sc.emp.mode." + to.key())), false);
+        } else if (ToolLevelSC.isBlade(held)) {
             BladeForm from = ItemBladeSC.formOf(held);
             BladeForm to = BladeForm.cycle(from, delta, ToolLevelSC.effectiveLevel(mc.thePlayer, held), ToolLevelSC.branchOf(held),
                     mc.thePlayer.capabilities.isCreativeMode);

@@ -555,12 +555,21 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
         return powered(armor) ? protection(player) : 0;
     }
 
-    /** The plating's armour points worn by `wearer`: in emergency mode (Quantum / Exo, no helium) only as good as iron. */
+    /**
+     * The plating's armour points worn by `wearer`: in emergency mode (Quantum / Exo, no helium) only as good as iron;
+     * so is a piece a ПЭ-1 suppressed (never better than its own - charge and gases stay).
+     */
     private int protection(EntityLivingBase wearer) {
         if (wearer instanceof EntityPlayer) {
-            return protectionIn(com.sc.util.ArmorGasSC.wornSet((EntityPlayer) wearer));
+            int points = protectionIn(com.sc.util.ArmorGasSC.wornSet((EntityPlayer) wearer));
+            return com.sc.emp.EmpSC.isSuppressed((EntityPlayer) wearer, armorType) ? suppressedPoints(points) : points;
         }
         return damageReduceAmount;
+    }
+
+    /** A ПЭ-1-suppressed piece's points: iron's for its slot, or its own `points` when those are lower already. */
+    public int suppressedPoints(int points) {
+        return Math.min(points, ArmorMaterial.IRON.getDamageReductionAmount(armorType));
     }
 
     /** Armour points of this piece with the set `worn` (no player needed): iron's 2 / 6 / 5 / 2 in emergency mode. */

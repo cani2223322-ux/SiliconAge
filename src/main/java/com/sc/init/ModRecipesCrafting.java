@@ -67,6 +67,7 @@ public final class ModRecipesCrafting {
         manual();
         bridge();
         converter();
+        pe1();
     }
 
     /**
@@ -1140,5 +1141,30 @@ public final class ModRecipesCrafting {
             carryResults = set;
         }
         return carryResults.contains(net.minecraft.item.Item.getIdFromItem(s.getItem()) + ":" + s.getItemDamage());
+    }
+
+    // ---- ПЭ-1 «Подавитель электроники» (docs/plan-pe1.md §6) ----
+
+    /** The gun (the existing Pulse Emitter as its «импульсный излучатель») and its five modules; ПЭ-1М is an Upgrade Station recipe. */
+    private static void pe1() {
+        ItemStack controller = silicon(SiliconMaterial.CONTROLLER);
+        OreRecipes.shapeless(new ItemStack(ModItems.empGun, 1, com.sc.emp.ItemEmpGunSC.META_BASIC),
+                weapon(WeaponType.PULSE_EMITTER), comp("copperCoil"), comp("copperCoil"), comp("capacitor"), comp("capacitor"),
+                comp("focusLens"), comp("sensor"), controller, comp("energyCellHV"));
+        OreRecipes.shapeless(module(com.sc.emp.EmpModule.CAPACITY),
+                comp("energyCellHV"), comp("capacitor"), comp("capacitor"), comp("copperCoil"));
+        OreRecipes.shapeless(module(com.sc.emp.EmpModule.FOCUS),
+                comp("focusLens"), comp("focusLens"), comp("sensor"));
+        // The water bucket comes back empty (vanilla's container item)
+        OreRecipes.shapeless(module(com.sc.emp.EmpModule.COOLING),
+                comp("copperCoil"), comp("copperCoil"), new ItemStack(Items.water_bucket), comp("steelCasing"));
+        OreRecipes.shapeless(module(com.sc.emp.EmpModule.EFFICIENT),
+                comp("tantalumCapacitor"), comp("tantalumCapacitor"), controller.copy());
+        OreRecipes.shapeless(module(com.sc.emp.EmpModule.WIDE),
+                comp("tantalumCapacitor"), comp("tantalumCapacitor"), comp("energyCellHV"), comp("copperCoil"), comp("copperCoil"));
+    }
+
+    private static ItemStack module(com.sc.emp.EmpModule m) {
+        return new ItemStack(ModItems.empModule, 1, m.ordinal());
     }
 }

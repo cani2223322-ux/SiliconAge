@@ -1229,6 +1229,7 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         NBTTagCompound carriedArmorTag = null;
         NBTTagCompound carriedBladeTag = null;
         NBTTagCompound carriedDrillTag = null;
+        NBTTagCompound carriedEmpTag = null;                       // ПЭ-1 -> ПЭ-1М: charge, modules, settings
         for (int i = 0; i < INPUT_SLOTS; i++) {
             if (slots[i] != null && slots[i].getItem() instanceof com.sc.item.ItemArmorSC && slots[i].hasTagCompound()) {
                 carriedArmorTag = (NBTTagCompound) slots[i].getTagCompound().copy();
@@ -1238,6 +1239,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             }
             if (slots[i] != null && slots[i].getItem() instanceof com.sc.item.ItemDrillSC && slots[i].hasTagCompound()) {
                 carriedDrillTag = (NBTTagCompound) slots[i].getTagCompound().copy();
+            }
+            if (slots[i] != null && slots[i].getItem() instanceof com.sc.emp.ItemEmpGunSC && slots[i].hasTagCompound()) {
+                carriedEmpTag = (NBTTagCompound) slots[i].getTagCompound().copy();
             }
         }
         consumeInputs(recipe);
@@ -1260,6 +1264,10 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 if (carriedDrillTag != null && made.getItem() instanceof com.sc.item.ItemDrillSC) {
                     made.setTagCompound((NBTTagCompound) carriedDrillTag.copy());
                     com.sc.item.ItemDrillSC.setCharge(made, com.sc.item.ItemDrillSC.chargeOf(made));
+                }
+                if (carriedEmpTag != null && made.getItem() instanceof com.sc.emp.ItemEmpGunSC) {
+                    made.setTagCompound((NBTTagCompound) carriedEmpTag.copy());
+                    com.sc.emp.ItemEmpGunSC.setCharge(made, com.sc.emp.ItemEmpGunSC.chargeOf(made));
                 }
                 insertOutput(made);
             }

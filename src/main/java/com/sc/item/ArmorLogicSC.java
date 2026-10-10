@@ -39,7 +39,9 @@ import net.minecraft.util.Vec3;
  * them cost half as much again but absorbing damage 20% cheaper and the shield reach twice as far.
  * An overheated suit (chips shut down, §16) switches its functions and the set bonuses off too;
  * so does emergency mode (Quantum / Exo without helium) - chips included, the gases' passives
- * (heavy water against radiation, argon putting fires out) still work.
+ * (heavy water against radiation, argon putting fires out) still work. A piece a ПЭ-1 suppressed
+ * (com.sc.emp) has its functions off but breathing, its chips off (chestplate), the moving ones off
+ * with the legs suppressed (EmpArmorSC.featureSuppressed).
  */
 public final class ArmorLogicSC {
 
@@ -98,7 +100,7 @@ public final class ArmorLogicSC {
 
     /** bonusSet, and none while the suit is overheated either (an overheated suit gives no set bonus). */
     public static ArmorSuit activeBonusSet(EntityPlayer p) {
-        return overheated(p) ? null : bonusSet(p);
+        return overheated(p) || com.sc.emp.EmpSC.anySuppressed(p) ? null : bonusSet(p);   // ПЭ-1: a suppressed piece breaks the set too
     }
 
     /** The suit's chips (and functions) are shut down by heat. */
@@ -131,6 +133,9 @@ public final class ArmorLogicSC {
         ItemStack s = piece(p, f.piece);
         if (s == null || !ItemArmorSC.isEnabled(s, f) || (f != ArmorFeature.HUD && overheated(p))) {
             return false;
+        }
+        if (com.sc.emp.EmpArmorSC.featureSuppressed(p, f)) {
+            return false;                 // ПЭ-1: its piece suppressed (breathing stays), or a moving one with the legs suppressed
         }
         if (!com.sc.util.SingularLevel.unlocked(p, f, s)) {
             return false;                 // a Singular function above the piece's level (creative: all open)
@@ -414,7 +419,8 @@ public final class ArmorLogicSC {
     public static boolean regenOn(EntityPlayer p) {
         ItemStack chest = piece(p, 1);
         return chest != null && ItemArmorSC.isEnabled(chest, ArmorFeature.REGENERATION) && powerMode(p) == 2
-                && !overheated(p) && ItemArmorSC.chargeOf(chest) > 0 && gasAllows(ArmorGasSC.wornSet(p), ArmorFeature.REGENERATION);
+                && !overheated(p) && ItemArmorSC.chargeOf(chest) > 0 && gasAllows(ArmorGasSC.wornSet(p), ArmorFeature.REGENERATION)
+                && !com.sc.emp.EmpArmorSC.featureSuppressed(p, ArmorFeature.REGENERATION);      // ПЭ-1: the chestplate suppressed
     }
 
     /** x3 on everything the suit spends while regeneration runs (functions, absorbing damage, chips). */
@@ -833,7 +839,7 @@ public final class ArmorLogicSC {
 
     /**
      * The flight cut by the suit, not by the wearer: the gases (flightCutByGas), or a switched-on
-     * flight shut down by the overheat or by too little charge for its next second.
+     * flight shut down by a ПЭ-1 suppression, the overheat or by too little charge for its next second.
      * @return the warning's key, null when the flight wasn't cut that way
      */
     public static String flightCutReason(EntityPlayer p) {
@@ -845,6 +851,9 @@ public final class ArmorLogicSC {
         boolean on = ItemArmorSC.isEnabled(chest, ArmorFeature.FLIGHT) || ItemArmorSC.isEnabled(chest, ArmorFeature.GRAV_FLIGHT);
         if (!on) {
             return null;
+        }
+        if (com.sc.emp.EmpArmorSC.flightCut(p)) {
+            return "sc.emp.warn.flightcut";                        // ПЭ-1: the chestplate or the legs suppressed - the same soft descent
         }
         if (overheated(p)) {
             return "sc.gas.warn.flightcut.heat";
@@ -994,6 +1003,7 @@ public final class ArmorLogicSC {
         } else {
             ItemStack chest = piece(p, 1);
             boolean sensorChip = !sight && chest != null && chest.hasTagCompound() && !overheated(p) && !emergency(ArmorGasSC.wornSet(p))
+                    && !com.sc.emp.EmpArmorSC.chipsSuppressed(p)           // ПЭ-1: a suppressed chestplate's chips are off
                     && chest.getTagCompound().getCompoundTag("ChipsSC").hasKey(com.sc.util.ChipType.SENSOR.name())
                     && chipsPowered(p, chest);                     // too little EU for the chips: they're off, the effect goes too
             if (sensorChip) {
@@ -1200,7 +1210,8 @@ public final class ArmorLogicSC {
         }
         // oxygen regenerator chip (Exo): under water the helmet's oxygen comes back, for EU
         int regen = ArmorGasSC.chipTier(chest, ChipType.OXYGEN_REGEN);
-        if (regen > 0 && !overheated(p) && !emergency(worn) && ArmorSuit.exoClass(suitOf(chest)) && p.isInWater()
+        if (regen > 0 && !overheated(p) && !emergency(worn) && !com.sc.emp.EmpArmorSC.chipsSuppressed(p)
+                && ArmorSuit.exoClass(suitOf(chest)) && p.isInWater()
                 && ArmorGasSC.capacityOf(worn, Gas.OXYGEN) > ArmorGasSC.amountOf(worn, Gas.OXYGEN)
                 && ItemArmorSC.pay(chest, (int) Math.ceil(ArmorGasSC.OXYGEN_REGEN_EU * costMul(p)))) {
             ArmorGasSC.fillOf(worn, Gas.OXYGEN, ArmorGasSC.OXYGEN_REGEN_BASE + ArmorGasSC.OXYGEN_REGEN_PER_TIER * regen, false);
@@ -1282,7 +1293,7 @@ public final class ArmorLogicSC {
     public static int solarPerSecond(EntityPlayer p) {
         int eu = p.worldObj.isDaytime() ? ArmorFeature.SOLAR_PER_SECOND : ArmorFeature.SOLAR_PER_SECOND / 2;
         ItemStack chest = piece(p, 1);
-        if (chest != null && !overheated(p)) {
+        if (chest != null && !overheated(p) && !com.sc.emp.EmpArmorSC.chipsSuppressed(p)) {   // ПЭ-1: no chip bonus while suppressed
             NBTTagCompound chips = ItemArmorSC.chipsTag(chest);
             String power = com.sc.util.ChipType.POWER.name();
             if (chips.hasKey(power)) {
@@ -1305,6 +1316,8 @@ public final class ArmorLogicSC {
             int took;
             if (s.getItem() instanceof ItemWeaponSC) {
                 took = ItemWeaponSC.charge(s, ((ItemWeaponSC) s.getItem()).getType(), offer);
+            } else if (com.sc.emp.ItemEmpGunSC.isGun(s) && !(p.isUsingItem() && s == p.getCurrentEquippedItem())) {
+                took = com.sc.emp.ItemEmpGunSC.charge(s, offer);                  // ПЭ-1 (not mid charge-up / stream: an NBT change drops the client's use)
             } else if (s.getItem() instanceof ItemBladeSC && !(p.isUsingItem() && s == p.getCurrentEquippedItem())) {
                 took = ItemBladeSC.charge(s, offer);                  // the energy blades too (not mid-block: it would drop the block)
             } else if (s.getItem() instanceof ItemDrillSC && !DrillLogicSC.digging(p, s)) {

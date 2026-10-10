@@ -384,6 +384,11 @@ public class ArmorClientSC {
                 }
                 mc.fontRenderer.drawStringWithShadow(label, x, y, low && GasUiSC.blinkOff() ? 0xFF5050 : g.color);
                 mc.fontRenderer.drawStringWithShadow(pct + "%", barX + GAS_BAR_W + 4, y, low ? 0xFF5050 : 0xB0B0B0);
+                int boil = g == ArmorGasSC.Gas.HELIUM ? com.sc.emp.EmpSC.boilMultiplier(p) : 1;
+                if (boil > 1) {                                 // ПЭ-1: «×3 расход: 14 с» after the helium's %
+                    String b = Lang.tr("sc.emp.hud.boil", boil, (com.sc.emp.EmpSC.boilTicks(p) + 19) / 20);
+                    mc.fontRenderer.drawStringWithShadow(b, barX + GAS_BAR_W + 4 + mc.fontRenderer.getStringWidth(pct + "%") + 6, y, 0xFFA040);
+                }
             }
             y += 10;
         }

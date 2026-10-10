@@ -1114,6 +1114,7 @@ public final class BookContent {
         }
         weapons.addAll(paras("sc.manual.armor.charge"));
         list.add(weapons);
+        BookEmpSC.add(list, c);                                  // ПЭ-1 and «Защита от ЭМИ» (package F)
         BookEntry blades = new BookEntry("blades", c, new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.values()[0])), Lang.tr("sc.manual.armor.bladeshead"));
         blades.add(BookEl.title(Lang.tr("sc.manual.armor.bladeshead"))).addAll(paras("sc.manual.armor.blades"));
         for (com.sc.util.BladeType type : com.sc.util.BladeType.values()) {

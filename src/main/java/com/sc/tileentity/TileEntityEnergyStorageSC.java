@@ -882,6 +882,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (s.getItem() instanceof ItemWeaponSC) {
             return ItemWeaponSC.charge(s, ((ItemWeaponSC) s.getItem()).getType(), max);
         }
+        if (com.sc.emp.ItemEmpGunSC.isGun(s)) {
+            return com.sc.emp.ItemEmpGunSC.charge(s, max);
+        }
         if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             return com.sc.item.ItemWrenchSC.charge(s, max);
         }
@@ -915,6 +918,9 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         }
         if (s.getItem() instanceof ItemWeaponSC) {
             return ((ItemWeaponSC) s.getItem()).getType().tier.ordinal() <= block.ordinal();
+        }
+        if (com.sc.emp.ItemEmpGunSC.isGun(s)) {
+            return com.sc.emp.EmpMathSC.CHARGE_TIER.ordinal() <= block.ordinal();
         }
         if (com.sc.item.ItemWrenchSC.isElectric(s)) {
             return com.sc.item.ItemWrenchSC.tierOf(s).chargeTier.ordinal() <= block.ordinal();

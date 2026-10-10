@@ -21,7 +21,7 @@ public class ArmorElectricManagerSC implements IElectricItemManager {
     private static ic2.api.item.ISpecialElectricItem item(ItemStack stack) {
         return stack != null && stack.stackSize == 1
                 && (stack.getItem() instanceof ItemArmorSC || stack.getItem() instanceof ItemBladeSC || stack.getItem() instanceof ItemDrillSC
-                    || stack.getItem() instanceof ItemWeaponSC || ItemWrenchSC.isElectric(stack))
+                    || stack.getItem() instanceof ItemWeaponSC || com.sc.emp.ItemEmpGunSC.isGun(stack) || ItemWrenchSC.isElectric(stack))
                 ? (ic2.api.item.ISpecialElectricItem) stack.getItem() : null;
     }
 
@@ -29,6 +29,7 @@ public class ArmorElectricManagerSC implements IElectricItemManager {
         return stack.getItem() instanceof ItemBladeSC ? ItemBladeSC.chargeOf(stack)
                 : stack.getItem() instanceof ItemDrillSC ? ItemDrillSC.chargeOf(stack)
                 : stack.getItem() instanceof ItemWeaponSC ? ItemWeaponSC.chargeOf(stack)
+                : com.sc.emp.ItemEmpGunSC.isGun(stack) ? com.sc.emp.ItemEmpGunSC.chargeOf(stack)
                 : stack.getItem() instanceof ItemWrenchSC ? ItemWrenchSC.chargeOf(stack) : ItemArmorSC.chargeOf(stack);
     }
 
@@ -36,12 +37,15 @@ public class ArmorElectricManagerSC implements IElectricItemManager {
         return stack.getItem() instanceof ItemBladeSC ? ItemBladeSC.capacityOf(stack)
                 : stack.getItem() instanceof ItemDrillSC ? ItemDrillSC.capacityOf(stack)
                 : stack.getItem() instanceof ItemWeaponSC ? ItemWeaponSC.capacityOf(stack)
+                : com.sc.emp.ItemEmpGunSC.isGun(stack) ? com.sc.emp.ItemEmpGunSC.capacityOf(stack)
                 : stack.getItem() instanceof ItemWrenchSC ? ItemWrenchSC.tierOf(stack).maxCharge : ItemArmorSC.capacityOf(stack);
     }
 
     private static void add(ItemStack stack, int eu) {
         if (stack.getItem() instanceof ItemWeaponSC) {
             ItemWeaponSC.charge(stack, eu);
+        } else if (com.sc.emp.ItemEmpGunSC.isGun(stack)) {
+            com.sc.emp.ItemEmpGunSC.charge(stack, eu);
         } else if (stack.getItem() instanceof ItemWrenchSC) {
             ItemWrenchSC.charge(stack, eu);
         } else if (stack.getItem() instanceof ItemDrillSC) {
@@ -56,6 +60,8 @@ public class ArmorElectricManagerSC implements IElectricItemManager {
     private static void take(ItemStack stack, int eu) {
         if (stack.getItem() instanceof ItemWeaponSC) {
             ItemWeaponSC.discharge(stack, eu);
+        } else if (com.sc.emp.ItemEmpGunSC.isGun(stack)) {
+            com.sc.emp.ItemEmpGunSC.discharge(stack, eu);
         } else if (stack.getItem() instanceof ItemWrenchSC) {
             ItemWrenchSC.discharge(stack, eu);
         } else if (stack.getItem() instanceof ItemDrillSC) {

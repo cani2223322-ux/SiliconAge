@@ -144,8 +144,9 @@ public class CommonEventHandler {
         // the Nether, lava, a desert sun; snow and water cool - also the heat already stored (excess below is clamped at 0)
         heatGen += environmentHeat(player);
         ItemStack[] worn = com.sc.util.ArmorGasSC.wornSet(player);
-        // emergency mode (Quantum / Exo without helium in the loop): the chips are off too - no effect, no EU, no heat
-        if (!shutDown && !com.sc.item.ArmorLogicSC.emergency(worn)) {
+        // emergency mode (Quantum / Exo without helium in the loop): the chips are off too - no effect, no EU, no heat;
+        // the same while a ПЭ-1 has the chestplate suppressed (its heat still comes in, through functionHeat)
+        if (!shutDown && !com.sc.item.ArmorLogicSC.emergency(worn) && !com.sc.emp.EmpArmorSC.chipsSuppressed(player)) {
             int cost = com.sc.item.ArmorLogicSC.chipsCost(player, chest);   // tier x CHIP_EU_PER_TIER_SECOND each, regeneration: x3
             if (cost > 0 && ItemArmorSC.chargeOf(chest) >= cost) {
                 ItemArmorSC.discharge(chest, cost);
@@ -163,6 +164,9 @@ public class CommonEventHandler {
         int excess = Math.max(0, heat + heatGen - suit.heatDissipation);
         excess -= com.sc.util.ArmorGasSC.heliumCool(worn, excess, com.sc.item.ArmorLogicSC.fusionRunning(player));
         com.sc.util.ArmorGasSC.heliumBoilOff(worn, com.sc.item.ArmorLogicSC.fusionRunning(player));
+        // ПЭ-1: the hit / the stream boils the loop faster for a while (the Recuperator gives part back as usual)
+        com.sc.util.ArmorGasSC.heliumBoilExtra(worn, com.sc.emp.EmpSC.boilExtraMbPerSecond(player,
+                com.sc.util.ArmorGasSC.capacityOf(worn, com.sc.util.ArmorGasSC.Gas.HELIUM)), com.sc.item.ArmorLogicSC.fusionRunning(player));
         heliumWarning(player, worn, heat + heatGen - suit.heatDissipation > 0);
         heat = Math.min(suit.heatCapacity, excess);
         int pct = heat * 100 / suit.heatCapacity;

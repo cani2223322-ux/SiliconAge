@@ -1,0 +1,347 @@
+package com.sc.debug;
+
+import com.mojang.authlib.GameProfile;
+import com.sc.emp.EmpArmorSC;
+import com.sc.emp.EmpGunLogicSC;
+import com.sc.emp.EmpMathSC;
+import com.sc.emp.EmpMode;
+import com.sc.emp.EmpRulesSC;
+import com.sc.emp.EmpSC;
+import com.sc.emp.EmpStateSC;
+import com.sc.emp.ItemEmpGunSC;
+import com.sc.init.ModItems;
+import com.sc.item.ArmorLogicSC;
+import com.sc.item.ItemArmorSC;
+import com.sc.util.ArmorFeature;
+import com.sc.util.ArmorGasSC;
+import com.sc.util.ArmorSuit;
+import com.sc.util.ConfigSC;
+
+import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.relauncher.ReflectionHelper;
+import cpw.mods.fml.common.gameevent.TickEvent;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemStack;
+import net.minecraft.scoreboard.Team;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.IntHashMap;
+import net.minecraft.util.ChunkCoordinates;
+import net.minecraft.world.WorldServer;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.util.FakePlayer;
+import net.minecraftforge.common.util.FakePlayerFactory;
+
+/**
+ * ПЭ-1 in a running world (-Dsc.worldtest=true, docs/plan-pe1-tech.md §6): fake players in a Quantum suit with
+ * helium. Point on the helmet: only the helmet suppressed for the table's time x0.8 (helium), night vision off and
+ * oxygen breathing still on (package B), the boil x2; the emergency reboot (B) / EmpSC.clearSuppression: immunity
+ * at once, the 60 s cooldown. Pulse: every piece for 11 s x0.8, the suit's heat, the boil x3; after the end the
+ * pieces are immune - a second Pulse suppresses nothing, heats and boils at half. Siphon through EmpGunLogicSC
+ * (package A): the target's EU reach the shooter's suit less 25%.
+ */
+public final class WorldTestEmpSC {
+
+    /** ArmorLogicSC's (private) per-player pending heat key - ПЭ-1's heat lands there. */
+    private static final String HEAT_KEY = "scArmorHeat";
+    private static final int Y = 200, SIPHON_TICKS = 60;
+
+    private int ticks;
+    private boolean done;
+    private int x, z;
+    private FakePlayer point, pulse, drained, shooter;
+    private long pulseEndAt;
+    private int pulseTicks;
+    private int siphonTick = -1;
+    private ItemStack gun;
+    private long targetBefore, shooterBefore;
+    private Chunk chunk;
+
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || done) {
+            return;
+        }
+        ticks++;
+        WorldServer w = DimensionManager.getWorld(0);
+        if (w == null) {
+            return;
+        }
+        try {
+            if (ticks == 100) {
+                if (!ConfigSC.empEnabled) {
+                    System.out.println("[SC-WORLDTEST] SKIP pe1: weapons.pe1.enabled = false in the config");
+                    done = true;
+                    return;
+                }
+                start(w);
+            } else if (pulseEndAt > 0 && w.getTotalWorldTime() >= pulseEndAt) {
+                pulseEndAt = 0;
+                checkImmunity();
+                startSiphon(w);
+            } else if (siphonTick >= 0) {
+                siphonStep(w);
+            }
+        } catch (Throwable t) {
+            System.out.println("[SC-WORLDTEST] FAIL pe1: exception " + t);
+            t.printStackTrace();
+            clean();
+        }
+    }
+
+    // ------------------------------------------------------------------ Point, the reboot, Pulse
+
+    private void start(WorldServer w) {
+        ChunkCoordinates spawn = w.getSpawnPoint();
+        x = spawn.posX;
+        z = spawn.posZ;
+        point = fake(w, "EmpPoint", x + 6, z);
+        pulse = fake(w, "EmpPulse", x + 9, z);
+        checkPoint();
+        checkReboot();
+        checkPulse();
+    }
+
+    private void checkPoint() {
+        wear(point, ArmorSuit.QUANTUM, 100);
+        boolean helium = EmpSC.heliumInLoop(point);
+        boolean nightBefore = ArmorLogicSC.active(point, ArmorFeature.NIGHT_VISION), airBefore = ArmorLogicSC.active(point, ArmorFeature.AIR);
+        int heat0 = point.getEntityData().getInteger(HEAT_KEY);
+        int[] slots = EmpMathSC.pointPieces(EmpMathSC.ZONE_AUTO, 0.9);
+        EmpSC.HitResult r = EmpSC.applyHit(point, EmpMode.POINT, false, slots);
+        int want = EmpMathSC.durationTicks(ArmorSuit.QUANTUM, EmpMode.POINT, false, 0, helium, ConfigSC.empDurationMultiplier);
+        boolean core = helium && slots.length == 1 && slots[0] == 0 && r.ticks[0] == want && r.ticks[1] == 0 && r.ticks[2] == 0 && r.ticks[3] == 0
+                && EmpSC.isSuppressed(point, 0) && !EmpSC.isSuppressed(point, 1) && EmpSC.suppressedTicks(point, 0) == want
+                && EmpSC.immuneTicks(point, 0) == 0 && EmpSC.boilMultiplier(point) == EmpMathSC.BOIL_MUL_POINT && r.heat > 0
+                && point.getEntityData().getInteger(HEAT_KEY) > heat0;
+        System.out.println("[SC-WORLDTEST] " + (core ? "PASS" : "FAIL") + " pe1 Point on the helmet: suppressed " + r.ticks[0] + " ticks (want "
+                + want + " = 13 s x0.8 helium " + helium + "), the other pieces " + r.ticks[1] + "/" + r.ticks[2] + "/" + r.ticks[3]
+                + ", boil x" + EmpSC.boilMultiplier(point) + ", heat +" + r.heat);
+        boolean night = ArmorLogicSC.active(point, ArmorFeature.NIGHT_VISION), air = ArmorLogicSC.active(point, ArmorFeature.AIR);
+        System.out.println("[SC-WORLDTEST] " + (nightBefore && !night && airBefore && air ? "PASS" : "FAIL")
+                + " pe1 suppressed helmet (package B): night vision " + nightBefore + " -> " + night + " (off), oxygen breathing "
+                + airBefore + " -> " + air + " (stays on)");
+    }
+
+    /** B's emergency reboot pays argon (100 mB if the suit has it) + 20% charge; then the core's effect, the cooldown, a refusal. */
+    private void checkReboot() {
+        long charge0 = suitCharge(point);
+        int argonCap = ArmorGasSC.capacityOf(ArmorGasSC.wornSet(point), ArmorGasSC.Gas.ARGON);
+        int argon0 = ArmorGasSC.amountOf(ArmorGasSC.wornSet(point), ArmorGasSC.Gas.ARGON);
+        EmpArmorSC.emergencyReboot(point);
+        long charge1 = suitCharge(point);
+        int argon1 = ArmorGasSC.amountOf(ArmorGasSC.wornSet(point), ArmorGasSC.Gas.ARGON);
+        boolean paid = !EmpSC.isSuppressed(point, 0) && charge1 < charge0
+                && (argonCap <= 0 || argon1 == argon0 - EmpMathSC.REBOOT_ARGON_MB);
+        System.out.println("[SC-WORLDTEST] " + (paid ? "PASS" : "FAIL") + " pe1 emergency reboot (package B): suppression gone "
+                + !EmpSC.isSuppressed(point, 0) + ", charge " + charge0 + " -> " + charge1 + " (20%), argon " + argon0 + " -> " + argon1
+                + " (-" + EmpMathSC.REBOOT_ARGON_MB + " mB when the suit has a tank: " + (argonCap > 0) + ")");
+        if (EmpSC.isSuppressed(point, 0)) {
+            EmpSC.clearSuppression(point);                         // B didn't: still check the core's part
+        }
+        int immunity = EmpMathSC.immunityTicks(ConfigSC.empImmunitySeconds);
+        boolean core = !EmpSC.isSuppressed(point, 0) && EmpSC.immuneTicks(point, 0) == immunity
+                && EmpSC.rebootCooldownTicks(point) == EmpMathSC.REBOOT_COOLDOWN;
+        long charge2 = suitCharge(point);
+        EmpArmorSC.emergencyReboot(point);                         // nothing suppressed (and on cooldown): refused, nothing paid
+        boolean refused = suitCharge(point) == charge2 && EmpSC.rebootCooldownTicks(point) == EmpMathSC.REBOOT_COOLDOWN;
+        System.out.println("[SC-WORLDTEST] " + (core && refused ? "PASS" : "FAIL") + " pe1 clearSuppression: immune at once "
+                + EmpSC.immuneTicks(point, 0) + " ticks (want " + immunity + "), reboot cooldown " + EmpSC.rebootCooldownTicks(point)
+                + " (want " + EmpMathSC.REBOOT_COOLDOWN + "); a second reboot refused without payment " + refused);
+    }
+
+    private void checkPulse() {
+        wear(pulse, ArmorSuit.QUANTUM, 100);
+        boolean helium = EmpSC.heliumInLoop(pulse);
+        int heat0 = pulse.getEntityData().getInteger(HEAT_KEY);
+        EmpSC.HitResult r = EmpSC.applyHit(pulse, EmpMode.PULSE, false, new int[]{0, 1, 2, 3});
+        int want = EmpMathSC.durationTicks(ArmorSuit.QUANTUM, EmpMode.PULSE, false, 0, helium, ConfigSC.empDurationMultiplier);
+        boolean all = true;
+        for (int i = 0; i < 4; i++) {
+            all &= r.ticks[i] == want && EmpSC.isSuppressed(pulse, i);
+        }
+        int wantHeat = EmpMathSC.heat(ArmorSuit.QUANTUM.heatCapacity, EmpMode.PULSE, false, false, false, 0, ConfigSC.empHeatMultiplier);
+        int loop = ArmorGasSC.capacityOf(ArmorGasSC.wornSet(pulse), ArmorGasSC.Gas.HELIUM);
+        float boil = EmpSC.boilExtraMbPerSecond(pulse, loop);
+        boolean ok = helium && all && r.heat == wantHeat && pulse.getEntityData().getInteger(HEAT_KEY) - heat0 >= wantHeat
+                && EmpSC.boilMultiplier(pulse) == EmpMathSC.BOIL_MUL_PULSE && EmpSC.boilTicks(pulse) == EmpMathSC.BOIL_TICKS_PULSE && boil > 0F;
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 Pulse: every piece suppressed " + all + " for " + r.ticks[0]
+                + " ticks (want " + want + " = 11 s x0.8 helium " + helium + "), heat +" + r.heat + " (want " + wantHeat + "), boil x"
+                + EmpSC.boilMultiplier(pulse) + " for " + EmpSC.boilTicks(pulse) + " ticks, " + boil + " mB/s extra of a " + loop + " mB loop");
+        pulseTicks = want;
+        pulseEndAt = EmpSC.now(pulse) + want + 2;
+    }
+
+    /** After the Pulse: immune, not suppressed; a second Pulse suppresses nothing, heats (a repeat, immune) and boils at half. */
+    private void checkImmunity() {
+        boolean immune = !EmpSC.anySuppressed(pulse);
+        int left = EmpSC.immuneTicks(pulse, 0);
+        for (int i = 0; i < 4; i++) {
+            immune &= EmpSC.immuneTicks(pulse, i) > 0;
+        }
+        EmpSC.HitResult r = EmpSC.applyHit(pulse, EmpMode.PULSE, false, new int[]{0, 1, 2, 3});
+        boolean blocked = !r.anySuppressed() && !EmpSC.anySuppressed(pulse);
+        for (int i = 0; i < 4; i++) {
+            blocked &= r.immune[i];
+        }
+        int wantHeat = EmpMathSC.heat(ArmorSuit.QUANTUM.heatCapacity, EmpMode.PULSE, true, true, false, 0, ConfigSC.empHeatMultiplier);
+        int loop = ArmorGasSC.capacityOf(ArmorGasSC.wornSet(pulse), ArmorGasSC.Gas.HELIUM);
+        float boil = EmpSC.boilExtraMbPerSecond(pulse, loop);
+        float wantBoil = EmpMathSC.boilMbPerSecond(loop, EmpMathSC.BOIL_MUL_PULSE, false, true, ConfigSC.empHeliumBoilMultiplier);
+        boolean ok = immune && blocked && r.heat == wantHeat && Math.abs(boil - wantBoil) < 1e-3F;
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 immunity after " + pulseTicks + " ticks of Pulse: immune " + immune
+                + " (" + left + " ticks left), a second Pulse suppresses nothing " + blocked + ", heat +" + r.heat + " (want " + wantHeat
+                + ", repeat + immune), boil " + boil + " mB/s (want " + wantBoil + ", half)");
+    }
+
+    // ------------------------------------------------------------------ Siphon (package A)
+
+    private void startSiphon(WorldServer w) {
+        drained = new TargetPlayer(w, new GameProfile(java.util.UUID.nameUUIDFromBytes("EmpDrained".getBytes()), "EmpDrained"));
+        drained.setLocationAndAngles(x + 0.5, Y, z + 4 + 0.5, 0F, 0F);
+        reset(drained);
+        shooter = fake(w, "EmpShooter", x, z);                      // facing south (+Z), the target 4 blocks ahead
+        wear(drained, ArmorSuit.QUANTUM, 100);
+        wear(shooter, ArmorSuit.QUANTUM, 0);
+        chunk = w.getChunkFromBlockCoords(x, z + 4);
+        chunk.addEntity(drained);                                   // findable by the hitscan, never ticked (not in the world's list)
+        idMap(w).addKey(drained.getEntityId(), drained);            // and by id, as the stream finds its target each tick
+        gun = new ItemStack(ModItems.empGun);
+        ItemEmpGunSC.setCharge(gun, ItemEmpGunSC.capacityOf(gun));
+        ItemEmpGunSC.setMode(gun, EmpMode.SIPHON);
+        ItemEmpGunSC.setReceiverEnabled(gun, EmpMathSC.RECV_BATTERY, false);
+        ItemEmpGunSC.setReceiverEnabled(gun, EmpMathSC.RECV_GUN, false);   // only the shooter's suit takes
+        shooter.inventory.currentItem = 0;
+        shooter.inventory.mainInventory[0] = gun;
+        targetBefore = suitCharge(drained);
+        shooterBefore = suitCharge(shooter);
+        int refusal = EmpRulesSC.refusal(shooter, drained, false);
+        System.out.println("[SC-WORLDTEST] INFO pe1 siphon: the rules say " + refusal + " (0 = OK) for one fake player on another");
+        ItemStack held = EmpGunLogicSC.rightClick(gun, w, shooter);
+        if (held != null && held != gun) {
+            gun = held;
+            shooter.inventory.mainInventory[0] = gun;
+        }
+        siphonTick = 0;
+    }
+
+    private void siphonStep(WorldServer w) {
+        siphonTick++;
+        if (siphonTick <= SIPHON_TICKS) {
+            EmpGunLogicSC.usingTick(gun, shooter, siphonTick);       // FakePlayers aren't ticked: drive the item and the player tick by hand
+            EmpGunLogicSC.playerTick(shooter);
+            return;
+        }
+        boolean draining = EmpSC.drained(drained);
+        EmpGunLogicSC.stoppedUsing(gun, w, shooter, SIPHON_TICKS);
+        shooter.clearItemInUse();
+        long lost = targetBefore - suitCharge(drained), got = suitCharge(shooter) - shooterBefore;
+        int lossPct = EmpMathSC.siphonLossPct(false, false, ConfigSC.empSiphonLoss);
+        long want = lost * (100 - lossPct) / 100;
+        boolean ok = lost > 0 && got > 0 && Math.abs(got - want) <= lost / 50 + 100 && draining;
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 Siphon (package A), " + SIPHON_TICKS + " ticks: the target lost " + lost
+                + " EU, the shooter's suit got " + got + " (want ~" + want + ", loss " + lossPct + "%), the target saw the drain " + draining
+                + ", the gun has " + ItemEmpGunSC.chargeOf(gun) + " EU (" + EmpMathSC.EU_SIPHON_START + " paid for the start)");
+        clean();
+    }
+
+    // ------------------------------------------------------------------
+
+    /**
+     * The siphon's target: Forge's FakePlayer refuses every attack (canAttackPlayer = false), so EmpRulesSC would say
+     * NO_PVP; this one answers as a real EntityPlayerMP does - the server's PvP, then the scoreboard team's friendly fire.
+     */
+    private static final class TargetPlayer extends FakePlayer {
+        TargetPlayer(WorldServer w, GameProfile profile) {
+            super(w, profile);
+        }
+
+        @Override
+        public boolean canAttackPlayer(EntityPlayer other) {
+            MinecraftServer s = MinecraftServer.getServer();
+            if (s != null && !s.isPVPEnabled()) {
+                return false;
+            }
+            Team mine = getTeam(), theirs = other == null ? null : other.getTeam();
+            return mine == null || !mine.isSameTeam(theirs) || mine.getAllowFriendlyFire();
+        }
+    }
+
+    /** WorldServer's id -> entity map (getEntityByID): the target isn't spawned, so it goes in by hand. */
+    private static IntHashMap idMap(WorldServer w) {
+        return (IntHashMap) ReflectionHelper.getPrivateValue(WorldServer.class, w, "entityIdMap", "field_73066_T");
+    }
+
+    private FakePlayer fake(WorldServer w, String name, int px, int pz) {
+        FakePlayer p = FakePlayerFactory.get(w, new GameProfile(java.util.UUID.nameUUIDFromBytes(name.getBytes()), name));
+        p.setLocationAndAngles(px + 0.5, Y, pz + 0.5, 0F, 0F);
+        reset(p);
+        return p;
+    }
+
+    /** FakePlayers are cached across runs: a clean ПЭ-1 state and no pending heat. */
+    private static void reset(FakePlayer p) {
+        EmpStateSC s = EmpSC.state(p);
+        for (int i = 0; i < 4; i++) {
+            s.until[i] = 0;
+            s.immuneUntil[i] = 0;
+        }
+        s.boilMul = 0;
+        s.boilUntil = 0;
+        s.streamUntil = 0;
+        s.drainBy = 0;
+        s.lastHeatHit = 0;
+        s.aimedUntil = 0;
+        s.aimedBy = 0;
+        s.rebootReadyAt = 0;
+        EmpSC.save(p, s);
+        p.getEntityData().removeTag(HEAT_KEY);
+    }
+
+    /** A full suit at `pct` charge, every tank full; night vision and oxygen breathing on. */
+    private static void wear(FakePlayer p, ArmorSuit suit, int pct) {
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = new ItemStack(ModItems.ARMOR.get(suit)[t]);
+            ItemArmorSC.setCharge(s, (int) ((long) ItemArmorSC.capacityOf(s) * pct / 100));
+            for (ArmorGasSC.Gas g : ArmorGasSC.Gas.values()) {
+                ArmorGasSC.setAmount(s, g, ArmorGasSC.capacity(s, g));
+            }
+            if (t == 0) {
+                ItemArmorSC.setEnabled(s, ArmorFeature.NIGHT_VISION, true);
+                ItemArmorSC.setEnabled(s, ArmorFeature.AIR, true);
+            }
+            p.inventory.armorInventory[3 - t] = s;
+        }
+    }
+
+    private static long suitCharge(FakePlayer p) {
+        long sum = 0;
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = ArmorLogicSC.piece(p, t);
+            sum += s == null ? 0 : ItemArmorSC.chargeOf(s);
+        }
+        return sum;
+    }
+
+    private void clean() {
+        done = true;
+        siphonTick = -1;
+        pulseEndAt = 0;
+        if (chunk != null && drained != null) {
+            chunk.removeEntity(drained);
+            idMap((WorldServer) drained.worldObj).removeObject(drained.getEntityId());
+        }
+        for (FakePlayer p : new FakePlayer[]{point, pulse, drained, shooter}) {
+            if (p == null) {
+                continue;
+            }
+            EmpGunLogicSC.forget(p);
+            reset(p);
+            for (int t = 0; t < 4; t++) {
+                p.inventory.armorInventory[t] = null;
+            }
+            p.inventory.mainInventory[0] = null;
+        }
+        System.out.println("[SC-WORLDTEST] DONE pe1");
+    }
+}

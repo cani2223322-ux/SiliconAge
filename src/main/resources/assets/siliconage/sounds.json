@@ -18,5 +18,13 @@
   "power.off": {"category": "block", "sounds": ["power/off"]},
   "field.zap": {"category": "weather", "sounds": ["field/zap"]},
   "battery.mode": {"category": "player", "sounds": ["battery/mode"]},
-  "rad.click": {"category": "player", "sounds": ["rad/click"]}
+  "rad.click": {"category": "player", "sounds": ["rad/click"]},
+  "emp.charge": {"category": "player", "sounds": [{"name": "machine/laser", "pitch": 1.6, "volume": 0.7}]},
+  "emp.hum": {"category": "player", "sounds": [{"name": "machine/hum", "pitch": 0.6, "volume": 1.0}]},
+  "emp.shot": {"category": "player", "sounds": [{"name": "field/zap", "pitch": 1.5, "volume": 0.9}]},
+  "emp.pulse": {"category": "player", "sounds": [{"name": "field/zap", "pitch": 0.6, "volume": 1.0}]},
+  "emp.siphon": {"category": "player", "sounds": [{"name": "quarry/beam", "pitch": 1.2, "volume": 0.6}]},
+  "emp.overheat": {"category": "player", "sounds": [{"name": "machine/fluid", "pitch": 1.7, "volume": 0.7}]},
+  "emp.suppress": {"category": "player", "sounds": [{"name": "power/off", "pitch": 1.3, "volume": 1.0}]},
+  "emp.reboot": {"category": "player", "sounds": [{"name": "power/on", "pitch": 0.75, "volume": 1.0}]}
 }

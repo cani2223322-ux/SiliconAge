@@ -644,6 +644,18 @@ public final class ArmorGasSC {
         }
     }
 
+    /**
+     * The ПЭ-1's extra boil-off this second: `mb` more helium out of the worn loop (EmpSC.boilExtraMbPerSecond), through
+     * the same use as the plain boil - the Recuperator gives part back, the fusion cell doubles it. Nothing without
+     * a chestplate or helium (the Nano suit without a loop only heats).
+     */
+    public static void heliumBoilExtra(ItemStack[] w, float mb, boolean fusion) {
+        ItemStack chest = at(w, CHEST);
+        if (chest != null && mb > 0 && amountOf(w, Gas.HELIUM) > 0) {
+            drainFraction(w, Gas.HELIUM, heliumUse(chest, mb, fusion));
+        }
+    }
+
     private static float heliumUse(ItemStack chest, float mb, boolean fusion) {
         int rec = chipTier(chest, ChipType.RECUPERATOR);
         float use = mb * (rec > 0 ? 1F - RECUPERATOR_PCT[rec - 1] / 100F : 1F);

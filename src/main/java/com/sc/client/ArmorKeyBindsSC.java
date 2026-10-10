@@ -27,6 +27,7 @@ import net.minecraftforge.common.config.Configuration;
  * suit function (ArmorFeature) and every energy blade function (BladeFeature), set in the armour
  * screen (GuiArmorSC) and kept in this player's own config file. Pressing it switches the function
  * on or off - or, for dash, the annihilation pulse and the blade's sweep / wave / lunge, fires it.
+ * The ПЭ-1's modes (EmpMode, "emp_" + key) are here too: the key switches the gun in hand to that mode.
  */
 public final class ArmorKeyBindsSC {
 
@@ -45,7 +46,7 @@ public final class ArmorKeyBindsSC {
     private static String configKey(Enum<?> f) {
         String name = f.name().toLowerCase(java.util.Locale.ROOT);
         return f instanceof BladeFeature ? "blade_" + name : f instanceof PowerModeKey ? "mode_" + name
-                : f instanceof com.sc.util.DrillFeature ? "drill_" + name : name;
+                : f instanceof com.sc.util.DrillFeature ? "drill_" + name : f instanceof com.sc.emp.EmpMode ? "emp_" + name : name;
     }
 
     public static void load(File configDir) {
@@ -61,6 +62,7 @@ public final class ArmorKeyBindsSC {
         java.util.Collections.addAll(all, BladeFeature.values());
         java.util.Collections.addAll(all, PowerModeKey.values());
         java.util.Collections.addAll(all, com.sc.util.DrillFeature.values());
+        java.util.Collections.addAll(all, com.sc.emp.EmpMode.values());
         for (Enum<?> f : all) {
             String v = config.get("keys", configKey(f), "",
                     "key:modifiers (modifiers: 1 Ctrl, 2 Shift, 4 Alt; mouse buttons are -100 + button)").getString();
@@ -207,6 +209,9 @@ public final class ArmorKeyBindsSC {
         if (f instanceof com.sc.util.DrillFeature) {
             return Lang.tr("sc.drillgui.tab") + ": " + Lang.tr("sc.drillfn." + ((com.sc.util.DrillFeature) f).key());
         }
+        if (f instanceof com.sc.emp.EmpMode) {
+            return Lang.tr("sc.empgui.tab") + ": " + Lang.tr("sc.emp.mode." + ((com.sc.emp.EmpMode) f).key());
+        }
         if (f instanceof PowerModeKey) {
             PowerModeKey k = (PowerModeKey) f;
             return Lang.tr("sc.modegui.tab") + ": " + (k == PowerModeKey.CYCLE ? Lang.tr("sc.modegui.cycle.name") : Lang.tr("sc.armorgui.mode." + k.mode()));
@@ -261,6 +266,8 @@ public final class ArmorKeyBindsSC {
             fireMode(mc, (PowerModeKey) f);
         } else if (f instanceof com.sc.util.DrillFeature) {
             fireDrill(mc, (com.sc.util.DrillFeature) f);
+        } else if (f instanceof com.sc.emp.EmpMode) {
+            com.sc.emp.client.EmpKeysSC.selectMode(mc, (com.sc.emp.EmpMode) f);
         } else {
             fireArmor(mc, (ArmorFeature) f);
         }

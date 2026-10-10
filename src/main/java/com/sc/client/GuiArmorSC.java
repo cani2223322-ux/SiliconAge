@@ -8,6 +8,9 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 
 import com.sc.handler.ArmorNetSC;
+import com.sc.emp.EmpMode;
+import com.sc.emp.ItemEmpGunSC;
+import com.sc.emp.client.GuiEmpTabSC;
 import com.sc.inventory.TextFitSC;
 import com.sc.item.ArmorLogicSC;
 import com.sc.item.BladeLogicSC;
@@ -53,6 +56,8 @@ import net.minecraftforge.fluids.IFluidContainerItem;
  * with their gas tanks (a click opens the piece's tab). The window is about 470 px wide and narrows
  * on small screens: the left panel loses its percentages, then goes; two columns become one.
  * Switches go to the server (ArmorNetSC) and show at once; keys live in the player's own config.
+ * A «ПЭ-1» tab while the ПЭ-1 is in hand (its modes are rows here, the rest is GuiEmpTabSC's), and on every armour
+ * tab the «ЭМИ» line with the emergency reboot (docs/plan-pe1.md §8).
  */
 public class GuiArmorSC extends GuiScreen {
 
@@ -62,6 +67,8 @@ public class GuiArmorSC extends GuiScreen {
     private static final int LEVEL_TAB = 8;
     /** The Ground / Space Bridge's tab (a Singular helmet worn): its own screen, GuiArmorBridgeSC, with this window's tab row. */
     public static final int BRIDGE_TAB = 9;
+    /** ПЭ-1 «Подавитель электроники» in hand (docs/plan-pe1.md §8): modes, settings, modules, the target (GuiEmpTabSC). */
+    private static final int EMP_TAB = 10;
 
     public GuiArmorSC() {
     }
@@ -84,6 +91,9 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (DrillLogicSC.held(mc.thePlayer) != null) {
             out.add(DRILL_TAB);
+        }
+        if (ItemEmpGunSC.held(mc.thePlayer) != null) {
+            out.add(EMP_TAB);
         }
         if (ArmorLogicSC.piece(mc.thePlayer, 1) != null) {
             out.add(MODE_TAB);
@@ -108,11 +118,11 @@ public class GuiArmorSC extends GuiScreen {
     public static String tabLabel(int type) {
         return type == BRIDGE_TAB ? Lang.tr("sc.bridge.armour.tab") : type == LEVEL_TAB ? Lang.tr("sc.levelgui.tab") : type == LIFE_TAB
                 ? Lang.tr("sc.lifegui.tab.short") : type == BLADE_TAB ? Lang.tr("sc.bladegui.tab") : type == MODE_TAB ? Lang.tr("sc.modegui.tab")
-                : type == DRILL_TAB ? Lang.tr("sc.drillgui.tab") : Lang.tr("sc.armorhud.piece." + type);
+                : type == DRILL_TAB ? Lang.tr("sc.drillgui.tab") : type == EMP_TAB ? Lang.tr("sc.empgui.tab") : Lang.tr("sc.armorhud.piece." + type);
     }
     /** Level tab: branch buttons (level 3 A / B, level 5 A / B), profiles 0..2, "save current", the page switch, the HUD place. */
     private static final int LV_BR = 1020, LV_PROF = 1024, LV_SAVE = 1027, LV_PAGE = 1028, LV_HUD = 1029;
-    private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002,
+    private static final int BLADE_BASE = 500, MODE_BASE = 600, DRILL_BASE = 700, EMP_BASE = 800, TAB_BASE = 900, MODE_ID = 1000, CHIPS_ID = 1001, COLOR_ID = 1002,
             FILL_ALL_ID = 1003, BIND_BASE = 2000;
     /** Chestplate tab: the free branch choice (Р2) - the first / the second side of the lowest level not chosen yet. */
     private static final int BRANCH_A_ID = 1004, BRANCH_B_ID = 1005;
@@ -229,12 +239,22 @@ public class GuiArmorSC extends GuiScreen {
         return DrillLogicSC.held(mc.thePlayer);
     }
 
+    private ItemStack gun() {
+        return ItemEmpGunSC.held(mc.thePlayer);
+    }
+
+    /** The ПЭ-1 tab's own layout, drawing and buttons (GuiEmpTabSC.ID_FIRST..ID_LAST), and the armour tabs' «ЭМИ» line. */
+    private final GuiEmpTabSC emp = new GuiEmpTabSC();
+
     /** The function behind a switch or key button, or null. */
     private static Enum<?> featureOf(int id) {
         if (id >= BIND_BASE) {
             id -= BIND_BASE;
         }
-        if (id >= DRILL_BASE && id < TAB_BASE) {
+        if (id >= EMP_BASE && id < TAB_BASE) {
+            return id - EMP_BASE < EmpMode.values().length ? EmpMode.of(id - EMP_BASE) : null;
+        }
+        if (id >= DRILL_BASE && id < EMP_BASE) {
             return DrillFeature.of(id - DRILL_BASE);
         }
         if (id >= MODE_BASE && id < DRILL_BASE) {
@@ -248,7 +268,7 @@ public class GuiArmorSC extends GuiScreen {
 
     private static int switchId(Enum<?> f) {
         return f instanceof BladeFeature ? BLADE_BASE + f.ordinal() : f instanceof PowerModeKey ? MODE_BASE + f.ordinal()
-                : f instanceof DrillFeature ? DRILL_BASE + f.ordinal() : f.ordinal();
+                : f instanceof DrillFeature ? DRILL_BASE + f.ordinal() : f instanceof EmpMode ? EMP_BASE + f.ordinal() : f.ordinal();
     }
 
     // ------------------------------------------------------------------ layout
@@ -268,6 +288,7 @@ public class GuiArmorSC extends GuiScreen {
         fillMoreY = -1;
         lifeY = -1;
         tlPageW = 0;
+        emp.clearArmourLine();
         tabs.clear();
         for (int type = 0; type < 4; type++) {
             if (ArmorLogicSC.piece(mc.thePlayer, type) != null) {
@@ -279,6 +300,9 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (drill() != null) {
             tabs.add(DRILL_TAB);
+        }
+        if (gun() != null) {
+            tabs.add(EMP_TAB);
         }
         if (ArmorLogicSC.piece(mc.thePlayer, 1) != null) {
             tabs.add(MODE_TAB);
@@ -339,6 +363,14 @@ public class GuiArmorSC extends GuiScreen {
                 modeDescs.add(new int[]{k.ordinal(), dx, y + (btnH - 8) / 2, contentX + contentW - dx});
                 y += r[1];
             }
+        } else if (selectedPiece == EMP_TAB) {
+            setPanel(winW >= 460 && layoutPanel(1) ? 1 : 0);    // two columns want the room: the narrow panel or none
+            int[] r = emp.init(buttonList, contentX, contentY, contentW, footY, KEY_W, GAP);
+            pitch = r[3];
+            btnH = pitch - 2;
+            for (EmpMode m : EmpMode.values()) {                 // the modes: switch + key, as the drill's functions
+                addRow(m, r[0], r[1] + m.ordinal() * pitch, r[2], false);
+            }
         } else if (toolPage == 1 && singularTool() != null) {
             initToolInfo(singularTool());
             addToolPageButton();
@@ -372,7 +404,8 @@ public class GuiArmorSC extends GuiScreen {
             int branchLevel = chest ? pendingBranch() : 0;
             ItemStack chestStack = chest ? ArmorLogicSC.piece(mc.thePlayer, 1) : null;
             List<ChipType> installed = installedChips(chestStack);
-            int[] r = chooseRows(list.size(), chips ? 150 : 140, chest ? (branchLevel > 0 ? 40 : 20) + installed.size() * CHIP_ROW_H : 0);
+            int[] r = chooseRows(list.size(), chips ? 150 : 140, (chest ? (branchLevel > 0 ? 40 : 20) + installed.size() * CHIP_ROW_H : 0)
+                    + (armour ? GuiEmpTabSC.ARMOUR_LINE_H : 0));
             int cols = r[0];
             int colW = (contentW - (cols - 1) * COL_GAP) / cols;
             if (cols == 1) {
@@ -427,6 +460,9 @@ public class GuiArmorSC extends GuiScreen {
                                 "§d" + Lang.tr("sc.armorgui.branch.pick", branchLevel, nameOf(bf))));
                     }
                 }
+            }
+            if (armour) {                                  // ПЭ-1: the «ЭМИ» line and the emergency reboot, at the foot of the rows
+                emp.initArmourLine(buttonList, fontRendererObj, contentX, footY - GuiEmpTabSC.ARMOUR_LINE_H, cols == 1 ? colW : contentW);
             }
         }
         refresh();
@@ -637,6 +673,8 @@ public class GuiArmorSC extends GuiScreen {
         sb.append(pendingBranch()).append(';');                     // a branch picked / a new one to pick: the chestplate's buttons
         ItemStack tool = blade() != null ? blade() : drill();    // a blade / drill taken in hand: its tab and rows
         sb.append(tool == null ? "-" : String.valueOf(Item.getIdFromItem(tool.getItem())));
+        ItemStack g = gun();                                      // the ПЭ-1 taken in hand / upgraded: its tab
+        sb.append(g == null ? "|-" : "|e" + g.getItemDamage());
         return sb.toString();
     }
 
@@ -1816,8 +1854,13 @@ public class GuiArmorSC extends GuiScreen {
         int charge = -1, heat = -1;
         boolean hot = false;
         List<String> chargeTip = new ArrayList<String>();
-        ItemStack tool = selectedPiece == BLADE_TAB ? blade() : selectedPiece == DRILL_TAB ? drill() : null;
-        if (tool != null) {
+        ItemStack tool = selectedPiece == BLADE_TAB ? blade() : selectedPiece == DRILL_TAB ? drill() : selectedPiece == EMP_TAB ? gun() : null;
+        if (tool != null && selectedPiece == EMP_TAB) {           // ПЭ-1: its buffer and its own heat (0..100)
+            charge = pct(ItemEmpGunSC.chargeOf(tool), ItemEmpGunSC.capacityOf(tool));
+            heat = ItemEmpGunSC.heatOf(tool);
+            hot = ItemEmpGunSC.overheated(tool);
+            chargeTip.add(tool.getDisplayName() + ": " + charge + "%");
+        } else if (tool != null) {
             boolean isBlade = selectedPiece == BLADE_TAB;
             int cap = isBlade ? ItemBladeSC.capacityOf(tool) : ItemDrillSC.capacityOf(tool);
             charge = pct(isBlade ? ItemBladeSC.chargeOf(tool) : ItemDrillSC.chargeOf(tool), cap);
@@ -1862,6 +1905,7 @@ public class GuiArmorSC extends GuiScreen {
             x += barW + 3;
             x += fit(heat + "%", x, ty, 24, hot ? RED : heat > 80 ? ORANGE : 0xE0E0E0) + 8;
             String key = tool == null ? (hot ? "sc.armorhud.overheat" : "sc.armorhud.heat")
+                    : selectedPiece == EMP_TAB ? "sc.empgui.heat"
                     : selectedPiece == BLADE_TAB ? (hot ? "sc.bladehud.overheat" : "sc.bladehud.heat") : (hot ? "sc.drillhud.overheat" : "sc.drillhud.heat");
             TextFitSC.hover(x0, sy, x - x0, 13, Lang.tr(key, heat));
         }
@@ -2206,6 +2250,10 @@ public class GuiArmorSC extends GuiScreen {
     // ------------------------------------------------------------------ state
 
     private boolean isOn(Enum<?> f) {
+        if (f instanceof EmpMode) {
+            ItemStack g = gun();
+            return g != null && ItemEmpGunSC.modeEnabled(g, (EmpMode) f);
+        }
         if (f instanceof DrillFeature) {
             ItemStack d = drill();
             return d != null && ItemDrillSC.isEnabled(d, (DrillFeature) f);
@@ -2263,6 +2311,9 @@ public class GuiArmorSC extends GuiScreen {
     }
 
     private static String nameOf(Enum<?> f) {
+        if (f instanceof EmpMode) {
+            return Lang.tr("sc.emp.mode." + ((EmpMode) f).key());
+        }
         if (f instanceof DrillFeature) {
             return Lang.tr("sc.drillfn." + ((DrillFeature) f).key());
         }
@@ -2297,6 +2348,9 @@ public class GuiArmorSC extends GuiScreen {
             tip.add(Lang.tr("sc.modegui." + ((PowerModeKey) f).key() + ".desc"));
             return tip;
         }
+        if (f instanceof EmpMode) {
+            return GuiEmpTabSC.modeTip(gun(), (EmpMode) f);
+        }
         if (f instanceof DrillFeature) {
             tip.add(Lang.tr("sc.drillfn." + ((DrillFeature) f).key() + ".desc"));
             toolTip(tip, f);
@@ -2321,6 +2375,9 @@ public class GuiArmorSC extends GuiScreen {
         }
         if (replacedByHorizon(a)) {
             tip.add("§d" + Lang.tr("sc.armorgui.tip.replaced"));
+        }
+        if (GuiEmpTabSC.suppressedFeature(a)) {
+            tip.add("§c" + Lang.tr("sc.armorgui.emp.mark.tip", GuiEmpTabSC.suppressedSeconds(a)));
         }
         if (a.offOnLowCharge()) {
             tip.add("§7" + Lang.tr("sc.armorgui.tip.lowcharge", Math.round(ArmorFeature.SING_LOW_CHARGE * 100)));
@@ -2389,6 +2446,8 @@ public class GuiArmorSC extends GuiScreen {
                 b.displayString = k == PowerModeKey.CYCLE
                         ? Lang.tr("sc.modegui.cycle", Lang.tr("sc.armorgui.mode." + mode))
                         : k.mode() == mode ? "§a> " + Lang.tr("sc.armorgui.mode." + k.mode()) + " <" : "§7" + Lang.tr("sc.armorgui.mode." + k.mode());
+            } else if (featureOf(b.id) instanceof EmpMode) {
+                b.displayString = GuiEmpTabSC.modeLabel(gun(), (EmpMode) featureOf(b.id));
             } else {
                 Enum<?> f = featureOf(b.id);
                 boolean on = isOn(f);
@@ -2400,6 +2459,8 @@ public class GuiArmorSC extends GuiScreen {
                     b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.row.branch");
                 } else if (replacedByHorizon(f)) {                 // the Singular chestplate: Н2 does the shield's work
                     b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.row.replaced");
+                } else if (GuiEmpTabSC.suppressedFeature(f)) {        // ПЭ-1: the piece is suppressed
+                    b.displayString = "§8" + nameOf(f) + ": " + Lang.tr("sc.armorgui.emp.mark");
                 } else if (why != null) {
                     boolean emergency = f instanceof ArmorFeature
                             && ArmorLogicSC.pieceEmergency(ArmorGasSC.wornSet(mc.thePlayer), ArmorLogicSC.suitOf(ArmorLogicSC.piece(mc.thePlayer, ((ArmorFeature) f).piece)));
@@ -2409,6 +2470,7 @@ public class GuiArmorSC extends GuiScreen {
                 }
             }
         }
+        emp.refresh(buttonList);                                     // the ПЭ-1 tab's buttons, the armour line's reboot
     }
 
     // ------------------------------------------------------------------ input
@@ -2465,6 +2527,11 @@ public class GuiArmorSC extends GuiScreen {
             toolAction(b);
             return;
         }
+        if (b.id >= GuiEmpTabSC.ID_FIRST && b.id <= GuiEmpTabSC.ID_LAST) {
+            emp.action(b);
+            refresh();
+            return;
+        }
         if (b.id == CHIPS_ID) {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.REMOVE_CHIPS, 0));   // the button goes once the chestplate comes back without them
             return;
@@ -2485,6 +2552,8 @@ public class GuiArmorSC extends GuiScreen {
                 ItemArmorSC.setPowerMode(chest, want);
                 ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.POWER_MODE, want));
             }
+        } else if (featureOf(b.id) instanceof EmpMode) {
+            GuiEmpTabSC.toggleMode(gun(), (EmpMode) featureOf(b.id));
         } else if (featureOf(b.id) instanceof DrillFeature) {
             DrillFeature f = (DrillFeature) featureOf(b.id);
             ItemStack drill = drill();
@@ -2589,7 +2658,8 @@ public class GuiArmorSC extends GuiScreen {
         }
         String sig = signature();
         if (selectedPiece == LEVEL_TAB && !com.sc.util.SingularLevel.wearsSingular(mc.thePlayer)
-                || selectedPiece == BLADE_TAB && blade() == null || selectedPiece == DRILL_TAB && drill() == null || selectedPiece == MODE_TAB && ArmorLogicSC.piece(mc.thePlayer, 1) == null
+                || selectedPiece == BLADE_TAB && blade() == null || selectedPiece == DRILL_TAB && drill() == null
+                || selectedPiece == EMP_TAB && gun() == null || selectedPiece == MODE_TAB && ArmorLogicSC.piece(mc.thePlayer, 1) == null
                 || selectedPiece == 1 && (chipsShown != ItemArmorChipSC.hasChips(ArmorLogicSC.piece(mc.thePlayer, 1))
                         || !chipsSig.equals(chipsSig(ArmorLogicSC.piece(mc.thePlayer, 1))))) {
             initGui();                                           // the blade left the hand / the chips came out
@@ -2632,10 +2702,15 @@ public class GuiArmorSC extends GuiScreen {
                 drawLife();
             } else if (selectedPiece == LEVEL_TAB) {
                 drawLevel();
+            } else if (selectedPiece == EMP_TAB) {
+                emp.draw(fontRendererObj, buttonList);
             } else if (toolPage == 1 && singularTool() != null) {
                 drawToolInfo();
             } else {
                 drawRows();
+                if (selectedPiece < 4) {
+                    emp.drawArmourLine(fontRendererObj);
+                }
             }
             // the set bonus at the foot of the window
             String bonus = null;
@@ -2649,7 +2724,7 @@ public class GuiArmorSC extends GuiScreen {
                 if (b != null && BladeLogicSC.setBonus(mc.thePlayer, b)) {
                     bonus = Lang.tr("sc.bladegui.set." + ItemBladeSC.typeOf(b).key());
                 }
-            } else {
+            } else if (selectedPiece != EMP_TAB) {
                 ArmorSuit set = ArmorLogicSC.activeBonusSet(mc.thePlayer);   // no set line while overheated
                 if (set != null) {
                     bonus = Lang.tr("sc.armorgui.set." + set.name().toLowerCase(Locale.ROOT));
@@ -2707,7 +2782,7 @@ public class GuiArmorSC extends GuiScreen {
             }
             List<String> tip;
             if (b.id >= BIND_BASE) {
-                boolean action = f instanceof PowerModeKey || (f instanceof DrillFeature ? ((DrillFeature) f).isAction()
+                boolean action = f instanceof PowerModeKey || f instanceof EmpMode || (f instanceof DrillFeature ? ((DrillFeature) f).isAction()
                         : f instanceof BladeFeature ? ((BladeFeature) f).isAction() : ((ArmorFeature) f).isAction());
                 tip = new ArrayList<String>();
                 tip.add(Lang.tr(action ? "sc.armorgui.bind.tip.action" : "sc.armorgui.bind.tip"));

@@ -170,6 +170,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
                 // the last row: the two weather / radiation shields side by side
                 buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_RAIN), x, y + rows.length * 22, 96, 20, ""));
                 buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_RADIATION), x + 100, y + rows.length * 22, 98, 20, ""));
+                // under them, left of the page button: the ПЭ-1 screen
+                buttonList.add(new HoloButton(flagId(TileEntityFieldGeneratorSC.F_EMP_SCREEN), x, y + (rows.length + 1) * 22, 104, 20, ""));
                 break;
             }
             case 2: {

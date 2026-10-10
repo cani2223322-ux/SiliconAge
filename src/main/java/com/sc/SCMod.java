@@ -70,6 +70,9 @@ public class SCMod {
         FMLCommonHandler.instance().bus().register(com.sc.item.BladeEventsSC.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.item.DrillEventsSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.item.DrillEventsSC.INSTANCE);
+        // ПЭ-1 (docs/plan-pe1-tech.md): login / tracking sync, package A's per-tick work
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.emp.EmpEventsSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.emp.EmpEventsSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -130,6 +133,8 @@ public class SCMod {
         com.sc.tileentity.TileEntityBridgeControllerSC.TEST_PLAYERS.clear();
         com.sc.item.BladeSingularSC.clearAll();          // the Singular tools' queued keys, collapses, tethers, per-player state
         com.sc.item.SingularPowersSC.clearAll();         // the Singular suit's queued keys, pinned / held mobs, fields
+        com.sc.emp.EmpSC.clearAll();                     // ПЭ-1: the cached per-player states
+        com.sc.emp.EmpGunLogicSC.forget(null);           // ПЭ-1: streams / charge-ups (package A)
         com.sc.item.DrillEventsSC.INSTANCE.clearAll();   // the drill's queued forgets and tracked falling blocks (no World kept between sessions)
         com.sc.tileentity.TileEntityMachineSC.clearSmeltCache();   // furnace answers: the next world may bring changed furnace recipes
     }
@@ -154,6 +159,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestBridge3SC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestBridgeAirSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestConverterSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmpSC());
         }
     }
 }

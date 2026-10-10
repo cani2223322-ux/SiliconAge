@@ -70,6 +70,9 @@ public final class ModItems {
     public static final java.util.Map<SCToolType, ItemToolSC> TOOLS = new java.util.EnumMap<SCToolType, ItemToolSC>(SCToolType.class);
     public static final java.util.Map<ArmorSuit, ItemArmorSC[]> ARMOR = new java.util.EnumMap<ArmorSuit, ItemArmorSC[]>(ArmorSuit.class);
     public static ItemArmorChipSC armorChip;
+    /** ПЭ-1 «Подавитель электроники» (meta 1: ПЭ-1М) and its modules (meta = EmpModule ordinal). */
+    public static com.sc.emp.ItemEmpGunSC empGun;
+    public static com.sc.emp.ItemEmpModuleSC empModule;
     public static final java.util.Map<WeaponType, ItemWeaponSC> WEAPONS = new java.util.EnumMap<WeaponType, ItemWeaponSC>(WeaponType.class);
     public static final java.util.Map<com.sc.util.DrillType, com.sc.item.ItemDrillSC> DRILLS =
             new java.util.EnumMap<com.sc.util.DrillType, com.sc.item.ItemDrillSC>(com.sc.util.DrillType.class);
@@ -185,6 +188,12 @@ public final class ModItems {
             GameRegistry.registerItem(drill, "drill" + type.name());
             DRILLS.put(type, drill);
         }
+
+        // ПЭ-1 «Подавитель электроники» (docs/plan-pe1.md): the gun (meta 1 = ПЭ-1М) and its modules (appended).
+        empGun = new com.sc.emp.ItemEmpGunSC();
+        GameRegistry.registerItem(empGun, "empGun");
+        empModule = new com.sc.emp.ItemEmpModuleSC();
+        GameRegistry.registerItem(empModule, "empModule");
 
         // §7/§9: Field Generator cluster linking tool.
         fieldLinkModule = new ItemFieldLinkModule();

@@ -27,6 +27,16 @@ public final class ModRecipesUpgradeStation {
         registerSuitUpgrades();
         registerBladeUpgrades();
         registerDrillUpgrades();
+        registerEmpUpgrade();
+    }
+
+    /** ПЭ-1 -> ПЭ-1М (docs/plan-pe1.md §6): + Quartz Emitter + Tantalum Capacitor x2 -> Upgrade Station (HV); charge, modules, settings come along. */
+    private static void registerEmpUpgrade() {
+        ItemStack basic = new ItemStack(ModItems.empGun, 1, com.sc.emp.ItemEmpGunSC.META_BASIC);
+        ItemStack upgraded = new ItemStack(ModItems.empGun, 1, com.sc.emp.ItemEmpGunSC.META_UPGRADED);
+        station(MachineType.UPGRADE_STATION_HV,
+                new ItemStack[]{basic, new ItemStack(ModItems.component("quartzEmitter")), copy(ModItems.component("tantalumCapacitor"), 2)},
+                null, null, new ItemStack[]{upgraded}, null, null, 400, 0f);
     }
 
     /** The drills climb like the suits: Nano -> Quantum (HV) -> Exo (EV); charge and switches come along. */

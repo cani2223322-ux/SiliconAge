@@ -30,7 +30,8 @@ import net.minecraft.util.ResourceLocation;
  * animated (a band of light running down it; Exo's colours flowing), or in the light colour picked
  * in the armour menu. How bright tells the charge: full - bright, under 15% - flickering, empty - a
  * slow red pulse. A piece whose own function is switched off in the armour menu (night vision,
- * speed / step assist / dash, jump / fall damping / water walk) has its lights out.
+ * speed / step assist / dash, jump / fall damping / water walk) has its lights out. ПЭ-1: a suppressed piece's lights
+ * are out with a short blue spark now and then; a suit a Siphon is draining dims and wavers.
  * The add-on parts' boxes match tools/parts3d.py (their texture nets in the armour layers).
  */
 @SideOnly(Side.CLIENT)
@@ -186,7 +187,23 @@ public class ModelArmorGlowSC extends ModelBiped {
             tex = this.tex + "_glow_" + layer + "_" + (int) (time / 3 % FRAMES);
         }
         float k = 1F;
-        if (!functionsOn()) {
+        EntityPlayer wearer = entity instanceof EntityPlayer ? (EntityPlayer) entity : null;
+        int armorType = ((ItemArmorSC) stack.getItem()).armorType;
+        boolean suppressed = wearer != null && com.sc.emp.EmpSC.isSuppressed(wearer, armorType);
+        if (suppressed) {
+            // ПЭ-1: the piece suppressed - its lights out, now and then a short blue spark through them
+            int n = (int) ((time * 7919L + entity.getEntityId() * 131L + armorType * 17L) % 23);
+            if (n == 0 || n == 7) {
+                tex = this.tex + "_gloww_" + layer;
+                r = 0.43F;
+                g = 0.84F;
+                b = 1F;
+                k = n == 0 ? 1F : 0.55F;
+            } else {
+                lit = false;
+                r = g = b = 0.16F;
+            }
+        } else if (!functionsOn()) {
             lit = false;                                // lights out: the lit parts drawn dark
             r = g = b = 0.16F;
             k = 1F;
@@ -199,6 +216,9 @@ public class ModelArmorGlowSC extends ModelBiped {
             k = n < 4 ? 0.25F : n < 6 ? 0.55F : 0.8F;
         } else {
             k = 0.6F + 0.4F * charge;
+        }
+        if (!suppressed && lit && wearer != null && com.sc.emp.EmpSC.drained(wearer)) {
+            k *= 0.4F + 0.15F * (float) Math.sin(time * 0.9);      // ПЭ-1 Siphon draining the suit: the lights dim and waver
         }
         Minecraft.getMinecraft().getTextureManager().bindTexture(texture(tex));
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_LIGHTING_BIT | GL11.GL_DEPTH_BUFFER_BIT);
