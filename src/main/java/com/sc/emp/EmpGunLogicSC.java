@@ -50,13 +50,16 @@ public final class EmpGunLogicSC {
         int lockedId, lost;
         /** Pulse: seconds of hum played. */
         int hums;
-        /** Siphon: the target, the «Страж» reversal of this second, the gun's EU / heat not yet written, EU received. */
+        /**
+         * Siphon: the target, the «Страж» reversal of this second, the gun's EU and heat (TENTHS of a heat unit) not yet
+         * written, EU received / vented (overflow), the soft overheat (the stream at SIPHON_THROTTLED_PCT).
+         */
         int targetId;
-        boolean reversed;
+        boolean reversed, throttled;
         int pendingCharge, pendingHeat;
-        long received;
-        /** Siphon: world ticks of the last stream second and transfer (-1: not yet). */
-        long secondAt = -1, stepAt = -1;
+        long received, vented;
+        /** Siphon: world ticks of the last stream second and transfer, of the last venting sparks (-1: not yet). */
+        long secondAt = -1, stepAt = -1, ventFxAt = -1;
 
         Use(ItemStack gun, EmpMode mode, long start) {
             this.gun = gun;
@@ -471,6 +474,9 @@ public final class EmpGunLogicSC {
         m.receiverRoom = m.receiver < 0 ? 0L : EmpSiphonSC.room(p, gun, u, m.receiver);
         m.streaming = streaming;
         m.received = streaming ? u.received : 0L;
+        m.vented = streaming ? u.vented : 0L;
+        m.heat = streaming ? EmpSiphonSC.liveHeat(u) : -1;
+        m.throttled = streaming && u.throttled;
         if (!(p instanceof net.minecraftforge.common.util.FakePlayer)) {
             EmpNetSC.channel().sendTo(m, p);
         }
@@ -505,7 +511,8 @@ public final class EmpGunLogicSC {
     }
 
     private static int startRefusal(ItemStack gun, EmpMode mode, long now) {
-        return EmpShotSC.startRefusal(ConfigSC.empEnabled, ItemEmpGunSC.modeEnabled(gun, mode), ItemEmpGunSC.overheated(gun),
+        // the Siphon's overheat is soft (2026-10-11): it starts throttled; Point / Pulse wait until below GUN_HEAT_RECOVER
+        return EmpShotSC.startRefusal(ConfigSC.empEnabled, ItemEmpGunSC.modeEnabled(gun, mode), mode != EmpMode.SIPHON && ItemEmpGunSC.overheated(gun),
                 ItemEmpGunSC.chargeOf(gun), EmpMathSC.euCost(mode), mode == EmpMode.PULSE ? ItemEmpGunSC.pulseCooldown(gun, now) : 0);
     }
 

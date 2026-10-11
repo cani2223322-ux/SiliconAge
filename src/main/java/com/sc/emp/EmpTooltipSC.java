@@ -68,9 +68,8 @@ public final class EmpTooltipSC {
                 line = Lang.tr("sc.tooltip.emp.line.pulse", name, num(EmpMathSC.EU_PULSE), seconds(EmpMathSC.chargeTicks(m, upgraded)),
                         EmpMathSC.PULSE_COOLDOWN / 20, EmpMathSC.range(m, focus));
             } else {
-                int rate = (int) (EmpMathSC.gunRate(wide) * Math.max(0F, ConfigSC.empSiphonRateMultiplier));
-                line = Lang.tr("sc.tooltip.emp.line.siphon", name, num(EmpMathSC.EU_SIPHON_START), num(rate),
-                        EmpMathSC.siphonLossPct(efficient, false, ConfigSC.empSiphonLoss), EmpMathSC.range(m, focus));
+                line = Lang.tr("sc.tooltip.emp.line.siphon", name, num(EmpMathSC.EU_SIPHON_START), siphonPct(ArmorSuit.SINGULAR, wide),
+                        siphonPct(ArmorSuit.NANO, wide), EmpMathSC.siphonLossPct(efficient, false, ConfigSC.empSiphonLoss), EmpMathSC.range(m, focus));
             }
             String off = ItemEmpGunSC.modeEnabled(stack, m) ? "" : " " + Lang.tr("sc.tooltip.emp.off");
             TooltipSC.wrap(list, line + off, "§7");
@@ -122,7 +121,7 @@ public final class EmpTooltipSC {
                         EmpMathSC.siphonLossPct(true, false, ConfigSC.empSiphonLoss));
                 break;
             default:
-                nums = Lang.tr("sc.tooltip.emp.module.wide", num(EmpMathSC.SIPHON_RATE_WIDE), num(EmpMathSC.SIPHON_RATE));
+                nums = Lang.tr("sc.tooltip.emp.module.wide", decimal(EmpMathSC.WIDE_MUL), siphonRates(true));
         }
         list.add("§b" + nums);
         TooltipSC.more(list, null, Lang.tr("sc.tooltip.emp.module.howto"));
@@ -134,6 +133,31 @@ public final class EmpTooltipSC {
     static String num(long v) {
         String s = com.sc.bridge.BridgeMathSC.group(v);
         return "ru".equals(Lang.trOr("sc.book.lang", "en")) ? s : s.replace(' ', ',');
+    }
+
+    /** "6", "4.5" ("4,5" in Russian): a number with at most one decimal. */
+    public static String decimal(double v) {
+        double r = Math.round(v * 10) / 10D;
+        if (r == Math.floor(r)) {
+            return String.valueOf((long) r);
+        }
+        String s = String.format(Locale.ROOT, "%.1f", r);
+        return "ru".equals(Lang.trOr("sc.book.lang", "en")) ? s.replace('.', ',') : s;
+    }
+
+    /** The siphon's speed against `suit`, % of its full charge a second (config included, no Defense chip), as decimal(). */
+    public static String siphonPct(ArmorSuit suit, boolean wide) {
+        return decimal(EmpMathSC.siphonPctPerSecond(suit, wide, 0, ConfigSC.empSiphonRateMultiplier));
+    }
+
+    /** «Нано 6% · Квант 5% · Экзо 4% · Сингулярная 3%» - the siphon's speed by the target's suit, a second. */
+    public static String siphonRates(boolean wide) {
+        StringBuilder sb = new StringBuilder();
+        for (ArmorSuit suit : ArmorSuit.values()) {
+            sb.append(sb.length() > 0 ? " · " : "").append(Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)))
+                    .append(' ').append(siphonPct(suit, wide)).append('%');
+        }
+        return sb.toString();
     }
 
     /** Ticks as seconds: "16", "8.8" ("8,8" in Russian). */

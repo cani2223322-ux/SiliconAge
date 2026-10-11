@@ -106,11 +106,13 @@ public final class EmpHudSC {
         int y = h / 2 + 12;
         boolean cooling = ItemEmpGunSC.hasModule(gun, EmpModule.COOLING);
         int heat = ItemEmpGunSC.heatOf(gun);
-        if (using && mode == EmpMode.SIPHON) {
-            // the server keeps the stream's heat until it ends (the stack must not change while in use): estimate it
-            heat = Math.min(EmpMathSC.GUN_HEAT_MAX, heat + p.getItemInUseDuration() * EmpMathSC.gunHeat(EmpMode.SIPHON, cooling) / 20);
+        boolean streamHeat = using && mode == EmpMode.SIPHON && aim != null && aim.streaming && aim.heat >= 0;
+        if (streamHeat) {
+            heat = aim.heat;                                     // the server keeps the stream's heat until it ends (rule 0.4.1): its readout
         }
-        if (ItemEmpGunSC.overheated(gun)) {
+        if (streamHeat && aim.throttled) {
+            y = centred(fr, Lang.tr("sc.emp.hud.throttled"), cx, y, GasUiSC.blinkOff() ? 0xB06020 : COL_WARN);   // soft overheat (2026-10-11)
+        } else if (!streamHeat && ItemEmpGunSC.overheated(gun)) {
             y = centred(fr, Lang.tr("sc.emp.hud.overheat", EmpMathSC.coolSeconds(heat)), cx, y, COL_WARN);
         } else if (ItemEmpGunSC.warnOn(gun) && EmpMathSC.overheatWarn(heat, cooling)) {
             y = centred(fr, Lang.tr("sc.emp.hud.overheat.warn"), cx, y, GasUiSC.blinkOff() ? 0xB06020 : COL_HOT);
@@ -128,6 +130,9 @@ public final class EmpHudSC {
                 y += 10;
             }
             y = centred(fr, Lang.tr("sc.emp.hud.received", eu(aim.received)), cx, y, EmpMode.SIPHON.rgb());
+            if (aim.vented > 0) {
+                y = centred(fr, Lang.tr("sc.emp.hud.vented", eu(aim.vented)), cx, y, 0xFF9A3C);
+            }
         }
     }
 

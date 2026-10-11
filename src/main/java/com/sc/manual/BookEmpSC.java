@@ -6,6 +6,7 @@ import java.util.Locale;
 import com.sc.emp.EmpMathSC;
 import com.sc.emp.EmpMode;
 import com.sc.emp.EmpModule;
+import com.sc.emp.EmpTooltipSC;
 import com.sc.emp.ItemEmpGunSC;
 import com.sc.init.ModItems;
 import com.sc.machine.MachineRecipe;
@@ -43,8 +44,6 @@ final class BookEmpSC {
 
         // modes (§1)
         e.add(BookEl.head(Lang.tr("sc.manual.emp.modeshead")));
-        int siphonRate = (int) (EmpMathSC.SIPHON_RATE * Math.max(0F, ConfigSC.empSiphonRateMultiplier));
-        int siphonRateWide = (int) (EmpMathSC.SIPHON_RATE_WIDE * Math.max(0F, ConfigSC.empSiphonRateMultiplier));
         for (EmpMode m : EmpMode.values()) {
             String sub;
             if (m == EmpMode.POINT) {
@@ -55,8 +54,8 @@ final class BookEmpSC {
                         sec(EmpMathSC.CHARGE_PULSE_M), EmpMathSC.PULSE_COOLDOWN / 20, EmpMathSC.range(m, false));
             } else {
                 sub = Lang.tr("sc.manual.emp.modeline.siphon", BookContent.num(EmpMathSC.EU_SIPHON_START), EmpMathSC.range(m, false),
-                        EmpMathSC.range(m, true), BookContent.num(siphonRate), BookContent.num(siphonRateWide),
-                        EmpMathSC.siphonLossPct(false, false, ConfigSC.empSiphonLoss));
+                        EmpMathSC.range(m, true), EmpTooltipSC.siphonPct(ArmorSuit.SINGULAR, false), EmpTooltipSC.siphonPct(ArmorSuit.NANO, false),
+                        EmpTooltipSC.decimal(EmpMathSC.WIDE_MUL), EmpMathSC.siphonLossPct(false, false, ConfigSC.empSiphonLoss));
             }
             e.add(BookEl.item(null, Lang.tr("sc.emp.mode." + m.key()), Lang.tr("sc.emp.mode." + m.key() + ".desc") + " " + sub));
         }
@@ -95,14 +94,18 @@ final class BookEmpSC {
 
         // the siphon (§4)
         e.add(BookEl.head(Lang.tr("sc.manual.emp.siphonhead")));
-        e.addAll(BookContent.paras("sc.manual.emp.siphon", null, new Object[]{BookContent.num(siphonRate), BookContent.num(siphonRateWide),
-                EmpMathSC.siphonLossPct(false, false, ConfigSC.empSiphonLoss), EmpMathSC.siphonLossPct(true, false, ConfigSC.empSiphonLoss)}));
+        int[] chipSiphon = EmpMathSC.DEFENSE_SIPHON_PCT;
+        e.addAll(BookContent.paras("sc.manual.emp.siphon", null, new Object[]{EmpTooltipSC.siphonRates(false), EmpTooltipSC.decimal(EmpMathSC.WIDE_MUL),
+                chipSiphon[0], chipSiphon[1], chipSiphon[2], EmpMathSC.siphonLossPct(false, false, ConfigSC.empSiphonLoss),
+                EmpMathSC.siphonLossPct(true, false, ConfigSC.empSiphonLoss)}, null, new Object[]{EmpMathSC.siphonOverheatSeconds(false),
+                EmpMathSC.siphonOverheatSeconds(true), EmpMathSC.SIPHON_THROTTLED_PCT, EmpTooltipSC.decimal(EmpMathSC.GUN_HEAT_THROTTLED_COOL_TENTHS / 10D),
+                EmpMathSC.GUN_HEAT_RECOVER}));
 
         // the gun and its modules (§5)
         e.add(BookEl.head(Lang.tr("sc.manual.emp.gunhead")));
         e.addAll(BookContent.paras("sc.manual.emp.gun", new Object[]{BookContent.num(EmpMathSC.BUFFER), BookContent.num(EmpMathSC.BUFFER_CAPACITY),
-                EmpMathSC.GUN_HEAT_POINT, EmpMathSC.GUN_HEAT_PULSE, EmpMathSC.GUN_HEAT_SIPHON_PER_SECOND, EmpMathSC.GUN_HEAT_MAX,
-                EmpMathSC.coolSeconds(EmpMathSC.GUN_HEAT_MAX) + EmpMathSC.GUN_COOL_DELAY / 20}, new Object[]{EmpMathSC.CHARGE_TIER.name()}));
+                EmpMathSC.GUN_HEAT_POINT, EmpMathSC.GUN_HEAT_PULSE, EmpMathSC.GUN_HEAT_MAX, EmpMathSC.siphonOverheatSeconds(false),
+                EmpMathSC.GUN_HEAT_RECOVER, EmpMathSC.coolFullSeconds(EmpMathSC.GUN_HEAT_MAX)}, new Object[]{EmpMathSC.CHARGE_TIER.name()}));
         for (EmpModule m : EmpModule.values()) {
             ItemStack s = ModItems.empModule.stackOf(m);
             e.add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.emp.module." + m.key() + ".desc")));

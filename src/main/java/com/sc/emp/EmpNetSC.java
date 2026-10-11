@@ -33,7 +33,7 @@ public final class EmpNetSC {
             SET_ZONE = 3,                          // a = EmpMathSC.ZONE_*
             SET_RECEIVER_ORDER = 4,                // a = the order as three base-4 digits: r0 + 4 r1 + 16 r2 (EmpMathSC.RECV_*)
             TOGGLE_RECEIVER = 5,                   // a = EmpMathSC.RECV_*, b = 1 on / 0 off
-            SET_LIMIT = 6,                         // a = 0 (until the receiver is full) or 1..100 (until my armour has a%)
+            SET_LIMIT = 6,                         // a = 0 (no limit, vent), 1..100 (until my armour has a%), 101 (until the receiver is full)
             SET_WARN = 7,                          // b = 1 on / 0 off: the overheat warning 2 s before
             MODULE_INSTALL = 8,                    // a = EmpModule ordinal, b = main inventory slot holding it
             MODULE_REMOVE = 9,                     // a = EmpModule ordinal
@@ -172,6 +172,10 @@ public final class EmpNetSC {
         /** Siphon: the stream runs; EU received by this stream so far. */
         public boolean streaming;
         public long received;
+        /** Siphon (2026-10-11): EU vented (the receivers full) so far; the gun's live heat (-1 not streaming); the soft overheat. */
+        public long vented;
+        public int heat = -1;
+        public boolean throttled;
 
         @Override
         public void fromBytes(ByteBuf buf) {
@@ -186,6 +190,9 @@ public final class EmpNetSC {
             receiverRoom = buf.readLong();
             streaming = buf.readBoolean();
             received = buf.readLong();
+            vented = buf.readLong();
+            heat = buf.readByte();
+            throttled = buf.readBoolean();
         }
 
         @Override
@@ -201,6 +208,9 @@ public final class EmpNetSC {
             buf.writeLong(receiverRoom);
             buf.writeBoolean(streaming);
             buf.writeLong(received);
+            buf.writeLong(vented);
+            buf.writeByte(heat);
+            buf.writeBoolean(throttled);
         }
     }
 
@@ -221,7 +231,7 @@ public final class EmpNetSC {
 
     /** FxMessage kinds. */
     public static final int FX_POINT = 0, FX_PULSE = 1, FX_STREAM_ON = 2, FX_STREAM_OFF = 3, FX_ABSORBED = 4, FX_SUPPRESSED = 5,
-            FX_REFLECTED = 6;
+            FX_REFLECTED = 6, FX_VENTED = 7;
 
     /**
      * Server -> everyone within EmpSC.SYNC_RANGE: a Point / Pulse beam from the shooter to (x, y, z) (the hit, the miss's end

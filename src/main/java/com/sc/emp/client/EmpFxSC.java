@@ -41,6 +41,7 @@ import net.minecraftforge.common.MinecraftForge;
  * <li>FX_SUPPRESSED: a burst of blue sparks on the target; while any of its pieces stays suppressed it keeps sparking
  * now and then (checked for every player near);</li>
  * <li>FX_REFLECTED: the Pulse goes back from the target («Страж») to the shooter, golden sparks on the target.</li>
+ * <li>FX_VENTED (2026-10-11): the stream's overflow vented - orange sparks off the shooter's gun.</li>
  * </ul>
  * The suit's lights themselves (dimmed while drained, out while suppressed) are ModelArmorGlowSC's.
  */
@@ -55,7 +56,8 @@ public final class EmpFxSC {
     private static final double SPARK_RANGE = 32;
     private static final int SPARK_EVERY = 5;
     private static final int RING_TICKS = 8;
-    private static final int ABSORBED_RGB = 0xC8F0FF, REFLECT_SPARK_RGB = 0xFFD060, SPARK_RGB = 0x9FE6FF;
+    private static final int ABSORBED_RGB = 0xC8F0FF, REFLECT_SPARK_RGB = 0xFFD060, SPARK_RGB = 0x9FE6FF,
+            VENT_RGB = 0xFF9A3C;
 
     /** The beams being drawn. */
     private static final List<Beam> BEAMS = new ArrayList<Beam>();
@@ -161,6 +163,14 @@ public final class EmpFxSC {
                     BEAMS.add(new Beam(-1, fx.targetId, end[0], end[1], end[2], EmpMode.PULSE.rgb(), 0.16F, BEAM_PULSE));
                     double[] c = chest(t, 1F);
                     burst(mc, c[0], c[1], c[2], REFLECT_SPARK_RGB, 14, 0.25);
+                }
+                break;
+            }
+            case EmpNetSC.FX_VENTED: {
+                Entity s = w.getEntityByID(fx.shooterId);
+                if (s != null) {
+                    double[] m = muzzle(mc, s, 1F);
+                    burst(mc, m[0], m[1], m[2], VENT_RGB, 6, 0.14);
                 }
                 break;
             }

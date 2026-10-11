@@ -29,13 +29,14 @@ import net.minecraft.world.World;
  *  "EmpMode"    byte   the current EmpMode ordinal
  *  "EmpOff"     byte   bits of EmpMode switched off in the K menu (the wheel / keys skip them; never all three)
  *  "EmpMods"    int    bits of installed EmpModule
- *  "HeatSC"     int    the gun's heat 0..EmpMathSC.GUN_HEAT_MAX; "OverheatSC" boolean - locked until back at 0
+ *  "HeatSC"     int    the gun's heat 0..EmpMathSC.GUN_HEAT_MAX; "OverheatSC" boolean - Point / Pulse locked until below GUN_HEAT_RECOVER
  *  "EmpHeatAt"  long   world tick of the last heating (cooling waits GUN_COOL_DELAY)
  *  "EmpPulseAt" long   world tick of the last Pulse (PULSE_COOLDOWN)
  *  "EmpZone"    byte   Point target: EmpMathSC.ZONE_AUTO / HEAD / BODY / LEGS
  *  "EmpRecv"    int    receiver order, base-4 digits r0 + 4 r1 + 16 r2 (EmpMathSC.RECV_*); 0 / invalid = default 0,1,2
  *  "EmpRecvOff" byte   bits of receivers switched off
- *  "EmpLimit"   byte   0 = until the receiver is full, 1..100 = until my armour holds N%
+ *  "EmpLimit"   byte   EmpMathSC.LIMIT_VENT 0 = no limit (overflow vented), 1..100 = until my armour holds N%,
+ *                     LIMIT_FULL 101 = until the receiver is full
  *  "EmpWarn"    boolean the overheat warning 2 s before (default on: stored inverted as "EmpNoWarn")
  * The upgrade flag is the meta (1 = ПЭ-1М); the Upgrade Station carries the whole tag over (package A).
  *
@@ -209,7 +210,7 @@ public class ItemEmpGunSC extends Item implements ic2.api.item.ISpecialElectricI
         return t != null && t.getBoolean(OVERHEAT);
     }
 
-    /** Sets the heat (0..GUN_HEAT_MAX): reaching the max locks the gun, 0 unlocks it. */
+    /** Sets the heat (0..GUN_HEAT_MAX): reaching the max locks the gun, below GUN_HEAT_RECOVER unlocks it. */
     public static void setHeat(ItemStack s, int heat, long now) {
         if (!isGun(s)) {
             return;
@@ -222,7 +223,23 @@ public class ItemEmpGunSC extends Item implements ic2.api.item.ISpecialElectricI
         t.setInteger(HEAT, h);
         if (h >= EmpMathSC.GUN_HEAT_MAX) {
             t.setBoolean(OVERHEAT, true);
-        } else if (h == 0) {
+        } else if (h < EmpMathSC.GUN_HEAT_RECOVER) {
+            t.removeTag(OVERHEAT);
+        }
+    }
+
+    /** The end of a stream (EmpSiphonSC.flush): its heat, whether it ended overheated (throttled), the heating time now. */
+    public static void setStreamHeat(ItemStack s, int heat, boolean overheated, long now) {
+        if (!isGun(s)) {
+            return;
+        }
+        NBTTagCompound t = tag(s);
+        int h = Math.max(0, Math.min(EmpMathSC.GUN_HEAT_MAX, heat));
+        t.setInteger(HEAT, h);
+        t.setLong(HEAT_AT, now);
+        if (overheated || h >= EmpMathSC.GUN_HEAT_MAX) {
+            t.setBoolean(OVERHEAT, true);
+        } else {
             t.removeTag(OVERHEAT);
         }
     }
@@ -305,15 +322,15 @@ public class ItemEmpGunSC extends Item implements ic2.api.item.ISpecialElectricI
         }
     }
 
-    /** 0 = until the receiver is full, 1..100 = until my armour holds N%. */
+    /** EmpMathSC.LIMIT_VENT (0, no limit - overflow vented), 1..100 = until my armour holds N%, LIMIT_FULL = until the receiver is full. */
     public static int limitOf(ItemStack s) {
         NBTTagCompound t = peek(s);
-        return t == null ? 0 : Math.max(0, Math.min(100, t.getByte(LIMIT)));
+        return t == null ? EmpMathSC.LIMIT_VENT : Math.max(EmpMathSC.LIMIT_VENT, Math.min(EmpMathSC.LIMIT_FULL, t.getByte(LIMIT)));
     }
 
     public static void setLimit(ItemStack s, int pct) {
         if (isGun(s)) {
-            tag(s).setByte(LIMIT, (byte) Math.max(0, Math.min(100, pct)));
+            tag(s).setByte(LIMIT, (byte) Math.max(EmpMathSC.LIMIT_VENT, Math.min(EmpMathSC.LIMIT_FULL, pct)));
         }
     }
 

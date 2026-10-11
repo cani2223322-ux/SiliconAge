@@ -9,6 +9,7 @@ import com.sc.emp.EmpMode;
 import com.sc.emp.EmpModule;
 import com.sc.emp.EmpNetSC;
 import com.sc.emp.EmpSC;
+import com.sc.emp.EmpTooltipSC;
 import com.sc.emp.ItemEmpGunSC;
 import com.sc.emp.ItemEmpModuleSC;
 import com.sc.inventory.TextFitSC;
@@ -41,8 +42,11 @@ public final class GuiEmpTabSC {
     /** Buttons: the Point zone, receiver switches (+ position 0..2), receiver "up" (+ position), limit, warning, modules (+ ordinal), reboot. */
     public static final int ID_FIRST = 1300, ID_ZONE = 1300, ID_RECV = 1301, ID_RECV_UP = 1304, ID_LIMIT = 1307, ID_WARN = 1308,
             ID_MODULE = 1310, ID_REBOOT = 1320, ID_LAST = 1329;
-    /** The «пока моя броня не наберёт N%» steps a click walks (Shift + click: back); 0 = until the receiver is full. */
-    private static final int[] LIMIT_STEPS = {EmpMathSC.LIMIT_FULL, 25, 50, 75, 90, 100};
+    /**
+     * The «Предел» steps a click walks (Shift + click: back), ascending: no limit - the overflow vented (the default),
+     * «пока моя броня не наберёт N%», «пока приёмник не полон» (2026-10-11).
+     */
+    private static final int[] LIMIT_STEPS = {EmpMathSC.LIMIT_VENT, 25, 50, 75, 90, 100, EmpMathSC.LIMIT_FULL};
     /** The aim readout is fresh this long (it comes every AIM_SCAN_TICKS while the gun is in hand). */
     private static final long AIM_FRESH_MS = 1000L;
     /** The armour tabs' «ЭМИ» line with its reboot button: height GuiArmorSC reserves under the rows. */
@@ -137,7 +141,7 @@ public final class GuiEmpTabSC {
             } else if (b.id == ID_LIMIT) {
                 int lim = ItemEmpGunSC.limitOf(gun);
                 b.displayString = Lang.tr("sc.empgui.limit", lim == EmpMathSC.LIMIT_FULL ? Lang.tr("sc.empgui.limit.full")
-                        : Lang.tr("sc.empgui.limit.pct", lim));
+                        : lim == EmpMathSC.LIMIT_VENT ? Lang.tr("sc.empgui.limit.vent") : Lang.tr("sc.empgui.limit.pct", lim));
             } else if (b.id == ID_WARN) {
                 boolean on = ItemEmpGunSC.warnOn(gun);
                 b.displayString = (on ? "§a" : "§7") + Lang.tr("sc.empgui.warn", Lang.tr(on ? "sc.armorgui.on" : "sc.armorgui.off"));
@@ -263,8 +267,15 @@ public final class GuiEmpTabSC {
         int charge = ItemEmpGunSC.chargeOf(gun), cap = ItemEmpGunSC.capacityOf(gun);
         int heat = ItemEmpGunSC.heatOf(gun);
         boolean hot = ItemEmpGunSC.overheated(gun);
+        EmpNetSC.AimMessage live = freshAim();
+        boolean streaming = live != null && live.streaming && live.heat >= 0;
+        if (streaming) {
+            heat = live.heat;                                    // the stream's heat isn't written until it ends (rule 0.4.1)
+            hot = live.throttled;
+        }
         String line = Lang.tr("sc.empgui.charge", eu(charge), eu(cap)) + " · " + Lang.tr("sc.empgui.heat", heat)
-                + (heat > 0 ? " · " + Lang.tr("sc.empgui.cool", EmpMathSC.coolSeconds(heat)) : "");
+                + (streaming && live.throttled ? " · " + Lang.tr("sc.emp.hud.throttled")
+                : heat > 0 && !streaming ? " · " + Lang.tr("sc.empgui.cool", EmpMathSC.coolFullSeconds(heat)) : "");
         fit(font, line, rx, y, rw, hot ? RED : heat > 80 ? ORANGE : TEXT);
         y += LINE;
         EmpMode mode = ItemEmpGunSC.modeOf(gun);
@@ -327,7 +338,8 @@ public final class GuiEmpTabSC {
         }
         String charge = aim.chargePct >= 0 ? Lang.tr("sc.empgui.target.charge", aim.chargePct) : "";
         if (aim.streaming) {
-            charge += (charge.isEmpty() ? "" : " · ") + Lang.tr("sc.empgui.target.stream", eu(aim.received));
+            charge += (charge.isEmpty() ? "" : " · ") + Lang.tr("sc.empgui.target.stream", eu(aim.received))
+                    + (aim.vented > 0 ? " · " + Lang.tr("sc.emp.hud.vented", eu(aim.vented)) : "");
         }
         if (!charge.isEmpty()) {
             lines.add(charge);
@@ -343,14 +355,14 @@ public final class GuiEmpTabSC {
     private static List<String> totals(ItemStack gun) {
         List<String> tip = new ArrayList<String>();
         boolean focus = ItemEmpGunSC.hasModule(gun, EmpModule.FOCUS);
-        int rate = (int) (EmpMathSC.gunRate(ItemEmpGunSC.hasModule(gun, EmpModule.WIDE)) * Math.max(0F, ConfigSC.empSiphonRateMultiplier));
+        boolean wide = ItemEmpGunSC.hasModule(gun, EmpModule.WIDE);
         tip.add(Lang.tr("sc.empgui.modules"));
         tip.add("§7" + Lang.tr("sc.empgui.totals", eu(ItemEmpGunSC.capacityOf(gun)), EmpMathSC.range(EmpMode.POINT, focus),
-                EmpMathSC.range(EmpMode.SIPHON, focus), eu(rate),
+                EmpMathSC.range(EmpMode.SIPHON, focus), EmpTooltipSC.siphonPct(ArmorSuit.SINGULAR, wide), EmpTooltipSC.siphonPct(ArmorSuit.NANO, wide),
                 EmpMathSC.siphonLossPct(ItemEmpGunSC.hasModule(gun, EmpModule.EFFICIENT), false, ConfigSC.empSiphonLoss)));
         boolean cooling = ItemEmpGunSC.hasModule(gun, EmpModule.COOLING);
         tip.add("§7" + Lang.tr("sc.empgui.totals.heat", EmpMathSC.gunHeat(EmpMode.POINT, cooling), EmpMathSC.gunHeat(EmpMode.PULSE, cooling),
-                EmpMathSC.gunHeat(EmpMode.SIPHON, cooling)));
+                EmpMathSC.siphonOverheatSeconds(cooling), EmpMathSC.coolFullSeconds(EmpMathSC.GUN_HEAT_MAX)));
         return tip;
     }
 
@@ -414,9 +426,9 @@ public final class GuiEmpTabSC {
         int range = EmpMathSC.range(m, focus);
         String price = eu(EmpMathSC.euCost(m));
         if (m == EmpMode.SIPHON) {
-            int rate = (int) (EmpMathSC.gunRate(ItemEmpGunSC.hasModule(gun, EmpModule.WIDE)) * Math.max(0F, ConfigSC.empSiphonRateMultiplier));
             int loss = EmpMathSC.siphonLossPct(ItemEmpGunSC.hasModule(gun, EmpModule.EFFICIENT), false, ConfigSC.empSiphonLoss);
-            tip.add("§b" + Lang.tr("sc.empgui.tip.siphon", price, range, eu(rate), loss));
+            tip.add("§b" + Lang.tr("sc.empgui.tip.siphon", price, range, loss));
+            tip.add("§7" + Lang.tr("sc.empgui.tip.siphon.rate", EmpTooltipSC.siphonRates(ItemEmpGunSC.hasModule(gun, EmpModule.WIDE))));
             StringBuilder recv = new StringBuilder();
             for (int r : ItemEmpGunSC.receiverOrder(gun)) {
                 if (ItemEmpGunSC.receiverEnabled(gun, r)) {

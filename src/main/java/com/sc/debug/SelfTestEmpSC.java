@@ -7,6 +7,7 @@ import com.sc.emp.EmpMathSC;
 import com.sc.emp.EmpMode;
 import com.sc.emp.EmpModule;
 import com.sc.emp.EmpNetSC;
+import com.sc.emp.EmpShotSC;
 import com.sc.emp.EmpStateSC;
 import com.sc.emp.ItemEmpGunSC;
 import com.sc.init.ModItems;
@@ -149,38 +150,106 @@ final class SelfTestEmpSC {
         check(pct && merge, "helium boil: Pulse 10% / 20 s, Point 5% / 15 s, stream 1%/s, immune x0.5, config; no stacking, extended by the same");
     }
 
-    /** §4: the rate = min(gun, receiver, target) x chip x config; losses 25 / 10 / 0; delivered. */
+    /**
+     * §4 (изменено 2026-10-11): the rate is a share of the target suit's full charge a second - Nano 6, Quantum 5, Exo 4,
+     * Singular 3 % - x1.5 Wide, x Defense chip -20/30/40%, x config; losses 25 / 10 / 0; the overflow vented; the limits.
+     */
     private static void siphon() {
-        boolean rate = EmpMathSC.gunRate(false) == 2048 && EmpMathSC.gunRate(true) == 8192
-                && EmpMathSC.siphonRate(2048, 512, 2048, 0, 1F) == 512 && EmpMathSC.siphonRate(2048, 8192, 8192, 0, 1F) == 2048
-                && EmpMathSC.siphonRate(8192, 8192, 8192, 0, 1F) == 8192 && EmpMathSC.siphonRate(8192, 2048, 32768, 0, 1F) == 2048
-                && EmpMathSC.siphonRate(2048, 8192, 8192, 1, 1F) == 1638 && EmpMathSC.siphonRate(2048, 8192, 8192, 3, 1F) == 1228
-                && EmpMathSC.siphonRate(2048, 8192, 8192, 0, 0.5F) == 1024;
+        long quantum = 4L * 1000000, singular = 4L * 64000000, nano = 4L * 100000, exo = 4L * 4000000;
+        boolean rate = EmpMathSC.siphonRate(nano, ArmorSuit.NANO, false, 0, 1F, 20) == 24000
+                && EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, false, 0, 1F, 20) == 200000
+                && EmpMathSC.siphonRate(exo, ArmorSuit.EXO, false, 0, 1F, 20) == 640000
+                && EmpMathSC.siphonRate(singular, ArmorSuit.SINGULAR, false, 0, 1F, 20) == 7680000
+                && EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, false, 0, 1F, 5) == 50000            // one STEP of 5 ticks
+                && EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, false, 0, 1F, 0) == 0
+                && EmpMathSC.siphonRate(quantum, null, false, 0, 1F, 20) == 0;
+        boolean wide = EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, true, 0, 1F, 20) == 300000
+                && EmpMathSC.siphonRate(singular, ArmorSuit.SINGULAR, true, 0, 1F, 20) == 11520000
+                && Math.abs(EmpMathSC.siphonPctPerSecond(ArmorSuit.EXO, true, 0, 1F) - 6D) < 1e-9
+                && Math.abs(EmpMathSC.siphonPctPerSecond(ArmorSuit.NANO, true, 0, 1F) - 9D) < 1e-9;
+        boolean chip = EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, false, 1, 1F, 20) == 160000
+                && EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, false, 2, 1F, 20) == 140000
+                && EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, false, 3, 1F, 20) == 120000
+                && EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, true, 3, 1F, 20) == 180000
+                && EmpMathSC.siphonRate(quantum, ArmorSuit.QUANTUM, false, 0, 0.5F, 20) == 100000
+                && EmpMathSC.siphonRate(singular, ArmorSuit.SINGULAR, true, 0, 10F, 20) == 115200000;     // no int overflow
         boolean loss = EmpMathSC.siphonLossPct(false, false, 25) == 25 && EmpMathSC.siphonLossPct(true, false, 25) == 10
                 && EmpMathSC.siphonLossPct(false, true, 25) == 0 && EmpMathSC.siphonLossPct(true, true, 25) == 0
                 && EmpMathSC.siphonLossPct(true, false, 50) == 20 && EmpMathSC.siphonLossPct(false, false, 150) == 100
                 && EmpMathSC.delivered(1000, 25) == 750 && EmpMathSC.delivered(1000, 0) == 1000 && EmpMathSC.delivered(-5, 25) == 0
                 && EmpMathSC.delivered(Integer.MAX_VALUE, 10) == (int) (Integer.MAX_VALUE * 90L / 100);
-        check(rate && loss, "siphon: min(gun EV 2048 / Wide IV 8192, receiver, target) x chip -20/40% x config; loss 25%, Efficient 10%, "
-                + "suppressed 0; delivered without overflow");
+        check(rate && wide && chip && loss, "siphon speed: % of the target suit's full charge a second - Nano 6, Quantum 5, Exo 4, Singular 3 "
+                + "(Quantum 4M: 200 000 EU/s, 50 000 a 5-tick step; Singular 256M: 7.68M EU/s), Wide x1.5, chip -20/30/40%, config; "
+                + "loss 25%, Efficient 10%, suppressed 0; delivered without overflow");
+
+        // venting: the target loses all, the receivers get what fits after the loss, the rest is vented
+        int[] full = EmpShotSC.streamStep(10000, 1000000, 0, 25, true);
+        int[] part = EmpShotSC.streamStep(10000, 1000000, 3000, 25, true);
+        int[] roomy = EmpShotSC.streamStep(10000, 1000000, 1000000, 10, true);
+        int[] dry = EmpShotSC.streamStep(10000, 4000, 1000000, 25, true);
+        int[] stops = EmpShotSC.streamStep(10000, 1000000, 3000, 25, false);
+        int[] none = EmpShotSC.streamStep(10000, 1000000, 0, 25, false);
+        boolean vent = Arrays.equals(full, new int[]{10000, 0, 7500}) && Arrays.equals(part, new int[]{10000, 3000, 4500})
+                && Arrays.equals(roomy, new int[]{10000, 9000, 0}) && Arrays.equals(dry, new int[]{4000, 3000, 0})
+                && Arrays.equals(stops, new int[]{4000, 3000, 0}) && Arrays.equals(none, new int[]{0, 0, 0});
+        boolean limits = EmpMathSC.LIMIT_VENT == 0 && EmpMathSC.LIMIT_FULL == 101
+                && !EmpShotSC.stopsWhenFull(EmpMathSC.LIMIT_VENT) && !EmpShotSC.stopsWhenFull(50) && EmpShotSC.stopsWhenFull(EmpMathSC.LIMIT_FULL)
+                && !EmpShotSC.limitReached(EmpMathSC.LIMIT_VENT, 100, 100) && !EmpShotSC.limitReached(EmpMathSC.LIMIT_FULL, 100, 100)
+                && EmpShotSC.limitReached(50, 50, 100) && !EmpShotSC.limitReached(50, 49, 100) && !EmpShotSC.limitReached(50, 0, 0);
+        check(vent && limits, "siphon overflow: the target loses the whole step, the receivers get what fits after the loss, the rest is vented "
+                + "(10 000 at 25% into 3 000 of room: 3 000 in, 4 500 vented); «пока приёмник не полон» (101) takes only what fits and stops; "
+                + "the default limit (0) vents; «N%» 1..100");
     }
 
-    /** §5: the gun's heat 10 / 30 / 11 a second, Cooling x0.7, the 2 s warning, the cool-down time. */
+    /**
+     * §5 (изменено 2026-10-11): the gun's heat - Point 10, Pulse 30, Siphon 2.9 a second (Cooling x0.7); a stream overheats
+     * it in ~35 s (Cooling ~50 s); the soft overheat: 25% speed, the gun cools 3 a second, full speed again below 70;
+     * full -> 0 in ~5 s; Point / Pulse locked until below 70.
+     */
     private static void gunHeat() {
         boolean heat = EmpMathSC.gunHeat(EmpMode.POINT, false) == 10 && EmpMathSC.gunHeat(EmpMode.PULSE, false) == 30
-                && EmpMathSC.gunHeat(EmpMode.SIPHON, false) == 11 && EmpMathSC.gunHeat(EmpMode.POINT, true) == 7
-                && EmpMathSC.gunHeat(EmpMode.PULSE, true) == 21 && EmpMathSC.gunHeat(EmpMode.SIPHON, true) == 8;
-        boolean warn = !EmpMathSC.overheatWarn(77, false) && EmpMathSC.overheatWarn(78, false) && !EmpMathSC.overheatWarn(100, false)
-                && EmpMathSC.overheatWarn(84, true) && !EmpMathSC.overheatWarn(83, true);
-        boolean cool = EmpMathSC.coolSeconds(100) == 13 && EmpMathSC.coolSeconds(0) == 0 && EmpMathSC.coolSeconds(8) == 1
-                && EmpMathSC.coolSeconds(9) == 2;
-        int stream = 0, seconds = 0;
-        while (stream < EmpMathSC.GUN_HEAT_MAX && seconds < 60) {
-            stream += EmpMathSC.gunHeat(EmpMode.SIPHON, false);
-            seconds++;
+                && EmpMathSC.gunHeat(EmpMode.POINT, true) == 7 && EmpMathSC.gunHeat(EmpMode.PULSE, true) == 21
+                && EmpMathSC.siphonHeatTenths(false) == 29 && EmpMathSC.siphonHeatTenths(true) == 20
+                && EmpMathSC.siphonOverheatSeconds(false) == 35 && EmpMathSC.siphonOverheatSeconds(true) == 50;
+        // a stream from cold, second by second (the first second doesn't heat - EmpSiphonSC.second)
+        int[] toOverheat = new int[2];
+        for (int c = 0; c < 2; c++) {
+            int h = 0, sec = 0;
+            boolean thr = false;
+            while (!thr && sec < 200) {
+                int[] r = EmpMathSC.streamHeat(h, false, c == 1);
+                h = r[0];
+                thr = r[1] != 0;
+                sec++;
+            }
+            toOverheat[c] = sec;
         }
-        check(heat && warn && cool && seconds >= 8 && seconds <= 10, "gun heat: Point 10, Pulse 30, Siphon 11/s (Cooling x0.7), warned 2 s ahead, "
-                + "cools 100 in 13 s; a stream overheats it in " + seconds + " s (8-10)");
+        // throttled at 100: back at full speed below 70 - and the throttled rate
+        int h = EmpMathSC.GUN_HEAT_MAX * 10, recover = 0;
+        boolean thr = true;
+        while (thr && recover < 200) {
+            int[] r = EmpMathSC.streamHeat(h, true, false);
+            h = r[0];
+            thr = r[1] != 0;
+            recover++;
+        }
+        boolean soft = recover >= 10 && recover <= 12 && h < EmpMathSC.GUN_HEAT_RECOVER * 10 && h >= (EmpMathSC.GUN_HEAT_RECOVER - 3) * 10
+                && EmpMathSC.streamHeat(1000, true, false)[1] == 1 && EmpMathSC.streamHeat(700, true, false)[1] == 0
+                && EmpMathSC.streamHeat(990, false, false)[1] == 1 && EmpMathSC.streamHeat(970, false, false)[1] == 0
+                && EmpMathSC.throttle(50000, true) == 12500 && EmpMathSC.throttle(50000, false) == 50000
+                && EmpMathSC.throttle(Integer.MAX_VALUE, true) == (int) (Integer.MAX_VALUE * 25L / 100);
+        boolean warn = !EmpMathSC.overheatWarn(94, false) && EmpMathSC.overheatWarn(95, false) && !EmpMathSC.overheatWarn(100, false)
+                && EmpMathSC.overheatWarn(96, true) && !EmpMathSC.overheatWarn(95, true)
+                && EmpMathSC.overheatWarnTenths(942, false) && !EmpMathSC.overheatWarnTenths(941, false);
+        boolean cool = EmpMathSC.coolFullSeconds(100) == 5 && EmpMathSC.coolFullSeconds(0) == 0 && EmpMathSC.coolFullSeconds(21) == 2
+                && EmpMathSC.coolSeconds(100) == 2 && EmpMathSC.coolSeconds(69) == 0 && EmpMathSC.coolSeconds(70) == 1
+                && EmpMathSC.coolSeconds(89) == 1 && EmpMathSC.coolSeconds(90) == 2 && EmpMathSC.GUN_HEAT_RECOVER == 70;
+        // Point / Pulse refuse an overheated gun; the Siphon's caller passes overheated = false (it starts throttled)
+        boolean lock = EmpShotSC.startRefusal(true, true, true, 600000, 50000, 0) == EmpShotSC.START_OVERHEAT
+                && EmpShotSC.startRefusal(true, true, false, 600000, 5000, 0) == EmpShotSC.START_OK;
+        check(heat && soft && warn && cool && lock && toOverheat[0] == 35 && toOverheat[1] == 50, "gun heat: Point 10, Pulse 30, Siphon 2.9/s "
+                + "(Cooling 2.0); a stream overheats it in " + toOverheat[0] + " s (Cooling " + toOverheat[1] + " s); then 25% speed, cooling 3/s, "
+                + "full speed again below 70 after " + recover + " s; warned 2 s ahead; cools 100 -> 0 in 5 s, Point / Pulse locked until below 70 (2 s)");
     }
 
     // ------------------------------------------------------------------ ItemEmpGunSC
@@ -212,20 +281,27 @@ final class SelfTestEmpSC {
                 && ItemEmpGunSC.pulseCooldown(g, 999) == 0 && ItemEmpGunSC.pulseCooldown(new ItemStack(ModItems.empGun), 5) == 0;
         ItemEmpGunSC.setHeat(g, 150, 10);
         boolean hot = ItemEmpGunSC.heatOf(g) == 100 && ItemEmpGunSC.overheated(g) && ItemEmpGunSC.lastHeatAt(g) == 10;
-        ItemEmpGunSC.setHeat(g, 50, 20);
+        ItemEmpGunSC.setHeat(g, 70, 20);
         hot &= ItemEmpGunSC.overheated(g) && ItemEmpGunSC.lastHeatAt(g) == 10;                              // cooling doesn't move the heat time
-        ItemEmpGunSC.setHeat(g, 0, 30);
-        hot &= !ItemEmpGunSC.overheated(g);
-        boolean settings = ItemEmpGunSC.zoneOf(g) == EmpMathSC.ZONE_AUTO && ItemEmpGunSC.warnOn(g) && ItemEmpGunSC.limitOf(g) == 0;
+        ItemEmpGunSC.setHeat(g, 69, 30);
+        hot &= !ItemEmpGunSC.overheated(g);                                                                // unlocked below 70
+        ItemEmpGunSC.setStreamHeat(g, 85, true, 40);                                                       // a stream ended throttled
+        hot &= ItemEmpGunSC.heatOf(g) == 85 && ItemEmpGunSC.overheated(g) && ItemEmpGunSC.lastHeatAt(g) == 40;
+        ItemEmpGunSC.setStreamHeat(g, 60, false, 50);
+        hot &= ItemEmpGunSC.heatOf(g) == 60 && !ItemEmpGunSC.overheated(g) && ItemEmpGunSC.lastHeatAt(g) == 50;
+        ItemEmpGunSC.setHeat(g, 0, 60);
+        boolean settings = ItemEmpGunSC.zoneOf(g) == EmpMathSC.ZONE_AUTO && ItemEmpGunSC.warnOn(g) && ItemEmpGunSC.limitOf(g) == EmpMathSC.LIMIT_VENT;
         ItemEmpGunSC.setZone(g, EmpMathSC.ZONE_LEGS);
         ItemEmpGunSC.setZone(g, 7);
         ItemEmpGunSC.setLimit(g, 150);
         ItemEmpGunSC.setWarn(g, false);
-        settings &= ItemEmpGunSC.zoneOf(g) == EmpMathSC.ZONE_LEGS && ItemEmpGunSC.limitOf(g) == 100 && !ItemEmpGunSC.warnOn(g);
+        settings &= ItemEmpGunSC.zoneOf(g) == EmpMathSC.ZONE_LEGS && ItemEmpGunSC.limitOf(g) == EmpMathSC.LIMIT_FULL && !ItemEmpGunSC.warnOn(g);
+        ItemEmpGunSC.setLimit(g, 75);
+        settings &= ItemEmpGunSC.limitOf(g) == 75;
         ItemEmpGunSC.setWarn(g, true);
         settings &= ItemEmpGunSC.warnOn(g) && !g.getTagCompound().hasKey(ItemEmpGunSC.NO_WARN);
         check(charge && mods && bits && upgraded && cooldown && hot && settings, "gun NBT: charge clamped to 600 000 / 1.2M with Capacity (cut back when "
-                + "it's removed), modules as bits, ПЭ-1М = meta 1 (empGunM), Pulse cooldown, overheat lock until 0, zone / limit / warning");
+                + "it's removed), modules as bits, ПЭ-1М = meta 1 (empGunM), Pulse cooldown, overheat lock until below 70 (a stream's end writes its own), zone / limit (0..101) / warning");
     }
 
     private static void modesAndReceivers() {
@@ -350,14 +426,15 @@ final class SelfTestEmpSC {
             "sc.emp.reboot.nocharge", "sc.emp.reboot.nothing", "sc.empgui.tab", "sc.empgui.charge", "sc.empgui.heat", "sc.empgui.cool",
             "sc.empgui.mode", "sc.empgui.price", "sc.empgui.receiver", "sc.empgui.noreceiver", "sc.empgui.modes", "sc.empgui.settings",
             "sc.empgui.zone", "sc.empgui.zone.0", "sc.empgui.zone.1", "sc.empgui.zone.2", "sc.empgui.zone.3", "sc.empgui.recv.0",
-            "sc.empgui.recv.1", "sc.empgui.recv.2", "sc.empgui.limit", "sc.empgui.limit.full", "sc.empgui.limit.pct", "sc.empgui.warn",
+            "sc.empgui.recv.1", "sc.empgui.recv.2", "sc.empgui.limit", "sc.empgui.limit.full", "sc.empgui.limit.pct", "sc.empgui.limit.vent", "sc.empgui.warn",
             "sc.empgui.modules", "sc.empgui.module.install", "sc.empgui.module.remove", "sc.empgui.module.none", "sc.empgui.target",
             "sc.empgui.target.none", "sc.empgui.target.suit", "sc.empgui.target.immune", "sc.empgui.target.charge", "sc.empgui.target.refuse",
             "sc.empgui.tip.point", "sc.empgui.tip.pulse", "sc.empgui.tip.siphon", "sc.armorgui.emp", "sc.armorgui.emp.suppressed",
             "sc.armorgui.emp.immune", "sc.armorgui.emp.normal", "sc.armorgui.emp.reboot", "sc.armorgui.emp.reboot.cd", "sc.armorgui.emp.mark",
             "key.sc.emp.point", "key.sc.emp.pulse", "key.sc.emp.siphon", "key.sc.emp.cancel", "key.sc.emp.reboot", "sc.emp.hud.charge",
             "sc.emp.hud.noreceiver", "sc.emp.hud.overheat", "sc.emp.hud.suppressed", "sc.emp.hud.boil", "sc.emp.hud.aimed", "sc.emp.hud.drain",
-            "sc.emp.hud.target", "sc.emp.hud.received", "sc.tooltip.emp.summary", "sc.tooltip.emp.state", "sc.tooltip.emp.statehot",
+            "sc.emp.hud.target", "sc.emp.hud.received", "sc.emp.hud.throttled", "sc.emp.hud.vented",
+            "sc.emp.siphon.throttled", "sc.emp.siphon.recovered", "sc.empgui.tip.siphon.rate", "sc.manual.emp.siphon.4", "sc.tooltip.emp.summary", "sc.tooltip.emp.state", "sc.tooltip.emp.statehot",
             "sc.tooltip.emp.modules", "sc.tooltip.emp.nomodules", "sc.tooltip.emp.modes", "sc.tooltip.emp.line.point", "sc.tooltip.emp.line.pulse",
             "sc.tooltip.emp.line.siphon", "sc.tooltip.emp.off", "sc.tooltip.emp.table", "sc.tooltip.emp.tablerow", "sc.tooltip.emp.immunity",
             "sc.tooltip.emp.upgraded", "sc.tooltip.emp.howto", "sc.tooltip.emp.charge", "sc.tooltip.emp.recipe", "sc.tooltip.emp.upgrade",

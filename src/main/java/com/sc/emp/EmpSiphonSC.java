@@ -18,15 +18,23 @@ import net.minecraft.world.World;
  * armour only - no mobs, machines or other mods' armour) into the shooter's receivers: a battery of this mod in the
  * inventory, the shooter's own suit, the gun itself - in the K menu's order, minus the switched-off ones.
  *
+ * Изменено 2026-10-11: the speed is a share of the target suit's FULL charge a second (EmpMathSC.siphonRate, by its
+ * chestplate's suit); the target always loses the whole amount, the receivers get what fits after the loss and the
+ * rest is vented (sparks, FX_VENTED) - the stream goes on with full receivers unless the «Предел» is «пока приёмник
+ * не полон». The gun's overheat is soft: at GUN_HEAT_MAX the stream runs throttled (SIPHON_THROTTLED_PCT) while the
+ * gun cools, back to full speed below GUN_HEAT_RECOVER (EmpMathSC.streamHeat).
+ *
  * The transfer runs every STEP ticks (STEP x the per-tick rate): the target's pieces and the receivers change NBT
  * at that pace, not every tick. What goes into the gun waits in Use.pendingCharge (with the start's -5 000 EU) and
- * the stream's gun heat in Use.pendingHeat - written when the stream stops (rule 0.4.1). Once a second: the rules,
- * the EMP screen, the «Страж» reversal, EmpSC.streamSecond (heat, boil, «Энергия утекает!»), the gun's heat.
+ * the stream's gun heat (tenths) in Use.pendingHeat - written when the stream stops (rule 0.4.1). Once a second: the
+ * rules, the EMP screen, the «Страж» reversal, EmpSC.streamSecond (heat, boil, «Энергия утекает!»), the gun's heat.
  */
 public final class EmpSiphonSC {
 
     /** Ticks between transfers. */
     static final int STEP = 5;
+    /** Venting sparks at most this often, ticks. */
+    private static final int VENT_FX_EVERY = 10;
     private static final int[] CHEST_FIRST = {1, 0, 2, 3};
 
     private EmpSiphonSC() {
@@ -61,6 +69,10 @@ public final class EmpSiphonSC {
         EmpGunLogicSC.Use u = new EmpGunLogicSC.Use(gun, EmpMode.SIPHON, now);
         u.targetId = target.getEntityId();
         u.pendingCharge = -EmpMathSC.EU_SIPHON_START;
+        u.throttled = ItemEmpGunSC.overheated(gun);                 // an overheated gun starts the stream weakened
+        if (u.throttled) {
+            EmpGunLogicSC.say(p, "sc.emp.siphon.throttled", EmpMathSC.SIPHON_THROTTLED_PCT, EmpMathSC.GUN_HEAT_RECOVER);
+        }
         EmpGunLogicSC.USES.put(p, u);
         return true;
     }
@@ -81,17 +93,13 @@ public final class EmpSiphonSC {
             stop(p, u, "sc.emp.siphon.stop.refused");
             return;
         }
-        if (ItemEmpGunSC.overheated(gun) || ItemEmpGunSC.heatOf(gun) + u.pendingHeat >= EmpMathSC.GUN_HEAT_MAX) {
-            stop(p, u, "sc.emp.siphon.stop.overheat");
-            return;
-        }
         // by the world clock, not by calls: a player's tick can come twice or not at all in a server tick (packet jitter)
         if ((u.secondAt < 0 || now - u.secondAt >= 20) && !second(p, u, target, u.secondAt >= 0)) {
             return;
         }
         if (u.stepAt < 0 || now - u.stepAt >= STEP) {
             u.stepAt = now;
-            transfer(p, u, target);
+            transfer(p, u, target, now);
         }
     }
 
@@ -111,26 +119,51 @@ public final class EmpSiphonSC {
         u.reversed = EmpArmorSC.guardReversesSiphon(target, p);
         EmpSC.streamSecond(target, p);
         if (heats) {
-            int before = ItemEmpGunSC.heatOf(u.gun) + u.pendingHeat;
-            u.pendingHeat += EmpMathSC.gunHeat(EmpMode.SIPHON, ItemEmpGunSC.hasModule(u.gun, EmpModule.COOLING));
-            int after = ItemEmpGunSC.heatOf(u.gun) + u.pendingHeat;
-            if (after < EmpMathSC.GUN_HEAT_MAX) {
-                EmpGunLogicSC.heatNews(p, u.gun, before, after);   // the warning; the overheat itself is told when the stream stops (flush)
-            }
+            heatSecond(p, u);
         }
         net.minecraft.util.Vec3 c = EmpShotSC.centre(target);
         EmpGunLogicSC.fx(p, EmpNetSC.FX_STREAM_ON, target.getEntityId(), c.xCoord, c.yCoord, c.zCoord);   // renewed: the client's 2 s timeout
-        SoundsSC.play(p.worldObj, p.posX, p.posY, p.posZ, EmpSC.SND_SIPHON, 0.6F, 1F);
+        SoundsSC.play(p.worldObj, p.posX, p.posY, p.posZ, EmpSC.SND_SIPHON, u.throttled ? 0.35F : 0.6F, u.throttled ? 0.8F : 1F);
         return true;
     }
 
+    /** A second of the gun's heat (pending, rule 0.4.1): the soft overheat, its end, the 2 s warning - told at once. */
+    private static void heatSecond(EntityPlayerMP p, EmpGunLogicSC.Use u) {
+        boolean cooling = ItemEmpGunSC.hasModule(u.gun, EmpModule.COOLING);
+        int before = heatTenths(u);
+        int[] h = EmpMathSC.streamHeat(before, u.throttled, cooling);
+        u.pendingHeat += h[0] - before;
+        boolean was = u.throttled;
+        u.throttled = h[1] != 0;
+        if (!was && u.throttled) {
+            SoundsSC.play(p.worldObj, p.posX, p.posY, p.posZ, EmpSC.SND_OVERHEAT, 0.8F, 1F);
+            EmpGunLogicSC.say(p, "sc.emp.siphon.throttled", EmpMathSC.SIPHON_THROTTLED_PCT, EmpMathSC.GUN_HEAT_RECOVER);
+        } else if (was && !u.throttled) {
+            EmpGunLogicSC.say(p, "sc.emp.siphon.recovered");
+        } else if (!u.throttled && ItemEmpGunSC.warnOn(u.gun) && EmpMathSC.overheatWarnTenths(h[0], cooling)
+                && !EmpMathSC.overheatWarnTenths(before, cooling)) {
+            SoundsSC.play(p.worldObj, p.posX, p.posY, p.posZ, EmpSC.SND_OVERHEAT, 0.4F, 1.4F);
+            EmpGunLogicSC.say(p, "sc.emp.overheat.warn");
+        }
+    }
+
+    /** The gun's heat with what the stream hasn't written yet, tenths. */
+    private static int heatTenths(EmpGunLogicSC.Use u) {
+        return Math.max(0, Math.min(EmpMathSC.GUN_HEAT_MAX * 10, ItemEmpGunSC.heatOf(u.gun) * 10 + u.pendingHeat));
+    }
+
+    /** The running stream's gun heat, whole units (the aim readout: the HUD / K tab can't see the pending part). */
+    static int liveHeat(EmpGunLogicSC.Use u) {
+        return heatTenths(u) / 10;
+    }
+
     /** STEP ticks of the stream. */
-    private static void transfer(EntityPlayerMP p, EmpGunLogicSC.Use u, EntityPlayer target) {
+    private static void transfer(EntityPlayerMP p, EmpGunLogicSC.Use u, EntityPlayer target, long now) {
         ItemStack gun = u.gun;
         boolean wide = ItemEmpGunSC.hasModule(gun, EmpModule.WIDE);
         int loss = EmpMathSC.siphonLossPct(ItemEmpGunSC.hasModule(gun, EmpModule.EFFICIENT), EmpSC.anySuppressed(target), ConfigSC.empSiphonLoss);
         if (u.reversed) {
-            // «Страж»: the shooter's charged suit feeds the target's
+            // «Страж»: the shooter's charged suit feeds the target's - at the shooter's (the drained suit's) rate
             long avail = armourCharge(p), room = armourCapacity(target) - armourCharge(target);
             if (avail <= 0) {
                 stop(p, u, "sc.emp.siphon.stop.empty");
@@ -140,13 +173,15 @@ public final class EmpSiphonSC {
                 stop(p, u, "sc.emp.siphon.stop.full");
                 return;
             }
-            int rate = EmpMathSC.siphonRate(EmpMathSC.gunRate(wide), suitVoltage(target), suitVoltage(p), 0, ConfigSC.empSiphonRateMultiplier) * STEP;
-            int[] step = EmpShotSC.streamStep(rate, avail, room, loss);
+            int rate = EmpMathSC.throttle(EmpMathSC.siphonRate(armourCapacity(p), suitOf(p), wide, 0, ConfigSC.empSiphonRateMultiplier, STEP),
+                    u.throttled);
+            int[] step = EmpShotSC.streamStep(rate, avail, room, loss, false);
             int taken = drain(p, step[0]);
             ArmorLogicSC.chargeSuit(target, (int) Math.min(room, EmpMathSC.delivered(taken, loss)));
             return;
         }
-        if (EmpShotSC.limitReached(ItemEmpGunSC.limitOf(gun), armourCharge(p), armourCapacity(p))) {
+        int limit = ItemEmpGunSC.limitOf(gun);
+        if (EmpShotSC.limitReached(limit, armourCharge(p), armourCapacity(p))) {
             stop(p, u, "sc.emp.siphon.stop.limit");
             return;
         }
@@ -155,18 +190,29 @@ public final class EmpSiphonSC {
             stop(p, u, "sc.emp.siphon.stop.empty");
             return;
         }
+        boolean stopWhenFull = EmpShotSC.stopsWhenFull(limit);
         int recv = pickReceiver(p, gun, u);
-        if (recv < 0) {
+        if (recv < 0 && stopWhenFull) {
             stop(p, u, "sc.emp.siphon.stop.full");
             return;
         }
-        long room = room(p, gun, u, recv);
-        int rate = EmpMathSC.siphonRate(EmpMathSC.gunRate(wide), receiverVoltage(p, recv), suitVoltage(target), EmpSC.defenseTier(target),
-                ConfigSC.empSiphonRateMultiplier) * STEP;
-        int[] step = EmpShotSC.streamStep(rate, avail, room, loss);
+        long room = recv < 0 ? 0L : stopWhenFull ? room(p, gun, u, recv) : totalRoom(p, gun, u);
+        int rate = EmpMathSC.throttle(EmpMathSC.siphonRate(armourCapacity(target), suitOf(target), wide, EmpSC.defenseTier(target),
+                ConfigSC.empSiphonRateMultiplier, STEP), u.throttled);
+        int[] step = EmpShotSC.streamStep(rate, avail, room, loss, !stopWhenFull);
         int taken = drain(target, step[0]);
-        int delivered = (int) Math.min(room, EmpMathSC.delivered(taken, loss));
-        u.received += give(p, u, recv, delivered);
+        int arrived = EmpMathSC.delivered(taken, loss);
+        int want = (int) Math.min(room, arrived);
+        int got = stopWhenFull ? give(p, u, recv, want) : giveAll(p, u, want);
+        u.received += got;
+        int vented = arrived - got;
+        if (vented > 0) {
+            u.vented += vented;
+            if (u.ventFxAt < 0 || now - u.ventFxAt >= VENT_FX_EVERY || now < u.ventFxAt) {
+                u.ventFxAt = now;
+                EmpGunLogicSC.fx(p, EmpNetSC.FX_VENTED, target.getEntityId(), p.posX, p.posY, p.posZ);
+            }
+        }
     }
 
     /** Server: the stream ends - the gun gets its EU and heat, the effect stops, `key` (null: none) to the shooter. */
@@ -181,15 +227,17 @@ public final class EmpSiphonSC {
         EmpGunLogicSC.endUse(p, u.gun);
     }
 
-    /** Writes what the stream owes the gun: the start's EU, what it received, its heat. */
+    /**
+     * Writes what the stream owes the gun: the start's EU, what it received, its heat and whether it ended overheated
+     * (the soft overheat told itself while the stream ran - no second message here).
+     */
     static void flush(EntityPlayer p, EmpGunLogicSC.Use u, long now) {
         if (u.pendingCharge != 0) {
             ItemEmpGunSC.setCharge(u.gun, ItemEmpGunSC.chargeOf(u.gun) + u.pendingCharge);
             u.pendingCharge = 0;
         }
-        if (u.pendingHeat != 0) {
-            int from = ItemEmpGunSC.heatOf(u.gun);
-            EmpGunLogicSC.heatUp(p, u.gun, from, u.pendingHeat, now);
+        if (u.pendingHeat != 0 || u.throttled != ItemEmpGunSC.overheated(u.gun)) {
+            ItemEmpGunSC.setStreamHeat(u.gun, heatTenths(u) / 10, u.throttled, now);
             u.pendingHeat = 0;
         }
     }
@@ -224,12 +272,33 @@ public final class EmpSiphonSC {
         return Math.max(0L, (long) ItemEmpGunSC.capacityOf(gun) - ItemEmpGunSC.chargeOf(gun) - pending);
     }
 
-    private static int receiverVoltage(EntityPlayer p, int recv) {
-        if (recv == EmpMathSC.RECV_BATTERY) {
-            ItemStack b = battery(p);
-            return b == null ? 0 : ItemBatterySC.tierOf(b).getVoltage();
+    /** Free room of every switched-on receiver together, EU. */
+    private static long totalRoom(EntityPlayer p, ItemStack gun, EmpGunLogicSC.Use u) {
+        long sum = 0;
+        for (int r : ItemEmpGunSC.receiverOrder(gun)) {
+            if (r >= 0 && r < EmpMathSC.RECV_COUNT && ItemEmpGunSC.receiverEnabled(gun, r)) {
+                sum += Math.max(0L, room(p, gun, u, r));
+            }
         }
-        return recv == EmpMathSC.RECV_ARMOR ? suitVoltage(p) : EmpMathSC.CHARGE_TIER.getVoltage();
+        return sum;
+    }
+
+    /** EU into the switched-on receivers in their order, each as much as it takes. @return EU taken in all */
+    private static int giveAll(EntityPlayer p, EmpGunLogicSC.Use u, int eu) {
+        int left = eu;
+        for (int r : ItemEmpGunSC.receiverOrder(u.gun)) {
+            if (left <= 0) {
+                break;
+            }
+            if (r < 0 || r >= EmpMathSC.RECV_COUNT || !ItemEmpGunSC.receiverEnabled(u.gun, r)) {
+                continue;
+            }
+            long room = room(p, u.gun, u, r);
+            if (room > 0) {
+                left -= give(p, u, r, (int) Math.min(room, left));
+            }
+        }
+        return eu - left;
     }
 
     /** EU into the receiver. @return EU it took */
@@ -280,6 +349,7 @@ public final class EmpSiphonSC {
         return sum;
     }
 
+    /** The full charge of the worn pieces of the mod's armour (their max capacity together). */
     static long armourCapacity(EntityPlayer p) {
         long sum = 0;
         for (int i = 0; i < 4; i++) {
@@ -291,16 +361,23 @@ public final class EmpSiphonSC {
         return sum;
     }
 
-    /** The charge tier's voltage of the worn suit (the chestplate first), 0 without one. */
-    private static int suitVoltage(EntityPlayer p) {
-        for (int i : CHEST_FIRST) {
+    /** The suit that sets the stream's speed: the chestplate's, else the best worn piece's; null without the mod's armour. */
+    static ArmorSuit suitOf(EntityPlayer p) {
+        ItemStack chest = EmpSC.modPiece(p, 1);
+        if (chest != null) {
+            return ((ItemArmorSC) chest.getItem()).getSuit();
+        }
+        ArmorSuit best = null;
+        for (int i = 0; i < 4; i++) {
             ItemStack s = EmpSC.modPiece(p, i);
             if (s != null) {
                 ArmorSuit suit = ((ItemArmorSC) s.getItem()).getSuit();
-                return suit.chargeTier.getVoltage();
+                if (best == null || suit.ordinal() > best.ordinal()) {
+                    best = suit;
+                }
             }
         }
-        return 0;
+        return best;
     }
 
     /** Takes up to `eu` from the worn pieces, the chestplate first. @return EU taken */

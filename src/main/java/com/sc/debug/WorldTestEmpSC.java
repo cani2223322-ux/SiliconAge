@@ -38,13 +38,17 @@ import net.minecraftforge.common.util.FakePlayerFactory;
  * oxygen breathing still on (package B), the boil x2; the emergency reboot (B) / EmpSC.clearSuppression: immunity
  * at once, the 60 s cooldown. Pulse: every piece for 11 s x0.8, the suit's heat, the boil x3; after the end the
  * pieces are immune - a second Pulse suppresses nothing, heats and boils at half. Siphon through EmpGunLogicSC
- * (package A): the target's EU reach the shooter's suit less 25%.
+ * (package A, изменено 2026-10-11), three streams of 3 s on a Quantum target: (1) it loses 5% of its full charge a
+ * second, the shooter's suit gets it less 25%; (2) the shooter's suit nearly full - the target still loses the full
+ * amount, the suit is filled and the rest vented; (3) an overheated gun - the stream runs at 25% speed.
  */
 public final class WorldTestEmpSC {
 
     /** ArmorLogicSC's (private) per-player pending heat key - ПЭ-1's heat lands there. */
     private static final String HEAT_KEY = "scArmorHeat";
     private static final int Y = 200, SIPHON_TICKS = 60;
+    /** Phase 1: the shooter's suit this many EU short of full. */
+    private static final int VENT_ROOM = 20000;
 
     private int ticks;
     private boolean done;
@@ -52,7 +56,7 @@ public final class WorldTestEmpSC {
     private FakePlayer point, pulse, drained, shooter;
     private long pulseEndAt;
     private int pulseTicks;
-    private int siphonTick = -1;
+    private int siphonTick = -1, siphonPhase;
     private ItemStack gun;
     private long targetBefore, shooterBefore;
     private Chunk chunk;
@@ -201,8 +205,6 @@ public final class WorldTestEmpSC {
         drained.setLocationAndAngles(x + 0.5, Y, z + 4 + 0.5, 0F, 0F);
         reset(drained);
         shooter = fake(w, "EmpShooter", x, z);                      // facing south (+Z), the target 4 blocks ahead
-        wear(drained, ArmorSuit.QUANTUM, 100);
-        wear(shooter, ArmorSuit.QUANTUM, 0);
         chunk = w.getChunkFromBlockCoords(x, z + 4);
         chunk.addEntity(drained);                                   // findable by the hitscan, never ticked (not in the world's list)
         idMap(w).addKey(drained.getEntityId(), drained);            // and by id, as the stream finds its target each tick
@@ -213,10 +215,23 @@ public final class WorldTestEmpSC {
         ItemEmpGunSC.setReceiverEnabled(gun, EmpMathSC.RECV_GUN, false);   // only the shooter's suit takes
         shooter.inventory.currentItem = 0;
         shooter.inventory.mainInventory[0] = gun;
-        targetBefore = suitCharge(drained);
-        shooterBefore = suitCharge(shooter);
         int refusal = EmpRulesSC.refusal(shooter, drained, false);
         System.out.println("[SC-WORLDTEST] INFO pe1 siphon: the rules say " + refusal + " (0 = OK) for one fake player on another");
+        siphonPhase = 0;
+        startStream(w);
+    }
+
+    /** Phase 0: an empty shooter suit; 1: the shooter's suit VENT_ROOM short of full (venting); 2: an overheated gun. */
+    private void startStream(WorldServer w) {
+        wear(drained, ArmorSuit.QUANTUM, 100);
+        wear(shooter, ArmorSuit.QUANTUM, siphonPhase == 1 ? 100 : 0);
+        if (siphonPhase == 1) {
+            ItemStack chest = shooter.inventory.armorInventory[2];
+            ItemArmorSC.setCharge(chest, ItemArmorSC.capacityOf(chest) - VENT_ROOM);
+        }
+        ItemEmpGunSC.setHeat(gun, siphonPhase == 2 ? EmpMathSC.GUN_HEAT_MAX : 0, w.getTotalWorldTime());
+        targetBefore = suitCharge(drained);
+        shooterBefore = suitCharge(shooter);
         ItemStack held = EmpGunLogicSC.rightClick(gun, w, shooter);
         if (held != null && held != gun) {
             gun = held;
@@ -233,16 +248,42 @@ public final class WorldTestEmpSC {
             return;
         }
         boolean draining = EmpSC.drained(drained);
+        boolean running = shooter.isUsingItem();                    // not cut by a full receiver / the overheat
         EmpGunLogicSC.stoppedUsing(gun, w, shooter, SIPHON_TICKS);
         shooter.clearItemInUse();
         long lost = targetBefore - suitCharge(drained), got = suitCharge(shooter) - shooterBefore;
+        long cap = suitCapacity(drained);
         int lossPct = EmpMathSC.siphonLossPct(false, false, ConfigSC.empSiphonLoss);
-        long want = lost * (100 - lossPct) / 100;
-        boolean ok = lost > 0 && got > 0 && Math.abs(got - want) <= lost / 50 + 100 && draining;
-        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 Siphon (package A), " + SIPHON_TICKS + " ticks: the target lost " + lost
-                + " EU, the shooter's suit got " + got + " (want ~" + want + ", loss " + lossPct + "%), the target saw the drain " + draining
-                + ", the gun has " + ItemEmpGunSC.chargeOf(gun) + " EU (" + EmpMathSC.EU_SIPHON_START + " paid for the start)");
-        clean();
+        // 60 ticks = 12 transfers of 5 ticks (the first at once): 5%/s of the full charge = 1/4 of that a step
+        int step = EmpMathSC.throttle(EmpMathSC.siphonRate(cap, ArmorSuit.QUANTUM, false, 0, ConfigSC.empSiphonRateMultiplier, 5), siphonPhase == 2);
+        long wantLost = 12L * step;
+        boolean lostOk = Math.abs(lost - wantLost) <= step;
+        String pctPerSecond = String.format(java.util.Locale.ROOT, "%.2f", lost * 100D / cap / (SIPHON_TICKS / 20D));
+        boolean ok;
+        String what;
+        if (siphonPhase == 0) {
+            long want = lost * (100 - lossPct) / 100;
+            ok = lostOk && got > 0 && Math.abs(got - want) <= lost / 50 + 100 && draining && running;
+            what = "Siphon (package A), " + SIPHON_TICKS + " ticks on a Quantum suit: it lost " + lost + " EU = " + pctPerSecond
+                    + "% of its full charge a second (want ~" + wantLost + ", 5%/s), the shooter's suit got " + got + " (want ~" + want + ", loss "
+                    + lossPct + "%), the target saw the drain " + draining + ", the gun has " + ItemEmpGunSC.chargeOf(gun) + " EU";
+        } else if (siphonPhase == 1) {
+            long vented = lost * (100 - lossPct) / 100 - got;
+            ok = lostOk && got > 0 && got <= VENT_ROOM && suitCharge(shooter) == suitCapacity(shooter) && vented > 0 && running;
+            what = "Siphon overflow: the shooter's suit " + VENT_ROOM + " EU short of full - the target still lost " + lost + " EU (want ~"
+                    + wantLost + "), the suit got " + got + " and is full, ~" + vented + " EU vented, the stream kept running " + running;
+        } else {
+            ok = lostOk && running && ItemEmpGunSC.overheated(gun);
+            what = "Siphon soft overheat: an overheated gun streams at " + EmpMathSC.SIPHON_THROTTLED_PCT + "% - the target lost " + lost
+                    + " EU = " + pctPerSecond + "%/s (want ~" + wantLost + "), still running " + running + ", the gun after: heat "
+                    + ItemEmpGunSC.heatOf(gun) + ", overheated " + ItemEmpGunSC.overheated(gun);
+        }
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 " + what);
+        if (++siphonPhase <= 2) {
+            startStream(w);
+        } else {
+            clean();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -312,6 +353,15 @@ public final class WorldTestEmpSC {
             }
             p.inventory.armorInventory[3 - t] = s;
         }
+    }
+
+    private static long suitCapacity(FakePlayer p) {
+        long sum = 0;
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = ArmorLogicSC.piece(p, t);
+            sum += s == null ? 0 : ItemArmorSC.capacityOf(s);
+        }
+        return sum;
     }
 
     private static long suitCharge(FakePlayer p) {

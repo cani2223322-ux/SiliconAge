@@ -32,13 +32,17 @@ public final class EmpMathSC {
     public static final int PULSE_LOS_GRACE = 10;
 
     /**
-     * The gun's own heat (NBT "HeatSC", 0..GUN_HEAT_MAX), shared by every mode: Point +10 a shot, Pulse +30,
-     * Siphon +11 a second (full in ~9 s, §4 "8-10 с"); the Cooling module x0.7. It cools GUN_COOL_PER_SECOND
-     * once GUN_COOL_DELAY ticks pass without heating: full -> 0 in 12.5 s (§5 "10-15 с"). Overheated
-     * (reached GUN_HEAT_MAX): no mode works until it is back at 0. TODO(balance): the units are this mod's own.
+     * The gun's own heat (NBT "HeatSC", 0..GUN_HEAT_MAX), shared by every mode (§5, изменено 2026-10-11): Point +10
+     * a shot, Pulse +30; the Siphon heats in tenths - GUN_HEAT_SIPHON_TENTHS a second (2.9: full in ~35 s of stream,
+     * the Cooling module x0.7 -> 2.0: 50 s). It cools GUN_COOL_PER_SECOND once GUN_COOL_DELAY ticks pass without
+     * heating: full -> 0 in ~5 s. Overheated (reached GUN_HEAT_MAX): Point / Pulse are locked until the heat is below
+     * GUN_HEAT_RECOVER (70). The Siphon overheats softly: the stream goes on at SIPHON_THROTTLED_PCT of its speed and
+     * the gun cools GUN_HEAT_THROTTLED_COOL_TENTHS a second meanwhile (3.0: 100 -> below 70 in ~11 s), then full speed.
      */
-    public static final int GUN_HEAT_MAX = 100, GUN_HEAT_POINT = 10, GUN_HEAT_PULSE = 30, GUN_HEAT_SIPHON_PER_SECOND = 11,
-            GUN_COOL_PER_SECOND = 8, GUN_COOL_DELAY = 20;
+    public static final int GUN_HEAT_MAX = 100, GUN_HEAT_RECOVER = 70, GUN_HEAT_POINT = 10, GUN_HEAT_PULSE = 30,
+            GUN_HEAT_SIPHON_TENTHS = 29, GUN_COOL_PER_SECOND = 20, GUN_COOL_DELAY = 20;
+    /** Soft overheat of the stream: speed, % of normal; the gun's cooling meanwhile, tenths a second. */
+    public static final int SIPHON_THROTTLED_PCT = 25, GUN_HEAT_THROTTLED_COOL_TENTHS = 30;
     public static final float COOLING_MODULE_MUL = 0.7F;
     /** "предупреждение о перегреве за 2 с" (§8): warn this many seconds of siphon heat before the limit. */
     public static final int OVERHEAT_WARN_SECONDS = 2;
@@ -70,20 +74,66 @@ public final class EmpMathSC {
         return m == EmpMode.POINT ? CHARGE_POINT : m == EmpMode.PULSE ? (upgraded ? CHARGE_PULSE_M : CHARGE_PULSE) : 0;
     }
 
-    /** Gun heat a shot (Point / Pulse) or a second of stream (Siphon) adds, with or without the Cooling module. */
+    /** Gun heat a shot (Point / Pulse) adds, with or without the Cooling module; Siphon: a second of stream, rounded (see siphonHeatTenths). */
     public static int gunHeat(EmpMode m, boolean cooling) {
-        int h = m == EmpMode.POINT ? GUN_HEAT_POINT : m == EmpMode.PULSE ? GUN_HEAT_PULSE : GUN_HEAT_SIPHON_PER_SECOND;
+        if (m == EmpMode.SIPHON) {
+            return Math.round(siphonHeatTenths(cooling) / 10F);
+        }
+        int h = m == EmpMode.POINT ? GUN_HEAT_POINT : GUN_HEAT_PULSE;
         return cooling ? Math.max(1, Math.round(h * COOLING_MODULE_MUL)) : h;
     }
 
-    /** The overheat warning is due: less than OVERHEAT_WARN_SECONDS of siphon heat left. */
-    public static boolean overheatWarn(int heat, boolean cooling) {
-        return heat < GUN_HEAT_MAX && GUN_HEAT_MAX - heat <= OVERHEAT_WARN_SECONDS * gunHeat(EmpMode.SIPHON, cooling);
+    /** Gun heat a second of stream adds, tenths: 29, Cooling 20. */
+    public static int siphonHeatTenths(boolean cooling) {
+        return cooling ? Math.max(1, Math.round(GUN_HEAT_SIPHON_TENTHS * COOLING_MODULE_MUL)) : GUN_HEAT_SIPHON_TENTHS;
     }
 
-    /** Seconds until an overheated gun is back at 0. */
+    /** Seconds of continuous stream from cold to the overheat: 35, Cooling 50. */
+    public static int siphonOverheatSeconds(boolean cooling) {
+        int r = siphonHeatTenths(cooling);
+        return (GUN_HEAT_MAX * 10 + r - 1) / r;
+    }
+
+    /**
+     * One second of stream for the gun's heat (`heatTenths` = heat x 10): not throttled - it heats siphonHeatTenths and
+     * is throttled once it reaches the max; throttled - it cools GUN_HEAT_THROTTLED_COOL_TENTHS and is back at full speed
+     * once below GUN_HEAT_RECOVER. @return {heat tenths after, 1 throttled / 0 not}
+     */
+    public static int[] streamHeat(int heatTenths, boolean throttled, boolean cooling) {
+        int max = GUN_HEAT_MAX * 10;
+        int h = Math.max(0, Math.min(max, heatTenths));
+        if (!throttled) {
+            h = Math.min(max, h + siphonHeatTenths(cooling));
+            return new int[]{h, h >= max ? 1 : 0};
+        }
+        h = Math.max(0, h - GUN_HEAT_THROTTLED_COOL_TENTHS);
+        return new int[]{h, h < GUN_HEAT_RECOVER * 10 ? 0 : 1};
+    }
+
+    /** A stream rate (EU) at the soft overheat's SIPHON_THROTTLED_PCT when `throttled`. */
+    public static int throttle(int rate, boolean throttled) {
+        return throttled ? (int) ((long) rate * SIPHON_THROTTLED_PCT / 100) : rate;
+    }
+
+    /** The overheat warning is due: less than OVERHEAT_WARN_SECONDS of siphon heat left (heat in whole units). */
+    public static boolean overheatWarn(int heat, boolean cooling) {
+        return overheatWarnTenths(heat * 10, cooling);
+    }
+
+    public static boolean overheatWarnTenths(int heatTenths, boolean cooling) {
+        int max = GUN_HEAT_MAX * 10;
+        return heatTenths < max && max - heatTenths <= OVERHEAT_WARN_SECONDS * siphonHeatTenths(cooling);
+    }
+
+    /** Seconds until an overheated gun may shoot again (heat below GUN_HEAT_RECOVER); 0 when it already may. */
     public static int coolSeconds(int heat) {
-        return (heat + GUN_COOL_PER_SECOND - 1) / GUN_COOL_PER_SECOND;
+        int over = heat - (GUN_HEAT_RECOVER - 1);
+        return over <= 0 ? 0 : (over + GUN_COOL_PER_SECOND - 1) / GUN_COOL_PER_SECOND;
+    }
+
+    /** Seconds until the gun is back at 0 (the first step comes with the GUN_COOL_DELAY): 100 -> 5. */
+    public static int coolFullSeconds(int heat) {
+        return (Math.max(0, heat) + GUN_COOL_PER_SECOND - 1) / GUN_COOL_PER_SECOND;
     }
 
     // ------------------------------------------------------------------ suppression (§2)
@@ -238,29 +288,44 @@ public final class EmpMathSC {
         return new long[]{curMul, curUntil};                     // a weaker boil while a stronger one runs: no change
     }
 
-    // ------------------------------------------------------------------ siphon (§4)
+    // ------------------------------------------------------------------ siphon (§4, изменено 2026-10-11)
 
-    /** EU/t: the gun's EV, with the Wide channel module IV. */
-    public static final int SIPHON_RATE = 2048, SIPHON_RATE_WIDE = 8192;
+    /**
+     * Speed, % of the target suit's FULL charge (the max capacity of the mod pieces it wears) a second, by the suit of
+     * its chestplate (no chestplate: the best piece): NANO, QUANTUM, EXO, SINGULAR.
+     */
+    public static final int[] SIPHON_PCT_PER_SECOND = {6, 5, 4, 3};
+    /** The Wide channel module: speed x1.5. */
+    public static final float WIDE_MUL = 1.5F;
     /** Loss, %: base (config siphonLoss), with the Efficient siphon module, against a suppressed suit. */
     public static final int SIPHON_LOSS = 25, SIPHON_LOSS_EFFICIENT = 10, SIPHON_LOSS_SUPPRESSED = 0;
     /** The target's Defense chip I/II/III: siphon speed -20/30/40%. */
     public static final int[] DEFENSE_SIPHON_PCT = {20, 30, 40};
-    /** "Пока моя броня не наберёт N%" (gun NBT "EmpLimit"): 0 = until the receiver is full. */
-    public static final int LIMIT_FULL = 0;
+    /**
+     * The «Предел» (gun NBT "EmpLimit"): LIMIT_VENT (0, the default) - no limit, what the receivers can't take is
+     * vented; 1..100 - until my armour holds N% (venting meanwhile); LIMIT_FULL (101) - until the receiver is full.
+     */
+    public static final int LIMIT_VENT = 0, LIMIT_FULL = 101;
     /** Receivers (gun NBT "EmpRecv" order, "EmpRecvOff" bits): the mod's battery in the inventory, own worn armour, the gun itself. */
     public static final int RECV_BATTERY = 0, RECV_ARMOR = 1, RECV_GUN = 2, RECV_COUNT = 3;
 
-    public static int gunRate(boolean wide) {
-        return wide ? SIPHON_RATE_WIDE : SIPHON_RATE;
+    /** % of the full charge a second against `suit`: the table x Wide 1.5 x Defense chip x config (0 for no suit). */
+    public static double siphonPctPerSecond(ArmorSuit suit, boolean wide, int defenseTier, float configMul) {
+        if (suit == null) {
+            return 0D;
+        }
+        double p = SIPHON_PCT_PER_SECOND[Math.min(SIPHON_PCT_PER_SECOND.length - 1, suit.ordinal())];
+        if (wide) {
+            p *= WIDE_MUL;
+        }
+        p *= 1D - pct(DEFENSE_SIPHON_PCT, defenseTier) / 100D;
+        return p * Math.max(0F, configMul);
     }
 
-    /** EU/t the stream takes from the target: min(gun, receiver tier, target suit tier) x Defense chip x config. */
-    public static int siphonRate(int gunRate, int receiverVoltage, int targetVoltage, int defenseTier, float configMul) {
-        double r = Math.min(gunRate, Math.min(receiverVoltage, targetVoltage));
-        r *= 1D - pct(DEFENSE_SIPHON_PCT, defenseTier) / 100D;
-        r *= Math.max(0F, configMul);
-        return Math.max(0, (int) Math.floor(r));
+    /** EU the stream takes in `ticks` from a `suit` of `fullCapacity` EU (siphonPctPerSecond of it a second). */
+    public static int siphonRate(long fullCapacity, ArmorSuit suit, boolean wide, int defenseTier, float configMul, int ticks) {
+        double eu = Math.max(0L, fullCapacity) * siphonPctPerSecond(suit, wide, defenseTier, configMul) / 100D * Math.max(0, ticks) / 20D;
+        return (int) Math.min(Integer.MAX_VALUE, Math.floor(eu + 1e-6));
     }
 
     /** Loss % of the stream: 0 against a suppressed suit; the Efficient module scales config's base 25 -> 10. */

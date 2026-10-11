@@ -82,26 +82,40 @@ public final class EmpShotSC {
     }
 
     /**
-     * One stream step: `rate` EU at most, no more than the target holds (`available`), and no more than the receiver
-     * can take after the loss (`room`). @return {EU taken from the target, EU that reach the receiver}
+     * One stream step: `rate` EU at most, no more than the target holds (`available`). `vent` (изменено 2026-10-11, the
+     * default «Предел»): the target loses all of it, the receivers (`room` in all) get what fits after the loss, the rest
+     * is vented. Not `vent` («пока приёмник не полон»): no more is taken than the room can hold after the loss.
+     * @return {EU taken from the target, EU that reach the receivers, EU vented}
      */
-    public static int[] streamStep(int rate, long available, long room, int lossPct) {
+    public static int[] streamStep(int rate, long available, long room, int lossPct, boolean vent) {
         long taken = Math.max(0L, Math.min(rate, available));
         int loss = Math.max(0, Math.min(100, lossPct));
-        if (room <= 0) {
-            return new int[]{0, 0};
+        long free = Math.max(0L, room);
+        if (vent) {
+            int arrived = EmpMathSC.delivered((int) taken, loss);
+            int delivered = (int) Math.min(free, arrived);
+            return new int[]{(int) taken, delivered, arrived - delivered};
+        }
+        if (free <= 0) {
+            return new int[]{0, 0, 0};
         }
         if (loss < 100) {
-            long byRoom = (room * 100 + (100 - loss) - 1) / (100 - loss);     // taken whose delivery just fills the room
+            long byRoom = (free * 100 + (100 - loss) - 1) / (100 - loss);     // taken whose delivery just fills the room
             taken = Math.min(taken, byRoom);
         }
-        int delivered = (int) Math.min(room, EmpMathSC.delivered((int) taken, loss));
-        return new int[]{(int) taken, delivered};
+        int arrived = EmpMathSC.delivered((int) taken, loss);
+        int delivered = (int) Math.min(free, arrived);
+        return new int[]{(int) taken, delivered, arrived - delivered};
     }
 
-    /** "Пока моя броня не наберёт N%": reached once `charge` is at least `limitPct` of `cap` (0 = no limit; no armour: never). */
+    /** "Пока моя броня не наберёт N%": reached once `charge` is at least `limitPct` (1..100) of `cap` (other limits / no armour: never). */
     public static boolean limitReached(int limitPct, long charge, long cap) {
-        return limitPct > EmpMathSC.LIMIT_FULL && cap > 0 && charge * 100 >= (long) limitPct * cap;
+        return limitPct > EmpMathSC.LIMIT_VENT && limitPct <= 100 && cap > 0 && charge * 100 >= (long) limitPct * cap;
+    }
+
+    /** The stream stops when the receivers are full only with the «пока приёмник не полон» limit; otherwise it vents. */
+    public static boolean stopsWhenFull(int limit) {
+        return limit == EmpMathSC.LIMIT_FULL;
     }
 
     /** Charge in %, 0..100 (0 for no capacity). */
