@@ -125,8 +125,8 @@
 
 ## 9. Правила сервера и конфиг
 
-Стреляет по игрокам только при PvP сервера, не в чужом приватном поле и не в привате других модов (FTB Utilities, GriefPrevention…), не по своим (список доступа / команда).
-Раздел `weapons.pe1` (серверный, приходит игрокам): `enabled` true, `affectsPlayers` true, `durationMultiplier` 1.0, `siphonRateMultiplier` 1.0, `siphonLoss` 25, `immunitySeconds` 20, `heatMultiplier` 1.0, `heliumBoilMultiplier` 1.0.
+Стреляет по игрокам только при PvP сервера и не по своим (список доступа / команда). В чужих приватах работает (решение 2026-10-11); с `respectClaims` = true — не в чужом приватном поле и не в привате других модов (FTB Utilities, GriefPrevention…). От пушки в своём привате защищает флаг поля «ЭМИ-экран».
+Раздел `weapons.pe1` (серверный, приходит игрокам): `enabled` true, `respectClaims` false, `affectsPlayers` true, `durationMultiplier` 1.0, `siphonRateMultiplier` 1.0, `siphonLoss` 25, `immunitySeconds` 20, `heatMultiplier` 1.0, `heliumBoilMultiplier` 1.0.
 
 ## 10. Оформление
 

@@ -82,6 +82,8 @@ public final class ConfigSC {
      * the immunity after a suppression, seconds.
      */
     public static boolean empEnabled = true, empAffectsPlayers = true;
+    /** ПЭ-1 respects private fields and other mods' claims (off by default: the gun works in someone else's claim too). */
+    public static boolean empRespectClaims = false;
     public static float empDurationMultiplier = 1F, empSiphonRateMultiplier = 1F, empHeatMultiplier = 1F, empHeliumBoilMultiplier = 1F;
     public static int empSiphonLoss = 25, empImmunitySeconds = 20;
 
@@ -216,6 +218,8 @@ public final class ConfigSC {
                     "The PE-1 works at all (off: it never fires) / ПЭ-1 работает (выкл.: не стреляет)");
             empAffectsPlayers = config.getBoolean("affectsPlayers", pe, true,
                     "The PE-1 affects players (off: mobs only, Slowness) / ПЭ-1 действует на игроков (выкл.: только мобы, Медлительность)");
+            empRespectClaims = config.getBoolean("respectClaims", pe, false,
+                    "The PE-1 refuses inside someone else's private field or another mod's claim (off: it works there too; PvP and friends still count) / ПЭ-1 не работает в чужом приватном поле и привате других модов (выкл.: работает и там; PvP и «свои» учитываются)");
             empDurationMultiplier = num(config, "durationMultiplier", pe, 1F, 0.1F, 10F,
                     "Suppression time, times this / Множитель времени подавления");
             empSiphonRateMultiplier = num(config, "siphonRateMultiplier", pe, 1F, 0.1F, 10F,

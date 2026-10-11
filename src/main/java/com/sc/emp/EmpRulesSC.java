@@ -28,7 +28,8 @@ public final class EmpRulesSC {
      * In this order: the gun off on the server; for a player target - players off in the config, the server's PvP
      * (BladeLogicSC.pvpBlocked: PvP off, a team without friendly fire), "one of us" (the same team, or one owns a
      * switched-on field with the other on its access list - either way round); then for anyone - the target, or the
-     * shooter, inside a private field that doesn't let the shooter in; and on a real shot, other mods' claims.
+     * shooter, inside a private field that doesn't let the shooter in; and on a real shot, other mods' claims - these two
+     * only with weapons.pe1.respectClaims (off by default).
      */
     public static int refusal(EntityPlayer shooter, Entity target, boolean fire) {
         if (!ConfigSC.empEnabled) {
@@ -53,6 +54,9 @@ public final class EmpRulesSC {
             }
         }
         World w = shooter.worldObj;
+        if (!ConfigSC.empRespectClaims) {
+            return EmpNetSC.OK;                                 // works in someone else's claim too (weapons.pe1.respectClaims)
+        }
         if (w != null && !w.isRemote
                 && (TileEntityFieldGeneratorSC.privateRefusing(w, shooter, target.posX, target.posY + target.height / 2, target.posZ) != null
                 || TileEntityFieldGeneratorSC.privateRefusing(w, shooter, shooter.posX, shooter.posY + shooter.height / 2, shooter.posZ) != null)) {
