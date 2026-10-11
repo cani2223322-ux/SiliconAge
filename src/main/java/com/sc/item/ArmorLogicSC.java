@@ -472,19 +472,19 @@ public final class ArmorLogicSC {
         softDescent(p);
         argon(p);
         searchlight(p);
-        if (shieldActive(p) && p.ticksExisted % 2 == 0) {
+        if (shieldActive(p) && com.sc.util.TickClock.mod(p, 2) == 0) {
             shield(p);
         }
         if (active(p, ArmorFeature.EVENT_HORIZON)) {
             horizonScan(p);
         }
-        if (p.ticksExisted % 2 == 0 && active(p, ArmorFeature.MAGNET)) {
+        if (com.sc.util.TickClock.mod(p, 2) == 0 && active(p, ArmorFeature.MAGNET)) {
             magnet(p);
         }
         if (p.posY < 0 && !p.isDead) {
             voidRescue(p);
         }
-        if (p.ticksExisted % SingularSensesSC.ANALYZE_EVERY == 0) {
+        if (com.sc.util.TickClock.mod(p, SingularSensesSC.ANALYZE_EVERY) == 0) {
             SingularSensesSC.analyzer(p);                      // Ш5: what the wearer looks at
         }
         if (active(p, ArmorFeature.FIRE_PROOF) && (p.isBurning() || p.handleLavaMovement()) && !p.isPotionActive(Potion.fireResistance)) {
@@ -660,7 +660,7 @@ public final class ArmorLogicSC {
             clearLight(p);
             return;
         }
-        if (p.ticksExisted % 4 != 0) {
+        if (com.sc.util.TickClock.mod(p, 4) != 0) {
             return;
         }
         double ey = p.posY + 1.62;                     // server: posY is the feet
@@ -1108,7 +1108,7 @@ public final class ArmorLogicSC {
         if (active(p, ArmorFeature.CHARGER)) {
             heat += chargeWeapons(p);
         }
-        if (p.ticksExisted % 200 == 0) {
+        if (com.sc.util.TickClock.mod(p, 200) == 0) {
             resendFlight(p);
         }
         if (ArmorGasSC.suitAmount(p, Gas.HYDROGEN) >= H2_WARN_REARM) {

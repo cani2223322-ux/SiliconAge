@@ -109,7 +109,10 @@ public class CommonEventHandler {
         com.sc.item.ArmorLogicSC.tick(event.player);          // both sides: the client moves the player
         com.sc.item.BladeLogicSC.tick(event.player);          // server: the blade's deflect while blocking
         com.sc.radiation.LeadSuitSC.tick(event.player);       // both sides: the lead suit's weight
-        if (event.player.worldObj.isRemote || event.player.ticksExisted % HEAT_INTERVAL_TICKS != 0) {
+        // the world's clock, not ticksExisted: riding, a player's ticksExisted moves twice a tick and this second never
+        // came (TickClock); and only once in that tick, should the event come twice
+        if (event.player.worldObj.isRemote || com.sc.util.TickClock.mod(event.player, HEAT_INTERVAL_TICKS) != 0
+                || !com.sc.util.TickClock.firstThisTick(event.player, "SCSecondTick")) {
             return;
         }
         com.sc.radiation.RadiationSC.perSecond(event.player); // before the suit's second: the shield's heat counts in it

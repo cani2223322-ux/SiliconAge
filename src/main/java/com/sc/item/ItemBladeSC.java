@@ -556,14 +556,14 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
 
     @Override
     public void onUpdate(ItemStack stack, World world, Entity entity, int slot, boolean held) {
-        if (!world.isRemote && entity.ticksExisted % 20 == 7 && !(held && entity instanceof EntityPlayer && ((EntityPlayer) entity).isUsingItem())) {
+        if (!world.isRemote && com.sc.util.TickClock.mod(entity, 20) == 7 && !(held && entity instanceof EntityPlayer && ((EntityPlayer) entity).isUsingItem())) {
             syncLooting(stack);                     // fresh blades (on by default) and upgraded ones (the new level)
         }
-        if (!world.isRemote && entity instanceof EntityPlayer && entity.ticksExisted % 20 == 0) {
+        if (!world.isRemote && entity instanceof EntityPlayer && com.sc.util.TickClock.mod(entity, 20) == 0) {
             BladeLogicSC.perSecond((EntityPlayer) entity, stack, slot, held);
         }
         // Singular: the worn Singular chestplate's colour scheme, once a second (not mid-block: that would drop it)
-        if (type == BladeType.SINGULAR && !world.isRemote && entity instanceof EntityPlayer && entity.ticksExisted % 20 == 11
+        if (type == BladeType.SINGULAR && !world.isRemote && entity instanceof EntityPlayer && com.sc.util.TickClock.mod(entity, 20) == 11
                 && !(held && ((EntityPlayer) entity).isUsingItem())) {
             ToolLevelSC.syncScheme((EntityPlayer) entity, stack);
         }

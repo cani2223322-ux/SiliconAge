@@ -405,7 +405,7 @@ public final class BladeSingularSC {
                 BladeLogicSC.resendHeld(p);
             }
         }
-        if (p.ticksExisted % 20 == 13) {
+        if (com.sc.util.TickClock.mod(p, 20) == 13) {
             second(p, s, sing ? blade : null, now);
         }
         syncHud(p, s, sing, now);

@@ -583,7 +583,7 @@ public final class BladeLogicSC {
         }
         settleDebt(p);
         BladeSingularSC.tick(p);                      // Singular: blocking, the spear / whip reach, once a second
-        if (p.ticksExisted % 2 != 0 || !p.isBlocking()) {
+        if (com.sc.util.TickClock.mod(p, 2) != 0 || !p.isBlocking()) {
             return;
         }
         ItemStack blade = held(p);

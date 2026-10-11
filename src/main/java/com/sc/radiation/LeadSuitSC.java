@@ -53,7 +53,7 @@ public final class LeadSuitSC {
                     speed.applyModifier(new AttributeModifier(SPEED_ID, "Lead suit", want, 2));
                 }
             }
-            if (n > 0 && p.ticksExisted % 20 == 0 && !p.capabilities.isCreativeMode) {
+            if (n > 0 && com.sc.util.TickClock.mod(p, 20) == 0 && !p.capabilities.isCreativeMode) {
                 p.addExhaustion(EXHAUSTION_PER_PART * n);
             }
         }

@@ -190,7 +190,7 @@ public class ArmorClientSC {
 
     /** A full set with its aura on: a few sparks of the suit's light colour drifting round the wearer. */
     private static void aura(net.minecraft.entity.player.EntityPlayer p) {
-        if (p.isInvisible() || p.ticksExisted % 3 != 0) {
+        if (p.isInvisible() || com.sc.util.TickClock.mod(p, 3) != 0) {
             return;
         }
         com.sc.util.ArmorSuit set = ArmorLogicSC.activeBonusSet(p);  // no aura in emergency mode or overheated

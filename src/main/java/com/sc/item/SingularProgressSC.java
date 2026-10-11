@@ -114,7 +114,7 @@ public final class SingularProgressSC {
             pts += SingularLevel.DIMENSION_POINTS;              // СБ-9: past the first few, still counted for the tasks
         }
         award(p, pts);
-        if (p.ticksExisted % (20 * SYNC_EVERY) < 20) {
+        if (com.sc.util.TickClock.mod(p, (20 * SYNC_EVERY)) < 20) {
             sync(p);
         }
     }

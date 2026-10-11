@@ -500,7 +500,7 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
 
     @Override
     public void onUpdate(ItemStack stack, World world, Entity entity, int slot, boolean held) {
-        if (!world.isRemote && entity.ticksExisted % 20 == 0 && heatOf(stack) > 0
+        if (!world.isRemote && com.sc.util.TickClock.mod(entity, 20) == 0 && heatOf(stack) > 0
                 && !(entity instanceof EntityPlayer && DrillLogicSC.digging((EntityPlayer) entity, stack))) {
             int h = heatOf(stack);
             if (entity instanceof EntityPlayer && DrillLogicSC.dumpsHeat((EntityPlayer) entity, stack)) {
@@ -511,7 +511,7 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
             }
         }
         // Singular: the worn Singular chestplate's colour scheme, once a second (not while digging: the block would restart)
-        if (type == DrillType.SINGULAR && !world.isRemote && entity instanceof EntityPlayer && entity.ticksExisted % 20 == 11
+        if (type == DrillType.SINGULAR && !world.isRemote && entity instanceof EntityPlayer && com.sc.util.TickClock.mod(entity, 20) == 11
                 && !DrillLogicSC.digging((EntityPlayer) entity, stack)) {
             ToolLevelSC.syncScheme((EntityPlayer) entity, stack);
         }
