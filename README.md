@@ -54,6 +54,7 @@
   - **Связь с сингулярной бронёй:** модуль в шлеме, вкладка «Мост» в меню K, клавиши **H** / **J**.
   - Износ и ремонт кольца, стабильность, перегрев, помехи, «знакомые места» и разброс выхода.
 - **Преобразователь энергии:** EU ⇄ **RF**, **джоули Mekanism** и **gJ Galacticraft** (с картами Mekanism и Galacticraft), курсы и потери в конфиге, режим каждой грани, модули. Необязателен: без этих модов у него нет рецепта, а поставленный работает как буфер EU.
+- **ПЭ-1 «Подавитель электроники»** — энергопушка без урона против энергоброни. **«Точка»** гасит часть брони, куда попал луч (голова / корпус / ноги), **«Импульс»** после набора 3 с гасит всю броню (16/14 с у Нано … 8/6 с у Сингулярной, затем 20 с невосприимчивости), **«Сифон»** перекачивает заряд брони цели в ваш аккумулятор, броню или пушку — 6/5/4/3% полного заряда в секунду у Нано/Квант/Экзо/Сингулярной, лишнее сбрасывается, на перегреве поток слабеет до 25%. Попадания греют броню цели и ускоряют выкипание гелия. 5 модулей, улучшение ПЭ-1М, вкладка в меню **K**, 3D-модель. Дешевле Нано-нагрудника — шанс для слабой брони. Защита: Защитный чип, аварийная перезагрузка, флаг поля «ЭМИ-экран». Учитывает PvP и «своих», работает и в чужих приватах (сервер может запретить).
 - **Энергоклинки** трёх уровней: режущая кромка, энергоблок, широкий взмах, энергетическая волна, «Добыча» до V.
 - **Электробуры** трёх уровней: площадь 3x3 и 5x5, туннель, жила, шёлковое касание, удача до V, автоплавка, лазер, связь с сундуком. Питаются от надетой брони.
 - **Сингулярный клинок и Сингулярный бур (SV):** получаются из Экзо-клинка и Экзо-бура в Сингулярной станции, растут до уровня 5, ветки на выбор, цветовые схемы; газы берут из баков надетой брони.
@@ -84,13 +85,13 @@
 | **H** / **J** | Мост «Домой» / к последней цели (шлем со связью с мостом), Shift + J — запомнить место |
 | **G** | Статья справочника о предмете под курсором в инвентаре (или в руке) |
 | **Ctrl+F** или **/** | Поиск в справочнике |
-| **Shift + колесо** | Форма Сингулярного клинка / режим Сингулярного бура |
+| **Shift + колесо** | Форма Сингулярного клинка / режим Сингулярного бура / режим ПЭ-1 |
 | **Гаечный ключ** | ПКМ — повернуть механизм, Shift + ПКМ в воздух — сменить режим (у электро- и квантового ключа), Shift + ПКМ по кабелю — обзор сети (ещё раз — обновить, Shift + ПКМ в воздух — скрыть) |
 | **Shift / Ctrl** | Подробности и управление в подсказках предметов |
 
 ### Требования и установка
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (или новее для 1.7.10), Java 8.
-2. Скачайте `SiliconAgeBeta-0.2.0.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
+2. Скачайте `SiliconAgeBeta-0.2.1.jar` на странице [Releases](../../releases) и положите в папку `.minecraft/mods`.
 
 ### Моды, которые помогут (необязательны)
 | Мод | Что даёт вместе с Silicon Age |
@@ -173,6 +174,7 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
   - **Singular armour link:** a module in the helmet, a Bridge tab in the K screen, the **H** / **J** keys.
   - Ring wear and repair, stability, overheating, interference, familiar places and exit scatter.
 - **Energy Converter:** EU ⇄ **RF**, **Mekanism joules** and **Galacticraft gJ** (with the Mekanism and Galacticraft cards), rates and loss in the config, a mode for every face, upgrades. Optional: without those mods it has no recipe, and one already placed works as an EU buffer.
+- **PE-1 "Electronics Suppressor"** - an energy gun that deals no damage, made against power armour. **Point** shuts down the armour piece the beam hits (head / body / legs), **Pulse** after a 3 s charge-up shuts down the whole suit (16/14 s on Nano ... 8/6 s on Singular, then 20 s immunity), **Siphon** pumps the target suit's charge into your battery, armour or the gun - 6/5/4/3% of its full charge a second on Nano/Quantum/Exo/Singular, the excess is vented, an overheated gun drops to 25%. Hits heat the target's suit and boil its helium faster. 5 modules, the PE-1M upgrade, a tab in the **K** screen, a 3D model. Cheaper than a Nano chestplate - a chance for weaker armour. Protection: the Defense chip, an emergency reboot, the field's "EMP screen" flag. Respects PvP and friends, works in other players' claims too (a server can forbid it).
 - **Energy blades** in three tiers: cutting edge, energy block, wide sweep, energy wave, Looting up to V.
 - **Electric drills** in three tiers: 3x3 and 5x5 areas, tunnel, vein, silk touch, fortune up to V, autosmelt, laser, chest link. Powered by the worn suit.
 - **Singular Blade and Singular Drill (SV):** made from the Exo blade and drill in the Singular Station, grow to level 5, branches to choose, colour schemes; they take gases from the worn suit's tanks.
@@ -203,13 +205,13 @@ A tech mod for Minecraft 1.7.10: the way from a silicon wafer to ExoTech. You mi
 | **H** / **J** | Bridge "Home" / to the last target (helmet with the bridge link), sneak + J remembers the spot |
 | **G** | The handbook article of the item under the cursor in an inventory (or in hand) |
 | **Ctrl+F** or **/** | Search the handbook |
-| **Sneak + wheel** | Singular blade form / Singular drill mode |
+| **Sneak + wheel** | Singular blade form / Singular drill mode / PE-1 mode |
 | **Wrench** | Right-click turns a machine, sneak + right-click in the air switches the mode (electric and quantum wrench), sneak + right-click a cable shows the network overview (again - refresh, sneak + right-click in the air - hide) |
 | **Shift / Ctrl** | Details and controls in item tooltips |
 
 ### Requirements and installation
 1. Minecraft **1.7.10**, Forge **10.13.4.1614** (or newer for 1.7.10), Java 8.
-2. Download `SiliconAgeBeta-0.2.0.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
+2. Download `SiliconAgeBeta-0.2.1.jar` from [Releases](../../releases) and put it into `.minecraft/mods`.
 
 ### Mods that help (optional)
 | Mod | What it adds with Silicon Age |
