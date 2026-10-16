@@ -232,6 +232,9 @@ public final class ConfigSC {
                     "Heat the PE-1 gives the target's suit, times this / Множитель нагрева брони цели от ПЭ-1");
             empHeliumBoilMultiplier = num(config, "heliumBoilMultiplier", pe, 1F, 0F, 10F,
                     "Extra helium boil-off from the PE-1, times this / Множитель усиленного выкипания гелия от ПЭ-1");
+            // Подложка (Si-14): its own holder, NOT fields of this class - ConfigSyncSC would overwrite the ids with the server's
+            // after the client had registered its world with its own (docs/plan-substrate-tech.md §2)
+            com.sc.dim.SubstrateConfigSC.load(config);
         } finally {
             if (config.hasChanged()) {
                 config.save();

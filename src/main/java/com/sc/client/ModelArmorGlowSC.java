@@ -9,6 +9,8 @@ import org.lwjgl.opengl.GL11;
 
 import com.sc.Reference;
 import com.sc.item.ItemArmorSC;
+import com.sc.mob.IArmoredMobSC;
+import com.sc.mob.MobArmorSC;
 import com.sc.util.ArmorFeature;
 
 import cpw.mods.fml.relauncher.Side;
@@ -32,6 +34,8 @@ import net.minecraft.util.ResourceLocation;
  * slow red pulse. A piece whose own function is switched off in the armour menu (night vision,
  * speed / step assist / dash, jump / fall damping / water walk) has its lights out. ПЭ-1: a suppressed piece's lights
  * are out with a short blue spark now and then; a suit a Siphon is draining dims and wavers.
+ * A Substrate mob wearing the suit (IArmoredMobSC, 2026-10-15) shows the same by its DataWatcher: its reserve as the
+ * charge, «down» as lights out; its colour is the stacks' glowColor (set once at spawning), only within 32 blocks.
  * The add-on parts' boxes match tools/parts3d.py (their texture nets in the armour layers).
  */
 @SideOnly(Side.CLIENT)
@@ -41,6 +45,8 @@ public class ModelArmorGlowSC extends ModelBiped {
     public static final ModelArmorGlowSC OUTER = new ModelArmorGlowSC(1.0F), INNER = new ModelArmorGlowSC(0.5F);
 
     public static final int FRAMES = 8;
+    /** ПБ-14: a Substrate mob's lights are drawn only this near the camera, blocks. */
+    public static final double MOB_GLOW_RANGE = 32;
     /** The light colours (ItemArmorSC.glowColor): 0 = the suit's own, then these (RGB). */
     public static final int[] COLORS = {0, 0xFF4040, 0xFF9A30, 0xFFE040, 0x50FF70, 0x40E0FF, 0x4A7CFF, 0xB060FF, 0xFF60C0, 0xFFFFFF};
 
@@ -170,8 +176,19 @@ public class ModelArmorGlowSC extends ModelBiped {
         if (stack == null || GL11.glGetInteger(GL11.GL_DEPTH_FUNC) == GL11.GL_EQUAL) {
             return;                                     // the enchantment glint pass draws this model again: leave it alone
         }
-        int capacity = ItemArmorSC.capacityOf(stack);
-        float charge = capacity <= 0 ? 0F : (float) ItemArmorSC.chargeOf(stack) / capacity;
+        // a Substrate mob (2026-10-15, ПБ-14): its stacks hold no charge - the reserve, «down», suppression and the siphon
+        // come from its DataWatcher (MobArmorSC); past MOB_GLOW_RANGE from the camera the lit pass isn't drawn at all
+        EntityLivingBase mob = entity instanceof IArmoredMobSC && entity instanceof EntityLivingBase ? (EntityLivingBase) entity : null;
+        if (mob != null && beyondGlowRange(mob)) {
+            return;
+        }
+        float charge;
+        if (mob != null) {
+            charge = MobArmorSC.clientCharge(mob);
+        } else {
+            int capacity = ItemArmorSC.capacityOf(stack);
+            charge = capacity <= 0 ? 0F : (float) ItemArmorSC.chargeOf(stack) / capacity;
+        }
         long time = entity.worldObj == null ? 0 : entity.worldObj.getTotalWorldTime();
         int color = COLORS[Math.max(0, Math.min(COLORS.length - 1, ItemArmorSC.glowColor(stack)))];
         String tex;
@@ -189,7 +206,8 @@ public class ModelArmorGlowSC extends ModelBiped {
         float k = 1F;
         EntityPlayer wearer = entity instanceof EntityPlayer ? (EntityPlayer) entity : null;
         int armorType = ((ItemArmorSC) stack.getItem()).armorType;
-        boolean suppressed = wearer != null && com.sc.emp.EmpSC.isSuppressed(wearer, armorType);
+        boolean suppressed = wearer != null ? com.sc.emp.EmpSC.isSuppressed(wearer, armorType)
+                : mob != null && MobArmorSC.clientSuppressed(mob, armorType);
         if (suppressed) {
             // ПЭ-1: the piece suppressed - its lights out, now and then a short blue spark through them
             int n = (int) ((time * 7919L + entity.getEntityId() * 131L + armorType * 17L) % 23);
@@ -203,7 +221,11 @@ public class ModelArmorGlowSC extends ModelBiped {
                 lit = false;
                 r = g = b = 0.16F;
             }
-        } else if (!functionsOn()) {
+        } else if (mob != null && MobArmorSC.clientFlag(mob, MobArmorSC.FLAG_DOWN)) {
+            lit = false;                                // ПБ-6: a mob's armour gone «down» - its lights out
+            r = g = b = 0.16F;
+            k = 1F;
+        } else if (mob == null && !functionsOn()) {     // a mob has no armour menu: its pieces' functions are always on
             lit = false;                                // lights out: the lit parts drawn dark
             r = g = b = 0.16F;
             k = 1F;
@@ -217,7 +239,8 @@ public class ModelArmorGlowSC extends ModelBiped {
         } else {
             k = 0.6F + 0.4F * charge;
         }
-        if (!suppressed && lit && wearer != null && com.sc.emp.EmpSC.drained(wearer)) {
+        boolean drained = wearer != null ? com.sc.emp.EmpSC.drained(wearer) : mob != null && MobArmorSC.clientFlag(mob, MobArmorSC.FLAG_DRAINED);
+        if (!suppressed && lit && drained) {
             k *= 0.4F + 0.15F * (float) Math.sin(time * 0.9);      // ПЭ-1 Siphon draining the suit: the lights dim and waver
         }
         Minecraft.getMinecraft().getTextureManager().bindTexture(texture(tex));
@@ -241,6 +264,13 @@ public class ModelArmorGlowSC extends ModelBiped {
         GL11.glPopAttrib();
         // the renderer carries on with this piece's texture bound (a later pass may draw it again)
         Minecraft.getMinecraft().getTextureManager().bindTexture(texture(this.tex + "_layer_" + layer));
+    }
+
+    /** A mob farther than MOB_GLOW_RANGE from the camera gets no lit pass: a crowd of them mustn't double the armour's draw calls. */
+    private static boolean beyondGlowRange(EntityLivingBase mob) {
+        Minecraft mc = Minecraft.getMinecraft();
+        Entity cam = mc.renderViewEntity != null ? mc.renderViewEntity : mc.thePlayer;
+        return cam != null && cam.getDistanceSqToEntity(mob) > MOB_GLOW_RANGE * MOB_GLOW_RANGE;
     }
 
     /** Is the piece's own function (any of them available to it) switched on? */

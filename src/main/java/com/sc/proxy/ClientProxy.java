@@ -23,6 +23,10 @@ public class ClientProxy extends CommonProxy {
         com.sc.client.BridgeHudSC.register();
         com.sc.client.BridgeVortexFxSC.register();
         com.sc.client.CarryTooltipSC.register();
+        // Подложка (Si-14): the world's client side (package W), the mobs' renderers (package M), the ids warning (core)
+        com.sc.dim.client.SubstrateClientSC.register();
+        com.sc.mob.client.MobClientSC.register();
+        com.sc.dim.client.SubstrateIdsClientSC.register();
         // the Singular tools: the black hole's zone frame, the blade's effects, Shift + wheel (form / mode)
         MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);

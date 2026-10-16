@@ -32,6 +32,10 @@ import net.minecraft.world.World;
  *
  * The client repeats a held right-click every 4 ticks once the use is over: a click that comes within HELD_GAP of
  * the last activity (no release in between) is ignored on both sides, so holding the button doesn't fire again.
+ *
+ * 2026-10-15 (docs/plan-substrate-tech.md §4.3): the Substrate's armoured mobs (IEmpTargetSC) are a branch of their
+ * own after the player's, asked through EmpMobSC and only while dimension.empMobTargets is on; the player path and
+ * every other mob (Slowness) are as before.
  */
 public final class EmpGunLogicSC {
 
@@ -338,6 +342,9 @@ public final class EmpGunLogicSC {
         Entity target = h.entity;
         if (target != null) {
             int r = refusal(p, target, true);
+            if (r == EmpNetSC.OK) {
+                r = EmpMobSC.refusal(target, mode);             // 2026-10-15: a Pulse spares the Substrate's villagers and pets
+            }
             if (r != EmpNetSC.OK) {
                 say(p, "sc.emp.refuse." + r);
                 endUse(p, gun);
@@ -378,6 +385,14 @@ public final class EmpGunLogicSC {
                     EmpShotSC.heightShare(h.at.yCoord, target.boundingBox.minY, target.boundingBox.maxY))
                     : ALL_PIECES;
             report(p, tp, EmpSC.applyHit(tp, mode, upgraded, pieces), pieces);
+        } else if (EmpMobSC.pointable(target)) {
+            // 2026-10-15, ПБ-10 (dimension.empMobTargets): a Substrate mob in the mod's armour - the player's zones, durations, immunity
+            int[] pieces = mode == EmpMode.POINT
+                    ? EmpMathSC.pointPieces(ItemEmpGunSC.zoneOf(gun),
+                    EmpShotSC.heightShare(h.at.yCoord, target.boundingBox.minY, target.boundingBox.maxY))
+                    : ALL_PIECES;
+            boolean shield = EmpMobSC.shieldUp(target);
+            reportMob(p, target, ((IEmpTargetSC) target).empHit(p, mode, upgraded, pieces), pieces, shield);
         } else if (target instanceof EntityLivingBase) {
             EmpSC.applyNoArmour((EntityLivingBase) target);
             say(p, "sc.emp.noarmour");
@@ -432,7 +447,35 @@ public final class EmpGunLogicSC {
         }
     }
 
-    private static void suppressedFx(EntityPlayer shooter, EntityPlayer target) {
+    /**
+     * What the hit did to a Substrate mob, to the shooter (as report: the same keys, the mob's name translated by the
+     * shooter's client); `shieldWas`: its shield was up before - a Point into the chestplate that put it out says so.
+     */
+    private static void reportMob(EntityPlayerMP p, Entity target, EmpSC.HitResult r, int[] pieces, boolean shieldWas) {
+        if (!r.anyArmour) {
+            say(p, "sc.emp.noarmour");                          // empHit gave the Slowness
+            return;
+        }
+        IEmpTargetSC t = (IEmpTargetSC) target;
+        int ticks = 0, immune = 0;
+        for (int i = 0; i < 4; i++) {
+            ticks = Math.max(ticks, r.ticks[i]);
+            if (r.immune[i]) {
+                immune = Math.max(immune, t.empImmuneTicks(i));
+            }
+        }
+        if (r.anySuppressed()) {
+            suppressedFx(p, target);
+            say(p, "sc.emp.hit", EmpMobSC.name(target), new ChatComponentTranslation(pieceKey(pieces)), EmpShotSC.seconds(ticks));
+            if (shieldWas && !EmpMobSC.shieldUp(target)) {
+                say(p, "sc.emp.hit.mob.shield", EmpShotSC.seconds(r.ticks[1]));     // «Сердце комплекта»
+            }
+        } else {
+            say(p, "sc.emp.immune", EmpShotSC.seconds(immune));
+        }
+    }
+
+    private static void suppressedFx(EntityPlayer shooter, Entity target) {
         SoundsSC.play(target.worldObj, target.posX, target.posY, target.posZ, EmpSC.SND_SUPPRESS, 0.8F, 1F);
         Vec3 c = EmpShotSC.centre(target);
         fx(shooter, EmpNetSC.FX_SUPPRESSED, target.getEntityId(), c.xCoord, c.yCoord, c.zCoord);
@@ -468,6 +511,12 @@ public final class EmpGunLogicSC {
                 if (EmpSC.hasSensorChip((EntityPlayer) target)) {
                     EmpSC.markAimed((EntityPlayer) target, p);
                 }
+            } else if (EmpMobSC.readable(target)) {
+                // 2026-10-15: a Substrate mob - its suit, slots and (Sensor chip) reserve; «ЭМИ-наведение» is a player's only
+                if (m.reason == EmpNetSC.OK) {
+                    m.reason = EmpMobSC.refusal(target, ItemEmpGunSC.modeOf(gun));
+                }
+                EmpMobSC.read(p, (IEmpTargetSC) target, m);
             }
         }
         m.receiver = EmpSiphonSC.pickReceiver(p, gun, u);

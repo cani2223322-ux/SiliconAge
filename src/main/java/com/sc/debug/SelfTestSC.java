@@ -108,6 +108,7 @@ public final class SelfTestSC {
             bridgeVortexLook();
             SelfTestConverterSC.run();
             SelfTestEmpSC.run();
+            SelfTestSubstrateSC.run();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -403,7 +404,7 @@ public final class SelfTestSC {
     }
 
     /**
-     * Handbook part 2: 14 chapters; the new articles (the Path, the Bridge chapter, the Components and Reference
+     * Handbook part 2: 15 chapters (WORLD, the Substrate's, since 2026-10-15); the new articles (the Path, the Bridge chapter, the Components and Reference
      * chapters, the split articles) build, have no raw keys; the pictures are in the jar; every item of the
      * Components chapter opens an article with G; the quarry and the Exo rig have their own pages.
      */
@@ -448,8 +449,8 @@ public final class SelfTestSC {
         boolean quarries = rig != null && rig.id.equals("quarry.exo") && lv != null && lv.id.equals("quarry");
         int chapters = com.sc.manual.BookChapter.values().length;
         com.sc.manual.BookContent.invalidate();
-        check(chapters == 14 && bad.length() == 0 && images >= 9 && noImage.length() == 0 && noG.length() == 0 && quarries,
-                "book part 2: " + chapters + " chapters (14), " + ids.length + " new / split articles build with no raw keys, " + images
+        check(chapters == 15 && bad.length() == 0 && images >= 9 && noImage.length() == 0 && noG.length() == 0 && quarries,
+                "book part 2: " + chapters + " chapters (15), " + ids.length + " new / split articles build with no raw keys, " + images
                         + " pictures (>= 9) all in the jar, every component's G finds its page, the quarry / Exo rig pages ("
                         + quarries + ")" + bad + (noImage.length() == 0 ? "" : "; no picture:" + noImage) + (noG.length() == 0 ? "" : "; no G:" + noG));
     }

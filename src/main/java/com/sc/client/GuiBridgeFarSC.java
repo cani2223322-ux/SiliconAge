@@ -454,12 +454,14 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         return s;
     }
 
+    /** ПВ-5: a dimension the server sent a lang key for (the Substrate) by its translated name, else the provider's own. */
     protected String dimName(int id) {
         NBTTagCompound b = bridge();
         NBTTagList d = b == null ? new NBTTagList() : b.getTagList("dims", 10);
         for (int i = 0; i < d.tagCount(); i++) {
-            if (d.getCompoundTagAt(i).getInteger("id") == id) {
-                return d.getCompoundTagAt(i).getString("n");
+            NBTTagCompound e = d.getCompoundTagAt(i);
+            if (e.getInteger("id") == id) {
+                return e.hasKey("k") ? Lang.trOr(e.getString("k"), e.getString("n")) : e.getString("n");
             }
         }
         return "DIM " + id;

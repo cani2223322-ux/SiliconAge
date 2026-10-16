@@ -158,7 +158,7 @@ public final class EmpNetSC {
         public int targetId;
         /** OK or a NO_* reason. */
         public int reason;
-        /** ArmorSuit ordinal of the target's chestplate (or of any worn piece), -1 none / a mob. */
+        /** ArmorSuit ordinal of the target's chestplate (or of any worn piece), -1 none; a Substrate mob (IEmpTargetSC) carries its suit, any other mob -1. */
         public int suit = -1;
         /** Bits 0..3: suppressed slots; bits 4..7: immune slots. */
         public int slots;

@@ -25,7 +25,7 @@ import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.registry.GameRegistry;
 
 @Mod(modid = Reference.MODID, name = Reference.NAME, version = Reference.VERSION,
-        dependencies = "after:" + Reference.IC2_MODID)
+        dependencies = "after:" + Reference.IC2_MODID + ";after:GalacticraftCore")
 public class SCMod {
 
     @Mod.Instance(Reference.MODID)
@@ -73,6 +73,15 @@ public class SCMod {
         // ПЭ-1 (docs/plan-pe1-tech.md): login / tracking sync, package A's per-tick work
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.emp.EmpEventsSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.emp.EmpEventsSC.INSTANCE);
+        // Подложка (Si-14), docs/plan-substrate-tech.md: the server's ids / rules to clients, the entry rules (package E),
+        // the delayed teleports, the mobs' events and the spawn director (package M)
+        com.sc.dim.SubstrateNetSC.init();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.dim.SubstrateEntrySC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.dim.SubstrateEntrySC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.dim.TeleportQueueSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.mob.MobEventsSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.mob.MobEventsSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.mob.SpawnDirectorSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -101,12 +110,18 @@ public class SCMod {
         ModRecipesComponents.init();
         ModRecipesCrafting.init();
         ModRecipesMachineBlocks.init();
+        com.sc.dim.SubstrateRecipesSC.init();            // the Substrate's blocks (package W)
+        com.sc.mob.MobRecipesSC.init();                  // the Substrate mobs' combat loot (package M)
     }
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
         // Weight 0, like most ore generators - runs alongside vanilla ore gen each chunk.
         GameRegistry.registerWorldGenerator(new OreGenSC(), 0);
+        // Подложка (Si-14): biomes, provider, dimension - each with its check, IMC (docs/plan-substrate-tech.md §1);
+        // its mobs in this mod's own entity pool
+        com.sc.dim.SubstrateSC.init();
+        com.sc.mob.MobEntitiesSC.init();
         net.minecraftforge.common.ForgeChunkManager.setForcedChunkLoadingCallback(instance, new com.sc.energy.ChunkLoaderSC());
         registerRecipes();
         com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
@@ -120,6 +135,12 @@ public class SCMod {
     public void postInit(FMLPostInitializationEvent event) {
         ModRecipesCrafting.metalBlocksLate();            // after every mod's ore dictionary and recipes
         proxy.postInit();
+    }
+
+    /** Every mod has registered everything: the Substrate's ids checked against Galacticraft and the biome slots again. */
+    @Mod.EventHandler
+    public void loadComplete(cpw.mods.fml.common.event.FMLLoadCompleteEvent event) {
+        com.sc.dim.SubstrateSC.loadComplete();
     }
 
     /** The server has stopped (single player: back to the title): registries of that server's tiles are emptied. */
@@ -137,6 +158,9 @@ public class SCMod {
         com.sc.emp.EmpGunLogicSC.forget(null);           // ПЭ-1: streams / charge-ups (package A)
         com.sc.item.DrillEventsSC.INSTANCE.clearAll();   // the drill's queued forgets and tracked falling blocks (no World kept between sessions)
         com.sc.tileentity.TileEntityMachineSC.clearSmeltCache();   // furnace answers: the next world may bring changed furnace recipes
+        com.sc.dim.TeleportQueueSC.clear();              // Подложка: the queued moves, the arrival grants, the director's counts
+        com.sc.dim.SubstrateEntrySC.clearAll();
+        com.sc.mob.SpawnDirectorSC.clearAll();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
@@ -160,6 +184,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestBridgeAirSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestConverterSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmpSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSubstrateSC());
         }
     }
 }

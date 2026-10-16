@@ -43,6 +43,8 @@ public class ModCreativeTab extends CreativeTabs {
         List<Object> order = new ArrayList<Object>();
         // ores and the world
         add(order, ModBlocks.oreSC, ModBlocks.limestoneSC);
+        // the Substrate (Si-14): its rock, ores and druse
+        add(order, com.sc.dim.SubstrateBlocksSC.rock, com.sc.dim.SubstrateBlocksSC.ore, com.sc.dim.SubstrateBlocksSC.druse);
         // materials
         add(order, ModItems.crushedOre, ModItems.purifiedCrushedOre, ModItems.dust, ModItems.dustTiny, ModItems.ingot,
                 ModBlocks.metalBlock, ModBlocks.metalBlock2, ModItems.siliconMaterial, ModItems.coke, ModItems.rubber, ModItems.rubberBlue, ModItems.rubberHeatResist,
@@ -86,6 +88,8 @@ public class ModCreativeTab extends CreativeTabs {
             }
         }
         order.addAll(ModItems.WEAPONS.values());
+        // the Substrate's creatures: spawn eggs, their loot, the trophies
+        add(order, com.sc.mob.MobItemsSC.spawnEgg, com.sc.mob.MobItemsSC.combatLoot, com.sc.mob.MobItemsSC.trophy);
         // the suits' service: the stations, the Singular station's stabiliser
         add(order, ModBlocks.armorStation, ModBlocks.singularStation, ModBlocks.gravStabiliser);
 

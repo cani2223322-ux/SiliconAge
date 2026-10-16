@@ -1,5 +1,8 @@
 package com.sc.bridge;
 
+import com.sc.dim.SubstrateEntrySC;
+import com.sc.dim.SubstrateSC;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -12,6 +15,12 @@ import net.minecraft.world.WorldServer;
  * through the server's own transfer with a Teleporter that only puts them at the point (never builds or
  * looks for a nether portal), other entities are re-created there (as vanilla's travelToDimension does,
  * without its portal search).
+ * <p>
+ * Подложка (docs/plan-substrate-tech.md §6.2, §6.6): a player carried into the Substrate gets its arrival grant here,
+ * just before the server's transfer (dimension.strictEntry lets in only what the core carries - the bridge's ends and
+ * the Vehicles add-on's riders both come through this method); the Substrate's own creatures never leave their
+ * dimension this way while dimension.nativesCrossBridge is off (the bridge's enter() asks first; this holds for any
+ * other caller).
  */
 public final class BridgeTeleportSC {
 
@@ -61,6 +70,9 @@ public final class BridgeTeleportSC {
         if (e == null || e.worldObj == null || e.worldObj.isRemote || e.isDead) {
             return null;
         }
+        if (!SubstrateEntrySC.mayCross(e, dim)) {
+            return null;                                   // ПВ-8: a native of the Substrate stays in its world
+        }
         e.fallDistance = 0;
         if (e.worldObj.provider.dimensionId == dim) {
             if (e instanceof EntityPlayerMP) {
@@ -82,6 +94,9 @@ public final class BridgeTeleportSC {
         if (e instanceof EntityPlayerMP) {
             EntityPlayerMP p = (EntityPlayerMP) e;
             int from = p.dimension;
+            if (SubstrateSC.isDim(dim) && !SubstrateSC.is(p.worldObj)) {
+                SubstrateEntrySC.grantArrival(p, SubstrateEntrySC.VIA_BRIDGE);   // ПВ-2: the arrival is lawful (strictEntry)
+            }
             server.getConfigurationManager().transferPlayerToDimension(p, dim, new Exact(to, x, y, z, yaw));
             if (from == 1) {
                 // leaving the End the server's transfer neither places nor spawns the player (it expects the credits)

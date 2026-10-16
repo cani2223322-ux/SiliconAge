@@ -26,5 +26,7 @@
   "emp.siphon": {"category": "player", "sounds": [{"name": "quarry/beam", "pitch": 1.2, "volume": 0.6}]},
   "emp.overheat": {"category": "player", "sounds": [{"name": "machine/fluid", "pitch": 1.7, "volume": 0.7}]},
   "emp.suppress": {"category": "player", "sounds": [{"name": "power/off", "pitch": 1.3, "volume": 1.0}]},
-  "emp.reboot": {"category": "player", "sounds": [{"name": "power/on", "pitch": 0.75, "volume": 1.0}]}
+  "emp.reboot": {"category": "player", "sounds": [{"name": "power/on", "pitch": 0.75, "volume": 1.0}]},
+  "mob.beam.aim": {"category": "hostile", "sounds": [{"name": "quarry/beam", "pitch": 1.8, "volume": 0.5}]},
+  "mob.beam.shot": {"category": "hostile", "sounds": [{"name": "field/zap", "pitch": 1.9, "volume": 0.8}]}
 }

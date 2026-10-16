@@ -86,6 +86,7 @@ public final class BookContent {
         armor(list);
         field(list);
         safety(list);
+        BookWorldSC.add(list);                      // the Substrate (Si-14): its own chapter, docs/plan-substrate-tech.md §7.2
         BookMaterialsSC.materials(list);
         BookReferenceSC.reference(list);
         BookPathSC.path(list);                      // last: its steps link to (and name) the other articles
@@ -177,6 +178,7 @@ public final class BookContent {
             case BRIDGE: return com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1);
             case MATERIALS: return new ItemStack(ModItems.component("capacitor"));
             case REFERENCE: return new ItemStack(Blocks.bookshelf);
+            case WORLD: return BookWorldSC.icon();
             default: return new ItemStack(Blocks.crafting_table);
         }
     }

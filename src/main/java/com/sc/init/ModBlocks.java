@@ -205,6 +205,8 @@ public final class ModBlocks {
         GameRegistry.registerBlock(energyConverter, com.sc.block.ItemBlockEnergyConverterSC.class, "energyConverter");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityEnergyConverterSC.tileClass(),
                 com.sc.tileentity.TileEntityEnergyConverterSC.TILE_ID);
+        // Подложка (Si-14): its rock, ores and druses (appended; package W, docs/plan-substrate-tech.md §3.4)
+        com.sc.dim.SubstrateBlocksSC.init();
 
         registerOreDict();
     }

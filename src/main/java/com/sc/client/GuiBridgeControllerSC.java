@@ -706,11 +706,13 @@ public class GuiBridgeControllerSC extends GuiScreen {
         }
     }
 
+    /** ПВ-5: a dimension the server sent a lang key for (the Substrate) by its translated name, else the provider's own. */
     private String dimName(int id) {
         NBTTagList d = has() ? st.getTagList("dims", 10) : new NBTTagList();
         for (int i = 0; i < d.tagCount(); i++) {
-            if (d.getCompoundTagAt(i).getInteger("id") == id) {
-                return d.getCompoundTagAt(i).getString("n");
+            NBTTagCompound e = d.getCompoundTagAt(i);
+            if (e.getInteger("id") == id) {
+                return e.hasKey("k") ? Lang.trOr(e.getString("k"), e.getString("n")) : e.getString("n");
             }
         }
         return "DIM " + id;

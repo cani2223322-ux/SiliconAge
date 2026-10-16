@@ -310,6 +310,8 @@ public final class ModItems {
         GameRegistry.registerItem(singularCrumb, "singularCrumb");
         singularClot = new com.sc.item.ItemSingularClotSC();
         GameRegistry.registerItem(singularClot, "singularClot");
+        // Подложка (Si-14): trophies, combat loot, the spawn egg (appended; package M, docs/plan-substrate-tech.md §5.7)
+        com.sc.mob.MobItemsSC.init();
     }
 
     public static com.sc.item.ItemConverterModuleSC converterModule;

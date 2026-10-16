@@ -911,7 +911,11 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (!envKnown) {
             refreshEnv();
         }
-        return BridgeMathSC.adjust(c, f[1], envRes);
+        BridgeMathSC.adjust(c, f[1], envRes);
+        // МС-1, ПВ-6: the same multipliers as plan() - the screen shows what «Открыть» draws
+        scaleCost(c, com.sc.util.ConfigSC.bridgeCostMultiplier * com.sc.dim.EntryRulesSC.costMultiplier(dim != ownDim(),
+                com.sc.dim.SubstrateSC.isDim(dim) || com.sc.dim.SubstrateSC.isDim(ownDim()), com.sc.dim.SubstrateConfigSC.bridgeCostMultiplier));
+        return c;
     }
 
     /**
@@ -1741,9 +1745,19 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             refreshEnv();
         }
         BridgeMathSC.adjust(pl.cost, pl.fam[1], envRes);
-        float mul = com.sc.util.ConfigSC.bridgeCostMultiplier;   // МС-1: the server's price of a bridge (energy and gases)
+        // МС-1: the server's price of a bridge (energy and gases); ПВ-6: times the Substrate's own for a trip between
+        // dimensions with an end there (the controller itself, or either end, in the Substrate) - never within it
+        float mul = com.sc.util.ConfigSC.bridgeCostMultiplier * com.sc.dim.EntryRulesSC.costMultiplier(
+                pl.a.dim != pl.b.dim || farDim != ownDim(),
+                com.sc.dim.SubstrateSC.isDim(pl.a.dim) || com.sc.dim.SubstrateSC.isDim(pl.b.dim) || com.sc.dim.SubstrateSC.isDim(ownDim()),
+                com.sc.dim.SubstrateConfigSC.bridgeCostMultiplier);
+        scaleCost(pl.cost, mul);
+        return pl;
+    }
+
+    /** МС-1, ПВ-6: a price times `mul` (energy and gases; whatever was 0 stays 0) - plan() and previewCost alike. */
+    private static void scaleCost(BridgeMathSC.Cost k, float mul) {
         if (mul != 1F) {
-            BridgeMathSC.Cost k = pl.cost;
             k.eu = k.eu > 0 ? com.sc.util.ConfigSC.scale(k.eu, mul) : 0;
             k.sm = k.sm > 0 ? com.sc.util.ConfigSC.scale(k.sm, mul, 1) : 0;
             k.d = k.d > 0 ? com.sc.util.ConfigSC.scale(k.d, mul, 1) : 0;
@@ -1754,7 +1768,6 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             k.arSec = k.arSec > 0 ? com.sc.util.ConfigSC.scale(k.arSec, mul, 1) : 0;
             k.d2oSec = k.d2oSec > 0 ? com.sc.util.ConfigSC.scale(k.d2oSec, mul, 1) : 0;
         }
-        return pl;
     }
 
     /**
@@ -2395,6 +2408,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             y = p[1];
             z = p[2] + 0.5;
             yaw = aAxis == 0 ? (d > 0 ? 0F : 180F) : (d > 0 ? -90F : 90F);
+        }
+        if (!com.sc.dim.SubstrateEntrySC.mayCross(e, dim)) {
+            return;                                          // ПВ-8: the Substrate's own creatures stay there (no EU, no cooldown)
         }
         data.setLong("scBridgeCd", now + BridgeMathSC.TELEPORT_COOLDOWN);
         // never out into someone else's private field (the exit cell next to the end; a turbulent shift below)
@@ -3144,14 +3160,21 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         for (Integer id : DimensionManager.getStaticDimensionIDs()) {
             NBTTagCompound d = new NBTTagCompound();
             d.setInteger("id", id);
-            String nm;
+            String nm, key = null;
             try {
                 World dw = DimensionManager.getWorld(id);
-                nm = dw != null ? dw.provider.getDimensionName() : DimensionManager.createProviderFor(id).getDimensionName();
+                net.minecraft.world.WorldProvider wp = dw != null ? dw.provider : DimensionManager.createProviderFor(id);
+                nm = wp.getDimensionName();
+                if (wp instanceof com.sc.dim.INamedDimensionSC) {
+                    key = ((com.sc.dim.INamedDimensionSC) wp).nameKey();
+                }
             } catch (Throwable ex) {
                 nm = "DIM" + id;
             }
             d.setString("n", nm);
+            if (key != null) {
+                d.setString("k", key);                       // ПВ-5: the screens translate it; "n" stays for logs and older clients
+            }
             dims.appendTag(d);
         }
         return dims;

@@ -8,6 +8,9 @@ import java.util.Set;
 import org.lwjgl.opengl.GL11;
 
 import com.sc.block.BlockMachineSC;
+import com.sc.dim.SubstrateBlocksSC;
+import com.sc.dim.SubstrateOreTableSC;
+import com.sc.emp.EmpTooltipSC;
 import com.sc.energy.GeneratorType;
 import com.sc.init.ModBlocks;
 import com.sc.init.ModItems;
@@ -17,10 +20,14 @@ import com.sc.machine.MachineRecipe;
 import com.sc.machine.MachineType;
 import com.sc.machine.RecipeRegistry;
 import com.sc.manual.BookContent;
+import com.sc.manual.BookWorldSC;
 import com.sc.manual.Lang;
+import com.sc.mob.MobEntitiesSC;
+import com.sc.mob.MobItemsSC;
 import com.sc.util.ConfigSC;
 import com.sc.util.Material;
 import com.sc.util.OreEntry;
+import com.sc.util.SiliconMaterial;
 import com.sc.worldgen.OreGenSC;
 
 import codechicken.lib.gui.GuiDraw;
@@ -30,6 +37,7 @@ import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.registry.GameRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.block.Block;
 import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -40,8 +48,9 @@ import net.minecraftforge.oredict.OreDictionary;
 /**
  * NEI page «Как получить» (R) for the items of the mod no recipe makes: the ores and limestone (where they
  * generate, from the config), the singularity crumb (the Singular drill's black hole), scrap dust (machine
- * defects), the creative generator, the fluids of other mods that the mod's generators burn, and - in a pack
- * that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
+ * defects), the creative generator, the fluids of other mods that the mod's generators burn, the Substrate's
+ * rock, ores and druse (generated there), its trophies and combat loot (off its mobs) and the spawn eggs (creative
+ * only), and - in a pack that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
  */
 public class ObtainHandlerSC extends TemplateRecipeHandler {
 
@@ -125,6 +134,10 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (item == ModItems.fluidDrop) {
             return fluidPage(s);
         }
+        Page substrate = substratePage(s);
+        if (substrate != null) {
+            return substrate;
+        }
         if (Loader.isModLoaded("UniDict") && (item == ModItems.ingot || item == ModItems.dust || item == ModItems.dustTiny)) {
             return unifiedPage(s);
         }
@@ -145,6 +158,79 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         p.text(Lang.tr("sc.nei.obtain.ore"));
         p.rel(BookContent.pickaxe(ore)).rel(BlockMachineSC.stackOf(MachineType.CRUSHER, 1));
         return p;
+    }
+
+    // ------------------------------------------------------------------ the Substrate (Si-14, docs/plan-substrate-tech.md §7.3)
+
+    /** The Substrate's rock / ores / druse (generated there), its trophies and loot (off its mobs), the spawn eggs; null: none of them. */
+    private Page substratePage(ItemStack s) {
+        Item item = s.getItem();
+        int meta = s.getItemDamage();
+        if (blockItem(item, SubstrateBlocksSC.rock)) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.substrate"));
+            p.text(BookWorldSC.rockLine(meta));
+            p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
+            if (meta == SubstrateBlocksSC.CRYSTALLITE || meta == SubstrateBlocksSC.QUARTZ_TURF) {
+                p.rel(ModItems.siliconMaterial.stackOf(SiliconMaterial.SILICA_SAND));
+            } else if (meta == SubstrateBlocksSC.COPPER_TRACE || meta == SubstrateBlocksSC.TRACE_NODE) {
+                p.rel(ModItems.crushedOre.stackOf(Material.COPPER));
+            }
+            return p;
+        }
+        if (blockItem(item, SubstrateBlocksSC.ore)) {
+            OreEntry ore = OreEntry.byMeta(meta);
+            ConfigSC.OreGenSettings g = BookContent.gen(ore);
+            float mul = SubstrateOreTableSC.veinMultiplier(ore);
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.substrate"));
+            if (g.veinsPerChunk <= 0 || mul <= 0F) {
+                p.text(Lang.tr("sc.nei.obtain.off"));
+            } else {
+                p.text(Lang.tr("sc.nei.obtain.subore", SubstrateOreTableSC.minY(ore), SubstrateOreTableSC.maxY(ore), g.veinSize,
+                        EmpTooltipSC.decimal(g.veinsPerChunk * mul), EmpTooltipSC.decimal(mul)));
+            }
+            p.text(Lang.tr("sc.manual.ores.tool", Lang.tr("sc.manual.ores.tool." + ore.tool.name().toLowerCase(java.util.Locale.ROOT))));
+            p.text(Lang.tr("sc.nei.obtain.subore.drop"));
+            p.rel(new ItemStack(ModBlocks.oreSC, 1, ore.meta())).rel(BookContent.pickaxe(ore)).rel(BlockMachineSC.stackOf(MachineType.CRUSHER, 1));
+            return p;
+        }
+        if (blockItem(item, SubstrateBlocksSC.druse)) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.substrate"));
+            p.text(Lang.tr("sc.manual.world.block.druse"));
+            p.rel(ModItems.siliconMaterial.stackOf(SiliconMaterial.SILICA_SAND));
+            return p;
+        }
+        if (MobItemsSC.trophy != null && item == MobItemsSC.trophy) {
+            String from = BookWorldSC.trophyDroppers(meta);
+            Page p = new Page(s);
+            p.text(from == null ? Lang.tr("sc.nei.obtain.trophy.later") : Lang.tr("sc.nei.obtain.trophy", from, BookWorldSC.trophyChancePct(meta)));
+            p.text(Lang.tr("sc.nei.obtain.mobrules"));
+            p.text(Lang.tr("sc.tooltip.trophy.howto"));
+            p.rel(BookWorldSC.realOfTrophy(meta));
+            return p;
+        }
+        if (MobItemsSC.combatLoot != null && item == MobItemsSC.combatLoot) {
+            Page p = new Page(s);
+            p.text(BookWorldSC.lootLine(meta));
+            p.text(Lang.tr("sc.nei.obtain.mobrules"));
+            if (MobItemsSC.spawnEgg != null) {
+                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, meta == BookWorldSC.LOOT_NANO_SCRAP ? MobEntitiesSC.ID_MARAUDER : MobEntitiesSC.ID_LINEMAN));
+            }
+            p.rel(BlockMachineSC.stackOf(MachineType.CRUSHER, 1));
+            return p;
+        }
+        if (MobItemsSC.spawnEgg != null && item == MobItemsSC.spawnEgg) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.egg"));
+            return p;
+        }
+        return null;
+    }
+
+    private static boolean blockItem(Item item, Block b) {
+        return b != null && item != null && item == Item.getItemFromBlock(b);
     }
 
     /** Only the fluids no recipe of the mod makes and the mod doesn't register itself. */

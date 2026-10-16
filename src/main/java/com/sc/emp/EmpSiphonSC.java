@@ -3,11 +3,13 @@ package com.sc.emp;
 import com.sc.item.ArmorLogicSC;
 import com.sc.item.ItemArmorSC;
 import com.sc.item.ItemBatterySC;
+import com.sc.mob.MobArmorMathSC;
 import com.sc.util.ArmorSuit;
 import com.sc.util.ConfigSC;
 import com.sc.util.SoundsSC;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
@@ -28,6 +30,13 @@ import net.minecraft.world.World;
  * at that pace, not every tick. What goes into the gun waits in Use.pendingCharge (with the start's -5 000 EU) and
  * the stream's gun heat (tenths) in Use.pendingHeat - written when the stream stops (rule 0.4.1). Once a second: the
  * rules, the EMP screen, the «Страж» reversal, EmpSC.streamSecond (heat, boil, «Энергия утекает!»), the gun's heat.
+ *
+ * Изменено 2026-10-15 (docs/plan-substrate-tech.md §4.3, ПБ-11 / ПБ-12, dimension.siphonMobs): the target may also be
+ * a Substrate mob in the mod's armour (IEmpTargetSC, EmpMobSC) - its reserve as EU (units x the suit's EU a unit),
+ * the rate by its chestplate's suit as for a player, its stream second instead of EmpSC.streamSecond (its recharge
+ * stops; no heat or boil), no «Страж». One stream delivers at most MobArmorMathSC.MOB_SIPHON_STREAM_CAP EU out of a
+ * mob: past that the mob keeps losing its reserve and the rest is vented. The stream's target goes through the
+ * target* helpers below: for a player they are exactly the old calls, so the player path is unchanged.
  */
 public final class EmpSiphonSC {
 
@@ -40,15 +49,21 @@ public final class EmpSiphonSC {
     private EmpSiphonSC() {
     }
 
-    /** The player in the crosshair within the siphon's range wearing the mod's armour, or null (both sides). */
-    static EntityPlayer targetOf(World w, EntityPlayer shooter, ItemStack gun) {
+    /**
+     * The player in the crosshair within the siphon's range wearing the mod's armour, or (dimension.siphonMobs) such a
+     * Substrate mob; null (both sides).
+     */
+    static EntityLivingBase targetOf(World w, EntityPlayer shooter, ItemStack gun) {
         Entity e = EmpShotSC.aim(w, shooter, EmpGunLogicSC.range(gun, EmpMode.SIPHON)).entity;
+        if (EmpMobSC.siphonable(e)) {
+            return (EntityLivingBase) e;
+        }
         return e instanceof EntityPlayer && EmpSC.wearsModArmour((EntityPlayer) e) ? (EntityPlayer) e : null;
     }
 
     /** Server: the stream starts (5 000 EU owed by the gun) - or why not. @return started */
     static boolean start(EntityPlayerMP p, ItemStack gun, long now) {
-        EntityPlayer target = targetOf(p.worldObj, p, gun);
+        EntityLivingBase target = targetOf(p.worldObj, p, gun);
         if (target == null) {
             EmpGunLogicSC.say(p, "sc.emp.siphon.notarget");
             return false;
@@ -62,7 +77,7 @@ public final class EmpSiphonSC {
             EmpGunLogicSC.say(p, "sc.emp.noreceiver");
             return false;
         }
-        if (armourCharge(target) <= 0) {
+        if (targetCharge(target) <= 0) {
             EmpGunLogicSC.say(p, "sc.emp.siphon.stop.empty");
             return false;
         }
@@ -81,7 +96,8 @@ public final class EmpSiphonSC {
     static void tick(EntityPlayerMP p, EmpGunLogicSC.Use u, long now) {
         ItemStack gun = u.gun;
         Entity e = p.worldObj.getEntityByID(u.targetId);
-        EntityPlayer target = e instanceof EntityPlayer ? (EntityPlayer) e : null;
+        // a mob stays the target whatever its reserve does: an empty one ends the stream as «броня цели пуста» (transfer)
+        EntityLivingBase target = e instanceof EntityPlayer || EmpMobSC.mob(e) ? (EntityLivingBase) e : null;
         if (target == null || target.isDead || target.getHealth() <= 0
                 || !EmpShotSC.inSight(p.worldObj, p, target, EmpGunLogicSC.range(gun, EmpMode.SIPHON))) {
             boolean far = target == null || target.isDead || target.getHealth() <= 0
@@ -104,10 +120,14 @@ public final class EmpSiphonSC {
     }
 
     /** The stream's second (`heats`: not the first - the gun heats for each second gone by). @return false when it stopped */
-    private static boolean second(EntityPlayerMP p, EmpGunLogicSC.Use u, EntityPlayer target, boolean heats) {
+    private static boolean second(EntityPlayerMP p, EmpGunLogicSC.Use u, EntityLivingBase target, boolean heats) {
         u.secondAt = EmpSC.now(p);
         if (EmpGunLogicSC.refusal(p, target, false) != EmpNetSC.OK) {
             stop(p, u, "sc.emp.siphon.stop.refused");
+            return false;
+        }
+        if (!(target instanceof EntityPlayer) && !EmpMobSC.siphonOn()) {
+            stop(p, u, "sc.emp.siphon.stop.refused");          // dimension.siphonMobs went off
             return false;
         }
         double[] border = EmpRulesSC.screenAbsorbs(p, target, EmpMathSC.screenCost(EmpMode.SIPHON));
@@ -116,8 +136,13 @@ public final class EmpSiphonSC {
             stop(p, u, "sc.emp.siphon.stop.screen");
             return false;
         }
-        u.reversed = EmpArmorSC.guardReversesSiphon(target, p);
-        EmpSC.streamSecond(target, p);
+        if (target instanceof EntityPlayer) {
+            u.reversed = EmpArmorSC.guardReversesSiphon((EntityPlayer) target, p);
+            EmpSC.streamSecond((EntityPlayer) target, p);
+        } else {
+            u.reversed = false;                                 // «Страж» is a player's suit's
+            ((IEmpTargetSC) target).empStreamSecond(p);         // the mob's recharge waits, its lights dim
+        }
         if (heats) {
             heatSecond(p, u);
         }
@@ -158,13 +183,14 @@ public final class EmpSiphonSC {
     }
 
     /** STEP ticks of the stream. */
-    private static void transfer(EntityPlayerMP p, EmpGunLogicSC.Use u, EntityPlayer target, long now) {
+    private static void transfer(EntityPlayerMP p, EmpGunLogicSC.Use u, EntityLivingBase target, long now) {
         ItemStack gun = u.gun;
         boolean wide = ItemEmpGunSC.hasModule(gun, EmpModule.WIDE);
-        int loss = EmpMathSC.siphonLossPct(ItemEmpGunSC.hasModule(gun, EmpModule.EFFICIENT), EmpSC.anySuppressed(target), ConfigSC.empSiphonLoss);
-        if (u.reversed) {
+        int loss = EmpMathSC.siphonLossPct(ItemEmpGunSC.hasModule(gun, EmpModule.EFFICIENT), targetSuppressed(target), ConfigSC.empSiphonLoss);
+        if (u.reversed && target instanceof EntityPlayer) {
             // «Страж»: the shooter's charged suit feeds the target's - at the shooter's (the drained suit's) rate
-            long avail = armourCharge(p), room = armourCapacity(target) - armourCharge(target);
+            EntityPlayer tp = (EntityPlayer) target;
+            long avail = armourCharge(p), room = armourCapacity(tp) - armourCharge(tp);
             if (avail <= 0) {
                 stop(p, u, "sc.emp.siphon.stop.empty");
                 return;
@@ -177,7 +203,7 @@ public final class EmpSiphonSC {
                     u.throttled);
             int[] step = EmpShotSC.streamStep(rate, avail, room, loss, false);
             int taken = drain(p, step[0]);
-            ArmorLogicSC.chargeSuit(target, (int) Math.min(room, EmpMathSC.delivered(taken, loss)));
+            ArmorLogicSC.chargeSuit(tp, (int) Math.min(room, EmpMathSC.delivered(taken, loss)));
             return;
         }
         int limit = ItemEmpGunSC.limitOf(gun);
@@ -185,26 +211,38 @@ public final class EmpSiphonSC {
             stop(p, u, "sc.emp.siphon.stop.limit");
             return;
         }
-        long avail = armourCharge(target);
+        long avail = targetCharge(target);
         if (avail <= 0) {
             stop(p, u, "sc.emp.siphon.stop.empty");
             return;
         }
         boolean stopWhenFull = EmpShotSC.stopsWhenFull(limit);
+        // ПБ-12: what a mob may still give this stream (a player: no cap); «пока приёмник не полон» stops at the cap
+        long capLeft = EmpMobSC.streamRoomLeft(target, u);
+        if (capLeft <= 0 && stopWhenFull) {
+            EmpGunLogicSC.say(p, "sc.emp.siphon.mobcap.stop", MobArmorMathSC.MOB_SIPHON_STREAM_CAP);
+            stop(p, u, null);
+            return;
+        }
         int recv = pickReceiver(p, gun, u);
         if (recv < 0 && stopWhenFull) {
             stop(p, u, "sc.emp.siphon.stop.full");
             return;
         }
         long room = recv < 0 ? 0L : stopWhenFull ? room(p, gun, u, recv) : totalRoom(p, gun, u);
-        int rate = EmpMathSC.throttle(EmpMathSC.siphonRate(armourCapacity(target), suitOf(target), wide, EmpSC.defenseTier(target),
+        room = Math.min(room, capLeft);                         // past the cap: the mob keeps losing, the rest is vented
+        int rate = EmpMathSC.throttle(EmpMathSC.siphonRate(targetCapacity(target), targetSuit(target), wide, targetDefense(target),
                 ConfigSC.empSiphonRateMultiplier, STEP), u.throttled);
         int[] step = EmpShotSC.streamStep(rate, avail, room, loss, !stopWhenFull);
-        int taken = drain(target, step[0]);
+        int taken = drainTarget(target, step[0]);
         int arrived = EmpMathSC.delivered(taken, loss);
         int want = (int) Math.min(room, arrived);
         int got = stopWhenFull ? give(p, u, recv, want) : giveAll(p, u, want);
         u.received += got;
+        EmpMobSC.streamDelivered(target, got);
+        if (!stopWhenFull && capLeft != Long.MAX_VALUE && capLeft > 0 && got >= capLeft) {
+            EmpGunLogicSC.say(p, "sc.emp.siphon.mobcap", MobArmorMathSC.MOB_SIPHON_STREAM_CAP);   // once: the cap is reached now
+        }
         int vented = arrived - got;
         if (vented > 0) {
             u.vented += vented;
@@ -378,6 +416,56 @@ public final class EmpSiphonSC {
             }
         }
         return best;
+    }
+
+    // ------------------------------------------------------------------ the stream's target: a player (the old calls) or a Substrate mob
+
+    /** EU the target holds now: a player's worn pieces; a mob's reserve as EU. */
+    static long targetCharge(EntityLivingBase t) {
+        if (t instanceof EntityPlayer) {
+            return armourCharge((EntityPlayer) t);
+        }
+        return t instanceof IEmpTargetSC ? ((IEmpTargetSC) t).empChargeEu() : 0L;
+    }
+
+    /** The target's full charge, EU (the rate is a share of it): a player's worn pieces' capacity; a mob's full reserve. */
+    static long targetCapacity(EntityLivingBase t) {
+        if (t instanceof EntityPlayer) {
+            return armourCapacity((EntityPlayer) t);
+        }
+        return t instanceof IEmpTargetSC ? ((IEmpTargetSC) t).empCapacityEu() : 0L;
+    }
+
+    /** The suit that sets the stream's speed (the chestplate's, else the best piece's). */
+    private static ArmorSuit targetSuit(EntityLivingBase t) {
+        if (t instanceof EntityPlayer) {
+            return suitOf((EntityPlayer) t);
+        }
+        return t instanceof IEmpTargetSC ? ((IEmpTargetSC) t).empSuit() : null;
+    }
+
+    /** The target's Defense chip tier (a mob: its equivalent). */
+    private static int targetDefense(EntityLivingBase t) {
+        if (t instanceof EntityPlayer) {
+            return EmpSC.defenseTier((EntityPlayer) t);
+        }
+        return t instanceof IEmpTargetSC ? ((IEmpTargetSC) t).empDefenseTier() : 0;
+    }
+
+    /** Some piece of the target is suppressed (the loss is 0 then). */
+    private static boolean targetSuppressed(EntityLivingBase t) {
+        if (t instanceof EntityPlayer) {
+            return EmpSC.anySuppressed((EntityPlayer) t);
+        }
+        return t instanceof IEmpTargetSC && EmpMobSC.anySuppressed((IEmpTargetSC) t);
+    }
+
+    /** Takes up to `eu` out of the target: a player's pieces (drain); a mob's reserve. @return EU taken */
+    private static int drainTarget(EntityLivingBase t, int eu) {
+        if (t instanceof EntityPlayer) {
+            return drain((EntityPlayer) t, eu);
+        }
+        return t instanceof IEmpTargetSC ? ((IEmpTargetSC) t).empDrainEu(eu) : 0;
     }
 
     /** Takes up to `eu` from the worn pieces, the chestplate first. @return EU taken */

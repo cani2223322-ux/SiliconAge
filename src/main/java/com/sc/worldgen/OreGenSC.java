@@ -2,6 +2,7 @@ package com.sc.worldgen;
 
 import java.util.Random;
 
+import com.sc.dim.SubstrateOreGenSC;
 import com.sc.init.ModBlocks;
 import com.sc.util.ConfigSC;
 import com.sc.util.OreEntry;
@@ -67,12 +68,28 @@ public class OreGenSC implements IWorldGenerator {
         if (settings.maxY <= settings.minY || settings.veinsPerChunk <= 0) {
             return;
         }
-        WorldGenMinable generator = new WorldGenMinable(ModBlocks.oreSC, ore.meta(), settings.veinSize, Blocks.stone);
+        WorldGenMinable generator = settings.veinSize < SubstrateOreGenSC.SMALL_VEIN ? null
+                : new WorldGenMinable(ModBlocks.oreSC, ore.meta(), settings.veinSize, Blocks.stone);
         for (int i = 0; i < settings.veinsPerChunk; i++) {
             int x = blockX + random.nextInt(16);
             int y = settings.minY + random.nextInt(settings.maxY - settings.minY);
             int z = blockZ + random.nextInt(16);
-            generator.generate(world, random, x, y, z);
+            vein(world, random, ore, settings.veinSize, generator, x, y, z);
+        }
+    }
+
+    /**
+     * One vein of `ore` in stone from (x, y, z), shifted by +8 into the populate window as WorldGenMinable does.
+     * WorldGenMinable places nothing for a vein of 2 and ~0.4 blocks for 3 (tantalite, baddeleyite, sperrylite are 2;
+     * wolframite, argyrodite, spodumene 3), so a vein below SubstrateOreGenSC.SMALL_VEIN is a short random walk of
+     * 1..size blocks instead. `generator`: a WorldGenMinable of this ore and size, or null to make one when needed.
+     */
+    public static void vein(World world, Random random, OreEntry ore, int size, WorldGenMinable generator, int x, int y, int z) {
+        if (size < SubstrateOreGenSC.SMALL_VEIN) {
+            SubstrateOreGenSC.smallVein(world, random, ModBlocks.oreSC, ore.meta(), size, Blocks.stone, x, y, z);
+        } else {
+            (generator != null ? generator : new WorldGenMinable(ModBlocks.oreSC, ore.meta(), size, Blocks.stone))
+                    .generate(world, random, x, y, z);
         }
     }
 
