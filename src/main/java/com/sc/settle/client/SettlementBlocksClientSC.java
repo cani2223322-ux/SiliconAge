@@ -10,6 +10,8 @@ import cpw.mods.fml.relauncher.SideOnly;
  * (TileEntityShowcaseSC); the Settlement Brick is a meta of the Substrate's rock; the core's dome needs nothing here
  * either - FieldRendererSC is found by TileEntitySettlementCoreSC's superclass. A TESR (a showcase with moving parts,
  * Ф3's workshops) would be bound here (ClientRegistry.bindTileEntitySpecialRenderer). Called from ClientProxy.preInit.
+ * Ф3 (docs/plan-substrate-tech-f3.md §6.3): the second showcase block (BlockShowcase2SC) is a plain cube too - the real
+ * machines' icons and its own warehouse textures, its particles TileEntityShowcaseSC's: still nothing to bind.
  */
 @SideOnly(Side.CLIENT)
 public final class SettlementBlocksClientSC {
@@ -18,6 +20,6 @@ public final class SettlementBlocksClientSC {
     }
 
     public static void register() {
-        // nothing in Ф2 (the class comment)
+        // nothing in Ф2 or Ф3 (the class comment)
     }
 }

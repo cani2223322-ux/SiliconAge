@@ -47,8 +47,8 @@ public final class MobArmorSC {
      * has 12..31 free: 20..23 are these, 24..31 belong to the mob classes (package M).
      */
     public static final int DW_RESERVE = 20, DW_RESERVE_MAX = 21, DW_FLAGS = 22, DW_EMP = 23;
-    /** DW_FLAGS bits. */
-    public static final int FLAG_SHIELD = 1, FLAG_EMERGENCY = 2, FLAG_DRAINED = 4, FLAG_ELITE = 8, FLAG_DOWN = 16;
+    /** DW_FLAGS bits. Ф3 (docs/plan-substrate-tech-f3.md §2.4): FLAG_SCREEN - the personal EMP screen is up (the Jammer, a «Экранированный» elite). */
+    public static final int FLAG_SHIELD = 1, FLAG_EMERGENCY = 2, FLAG_DRAINED = 4, FLAG_ELITE = 8, FLAG_DOWN = 16, FLAG_SCREEN = 32;
     /** DW_EMP: bits 0..3 suppressed pieces (by armorType), 4..7 immune ones. */
     public static final int EMP_IMMUNE_SHIFT = 4;
     /** The reserve travels to clients in tenths of a unit (DW_RESERVE / DW_RESERVE_MAX are ints). */
@@ -79,6 +79,20 @@ public final class MobArmorSC {
     public long streamUntil, lastDamageAt;
     /** EU the current siphon stream has taken so far (capped per stream, ПБ-12). */
     public long streamDrawnEu;
+    /**
+     * Ф3, ПБ-19: a personal EMP screen (the Jammer's, a «Экранированный» elite's) - it takes the first ПЭ-1 shot and is down
+     * for EliteModSC.SCREEN_RECOVER_TICKS after (until then the next shot gets through). Saved: whether it has one; the
+     * downtime is transient (a reloaded mob has its screen up).
+     */
+    public boolean screen;
+    public long screenDownUntil;
+    /** Ф3, ПС-21: a Commander's order already raised its reserve's maximum (once in its life - saved, "cmd"). */
+    public boolean commanded;
+    /**
+     * Ф3, ПС-21 (EliteSC, server, not saved): world time a Commander's order stops raising this mob's blows (damageMul), and -
+     * on a Commander itself - when its current order was given (0: none under way; the group gets the bonus ORDER_TICKS after).
+     */
+    public long commandUntil, orderAt;
     /** The «down» effects were played for this reserve-0 (not again until it is recharged above 0). Not saved. */
     private boolean downShown;
 
@@ -230,11 +244,12 @@ public final class MobArmorSC {
             return amount;
         }
         lastDamageAt = now();                           // every blow that lands comes here first: the regen delay starts
-        if (src == DamageSource.outOfWorld || radiation(src) || !shieldUp()) {
-            return amount;
+        if (src == DamageSource.outOfWorld || radiation(src) || BreakdownDamageSC.is(src) || !shieldUp()) {
+            return amount;                              // Ф3, ПБ-16: «Пробой» passes the shield, as the player's exoStops lets it
         }
         float[] r = MobArmorMathSC.shield(amount, reserve);
         take(r[1]);
+        MobEventsSC.shieldTook(mob, src, r[1]);         // Ф3: a blow the shield took is the fight too (the trophy's player, ПТ-2)
         return r[0];
     }
 
@@ -294,8 +309,8 @@ public final class MobArmorSC {
                 && MobArmorMathSC.mayRegen(now, lastDamageAt, regenDelayTicks, streamUntil)) {
             recharge(regenPerSecond);
         }
-        if (phase % MobArmorMathSC.SYNC_EVERY == 0) {
-            sync();
+        if (phase % MobArmorMathSC.SYNC_EVERY == 0 || screen && screenDownUntil == now) {
+            sync();                                     // Ф3: the personal screen's bubble back on the tick it recovers
         }
     }
 
@@ -307,9 +322,9 @@ public final class MobArmorSC {
         DataWatcher dw = mob.getDataWatcher();
         dw.updateObject(DW_RESERVE, Integer.valueOf(Math.round(reserve * WATCH_SCALE)));
         dw.updateObject(DW_RESERVE_MAX, Integer.valueOf(Math.round(reserveMax * WATCH_SCALE)));
-        int flags = (shieldUp() ? FLAG_SHIELD : 0) | (emergency ? FLAG_EMERGENCY : 0) | (elite ? FLAG_ELITE : 0)
-                | (down() ? FLAG_DOWN : 0);
         long now = now();
+        int flags = (shieldUp() ? FLAG_SHIELD : 0) | (emergency ? FLAG_EMERGENCY : 0) | (elite ? FLAG_ELITE : 0)
+                | (down() ? FLAG_DOWN : 0) | (screenUp() ? FLAG_SCREEN : 0);
         if (streamUntil > now) {
             flags |= FLAG_DRAINED;
         }
@@ -417,6 +432,43 @@ public final class MobArmorSC {
         sync();
     }
 
+    /**
+     * Ф3, ПБ-19: the personal EMP screen is up now (server) - it has one, it isn't recovering, and the suit holds a reserve
+     * (a «down» suit powers nothing: no bubble, and the ПЭ-1's answer is the Slowness of an empty suit anyway).
+     */
+    public boolean screenUp() {
+        return screen && screenDownUntil <= now() && !down();
+    }
+
+    /**
+     * Ф3, ПС-21, server: a Commander's order - the reserve's maximum `share` larger, once in the mob's life (commanded), the
+     * new room filled as a recharge (not while a siphon draws). @return it was raised now
+     */
+    public boolean commandBoost(float share) {
+        if (commanded || share <= 0F || reserveMax <= 0F || !server()) {
+            return false;
+        }
+        commanded = true;
+        float add = reserveMax * share;
+        reserveMax += add;
+        recharge(add);                                  // syncs; a stream's mob gets only the larger maximum
+        sync();
+        return true;
+    }
+
+    /**
+     * Ф3, ПБ-19, server: a ПЭ-1 shot (or a stream's second) meets the personal screen - if it is up it takes the shot and is
+     * down for EliteModSC.SCREEN_RECOVER_TICKS. @return true when the screen took it (the shot does nothing else)
+     */
+    public boolean screenTakes() {
+        if (!server() || !screenUp()) {
+            return false;
+        }
+        screenDownUntil = now() + EliteModSC.SCREEN_RECOVER_TICKS;
+        sync();
+        return true;
+    }
+
     /** ПБ-12: EU this mob's stream may still deliver to the gun's receivers. */
     public long streamRoomEu() {
         return Math.max(0L, MobArmorMathSC.MOB_SIPHON_STREAM_CAP - streamDrawnEu);
@@ -458,6 +510,8 @@ public final class MobArmorSC {
         t.setFloat("regen", regenPerSecond);
         t.setInteger("regenDelay", regenDelayTicks);
         t.setByte("def", (byte) defenseTier);
+        t.setBoolean("scr", screen);
+        t.setBoolean("cmd", commanded);
         // suppression / streams are seconds long: not saved (a reloaded mob starts clean)
         tag.setTag(NBT, t);
     }
@@ -475,6 +529,8 @@ public final class MobArmorSC {
         regenPerSecond = t.getFloat("regen");
         regenDelayTicks = t.getInteger("regenDelay");
         defenseTier = t.getByte("def");
+        screen = t.getBoolean("scr");
+        commanded = t.getBoolean("cmd");
         downShown = down();                             // a mob saved «down» doesn't spark again on loading
     }
 }

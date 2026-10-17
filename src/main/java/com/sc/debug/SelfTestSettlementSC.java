@@ -557,8 +557,8 @@ public final class SelfTestSettlementSC {
         }
         String[] keys = {"elder", "technologist", "metallurgist", "gasTech", "cartographer", "sentry", "seniorWarden"};
         NpcKindSC[] kinds = NpcKindSC.values();
-        boolean order = kinds.length == keys.length;
-        for (int i = 0; order && i < kinds.length; i++) {
+        boolean order = kinds.length >= keys.length;                      // Ф3 appended five (SelfTestCombatSC checks all twelve)
+        for (int i = 0; order && i < keys.length; i++) {
             order = keys[i].equals(kinds[i].key) && kinds[i].guard == (i >= 5) && ("sc.settle.kind." + keys[i]).equals(kinds[i].langKey());
         }
         boolean respawn = NpcKindSC.ELDER.respawnTicks() == 24000 && NpcKindSC.CARTOGRAPHER.respawnTicks() == 24000 && NpcKindSC.SENTRY.respawnTicks() == 6000
@@ -569,7 +569,7 @@ public final class SelfTestSettlementSC {
                 && SettlementSC.DAY == 24000L && SettlementSC.WEEK_DAYS == 7 && SettlementSC.ownerName(7).equals(SettlementSC.OWNER_PREFIX + "7]");
         check(table && inBounds && cityLo && cityHi && order && respawn && consts, "sizes and kinds (proposal §5): Outpost 24 / 3-5 / 2 Sentries,"
                 + " Settlement 40 / 8-12 / 3 + 2 / dock, City 56-64 / 15-20 / 4 + 3 / dock " + table + ", radius(seed) within bounds over 4000 seeds "
-                + inBounds + " (the City's both ends met " + (cityLo && cityHi) + "); NpcKindSC's order, keys and guard flags " + order + ", respawnTicks"
+                + inBounds + " (the City's both ends met " + (cityLo && cityHi) + "); NpcKindSC's Ф2 order, keys and guard flags " + order + ", respawnTicks"
                 + " 24000 / 6000, of() never throws " + respawn + "; SettlementSC's numbers (belt 24, foundation 6, dock zone 5 / -3 / +16, spawn margin 40,"
                 + " clear 48, kill reach 48, the day) " + consts);
     }
@@ -792,8 +792,8 @@ public final class SelfTestSettlementSC {
                 + (bad.length() == 0 ? "" : " - BAD:" + bad));
     }
 
-    /** What is wrong with a site's plan (null: nothing). */
-    private static String planProblem(long seed, SettlementLayoutSC.Site s) {
+    /** What is wrong with a site's plan (null: nothing). SelfTestCombatSC asks it too (Ф3's roster). */
+    static String planProblem(long seed, SettlementLayoutSC.Site s) {
         SettlementLayoutSC.Plan p = SettlementLayoutSC.plan(seed, s), q = SettlementLayoutSC.plan(seed, s);
         if (p == null) {
             return "no plan";
@@ -806,9 +806,9 @@ public final class SelfTestSettlementSC {
                 || p.coreZ != s.z) {
             return "core " + p.coreX + "," + p.coreY + "," + p.coreZ + " floor " + p.floorY + " (" + floor + ")";
         }
-        // §4.2: the roster - kinds, counts, order
+        // §4.2: the roster - kinds, counts, order (Ф3: the record of version 2 - docs/plan-substrate-tech-f3.md §6.2)
         List<NpcKindSC> roster = SettlementLayoutSC.roster(s);
-        String why = rosterProblem(s.size, roster);
+        String why = rosterProblem(s.size, s.seed, roster);
         if (why != null) {
             return why;
         }
@@ -876,39 +876,60 @@ public final class SelfTestSettlementSC {
         return dx * dx + dz * dz;
     }
 
-    /** §4.2: Outpost - the Elder, a Cartographer and 1..3 of the three; Settlement - the five + 3..7; City - the Elder and 2 of each; then the guards. */
+    /**
+     * §4.2: Outpost - the Elder, a Cartographer and 1..3 of the extras; Settlement - the five + more; City - the Elder and 2 of
+     * each; then the guards. Ф3 (docs/plan-substrate-tech-f3.md §6.2, ПЖ-9 - the record of version 2): the Salvager among an
+     * Outpost's extras, the new trades among the settlers, the Captain and the Commandant after the Senior Wardens - SettlementSizeSC
+     * says how many (the Captain by the settlement's seed; without one - none or one). SelfTestCombatSC adds Ф3's own counts.
+     */
     static String rosterProblem(SettlementSizeSC size, List<NpcKindSC> roster) {
+        return rosterProblem(size, null, roster);
+    }
+
+    /** The same for a settlement of seed `seed` (its Captain known). */
+    static String rosterProblem(SettlementSizeSC size, long seed, List<NpcKindSC> roster) {
+        return rosterProblem(size, Long.valueOf(seed), roster);
+    }
+
+    private static String rosterProblem(SettlementSizeSC size, Long seed, List<NpcKindSC> roster) {
         int[] n = new int[NpcKindSC.values().length];
-        int tuners = 0, guardFrom = -1, seniorFrom = -1;
+        int tuners = 0, last = -1;
+        List<NpcKindSC> guardOrder = Arrays.asList(NpcKindSC.SENTRY, NpcKindSC.SENIOR_WARDEN, NpcKindSC.CAPTAIN, NpcKindSC.COMMANDANT);
         for (int i = 0; i < roster.size(); i++) {
             NpcKindSC k = roster.get(i);
             n[k.ordinal()]++;
             if (!k.guard) {
                 tuners++;
-                if (guardFrom >= 0) {
+                if (last >= 0) {
                     return "a settler after the guards";
                 }
             } else {
-                guardFrom = guardFrom < 0 ? i : guardFrom;
-                if (k == NpcKindSC.SENIOR_WARDEN) {
-                    seniorFrom = seniorFrom < 0 ? i : seniorFrom;
-                } else if (seniorFrom >= 0) {
-                    return "a Sentry after the Senior Wardens";
+                int rank = guardOrder.indexOf(k);
+                if (rank < 0) {
+                    return "a guard of kind " + k;
                 }
+                if (rank < last) {
+                    return "a " + k + " after a " + guardOrder.get(last);
+                }
+                last = rank;
             }
         }
         if (roster.isEmpty() || roster.get(0) != NpcKindSC.ELDER || n[NpcKindSC.ELDER.ordinal()] != 1) {
             return "the Elder isn't the one and first (" + roster + ")";
         }
+        int captains = n[NpcKindSC.CAPTAIN.ordinal()], commandants = n[NpcKindSC.COMMANDANT.ordinal()];
+        boolean chiefs = (seed == null ? captains <= 1 : captains == (size.captain(seed.longValue()) ? 1 : 0)) && commandants == (size.commandant ? 1 : 0);
         if (tuners < size.tunersMin || tuners > size.tunersMax || n[NpcKindSC.SENTRY.ordinal()] != size.sentries
-                || n[NpcKindSC.SENIOR_WARDEN.ordinal()] != size.seniors) {
-            return size + ": " + tuners + " settlers, " + n[NpcKindSC.SENTRY.ordinal()] + " + " + n[NpcKindSC.SENIOR_WARDEN.ordinal()] + " guards";
+                || n[NpcKindSC.SENIOR_WARDEN.ordinal()] != size.seniors || !chiefs) {
+            return size + ": " + tuners + " settlers, " + n[NpcKindSC.SENTRY.ordinal()] + " + " + n[NpcKindSC.SENIOR_WARDEN.ordinal()] + " guards, Captain "
+                    + captains + ", Commandant " + commandants;
         }
         int need = size == SettlementSizeSC.CITY ? 2 : 1;
         int c = n[NpcKindSC.CARTOGRAPHER.ordinal()], t = n[NpcKindSC.TECHNOLOGIST.ordinal()], m = n[NpcKindSC.METALLURGIST.ordinal()],
-                g = n[NpcKindSC.GAS_TECH.ordinal()];
-        if (size == SettlementSizeSC.OUTPOST ? c < 1 || t + m + g < 1 || t + m + g > 3 : c < need || t < need || m < need || g < need) {
-            return size + ": Cartographers " + c + ", Technologists " + t + ", Metallurgists " + m + ", Gas Technicians " + g;
+                g = n[NpcKindSC.GAS_TECH.ordinal()], extra = t + m + g + n[NpcKindSC.SALVAGER.ordinal()];
+        if (size == SettlementSizeSC.OUTPOST ? c < 1 || extra < 1 || extra > 3 : c < need || t < need || m < need || g < need) {
+            return size + ": Cartographers " + c + ", Technologists " + t + ", Metallurgists " + m + ", Gas Technicians " + g + ", Salvagers "
+                    + n[NpcKindSC.SALVAGER.ordinal()];
         }
         return null;
     }
@@ -936,7 +957,7 @@ public final class SelfTestSettlementSC {
         StringBuilder bad = new StringBuilder(), noLang = new StringBuilder(), forbidden = new StringBuilder(), both = new StringBuilder();
         Set<String> keys = new HashSet<String>();
         List<TradeOfferSC.Ingredient> given = new ArrayList<TradeOfferSC.Ingredient>(), got = new ArrayList<TradeOfferSC.Ingredient>();
-        int violatorOpen = 0;
+        int violatorOpen = 0, services = 0;
         for (TradeOfferSC o : all) {
             if (o.key == null || o.key.isEmpty() || !keys.add(o.key)) {
                 bad.append(" key '").append(o.key).append('\'');
@@ -947,6 +968,10 @@ public final class SelfTestSettlementSC {
             }
             if (o.kind == null || o.kind.guard || !TradeTableSC.offers(o.kind).contains(o) || TradeTableSC.byKey(o.key) != o) {
                 bad.append(' ').append(o.key).append(" kind ").append(o.kind);
+            }
+            if (o.outKind > TradeOfferSC.OUT_MAP) {
+                services++;                                 // Ф3's services (the charge, the restoring): SelfTestCombatSC's, ПО-7 sets them aside
+                continue;
             }
             if (o.in == null || o.in.length < 1 || o.in.length > 2) {
                 bad.append(' ').append(o.key).append(" sides");
@@ -978,14 +1003,11 @@ public final class SelfTestSettlementSC {
             }
             violatorOpen += TradeRulesSC.available(o, ReputationSC.VIOLATOR) ? 1 : 0;
         }
-        // ПО-7: no thing both given and got anywhere (matched both ways: an ore name against a stack)
-        for (TradeOfferSC.Ingredient g : given) {
-            for (TradeOfferSC.Ingredient o : got) {
-                ItemStack gs = g.display(), os = o.display();
-                if (gs != null && os != null && (g.matches(os) || o.matches(gs))) {
-                    both.append(' ').append(gs.getDisplayName());
-                }
-            }
+        // ПО-7: no thing both bought and sold anywhere - Ф3: by its one definition, TradeTableSC.boughtAndSold (a purchase's part,
+        // the Armourer's Controllers for the Defense Chip, is a price, not «bought»; Ф2 took every given thing, which Ф3's approved
+        // deal against the Technologist's Controllers would fail)
+        for (String n : TradeTableSC.boughtAndSold()) {
+            both.append(' ').append(n);
         }
         boolean guards = TradeTableSC.offers(NpcKindSC.SENTRY).isEmpty() && TradeTableSC.offers(NpcKindSC.SENIOR_WARDEN).isEmpty();
         check(!all.isEmpty() && bad.length() == 0 && noLang.length() == 0 && forbidden.length() == 0 && both.length() == 0 && guards, "trade table"
@@ -993,7 +1015,8 @@ public final class SelfTestSettlementSC {
                 + (all.isEmpty() ? " - THE TABLE IS EMPTY" : "") + (bad.length() == 0 ? "" : " - BAD:" + bad) + "; sc.trade.offer.<key> in both"
                 + " languages" + (noLang.length() == 0 ? "" : " - NO LANG:" + noLang) + "; no armour, blades, weapons, PE-1, reactors, bridge parts or"
                 + " clots out" + (forbidden.length() == 0 ? "" : " - SOLD:" + forbidden) + "; nothing both bought and sold"
-                + (both.length() == 0 ? "" : " - BOTH:" + both) + "; the guards trade nothing " + guards + "; " + violatorOpen + " deals open to a Violator");
+                + (both.length() == 0 ? "" : " - BOTH:" + both) + "; the guards trade nothing " + guards + "; " + violatorOpen + " deals open to a Violator"
+                + (services > 0 ? "; " + services + " Ф3 services aside" : ""));
 
         // ПО-3, ПО-6: the player's side - a settlement with no spread, the level's multiplier, rounded up
         long zero = Long.MIN_VALUE;
@@ -1048,12 +1071,30 @@ public final class SelfTestSettlementSC {
         check(rules && chips, "trade rules (ПД-1, ПО-4, ПО-5): a Violator sells and does penance but buys nothing, an Enemy does nothing, the level"
                 + " gate, remaining / period, strict matching by meta, the chips " + rules + "; chipsAllowed(60, 8) = " + TradeRulesSC.chipsAllowed(60, 8)
                 + " (4), 64 a day / 3 contracts / 1 crumb a week " + chips);
+
+        // ПО-6 (Ф3): a sale of a matcher (the Salvager's trophy - one stays one) scales its chips by the level and the spread
+        TradeOfferSC trophySale = TradeTableSC.byKey(TradeTableSC.SAL_TROPHY);
+        boolean trophyOut = false;
+        String trophyWhat = "no " + TradeTableSC.SAL_TROPHY;
+        if (trophySale != null && trophySale.out != null && trophySale.out.count == 6) {
+            int vio = TradeRulesSC.outCount(trophySale, ReputationSC.VIOLATOR, 0), str = TradeRulesSC.outCount(trophySale, ReputationSC.STRANGER, 0),
+                    par = TradeRulesSC.outCount(trophySale, ReputationSC.PARTNER, 0), hon = TradeRulesSC.outCount(trophySale, ReputationSC.HONOURED, 0),
+                    dear = TradeRulesSC.outCount(trophySale, ReputationSC.PARTNER, 10), single = TradeRulesSC.playerCounts(trophySale, ReputationSC.VIOLATOR, 10)[0];
+            TradeOfferSC firmware = TradeTableSC.byKey(TradeTableSC.SAL_FIRMWARE);
+            int plain = firmware == null ? -1 : TradeRulesSC.outCount(firmware, ReputationSC.VIOLATOR, 10);
+            trophyOut = vio == 3 && str == 4 && par == 6 && hon == 7 && dear == 5 && single == 1 && firmware != null && plain == firmware.out.count;
+            trophyWhat = "6 chips - a Violator " + vio + " (3), a Stranger " + str + " (4), a Partner " + par + " (6), the Honoured " + hon + " (7), a Partner"
+                    + " at +10% " + dear + " (5); the trophy stays " + single + " (1); a plain sale's chips unscaled " + plain + " (" + (firmware == null ? "?" : firmware.out.count) + ")";
+        } else if (trophySale != null) {
+            trophyWhat = TradeTableSC.SAL_TROPHY + " pays " + (trophySale.out == null ? "nothing" : trophySale.out.count + " (6 expected)");
+        }
+        check(trophyOut, "trade prices (ПО-6): the Salvager's trophy sale (TradeRulesSC.outCount) - " + trophyWhat);
         System.out.println("[SC-TEST] INFO settlement: ПО-7's «buying costs at least x" + TradeRulesSC.BUY_OVER_SELL + " of selling» is a balance rule"
                 + " with no value table to check it by (TODO(balance)); nothing in the table may be both bought and sold, so no pair to compare");
     }
 
     /** Why a deal may not give `s` (ПО-7: armour, blades, weapons, ПЭ-1, reactors, bridge parts, Singularity Clots), null if it may. */
-    private static String forbidden(ItemStack s) {
+    static String forbidden(ItemStack s) {
         Item i = s.getItem();
         GeneratorType g = ModBlocks.generatorTypeOf(s);
         if (i instanceof ItemArmor) {
@@ -1383,7 +1424,7 @@ public final class SelfTestSettlementSC {
         }
         int sizes = rowsOf("world.settlements", 0), levels = rowsOf("world.trust", 0), violations = rowsOf("world.trust", 1), ranks = rowsOf("world.wardens", 0);
         boolean tables = sizes == SettlementSizeSC.values().length && levels == ReputationSC.LEVEL_KEYS.length && violations == ViolationRulesSC.KEYS.length
-                && ranks == 2;
+                && ranks == 4;                                             // Ф3: + the Captain and the Commandant
         int dealTables = 0;
         BookEntry tradeEntry = BookContent.byId("world.trade");
         for (BookEl el : tradeEntry == null ? new ArrayList<BookEl>() : tradeEntry.els) {
@@ -1420,7 +1461,8 @@ public final class SelfTestSettlementSC {
         String brickMeta = staticInt(SubstrateBlocksSC.class, "SETTLEMENT_BRICK");
         boolean sMetas = SubstrateBlocksSC.ROCK_METAS == BookWorldSC.ROCK_NAMES.length && String.valueOf(BookWorldSC.BRICK).equals(brickMeta);
         ItemCombatLootSC.LootKind[] loot = ItemCombatLootSC.LootKind.values();
-        boolean tMetas = loot.length == BookWorldSC.LOOT_NAMES.length && "stolenCargo".equals(loot[loot.length - 1].key);
+        boolean tMetas = loot.length == BookWorldSC.LOOT_NAMES.length && "stolenCargo".equals(loot[BookWorldSC.LOOT_STOLEN_CARGO].key)
+                && "shieldCore".equals(loot[loot.length - 1].key);           // Ф3 appended four after it (docs/plan-substrate-tech-f3.md §2.2)
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {

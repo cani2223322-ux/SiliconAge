@@ -22,8 +22,11 @@ import com.sc.machine.RecipeRegistry;
 import com.sc.manual.BookContent;
 import com.sc.manual.BookWorldSC;
 import com.sc.manual.Lang;
+import com.sc.mob.ItemCombatLootSC;
 import com.sc.mob.MobEntitiesSC;
 import com.sc.mob.MobItemsSC;
+import com.sc.mob.MobRecipesSC;
+import com.sc.ruin.RuinBlocksSC;
 import com.sc.settle.ReputationSC;
 import com.sc.settle.SettlementBlocksSC;
 import com.sc.settle.SettlementItemsSC;
@@ -56,7 +59,9 @@ import net.minecraftforge.oredict.OreDictionary;
  * defects), the creative generator, the fluids of other mods that the mod's generators burn, the Substrate's
  * rock, ores and druse (generated there), its trophies and combat loot (off its mobs) and the spawn eggs (creative
  * only), the settlements' Credit Chip, Return Capsule and Settlement Map (Ф2: the settlers and the Cartographer's
- * deal), and - in a pack that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
+ * deal), Ф3's ruin blocks (the Dead Nodes and the lithographs), its loot (who drops it, who buys it) and its trophies'
+ * restoring (the Armourer, one's own station - BookWorldSC.restoreLine), and - in a pack that unifies metals (UniDict) -
+ * the mod's ingots and dusts it swaps for another mod's.
  */
 public class ObtainHandlerSC extends TemplateRecipeHandler {
 
@@ -212,24 +217,36 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
             p.rel(ModItems.siliconMaterial.stackOf(SiliconMaterial.SILICA_SAND));
             return p;
         }
+        // Ф3 (docs/plan-substrate-tech-f3.md §10.3): the ruin blocks - the Dead Nodes' and the lithographs', broken into scrap
+        if (blockItem(item, RuinBlocksSC.ruin)) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.ruin"));
+            p.text(BookWorldSC.ruinLine(meta));
+            p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
+            p.rel(MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1));
+            return p;
+        }
         if (MobItemsSC.trophy != null && item == MobItemsSC.trophy) {
-            String from = BookWorldSC.trophyDroppers(meta);
+            String from = BookWorldSC.trophyDroppers(meta), restore = BookWorldSC.restoreLine(meta);
             Page p = new Page(s);
             p.text(from == null ? Lang.tr("sc.nei.obtain.trophy.later") : Lang.tr("sc.nei.obtain.trophy", from, BookWorldSC.trophyChancePct(meta)));
             p.text(Lang.tr("sc.nei.obtain.mobrules"));
-            p.text(Lang.tr("sc.tooltip.trophy.howto"));
+            p.text(restore != null ? restore : Lang.tr("sc.nei.obtain.trophy.norestore"));     // Ф3 (ПТ-11, ПТ-12): where and for what
             p.rel(BookWorldSC.realOfTrophy(meta));
+            if (MobItemsSC.spawnEgg != null) {
+                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_TUNER));          // the Armourer
+            }
             return p;
         }
         if (MobItemsSC.combatLoot != null && item == MobItemsSC.combatLoot) {
             boolean cargo = meta == BookWorldSC.LOOT_STOLEN_CARGO;          // Ф2: back to an Elder, never into the Crusher
+            ItemCombatLootSC.LootKind kind = ItemCombatLootSC.LootKind.of(meta);
             Page p = new Page(s);
             p.text(BookWorldSC.lootLine(meta));
             p.text(Lang.tr("sc.nei.obtain.mobrules"));
-            if (MobItemsSC.spawnEgg != null) {
-                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, meta == BookWorldSC.LOOT_NANO_SCRAP || cargo ? MobEntitiesSC.ID_MARAUDER : MobEntitiesSC.ID_LINEMAN));
-            }
-            if (cargo) {
+            p.rel(BookWorldSC.lootEgg(meta));
+            if (cargo || MobRecipesSC.inputCount(kind) <= 0) {
+                // the Elder takes the cargo back; Ф3's loot the Crusher doesn't take goes to the Salvager (ПО-12)
                 p.rel(MobItemsSC.spawnEgg == null ? null : new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_TUNER));
             } else {
                 p.rel(BlockMachineSC.stackOf(MachineType.CRUSHER, 1));
@@ -274,7 +291,7 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
             return p;
         }
         boolean placed = blockItem(item, SettlementBlocksSC.core) || blockItem(item, SettlementBlocksSC.showcase) || blockItem(item, SettlementBlocksSC.dock)
-                || blockItem(item, SettlementBlocksSC.decor) || blockItem(item, SettlementBlocksSC.glass)
+                || blockItem(item, SettlementBlocksSC.decor) || blockItem(item, SettlementBlocksSC.glass) || blockItem(item, SettlementBlocksSC.showcase2)
                 || blockItem(item, SubstrateBlocksSC.rock) && s.getItemDamage() == BookWorldSC.BRICK;
         if (placed) {
             Page p = new Page(s);

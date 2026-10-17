@@ -68,6 +68,47 @@ public final class EmpRulesSC {
         return EmpNetSC.OK;
     }
 
+    /**
+     * Подложка Ф3 (docs/plan-substrate-tech-f3.md §3.1, rules ПБ-17, ПБ-18): the same question for any shooter. A player - the
+     * player's refusal above, exactly as before (PvP, claims, friends, weapons.pe1.respectClaims). A mob (EmpMobGunSC: a
+     * Jammer's, the Commandant's) - none of the players' permissions apply to it: the gun off on the server (NO_DISABLED);
+     * players off in the config, or the target in creative / a spectator (NO_PLAYERS); itself (NO_OWN); a hostile shooter (IMob)
+     * never fires at a settlement's creature, a pet or another hostile native (NO_OWN); a settlement's guard only at hostiles
+     * (IMob - else NO_OWN).
+     * The EMP screen of a field is screenAbsorbs', after this.
+     */
+    public static int refusal(Entity shooter, Entity target, boolean fire) {
+        if (shooter instanceof EntityPlayer) {
+            return refusal((EntityPlayer) shooter, target, fire);
+        }
+        if (!ConfigSC.empEnabled) {
+            return EmpNetSC.NO_DISABLED;
+        }
+        if (shooter == null || target == null) {
+            return EmpNetSC.OK;
+        }
+        if (target == shooter) {
+            return EmpNetSC.NO_OWN;
+        }
+        if (target instanceof EntityPlayer) {
+            EntityPlayer t = (EntityPlayer) target;
+            if (!ConfigSC.empAffectsPlayers || t.capabilities.disableDamage) {
+                return EmpNetSC.NO_PLAYERS;
+            }
+        }
+        if (shooter instanceof com.sc.settle.ISettlementGuardSC) {
+            return target instanceof net.minecraft.entity.monster.IMob ? EmpNetSC.OK : EmpNetSC.NO_OWN;
+        }
+        if (target instanceof com.sc.settle.ISettlementMemberSC || EmpMobSC.owned(target)) {
+            return EmpNetSC.NO_OWN;
+        }
+        if (shooter instanceof net.minecraft.entity.monster.IMob && target instanceof net.minecraft.entity.monster.IMob
+                && target instanceof com.sc.mob.ISubstrateNativeSC) {
+            return EmpNetSC.NO_OWN;                             // package A: no ПЭ-1 among the natives (a revenge target, a stray aim)
+        }
+        return EmpNetSC.OK;
+    }
+
     /** "One of us": the same scoreboard team, or a field's owner and someone on its access list (either way round). */
     static boolean friends(EntityPlayer a, EntityPlayer b) {
         if (a.isOnSameTeam((EntityLivingBase) b)) {
@@ -83,6 +124,14 @@ public final class EmpRulesSC {
      * @return the point on the border to draw the beam to, or null (not absorbed)
      */
     public static double[] screenAbsorbs(EntityPlayer shooter, Entity target, int eu) {
+        return screenAbsorbs((Entity) shooter, target, eu);
+    }
+
+    /**
+     * Подложка Ф3 (§3.1): the same for any shooter - a mob's eyes are its posY + getEyeHeight() as a player's are (the body is
+     * the player version's, moved here unchanged: the player path answers exactly as before).
+     */
+    public static double[] screenAbsorbs(Entity shooter, Entity target, int eu) {
         if (shooter == null || target == null || target.worldObj == null || target.worldObj.isRemote
                 || shooter.worldObj != target.worldObj) {
             return null;

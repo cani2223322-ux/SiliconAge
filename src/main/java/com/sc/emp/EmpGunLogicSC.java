@@ -36,6 +36,10 @@ import net.minecraft.world.World;
  * 2026-10-15 (docs/plan-substrate-tech.md §4.3): the Substrate's armoured mobs (IEmpTargetSC) are a branch of their
  * own after the player's, asked through EmpMobSC and only while dimension.empMobTargets is on; the player path and
  * every other mob (Slowness) are as before.
+ *
+ * Ф3 (docs/plan-substrate-tech-f3.md §3.3, §3.5): in that branch a mob's personal EMP screen takes the shot first
+ * (sc.emp.hit.mob.screen, the EU spent); the reactive technology (IEmpReactiveSC: drones, swarms, mimics) answers before
+ * the Slowness - both under the same rule. A mob's own ПЭ-1 is EmpMobGunSC's.
  */
 public final class EmpGunLogicSC {
 
@@ -386,6 +390,12 @@ public final class EmpGunLogicSC {
                     : ALL_PIECES;
             report(p, tp, EmpSC.applyHit(tp, mode, upgraded, pieces), pieces);
         } else if (EmpMobSC.pointable(target)) {
+            if (EmpMobSC.screenTakes(target)) {
+                // Ф3, ПБ-19: its personal EMP screen took the shot - the EU are spent, nothing is suppressed, the screen is down 30 s
+                fx(p, EmpNetSC.FX_ABSORBED, target.getEntityId(), h.at.xCoord, h.at.yCoord, h.at.zCoord);
+                say(p, "sc.emp.hit.mob.screen", EmpMobSC.name(target), EmpMobSC.screenSeconds(target));
+                return;
+            }
             // 2026-10-15, ПБ-10 (dimension.empMobTargets): a Substrate mob in the mod's armour - the player's zones, durations, immunity
             int[] pieces = mode == EmpMode.POINT
                     ? EmpMathSC.pointPieces(ItemEmpGunSC.zoneOf(gun),
@@ -393,6 +403,9 @@ public final class EmpGunLogicSC {
                     : ALL_PIECES;
             boolean shield = EmpMobSC.shieldUp(target);
             reportMob(p, target, ((IEmpTargetSC) target).empHit(p, mode, upgraded, pieces), pieces, shield);
+        } else if (EmpMobSC.reactive(target) && ((IEmpReactiveSC) target).empStruck(p, mode, h.at.xCoord, h.at.yCoord, h.at.zCoord)) {
+            suppressedFx(p, target);                            // Ф3, ПБ-20: a drone falls, a swarm burns, a mimic wakes up stunned
+            say(p, "sc.emp.hit.reactive", EmpMobSC.name(target));
         } else if (target instanceof EntityLivingBase) {
             EmpSC.applyNoArmour((EntityLivingBase) target);
             say(p, "sc.emp.noarmour");
@@ -517,6 +530,8 @@ public final class EmpGunLogicSC {
                     m.reason = EmpMobSC.refusal(target, ItemEmpGunSC.modeOf(gun));
                 }
                 EmpMobSC.read(p, (IEmpTargetSC) target, m);
+            } else if (EmpMobSC.reactive(target) && m.reason == EmpNetSC.OK) {
+                m.reason = EmpMobSC.refusal(target, ItemEmpGunSC.modeOf(gun));     // Ф3, §3.5: no suit to show (suit -1)
             }
         }
         m.receiver = EmpSiphonSC.pickReceiver(p, gun, u);

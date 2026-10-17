@@ -18,7 +18,8 @@ import net.minecraft.item.crafting.IRecipe;
  * Developer check (PackCheckSC, -Dsc.packcheck): every item of this mod as the creative tabs list it, and how many
  * recipes NEI's own handlers show for it ("item" lookups, as the R key asks). Items with none are listed, with any
  * crafting-table recipe NEI doesn't draw (a custom IRecipe class); those hidden in NEI on purpose (the technical
- * blocks, the settlements' core, showcases, dock, trim and brick) are listed apart - not a gap. Client only, NEI loaded.
+ * blocks, the settlements' core, showcases (Ф3: both blocks), dock, trim and brick) are listed apart - not a gap. Ф3's
+ * ruin blocks (no tab) are taken meta by meta as NEI lists them. Client only, NEI loaded.
  */
 public final class NeiCoverageSC {
 
@@ -49,6 +50,9 @@ public final class NeiCoverageSC {
             }
             if (subs.isEmpty()) {
                 subs.add(new ItemStack(item));
+            }
+            if (com.sc.ruin.RuinBlocksSC.ruin != null && item == Item.getItemFromBlock(com.sc.ruin.RuinBlocksSC.ruin)) {
+                subs.addAll(NEISiliconAgeConfig.ruinStacks());      // Ф3: in no tab, every meta listed in NEI (and checked here)
             }
             for (ItemStack s : subs) {
                 if (s != null && s.getItem() != null && seen.add(Item.itemRegistry.getNameForObject(s.getItem()) + ":" + s.getItemDamage())) {

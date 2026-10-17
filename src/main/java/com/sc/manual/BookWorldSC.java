@@ -7,6 +7,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import com.sc.block.BlockDockSC;
+import com.sc.block.BlockRuinSC;
+import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
 import com.sc.bridge.BridgeMathSC;
 import com.sc.dim.EntryRulesSC;
@@ -17,6 +19,7 @@ import com.sc.dim.SubstrateSC;
 import com.sc.dim.SubstrateTerrainSC;
 import com.sc.dim.WorldProviderSubstrateSC;
 import com.sc.emp.EmpMathSC;
+import com.sc.emp.EmpMobGunSC;
 import com.sc.emp.EmpMode;
 import com.sc.emp.EmpTooltipSC;
 import com.sc.init.ModBlocks;
@@ -24,14 +27,26 @@ import com.sc.init.ModItems;
 import com.sc.machine.MachineRecipe;
 import com.sc.machine.MachineType;
 import com.sc.machine.RecipeRegistry;
+import com.sc.mob.EliteModSC;
+import com.sc.mob.EntityExecutionerSC;
+import com.sc.mob.EntityHollowShellSC;
+import com.sc.mob.EntityJammerSC;
 import com.sc.mob.EntityLinemanSC;
 import com.sc.mob.EntityMarauderSC;
+import com.sc.mob.EntityMimicSC;
+import com.sc.mob.EntityNaniteSC;
+import com.sc.mob.EntityRepairDroneSC;
+import com.sc.mob.EntitySentryDroneSC;
+import com.sc.mob.EntityTrooperSC;
 import com.sc.mob.MobArmorMathSC;
 import com.sc.mob.MobCombatSC;
 import com.sc.mob.MobEntitiesSC;
 import com.sc.mob.MobItemsSC;
 import com.sc.mob.SpawnRulesSC;
+import com.sc.mob.TrophyRestoreSC;
 import com.sc.mob.TrophyTableSC;
+import com.sc.ruin.RuinBlocksSC;
+import com.sc.ruin.RuinLayoutSC;
 import com.sc.settle.NpcKindSC;
 import com.sc.settle.ReputationSC;
 import com.sc.settle.SettlementBlocksSC;
@@ -79,6 +94,15 @@ import net.minecraftforge.oredict.OreDictionary;
  * name (stat) so this chapter builds before M's constants exist - the plan's value until then, and the self-test
  * lists every one still on it (unresolved). TODO(D, after M): direct references. Package N's creatures (the Tuner's
  * day, the guards' health and reserve) are read the same way.
+ * <p>
+ * Ф3 «Броня и ЭМИ» (docs/plan-substrate-tech-f3.md §10.2) adds at the chapter's end «ПЭ-1 в руках врагов и «Пробой»»
+ * (EmpMobGunSC's warnings, the personal screen, the reactive machines, BreakdownDamageSC), the bestiary of Ф3
+ * («Штурмовик и Глушитель», «Пустые оболочки и дроны», «Экзо-палач», «Рой, дрон-охранник, мимик»), «Элита» (EliteModSC's
+ * table), «Мёртвые Узлы и литографии» (RuinLayoutSC, the loot, the ruin blocks) and «Восстановление трофеев»
+ * (TrophyRestoreSC, the Armourer's services of TradeTableSC); and extends «Наладчики» (the three professions), «Стражи
+ * купола» (the Captain, the Commandant), «Терминал обмена» (the services) and «Трофеи и добыча» (the trophies SHOWN now, the
+ * new loot). The numbers of packages M / X / A / S / T that the core doesn't fix are read by name too (stat, weight, member). G on
+ * the eggs, the new loot and the ruin blocks opens these pages.
  */
 public final class BookWorldSC {
 
@@ -88,9 +112,11 @@ public final class BookWorldSC {
     /** Ф2: the Settlement Brick is the rock's meta 8 (SubstrateBlocksSC.SETTLEMENT_BRICK, package S; docs/plan-substrate-tech-f2.md §2.2). */
     public static final int BRICK = 8;
     /** The combat loot by meta (ItemCombatLootSC.LootKind, appended only): item.siliconage.combatLoot.<name>.name, sc.tooltip.loot.<name>. */
-    public static final String[] LOOT_NAMES = {"shellFirmware", "nanoScrap", "stolenCargo"};
+    public static final String[] LOOT_NAMES = {"shellFirmware", "nanoScrap", "stolenCargo", "quantumScrap", "exoScrap", "naniteDust", "shieldCore"};
     /** Ф2: the Stolen Cargo is meta 2 (LootKind.STOLEN_CARGO, package T). */
     public static final int LOOT_FIRMWARE = 0, LOOT_NANO_SCRAP = 1, LOOT_STOLEN_CARGO = 2;
+    /** Ф3: the core's LootKind QUANTUM_SCRAP..SHIELD_CORE (docs/plan-substrate-tech-f3.md §2.2). */
+    public static final int LOOT_QUANTUM_SCRAP = 3, LOOT_EXO_SCRAP = 4, LOOT_NANITE_DUST = 5, LOOT_SHIELD_CORE = 6;
     /** The trophy's lang key by meta (item.siliconage.trophy.<key>.name; the metas of TrophyTableSC). */
     public static final String[] TROPHY_KEYS = trophyKeys();
 
@@ -99,6 +125,19 @@ public final class BookWorldSC {
             BEAM = "com.sc.mob.ai.EntityAIBeamAttackSC";
     /** Ф2: package N's creatures (their numbers by name, as package M's: the plan's value until N's constants exist). */
     private static final String TUNER = "com.sc.settle.npc.EntityTunerSC", WARDEN = "com.sc.settle.npc.EntityWardenSC";
+    /**
+     * Ф3: the classes of packages M (the armoured mobs, the census and weights, the trophy table), X («noise», the ruins), A (the
+     * elites' rhythm) and T (the services' output kinds) whose numbers the core doesn't fix - read by name like the above.
+     */
+    private static final String TROOPER = "com.sc.mob.EntityTrooperSC", JAMMER = "com.sc.mob.EntityJammerSC", SHELL = "com.sc.mob.EntityHollowShellSC",
+            REPAIR_DRONE = "com.sc.mob.EntityRepairDroneSC", EXECUTIONER = "com.sc.mob.EntityExecutionerSC", NANITE = "com.sc.mob.EntityNaniteSC",
+            SENTRY_DRONE = "com.sc.mob.EntitySentryDroneSC", MIMIC = "com.sc.mob.EntityMimicSC", RULES = "com.sc.mob.SpawnRulesSC",
+            TROPHIES = "com.sc.mob.TrophyTableSC", ELITE_MOD = "com.sc.mob.EliteModSC", RUIN_LOOT = "com.sc.ruin.RuinLootSC", LITHO = "com.sc.ruin.MapGenLithographSC",
+            RUIN_LAYOUT = "com.sc.ruin.RuinLayoutSC", RUIN_BLOCK = "com.sc.block.BlockRuinSC", OFFER = "com.sc.settle.trade.TradeOfferSC";
+    /** Ф3 (docs/plan-substrate-tech-f3.md §2.3): the services' output kinds package T appends to TradeOfferSC (charge a piece, restore a trophy). */
+    static final int OUT_CHARGE = (int) stat(OFFER, "OUT_CHARGE", 3F), OUT_RESTORE = (int) stat(OFFER, "OUT_RESTORE", 4F);
+    /** A limit at least this big reads «без лимита» (a service without one, TODO(balance)). */
+    private static final int NO_LIMIT = 1000;
     /** The trade article's price example: what the table's 16 becomes at each level. */
     private static final int PRICE_EXAMPLE = 16;
     private static final Set<String> UNRESOLVED = new TreeSet<String>();
@@ -121,7 +160,20 @@ public final class BookWorldSC {
         list.add(trust(c));
         list.add(wardens(c));
         list.add(docks(c));
+        // Ф3 «Броня и ЭМИ» (docs/plan-substrate-tech-f3.md §10.2): at the chapter's end
+        list.add(mobEmp(c));
+        list.add(renegades(c));
+        list.add(shells(c));
+        list.add(executioner(c));
+        list.add(noise(c));
+        list.add(elites(c));
+        list.add(ruins(c));
+        list.add(restore(c));
     }
+
+    /** Ф3: the eight new articles, in the chapter's order (the self-test counts and checks them). */
+    public static final String[] F3_ARTICLES = {"world.mobemp", "world.renegades", "world.shells", "world.executioner", "world.noise", "world.elites",
+            "world.ruins", "world.restore"};
 
     /** The chapter's tile: Crystallite while the Substrate's blocks exist, else a compass. */
     static ItemStack icon() {
@@ -176,6 +228,7 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.armoured", Lang.tr("sc.manual.world.armoured.title")));
         e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
         e.add(BookEl.link("world.settlements", Lang.tr("sc.manual.world.settlements.title")));
+        e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
         e.add(BookEl.link("bridge", Lang.tr("sc.manual.bridge.title")));
         return e;
     }
@@ -266,9 +319,17 @@ public final class BookWorldSC {
                 : Lang.tr("sc.manual.world.emp.off", sec(EmpMathSC.NO_ARMOR_SLOW_TICKS))));
         e.add(BookEl.para(SubstrateConfigSC.siphonMobs ? Lang.tr("sc.manual.world.siphon.on", BookContent.num(MobArmorMathSC.MOB_SIPHON_STREAM_CAP))
                 : Lang.tr("sc.manual.world.siphon.off")));
+        // Ф3: the enemies' own ПЭ-1, the personal screen, «Пробой» - their article
+        e.add(BookEl.para(Lang.tr("sc.manual.world.emp.f3")));
         e.add(BookEl.link("emp", Lang.tr("sc.manual.emp.title")));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
         e.add(BookEl.link("world.lineman", mobName(EntityLinemanSC.NAME)));
         e.add(BookEl.link("world.marauder", mobName(EntityMarauderSC.NAME)));
+        e.add(BookEl.link("world.renegades", Lang.tr("sc.manual.world.renegades.title")));
+        e.add(BookEl.link("world.shells", Lang.tr("sc.manual.world.shells.title")));
+        e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
+        e.add(BookEl.link("world.noise", Lang.tr("sc.manual.world.noise.title")));
+        e.add(BookEl.link("world.elites", Lang.tr("sc.manual.world.elites.title")));
         return e;
     }
 
@@ -339,31 +400,40 @@ public final class BookWorldSC {
             e.add(BookEl.warn(Lang.tr("sc.manual.world.trophies.mul", n(SubstrateConfigSC.gearDropMultiplier))));
         }
 
-        // what drops in this version (ПТ-7, ПТ-9): the chances with the server's multiplier
-        String both = mobName(EntityLinemanSC.NAME) + ", " + mobName(EntityMarauderSC.NAME);
+        // what drops in this version (ПТ-7, ПТ-9, Ф3 ПТ-14): every meta of TrophyTableSC.SHOWN, the chances with the server's multiplier
         BookEl t = BookEl.table(Lang.tr("sc.manual.world.t.trophy"), Lang.tr("sc.manual.world.t.chance"), Lang.tr("sc.manual.world.t.from"));
-        t.row(trophy(TrophyTableSC.armorMeta(ArmorSuit.NANO, 1)), Lang.tr("sc.manual.world.t.nanopiece"), pct(trophyChance(TrophyTableSC.PIECE[0])) + "%", both);
-        t.row(trophy(TrophyTableSC.bladeMeta(BladeType.NANO)), blade(BladeType.NANO).getDisplayName(), pct(trophyChance(TrophyTableSC.BLADE[0])) + "%",
-                mobName(EntityMarauderSC.NAME));
-        t.row(trophy(TrophyTableSC.weaponMeta(WeaponType.ION_CUTTER)), weapon(WeaponType.ION_CUTTER).getDisplayName(),
-                pct(trophyChance(TrophyTableSC.WEAPON[WeaponType.ION_CUTTER.ordinal()])) + "%", both);
+        for (int meta : TrophyTableSC.SHOWN) {
+            ItemStack real = realOfTrophy(meta);
+            String from = trophyDroppers(meta), chance = trophyChancePct(meta);
+            t.row(trophy(meta), real != null ? real.getDisplayName() : TrophyTableSC.key(meta), chance == null ? "-" : chance + "%",
+                    from == null ? "-" : from);
+        }
         e.add(t);
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.trophies.pe1", pct(trophyChance(stat(TROPHIES, "PE1", 0.02F))),
+                n(1F / Math.max(1e-6F, stat(JAMMER, "CARRIER_CHANCE", 0.02F))))));
 
         e.add(BookEl.head(Lang.tr("sc.manual.world.trophyitemshead")));
         e.addAll(BookContent.paras("sc.manual.world.trophyitems"));
+        e.add(BookEl.link("world.restore", Lang.tr("sc.manual.world.restore.title")));
 
-        // faction loot (ПТ-1) and its use before the settlements: the Crusher's recipes
+        // faction loot (ПТ-1, Ф3 ПТ-13) and its use: the Crusher's recipes, the Salvager (Ф3)
         e.add(BookEl.head(Lang.tr("sc.manual.world.loothead")));
         e.add(BookEl.item(loot(LOOT_FIRMWARE), lootName(LOOT_FIRMWARE), Lang.tr("sc.manual.world.loot.shellFirmware")));
         e.add(BookEl.item(loot(LOOT_NANO_SCRAP), lootName(LOOT_NANO_SCRAP), Lang.tr("sc.manual.world.loot.nanoScrap",
                 pct(stat(DROPS, "SCRAP_CHANCE", 0.4F)))));
         e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.t.bag"), Lang.tr("sc.manual.world.loot.bag")));
         e.add(BookEl.item(loot(LOOT_STOLEN_CARGO), lootName(LOOT_STOLEN_CARGO), lootLine(LOOT_STOLEN_CARGO)));   // Ф2: back to the Elders
+        for (int m = LOOT_QUANTUM_SCRAP; m <= LOOT_SHIELD_CORE; m++) {
+            e.add(BookEl.item(loot(m), lootName(m), lootLine(m)));
+        }
         for (MachineRecipe r : lootRecipes()) {
             e.add(BookEl.machine(r));
         }
         e.add(BookEl.link("world.lineman", mobName(EntityLinemanSC.NAME)));
         e.add(BookEl.link("world.marauder", mobName(EntityMarauderSC.NAME)));
+        e.add(BookEl.link("world.renegades", Lang.tr("sc.manual.world.renegades.title")));
+        e.add(BookEl.link("world.shells", Lang.tr("sc.manual.world.shells.title")));
+        e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
         e.add(BookEl.link("world.trade", Lang.tr("sc.manual.world.trade.title")));
         if (MobItemsSC.trophy != null) {
             e.about(new ItemStack(MobItemsSC.trophy, 1, OreDictionary.WILDCARD_VALUE));
@@ -461,6 +531,9 @@ public final class BookWorldSC {
         if (SettlementBlocksSC.showcase != null) {
             e.about(new ItemStack(SettlementBlocksSC.showcase, 1, OreDictionary.WILDCARD_VALUE));
         }
+        if (SettlementBlocksSC.showcase2 != null) {                    // Ф3: the Power Engineer's and the Salvager's machines
+            e.about(new ItemStack(SettlementBlocksSC.showcase2, 1, OreDictionary.WILDCARD_VALUE));
+        }
         if (SettlementBlocksSC.decor != null) {
             e.about(new ItemStack(SettlementBlocksSC.decor, 1, OreDictionary.WILDCARD_VALUE));
         }
@@ -492,7 +565,7 @@ public final class BookWorldSC {
         e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n(hp), n(hp / 2F))));
         e.add(BookEl.item(core(), Lang.tr("sc.manual.world.tuners.safe"), Lang.tr("sc.manual.world.tuners.safe.desc", SettlementSC.BELT)));
 
-        // the professions of Ф2 (ПЖ-3): NpcKindSC, the deals' count from TradeTableSC
+        // the professions of Ф2 (ПЖ-3) and Ф3 (ПЖ-8: the Power Engineer, the Armourer, the Salvager): NpcKindSC, the deals' count from TradeTableSC
         e.add(BookEl.head(Lang.tr("sc.manual.world.tuners.kindshead")));
         for (NpcKindSC k : NpcKindSC.values()) {
             if (k.guard) {
@@ -502,7 +575,7 @@ public final class BookWorldSC {
             String what = Lang.tr("sc.manual.world.tuners.kind." + k.key);
             e.add(BookEl.item(kindIcon(k), Lang.tr(k.langKey()), deals > 0 ? what + " " + Lang.tr("sc.manual.world.tuners.deals", deals) : what));
         }
-        e.add(BookEl.dim(Lang.tr("sc.manual.world.tuners.later")));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.tuners.f3")));
 
         // the day (ПЖ-4), the world's clock: tick 0 is 6:00
         int work = (int) stat(TUNER, "WORK_UNTIL", 11500F), plaza = (int) stat(TUNER, "PLAZA_UNTIL", 13500F);
@@ -559,6 +632,11 @@ public final class BookWorldSC {
             e.add(BookEl.dim(Lang.tr("sc.manual.world.trade.none")));
         }
 
+        // Ф3 (ПО-13): the services - the Power Engineer's charge, the Armourer's restoring; the thing worked on is the player's own
+        e.add(BookEl.head(Lang.tr("sc.manual.world.trade.serviceshead"), kindIcon(NpcKindSC.POWER_ENGINEER)));
+        e.addAll(BookContent.paras("sc.manual.world.trade.services"));
+        e.add(BookEl.link("world.restore", Lang.tr("sc.manual.world.restore.title")));
+
         // the level's multiplier on the player's side (ПО-6): ReputationSC
         e.add(BookEl.head(Lang.tr("sc.manual.world.trade.priceshead")));
         BookEl p = BookEl.table(Lang.tr("sc.manual.world.t.level"), Lang.tr("sc.manual.world.t.mul"), Lang.tr("sc.manual.world.t.example", PRICE_EXAMPLE),
@@ -610,9 +688,15 @@ public final class BookWorldSC {
 
     /** «16 × Кремниевая пластина + 6 КЧ». */
     private static String sides(TradeOfferSC.Ingredient[] in) {
+        return sides(in, 0, false);
+    }
+
+    /** The sides from `from` on; `noChips` - the Credit Chips left out (a station's price: the Armourer's components only). */
+    private static String sides(TradeOfferSC.Ingredient[] in, int from, boolean noChips) {
         StringBuilder sb = new StringBuilder();
-        for (TradeOfferSC.Ingredient i : in) {
-            if (i != null) {
+        for (int k = Math.max(0, from); in != null && k < in.length; k++) {
+            TradeOfferSC.Ingredient i = in[k];
+            if (i != null && !(noChips && i.isChips())) {
                 sb.append(sb.length() == 0 ? "" : " + ").append(side(i));
             }
         }
@@ -622,6 +706,10 @@ public final class BookWorldSC {
     private static String side(TradeOfferSC.Ingredient i) {
         if (i.isChips()) {
             return Lang.tr("sc.manual.world.cell.chips", i.count);
+        }
+        String any = matcherText(i);
+        if (any != null) {
+            return any;                                 // Ф3: a service's «any matching» side - the player's own thing, never one stack
         }
         ItemStack s = i.display();
         return Lang.tr("sc.manual.world.cell.count", i.count, s != null ? s.getDisplayName() : i.ore != null ? i.ore : "?");
@@ -635,13 +723,79 @@ public final class BookWorldSC {
             return SettlementItemsSC.settlementMap != null ? new ItemStack(SettlementItemsSC.settlementMap).getDisplayName()
                     : Lang.tr("item.siliconage.settlementMap.name");
         }
+        if (o.outKind == OUT_CHARGE) {
+            return Lang.tr("sc.manual.world.cell.charged");
+        }
+        if (o.outKind == OUT_RESTORE) {
+            return Lang.tr("sc.manual.world.cell.restored");
+        }
         return o.out == null ? "?" : side(o.out);
     }
 
-    /** «8 в сутки», «1 в неделю, глоб.» (ПО-4, ПО-5). */
+    /** «8 в сутки», «1 в неделю, глоб.» (ПО-4, ПО-5); Ф3: «без лимита» (a service with none of its own). */
     static String limitText(TradeOfferSC o) {
+        if (o.limit >= NO_LIMIT) {
+            return Lang.tr("sc.manual.world.cell.nolimit");
+        }
         String k = o.global ? (o.periodDays >= 7 ? "sc.manual.world.cell.week.global" : "sc.manual.world.cell.day.global") : "sc.manual.world.cell.day";
         return Lang.tr(k, o.limit);
+    }
+
+    /**
+     * Ф3 (§6.8): a service's matcher side in words - «часть брони Нано» (TradeOfferSC.Ingredient.suit), «трофейная часть брони
+     * Квант» / a trophy's name (Ingredient.metas()) -, null for any other side. Package T's members, read by name: the chapter
+     * builds on the core's TradeOfferSC too (no matchers there - null).
+     */
+    private static String matcherText(TradeOfferSC.Ingredient i) {
+        Object suit = member(i, "suit");
+        if (suit instanceof ArmorSuit) {
+            return Lang.tr("sc.manual.world.cell.piece", suitName((ArmorSuit) suit));
+        }
+        int[] metas = metasOf(i);
+        return metas.length == 0 ? null : trophyGroup(metas);
+    }
+
+    /** A trophy matcher's metas (Ingredient.metas(), package T), empty for any other side. */
+    private static int[] metasOf(TradeOfferSC.Ingredient i) {
+        Object m = member(i, "metas");
+        return m instanceof int[] ? (int[]) m : new int[0];
+    }
+
+    /** «трофейная часть брони Нано» for a suit's four pieces, else the trophies' names. */
+    static String trophyGroup(int[] metas) {
+        ArmorSuit level = null;
+        boolean pieces = metas.length == 4;
+        for (int m : metas) {
+            ArmorSuit s = m >= 0 && m < TrophyTableSC.META_BLADE ? TrophyTableSC.level(m) : null;
+            pieces &= s != null && (level == null || level == s);
+            level = s;
+        }
+        if (pieces && level != null) {
+            return Lang.tr("sc.manual.world.cell.trophypiece", suitName(level));
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int m : metas) {
+            ItemStack t = trophy(m);
+            sb.append(sb.length() == 0 ? "" : ", ").append(t != null ? t.getDisplayName() : TrophyTableSC.key(m));
+        }
+        return sb.toString();
+    }
+
+    /** A public field or a public no-argument method `name` of `o` (another package's member, by name), null if it has none. */
+    private static Object member(Object o, String name) {
+        if (o == null) {
+            return null;
+        }
+        try {
+            return o.getClass().getField(name).get(o);
+        } catch (Throwable t) {
+            // not a field (yet)
+        }
+        try {
+            return o.getClass().getMethod(name).invoke(o);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /** The chips a deal takes (0: none). */
@@ -765,6 +919,21 @@ public final class BookWorldSC {
                 Lang.tr("sc.manual.world.cell.suit4.helium", suitName(ArmorSuit.QUANTUM)),
                 span((int) stat(WARDEN, "SENIOR_RESERVE_MIN", 40F), (int) stat(WARDEN, "SENIOR_RESERVE_MAX", 70F)), n(stat(WARDEN, "SENIOR_HP", 50F)),
                 sizesWith(true));
+        // Ф3 (ПГ-11, ПГ-12): the Captain and the Commandant - package S's numbers by name, where they serve from SettlementSizeSC
+        t.row(new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[1]), Lang.tr(NpcKindSC.CAPTAIN.langKey()),
+                Lang.tr("sc.manual.world.cell.suit4.helium", suitName(ArmorSuit.EXO)),
+                span((int) stat(WARDEN, "CAPTAIN_RESERVE_MIN", 70F), (int) stat(WARDEN, "CAPTAIN_RESERVE_MAX", 110F)), n(stat(WARDEN, "CAPTAIN_HP", 80F)),
+                captainSizes());
+        StringBuilder cities = new StringBuilder();
+        for (SettlementSizeSC s : SettlementSizeSC.values()) {
+            if (s.commandant) {
+                cities.append(cities.length() == 0 ? "" : ", ").append(Lang.tr(s.langKey()));
+            }
+        }
+        t.row(new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[1]), Lang.tr(NpcKindSC.COMMANDANT.langKey()),
+                Lang.tr("sc.manual.world.cell.suit4", suitName(ArmorSuit.SINGULAR)),
+                span((int) stat(WARDEN, "COMMANDANT_RESERVE_MIN", 150F), (int) stat(WARDEN, "COMMANDANT_RESERVE_MAX", 250F)),
+                n(stat(WARDEN, "COMMANDANT_HP", 120F)), cities.toString());
         e.add(t);
         e.add(BookEl.item(blade(BladeType.NANO), Lang.tr(NpcKindSC.SENTRY.langKey()), Lang.tr("sc.manual.world.wardens.weapon.sentry",
                 blade(BladeType.NANO).getDisplayName(), MobCombatSC.BLADE[BladeType.NANO.ordinal()], weapon(WeaponType.ION_CUTTER).getDisplayName(),
@@ -772,6 +941,15 @@ public final class BookWorldSC {
         e.add(BookEl.item(blade(BladeType.QUANTUM), Lang.tr(NpcKindSC.SENIOR_WARDEN.langKey()), Lang.tr("sc.manual.world.wardens.weapon.senior",
                 blade(BladeType.QUANTUM).getDisplayName(), MobCombatSC.BLADE[BladeType.QUANTUM.ordinal()], weapon(WeaponType.PLASMA_RIFLE).getDisplayName(),
                 MobCombatSC.BEAM[WeaponType.PLASMA_RIFLE.ordinal()], sec((int) stat(WARDEN, "SENIOR_AIM_TICKS", 20F)))));
+        // Ф3: the Captain's heavy «Пробой» blow (ПГ-11), the Commandant's Singular Blade and ПЭ-1 Pulse at the hostiles (ПГ-12)
+        e.add(BookEl.item(blade(BladeType.EXO), Lang.tr(NpcKindSC.CAPTAIN.langKey()), Lang.tr("sc.manual.world.wardens.weapon.captain",
+                blade(BladeType.EXO).getDisplayName(), n(stat(WARDEN, "CAPTAIN_BLADE", 10F)), sec((int) stat(WARDEN, "HEAVY_WINDUP", 20F)),
+                n(stat(WARDEN, "HEAVY_BLOW", 5F)), sec((int) stat(WARDEN, "HEAVY_COOLDOWN", 100F)))));
+        String commandantGun = EmpMobGunSC.allowed() ? Lang.tr("sc.manual.world.wardens.emp.commandant", n(stat(WARDEN, "COMMANDANT_RANGE_OUT", 8F)))
+                : Lang.tr("sc.manual.world.wardens.emp.commandant.off");
+        e.add(BookEl.item(blade(BladeType.SINGULAR), Lang.tr(NpcKindSC.COMMANDANT.langKey()), Lang.tr("sc.manual.world.wardens.weapon.commandant",
+                blade(BladeType.SINGULAR).getDisplayName(), n(stat(WARDEN, "COMMANDANT_BLADE", 12F)), n(stat(WARDEN, "PLAZA_STAY", 7F)))
+                + " " + commandantGun));
 
         // their work (ПГ-3, ПГ-5, ПГ-10)
         e.add(BookEl.head(Lang.tr("sc.manual.world.wardens.workhead")));
@@ -794,11 +972,13 @@ public final class BookWorldSC {
         // death (ПГ-9) and ПЭ-1
         ItemStack clone = showcase(BlockShowcaseSC.CLONE_CAPSULE);
         e.add(BookEl.item(clone, clone != null ? clone.getDisplayName() : Lang.tr("tile.siliconage.showcase.cloneCapsule.name"),
-                Lang.tr("sc.manual.world.wardens.clone", minutes(NpcKindSC.GUARD_RESPAWN_TICKS), SettlementSC.RESPAWN_CLEAR)));
+                Lang.tr("sc.manual.world.wardens.clone", minutes(NpcKindSC.GUARD_RESPAWN_TICKS), SettlementSC.RESPAWN_CLEAR)
+                        + " " + Lang.tr("sc.manual.world.wardens.clone.chiefs", minutes(NpcKindSC.CAPTAIN.respawnTicks()))));
         e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.wardens.emp"), Lang.tr("sc.manual.world.wardens.emp.desc")));
         e.add(BookEl.item(egg, egg != null ? egg.getDisplayName() : mobName(EntityWardenSC.NAME), Lang.tr("sc.manual.world.wardens.egg")));
         e.add(BookEl.link("world.trust", Lang.tr("sc.manual.world.trust.title")));
         e.add(BookEl.link("world.armoured", Lang.tr("sc.manual.world.armoured.title")));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
         e.about(egg);
         return e;
     }
@@ -809,6 +989,19 @@ public final class BookWorldSC {
         for (SettlementSizeSC s : SettlementSizeSC.values()) {
             if (seniors ? s.seniors > 0 : s.sentries > 0) {
                 sb.append(sb.length() == 0 ? "" : ", ").append(Lang.tr(s.langKey()));
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Ф3: where a Captain serves - «Город, Посёлок (30%)» (SettlementSizeSC.captainPct). */
+    private static String captainSizes() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = SettlementSizeSC.values().length - 1; i >= 0; i--) {
+            SettlementSizeSC s = SettlementSizeSC.values()[i];
+            if (s.captainPct > 0) {
+                sb.append(sb.length() == 0 ? "" : ", ").append(Lang.tr(s.langKey()))
+                        .append(s.captainPct >= 100 ? "" : " (" + s.captainPct + "%)");
             }
         }
         return sb.toString();
@@ -857,6 +1050,425 @@ public final class BookWorldSC {
         return e;
     }
 
+    // ================================================================== Ф3 «Броня и ЭМИ» (docs/plan-substrate-tech-f3.md §10.2)
+
+    // ------------------------------------------------------------------ «ПЭ-1 в руках врагов и «Пробой»»
+
+    private static BookEntry mobEmp(BookChapter c) {
+        BookEntry e = new BookEntry("world.mobemp", c, new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.mobemp.title"));
+        int carrier = Math.round(1F / Math.max(1e-6F, stat(JAMMER, "CARRIER_CHANCE", 0.02F)));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.mobemp.title"))).addAll(BookContent.paras("sc.manual.world.mobemp",
+                new Object[]{mobName(EntityJammerSC.NAME), carrier, Lang.tr(NpcKindSC.COMMANDANT.langKey())}, new Object[]{ConfigSC.empImmunitySeconds}));
+        if (!EmpMobGunSC.allowed()) {
+            e.add(BookEl.warn(Lang.tr("sc.manual.world.mobemp.off")));
+        }
+
+        // the warnings (ПБ-17): EmpMobGunSC
+        e.add(BookEl.head(Lang.tr("sc.manual.world.mobemp.warnhead")));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.emp.mode.point"), Lang.tr("sc.manual.world.mobemp.point",
+                sec(EmpMobGunSC.POINT_WARN_TICKS), sec(EmpMobGunSC.POINT_EVERY_MIN), sec(EmpMobGunSC.POINT_EVERY_MAX))));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.emp.mode.pulse"), Lang.tr("sc.manual.world.mobemp.pulse",
+                sec(EmpMobGunSC.PULSE_CHARGE_TICKS), EmpMobGunSC.PULSE_HUM_RANGE, EmpMobGunSC.PULSE_GROUP_MIN, n((float) EmpMobGunSC.PULSE_GROUP_RADIUS))));
+        e.add(BookEl.item(new ItemStack(Blocks.stonebrick), Lang.tr("sc.manual.world.mobemp.cover"), Lang.tr("sc.manual.world.mobemp.cover.desc",
+                EmpMobGunSC.RANGE)));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.mobemp.rules"), Lang.tr("sc.manual.world.mobemp.rules.desc")));
+
+        // the personal EMP screen (ПБ-19)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.mobemp.screenhead"), egg(MobEntitiesSC.ID_JAMMER)));
+        e.addAll(BookContent.paras("sc.manual.world.mobemp.screen", new Object[]{mobName(EntityJammerSC.NAME), Lang.tr(EliteModSC.SHIELDED.langKey()),
+                sec(EliteModSC.SCREEN_RECOVER_TICKS)}));
+
+        // the reactive machines (ПБ-20): package M's / X's numbers by name
+        e.add(BookEl.head(Lang.tr("sc.manual.world.mobemp.reactivehead")));
+        if (!SubstrateConfigSC.empMobTargets) {
+            e.add(BookEl.dim(Lang.tr("sc.manual.world.mobemp.reactive.off", sec(EmpMathSC.NO_ARMOR_SLOW_TICKS))));
+        }
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_REPAIR_DRONE), mobName(EntityRepairDroneSC.NAME) + ", " + mobName(EntitySentryDroneSC.NAME),
+                Lang.tr("sc.manual.world.mobemp.drones")));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_NANITE), mobName(EntityNaniteSC.NAME), Lang.tr("sc.manual.world.mobemp.swarm",
+                n(stat(NANITE, "PULSE_BURN_RADIUS", 5F)))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_MIMIC), mobName(EntityMimicSC.NAME), Lang.tr("sc.manual.world.mobemp.mimic",
+                sec((int) stat(MIMIC, "STUN_TICKS", 60F)))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_HOLLOW_SHELL), mobName(EntityHollowShellSC.NAME), Lang.tr("sc.manual.world.mobemp.reboot",
+                sec((int) stat(SHELL, "REBOOT_TICKS", 60F)))));
+
+        // «Пробой» (ПБ-15, ПБ-16): BreakdownDamageSC
+        e.add(BookEl.head(Lang.tr("sc.manual.world.mobemp.breakdownhead"), egg(MobEntitiesSC.ID_EXECUTIONER)));
+        e.addAll(BookContent.paras("sc.manual.world.mobemp.breakdown", null, new Object[]{mobName(EntityExecutionerSC.NAME),
+                n(stat(EXECUTIONER, "CLEAVE_DAMAGE", 6F)), Lang.tr(NpcKindSC.CAPTAIN.langKey()), n(stat(WARDEN, "HEAVY_BLOW", 5F))}));
+        e.add(BookEl.link("emp", Lang.tr("sc.manual.emp.title")));
+        e.add(BookEl.link("world.renegades", Lang.tr("sc.manual.world.renegades.title")));
+        e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
+        e.add(BookEl.link("world.wardens", Lang.tr("sc.manual.world.wardens.title")));
+        e.add(BookEl.link("world.armoured", Lang.tr("sc.manual.world.armoured.title")));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Штурмовик и Глушитель»
+
+    private static BookEntry renegades(BookChapter c) {
+        ItemStack trooperEgg = egg(MobEntitiesSC.ID_TROOPER), jammerEgg = egg(MobEntitiesSC.ID_JAMMER);
+        BookEntry e = new BookEntry("world.renegades", c, trooperEgg != null ? trooperEgg : quantumPiece(1), Lang.tr("sc.manual.world.renegades.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.renegades.title"))).addAll(BookContent.paras("sc.manual.world.renegades"));
+
+        // the Trooper (§4.2)
+        String trooper = mobName(EntityTrooperSC.NAME);
+        e.add(BookEl.head(trooper, trooperEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityTrooperSC.HP), n((float) EntityTrooperSC.HP / 2F))));
+        e.add(BookEl.item(quantumPiece(1), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.trooper.armour", suitName(ArmorSuit.QUANTUM),
+                n(stat(TROOPER, "RESERVE_DAMAGE_MIN", 40F)), n(stat(TROOPER, "RESERVE_DAMAGE_MAX", 70F)), pct(stat(TROOPER, "FAULTY_CHANCE", 0.5F)), ironPoints())));
+        e.add(BookEl.item(weapon(WeaponType.PLASMA_RIFLE), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.trooper.weapon",
+                blade(BladeType.QUANTUM).getDisplayName(), n(stat(TROOPER, "BLADE_DAMAGE", 8F)), pct(stat(TROOPER, "BLADE_CHANCE", 0.5F)),
+                weapon(WeaponType.PLASMA_RIFLE).getDisplayName(), n(stat(TROOPER, "RIFLE_DAMAGE", 7F)), sec((int) stat(TROOPER, "AIM_TICKS", 30F)),
+                sec((int) stat(TROOPER, "SHOT_EVERY_MIN", 40F)), sec((int) stat(TROOPER, "SHOT_EVERY_MAX", 60F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.trooper.dash"), Lang.tr("sc.manual.world.trooper.dash.desc", n(stat(TROOPER, "DASH_FROM", 4F)),
+                n(stat(TROOPER, "DASH_TO", 8F)), sec((int) stat(TROOPER, "DASH_CUE_TICKS", 10F)), n(stat(TROOPER, "DASH_LENGTH", 6F)),
+                sec((int) stat(TROOPER, "RECOVER_TICKS", 30F)), n(stat(TROOPER, "BACKSTAB_MUL", 1.5F)), sec((int) stat(TROOPER, "DASH_COOLDOWN", 100F)))));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.trooper.where",
+                weight("CANYON_WEIGHTS", MobEntitiesSC.ID_TROOPER, 30), n(stat(TROOPER, "GROUP_MIN", 1F)), n(stat(TROOPER, "GROUP_MAX", 2F)))));
+        e.add(BookEl.item(loot(LOOT_QUANTUM_SCRAP), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.renegade.loot", lootName(LOOT_QUANTUM_SCRAP),
+                pct(stat(TROOPER, "SCRAP_CHANCE", 0.5F)))));
+        e.add(BookEl.item(trophy(TrophyTableSC.weaponMeta(WeaponType.PLASMA_RIFLE)), Lang.tr("sc.manual.world.t.trophies"),
+                Lang.tr("sc.manual.world.trooper.trophies", pct(trophyChance(TrophyTableSC.PIECE[1])), pct(trophyChance(TrophyTableSC.BLADE[1])),
+                        pct(trophyChance(TrophyTableSC.WEAPON[WeaponType.PLASMA_RIFLE.ordinal()])))));
+
+        // the Jammer (§4.3)
+        String jammer = mobName(EntityJammerSC.NAME);
+        int tier = (int) stat(JAMMER, "DEFENSE_TIER", 3F);
+        e.add(BookEl.head(jammer, jammerEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityJammerSC.HP), n((float) EntityJammerSC.HP / 2F))));
+        e.add(BookEl.item(quantumPiece(1), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.jammer.armour", suitName(ArmorSuit.QUANTUM),
+                defensePct(EmpMathSC.DEFENSE_DURATION_PCT, tier), defensePct(EmpMathSC.DEFENSE_SIPHON_PCT, tier),
+                n(stat(JAMMER, "RESERVE_DAMAGE_MIN", 40F)), n(stat(JAMMER, "RESERVE_DAMAGE_MAX", 60F)), sec(EliteModSC.SCREEN_RECOVER_TICKS))));
+        e.add(BookEl.item(weapon(WeaponType.PULSE_EMITTER), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.jammer.weapon",
+                weapon(WeaponType.PULSE_EMITTER).getDisplayName(), sec((int) stat(JAMMER, "AIM_TICKS", 20F)), n(stat(JAMMER, "BURST", 3F)),
+                n(stat(JAMMER, "BURST_DAMAGE", 3F)), sec((int) stat(JAMMER, "BURST_GAP_TICKS", 5F)), sec((int) stat(JAMMER, "RELOAD_TICKS", 60F)))));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.jammer.carrier"), EmpMobGunSC.allowed()
+                ? Lang.tr("sc.manual.world.jammer.carrier.on", Math.round(1F / Math.max(1e-6F, stat(JAMMER, "CARRIER_CHANCE", 0.02F))),
+                weapon(WeaponType.ION_CUTTER).getDisplayName())
+                : Lang.tr("sc.manual.world.jammer.carrier.off", weapon(WeaponType.ION_CUTTER).getDisplayName())));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.jammer.keep"), Lang.tr("sc.manual.world.jammer.keep.desc", n(stat(JAMMER, "KEEP_MIN", 8F)),
+                n(stat(JAMMER, "KEEP_MAX", 14F)), pct(stat(JAMMER, "ESCORT_CHANCE", 0.5F)), trooper)));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.jammer.where",
+                weight("CANYON_WEIGHTS", MobEntitiesSC.ID_JAMMER, 15))));
+        e.add(BookEl.item(loot(LOOT_QUANTUM_SCRAP), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.jammer.loot", lootName(LOOT_QUANTUM_SCRAP),
+                pct(stat(JAMMER, "SCRAP_CHANCE", 0.4F)), pct(stat(JAMMER, "MODULE_CHANCE", 0.05F)), pct(stat(JAMMER, "CARRIER_MODULE_CHANCE", 0.25F)))));
+        e.add(BookEl.item(trophy(TrophyTableSC.weaponMeta(WeaponType.PULSE_EMITTER)), Lang.tr("sc.manual.world.t.trophies"),
+                Lang.tr("sc.manual.world.jammer.trophies", pct(trophyChance(TrophyTableSC.PIECE[1])),
+                        pct(trophyChance(TrophyTableSC.WEAPON[WeaponType.PULSE_EMITTER.ordinal()])), pct(trophyChance(stat(TROPHIES, "PE1", 0.02F))))));
+        e.addAll(BookContent.paras("sc.manual.world.renegades.tips", new Object[]{sec(empTicks(ArmorSuit.QUANTUM, EmpMode.POINT))},
+                new Object[]{jammer}));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.add(BookEl.link("world.elites", Lang.tr("sc.manual.world.elites.title")));
+        e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.about(trooperEgg, jammerEgg, loot(LOOT_QUANTUM_SCRAP));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Пустые оболочки и дроны»
+
+    private static BookEntry shells(BookChapter c) {
+        ItemStack shellEgg = egg(MobEntitiesSC.ID_HOLLOW_SHELL), droneEgg = egg(MobEntitiesSC.ID_REPAIR_DRONE);
+        BookEntry e = new BookEntry("world.shells", c, shellEgg != null ? shellEgg : exoPiece(1), Lang.tr("sc.manual.world.shells.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.shells.title"))).addAll(BookContent.paras("sc.manual.world.shells", null,
+                new Object[]{RuinLayoutSC.NODE_HALF, n(stat(SHELL, "LEASH", 48F))}));
+
+        String shell = mobName(EntityHollowShellSC.NAME);
+        e.add(BookEl.head(shell, shellEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityHollowShellSC.HP),
+                n((float) EntityHollowShellSC.HP / 2F))));
+        e.add(BookEl.item(exoPiece(1), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.shell.armour", suitName(ArmorSuit.EXO),
+                n(stat(SHELL, "RESERVE_DAMAGE_MIN", 70F)), n(stat(SHELL, "RESERVE_DAMAGE_MAX", 110F)), pct(stat(SHELL, "RUSTY_CHANCE", 0.3F)), ironPoints())));
+        e.add(BookEl.item(blade(BladeType.EXO), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.shell.weapon",
+                blade(BladeType.EXO).getDisplayName(), pct(stat(SHELL, "EXO_BLADE_CHANCE", 0.15F)), n(stat(SHELL, "EXO_BLADE_DAMAGE", 10F)),
+                blade(BladeType.QUANTUM).getDisplayName(), pct(stat(SHELL, "QUANTUM_BLADE_CHANCE", 0.25F)), n(stat(SHELL, "QUANTUM_BLADE_DAMAGE", 8F)),
+                n(stat(SHELL, "FIST_DAMAGE", 6F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.shell.reboot"), Lang.tr("sc.manual.world.shell.reboot.desc", sec((int) stat(SHELL, "REBOOT_TICKS", 60F)))));
+        e.add(BookEl.item(ruin(BlockRuinSC.MACHINE_HUSK), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.shell.where",
+                weight("NODE_WEIGHTS", MobEntitiesSC.ID_HOLLOW_SHELL, 70), n(stat(SHELL, "GROUP_MIN", 2F)), n(stat(SHELL, "GROUP_MAX", 3F)))));
+        e.add(BookEl.item(loot(LOOT_FIRMWARE), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.shell.loot", lootName(LOOT_FIRMWARE),
+                n(stat(SHELL, "FIRMWARE_MIN", 1F)), n(stat(SHELL, "FIRMWARE_MAX", 3F)), pct(stat(SHELL, "HELIUM_CELL_CHANCE", 0.1F)))));
+        e.add(BookEl.item(trophy(TrophyTableSC.bladeMeta(BladeType.EXO)), Lang.tr("sc.manual.world.t.trophies"), Lang.tr("sc.manual.world.shell.trophies",
+                pct(trophyChance(TrophyTableSC.PIECE[2])), pct(trophyChance(TrophyTableSC.BLADE[2])), pct(trophyChance(TrophyTableSC.BLADE[1])))));
+
+        // the Repair Drone (§4.4)
+        String drone = mobName(EntityRepairDroneSC.NAME);
+        e.add(BookEl.head(drone, droneEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityRepairDroneSC.HP),
+                n((float) EntityRepairDroneSC.HP / 2F))));
+        e.add(BookEl.item(droneEgg, Lang.tr("sc.manual.world.drone.repair"), Lang.tr("sc.manual.world.drone.repair.desc",
+                pct(stat(RULES, "DRONE_PATROL_CHANCE", 0.3F)), n(stat(REPAIR_DRONE, "REPAIR_UNITS", 3F)), sec((int) stat(REPAIR_DRONE, "REPAIR_EVERY", 20F)),
+                sec((int) stat(REPAIR_DRONE, "ORPHAN_TICKS", 600F)))));
+        e.addAll(BookContent.paras("sc.manual.world.shells.tips", new Object[]{siphonSeconds(ArmorSuit.EXO)},
+                new Object[]{sec(empTicks(ArmorSuit.EXO, EmpMode.POINT)), sec(EmpMathSC.durationTicks(ArmorSuit.EXO, EmpMode.POINT, false, 0, true,
+                        ConfigSC.empDurationMultiplier))}));
+        e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.about(shellEgg, droneEgg);
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Экзо-палач»
+
+    private static BookEntry executioner(BookChapter c) {
+        String name = mobName(EntityExecutionerSC.NAME);
+        ItemStack egg = egg(MobEntitiesSC.ID_EXECUTIONER);
+        BookEntry e = new BookEntry("world.executioner", c, egg != null ? egg : exoPiece(1), name);
+        e.add(BookEl.title(name)).addAll(BookContent.paras("sc.manual.world.executioner"));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityExecutionerSC.HP),
+                n((float) EntityExecutionerSC.HP / 2F))));
+        e.add(BookEl.item(exoPiece(1), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.executioner.armour", suitName(ArmorSuit.EXO),
+                n(stat(EXECUTIONER, "RESERVE_DAMAGE_MIN", 100F)), n(stat(EXECUTIONER, "RESERVE_DAMAGE_MAX", 140F)))));
+        e.add(BookEl.item(blade(BladeType.EXO), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.executioner.weapon",
+                blade(BladeType.EXO).getDisplayName(), n(stat(EXECUTIONER, "BLADE_DAMAGE", 11F)))));
+        int windup = (int) stat(EXECUTIONER, "WINDUP_TICKS", 20F);
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.executioner.cleave"), Lang.tr("sc.manual.world.executioner.cleave.desc",
+                n(stat(EXECUTIONER, "CLEAVE_REACH", 3F)), sec(windup), n(stat(EXECUTIONER, "CLEAVE_HALF_ANGLE", 60F)), n(stat(EXECUTIONER, "CLEAVE_DAMAGE", 6F)),
+                sec((int) stat(EXECUTIONER, "CLEAVE_COOLDOWN", 100F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.executioner.elite"), Lang.tr("sc.manual.world.executioner.elite.desc")));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.executioner.where",
+                weight("CANYON_WEIGHTS", MobEntitiesSC.ID_EXECUTIONER, 3), n(stat(RULES, "EXECUTIONER_MIN_DIST", 1000F)))));
+        e.add(BookEl.item(loot(LOOT_SHIELD_CORE), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.executioner.loot", lootName(LOOT_EXO_SCRAP),
+                n(stat(EXECUTIONER, "SCRAP_MIN", 1F)), n(stat(EXECUTIONER, "SCRAP_MAX", 2F)), lootName(LOOT_SHIELD_CORE),
+                pct(stat(EXECUTIONER, "CORE_CHANCE", 0.15F)), pct(stat(EXECUTIONER, "HELIUM_CELL_CHANCE", 0.5F)))));
+        e.add(BookEl.item(trophy(TrophyTableSC.bladeMeta(BladeType.EXO)), Lang.tr("sc.manual.world.t.trophies"), Lang.tr("sc.manual.world.executioner.trophies",
+                pct(trophyChance(TrophyTableSC.PIECE[2])), pct(trophyChance(TrophyTableSC.BLADE[2])))));
+        int chestPoint = EmpMathSC.durationTicks(ArmorSuit.EXO, EmpMode.POINT, false, 0, true, ConfigSC.empDurationMultiplier);
+        e.addAll(BookContent.paras("sc.manual.world.executioner.tips", new Object[]{sec(windup)}, new Object[]{sec(chestPoint)}));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.add(BookEl.link("world.elites", Lang.tr("sc.manual.world.elites.title")));
+        e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.about(egg, loot(LOOT_EXO_SCRAP), loot(LOOT_SHIELD_CORE));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Рой, дрон-охранник, мимик»
+
+    private static BookEntry noise(BookChapter c) {
+        ItemStack swarmEgg = egg(MobEntitiesSC.ID_NANITE), droneEgg = egg(MobEntitiesSC.ID_SENTRY_DRONE), mimicEgg = egg(MobEntitiesSC.ID_MIMIC);
+        BookEntry e = new BookEntry("world.noise", c, swarmEgg != null ? swarmEgg : icon(), Lang.tr("sc.manual.world.noise.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.noise.title"))).addAll(BookContent.paras("sc.manual.world.noise"));
+
+        // the nanite swarm (§4.6)
+        e.add(BookEl.head(mobName(EntityNaniteSC.NAME), swarmEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.swarm.hp", n((float) EntityNaniteSC.HP),
+                n(stat(NANITE, "SWARM_MIN", 6F)), n(stat(NANITE, "SWARM_MAX", 10F)), n(stat(NANITE, "SWARM_CAP", 12F)))));
+        e.add(BookEl.item(quantumPiece(1), Lang.tr("sc.manual.world.swarm.drain"), Lang.tr("sc.manual.world.swarm.drain.desc",
+                pct(stat(NANITE, "ARMOUR_DRAIN", 0.02F)), n(stat(NANITE, "ARMOUR_REACH", 2F)), n(stat(NANITE, "MACHINE_REACH", 4F)),
+                pct(stat(NANITE, "MACHINE_DRAIN", 0.02F)), BookContent.num((long) stat(NANITE, "MACHINE_DRAIN_CAP", 2000F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.swarm.split"), Lang.tr("sc.manual.world.swarm.split.desc", sec((int) stat(NANITE, "SPLIT_TICKS", 200F)),
+                pct(stat(NANITE, "ARROW_MUL", 0.2F)))));
+        e.add(BookEl.item(loot(LOOT_NANITE_DUST), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.swarm.loot", lootName(LOOT_NANITE_DUST),
+                pct(stat(NANITE, "DUST_CHANCE", 0.5F)), pct(stat(NANITE, "TRANSISTOR_CHANCE", 0.04F)), pct(stat(NANITE, "MEMORY_CHIP_CHANCE", 0.01F)))));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.swarm.where",
+                weight("CANYON_WEIGHTS", MobEntitiesSC.ID_NANITE, 5), weight("NODE_WEIGHTS", MobEntitiesSC.ID_NANITE, 10))));
+
+        // the feral sentry drone (§4.7)
+        e.add(BookEl.head(mobName(EntitySentryDroneSC.NAME), droneEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.sentry.hp", n((float) EntitySentryDroneSC.HP),
+                n(stat(SENTRY_DRONE, "NATURAL_ARMOUR", 6F)))));
+        e.add(BookEl.item(weapon(WeaponType.ION_CUTTER), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.sentry.weapon",
+                weapon(WeaponType.ION_CUTTER).getDisplayName(), n(stat(SENTRY_DRONE, "BEAM_DAMAGE", 4F)), sec((int) stat(SENTRY_DRONE, "RELOAD_TICKS", 40F)),
+                sec((int) stat(SENTRY_DRONE, "SEARCHLIGHT_TICKS", 20F)), n(stat(SENTRY_DRONE, "RANGE", 16F)), n(stat(SENTRY_DRONE, "CALL_RADIUS", 24F)))));
+        e.add(BookEl.item(ruin(BlockRuinSC.RUIN_METAL), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.sentry.where",
+                weight("NODE_WEIGHTS", MobEntitiesSC.ID_SENTRY_DRONE, 20), n(stat(SENTRY_DRONE, "HOME_MARGIN", 8F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.sentry.loot", pct(stat(SENTRY_DRONE, "SENSOR_CHANCE", 0.05F)),
+                pct(stat(SENTRY_DRONE, "LENS_CHANCE", 0.01F)), pct(stat(SENTRY_DRONE, "CONTROLLER_CHANCE", 0.008F)))));
+
+        // the mimic machine (§4.8)
+        e.add(BookEl.head(mobName(EntityMimicSC.NAME), mimicEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityMimicSC.HP), n((float) EntityMimicSC.HP / 2F))));
+        e.add(BookEl.item(com.sc.block.BlockMachineSC.stackOf(MachineType.CRUSHER, 1), Lang.tr("sc.manual.world.mimic.sleep"),
+                Lang.tr("sc.manual.world.mimic.sleep.desc", n(stat(MIMIC, "WAKE_RADIUS", 3F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.mimic.weapon", n(stat(MIMIC, "CHEW_DAMAGE", 6F)),
+                sec((int) stat(MIMIC, "CHEW_EVERY", 20F)))));
+        e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.mimic.loot",
+                n(stat(MIMIC, "LOOT_MIN", 1F)), n(stat(MIMIC, "LOOT_MAX", 2F)), pct(stat(MIMIC, "COMPONENT_CHANCE", 0.25F)))));
+        e.addAll(BookContent.paras("sc.manual.world.noise.tips"));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
+        e.about(swarmEgg, droneEgg, mimicEgg, loot(LOOT_NANITE_DUST));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Элита»
+
+    private static BookEntry elites(BookChapter c) {
+        BookEntry e = new BookEntry("world.elites", c, quantumPiece(0), Lang.tr("sc.manual.world.elites.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.elites.title"))).addAll(BookContent.paras("sc.manual.world.elites",
+                new Object[]{EliteModSC.CHANCE_PCT, EliteModSC.PER_STEP_PCT, EliteModSC.STEP_BLOCKS, EliteModSC.MAX_EXTRA_PCT, mobName(EntityExecutionerSC.NAME)},
+                new Object[]{Lang.tr("sc.elite.name", Lang.tr(EliteModSC.COMMANDER.langKey()), mobName(EntityTrooperSC.NAME)), n(TrophyTableSC.ELITE_MUL),
+                        n(TrophyTableSC.EVENT_CAP)},
+                new Object[]{n(stat(RULES, "ELITE_MAX", 1F)), n(stat(RULES, "ELITE_RADIUS", 128F))}));
+
+        // the modifiers (ПС-21): EliteModSC's table, package A's rhythm by name
+        BookEl t = BookEl.table(Lang.tr("sc.manual.world.t.modifier"), Lang.tr("sc.manual.world.t.does"));
+        for (EliteModSC m : EliteModSC.values()) {
+            t.row(null, Lang.tr(m.langKey()), eliteLine(m));
+        }
+        e.add(t);
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.elites.pick", mobName(EntityJammerSC.NAME), Lang.tr(EliteModSC.SHIELDED.langKey()),
+                Lang.tr(EliteModSC.VETERAN.langKey()))));
+        e.addAll(BookContent.paras("sc.manual.world.elites.tips", new Object[]{Lang.tr(EliteModSC.AVENGER.langKey()), sec(EliteModSC.AVENGER_FUSE_TICKS)},
+                new Object[]{Lang.tr(EliteModSC.COMMANDER.langKey())}));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
+        return e;
+    }
+
+    /** sc.manual.world.elite.<key> with its numbers (EliteModSC, EmpMathSC; the Commander's order rhythm - package A's numbers of EliteModSC by name). */
+    static String eliteLine(EliteModSC m) {
+        String k = "sc.manual.world.elite." + m.key;
+        switch (m) {
+            case COMMANDER:
+                return Lang.tr(k, sec((int) stat(ELITE_MOD, "ORDER_EVERY_TICKS", 100F)), sec(EliteModSC.ORDER_TICKS), EliteModSC.COMMANDER_RADIUS,
+                        pct(EliteModSC.COMMANDER_BONUS), sec((int) stat(ELITE_MOD, "ORDER_BUFF_TICKS", 200F)), pct(EliteModSC.COMMANDER_BONUS));
+            case CHARGED:
+                return Lang.tr(k, pct(EliteModSC.CHARGED_BONUS));
+            case SHIELDED:
+                return Lang.tr(k, sec(EliteModSC.SCREEN_RECOVER_TICKS));
+            case VETERAN:
+                return Lang.tr(k, pct(1F - EmpMathSC.HELIUM_DURATION_MUL));
+            case REPAIRER:
+                return Lang.tr(k, n(EliteModSC.REPAIR_UNITS), EliteModSC.REPAIR_RADIUS);
+            case AVENGER:
+                return Lang.tr(k, sec(EliteModSC.AVENGER_FUSE_TICKS), n(EliteModSC.AVENGER_RADIUS));
+            default:
+                return Lang.tr(k);
+        }
+    }
+
+    // ------------------------------------------------------------------ «Мёртвые Узлы и литографии»
+
+    private static BookEntry ruins(BookChapter c) {
+        ItemStack metal = ruin(BlockRuinSC.RUIN_METAL);
+        BookEntry e = new BookEntry("world.ruins", c, metal != null ? metal : icon(), Lang.tr("sc.manual.world.ruins.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.ruins.title"))).addAll(BookContent.paras("sc.manual.world.ruins",
+                new Object[]{SubstrateTerrainSC.GRID, RuinLayoutSC.NODE_HALF},
+                new Object[]{RuinLayoutSC.LITHO_CHANCE_PCT, RuinLayoutSC.HALL, RuinLayoutSC.HALL, RuinLayoutSC.HALL_H,
+                        n(stat(RUIN_LAYOUT, "FLOOR_MIN", 30F)), n(stat(RUIN_LAYOUT, "FLOOR_MAX", 40F)), RuinLayoutSC.LITHO_JITTER}));
+        if (!com.sc.ruin.RuinSC.generates()) {
+            e.add(BookEl.warn(Lang.tr("sc.manual.world.ruins.off")));
+        }
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.ruins.old")));
+
+        // the Dead Node (ПУ-1, ПУ-2, §8.5, §8.6)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.ruins.nodehead"), ruin(BlockRuinSC.MACHINE_HUSK)));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_HOLLOW_SHELL), Lang.tr("sc.manual.world.ruins.patrols"), Lang.tr("sc.manual.world.ruins.patrols.desc",
+                mobName(EntityHollowShellSC.NAME), weight("NODE_WEIGHTS", MobEntitiesSC.ID_HOLLOW_SHELL, 70), mobName(EntitySentryDroneSC.NAME),
+                weight("NODE_WEIGHTS", MobEntitiesSC.ID_SENTRY_DRONE, 20), mobName(EntityNaniteSC.NAME), weight("NODE_WEIGHTS", MobEntitiesSC.ID_NANITE, 10),
+                mobName(EntityMarauderSC.NAME), weight("NODE_WEIGHTS", MobEntitiesSC.ID_MARAUDER, 10))));
+        e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.ruins.chests"), Lang.tr("sc.manual.world.ruins.node.loot",
+                n(stat(RUIN_LOOT, "NODE_CHESTS_MIN", 1F)), n(stat(RUIN_LOOT, "NODE_CHESTS_MAX", 3F)), pct(stat(RUIN_LOOT, "NODE_CRUMB_CHANCE", 0.03F)))));
+
+        // the lithograph (ПУ-4..ПУ-6)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.ruins.lithohead"), ruin(BlockRuinSC.BURNT_PANEL)));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_MIMIC), Lang.tr("sc.manual.world.ruins.residents"), Lang.tr("sc.manual.world.ruins.residents.desc",
+                n(stat(LITHO, "MIMICS_MIN", 2F)), n(stat(LITHO, "MIMICS_MAX", 4F)), mobName(EntityMimicSC.NAME), n(stat(LITHO, "DRONES_MIN", 2F)),
+                n(stat(LITHO, "DRONES_MAX", 3F)), mobName(EntitySentryDroneSC.NAME))));
+        e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.ruins.chests"), Lang.tr("sc.manual.world.ruins.litho.loot",
+                n(stat(RUIN_LOOT, "LITHO_CHESTS_MIN", 2F)), n(stat(RUIN_LOOT, "LITHO_CHESTS_MAX", 4F)), pct(stat(RUIN_LOOT, "LITHO_CHIP_CHANCE", 0.05F)),
+                pct(stat(RUIN_LOOT, "LITHO_MODULE_CHANCE", 0.02F)))));
+
+        // the ruin blocks (ПУ-2, §8.3)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.ruins.blockshead")));
+        for (int m = 0; m < BlockRuinSC.NAMES.length; m++) {
+            e.add(BookEl.item(ruin(m), ruinName(m), ruinLine(m)));
+        }
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.ruins.blocks.note")));
+        e.add(BookEl.link("world.shells", Lang.tr("sc.manual.world.shells.title")));
+        e.add(BookEl.link("world.noise", Lang.tr("sc.manual.world.noise.title")));
+        e.add(BookEl.link("world.terrain", Lang.tr("sc.manual.world.terrain.title")));
+        if (RuinBlocksSC.ruin != null) {
+            e.about(new ItemStack(RuinBlocksSC.ruin, 1, OreDictionary.WILDCARD_VALUE));
+        }
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Восстановление трофеев»
+
+    private static BookEntry restore(BookChapter c) {
+        ItemStack icon = trophy(TrophyTableSC.armorMeta(ArmorSuit.QUANTUM, 1));
+        BookEntry e = new BookEntry("world.restore", c, icon != null ? icon : quantumPiece(1), Lang.tr("sc.manual.world.restore.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.restore.title"))).addAll(BookContent.paras("sc.manual.world.restore", null,
+                new Object[]{Lang.tr(NpcKindSC.ARMOURER.langKey())},
+                new Object[]{sec(TrophyRestoreSC.CONFIRM_TICKS), BookContent.num(TrophyRestoreSC.STATION_EU)},
+                new Object[]{clotName(), BookContent.num(TrophyRestoreSC.SINGULAR_STATION_EU)}));
+
+        // the prices (ПТ-12): the Armourer's OUT_RESTORE deals of TradeTableSC, the station's - his components without the chips + the EU
+        BookEl t = BookEl.table(Lang.tr("sc.manual.world.t.trophy"), Lang.tr(NpcKindSC.ARMOURER.langKey()), Lang.tr("sc.manual.world.t.level"),
+                Lang.tr("sc.manual.world.t.station"));
+        int rows = 0;
+        for (TradeOfferSC o : TradeTableSC.offers(NpcKindSC.ARMOURER)) {
+            if (o.outKind != OUT_RESTORE || o.in == null || o.in.length == 0 || o.in[0] == null) {
+                continue;
+            }
+            String what = matcherText(o.in[0]);
+            t.row(o.in[0].display(), what != null ? what : Lang.tr(o.langKey()), sides(o.in, 1, false), levelName(o.minLevel), stationPrice(o));
+            rows++;
+        }
+        ItemStack singular = trophy(TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 1));
+        t.row(singular, Lang.tr("sc.manual.world.restore.singular"), "-", "-", Lang.tr("sc.manual.world.restore.singular.price", clotName(),
+                BookContent.num(TrophyRestoreSC.SINGULAR_STATION_EU)));
+        e.add(t);
+        if (rows == 0) {
+            e.add(BookEl.dim(Lang.tr("sc.manual.world.restore.none")));
+        }
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.restore.note")));
+
+        // the Salvager buys a Nano trophy instead (ПО-12) - its deal, if the table has it
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_TUNER), Lang.tr(NpcKindSC.SALVAGER.langKey()), Lang.tr("sc.manual.world.restore.salvager")));
+        e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.add(BookEl.link("world.trade", Lang.tr("sc.manual.world.trade.title")));
+        e.add(BookEl.link("world.tuners", Lang.tr("sc.manual.world.tuners.title")));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ Ф3's stacks and numbers
+
+    private static ItemStack ruin(int meta) {
+        return RuinBlocksSC.ruin == null ? null : new ItemStack(RuinBlocksSC.ruin, 1, meta);
+    }
+
+    private static String ruinName(int meta) {
+        ItemStack s = ruin(meta);
+        return s != null ? s.getDisplayName() : Lang.tr("tile.siliconage.ruin." + BlockRuinSC.nameOf(meta) + ".name");
+    }
+
+    private static ItemStack quantumPiece(int armorType) {
+        return new ItemStack(ModItems.ARMOR.get(ArmorSuit.QUANTUM)[armorType]);
+    }
+
+    private static ItemStack exoPiece(int armorType) {
+        return new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[armorType]);
+    }
+
+    /** A Defense chip's cut (EmpMathSC.DEFENSE_*_PCT) at tier 1..3, % (0 for none). */
+    private static int defensePct(int[] table, int tier) {
+        return tier < 1 || table.length == 0 ? 0 : table[Math.min(table.length, tier) - 1];
+    }
+
+    /**
+     * Ф3 (§4.9): SpawnDirectorSC's weight of pool id `id` in package M's table `field` of SpawnRulesSC (PLATEAU_WEIGHTS,
+     * CANYON_WEIGHTS - by pool id, appended -, NODE_WEIGHTS), the plan's `plan` while the table has no such entry.
+     */
+    static int weight(String field, int id, int plan) {
+        try {
+            Object v = SpawnRulesSC.class.getField(field).get(null);
+            if (v instanceof int[] && id >= 0 && id < ((int[]) v).length) {
+                return ((int[]) v)[id];
+            }
+        } catch (Throwable t) {
+            // not there (yet): the plan's number
+        }
+        synchronized (UNRESOLVED) {
+            UNRESOLVED.add("SpawnRulesSC." + field + "[" + id + "]");
+        }
+        return plan;
+    }
+
     // ------------------------------------------------------------------ Ф2's stacks and numbers
 
     private static ItemStack core() {
@@ -889,9 +1501,22 @@ public final class BookWorldSC {
                 return showcase(BlockShowcaseSC.AIR_SEPARATOR);
             case CARTOGRAPHER:
                 return showcase(BlockShowcaseSC.FOCUSER);
-            default:
+            case POWER_ENGINEER:                        // Ф3: the Power Engineer's workshop, the Salvager's warehouse (BlockShowcase2SC)
+                return showcase2(BlockShowcase2SC.ENERGY_STORAGE);
+            case SALVAGER:
+                return showcase2(BlockShowcase2SC.SCRAP_PILE);
+            case CAPTAIN:
+                return new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[1]);
+            case COMMANDANT:
+                return new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[1]);
+            default:                                    // the guards, the Armourer: the guard square's armour station
                 return showcase(BlockShowcaseSC.ARMOUR_STATION);
         }
+    }
+
+    /** Ф3: a showcase machine of the second block (BlockShowcase2SC), null before it is registered. */
+    private static ItemStack showcase2(int meta) {
+        return SettlementBlocksSC.showcase2 == null ? null : new ItemStack(SettlementBlocksSC.showcase2, 1, meta);
     }
 
     /** «3-5», or «24» when both ends agree. */
@@ -917,7 +1542,12 @@ public final class BookWorldSC {
 
     // ------------------------------------------------------------------ shared with NEI's «Как получить» (ObtainHandlerSC)
 
-    /** Who drops trophy `meta` in this version (the creative tab and NEI show only these, ПТ-7), or null: a later phase. */
+    /**
+     * Who drops trophy `meta` in this version (the creative tab and NEI show only these, ПТ-7), or null: a later phase. Ф3
+     * (ПТ-14): the Quantum pieces - the Trooper and the Jammer, the Exo pieces - the Hollow Shell and the Executioner, the
+     * Quantum Blade - the Trooper and the Shell, the Exo Blade - the Shell and the Executioner, the Pulse Emitter - the
+     * Jammer, the Plasma Rifle - the Trooper, the ПЭ-1 - a Jammer carrier only (what each holds or wears).
+     */
     public static String trophyDroppers(int meta) {
         String both = mobName(EntityLinemanSC.NAME) + ", " + mobName(EntityMarauderSC.NAME);
         if (meta >= TrophyTableSC.armorMeta(ArmorSuit.NANO, 0) && meta <= TrophyTableSC.armorMeta(ArmorSuit.NANO, 3)) {
@@ -929,11 +1559,35 @@ public final class BookWorldSC {
         if (meta == TrophyTableSC.weaponMeta(WeaponType.ION_CUTTER)) {
             return both;
         }
+        if (meta >= TrophyTableSC.armorMeta(ArmorSuit.QUANTUM, 0) && meta <= TrophyTableSC.armorMeta(ArmorSuit.QUANTUM, 3)) {
+            return mobName(EntityTrooperSC.NAME) + ", " + mobName(EntityJammerSC.NAME);
+        }
+        if (meta >= TrophyTableSC.armorMeta(ArmorSuit.EXO, 0) && meta <= TrophyTableSC.armorMeta(ArmorSuit.EXO, 3)) {
+            return mobName(EntityHollowShellSC.NAME) + ", " + mobName(EntityExecutionerSC.NAME);
+        }
+        if (meta == TrophyTableSC.bladeMeta(BladeType.QUANTUM)) {
+            return mobName(EntityTrooperSC.NAME) + ", " + mobName(EntityHollowShellSC.NAME);
+        }
+        if (meta == TrophyTableSC.bladeMeta(BladeType.EXO)) {
+            return mobName(EntityHollowShellSC.NAME) + ", " + mobName(EntityExecutionerSC.NAME);
+        }
+        if (meta == TrophyTableSC.weaponMeta(WeaponType.PULSE_EMITTER)) {
+            return mobName(EntityJammerSC.NAME);
+        }
+        if (meta == TrophyTableSC.weaponMeta(WeaponType.PLASMA_RIFLE)) {
+            return mobName(EntityTrooperSC.NAME);
+        }
+        if (meta == TrophyTableSC.META_PE1) {
+            return Lang.tr("sc.manual.world.cell.carrier", mobName(EntityJammerSC.NAME));
+        }
         return null;
     }
 
     /** Trophy `meta`'s chance of one roll as percent text, the server's multiplier included ("2", "1,5"); null outside the tables. */
     public static String trophyChancePct(int meta) {
+        if (meta == TrophyTableSC.META_PE1) {
+            return pct(trophyChance(stat(TROPHIES, "PE1", 0.02F)));     // Ф3: the carrier's ПЭ-1 (package M's TrophyTableSC.PE1)
+        }
         if (meta >= 0 && meta < TrophyTableSC.META_BLADE) {
             return pct(trophyChance(TrophyTableSC.PIECE[Math.min(TrophyTableSC.PIECE.length - 1, meta / 4)]));
         }
@@ -974,7 +1628,93 @@ public final class BookWorldSC {
         if (meta == LOOT_STOLEN_CARGO) {
             return Lang.tr("sc.manual.world.loot.stolenCargo", pct(stat(DROPS, "CARGO_CHANCE", 0.05F)), ReputationSC.CARGO);
         }
+        // Ф3 (ПТ-13): package M's / X's chances by name
+        if (meta == LOOT_QUANTUM_SCRAP) {
+            return Lang.tr("sc.manual.world.loot.quantumScrap", pct(stat(TROOPER, "SCRAP_CHANCE", 0.5F)), pct(stat(JAMMER, "SCRAP_CHANCE", 0.4F)));
+        }
+        if (meta == LOOT_EXO_SCRAP) {
+            return Lang.tr("sc.manual.world.loot.exoScrap", n(stat(EXECUTIONER, "SCRAP_MIN", 1F)), n(stat(EXECUTIONER, "SCRAP_MAX", 2F)));
+        }
+        if (meta == LOOT_NANITE_DUST) {
+            return Lang.tr("sc.manual.world.loot.naniteDust", pct(stat(NANITE, "DUST_CHANCE", 0.5F)));
+        }
+        if (meta == LOOT_SHIELD_CORE) {
+            return Lang.tr("sc.manual.world.loot.shieldCore", pct(stat(EXECUTIONER, "CORE_CHANCE", 0.15F)));
+        }
         return Lang.tr("sc.manual.world.loot.shellFirmware");
+    }
+
+    /** Ф3, NEI's «Как получить» of the loot: the spawn egg of the mob that drops loot `meta` (the Salvager's buyers aside), or null. */
+    public static ItemStack lootEgg(int meta) {
+        switch (meta) {
+            case LOOT_FIRMWARE:
+                return egg(MobEntitiesSC.ID_LINEMAN);
+            case LOOT_QUANTUM_SCRAP:
+                return egg(MobEntitiesSC.ID_TROOPER);
+            case LOOT_EXO_SCRAP:
+            case LOOT_SHIELD_CORE:
+                return egg(MobEntitiesSC.ID_EXECUTIONER);
+            case LOOT_NANITE_DUST:
+                return egg(MobEntitiesSC.ID_NANITE);
+            default:
+                return egg(MobEntitiesSC.ID_MARAUDER);
+        }
+    }
+
+    /** Ф3: what the handbook says of ruin block `meta` (BlockRuinSC: where it stands, what it breaks into, package X's chances) - NEI's page too. */
+    public static String ruinLine(int meta) {
+        String k = "sc.manual.world.ruin." + BlockRuinSC.nameOf(meta);
+        switch (meta) {
+            case BlockRuinSC.RUIN_METAL:
+                return Lang.tr(k, n(stat(RUIN_BLOCK, "METAL_SCRAP_PCT", 30F)));
+            case BlockRuinSC.BURNT_PANEL:
+                return Lang.tr(k, n(stat(RUIN_BLOCK, "PANEL_FIRMWARE_PCT", 20F)));
+            case BlockRuinSC.MACHINE_HUSK:
+                return Lang.tr(k, n(stat(RUIN_BLOCK, "HUSK_TRANSISTOR_PCT", 10F)));
+            default:
+                return Lang.tr(k);
+        }
+    }
+
+    /**
+     * Ф3 (ПТ-11, ПТ-12), NEI's «Как получить» of a trophy: where and for what it is restored - the Armourer's service
+     * (TradeTableSC's OUT_RESTORE deal for its meta: the sides, the level) and one's own station (his components without the
+     * chips + TrophyRestoreSC.STATION_EU); a Singular one only at the Singular station; null - it isn't restored (ПЭ-1М, Ф5).
+     */
+    public static String restoreLine(int meta) {
+        if (TrophyTableSC.level(meta) == ArmorSuit.SINGULAR) {
+            return Lang.tr("sc.manual.world.restore.line.singular", clotName(), BookContent.num(TrophyRestoreSC.SINGULAR_STATION_EU));
+        }
+        TradeOfferSC o = restoreDeal(meta);
+        if (o == null) {
+            return meta == TrophyTableSC.META_PE1M ? null : Lang.tr("sc.manual.world.restore.line.station", BookContent.num(TrophyRestoreSC.STATION_EU));
+        }
+        return Lang.tr("sc.manual.world.restore.line", sides(o.in, 1, false), levelName(o.minLevel), stationPrice(o));
+    }
+
+    /** The Armourer's OUT_RESTORE deal whose trophy side takes meta `meta`, or null (none - or package T's table not written yet). */
+    static TradeOfferSC restoreDeal(int meta) {
+        for (TradeOfferSC o : TradeTableSC.offers(NpcKindSC.ARMOURER)) {
+            if (o.outKind == OUT_RESTORE && o.in != null && o.in.length > 0) {
+                for (int m : metasOf(o.in[0])) {
+                    if (m == meta) {
+                        return o;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** ПТ-11: one's own station's price for what deal `o` restores - its components (no chips) and the station's EU. */
+    private static String stationPrice(TradeOfferSC o) {
+        String parts = sides(o.in, 1, true);
+        String eu = BookContent.num(TrophyRestoreSC.STATION_EU) + " EU";
+        return parts.isEmpty() ? eu : parts + " + " + eu;
+    }
+
+    private static String clotName() {
+        return ModItems.singularClot != null ? new ItemStack(ModItems.singularClot).getDisplayName() : Lang.tr("item.siliconage.singularClot.name");
     }
 
     /**

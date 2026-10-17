@@ -23,10 +23,18 @@ public final class TrophyTableSC {
     /** ПТ-5: kills of that level without a trophy before x2 (2N: x4), by ArmorSuit ordinal. */
     public static final int[] BAD_LUCK_N = {40, 80, 120, 40};
     /**
-     * ПТ-7: the metas that already drop - the creative tab and NEI show only these (Ф1: the four Nano pieces, the Nano
-     * Blade, the Ion Cutter). Each phase appends the trophies of its mobs.
+     * Ф3 (ПТ-14): the ПЭ-1's own category - a Jammer carrier holding one (ItemEmpGunSC in hand, MobDropsSC): 2%, so about
+     * 0.04% a Jammer. TODO(balance)
      */
-    public static final int[] SHOWN = {0, 1, 2, 3, META_BLADE, META_WEAPON};
+    public static final float PE1 = 0.02F;
+    /**
+     * ПТ-7: the metas that already drop - the creative tab and NEI show only these (Ф1: the four Nano pieces, the Nano
+     * Blade, the Ion Cutter). Each phase adds the trophies of its mobs. Ф3 (ПТ-14): the Quantum (4..7) and Exo (8..11)
+     * pieces, the Quantum and Exo Blades (17, 18), the Pulse Emitter and the Plasma Rifle (21, 22), the ПЭ-1 (23) - kept in
+     * meta order (the creative tab and NEI list them so).
+     */
+    public static final int[] SHOWN = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, META_BLADE, META_BLADE + 1, META_BLADE + 2,
+            META_WEAPON, META_WEAPON + 1, META_WEAPON + 2, META_PE1};
     /** The key in the bad-luck counters' tag (EntityPlayer.PERSISTED_NBT_TAG: survives death): int[4] by level. */
     public static final String DRY_NBT = "scTrophyDry";
 

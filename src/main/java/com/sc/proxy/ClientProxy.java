@@ -30,6 +30,9 @@ public class ClientProxy extends CommonProxy {
         // Подложка Ф2: the settlements' creatures (package N) and blocks (package S)
         com.sc.settle.client.SettlementClientSC.register();
         com.sc.settle.client.SettlementBlocksClientSC.register();
+        // Подложка Ф3: the armoured mobs' elites and telegraphs (package A), the ruins' creatures and blocks (package X)
+        com.sc.mob.client.MobArmorClientSC.register();
+        com.sc.ruin.client.RuinClientSC.register();
         // the Singular tools: the black hole's zone frame, the blade's effects, Shift + wheel (form / mode)
         MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);

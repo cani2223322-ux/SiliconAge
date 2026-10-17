@@ -90,6 +90,10 @@ public class SCMod {
         FMLCommonHandler.instance().bus().register(com.sc.settle.trade.EconomyEventsSC.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.travel.TravelEventsSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.settle.travel.TravelEventsSC.INSTANCE);
+        // Подложка Ф3, docs/plan-substrate-tech-f3.md: the elites' world tick (the Avenger's blasts - package A), the blast
+        // sparing items (Forge's ExplosionEvent.Detonate)
+        FMLCommonHandler.instance().bus().register(com.sc.mob.EliteSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.mob.EliteSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -131,6 +135,7 @@ public class SCMod {
         com.sc.dim.SubstrateSC.init();
         com.sc.mob.MobEntitiesSC.init();
         com.sc.settle.SettlementSC.init();               // Ф2: the settlements' structure names (MapGenStructureIO), the IMC
+        com.sc.ruin.RuinSC.init();                       // Ф3: the Dead Nodes' and the lithographs' structure names
         net.minecraftforge.common.ForgeChunkManager.setForcedChunkLoadingCallback(instance, new com.sc.energy.ChunkLoaderSC());
         registerRecipes();
         com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
@@ -175,6 +180,9 @@ public class SCMod {
         com.sc.settle.trade.TradeServerSC.clearAll();
         com.sc.settle.trade.EconomyEventsSC.clearAll();
         com.sc.settle.travel.TravelEventsSC.clearAll();
+        com.sc.mob.EliteSC.clearAll();                   // Ф3: the Avenger's pending blasts, mobs' ПЭ-1 charge-ups, the stations' pending restorings
+        com.sc.emp.EmpMobGunSC.clearAll();
+        com.sc.mob.TrophyRestoreSC.clearAll();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
@@ -200,6 +208,8 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmpSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSubstrateSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSettlementSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestCombatSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestArmourerSC());
         }
     }
 }

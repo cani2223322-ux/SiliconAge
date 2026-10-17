@@ -243,6 +243,8 @@ public final class EmpSC {
         public boolean anyArmour;
         /** Heat units given. */
         public int heat;
+        /** Ф3, ПБ-19: a mob's personal EMP screen took the shot (nothing else happened; the screen is down for 30 s now). */
+        public boolean screened;
 
         public boolean anySuppressed() {
             for (int t : ticks) {

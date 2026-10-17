@@ -15,7 +15,8 @@ import net.minecraft.world.WorldServer;
  * EntityWardenSC.RECHARGE_BELOW walks to the nearest free charge pad of the guard square (P_PAD + "0".."3"; all taken - the
  * nearest one: it waits its turn beside it) and stands on it, PAD_UNITS into the reserve every PAD_EVERY ticks
  * (MobArmorSC.recharge - nothing while a ПЭ-1 Siphon draws it) until RECHARGE_UNTIL. A spark runs from the pad into the
- * suit each time - the players see who is «down». A fight or the leash takes it off the pad. Mutex 3.
+ * suit each time - the players see who is «down». A fight or the leash takes it off the pad. Mutex 3. Ф3: the City
+ * Commandant only uses the pads within EntityWardenSC.PLAZA_STAY of his plaza (a City's two front ones).
  */
 public class EntityAIWardenPadSC extends EntityAIBase {
 
@@ -100,10 +101,11 @@ public class EntityAIWardenPadSC extends EntityAIBase {
     private int[] pad(SettlementRegistrySC.Settlement s) {
         int[] best = null, bestFree = null;
         double bd = Double.MAX_VALUE, bdFree = Double.MAX_VALUE;
+        int[] plaza = g.holdsPlaza() ? g.plaza() : null;
         for (int i = 0; i < PADS; i++) {
             int[] p = NpcLinkSC.point(s, SettlementRegistrySC.P_PAD + i);
-            if (p == null) {
-                continue;
+            if (p == null || plaza != null && sq(p[0] - plaza[0]) + sq(p[2] - plaza[2]) > sq(EntityWardenSC.PLAZA_STAY)) {
+                continue;                                       // Ф3: the Commandant only uses the pads by his plaza
             }
             double d = NpcLinkSC.distSq(g, p);
             if (d < bd) {
@@ -116,6 +118,10 @@ public class EntityAIWardenPadSC extends EntityAIBase {
             }
         }
         return bestFree != null ? bestFree : best;
+    }
+
+    private static double sq(double d) {
+        return d * d;
     }
 
     private boolean free(int[] p) {

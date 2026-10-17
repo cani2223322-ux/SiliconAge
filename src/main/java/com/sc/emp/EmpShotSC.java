@@ -220,6 +220,31 @@ public final class EmpShotSC {
         return w.func_147447_a(copy(eyes), head, false, true, false) == null;
     }
 
+    /**
+     * Подложка Ф3 (docs/plan-substrate-tech-f3.md §3.1, ПБ-17): the same for any shooter - a mob's eyes are its posY +
+     * getEyeHeight() (a mob's posY is its feet on both sides); a player goes to the method above, unchanged.
+     */
+    public static boolean inSight(World w, EntityLivingBase from, Entity to, double range) {
+        if (from instanceof EntityPlayer) {
+            return inSight(w, (EntityPlayer) from, to, range);
+        }
+        Vec3 eyes = mobEyes(from);
+        Vec3 mid = centre(to);
+        if (eyes.distanceTo(mid) > range + to.width) {
+            return false;
+        }
+        if (w.func_147447_a(copy(eyes), copy(mid), false, true, false) == null) {
+            return true;
+        }
+        Vec3 head = Vec3.createVectorHelper(mid.xCoord, to.boundingBox.maxY - 0.2, mid.zCoord);
+        return w.func_147447_a(copy(eyes), head, false, true, false) == null;
+    }
+
+    /** Ф3: a mob shooter's eyes (EmpRulesSC.screenAbsorbs takes the same point). */
+    public static Vec3 mobEyes(EntityLivingBase e) {
+        return Vec3.createVectorHelper(e.posX, e.posY + e.getEyeHeight(), e.posZ);
+    }
+
     private static Vec3 copy(Vec3 v) {
         return Vec3.createVectorHelper(v.xCoord, v.yCoord, v.zCoord);
     }

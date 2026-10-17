@@ -2,6 +2,7 @@ package com.sc.tileentity;
 
 import java.util.Random;
 
+import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
 
 import net.minecraft.nbt.NBTTagCompound;
@@ -18,6 +19,11 @@ import net.minecraftforge.common.util.ForgeDirection;
  * sound: the workshop machines while their Tuners stand at them (world time 0..WORK_END, the Tuners' day), the guard
  * square's, the Clone Capsule's and the gate's always. Never an inventory, a recipe or energy; nothing on the server;
  * blockExists before a neighbour is read (the air over a machine).
+ * <p>
+ * Ф3 (docs/plan-substrate-tech-f3.md §6.3): the tile of the second block too (BlockShowcase2SC - the same tile id
+ * "SiliconAge.showcase", told apart by its block): the energy storage's and the transformer's sparks while the Power
+ * Engineer works, the wind generator's gusts always, the scrap pile's sparks and clatter while the Salvager sorts it; the
+ * rack only faces (its front).
  */
 public class TileEntityShowcaseSC extends TileEntity {
 
@@ -58,10 +64,63 @@ public class TileEntityShowcaseSC extends TileEntity {
             return;                                     // the server: nothing to do, ever
         }
         int meta = getBlockMetadata();
-        if (meta < BlockShowcaseSC.ARMOUR_STATION && worldObj.getWorldTime() % 24000L >= WORK_END) {
+        boolean evening = worldObj.getWorldTime() % 24000L >= WORK_END;
+        if (getBlockType() instanceof BlockShowcase2SC) {
+            if (!evening || meta == BlockShowcase2SC.WIND_GENERATOR) {
+                effects2(meta, worldObj.rand);          // the wind blows in the evening too
+            }
+            return;
+        }
+        if (meta < BlockShowcaseSC.ARMOUR_STATION && evening) {
             return;                                     // the workshop's Tuners are off for the evening
         }
         effects(meta, worldObj.rand);
+    }
+
+    /** Ф3: the second block's particles and sound by meta (client). */
+    private void effects2(int meta, Random r) {
+        ForgeDirection f = ForgeDirection.getOrientation(facing);
+        double cx = xCoord + 0.5D, cy = yCoord + 0.5D, cz = zCoord + 0.5D;
+        double fx = cx + f.offsetX * 0.55D, fz = cz + f.offsetZ * 0.55D;
+        boolean airOver = worldObj.blockExists(xCoord, yCoord + 1, zCoord) && worldObj.isAirBlock(xCoord, yCoord + 1, zCoord);
+        double top = yCoord + 1.05D;
+        String sound = null;
+        float volume = 0.2F, pitch = 1.0F;
+        switch (meta) {
+            case BlockShowcase2SC.ENERGY_STORAGE:                           // a spark off the terminal now and then
+                if (r.nextInt(2) == 0) {
+                    front("magicCrit", 1, fx, cy + 0.1D, fz, f, r, 0.03D);
+                }
+                break;
+            case BlockShowcase2SC.TRANSFORMER:                              // the coils' blue flicker, a hum
+                for (int i = 0; i < 2; i++) {
+                    worldObj.spawnParticle("reddust", fx + (r.nextDouble() - 0.5D) * Math.abs(f.offsetZ) * 0.7D, cy + (r.nextDouble() - 0.4D) * 0.6D,
+                            fz + (r.nextDouble() - 0.5D) * Math.abs(f.offsetX) * 0.7D, 0.3D, 0.75D, 1.0D);
+                }
+                sound = com.sc.Reference.ASSETS + ":machine.hum";
+                volume = 0.06F;
+                pitch = 0.7F;
+                break;
+            case BlockShowcase2SC.WIND_GENERATOR:                           // a gust past the rotor
+                if (airOver && r.nextInt(2) == 0) {
+                    worldObj.spawnParticle("cloud", cx + (r.nextDouble() - 0.5D) * 0.8D, top + 0.2D + r.nextDouble() * 0.4D,
+                            cz + (r.nextDouble() - 0.5D) * 0.8D, 0.06D, 0.0D, 0.02D);
+                }
+                break;
+            case BlockShowcase2SC.SCRAP_PILE:                               // sorting: sparks over the heap, a clatter
+                if (airOver) {
+                    over("crit", 2, cx, top, cz, r);
+                }
+                sound = "random.anvil_land";
+                volume = 0.04F;
+                pitch = 1.8F;
+                break;
+            default:
+                break;
+        }
+        if (sound != null && r.nextInt(SOUND_ONE_IN) == 0) {
+            worldObj.playSound(cx, cy, cz, sound, volume, pitch * (0.9F + r.nextFloat() * 0.2F), false);
+        }
     }
 
     /** The work's particles and sound by meta (client). */

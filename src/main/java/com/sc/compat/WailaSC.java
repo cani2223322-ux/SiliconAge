@@ -48,6 +48,7 @@ public class WailaSC implements IWailaDataProvider {
             registrar.registerBodyProvider(provider, c);
             registrar.registerNBTProvider(provider, c);
         }
+        WailaEntitySC.register(registrar);                          // Подложка Ф3: the Substrate's creatures (ПИ-1)
     }
 
     @Override

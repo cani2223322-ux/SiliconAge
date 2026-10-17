@@ -49,9 +49,12 @@ import net.minecraftforge.common.DimensionManager;
  */
 final class SelfTestSubstrateSC {
 
-    /** The rules of Ф1 and Ф2, the public fields SubstrateNetSC sends a joining client (docs/plan-substrate.md §8, docs/plan-substrate-tech-f2.md §2.1). */
+    /**
+     * The rules of Ф1..Ф3, the public fields SubstrateNetSC sends a joining client (docs/plan-substrate.md §8,
+     * docs/plan-substrate-tech-f2.md §2.1, docs/plan-substrate-tech-f3.md §2.1).
+     */
     private static final String[] RULES = {"strictEntry", "respawnDimension", "bridgeCostMultiplier", "nativesCrossBridge", "empMobTargets",
-            "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations"};
+            "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations", "mobsUseEmp"};
     /** The ids: private behind getters, never synced (ПК-4). */
     private static final String[] IDS = {"enabled", "dimensionId", "providerId", "biomeIdPlateaus", "biomeIdCanyons", "keepLoaded"};
 
@@ -455,14 +458,17 @@ final class SelfTestSubstrateSC {
         } catch (Throwable t) {
             subErr = t.toString();                                        // a dedicated server has no getSubItems
         }
-        Set<Integer> f1 = new TreeSet<Integer>(Arrays.asList(0, 1, 2, 3, TrophyTableSC.META_BLADE, TrophyTableSC.META_WEAPON));
-        boolean tab = subErr != null || shown.equals(f1);
+        Set<Integer> f1 = new TreeSet<Integer>(Arrays.asList(0, 1, 2, 3, TrophyTableSC.META_BLADE, TrophyTableSC.META_WEAPON)), all = new TreeSet<Integer>();
+        for (int m : TrophyTableSC.SHOWN) {
+            all.add(m);                                     // Ф3 appended its trophies (SelfTestCombatSC checks the 19)
+        }
+        boolean tab = all.containsAll(f1) && (subErr != null || shown.equals(all));
         if (renamed.length() > 0) {
             System.out.println("[SC-TEST] INFO substrate: trophy names other than the plan's item.siliconage.trophy.<key>.name:" + renamed);
         }
         check(bad.length() == 0 && eggs && tab, "items: the 25 trophy metas each stand for a real item and have a name in en_US and ru_RU, the loot's "
-                + "names, the eggs named after their mob (" + lineman + " / " + marauder + ") " + eggs + "; the creative tab / NEI show only Ф1's "
-                + (subErr != null ? "(not checked: " + subErr + ")" : shown + " (want " + f1 + ")") + (bad.length() == 0 ? "" : " - BAD:" + bad));
+                + "names, the eggs named after their mob (" + lineman + " / " + marauder + ") " + eggs + "; the creative tab / NEI show only SHOWN (Ф1's "
+                + f1 + " among them) " + (subErr != null ? "(not checked: " + subErr + ")" : shown + " (want " + all + ")") + (bad.length() == 0 ? "" : " - BAD:" + bad));
     }
 
     // ------------------------------------------------------------------ texts and the handbook (package D, §7)
@@ -583,9 +589,10 @@ final class SelfTestSubstrateSC {
             System.out.println("[SC-TEST] INFO substrate: the bestiary still prints the plan's numbers for (package M's constants by these names, or "
                     + "direct references in BookWorldSC): " + unresolved);
         }
-        int articles = ARTICLES.length + SelfTestSettlementSC.ARTICLES.length;          // Ф2 appends its six (SelfTestSettlementSC checks them)
+        int articles = ARTICLES.length + SelfTestSettlementSC.ARTICLES.length          // Ф2 appends its six (SelfTestSettlementSC checks them)
+                + SelfTestCombatSC.ARTICLES.length;                                     // Ф3 its eight (SelfTestCombatSC)
         check(bad.length() == 0 && chapter == articles && table && noG.length() == 0 && iconOk, "handbook: the chapter \"" + BookChapter.WORLD.title()
-                + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys and Ф2's), the armour table by suit " + table
+                + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys, Ф2's and Ф3's), the armour table by suit " + table
                 + ", G on the rock / ore / druse"
                 + " / trophy / loot / eggs" + (noG.length() == 0 ? "" : " - NOT:" + noG) + ", the tile's icon " + iconOk + (bad.length() == 0 ? "" : " -" + bad));
     }

@@ -2,25 +2,30 @@ package com.sc.settle;
 
 /**
  * Подложка Ф2 (docs/idea-dimension-substrate.md §5 «Размеры поселений», docs/plan-substrate-tech-f2.md §2.3): the three
- * sizes. The ordinal is saved (SettlementRegistrySC.Settlement.size): append only. Numbers of the proposal; the City's
- * Captain and Commandant come in Ф3 (their slots are added to the cities then). Lang: sc.settle.size.<key>.
+ * sizes. The ordinal is saved (SettlementRegistrySC.Settlement.size): append only. Numbers of the proposal. Ф3
+ * (docs/plan-substrate-tech-f3.md §6.2): the City's Captain and Commandant, a Settlement's Captain at CAPTAIN_PCT (by its
+ * seed) - a Ф2 record gets their slots appended (RosterSC, Settlement.version). Lang: sc.settle.size.<key>.
  * Shared core: only the coordinator edits this file.
  */
 public enum SettlementSizeSC {
 
     /** «Пост»: dome 24, 3..5 Tuners, 2 Sentries, no dock. */
-    OUTPOST("outpost", 24, 24, 3, 5, 2, 0, false),
-    /** «Посёлок»: dome 40, 8..12 Tuners, 3 Sentries + 2 Senior Wardens, a dock at the gate. */
-    SETTLEMENT("settlement", 40, 40, 8, 12, 3, 2, true),
-    /** «Город» (one to 3..4 Settlements): dome 56..64, 15..20 Tuners, 4 Sentries + 3 Senior Wardens, a dock. */
-    CITY("city", 56, 64, 15, 20, 4, 3, true);
+    OUTPOST("outpost", 24, 24, 3, 5, 2, 0, false, 0, false),
+    /** «Посёлок»: dome 40, 8..12 Tuners, 3 Sentries + 2 Senior Wardens (Ф3: a Captain at 30%), a dock at the gate. */
+    SETTLEMENT("settlement", 40, 40, 8, 12, 3, 2, true, 30, false),
+    /** «Город» (one to 3..4 Settlements): dome 56..64, 15..20 Tuners, 4 Sentries + 3 Senior Wardens (Ф3: + the Captain, the Commandant), a dock. */
+    CITY("city", 56, 64, 15, 20, 4, 3, true, 100, true);
 
     public final String key;
     public final int radiusMin, radiusMax, tunersMin, tunersMax, sentries, seniors;
     /** A «Причал» (dock with its beacon and protected zone) stands outside the gate. */
     public final boolean dock;
+    /** Ф3 (ПГ-11, ПГ-12): the chance of a Captain, %, by the settlement's seed (captain()); a Commandant (the City). TODO(balance) */
+    public final int captainPct;
+    public final boolean commandant;
 
-    SettlementSizeSC(String key, int radiusMin, int radiusMax, int tunersMin, int tunersMax, int sentries, int seniors, boolean dock) {
+    SettlementSizeSC(String key, int radiusMin, int radiusMax, int tunersMin, int tunersMax, int sentries, int seniors, boolean dock,
+                     int captainPct, boolean commandant) {
         this.key = key;
         this.radiusMin = radiusMin;
         this.radiusMax = radiusMax;
@@ -29,6 +34,13 @@ public enum SettlementSizeSC {
         this.sentries = sentries;
         this.seniors = seniors;
         this.dock = dock;
+        this.captainPct = captainPct;
+        this.commandant = commandant;
+    }
+
+    /** Ф3: a settlement of this size and seed has a Captain (pure: the same answer for the plan and for a Ф2 record's upgrade). */
+    public boolean captain(long seed) {
+        return captainPct >= 100 || captainPct > 0 && (int) (((seed >>> 23) & 0x7FFFFFFFL) % 100) < captainPct;
     }
 
     /** The dome's radius for a settlement of this seed: radiusMin..radiusMax (pure). */

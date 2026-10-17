@@ -26,6 +26,9 @@ import net.minecraft.world.gen.MapGenBase;
  * Ф2 (package S): no via inside a built settlement's box either (MapGenSettlementSC.covers - the provider lets the
  * settlements make their starts before it calls the carver). Its tunnels stay: the settlement's ground closes what
  * opens under its floor.
+ * <p>
+ * Ф3 (package X, rule ПУ-5): no via through a lithograph's hall or its entrance either (RuinLayoutSC.lithoNear - pure, so it
+ * holds where the lithograph's start comes out empty too); a cave tunnel may still reach the hall - its walls close it.
  */
 public class MapGenSubstrateCavesSC extends MapGenBase {
 
@@ -85,8 +88,9 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
         }
         int d = VIA_MIN + rand.nextInt(VIA_MAX - VIA_MIN + 1);
         int vx = ox * 16 + 4 + rand.nextInt(8), vz = oz * 16 + 4 + rand.nextInt(8);
-        if (SubstrateTerrainSC.inCanyonBelt(vx, vz) || nearSpawn(vx, vz) || settlements != null && settlements.covers(vx, vz, d)) {
-            return;
+        if (SubstrateTerrainSC.inCanyonBelt(vx, vz) || nearSpawn(vx, vz) || settlements != null && settlements.covers(vx, vz, d)
+                || worldObj != null && com.sc.ruin.RuinLayoutSC.lithoNear(worldObj.getSeed(), vx, vz, d + 1) != null) {
+            return;                                              // Ф3: never through a lithograph's hall (pure: its start may be empty)
         }
         double c = d % 2 == 1 ? 0.5D : 0D, r2 = d * d / 4D;      // odd: around a block's centre, even: a block's corner
         for (int x = 0; x < 16; x++) {

@@ -3,9 +3,14 @@ package com.sc.mob;
 import java.util.List;
 
 import com.sc.Reference;
+import com.sc.block.BlockArmorStationSC;
+import com.sc.bridge.BridgeMathSC;
 import com.sc.init.ModCreativeTab;
 import com.sc.init.ModItems;
 import com.sc.manual.Lang;
+import com.sc.settle.ReputationSC;
+import com.sc.settle.trade.TradeOfferSC;
+import com.sc.settle.trade.TradeTableSC;
 import com.sc.util.ArmorSuit;
 import com.sc.util.BladeType;
 import com.sc.util.TooltipSC;
@@ -20,13 +25,16 @@ import net.minecraft.item.EnumRarity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.IIcon;
+import net.minecraft.world.World;
 
 /**
  * PACKAGE M (docs/plan-substrate-tech.md §5.7, rules ПТ-6, ПТ-7): «Трофейный <предмет>» - a piece of armour or a weapon
  * taken off a Substrate mob, dead: no charge, no functions, it can't be worn or fired. It is an item of its own on
- * purpose - the player's armour code never sees it, no NBT trick can make a real piece of it. Restoring it (the
- * settlement's Armourer, or one's own armour service station: a real item with 0 EU, no gases, chips or modules; a
- * Singular one only at the Singular station, level 1) comes in Ф3 - the tooltip says so in the future tense.
+ * purpose - the player's armour code never sees it, no NBT trick can make a real piece of it. Restoring it (Ф3, package T,
+ * TrophyRestoreSC: the settlement's Armourer, or one's own armour service station - a right-click with it in hand, sneaking
+ * too: doesSneakBypassUse lets that click reach the station; a real item with 0 EU, no gases, chips or modules; a Singular
+ * one only at the Singular station, level 1) - the tooltip's Ctrl page says where and for what, from TrophyRestoreSC's
+ * prices and TradeTableSC (the Salvager buys the Nano pieces).
  * <p>
  * Metas fixed by TrophyTableSC (0..15 armour, 16..19 blades, 20..22 guns, 23 ПЭ-1, 24 ПЭ-1М). The icon is the real
  * item's own (whatever it's retextured to) with a second pass on top - trophy_overlay.png, a tag and scratches. Each meta
@@ -118,13 +126,66 @@ public class ItemTrophySC extends Item {
         }
     }
 
-    /** «Нерабочий трофей: <the real name>»; Shift - what it is and where it came from; Ctrl - its restoring (Ф3). */
+    /**
+     * Ф3 (ПТ-11): a sneaking right-click with a trophy at an armour service station (the Singular one is a subclass) still
+     * reaches the block - its restoring (TrophyRestoreSC.onStationClick). Anywhere else sneaking works as usual.
+     */
+    @Override
+    public boolean doesSneakBypassUse(World world, int x, int y, int z, EntityPlayer player) {
+        return world != null && world.getBlock(x, y, z) instanceof BlockArmorStationSC;
+    }
+
+    /**
+     * «Нерабочий трофей: <the real name>»; Shift - what it is and where it came from; Ctrl - where and for what it is
+     * restored (TrophyRestoreSC's prices: the Armourer, one's own station, the Singular station) and the Salvager's price.
+     */
     @Override
     @SideOnly(Side.CLIENT)
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         ItemStack real = realStack(stack.getItemDamage());
         TooltipSC.wrap(list, Lang.tr("sc.tooltip.trophy", real == null ? "?" : real.getDisplayName()), "§7");
-        TooltipSC.more(list, Lang.tr("sc.tooltip.trophy.details"), Lang.tr("sc.tooltip.trophy.howto"));
+        TooltipSC.more(list, Lang.tr("sc.tooltip.trophy.details"), howto(stack));
+    }
+
+    /** The Ctrl page: the restoring's price where it can be done (present tense), the Salvager's offer if he buys it. */
+    @SideOnly(Side.CLIENT)
+    private static String howto(ItemStack stack) {
+        int meta = stack.getItemDamage();
+        TrophyRestoreSC.Price armourer = TrophyRestoreSC.price(meta, TrophyRestoreSC.WHERE_ARMOURER);
+        TrophyRestoreSC.Price station = TrophyRestoreSC.price(meta, TrophyRestoreSC.WHERE_STATION);
+        TrophyRestoreSC.Price singular = TrophyRestoreSC.price(meta, TrophyRestoreSC.WHERE_SINGULAR_STATION);
+        String text;
+        if (armourer != null && station != null) {
+            text = Lang.tr("sc.tooltip.trophy.howto", Lang.tr(ReputationSC.levelKey(armourer.level)),
+                    Lang.tr("sc.restore.chips", armourer.chips) + " + " + parts(armourer.parts), parts(station.parts), num(station.eu));
+        } else if (singular != null && TrophyRestoreSC.singular(meta)) {
+            text = Lang.tr("sc.tooltip.trophy.howto.singular", parts(singular.parts), num(singular.eu));
+        } else {
+            text = Lang.tr("sc.tooltip.trophy.howto.none");
+        }
+        TradeOfferSC sale = TradeTableSC.salvagerSale(stack);
+        if (sale != null && sale.out != null) {
+            text += "\n" + Lang.tr("sc.tooltip.trophy.salvager", sale.out.count);
+        }
+        return text;
+    }
+
+    /** «2 × Контроллер, 2 × Чип памяти». */
+    @SideOnly(Side.CLIENT)
+    private static String parts(TradeOfferSC.Ingredient[] parts) {
+        StringBuilder b = new StringBuilder();
+        for (TradeOfferSC.Ingredient i : parts) {
+            ItemStack s = i.display();
+            b.append(b.length() == 0 ? "" : ", ").append(Lang.tr("sc.restore.part", i.count, s != null ? s.getDisplayName() : i.ore));
+        }
+        return b.toString();
+    }
+
+    /** "10 000" in Russian, "10,000" in English (the handbook's way). */
+    @SideOnly(Side.CLIENT)
+    private static String num(long v) {
+        String s = BridgeMathSC.group(v);
+        return "ru".equals(Lang.trOr("sc.book.lang", "en")) ? s : s.replace(' ', ',');
     }
 }

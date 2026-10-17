@@ -23,8 +23,19 @@ import net.minecraft.world.World;
  * alone is not enough - vanilla's check is rand - looting x 0.01 < chance, so Looting would still drop real, working
  * pieces (an Exo blade's looting mode: 5% a slot, a farm's dream) - hence dropEquipment does nothing; trophies are
  * MobDropsSC's single roll.
+ * <p>
+ * Ф3 (docs/plan-substrate-tech-f3.md §2.4, §5; the coordinator's): DataWatcher DW_ELITE (24, the elite modifier's code -
+ * EliteModSC, 0 none) and DW_ACTION (25, IMobActionSC's telegraph); 26..31 belong to the mob classes. An elite's «Казнь»
+ * immunity (IExecuteImmuneSC), the census (ICensusSC), the modifier's work (EliteSC: serverTick, onDeath, damageMul - the
+ * subclasses multiply their blows by damageMul()). NBT "scEliteMod".
  */
-public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMobSC, IEmpTargetSC, ISubstrateNativeSC {
+public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMobSC, IEmpTargetSC, ISubstrateNativeSC,
+        IExecuteImmuneSC, ICensusSC, IMobActionSC {
+
+    /** DataWatcher (fixed, Ф3): the elite modifier's code (byte: EliteModSC.code, 0 none), the telegraph (byte: IMobActionSC.ACT_*). */
+    public static final int DW_ELITE = 24, DW_ACTION = 25;
+    /** The entity NBT key of the elite modifier's code. */
+    public static final String NBT_ELITE = "scEliteMod";
 
     private final MobArmorSC armor;
 
@@ -50,6 +61,74 @@ public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMo
     protected void entityInit() {
         super.entityInit();
         MobArmorSC.addWatchers(dataWatcher);
+        dataWatcher.addObject(DW_ELITE, Byte.valueOf((byte) 0));
+        dataWatcher.addObject(DW_ACTION, Byte.valueOf((byte) IMobActionSC.ACT_NONE));
+    }
+
+    // ------------------------------------------------------------------ Ф3: the elite modifier, the telegraph, the census
+
+    /** The elite modifier (both sides: the DataWatcher), null - a plain mob. */
+    public EliteModSC eliteMod() {
+        return EliteModSC.of(dataWatcher.getWatchableObjectByte(DW_ELITE));
+    }
+
+    /** Server (EliteSC.apply): the modifier shown and kept; null clears it. */
+    public void setEliteMod(EliteModSC m) {
+        dataWatcher.updateObject(DW_ELITE, Byte.valueOf((byte) (m == null ? 0 : m.code())));
+    }
+
+    /** An elite of its kind (the Exo Executioner; Ф4 the Sentinel, «Затмение», the warlords): never gets a modifier, never «Казнь». */
+    protected boolean alwaysElite() {
+        return false;
+    }
+
+    /** ПБ-8, ПС-24: an elite (a modifier, or of its kind) - «Казнь» doesn't finish it. */
+    @Override
+    public boolean executeImmune() {
+        return alwaysElite() || armor.elite || eliteMod() != null;
+    }
+
+    @Override
+    public int mobAction() {
+        return dataWatcher.getWatchableObjectByte(DW_ACTION);
+    }
+
+    @Override
+    public void setMobAction(int action) {
+        if (mobAction() != action) {
+            dataWatcher.updateObject(DW_ACTION, Byte.valueOf((byte) action));
+        }
+    }
+
+    /** ПС-7: every armoured native counts (a subclass may not). */
+    @Override
+    public boolean censusCounts() {
+        return true;
+    }
+
+    /** ПС-7: Quantum armour and above is the «Квант и выше» tier. */
+    @Override
+    public int censusTier() {
+        ArmorSuit s = armor.suit();
+        return s != null && s.atLeast(ArmorSuit.QUANTUM) || alwaysElite() ? TIER_QUANTUM : TIER_PLAIN;
+    }
+
+    @Override
+    public boolean censusElite() {
+        return executeImmune();
+    }
+
+    /** Server: what this mob's blows are multiplied by now (ПС-21: a Commander's group) - the subclasses' attackEntityAsMob and beams use it. */
+    public float damageMul() {
+        return EliteSC.damageMul(this);
+    }
+
+    @Override
+    public void onDeath(DamageSource src) {
+        super.onDeath(src);
+        if (!worldObj.isRemote && dead) {               // dead: vanilla's flag, unset if a mod cancelled LivingDeathEvent
+            EliteSC.onDeath(this);
+        }
     }
 
     @Override
@@ -79,6 +158,7 @@ public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMo
         super.onLivingUpdate();
         if (!worldObj.isRemote) {
             armor.serverTick();
+            EliteSC.serverTick(this);
         }
     }
 
@@ -86,12 +166,17 @@ public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMo
     public void writeEntityToNBT(NBTTagCompound tag) {
         super.writeEntityToNBT(tag);
         armor.write(tag);
+        EliteModSC m = eliteMod();
+        if (m != null) {
+            tag.setByte(NBT_ELITE, (byte) m.code());
+        }
     }
 
     @Override
     public void readEntityFromNBT(NBTTagCompound tag) {
         super.readEntityFromNBT(tag);
         armor.read(tag);
+        setEliteMod(EliteModSC.of(tag.getByte(NBT_ELITE)));
         armor.sync();
     }
 

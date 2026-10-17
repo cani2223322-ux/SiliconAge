@@ -25,7 +25,10 @@ import net.minecraft.entity.Entity;
  * warden.png, the alarm lamp; the worn armour draws itself through ModelArmorGlowSC), and what both share: the name
  * over the head - NpcNamesSC translated here, by each client in its own language (not a custom name tag: that is one
  * string for everyone), within NAME_RANGE blocks, the profession / rank under it - and the full-bright lamps. Called
- * from ClientProxy.preInit. Textures: tools/gen_settlement_mobs_tex.py.
+ * from ClientProxy.preInit. Textures: tools/gen_settlement_mobs_tex.py. Ф3 (docs/plan-substrate-tech-f3.md §6.1, package S):
+ * the same two renderers draw the Power Engineer, the Armourer and the Salvager (RenderTunerSC: their parts and skins) and
+ * the Captain and the Commandant (RenderWardenSC: their skins, cloaks, the wind-up) - nothing more to register; the new
+ * kinds' names under the name are their lang keys (sc.settle.kind.<key>); tools/gen_settlement3_tex.py.
  */
 @SideOnly(Side.CLIENT)
 public final class SettlementClientSC {

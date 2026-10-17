@@ -209,6 +209,8 @@ public final class ModBlocks {
         com.sc.dim.SubstrateBlocksSC.init();
         // Подложка Ф2: the settlement core, the showcase machines, the dock (appended; docs/plan-substrate-tech-f2.md §2.2)
         com.sc.settle.SettlementBlocksSC.init();
+        // Подложка Ф3: the ruins' blocks (appended; docs/plan-substrate-tech-f3.md §2.2)
+        com.sc.ruin.RuinBlocksSC.init();
 
         registerOreDict();
     }

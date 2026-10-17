@@ -46,6 +46,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         // the bundle block itself is never an item you hold - the cable / pipe / tube items are
         API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.conduitBundle));
         hideSettlementBlocks();
+        showRuinBlocks();
         // the Energy Converter and its modules: no other energy in this game (no RF API, Mekanism, Galacticraft) - no use, no recipe
         if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.energyConverter));
@@ -76,8 +77,8 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
 
     /**
      * Подложка Ф2 (docs/plan-substrate-tech-f2.md §10.3): what only the settlement generator places - the core, every
-     * showcase machine, both dock blocks, the trim (every meta, its glass), the Settlement Brick (the rock's meta
-     * BookWorldSC.BRICK). The chip, the
+     * showcase machine (Ф3: the second block's too), both dock blocks, the trim (every meta, its glass), the Settlement
+     * Brick (the rock's meta BookWorldSC.BRICK). The chip, the
      * capsule, the map, the Stolen Cargo and the eggs stay, with their «Как получить» pages (ObtainHandlerSC).
      */
     static void hideSettlementBlocks() {
@@ -105,6 +106,32 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         if (com.sc.dim.SubstrateBlocksSC.rock != null) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.dim.SubstrateBlocksSC.rock, 1, com.sc.manual.BookWorldSC.BRICK));
         }
+        // Ф3 (docs/plan-substrate-tech-f3.md §10.3): the Power Engineer's and the Salvager's showcase machines
+        if (com.sc.settle.SettlementBlocksSC.showcase2 != null) {
+            for (int m = 0; m < com.sc.block.BlockShowcase2SC.NAMES.length; m++) {
+                API.hideItem(new net.minecraft.item.ItemStack(com.sc.settle.SettlementBlocksSC.showcase2, 1, m));
+            }
+        }
+    }
+
+    /**
+     * Ф3 (§10.3): the ruin blocks are in no creative tab (found, not made) but NEI lists every meta, each with its «Как
+     * получить» page (ObtainHandlerSC: the Dead Nodes and the lithographs, what it breaks into). The new loot, trophies
+     * (TrophyTableSC.SHOWN) and eggs come through their items' own getSubItems.
+     */
+    static void showRuinBlocks() {
+        if (com.sc.ruin.RuinBlocksSC.ruin != null) {
+            API.setItemListEntries(net.minecraft.item.Item.getItemFromBlock(com.sc.ruin.RuinBlocksSC.ruin), ruinStacks());
+        }
+    }
+
+    /** Every meta of the ruin block (NeiCoverageSC checks them too). */
+    static List<net.minecraft.item.ItemStack> ruinStacks() {
+        List<net.minecraft.item.ItemStack> out = new ArrayList<net.minecraft.item.ItemStack>();
+        for (int m = 0; com.sc.ruin.RuinBlocksSC.ruin != null && m < com.sc.block.BlockRuinSC.NAMES.length; m++) {
+            out.add(new net.minecraft.item.ItemStack(com.sc.ruin.RuinBlocksSC.ruin, 1, m));
+        }
+        return out;
     }
 
     @Override

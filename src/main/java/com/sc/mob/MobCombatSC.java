@@ -2,6 +2,7 @@ package com.sc.mob;
 
 import java.util.Random;
 
+import com.sc.emp.ItemEmpGunSC;
 import com.sc.init.ModItems;
 import com.sc.item.ItemArmorSC;
 import com.sc.item.ItemBladeSC;
@@ -14,6 +15,7 @@ import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.monster.IMob;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.DamageSource;
@@ -25,13 +27,20 @@ import net.minecraft.util.DamageSource;
  * 12..40 (one blow kills a friend in Nano). So the mob classes override attackEntityAsMob with melee() below - the
  * number from the table, a zombie's knockback, no enchantments of the held item. Armour-breaking, absolute damage and
  * «Казнь» (BladeLogicSC) stay the player's alone (ПБ-9).
+ * <p>
+ * Ф3 (docs/plan-substrate-tech-f3.md §4, rule ПС-10): the caps of the new mobs - the Quantum Blade 8, the Exo Blade 10 (the
+ * Executioner's own 11 - EntityExecutionerSC), a Hollow Shell's fist 6, the Plasma Rifle's beam 7, the Pulse Emitter's 3
+ * a ray (a burst of 3); every blow and beam of an armoured native times its damageMul() (a Commander's group, ПС-21).
  */
 public final class MobCombatSC {
 
     /** Fist: FIST + 0..FIST_SPREAD (3..4); a club (a stick) 4. */
     public static final int FIST = 3, FIST_SPREAD = 1, CLUB = 4;
-    /** Blades by BladeType ordinal, + 0..BLADE_SPREAD: Nano 6, Quantum 8, Exo 10..11, Singular 13..14 (the boss 16, Ф5). TODO(balance) */
-    public static final int[] BLADE = {6, 8, 10, 13}, BLADE_SPREAD = {0, 0, 1, 1};
+    /**
+     * Blades by BladeType ordinal, + 0..BLADE_SPREAD: Nano 6, Quantum 8, Exo 10 (Ф3, ПС-10: the cap - no spread; the
+     * Executioner's 11 is its own), Singular 13..14 (the boss 16, Ф5). TODO(balance)
+     */
+    public static final int[] BLADE = {6, 8, 10, 13}, BLADE_SPREAD = {0, 0, 0, 1};
     /** Beams by WeaponType ordinal: Ion Cutter 4, Pulse Emitter 3 a ray (a burst of 3, Ф3), Plasma Rifle 7 (Ф3). */
     public static final int[] BEAM = {4, 3, 7};
     /** Ticks between two melee blows (vanilla's EntityAIAttackOnCollide: 20). */
@@ -123,5 +132,53 @@ public final class MobCombatSC {
 
     public static ItemStack gunStack(WeaponType t) {
         return new ItemStack(ModItems.WEAPONS.get(t));
+    }
+
+    // ------------------------------------------------------------------ Ф3
+
+    /** Spawning (Ф3): the basic ПЭ-1 a Jammer carrier holds - only the look and the trophy's category (a mob's gun has no charge). */
+    public static ItemStack pe1Stack() {
+        return new ItemStack(ModItems.empGun, 1, ItemEmpGunSC.META_BASIC);
+    }
+
+    /** It holds a ПЭ-1 (a carrier: the trophy category «ПЭ-1», the module's larger chance). */
+    public static boolean holdsPe1(EntityLivingBase mob) {
+        return ItemEmpGunSC.isGun(mob.getHeldItem());
+    }
+
+    /** One of the Substrate's hostiles (ISubstrateNativeSC and IMob): the census, the drops, «свои» for a Shell and a cleave. */
+    public static boolean hostileNative(Entity e) {
+        return e instanceof ISubstrateNativeSC && e instanceof IMob;
+    }
+
+    /**
+     * `attacker` stands behind `mob` facing `yaw` (degrees, Minecraft's: 0 = +Z): more than 90 degrees off that way, seen
+     * from above. Pure but for the positions.
+     */
+    public static boolean behind(Entity mob, Entity attacker, float yaw) {
+        if (attacker == null || attacker == mob) {
+            return false;
+        }
+        double dx = attacker.posX - mob.posX, dz = attacker.posZ - mob.posZ;
+        double fx = -Math.sin(Math.toRadians(yaw)), fz = Math.cos(Math.toRadians(yaw));
+        return dx * fx + dz * fz < 0D;
+    }
+
+    /**
+     * (x, z) lies within `halfAngle` degrees of the way `yaw` faces from (ox, oz) (Minecraft's yaw, seen from above); the
+     * point at the origin counts. Pure.
+     */
+    public static boolean inCone(double ox, double oz, float yaw, double x, double z, double halfAngle) {
+        double dx = x - ox, dz = z - oz, len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 1.0E-4D) {
+            return true;
+        }
+        double fx = -Math.sin(Math.toRadians(yaw)), fz = Math.cos(Math.toRadians(yaw));
+        return (dx * fx + dz * fz) / len >= Math.cos(Math.toRadians(halfAngle));
+    }
+
+    /** Minecraft's yaw (degrees) from (ox, oz) towards (x, z). */
+    public static float yawTo(double ox, double oz, double x, double z) {
+        return (float) (Math.atan2(z - oz, x - ox) * 180D / Math.PI) - 90F;
     }
 }

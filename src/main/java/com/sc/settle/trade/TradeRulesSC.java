@@ -10,7 +10,8 @@ import com.sc.settle.ReputationSC;
  * The player's side of a deal is what the level and the settlement scale (ПО-6, the coordinator's §15 «Цена»): the
  * goods a player sells, the chips a player pays - never the Tuner's side, never the extra goods of a chips deal (the
  * one wafer of «6 КЧ + 1 пластина»), never a «Доверие» deal (the penance is 16 chips for everyone - ПД-4 - and a
- * Stolen Cargo is one crate).
+ * Stolen Cargo is one crate). Ф3: a sale of a thing that can't be scaled (the Salvager's trophy) scales its chips the
+ * other way instead (outCount).
  */
 public final class TradeRulesSC {
 
@@ -63,12 +64,45 @@ public final class TradeRulesSC {
         return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, out));
     }
 
-    /** ПО-6: the level and the spread scale this side of `o` (see the class comment). */
+    /**
+     * ПО-6: the level and the spread scale this side of `o` (see the class comment). A matcher side (Ф3: a service's piece
+     * or trophy, the Salvager's trophy) is one thing of the player's own - never scaled: one trophy stays one at every level
+     * (a sale of it scales its chips instead - outCount).
+     */
     public static boolean scales(TradeOfferSC o, TradeOfferSC.Ingredient i) {
-        if (o == null || i == null || o.outKind == TradeOfferSC.OUT_REPUTATION) {
+        if (o == null || i == null || o.outKind == TradeOfferSC.OUT_REPUTATION || i.any()) {
             return false;
         }
         return !o.buy() || i.isChips();
+    }
+
+    /**
+     * What one deal of `o` gives out at `level` with spread `pct` (OUT_ITEM: the count of `o.out`). The Tuner's side never
+     * scales - but a sale whose goods are a matcher (the Salvager's trophy: one stays one) would then pay the same at every
+     * level and spread, so there the chips shrink by what the goods would grow by: out.count / (the level's multiplier x
+     * (100 + pct) / 100), rounded down, at least 1 (6 chips: a «Нарушитель» 3, a «Чужак» 4, a «Партнёр» 6).
+     */
+    public static int outCount(TradeOfferSC o, int level, int pct) {
+        if (o == null || o.out == null) {
+            return 0;
+        }
+        if (!o.sell() || !matcherGoods(o)) {
+            return o.out.count;
+        }
+        long hundredths = Math.round(ReputationSC.priceMultiplier(level) * 100F);
+        long den = Math.max(1L, hundredths * (100 + pct));
+        long out = (long) Math.max(1, o.out.count) * 10000L / den;
+        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, out));
+    }
+
+    /** Some side of `o` the player gives is a matcher (Ф3: TradeOfferSC.Ingredient.any - a trophy, a suit's piece). */
+    private static boolean matcherGoods(TradeOfferSC o) {
+        for (TradeOfferSC.Ingredient i : o.in) {
+            if (i != null && i.any()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** What the player gives for one deal of `o` at `level` with spread `pct`: the counts of `o.in`, in order. */
@@ -94,9 +128,16 @@ public final class TradeRulesSC {
         return goodsForChips ? ReputationSC.buys(level) : ReputationSC.sells(level);
     }
 
-    /** ПО-4, ПО-5: how many more times today (a global deal: this period) - the limit less what is used. */
+    /**
+     * ПО-4, ПО-5: how many more times today (a global deal: this period) - the limit less what is used (deals sharing a
+     * counter - the Power Engineer's three charges - share what is used). An unlimited deal (Ф3: the Armourer's restoring,
+     * TradeOfferSC.UNLIMITED): its limit whatever was used.
+     */
     public static int remaining(TradeOfferSC o, int used) {
-        return o == null ? 0 : Math.max(0, o.limit - used);
+        if (o == null) {
+            return 0;
+        }
+        return o.unlimited() ? o.limit : Math.max(0, o.limit - used);
     }
 
     /** ПО-5: of `want` chips, how many may still be given out today with `given` already. */

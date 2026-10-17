@@ -1507,6 +1507,9 @@ public final class ArmorLogicSC {
         if (src == com.sc.radiation.RadiationSC.DAMAGE || src == net.minecraft.util.DamageSource.wither) {
             return false;                                  // radiation is the radiation shield's job, not the energy shield's
         }
+        if (com.sc.mob.BreakdownDamageSC.is(src)) {
+            return false;                                  // Подложка Ф3, ПБ-16: «Пробой» passes the energy shield - the one documented exception
+        }
         if (src.isExplosion() && active(p, ArmorFeature.EXPLOSION_PROOF)
                 && pay(p, ArmorFeature.EXPLOSION_PROOF, ArmorFeature.EXPLOSION_PROOF_COST)) {
             addHeat(p, ArmorFeature.EXPLOSION_PROOF.heat);

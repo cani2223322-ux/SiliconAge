@@ -52,15 +52,22 @@ import net.minecraftforge.common.util.FakePlayer;
  * A «Доверие» deal (the penance, a Stolen Cargo) gives its own amount (SRC_PENANCE, SRC_CARGO) and not the +1 of a
  * trade. Contracts (ПО-8) need «Знакомый» to take; DELIVER and CARGO are handed in a part at a time (the inputs only
  * when the reward fits under the chips' cap); KILL / SUPPRESS_KILL count by themselves (EconomyEventsSC).
+ * <p>
+ * Ф3 (docs/plan-substrate-tech-f3.md §6.8, rule ПО-13): the services - the Power Engineer's charge, the Armourer's
+ * restoring - go the same way (the level, the limit, the price, «Доверие» +1), but their first side is the player's own
+ * thing worked on in its slot (TradeServicesSC: the hand first, else the first that fits; none - R_NO_ITEM): the price is
+ * taken, then the piece charged or the trophy replaced. Deals sharing a counter (TradeOfferSC.counter: the three charges)
+ * count and limit together; an unlimited one (the restoring) isn't counted at all.
  */
 public final class TradeServerSC {
 
     /** execute's results and TRADE_RESULT's "code": OK, or why not (lang sc.trade.result.<RESULT_KEYS[code]>). */
     public static final int OK = 0, R_UNKNOWN = 1, R_ENEMY = 2, R_LEVEL = 3, R_LIMIT = 4, R_CHIPS_CAP = 5, R_MISSING = 6,
             R_NO_SETTLEMENT = 7, R_NOT_HERE = 8, R_CONTRACTS_CAP = 9, R_TAKEN = 10, R_NOT_ON_BOARD = 11, R_NOT_DONE = 12,
-            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15;
+            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16;
+    /** Appended only (Ф3: "noItem" - a service found nothing of the player's to work on). */
     public static final String[] RESULT_KEYS = {"ok", "unknown", "enemy", "level", "limit", "chipsCap", "missing", "noSettlement",
-            "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial"};
+            "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem"};
     /** TRADE_STATE "anchor": nobody placed the first anchor yet / it is the viewer's, unpaid / paid to the viewer / someone else's. */
     public static final int ANCHOR_OPEN = 0, ANCHOR_YOURS = 1, ANCHOR_PAID = 2, ANCHOR_OTHER = 3;
     /** TRADE_STATE board "st": on the board, not taken / taken and open / handed in today. */
@@ -144,7 +151,8 @@ public final class TradeServerSC {
     }
 
     /**
-     * For the world test (no window, no packets - a FakePlayer works): up to `times` deals of `key` with `t`.
+     * For the world test (no window, no packets - a FakePlayer works): up to `times` deals of `key` with `t` - the services
+     * too (the charge, the restoring: on the FakePlayer's held / first fitting thing).
      * @return OK if at least one was made, else why not (R_*)
      */
     public static int execute(EntityPlayer p, EntityTunerSC t, String key, int times) {
@@ -204,6 +212,9 @@ public final class TradeServerSC {
         int why = OK;
         while (done < times) {
             why = refusal(c, o);
+            if (why == OK && o.service() && TradeServicesSC.slot(c.p, o) < 0) {
+                why = R_NO_ITEM;                            // nothing (left) of the player's to charge or restore
+            }
             if (why == OK && !affordable(c, o)) {
                 why = R_MISSING;
             }
@@ -234,7 +245,8 @@ public final class TradeServerSC {
         if (TradeRulesSC.remaining(o, used(c, o)) <= 0) {
             return R_LIMIT;
         }
-        if (o.sell() && TradeRulesSC.chipsAllowed(c.rec.chips, o.out.count) < o.out.count) {
+        int out = o.sell() ? TradeRulesSC.outCount(o, c.level, c.pct(o)) : 0;
+        if (o.sell() && TradeRulesSC.chipsAllowed(c.rec.chips, out) < out) {
             return R_CHIPS_CAP;
         }
         if (o.outKind == TradeOfferSC.OUT_MAP && c.s == null) {
@@ -243,10 +255,10 @@ public final class TradeServerSC {
         return OK;
     }
 
-    /** The player's inventory holds every side of one deal of `o` at its price here. */
+    /** The player's inventory holds every side of one deal of `o` at its price here (a service: its price - the thing is slot's). */
     private static boolean affordable(Ctx c, TradeOfferSC o) {
         int[] n = TradeRulesSC.playerCounts(o, c.level, c.pct(o));
-        for (int k = 0; k < o.in.length; k++) {
+        for (int k = o.service() ? 1 : 0; k < o.in.length; k++) {
             if (o.in[k].countIn(c.p.inventory.mainInventory) < n[k]) {
                 return false;
             }
@@ -254,15 +266,22 @@ public final class TradeServerSC {
         return true;
     }
 
-    /** One deal (refusal and affordable said yes): the inputs out, the output in, the counters and «Доверие». */
+    /**
+     * One deal (refusal and affordable said yes, a service's slot found): the inputs out, the output in (a service: the
+     * player's thing worked on in its slot), the counters and «Доверие».
+     */
     private static void perform(Ctx c, TradeOfferSC o) {
         int[] n = TradeRulesSC.playerCounts(o, c.level, c.pct(o));
-        for (int k = 0; k < o.in.length; k++) {
-            o.in[k].takeFrom(c.p.inventory.mainInventory, n[k]);
+        int slot = o.service() ? TradeServicesSC.slot(c.p, o) : -1;     // before the payment: the hand's thing, else the first that fits
+        for (int k = o.service() ? 1 : 0; k < o.in.length; k++) {
+            o.in[k].takeFrom(c.p.inventory.mainInventory, n[k], o.in[k].any() ? c.p.inventory.currentItem : -1);
         }
-        if (o.outKind == TradeOfferSC.OUT_ITEM) {
+        if (o.service()) {
+            TradeServicesSC.apply(c.p, o, slot);
+        } else if (o.outKind == TradeOfferSC.OUT_ITEM) {
             ItemStack out = o.out.display();
             if (o.sell()) {
+                out.stackSize = TradeRulesSC.outCount(o, c.level, c.pct(o));    // a trophy's sale: by the level (ПО-6)
                 c.rec.chips += out.stackSize;
             }
             give(c.p, out);
@@ -282,10 +301,16 @@ public final class TradeServerSC {
         c.refreshLevel();
     }
 
-    /** Times `o` was made by this player in its window (today here; a global one - its period everywhere). */
+    /**
+     * Times `o` was made by this player in its window (today here; a global one - its period everywhere) - by its counter
+     * (the deals sharing one together); an unlimited deal: 0 (never counted).
+     */
     static int used(Ctx c, TradeOfferSC o) {
+        if (o.unlimited()) {
+            return 0;
+        }
         if (o.global) {
-            int n = c.rec.globalCount(o.key, TradeRulesSC.period(c.day, o.periodDays));
+            int n = c.rec.globalCount(o.counter, TradeRulesSC.period(c.day, o.periodDays));
             if (TradeTableSC.ELDER_CRUMB.equals(o.key)) {
                 c.rec.rollWeek(SettlementSC.week(c.p.worldObj));
                 n = Math.max(n, c.rec.crumbs);
@@ -294,15 +319,18 @@ public final class TradeServerSC {
         }
         if (c.s != null) {
             SettlementRegistrySC.LocalRec l = c.s.localIfAny(c.id);
-            return l == null || l.day != c.day ? 0 : l.count(o.key);
+            return l == null || l.day != c.day ? 0 : l.count(o.counter);
         }
         NBTTagCompound u = c.rec.extra.getCompoundTag(EXTRA);
-        return u.getLong("uDay") != c.day ? 0 : u.getCompoundTag("uCounts").getInteger(o.key);
+        return u.getLong("uDay") != c.day ? 0 : u.getCompoundTag("uCounts").getInteger(o.counter);
     }
 
     private static void count(Ctx c, TradeOfferSC o) {
+        if (o.unlimited()) {
+            return;
+        }
         if (o.global) {
-            c.rec.addGlobalCount(o.key, TradeRulesSC.period(c.day, o.periodDays), 1);
+            c.rec.addGlobalCount(o.counter, TradeRulesSC.period(c.day, o.periodDays), 1);
             if (TradeTableSC.ELDER_CRUMB.equals(o.key)) {
                 c.rec.rollWeek(SettlementSC.week(c.p.worldObj));
                 c.rec.crumbs++;
@@ -310,11 +338,11 @@ public final class TradeServerSC {
         } else if (c.s != null) {
             SettlementRegistrySC.LocalRec l = c.s.local(c.id);
             l.rollDay(c.day);
-            l.addCount(o.key, 1);
+            l.addCount(o.counter, 1);
         } else {
             NBTTagCompound u = c.rec.extra.getCompoundTag(EXTRA);
             NBTTagCompound counts = u.getLong("uDay") == c.day ? u.getCompoundTag("uCounts") : new NBTTagCompound();
-            counts.setInteger(o.key, counts.getInteger(o.key) + 1);
+            counts.setInteger(o.counter, counts.getInteger(o.counter) + 1);
             u.setLong("uDay", c.day);
             u.setTag("uCounts", counts);
             c.rec.extra.setTag(EXTRA, u);
@@ -512,6 +540,7 @@ public final class TradeServerSC {
             NBTTagCompound e = new NBTTagCompound();
             e.setString("k", o.key);
             e.setIntArray("n", TradeRulesSC.playerCounts(o, c.level, c.pct(o)));
+            e.setInteger("o", TradeRulesSC.outCount(o, c.level, c.pct(o)));
             e.setInteger("left", TradeRulesSC.remaining(o, used(c, o)));
             e.setByte("why", (byte) refusal(c, o));
             offers.appendTag(e);

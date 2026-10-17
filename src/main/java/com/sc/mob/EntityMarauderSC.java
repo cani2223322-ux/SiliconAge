@@ -113,10 +113,13 @@ public class EntityMarauderSC extends EntityArmoredMobSC implements IFactionLoot
         return true;
     }
 
-    /** ПС-4: the blade 6, the club 4, the fist 3..4 (the cutter in hand) - never the held item's attributes. */
+    /**
+     * ПС-4: the blade 6, the club 4, the fist 3..4 (the cutter in hand) - never the held item's attributes; Ф3: x damageMul()
+     * (a Commander's group, ПС-21).
+     */
     @Override
     public boolean attackEntityAsMob(Entity target) {
-        return MobCombatSC.melee(this, target, MobCombatSC.meleeDamage(getHeldItem(), MobCombatSC.FIST, rand));
+        return MobCombatSC.melee(this, target, MobCombatSC.meleeDamage(getHeldItem(), MobCombatSC.FIST, rand) * damageMul());
     }
 
     @Override

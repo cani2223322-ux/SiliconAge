@@ -59,6 +59,12 @@ public final class SubstrateConfigSC {
     public static boolean villages = true;
     /** Ф2, ПГ-7: the guards attack after a third violation within 60 s (off - ★: warnings and «Доверие» only; a blow at a creature always provokes). */
     public static boolean guardsAggroOnViolations = false;
+    /**
+     * Ф3, ПБ-17 (docs/plan-substrate-tech-f3.md §2.1): the Substrate's mobs use the ПЭ-1 - one Jammer in 50 carries one, the
+     * City's Commandant fires it at the hostiles (off - and with weapons.pe1.enabled or affectsPlayers off - no mob carries a
+     * ПЭ-1: a carrier gets the Ion Cutter instead, the Commandant only its blade).
+     */
+    public static boolean mobsUseEmp = true;
 
     private SubstrateConfigSC() {
     }
@@ -105,6 +111,9 @@ public final class SubstrateConfigSC {
         guardsAggroOnViolations = c.getBoolean("guardsAggroOnViolations", d, false,
                 "A settlement's guards attack a player after a third violation within 60 s (off: warnings and reputation only; hitting a settler or a guard always makes them attack)"
                 + " / Стражи поселения нападают после третьего нарушения за 60 с (выкл.: только предупреждения и репутация; удар по жителю или стражу - нападение всегда)");
+        mobsUseEmp = c.getBoolean("mobsUseEmp", d, true,
+                "The Substrate's mobs use the PE-1: one Jammer in 50 carries one, a City's Commandant fires it at hostiles (off: no mob ever holds a PE-1)"
+                + " / Мобы Подложки применяют ПЭ-1: он есть у 1 из 50 Глушителей, Комендант города стреляет им по враждебным (выкл.: ПЭ-1 ни у одного моба)");
     }
 
     /** As ConfigSC.num: Forge clamps by comparisons and NaN passes them - NaN / infinity in the file: the default. */

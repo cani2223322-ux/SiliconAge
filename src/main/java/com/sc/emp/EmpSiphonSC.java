@@ -37,6 +37,9 @@ import net.minecraft.world.World;
  * stops; no heat or boil), no «Страж». One stream delivers at most MobArmorMathSC.MOB_SIPHON_STREAM_CAP EU out of a
  * mob: past that the mob keeps losing its reserve and the rest is vented. The stream's target goes through the
  * target* helpers below: for a player they are exactly the old calls, so the player path is unchanged.
+ *
+ * Ф3 (docs/plan-substrate-tech-f3.md §3.3, ПБ-19): a mob's raised personal EMP screen takes the stream's first second (its
+ * start) or any later one - the screen drops for 30 s and the stream stops (sc.emp.siphon.stop.mobscreen).
  */
 public final class EmpSiphonSC {
 
@@ -137,6 +140,13 @@ public final class EmpSiphonSC {
         if (border != null) {
             EmpGunLogicSC.fx(p, EmpNetSC.FX_ABSORBED, target.getEntityId(), border[0], border[1], border[2]);
             stop(p, u, "sc.emp.siphon.stop.screen");
+            return false;
+        }
+        if (!(target instanceof EntityPlayer) && EmpMobSC.siphonScreenTakes(target)) {
+            // Ф3, ПБ-19: a mob's personal EMP screen - the start or any second of the stream drops it and the stream stops
+            net.minecraft.util.Vec3 c = EmpShotSC.centre(target);
+            EmpGunLogicSC.fx(p, EmpNetSC.FX_ABSORBED, target.getEntityId(), c.xCoord, c.yCoord, c.zCoord);
+            stop(p, u, "sc.emp.siphon.stop.mobscreen");
             return false;
         }
         if (target instanceof EntityPlayer) {

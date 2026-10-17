@@ -67,6 +67,9 @@ public class BlockArmorStationSC extends Block {
         if (!(te instanceof TileEntityArmorStationSC)) {
             return false;
         }
+        if (com.sc.mob.TrophyRestoreSC.onStationClick(world, x, y, z, player)) {
+            return true;                                     // Подложка Ф3, ПТ-11: a right-click with a trophy in hand restores it
+        }
         ItemStack held = player.getCurrentEquippedItem();
         if (holdsGas(held)) {                                // a bucket / cell of a gas: into its tank, as a machine
             if (!world.isRemote) {

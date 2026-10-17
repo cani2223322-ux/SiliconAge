@@ -3,10 +3,12 @@ package com.sc.settle;
 import com.sc.block.BlockDockSC;
 import com.sc.block.BlockSettlementCoreSC;
 import com.sc.block.BlockSettlementDecorSC;
+import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
 import com.sc.block.ItemBlockDockSC;
 import com.sc.block.ItemBlockSettlementCoreSC;
 import com.sc.block.ItemBlockSettlementDecorSC;
+import com.sc.block.ItemBlockShowcase2SC;
 import com.sc.block.ItemBlockShowcaseSC;
 import com.sc.tileentity.TileEntitySettlementCoreSC;
 import com.sc.tileentity.TileEntityShowcaseSC;
@@ -20,13 +22,15 @@ import net.minecraft.item.ItemStack;
  * after SubstrateBlocksSC). Registry and tile ids are what worlds keep - fixed here: "settlementCore" (package C),
  * "showcaseSC" (package S), "dockSC" (package B), the trim "settlementDecor" and "settlementGlass" (the settlements' metal,
  * coils and lead glass: BlockSettlementDecorSC); tiles "SiliconAge.settlementCore", "SiliconAge.showcase". The
- * Settlement Brick is the Substrate rock's meta 8 (SubstrateBlocksSC.SETTLEMENT_BRICK, package S). Registered always,
+ * Settlement Brick is the Substrate rock's meta 8 (SubstrateBlocksSC.SETTLEMENT_BRICK, package S). Ф3
+ * (docs/plan-substrate-tech-f3.md §2.2): "showcase2SC" - the Ф3 workshops' showcase machines (BlockShowcase2SC, package S).
+ * Registered always,
  * the dimension off too (a world that has them keeps loading). None is in a creative tab; NEI hides them (package D).
  * Shared core: only the coordinator edits this file.
  */
 public final class SettlementBlocksSC {
 
-    public static Block core, showcase, dock, decor, glass;
+    public static Block core, showcase, dock, decor, glass, showcase2;
 
     private SettlementBlocksSC() {
     }
@@ -44,6 +48,13 @@ public final class SettlementBlocksSC {
         GameRegistry.registerBlock(decor, ItemBlockSettlementDecorSC.class, "settlementDecor");
         glass = new BlockSettlementDecorSC.Glass();
         GameRegistry.registerBlock(glass, ItemBlockSettlementDecorSC.class, "settlementGlass");
+        showcase2 = new BlockShowcase2SC();
+        GameRegistry.registerBlock(showcase2, ItemBlockShowcase2SC.class, "showcase2SC");
+    }
+
+    /** Ф3: a showcase machine of the second block, meta `meta` (BlockShowcase2SC). */
+    public static ItemStack showcase2Stack(int meta) {
+        return new ItemStack(showcase2, 1, meta);
     }
 
     /** A showcase machine of meta `meta` (BlockShowcaseSC). */
@@ -65,6 +76,6 @@ public final class SettlementBlocksSC {
      * them (package C), a creative player only one standing outside every settlement (SettlementProtectSC.takenAway).
      */
     public static boolean unbreakable(Block b) {
-        return b != null && (b == core || b == showcase || b == dock || b == decor || b == glass);
+        return b != null && (b == core || b == showcase || b == dock || b == decor || b == glass || b == showcase2);
     }
 }

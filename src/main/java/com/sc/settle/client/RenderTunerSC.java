@@ -25,6 +25,12 @@ import net.minecraft.util.ResourceLocation;
  * the two diode eyes in the profession's colour (the armour's light colours, ModelArmorGlowSC.COLORS) and the mood
  * lamp - on the stalk and a pip on the chest strap - green / yellow / red (DW_MOOD; «враг рядом» blinks). The name
  * and profession over the head (SettlementClientSC.label).
+ * <p>
+ * Ф3, package S (docs/plan-substrate-tech-f3.md §6.1, rule ПЖ-8): the Power Engineer - a coil on the back of the pack
+ * whose core glows white-blue and pulses (full-bright, the renderer's); the Armourer - Nano pieces over the overall (a
+ * chest plate below the strap's pip, shoulder plates); the Salvager - a bag of scrap over the pack, a rod and a plate
+ * sticking out of it. Their parts' UV lie in the head's unused hat area and beside the Elder's cloak - each profession's
+ * skin paints only its own (tools/gen_settlement3_tex.py: tuner_powerEngineer, tuner_armourer, tuner_salvager).
  */
 @SideOnly(Side.CLIENT)
 public class RenderTunerSC extends RenderBiped {
@@ -33,9 +39,12 @@ public class RenderTunerSC extends RenderBiped {
     public static final float SCALE_XZ = 0.88F, SCALE_Y = 0.95F;
     /**
      * The diode eyes by NpcKindSC ordinal (ModelArmorGlowSC.COLORS): the Elder the dome's turquoise, the Technologist
-     * blue, the Metallurgist orange, the Gas Technician violet, the Cartographer yellow.
+     * blue, the Metallurgist orange, the Gas Technician violet, the Cartographer yellow; (the guards' two unused); Ф3 - the
+     * Power Engineer white, the Armourer red, the Salvager green.
      */
-    public static final int[] DIODES = {0x40E0FF, 0x4A7CFF, 0xFF9A30, 0xB060FF, 0xFFE040};
+    public static final int[] DIODES = {0x40E0FF, 0x4A7CFF, 0xFF9A30, 0xB060FF, 0xFFE040, 0x40E0FF, 0x40E0FF, 0xFFFFFF, 0xFF4040, 0x50FF70};
+    /** Ф3: the Power Engineer's coil core - white-blue, pulsing. */
+    public static final int COIL = 0xB4F0FF;
     /** The mood lamp: calm, alarm, an enemy near. */
     public static final int[] MOOD = {0x50FF70, 0xFFE040, 0xFF4040};
 
@@ -90,6 +99,10 @@ public class RenderTunerSC extends RenderBiped {
         if (k == NpcKindSC.CARTOGRAPHER) {
             SettlementClientSC.lamp(model.antennaTip, diode, 0.6F + 0.4F * (float) Math.abs(Math.sin(t.ticksExisted * 0.1D)));
         }
+        if (k == NpcKindSC.POWER_ENGINEER) {                    // Ф3: the coil's core, a slow pulse with a flicker
+            float c = 0.55F + 0.35F * (float) Math.abs(Math.sin((t.ticksExisted + partial) * 0.15D)) + ((t.ticksExisted / 3) % 7 == 0 ? 0.1F : 0F);
+            SettlementClientSC.lamp(model.coilCore, COIL, c);
+        }
         GL11.glPopMatrix();
     }
 
@@ -115,8 +128,12 @@ public class RenderTunerSC extends RenderBiped {
         final ModelRenderer pack, stalk, mask;
         /** By profession. */
         final ModelRenderer collar, cloak, loupe, apron, cylinders, antenna;
+        /** Ф3, by profession: the Power Engineer's coil, the Armourer's chest and shoulder plates, the Salvager's bag and its scrap. */
+        final ModelRenderer coil, plate, pauldron, pauldronLeft, sack, scrapRod, scrapPlate;
         /** Full-bright, drawn by the renderer (never in render()): the diode eyes (head), the lamp and the chest pip (body), the antenna's tip (body). */
         final ModelRenderer eyes, lamp, antennaTip;
+        /** Ф3, full-bright: the coil's core (body). */
+        final ModelRenderer coilCore;
 
         public ModelTunerSC() {
             super(0F, 0F, 64, 64);
@@ -136,6 +153,18 @@ public class RenderTunerSC extends RenderBiped {
             lamp = loose(1.5F, -4F, 4F, 2, 2, 2);
             lamp.addBox(2F, 2F, -2.5F, 1, 1, 1);                 // the pip on the chest strap
             antennaTip = loose(-3.5F, -10F, 3.5F, 2, 2, 2);
+            // Ф3 - the UV in the hat area (32..63, 0..15: the headwear is hidden) and beside / over the Elder's cloak
+            coil = part(bipedBody, 50, 0, -2F, 2F, 5F, 4, 4, 3);
+            coilCore = loose(-1F, 3F, 7.6F, 2, 2, 1);
+            plate = part(bipedBody, 32, 0, -4F, 3F, -3F, 8, 5, 1);
+            pauldron = part(bipedRightArm, 32, 7, -3.5F, -2.5F, -2.5F, 5, 3, 5);
+            pauldronLeft = new ModelRenderer(this, 32, 7);
+            pauldronLeft.mirror = true;
+            pauldronLeft.addBox(-1.5F, -2.5F, -2.5F, 5, 3, 5);
+            bipedLeftArm.addChild(pauldronLeft);
+            sack = part(bipedBody, 36, 32, -3F, 3F, 5F, 6, 6, 4);
+            scrapRod = part(bipedBody, 56, 32, 1F, 0F, 6F, 1, 4, 1);
+            scrapPlate = part(bipedBody, 56, 37, -2.5F, 1F, 7F, 3, 3, 1);
         }
 
         private ModelRenderer part(ModelRenderer parent, int u, int v, float x, float y, float z, int w, int h, int d) {
@@ -159,6 +188,9 @@ public class RenderTunerSC extends RenderBiped {
             apron.showModel = k == NpcKindSC.METALLURGIST;
             cylinders.showModel = k == NpcKindSC.GAS_TECH;
             antenna.showModel = k == NpcKindSC.CARTOGRAPHER;
+            coil.showModel = k == NpcKindSC.POWER_ENGINEER;
+            plate.showModel = pauldron.showModel = pauldronLeft.showModel = k == NpcKindSC.ARMOURER;
+            sack.showModel = scrapRod.showModel = scrapPlate.showModel = k == NpcKindSC.SALVAGER;
         }
     }
 }

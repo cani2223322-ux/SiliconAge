@@ -60,6 +60,11 @@ import net.minecraftforge.common.util.FakePlayer;
  * (SettlementProtectSC cancels them in the dome and the belt) - nothing here. A name tag can't be put on it (the click
  * is the trade's). Its death: SettlementRegistrySC.slotDied (the Clone Capsule's timer, package C). From a spawn egg: a
  * stray - a random trading profession and name, no dome (it trades at the base prices: package T).
+ * <p>
+ * Ф3, package S (docs/plan-substrate-tech-f3.md §6.1, rule ПЖ-8): the Power Engineer, the Armourer and the Salvager are
+ * kinds like the others (their posts the plan's - the Armourer's at the guard square's armour station; their looks
+ * RenderTunerSC's - the coil on the pack, Nano pieces over the overall, the scrap bag); a spawn egg may make any of the
+ * seven traders (TRADERS); their sneaking right-click adds a line of what they do for a player (HINTED).
  */
 public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNpcSC, ISubstrateNativeSC {
 
@@ -81,8 +86,11 @@ public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNp
     public static final int ALARM_NEAR = 24, MOOD_HOLD = 60;
     /** How often it looks round (the danger, the guards' alarm, a customer), ticks. */
     public static final int THINK = 10;
-    /** A spawn egg's Tuner: one of the four trading professions (the Elder belongs to a settlement). */
-    public static final NpcKindSC[] TRADERS = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.CARTOGRAPHER};
+    /** A spawn egg's Tuner: one of the trading professions (the Elder belongs to a settlement) - Ф3's three too. */
+    public static final NpcKindSC[] TRADERS = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.CARTOGRAPHER,
+            NpcKindSC.POWER_ENGINEER, NpcKindSC.ARMOURER, NpcKindSC.SALVAGER};
+    /** Ф3 (ПЖ-8): the professions whose sneaking right-click adds a second line - what they do for a player (sc.settle.tuner.hint.<key>). */
+    public static final NpcKindSC[] HINTED = {NpcKindSC.POWER_ENGINEER, NpcKindSC.ARMOURER, NpcKindSC.SALVAGER};
     /** The plaza at dusk: slot i stands PLAZA_SPREAD + i % 3 blocks off the point, at i x the golden angle round it. */
     public static final int PLAZA_SPREAD = 2;
 
@@ -384,6 +392,13 @@ public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNp
                 new ChatComponentTranslation("sc.settle.rep." + ReputationSC.LEVEL_KEYS[level]));
         msg.getChatStyle().setColor(EnumChatFormatting.AQUA);
         p.addChatComponentMessage(msg);
+        for (NpcKindSC k : HINTED) {                            // Ф3: what the new professions do for a player
+            if (kind() == k) {
+                IChatComponent hint = new ChatComponentTranslation("sc.settle.tuner.hint." + k.key);
+                hint.getChatStyle().setColor(EnumChatFormatting.GRAY);
+                p.addChatComponentMessage(hint);
+            }
+        }
     }
 
     /** The Clone Capsule's timer starts (package C respawns it). */

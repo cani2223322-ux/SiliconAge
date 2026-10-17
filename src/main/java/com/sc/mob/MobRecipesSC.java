@@ -21,14 +21,17 @@ import net.minecraft.item.ItemStack;
  * <li>4 Shell Firmware -> 1 Copper Dust, 20% a Transistor (its traces and its controller chip);</li>
  * <li>4 Nano Armour Scrap -> 1 Titanium Concentrate (Nano is built of titanium and polymer plates: a chestplate holds
  * 2 titanium ingots - a tenth of that is about what four scraps of 40% Marauders give back).</li>
+ * <li>Ф3 (package T): 4 Quantum Armour Scrap -> 1 Tungsten Dust (Quantum is Nano + W-Ti plates), 4 Exo Armour Scrap ->
+ * 1 Niobium Dust (Exo is Quantum + Nb3Sn plates). TODO(balance)</li>
  * </ul>
- * The Stolen Cargo (Ф2, rule ПТ-10) has no recipe: a settlement's crate goes back to an Elder, not into a machine.
+ * The Stolen Cargo (Ф2, rule ПТ-10) has no recipe: a settlement's crate goes back to an Elder, not into a machine; nor do
+ * the Nanite Dust (the Salvager's only) and the Shield Core (a part of an Exo trophy's restoring, TrophyRestoreSC).
  * The inputs are this mod's own items: no other recipe in the pack can match them (-Dsc.packcheck).
  */
 public final class MobRecipesSC {
 
     /** Pieces a Crusher run takes; the Transistor's chance of a firmware run. */
-    public static final int FIRMWARE_IN = 4, SCRAP_IN = 4;
+    public static final int FIRMWARE_IN = 4, SCRAP_IN = 4, QUANTUM_SCRAP_IN = 4, EXO_SCRAP_IN = 4;
     public static final float FIRMWARE_TRANSISTOR = 0.2F;
     private static final int TICKS = 200;          // as the Crusher's ores
 
@@ -49,13 +52,35 @@ public final class MobRecipesSC {
                 new ItemStack[]{loot.stackOf(ItemCombatLootSC.LootKind.NANO_SCRAP, SCRAP_IN)}, null, null,
                 new ItemStack[]{ModItems.dust.stackOf(Material.TITANIUM)}, null, null,
                 TICKS, 0F));
+        RecipeRegistry.register(new MachineRecipe(MachineType.CRUSHER,
+                new ItemStack[]{loot.stackOf(ItemCombatLootSC.LootKind.QUANTUM_SCRAP, QUANTUM_SCRAP_IN)}, null, null,
+                new ItemStack[]{ModItems.dust.stackOf(Material.TUNGSTEN)}, null, null,
+                TICKS, 0F));
+        RecipeRegistry.register(new MachineRecipe(MachineType.CRUSHER,
+                new ItemStack[]{loot.stackOf(ItemCombatLootSC.LootKind.EXO_SCRAP, EXO_SCRAP_IN)}, null, null,
+                new ItemStack[]{ModItems.dust.stackOf(Material.NIOBIUM)}, null, null,
+                TICKS, 0F));
     }
 
-    /** How many of a kind one Crusher run takes (the tooltip); 0 - the Crusher never takes it (the Stolen Cargo, ПТ-10). */
+    /**
+     * How many of a kind one Crusher run takes (the tooltip); 0 - the Crusher never takes it (the Stolen Cargo, ПТ-10; the
+     * Nanite Dust, the Shield Core).
+     */
     public static int inputCount(ItemCombatLootSC.LootKind kind) {
-        if (kind == ItemCombatLootSC.LootKind.STOLEN_CARGO) {
+        if (kind == null) {
             return 0;
         }
-        return kind == ItemCombatLootSC.LootKind.NANO_SCRAP ? SCRAP_IN : FIRMWARE_IN;
+        switch (kind) {
+            case SHELL_FIRMWARE:
+                return FIRMWARE_IN;
+            case NANO_SCRAP:
+                return SCRAP_IN;
+            case QUANTUM_SCRAP:
+                return QUANTUM_SCRAP_IN;
+            case EXO_SCRAP:
+                return EXO_SCRAP_IN;
+            default:
+                return 0;
+        }
     }
 }

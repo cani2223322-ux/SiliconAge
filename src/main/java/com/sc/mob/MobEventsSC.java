@@ -41,8 +41,12 @@ import net.minecraftforge.event.entity.player.EntityInteractEvent;
  * The damage log is transient - kept beside the mob (weakly), never saved: a mob reloaded from its chunk starts a new
  * fight. Only real players (EntityPlayerMP, not a FakePlayer) are named in it; everything else - mobs, fire, a mob
  * grinder's FakePlayer - only adds to the total, so a tap by a player and a grinder's kill don't make a trophy.
- * Note for Ф3: a blow the mob's shield takes whole never reaches LivingHurtEvent (EntityArmoredMobSC.damageEntity), so
- * it isn't counted - no Ф1 mob has a shield.
+ * <p>
+ * Ф3 (docs/plan-substrate-tech-f3.md §4.10, rule ПТ-15): the log is kept for every hostile native (ISubstrateNativeSC and
+ * IMob - the armoured ones and the swarm, the drones, the mimic: their faction loot goes to the trophy player too), and the
+ * part of a blow a mob's shield takes - it never reaches LivingHurtEvent (EntityArmoredMobSC.damageEntity: the shield
+ * first, then the rest as a hurt) - comes in through shieldTook, so the fight against an Exo shield counts. The guards and
+ * the Tuners (natives, not IMob) are never logged.
  */
 public final class MobEventsSC {
 
@@ -121,15 +125,23 @@ public final class MobEventsSC {
     /** Last, after every mod changed the amount: the blow as it lands (before the armour - that is the fight too). */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onHurt(LivingHurtEvent e) {
-        if (!(e.entityLiving instanceof EntityArmoredMobSC) || e.entityLiving.worldObj.isRemote || !(e.ammount > 0F)) {
+        if (!MobCombatSC.hostileNative(e.entityLiving) || e.entityLiving.worldObj.isRemote || !(e.ammount > 0F)) {
             return;
         }
-        EntityArmoredMobSC mob = (EntityArmoredMobSC) e.entityLiving;
+        EntityLivingBase mob = e.entityLiving;
         // an overkill blow counts only what there was to take: 1000 from a player doesn't outweigh the whole fight
-        float amount = Math.min(e.ammount, mob.getHealth() + Math.max(0F, mob.mobArmor().reserve));
-        Entity src = e.source.getEntity();
-        if (src == null && e.source.getSourceOfDamage() instanceof EntityArrow) {
-            src = ((EntityArrow) e.source.getSourceOfDamage()).shootingEntity;
+        float reserve = mob instanceof IArmoredMobSC ? Math.max(0F, ((IArmoredMobSC) mob).mobArmor().reserve) : 0F;
+        log(mob, e.source, Math.min(e.ammount, mob.getHealth() + reserve));
+    }
+
+    /** Server: `amount` of a blow from `source` into the mob's damage log (the source's player, an arrow's shooter). */
+    private static void log(EntityLivingBase mob, net.minecraft.util.DamageSource source, float amount) {
+        if (!(amount > 0F) || source == null) {
+            return;
+        }
+        Entity src = source.getEntity();
+        if (src == null && source.getSourceOfDamage() instanceof EntityArrow) {
+            src = ((EntityArrow) source.getSourceOfDamage()).shootingEntity;
         }
         synchronized (LOGS) {
             DamageLog log = LOGS.get(mob);
@@ -144,6 +156,19 @@ public final class MobEventsSC {
                 log.players.put(id, (was == null ? 0F : was.floatValue()) + amount);
             }
         }
+    }
+
+    /**
+     * Подложка Ф3 (docs/plan-substrate-tech-f3.md §4.10, package M): the mob's shield took `amount` of a blow whole or in part
+     * (MobArmorSC.shield) - that part never reaches LivingHurtEvent, yet it is the fight: counted in the damage log as onHurt
+     * counts a blow (the source's player, an arrow's shooter). Server; a hostile native's only (a guard's shield is no fight
+     * for a trophy). The shield takes at most the reserve, so no overkill clamp is needed.
+     */
+    public static void shieldTook(EntityLivingBase mob, net.minecraft.util.DamageSource src, float amount) {
+        if (mob == null || mob.worldObj == null || mob.worldObj.isRemote || !MobCombatSC.hostileNative(mob)) {
+            return;
+        }
+        log(mob, src, amount);
     }
 
     /**

@@ -1,16 +1,20 @@
 package com.sc.emp.client;
 
 import java.nio.FloatBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 
 import com.sc.emp.EmpMathSC;
+import com.sc.emp.EmpMobGunSC;
 import com.sc.emp.EmpMode;
 import com.sc.emp.EmpNetSC;
 import com.sc.emp.ItemEmpGunSC;
 import com.sc.init.ModItems;
+import com.sc.mob.IMobActionSC;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -18,6 +22,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.client.IItemRenderer;
@@ -32,6 +37,9 @@ import net.minecraftforge.client.MinecraftForgeClient;
  * The capsule glows full-bright in the current mode's colour (EmpMode.rgb) and is filled from the back as far as the
  * gun is charged; bands run back through it while a Siphon stream pulls energy in, and it throbs faster through a
  * Point / Pulse charge-up. ПЭ-1М: a second pair of copper rings round the capsule and a brass band on the needle.
+ * In a mob's hand (Подложка Ф3, EmpMobGunSC - it has no charge of its own) the capsule glows a third full at rest and fills
+ * bright in the mode's colour through a charge-up the mob's telegraph tells (IMobActionSC.ACT_EMP_POINT: the barrel turns
+ * blue; ACT_EMP_PULSE: violet) - the warning every client sees.
  *
  * Poses: in a slot a fixed 3/4 view from a little above; dropped, Forge turns and bobs it (~0.75 blocks long); in the
  * hand (first and third person) Forge / vanilla first apply their flat-item chain (ForgeHooksClient.renderEquippedItem
@@ -80,6 +88,11 @@ public final class RenderEmpGunSC implements IItemRenderer {
 
     private static final FloatBuffer FP_POSE = firstPersonPose(), TP_POSE = thirdPersonPose();
 
+    /** A mob's gun at rest shows this much of its capsule (Ф3). */
+    private static final float MOB_REST_FILL = 0.35F;
+    /** Render thread: a mob's charge-up as first seen - entity id -> {telegraph, System ms} (the client doesn't know its start). */
+    private static final Map<Integer, long[]> MOB_CHARGE = new HashMap<Integer, long[]>();
+
     private RenderEmpGunSC() {
     }
 
@@ -103,9 +116,12 @@ public final class RenderEmpGunSC implements IItemRenderer {
     @Override
     public void renderItem(ItemRenderType type, ItemStack item, Object... data) {
         EntityPlayer holder = null;
+        EntityLivingBase mobHolder = null;
         if ((type == ItemRenderType.EQUIPPED || type == ItemRenderType.EQUIPPED_FIRST_PERSON) && data.length > 1
                 && data[1] instanceof EntityPlayer) {
             holder = (EntityPlayer) data[1];
+        } else if (type == ItemRenderType.EQUIPPED && data.length > 1 && data[1] instanceof EntityLivingBase) {
+            mobHolder = (EntityLivingBase) data[1];             // Ф3: a Jammer carrier, the Commandant
         }
         EmpMode mode = ItemEmpGunSC.modeOf(item);
         int cap = ItemEmpGunSC.capacityOf(item);
@@ -124,6 +140,13 @@ public final class RenderEmpGunSC implements IItemRenderer {
         }
         if (holder != null && EmpFxSC.streamingFrom(holder.getEntityId())) {
             streaming = true;
+        }
+        if (mobHolder != null) {
+            // a mob's ПЭ-1: its charge-up by its telegraph (the barrel turns blue - ПБ-17), a third of the capsule lit at rest
+            int act = mobHolder instanceof IMobActionSC ? ((IMobActionSC) mobHolder).mobAction() : IMobActionSC.ACT_NONE;
+            chargeUp = mobChargeUp(mobHolder.getEntityId(), act, ItemEmpGunSC.upgraded(item), ms);
+            mode = act == IMobActionSC.ACT_EMP_PULSE ? EmpMode.PULSE : EmpMode.POINT;
+            fill = chargeUp >= 0F ? MOB_REST_FILL + (1F - MOB_REST_FILL) * chargeUp : MOB_REST_FILL;
         }
 
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_LIGHTING_BIT | GL11.GL_CURRENT_BIT | GL11.GL_COLOR_BUFFER_BIT
@@ -160,6 +183,27 @@ public final class RenderEmpGunSC implements IItemRenderer {
             GL11.glPopAttrib();
             GL11.glColor4f(1F, 1F, 1F, 1F);
         }
+    }
+
+    /**
+     * A mob's charge-up 0..1 by the time its telegraph has been on (seen by this client), -1 at rest. The client doesn't know
+     * the server's start: a mob first seen mid-charge starts from there - the warning is only ever late, never early.
+     */
+    private static float mobChargeUp(int id, int act, boolean upgraded, long ms) {
+        if (act != IMobActionSC.ACT_EMP_POINT && act != IMobActionSC.ACT_EMP_PULSE) {
+            MOB_CHARGE.remove(id);
+            return -1F;
+        }
+        long[] c = MOB_CHARGE.get(id);
+        if (c == null || c[0] != act) {
+            if (MOB_CHARGE.size() > 64) {
+                MOB_CHARGE.clear();                             // mobs unloaded mid-charge: never many
+            }
+            c = new long[]{act, ms};
+            MOB_CHARGE.put(id, c);
+        }
+        int ticks = EmpMobGunSC.chargeTicks(act == IMobActionSC.ACT_EMP_PULSE ? EmpMode.PULSE : EmpMode.POINT, upgraded);
+        return ticks <= 0 ? 1F : Math.max(0F, Math.min(1F, (ms - c[1]) / (ticks * 50F)));
     }
 
     /** Our own player's stream runs (the server's readout, fresh). */

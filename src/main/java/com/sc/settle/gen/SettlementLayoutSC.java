@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
+import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
 import com.sc.dim.SubstrateTerrainSC;
 import com.sc.settle.NpcKindSC;
@@ -33,6 +34,13 @@ import com.sc.settle.npc.NpcNamesSC;
  * lead glass), the guard square 15 x 15 (armour station, 2..4 charge pads, the Clone Capsule), the ring of workshops
  * (one per Tuner profession of the roster), the living cells, 2 watch towers, the gate (the decontamination shower,
  * the guard post) and - Settlement and City - the dock 7 x 7 outside the gate, wholly outside the dome.</li>
+ * <li>Ф3 (docs/plan-substrate-tech-f3.md §6.2, §6.3; rules ПЖ-8, ПЖ-9, ПГ-11, ПГ-12): the roster of record version 2 -
+ * the Power Engineer, the Armourer and the Salvager among the Tuners, the Captain (by SettlementSizeSC.captain) and the
+ * City's Commandant after the Senior Wardens; the Power Engineer's workshop (its roof - the wind generator and the
+ * solar panels - a block higher: WORKSHOP_ROOF_H) and the Salvager's warehouse join the ring (a Settlement's and a
+ * City's six workshops: the square's four corners, then its sides - RING_SIDES); the Armourer has none - he works at
+ * the guard square's armour station (AT_ARMOURER), the Captain stands at P_SQUARE, the Commandant at P_PLAZA. A
+ * workshop's showcases are workshopLine's codes (the first block's metas, SHOWCASE2 + the second's).</li>
  * </ul>
  * The plan is worked out in the settlement's own frame: `a` along the main street towards the gate (gateDir), `p`
  * across it; the lots are placed in order (the gate, the workshops, the towers, the cells), each at the nearest free
@@ -66,6 +74,8 @@ public final class SettlementLayoutSC {
     public static final int WORKSHOP = 9, WORKSHOP_CITY = 11, HOUSE = 5, TOWER = 5, GATE_W = 7, GATE_D = 5;
     /** The lots' heights: their top face this many blocks over the floor (the dome fit). */
     public static final int WORKSHOP_H = 6, HOUSE_H = 5, TOWER_H = 11, GATE_H = 6, HEART_H = 7;
+    /** Ф3: the Power Engineer's workshop - the wind generator and the solar panels stand on its roof (one block over WORKSHOP_H). */
+    public static final int WORKSHOP_ROOF_H = 7;
     /** A tower's platform: one stands this many blocks over the floor (P_TOWER*). */
     public static final int TOWER_STAND = 10;
     /** Charge pads on the guard square: Outpost / Settlement / City. */
@@ -89,6 +99,25 @@ public final class SettlementLayoutSC {
     public static final int[][] PAD_AT = {{-5, -5}, {-5, 5}, {5, -5}, {5, 5}};
     /** Two Sentries spend the night by the Heart, here. */
     public static final int[][] NIGHT_AT = {{-4, -2}, {-4, 2}};
+    /**
+     * Ф3 (ПЖ-8): the Armourers' places by the armour station's front (the station at STATION, P_SQUARE - the Captain's -
+     * before it): the first beside P_SQUARE, a City's others on its other side and a step out.
+     */
+    public static final int[][] AT_ARMOURER = {{-5, 1}, {-5, -1}, {-4, 2}, {-4, -2}};
+
+    /** Ф3 (ПЖ-9): the seven trading professions - one of each in a Settlement, two of each in a City, in this order in the roster. */
+    public static final NpcKindSC[] TRADES = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.CARTOGRAPHER,
+            NpcKindSC.POWER_ENGINEER, NpcKindSC.ARMOURER, NpcKindSC.SALVAGER};
+    /** ПЖ-9: an Outpost's Cartographer has 1..3 different ones of these with him; a Settlement's 0..4 more Tuners are any of SETTLEMENT_EXTRA. */
+    public static final NpcKindSC[] OUTPOST_EXTRA = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.SALVAGER},
+            SETTLEMENT_EXTRA = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.POWER_ENGINEER};
+    /** Ф3: a workshopLine code from here on is a BlockShowcase2SC meta (code - SHOWCASE2); below it - a BlockShowcaseSC meta. */
+    public static final int SHOWCASE2 = 16;
+    /**
+     * Ф3: a Settlement's and a City's workshops past the square's four corners stand at its sides (in the settlement's
+     * frame, a multiple of the ring's offset c): left, right, behind - never in front (the street).
+     */
+    public static final int[][] RING_SIDES = {{0, -1}, {0, 1}, {-1, 0}};
 
     private static final long SITE_SALT = 0x5E771EL, ROSTER_SALT = 0x2057E2L, NAME_SALT = 0x4A3E5L, PLAN_SALT = 0x91A4L;
     /** The square's fixtures (no post on them), in the settlement's frame. */
@@ -294,45 +323,51 @@ public final class SettlementLayoutSC {
         return got[k / 2];
     }
 
-    /** The roster of a site (kinds: villagers first, the Elder at 0; then Sentries, then Senior Wardens) - §5 «Размеры». */
+    /**
+     * The roster of a site - record version 2 (Ф3, ПЖ-9, ПГ-11, ПГ-12; §5 «Размеры»): the villagers first - the Elder at
+     * 0, then the trading professions in TRADES order -, then the guards: the Sentries, the Senior Wardens, the Captain
+     * (SettlementSizeSC.captain by the site's seed), the Commandant (the City). The settlers:
+     * <ul>
+     * <li>Outpost (3..5): the Elder, a Cartographer and 1..3 different ones of OUTPOST_EXTRA;</li>
+     * <li>Settlement (8..12): the Elder, one of each of the seven TRADES and 0..4 more, any of SETTLEMENT_EXTRA;</li>
+     * <li>City (15..20): the Elder, two of each of the seven and the rest evenly (0..5 of them, none twice).</li>
+     * </ul>
+     * Pure: the plan, the self-test (rosterProblem) and RosterSC.restore ask the same.
+     */
     public static List<NpcKindSC> roster(Site s) {
         Random r = new Random(s.seed ^ ROSTER_SALT);
         SettlementSizeSC z = s.size;
         int total = z.tunersMin + r.nextInt(z.tunersMax - z.tunersMin + 1);
-        NpcKindSC[] trade = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.CARTOGRAPHER};
-        int[] count = new int[trade.length];
-        List<Integer> order = new ArrayList<Integer>();
-        for (int i = 0; i < trade.length; i++) {
-            order.add(Integer.valueOf(i));
-        }
+        int[] count = new int[NpcKindSC.values().length];
         if (z == SettlementSizeSC.OUTPOST) {
-            count[3] = 1;                                      // the Cartographer + 1..3 of the other three, all different
-            List<Integer> three = new ArrayList<Integer>(order.subList(0, 3));
-            Collections.shuffle(three, r);
-            for (int i = 0; i < total - 2 && i < three.size(); i++) {
-                count[three.get(i).intValue()]++;
+            count[NpcKindSC.CARTOGRAPHER.ordinal()] = 1;       // the Cartographer + 1..3 of the four, all different
+            List<NpcKindSC> extra = new ArrayList<NpcKindSC>(Arrays.asList(OUTPOST_EXTRA));
+            Collections.shuffle(extra, r);
+            for (int i = 0; i < total - 2 && i < extra.size(); i++) {
+                count[extra.get(i).ordinal()]++;
             }
         } else if (z == SettlementSizeSC.SETTLEMENT) {
-            for (int i = 0; i < trade.length; i++) {           // one of each + 3..7 more, any of the four
-                count[i] = 1;
+            for (NpcKindSC k : TRADES) {                       // one of each + 0..4 more, any of the four
+                count[k.ordinal()] = 1;
             }
-            for (int i = 0; i < total - 1 - trade.length; i++) {
-                count[r.nextInt(trade.length)]++;
+            for (int i = 0; i < total - 1 - TRADES.length; i++) {
+                count[SETTLEMENT_EXTRA[r.nextInt(SETTLEMENT_EXTRA.length)].ordinal()]++;
             }
         } else {
-            for (int i = 0; i < trade.length; i++) {           // two of each + the rest evenly
-                count[i] = 2;
+            for (NpcKindSC k : TRADES) {                       // two of each + the rest evenly
+                count[k.ordinal()] = 2;
             }
+            List<NpcKindSC> order = new ArrayList<NpcKindSC>(Arrays.asList(TRADES));
             Collections.shuffle(order, r);
-            for (int i = 0; i < total - 1 - 2 * trade.length; i++) {
-                count[order.get(i % trade.length).intValue()]++;
+            for (int i = 0; i < total - 1 - 2 * TRADES.length; i++) {
+                count[order.get(i % order.size()).ordinal()]++;
             }
         }
         List<NpcKindSC> out = new ArrayList<NpcKindSC>();
         out.add(NpcKindSC.ELDER);
-        for (int i = 0; i < trade.length; i++) {
-            for (int k = 0; k < count[i]; k++) {
-                out.add(trade[i]);
+        for (NpcKindSC k : TRADES) {
+            for (int i = 0; i < count[k.ordinal()]; i++) {
+                out.add(k);
             }
         }
         for (int i = 0; i < z.sentries; i++) {
@@ -340,6 +375,85 @@ public final class SettlementLayoutSC {
         }
         for (int i = 0; i < z.seniors; i++) {
             out.add(NpcKindSC.SENIOR_WARDEN);
+        }
+        if (z.captain(s.seed)) {
+            out.add(NpcKindSC.CAPTAIN);
+        }
+        if (z.commandant) {
+            out.add(NpcKindSC.COMMANDANT);
+        }
+        return out;
+    }
+
+    /**
+     * What breaks §6.2's roster rules in `roster` for a site of `size` and `seed` (null: nothing) - the self-test's check of
+     * roster() (and of a record's kinds). The order: the Elder (one, first), the settlers, the Sentries, the Senior Wardens,
+     * the Captain, the Commandant; the counts by size as roster() says.
+     */
+    public static String rosterProblem(SettlementSizeSC size, long seed, List<NpcKindSC> roster) {
+        int[] n = new int[NpcKindSC.values().length];
+        int tuners = 0, last = -1;
+        NpcKindSC[] guardOrder = {NpcKindSC.SENTRY, NpcKindSC.SENIOR_WARDEN, NpcKindSC.CAPTAIN, NpcKindSC.COMMANDANT};
+        for (int i = 0; i < roster.size(); i++) {
+            NpcKindSC k = roster.get(i);
+            n[k.ordinal()]++;
+            int rank = k.guard ? Arrays.asList(guardOrder).indexOf(k) : -1;
+            if (k.guard && rank < 0) {
+                return "a guard of kind " + k;
+            }
+            if (rank < last) {
+                return (k.guard ? "a " + k + " after a " + guardOrder[last] : "a settler after the guards") + " (" + roster + ")";
+            }
+            last = Math.max(last, rank);
+            if (!k.guard) {
+                tuners++;
+                if (k == NpcKindSC.ELDER && i != 0) {
+                    return "the Elder isn't first (" + roster + ")";
+                }
+            }
+        }
+        if (roster.isEmpty() || roster.get(0) != NpcKindSC.ELDER || n[NpcKindSC.ELDER.ordinal()] != 1) {
+            return "the Elder isn't the one and first (" + roster + ")";
+        }
+        if (tuners < size.tunersMin || tuners > size.tunersMax || n[NpcKindSC.SENTRY.ordinal()] != size.sentries
+                || n[NpcKindSC.SENIOR_WARDEN.ordinal()] != size.seniors || n[NpcKindSC.CAPTAIN.ordinal()] != (size.captain(seed) ? 1 : 0)
+                || n[NpcKindSC.COMMANDANT.ordinal()] != (size.commandant ? 1 : 0)) {
+            return size + ": " + tuners + " settlers, guards " + n[NpcKindSC.SENTRY.ordinal()] + " / " + n[NpcKindSC.SENIOR_WARDEN.ordinal()] + " / "
+                    + n[NpcKindSC.CAPTAIN.ordinal()] + " / " + n[NpcKindSC.COMMANDANT.ordinal()];
+        }
+        StringBuilder counts = new StringBuilder();
+        for (NpcKindSC k : TRADES) {
+            counts.append(' ').append(k.key).append(' ').append(n[k.ordinal()]);
+        }
+        if (size == SettlementSizeSC.OUTPOST) {
+            int extra = 0;
+            for (NpcKindSC k : TRADES) {
+                boolean allowed = k == NpcKindSC.CARTOGRAPHER || Arrays.asList(OUTPOST_EXTRA).contains(k);
+                if (!allowed && n[k.ordinal()] > 0 || n[k.ordinal()] > 1) {
+                    return size + ":" + counts;
+                }
+                extra += k == NpcKindSC.CARTOGRAPHER ? 0 : n[k.ordinal()];
+            }
+            return n[NpcKindSC.CARTOGRAPHER.ordinal()] != 1 || extra < 1 || extra > 3 ? size + ":" + counts : null;
+        }
+        int need = size == SettlementSizeSC.CITY ? 2 : 1;
+        for (NpcKindSC k : TRADES) {
+            int more = n[k.ordinal()] - need;
+            if (more < 0 || size == SettlementSizeSC.CITY && more > 1 || size == SettlementSizeSC.SETTLEMENT && more > 0
+                    && !Arrays.asList(SETTLEMENT_EXTRA).contains(k)) {
+                return size + ":" + counts;
+            }
+        }
+        return null;
+    }
+
+    /** The professions with a workshop of a roster, in its order, each once (ПЖ-8: not the Elder - the Heart - nor the Armourer - the square). */
+    public static List<NpcKindSC> workshopKinds(List<NpcKindSC> roster) {
+        List<NpcKindSC> out = new ArrayList<NpcKindSC>();
+        for (NpcKindSC k : roster) {
+            if (!k.guard && k != NpcKindSC.ELDER && k != NpcKindSC.ARMOURER && !out.contains(k)) {
+                out.add(k);
+            }
         }
         return out;
     }
@@ -349,6 +463,11 @@ public final class SettlementLayoutSC {
     /** A workshop's side (WORKSHOP; a City's WORKSHOP_CITY). */
     public static int workshopSize(SettlementSizeSC size) {
         return size == SettlementSizeSC.CITY ? WORKSHOP_CITY : WORKSHOP;
+    }
+
+    /** A profession's workshop height over the floor for the dome fit: WORKSHOP_H; the Power Engineer's, with its roof's machines, WORKSHOP_ROOF_H. */
+    public static int workshopHeight(NpcKindSC kind) {
+        return kind == NpcKindSC.POWER_ENGINEER ? WORKSHOP_ROOF_H : WORKSHOP_H;
     }
 
     /** The machine spots of a w x w workshop in its frame: {u, v, du, dv} - the machine, and the way it faces (its tender stands there). */
@@ -365,8 +484,14 @@ public final class SettlementLayoutSC {
         return l.toArray(new int[l.size()][]);
     }
 
-    /** The showcase machines of a profession's workshop, spot by spot (BlockShowcaseSC metas). The Cartographer's one stands in the middle. */
-    public static int[] workshopMachines(NpcKindSC kind) {
+    /**
+     * The showcases of a profession's workshop, spot by spot (workshopSpots): a code below SHOWCASE2 is a BlockShowcaseSC
+     * meta, from SHOWCASE2 on a BlockShowcase2SC one (code - SHOWCASE2). The Cartographer's one stands in the middle. Ф3:
+     * the Power Engineer - two energy storages round a transformer at the back, two charge pads set in the floor at the
+     * sides (the Armourer has no workshop); the Salvager's warehouse - the scrap pile between two racks at the back, crates
+     * at the sides (ComponentSetWorkshopSC stacks the warehouse's racks and crates two high and heaps the pile).
+     */
+    public static int[] workshopLine(NpcKindSC kind) {
         switch (kind) {
             case TECHNOLOGIST:
                 return new int[]{BlockShowcaseSC.CVD, BlockShowcaseSC.CZOCHRALSKI, BlockShowcaseSC.STEPPER, BlockShowcaseSC.ETCH_BATH,
@@ -378,9 +503,35 @@ public final class SettlementLayoutSC {
                         BlockShowcaseSC.GAS_TANK};
             case CARTOGRAPHER:
                 return new int[]{BlockShowcaseSC.FOCUSER};
+            case POWER_ENGINEER:
+                return new int[]{SHOWCASE2 + BlockShowcase2SC.TRANSFORMER, SHOWCASE2 + BlockShowcase2SC.ENERGY_STORAGE,
+                        SHOWCASE2 + BlockShowcase2SC.ENERGY_STORAGE, BlockShowcaseSC.CHARGE_PAD, BlockShowcaseSC.CHARGE_PAD};
+            case SALVAGER:
+                return new int[]{SHOWCASE2 + BlockShowcase2SC.SCRAP_PILE, SHOWCASE2 + BlockShowcase2SC.RACK, SHOWCASE2 + BlockShowcase2SC.RACK,
+                        SHOWCASE2 + BlockShowcase2SC.CRATE, SHOWCASE2 + BlockShowcase2SC.CRATE};
             default:
                 return new int[0];
         }
+    }
+
+    /**
+     * The first block's showcases of a profession's workshop (BlockShowcaseSC metas, in workshopLine's order): the whole
+     * line for Ф2's professions, the charge pads of the Power Engineer's, none of the Salvager's (the rest is BlockShowcase2SC).
+     */
+    public static int[] workshopMachines(NpcKindSC kind) {
+        int[] line = workshopLine(kind);
+        int n = 0;
+        for (int c : line) {
+            n += c < SHOWCASE2 ? 1 : 0;
+        }
+        int[] out = new int[n];
+        n = 0;
+        for (int c : line) {
+            if (c < SHOWCASE2) {
+                out[n++] = c;
+            }
+        }
+        return out;
     }
 
     /** Where a profession's Tuners stand in their w x w workshop, in its frame: {u, v}, the first first (more Tuners: round again). */
@@ -396,7 +547,7 @@ public final class SettlementLayoutSC {
             return l.toArray(new int[l.size()][]);
         }
         int[][] spots = workshopSpots(w);
-        int n = Math.min(spots.length, workshopMachines(kind).length);
+        int n = Math.min(spots.length, workshopLine(kind).length);
         for (int k = 1; k <= 2; k++) {                         // at each machine, then a step further from it
             for (int i = 0; i < n; i++) {
                 l.add(new int[]{spots[i][0] + spots[i][2] * k, spots[i][1] + spots[i][3] * k});
@@ -441,14 +592,11 @@ public final class SettlementLayoutSC {
         int r = s.radius;
         Frame f = new Frame(s.x, s.z, p.gateDir, r);
         List<NpcKindSC> roster = roster(s);
-        List<NpcKindSC> trades = new ArrayList<NpcKindSC>();
+        List<NpcKindSC> trades = workshopKinds(roster);
         int tuners = 0;
         for (NpcKindSC k : roster) {
             if (!k.guard) {
                 tuners++;
-                if (k != NpcKindSC.ELDER && !trades.contains(k)) {
-                    trades.add(k);
-                }
             }
         }
         // the reserved ground: the square, the street from it through the gate to the dome's edge
@@ -461,14 +609,23 @@ public final class SettlementLayoutSC {
         }
         int[] gate = {g, -GATE_W / 2, g + GATE_D - 1, GATE_W / 2};
         f.taken.add(gate);
-        // the workshops: one per profession, round the square (a Settlement's and a City's on its corners)
+        // the workshops: one per profession (not the Armourer's), round the square (a Settlement's and a City's on its
+        // corners, Ф3's two more at its sides)
         int ws = workshopSize(s.size), c = SQUARE_HALF + 2 + ws / 2;
-        int[][] want = r >= SettlementSizeSC.SETTLEMENT.radiusMin
-                ? new int[][]{{-c, -c}, {-c, c}, {c, -c}, {c, c}}
-                : new int[][]{{-c, 0}, {0, -c}, {0, c}, {c - 1, c + 1}};
+        int[][] want;
+        if (r >= SettlementSizeSC.SETTLEMENT.radiusMin) {
+            want = new int[4 + RING_SIDES.length][];
+            int[][] corners = {{-c, -c}, {-c, c}, {c, -c}, {c, c}};
+            System.arraycopy(corners, 0, want, 0, 4);
+            for (int i = 0; i < RING_SIDES.length; i++) {
+                want[4 + i] = new int[]{RING_SIDES[i][0] * c, RING_SIDES[i][1] * c};
+            }
+        } else {
+            want = new int[][]{{-c, 0}, {0, -c}, {0, c}, {c - 1, c + 1}};
+        }
         int[][] workshop = new int[trades.size()][];
         for (int i = 0; i < trades.size(); i++) {
-            workshop[i] = f.place(want[i % want.length][0], want[i % want.length][1], ws, ws, WORKSHOP_H, false);
+            workshop[i] = f.place(want[i % want.length][0], want[i % want.length][1], ws, ws, workshopHeight(trades.get(i)), false);
         }
         // the towers, flanking the gate on the inside
         int[][] tower = new int[2][];
@@ -495,7 +652,7 @@ public final class SettlementLayoutSC {
         Lot[] wLots = new Lot[trades.size()];
         for (int i = 0; i < trades.size(); i++) {
             if (workshop[i] != null) {
-                wLots[i] = f.lot(LOT_WORKSHOP, workshop[i], f.facingToCentre(workshop[i]), trades.get(i).ordinal(), WORKSHOP_H);
+                wLots[i] = f.lot(LOT_WORKSHOP, workshop[i], f.facingToCentre(workshop[i]), trades.get(i).ordinal(), workshopHeight(trades.get(i)));
                 p.lots.add(wLots[i]);
             }
         }
@@ -540,11 +697,15 @@ public final class SettlementLayoutSC {
 
         // ---- the posts
         int[] used = new int[trades.size()];
-        int home = 0, sentries = 0, seniors = 0;
+        int home = 0, sentries = 0, seniors = 0, armourers = 0, byHeart = 0;
         for (NpcKindSC k : roster) {
             int[] at;
             int[] sleep = null;
-            if (k == NpcKindSC.SENTRY) {
+            if (k == NpcKindSC.CAPTAIN) {                      // ПГ-11: the guard square, before the armour station
+                at = p.pointOf(SettlementRegistrySC.P_SQUARE);
+            } else if (k == NpcKindSC.COMMANDANT) {            // ПГ-12: the plaza, he never leaves it
+                at = p.pointOf(SettlementRegistrySC.P_PLAZA);
+            } else if (k == NpcKindSC.SENTRY) {
                 if (sentries == 0) {
                     at = p.pointOf(SettlementRegistrySC.P_GATE);
                 } else if (sentries == 1) {
@@ -570,6 +731,9 @@ public final class SettlementLayoutSC {
             } else {
                 if (k == NpcKindSC.ELDER) {
                     at = new int[]{f.x(AT_ELDER[0], AT_ELDER[1]), stand, f.z(AT_ELDER[0], AT_ELDER[1])};
+                } else if (k == NpcKindSC.ARMOURER) {          // ПЖ-8: no workshop - at the guard square's armour station
+                    int[] q = AT_ARMOURER[armourers++ % AT_ARMOURER.length];
+                    at = new int[]{f.x(q[0], q[1]), stand, f.z(q[0], q[1])};
                 } else {
                     int w = trades.indexOf(k);
                     Lot l = wLots[w];
@@ -578,7 +742,7 @@ public final class SettlementLayoutSC {
                         int[] q = posts[used[w]++ % posts.length];
                         at = new int[]{l.wx(q[0], q[1]), stand, l.wz(q[0], q[1])};
                     } else {                                   // no room for its workshop: by the square
-                        int[] q = f.freeSpot(3, -5 + 2 * used[w]++);
+                        int[] q = f.freeSpot(3, -5 + 2 * byHeart++);
                         at = new int[]{f.x(q[0], q[1]), stand, f.z(q[0], q[1])};
                     }
                 }

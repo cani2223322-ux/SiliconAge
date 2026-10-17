@@ -27,10 +27,12 @@ import com.sc.settle.trade.ContractTableSC;
 import com.sc.settle.trade.TradeOfferSC;
 import com.sc.settle.trade.TradeRulesSC;
 import com.sc.settle.trade.TradeServerSC;
+import com.sc.settle.trade.TradeServicesSC;
 import com.sc.settle.trade.TradeTableSC;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.inventory.GuiContainer;
@@ -55,6 +57,12 @@ import net.minecraft.util.ResourceLocation;
  * contracts) on the left; the chosen one's details and its buttons on the right; a status line (the last answer, the
  * day's chips or contracts, the time to dawn); the player's inventory. What the player holds is counted here from the
  * client's own inventory every tick (red counts: not enough), the limits and the level come from the server.
+ * <p>
+ * Ф3 (docs/plan-substrate-tech-f3.md §6.8, rule ПО-13): a service's row (the Power Engineer's charge, the Armourer's
+ * restoring) shows the thing it will work on - the one in the hand, else the first that fits (TradeServicesSC.slot, on
+ * the client's inventory: the server finds the same) - with what it becomes on the right; nothing fits - its icon cycles
+ * through what would, marked «*» («any matching»), and the details say what is wanted. The slot that will be taken is
+ * framed in the inventory below. A matcher side of a plain deal (the Salvager's Nano trophy) cycles the same way.
  */
 @SideOnly(Side.CLIENT)
 public class GuiTradeSC extends GuiContainer {
@@ -81,8 +89,12 @@ public class GuiTradeSC extends GuiContainer {
     private static final class Row {
         TradeOfferSC offer;
         int[] n;
+        /** What one deal gives out here (TradeRulesSC.outCount - a trophy's sale scales its chips). */
+        int out;
         int left, why;
         int[] have;
+        /** A service: the main inventory's slot it will work on (TradeServicesSC.slot), -1 none. */
+        int slot = -1;
     }
 
     /** One contract line: on the board, open from an earlier day, or the one-time anchor. */
@@ -204,6 +216,7 @@ public class GuiTradeSC extends GuiContainer {
             Row r = new Row();
             r.offer = o;
             r.n = n;
+            r.out = e.hasKey("o") ? e.getInteger("o") : o.out == null ? 0 : o.out.count;
             r.left = e.getInteger("left");
             r.why = e.getByte("why");
             r.have = new int[n.length];
@@ -252,7 +265,8 @@ public class GuiTradeSC extends GuiContainer {
         String text;
         boolean good;
         if (kind == SettleNetSC.TRADE_DO && done > 0) {
-            text = Lang.tr("sc.trade.done", done);
+            TradeOfferSC o = TradeTableSC.byKey(r.getString("key"));
+            text = Lang.tr(o != null && o.service() ? "sc.trade.service.done" : "sc.trade.done", done);
             if (code != TradeServerSC.OK && code != TradeServerSC.R_MISSING) {
                 text += " - " + reason(code);                   // stopped by a limit, not by running out
             }
@@ -282,10 +296,12 @@ public class GuiTradeSC extends GuiContainer {
     /** What the client's inventory holds of every side (its own count, so a stack moved here shows at once). */
     private void countHave() {
         ItemStack[] inv = mc.thePlayer == null ? null : mc.thePlayer.inventory.mainInventory;
+        int held = mc.thePlayer == null ? -1 : mc.thePlayer.inventory.currentItem;
         for (Row r : rows) {
             for (int k = 0; k < r.n.length; k++) {
                 r.have[k] = r.offer.in[k].countIn(inv);
             }
+            r.slot = r.offer.service() ? TradeServicesSC.slot(inv, held, r.offer) : -1;
         }
         for (CRow r : crows) {
             TradeOfferSC.Ingredient in = r.anchor ? null : r.c.handIn();
@@ -295,7 +311,7 @@ public class GuiTradeSC extends GuiContainer {
 
     /** One more deal of `r` could be made now (the server decides; this only lights the button). */
     private static boolean canOnce(Row r) {
-        if (r.why != TradeServerSC.OK) {
+        if (r.why != TradeServerSC.OK || r.offer.service() && r.slot < 0) {
             return false;
         }
         for (int k = 0; k < r.n.length; k++) {
@@ -467,6 +483,7 @@ public class GuiTradeSC extends GuiContainer {
         }
         TextFitSC.draw(fontRendererObj, left, 8, STATUS_Y, W - 22 - dawnW, colour, guiLeft, guiTop);
         fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerTradeSC.INV_X, ContainerTradeSC.INV_Y - 10, TEXT_DARK);
+        frameTaken();
         GuiHoloSC.glint(LX, LY, LW, LH);
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
@@ -528,6 +545,10 @@ public class GuiTradeSC extends GuiContainer {
             } else if (r.why != TradeServerSC.OK) {
                 sub = Lang.tr("sc.trade.row." + TradeServerSC.RESULT_KEYS[Math.max(0, Math.min(TradeServerSC.RESULT_KEYS.length - 1, r.why))]);
                 col = GuiHoloSC.IDLE;
+            } else if (r.offer.service()) {                       // which thing it will take, or that none fits
+                ItemStack t = taken(r);
+                sub = t != null ? Lang.tr("sc.trade.service.row", t.getDisplayName()) : Lang.tr("sc.trade.row.noItem");
+                col = t == null ? GuiHoloSC.WARN : canOnce(r) ? GuiHoloSC.OK : GuiHoloSC.LABEL;
             } else {
                 sub = leftLine(r);
                 col = canOnce(r) ? GuiHoloSC.OK : GuiHoloSC.LABEL;
@@ -541,8 +562,11 @@ public class GuiTradeSC extends GuiContainer {
         }
     }
 
-    /** «ещё 3 из 8» / «на этой неделе: 0 из 1». */
+    /** «ещё 3 из 8» / «на этой неделе: 0 из 1» / «без лимита». */
     private static String leftLine(Row r) {
+        if (r.offer.unlimited()) {
+            return Lang.tr("sc.trade.left.none");
+        }
         if (r.offer.global && r.offer.periodDays > 1) {
             return Lang.tr("sc.trade.left.week", r.left, r.offer.limit);
         }
@@ -550,13 +574,17 @@ public class GuiTradeSC extends GuiContainer {
     }
 
     private void dealDetails(Row r) {
+        if (r.offer.service()) {
+            serviceDetails(r);
+            return;
+        }
         int x = RX + 4, w = RW - 8, y = detailsY() + 4;
         TradeOfferSC o = r.offer;
         String out;
         if (o.outKind == TradeOfferSC.OUT_REPUTATION) {
             out = Lang.tr("sc.trade.out.rep", o.outAmount);
         } else {
-            ItemStack s = o.outStack();
+            ItemStack s = outStack(r);
             out = s == null ? "?" : Lang.tr("sc.trade.count", s.stackSize, s.getDisplayName());
         }
         y = wrapped(out, x, y, w, GuiHoloSC.VALUE, 2);
@@ -564,7 +592,8 @@ public class GuiTradeSC extends GuiContainer {
         y += 10;
         for (int k = 0; k < o.in.length; k++) {
             ItemStack s = o.in[k].display();
-            String line = r.have[k] + "/" + r.n[k] + " " + (s == null ? o.in[k].ore : s.getDisplayName());
+            String name = o.in[k].any() && o.anyLangKey() != null ? Lang.tr(o.anyLangKey()) : s == null ? o.in[k].ore : s.getDisplayName();
+            String line = r.have[k] + "/" + r.n[k] + " " + name;     // a matcher (the Salvager's trophy): what fits, in words
             TextFitSC.draw(fontRendererObj, line, x, y, w, r.have[k] >= r.n[k] ? GuiHoloSC.OK : GuiHoloSC.BAD, guiLeft, guiTop);
             y += 10;
         }
@@ -582,6 +611,77 @@ public class GuiTradeSC extends GuiContainer {
         if (why != null) {
             wrapped(why, x, y, w, r.why == TradeServerSC.OK ? GuiHoloSC.BAD : GuiHoloSC.WARN, Math.max(1, (bottom - y) / 9));
         }
+    }
+
+    /**
+     * A service's details: what the thing becomes, where it is taken from (the hand / the framed slot) or what would fit,
+     * the price (in[1..]), the limit, why not.
+     */
+    private void serviceDetails(Row r) {
+        int x = RX + 4, w = RW - 8, y = detailsY() + 4, bottom = BY - 4;
+        TradeOfferSC o = r.offer;
+        ItemStack t = taken(r);
+        ItemStack res = TradeServicesSC.result(o, t != null ? t : o.in[0].display());
+        String what = res == null ? "?" : res.getDisplayName();
+        y = wrapped(Lang.tr(o.outKind == TradeOfferSC.OUT_CHARGE ? "sc.trade.service.charge" : "sc.trade.service.restore", what), x, y, w,
+                GuiHoloSC.VALUE, 2);
+        if (t != null) {
+            boolean hand = mc.thePlayer != null && r.slot == mc.thePlayer.inventory.currentItem;
+            TextFitSC.draw(fontRendererObj, Lang.tr(hand ? "sc.trade.service.taken.hand" : "sc.trade.service.taken.inv"), x, y, w, GuiHoloSC.OK,
+                    guiLeft, guiTop);
+            y += 10;
+        } else if (o.anyLangKey() != null) {
+            y = wrapped(Lang.tr("sc.trade.service.need", Lang.tr(o.anyLangKey())), x, y, w, GuiHoloSC.BAD, 2);
+        }
+        fontRendererObj.drawString(Lang.tr("sc.trade.give"), x, y, GuiHoloSC.LABEL);
+        y += 10;
+        for (int k = 1; k < o.in.length; k++) {
+            ItemStack s = o.in[k].display();
+            String line = r.have[k] + "/" + r.n[k] + " " + (s == null ? o.in[k].ore : s.getDisplayName());
+            TextFitSC.draw(fontRendererObj, line, x, y, w, r.have[k] >= r.n[k] ? GuiHoloSC.OK : GuiHoloSC.BAD, guiLeft, guiTop);
+            y += 10;
+        }
+        TextFitSC.draw(fontRendererObj, leftLine(r), x, y, w, GuiHoloSC.LABEL, guiLeft, guiTop);
+        y += 10;
+        String why = null;
+        if (r.why == TradeServerSC.R_LEVEL) {
+            why = Lang.tr("sc.trade.need.level", levelName(o.minLevel));
+        } else if (r.why != TradeServerSC.OK) {
+            why = reason(r.why);
+        } else if (t == null) {
+            why = reason(TradeServerSC.R_NO_ITEM);
+        } else if (!canOnce(r)) {
+            why = reason(TradeServerSC.R_MISSING);
+        }
+        if (why != null && y < bottom) {
+            wrapped(why, x, y, w, r.why == TradeServerSC.OK ? GuiHoloSC.BAD : GuiHoloSC.WARN, Math.max(1, (bottom - y) / 9));
+        }
+    }
+
+    /** The thing a service row will work on (the client's inventory), null none. */
+    private ItemStack taken(Row r) {
+        ItemStack[] inv = mc.thePlayer == null ? null : mc.thePlayer.inventory.mainInventory;
+        return inv != null && r.slot >= 0 && r.slot < inv.length ? inv[r.slot] : null;
+    }
+
+    /** A matcher's icon: one of its choices, a new one every second («any matching»). */
+    private static ItemStack cycle(List<ItemStack> choices) {
+        return choices.isEmpty() ? null : choices.get((int) ((Minecraft.getSystemTime() / 1000L) % choices.size()));
+    }
+
+    /** The selected service's slot framed in the inventory below (what will be taken - the hand's is framed too). */
+    private void frameTaken() {
+        Row r = !contractsTab && sel >= 0 && sel < rows.size() ? rows.get(sel) : null;
+        if (r == null || !r.offer.service() || r.slot < 0 || r.slot >= 36) {
+            return;
+        }
+        int x = ContainerTradeSC.INV_X + (r.slot % 9) * 18, y = r.slot < 9 ? ContainerTradeSC.HOTBAR_Y : ContainerTradeSC.INV_Y + (r.slot / 9 - 1) * 18;
+        int c = 0xFF6EE6FF;
+        drawRect(x - 1, y - 1, x + 17, y, c);
+        drawRect(x - 1, y + 16, x + 17, y + 17, c);
+        drawRect(x - 1, y, x, y + 16, c);
+        drawRect(x + 16, y, x + 17, y + 16, c);
+        GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
     private void drawContracts(int mx, int my) {
@@ -744,22 +844,28 @@ public class GuiTradeSC extends GuiContainer {
         GL11.glEnable(GL11.GL_LIGHTING);
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         itemRender.zLevel = 100F;
-        List<int[]> counts = new ArrayList<int[]>();      // x, y, row, side (to draw after the icons, unlit)
+        List<int[]> counts = new ArrayList<int[]>();      // x, y, row, side, the out count, «any» (to draw after the icons, unlit)
         if (!contractsTab) {
             for (int i = 0; i < ROWS && scroll + i < rows.size(); i++) {
                 Row r = rows.get(scroll + i);
                 int y = guiTop + LY + 2 + i * ROW_H + 1;
+                ItemStack first = null;
                 for (int k = 0; k < r.offer.in.length && k < 2; k++) {
                     int x = guiLeft + LX + 3 + k * 17;
-                    ItemStack s = r.offer.in[k].display();
+                    TradeOfferSC.Ingredient side = r.offer.in[k];
+                    ItemStack t = k == 0 ? taken(r) : null;
+                    ItemStack s = t != null ? t : side.any() ? cycle(side.choices()) : side.display();
+                    if (k == 0) {
+                        first = s;
+                    }
                     hovered = icon(s, x, y, mx, my, hovered);
-                    counts.add(new int[]{x, y, scroll + i, k});
+                    counts.add(new int[]{x, y, scroll + i, k, 0, side.any() && t == null ? 1 : 0});
                 }
-                ItemStack out = r.offer.outStack();
+                ItemStack out = r.offer.service() ? TradeServicesSC.result(r.offer, first) : outStack(r);
                 int ox = guiLeft + LX + 49;
                 if (out != null) {
                     hovered = icon(out, ox, y, mx, my, hovered);
-                    counts.add(new int[]{ox, y, scroll + i, -1});
+                    counts.add(new int[]{ox, y, scroll + i, -1, out.stackSize, 0});
                 }
             }
         } else {
@@ -777,7 +883,7 @@ public class GuiTradeSC extends GuiContainer {
             String text;
             int colour = 0xFFFFFF;
             if (c[3] < 0) {
-                int n = r.offer.outStack().stackSize;
+                int n = c[4];
                 text = n > 1 ? String.valueOf(n) : null;
             } else {
                 text = String.valueOf(r.n[c[3]]);
@@ -785,6 +891,9 @@ public class GuiTradeSC extends GuiContainer {
             }
             if (text != null && (c[3] >= 0 ? r.n[c[3]] > 1 || colour != 0xFFFFFF : true)) {
                 fontRendererObj.drawStringWithShadow(text, c[0] + 17 - fontRendererObj.getStringWidth(text), c[1] + 9, colour);
+            }
+            if (c[5] != 0) {
+                fontRendererObj.drawStringWithShadow("*", c[0], c[1] - 1, 0x6EE6FF);        // «any matching»: the icon is one of them
             }
             if (r.why != TradeServerSC.OK) {
                 drawRect(c[0], c[1], c[0] + 16, c[1] + 16, 0x900A1420);      // dimmed: not open to this player
@@ -814,6 +923,15 @@ public class GuiTradeSC extends GuiContainer {
         one.stackSize = 1;
         itemRender.renderItemAndEffectIntoGUI(fontRendererObj, mc.getTextureManager(), one, x, y);
         return mx >= x && my >= y && mx < x + 16 && my < y + 16 ? one : hovered;
+    }
+
+    /** What the row's deal gives out, its count as the server said (a sale's chips by the level - TradeRulesSC.outCount). */
+    private static ItemStack outStack(Row r) {
+        ItemStack s = r.offer.outStack();
+        if (s != null && r.offer.outKind == TradeOfferSC.OUT_ITEM && r.out > 0) {
+            s.stackSize = r.out;
+        }
+        return s;
     }
 
     /** A contract's picture: a sword (kill), the thing handed in (deliver, cargo), the ПЭ-1 (suppress), the anchor. */

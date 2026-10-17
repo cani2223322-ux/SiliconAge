@@ -53,6 +53,9 @@ import net.minecraft.world.chunk.IChunkProvider;
  * provideChunk lets it make its starts first (before the carver: a via is never cut into a settlement), recreateStructures
  * does the same for a chunk loaded from disk, populate builds them LAST (they lie over the ores, traces and druses);
  * a trace, a druse and a pond never go inside a built settlement's box (MapGenSettlementSC.covers).
+ * <p>
+ * Ф3 (package X, docs/plan-substrate-tech-f3.md §8.2): the same for the ruins - no trace, druse or pond in a built Dead Node's
+ * zone or under a lithograph's entrance hut (ruinCovers: MapGenDeadNodeSC / MapGenLithographSC.covers).
  */
 public class ChunkProviderSubstrateSC implements IChunkProvider {
 
@@ -80,6 +83,9 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     /** Ф2: the settlements (made before the carver - it keeps its vias out of them). */
     private final MapGenSettlementSC settlements = new MapGenSettlementSC();
     private final MapGenSubstrateCavesSC caves = new MapGenSubstrateCavesSC(settlements);
+    /** Ф3 (package X, docs/plan-substrate-tech-f3.md §8): the Dead Nodes at the crossings, the abandoned lithographs under the plateaus. */
+    private final com.sc.ruin.MapGenDeadNodeSC nodes = new com.sc.ruin.MapGenDeadNodeSC();
+    private final com.sc.ruin.MapGenLithographSC lithographs = new com.sc.ruin.MapGenLithographSC();
 
     public ChunkProviderSubstrateSC(World world, long seed) {
         this.world = world;
@@ -89,6 +95,16 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     /** Ф2: the settlements' structure (the world test asks it for a site's start). */
     public MapGenSettlementSC settlements() {
         return settlements;
+    }
+
+    /** Ф3: the Dead Nodes' structure (the world test, SpawnDirectorSC's patrols ask it). */
+    public com.sc.ruin.MapGenDeadNodeSC nodes() {
+        return nodes;
+    }
+
+    /** Ф3: the lithographs' structure. */
+    public com.sc.ruin.MapGenLithographSC lithographs() {
+        return lithographs;
     }
 
     @Override
@@ -107,6 +123,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
             }
         }
         settlements.func_151539_a(this, world, cx, cz, blocks);     // the starts within 8 chunks (no block is touched)
+        nodes.func_151539_a(this, world, cx, cz, blocks);           // Ф3: the ruins' starts, the same way
+        lithographs.func_151539_a(this, world, cx, cz, blocks);
         caves.func_151539_a(this, world, cx, cz, blocks);
         pond(cx, cz, blocks, metas);
         Chunk chunk = new Chunk(world, blocks, metas, cx, cz);
@@ -162,7 +180,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         int rx = 2 + rand.nextInt(2), rz = 2 + rand.nextInt(2), depth = 1 + rand.nextInt(2);
         int px = rx + 1 + rand.nextInt(14 - 2 * rx), pz = rz + 1 + rand.nextInt(14 - 2 * rz);
         int wx = cx * 16 + px, wz = cz * 16 + pz;
-        if (SubstrateTerrainSC.inCanyonBelt(wx, wz) || MapGenSubstrateCavesSC.nearSpawn(wx, wz) || settlements.covers(wx, wz, Math.max(rx, rz) + 1)) {
+        if (SubstrateTerrainSC.inCanyonBelt(wx, wz) || MapGenSubstrateCavesSC.nearSpawn(wx, wz) || settlements.covers(wx, wz, Math.max(rx, rz) + 1)
+                || ruinCovers(wx, wz, Math.max(rx, rz) + 1)) {
             return;
         }
         int level = -1;
@@ -222,17 +241,30 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         popRand.setSeed(cx * a + cz * b ^ seed);
         SubstrateOreGenSC.generate(world, popRand, cx * 16, cz * 16);
         townNear = settlements.covers(cx * 16 + 16, cz * 16 + 16, 9);      // the window (+8..+23) and a block round it
+        ruinNear = ruinCovers(cx * 16 + 16, cz * 16 + 16, 9);             // Ф3: a Dead Node's zone, a lithograph's hut
         for (int ox = cx - TRACE_REACH; ox <= cx + TRACE_REACH; ox++) {
             for (int oz = cz - TRACE_REACH; oz <= cz + TRACE_REACH; oz++) {
                 trace(ox, oz, cx * 16 + 8, cz * 16 + 8);
             }
         }
         druse(cx * 16 + 8, cz * 16 + 8);
+        nodes.generateStructuresInChunk(world, popRand, cx, cz);          // Ф3: the ruins over the land (they never meet a settlement)
+        lithographs.generateStructuresInChunk(world, popRand, cx, cz);
         settlements.generateStructuresInChunk(world, popRand, cx, cz);    // last: the settlements lie over everything
     }
 
     /** The window being populated meets a settlement: its traces and druses ask covers() block by block. */
     private boolean townNear;
+    /** Ф3 (package X): the window meets a built ruin's box - its traces and druses ask ruinCovers() block by block. */
+    private boolean ruinNear;
+
+    /**
+     * Ф3 (package X, docs/plan-substrate-tech-f3.md §8.2): the column (x, z), `margin` round it, lies in a built Dead Node's zone
+     * or under a lithograph's entrance hut - no trace, druse or pond there (the ruins are built after them and over them).
+     */
+    private boolean ruinCovers(int x, int z, int margin) {
+        return nodes.covers(x, z, margin) || lithographs.covers(x, z, margin);
+    }
 
     /** The part of origin chunk (ox, oz)'s trace segment (if it has one) inside the window from (wx0, wz0), 16 x 16. */
     private void trace(int ox, int oz, int wx0, int wz0) {
@@ -281,6 +313,9 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
 
     /** A trace block in a wall: only into the rock of the wall's face (the canyon's air at x + ix, z + iz). */
     private void wallTrace(int x, int y, int z, int ix, int iz, boolean node) {
+        if (ruinNear && ruinCovers(x, z, 0)) {
+            return;                                              // Ф3: a Dead Node's walls carry its panels
+        }
         if (y > 0 && y < 255 && world.getBlock(x, y, z) == SubstrateBlocksSC.rock && world.isAirBlock(x + ix, y, z + iz)) {
             world.setBlock(x, y, z, SubstrateBlocksSC.rock, node ? SubstrateBlocksSC.TRACE_NODE : SubstrateBlocksSC.COPPER_TRACE, 2);
             if (node) {
@@ -291,7 +326,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
 
     /** A trace block as the column's top block (turf, crust or a canyon's floor; never water, never in a settlement). */
     private void surfaceTrace(int x, int z, boolean node) {
-        if (townNear && settlements.covers(x, z, 0)) {
+        if (townNear && settlements.covers(x, z, 0) || ruinNear && ruinCovers(x, z, 0)) {
             return;
         }
         int y = world.getHeightValue(x, z) - 1;
@@ -327,7 +362,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     private boolean crystal(int x, int z, int h) {
         int y = world.getHeightValue(x, z);
         if (y <= 1 || y + h >= 255 || world.getBlock(x, y - 1, z) != SubstrateBlocksSC.rock || SubstrateTerrainSC.canyonFloorY(seed, x, z) >= 0
-                || townNear && settlements.covers(x, z, 1)) {
+                || townNear && settlements.covers(x, z, 1) || ruinNear && ruinCovers(x, z, 1)) {
             return false;
         }
         for (int k = 0; k < h; k++) {
@@ -404,9 +439,15 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         return new ArrayList();
     }
 
-    /** The nearest settlement for "SCSi14Settlement" (vanilla's structure finder), nothing else. */
+    /** The nearest settlement for "SCSi14Settlement" (vanilla's structure finder); Ф3: a Dead Node, a lithograph by their names. */
     @Override
     public ChunkPosition func_147416_a(World w, String structure, int x, int y, int z) {
+        if (com.sc.ruin.MapGenDeadNodeSC.START_NAME.equals(structure)) {
+            return nodes.func_151545_a(w, x, y, z);
+        }
+        if (com.sc.ruin.MapGenLithographSC.START_NAME.equals(structure)) {
+            return lithographs.func_151545_a(w, x, y, z);
+        }
         return MapGenSettlementSC.START_NAME.equals(structure) ? settlements.func_151545_a(w, x, y, z) : null;
     }
 
@@ -419,6 +460,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     @Override
     public void recreateStructures(int x, int z) {
         settlements.func_151539_a(this, world, x, z, null);
+        nodes.func_151539_a(this, world, x, z, null);
+        lithographs.func_151539_a(this, world, x, z, null);
     }
 
     @Override

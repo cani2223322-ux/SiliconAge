@@ -6,6 +6,7 @@ import java.util.Random;
 
 import com.sc.dim.SubstrateConfigSC;
 import com.sc.dim.SubstrateSC;
+import com.sc.emp.ItemEmpGunSC;
 import com.sc.item.ItemArmorSC;
 import com.sc.util.ArmorSuit;
 import com.sc.util.BladeType;
@@ -13,6 +14,7 @@ import com.sc.util.WeaponType;
 
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -41,6 +43,11 @@ import net.minecraftforge.event.entity.living.LivingDropsEvent;
  * NBT, so it outlives an unloaded chunk and a restart).</li>
  * </ol>
  * The decisions are public for the tests: qualifies (ПТ-1), trophyChance, rollTrophy.
+ * <p>
+ * Ф3 (docs/plan-substrate-tech-f3.md §4.10, rules ПТ-13..ПТ-15): all of the above for every hostile native
+ * (ISubstrateNativeSC and IMob - the swarm's particles, the drones and the mimic of package X too, through their
+ * IFactionLootSC); the trophy roll only for an armoured one (EntityArmoredMobSC). A fourth category: a ПЭ-1 in hand (a
+ * Jammer carrier) - TrophyTableSC.META_PE1 at TrophyTableSC.PE1 (a ПЭ-1М: META_PE1M, the boss's - Ф5).
  */
 public final class MobDropsSC {
 
@@ -56,12 +63,12 @@ public final class MobDropsSC {
     private MobDropsSC() {
     }
 
-    /** LivingDropsEvent of an armoured Substrate mob (server). */
+    /** LivingDropsEvent of a hostile Substrate native (server). */
     public static void onDrops(LivingDropsEvent event) {
-        if (!(event.entityLiving instanceof EntityArmoredMobSC) || event.entityLiving.worldObj.isRemote) {
+        if (!MobCombatSC.hostileNative(event.entityLiving) || event.entityLiving.worldObj.isRemote) {
             return;
         }
-        EntityArmoredMobSC mob = (EntityArmoredMobSC) event.entityLiving;
+        EntityLivingBase mob = event.entityLiving;
         List<ItemStack> out = new ArrayList<ItemStack>();
         if (mob instanceof EntityMarauderSC) {
             out.addAll(((EntityMarauderSC) mob).takeBag());
@@ -73,7 +80,9 @@ public final class MobDropsSC {
             if (mob instanceof IFactionLootSC) {
                 ((IFactionLootSC) mob).factionLoot(out, mob.getRNG());
             }
-            trophy = rollTrophy(mob, killer, mob.getRNG());
+            if (mob instanceof EntityArmoredMobSC) {                 // ПТ-15: the trophy roll is the armoured ones' only
+                trophy = rollTrophy((EntityArmoredMobSC) mob, killer, mob.getRNG());
+            }
         }
         for (ItemStack s : out) {
             if (s != null && s.stackSize > 0) {
@@ -100,8 +109,7 @@ public final class MobDropsSC {
      * level.
      */
     public static float trophyChance(EntityArmoredMobSC mob, EntityPlayer killer) {
-        float[] c = categories(mob);
-        float sum = c[0] + c[1] + c[2];
+        float sum = sum(categories(mob));
         if (sum <= 0F) {
             return 0F;
         }
@@ -117,7 +125,7 @@ public final class MobDropsSC {
      */
     public static ItemStack rollTrophy(EntityArmoredMobSC mob, EntityPlayer killer, Random rand) {
         float[] c = categories(mob);
-        if (c[0] + c[1] + c[2] <= 0F || SubstrateConfigSC.gearDropMultiplier <= 0F) {
+        if (sum(c) <= 0F || SubstrateConfigSC.gearDropMultiplier <= 0F) {
             return null;
         }
         float chance = trophyChance(mob, killer);
@@ -141,13 +149,19 @@ public final class MobDropsSC {
             case 2:
                 meta = TrophyTableSC.weaponMeta(MobCombatSC.gun(mob));
                 break;
+            case 3:
+                meta = ItemEmpGunSC.upgraded(mob.getHeldItem()) ? TrophyTableSC.META_PE1M : TrophyTableSC.META_PE1;
+                break;
             default:
                 return null;
         }
         return meta < 0 ? null : MobItemsSC.trophyStack(meta);
     }
 
-    /** The categories' chances: {a worn piece, the blade in hand, the gun in hand} (ПТ-9 by level). */
+    /**
+     * The categories' chances: {a worn piece, the blade in hand, the gun in hand, a ПЭ-1 in hand} (ПТ-9 by level; Ф3, ПТ-14:
+     * the ПЭ-1's own TrophyTableSC.PE1).
+     */
     private static float[] categories(EntityArmoredMobSC mob) {
         ArmorSuit suit = mob.mobArmor().suit();
         BladeType blade = MobCombatSC.blade(mob);
@@ -155,7 +169,16 @@ public final class MobDropsSC {
         return new float[]{
                 suit == null ? 0F : TrophyTableSC.PIECE[suit.ordinal()],
                 blade == null ? 0F : TrophyTableSC.BLADE[blade.ordinal()],
-                gun == null ? 0F : TrophyTableSC.WEAPON[gun.ordinal()]};
+                gun == null ? 0F : TrophyTableSC.WEAPON[gun.ordinal()],
+                MobCombatSC.holdsPe1(mob) ? TrophyTableSC.PE1 : 0F};
+    }
+
+    private static float sum(float[] c) {
+        float s = 0F;
+        for (float v : c) {
+            s += Math.max(0F, v);
+        }
+        return s;
     }
 
     /** The mob's level for the bad-luck counter: its suit, else its blade's, else Nano. */

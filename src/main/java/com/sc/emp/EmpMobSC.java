@@ -60,6 +60,41 @@ public final class EmpMobSC {
     }
 
     /**
+     * Ф3 (docs/plan-substrate-tech-f3.md §3.5, §3.6, ПБ-20): unarmoured Substrate technology a Point / Pulse does something of
+     * its own to (IEmpReactiveSC: the drones, the nanite swarm, the mimic) - only while dimension.empMobTargets is on (off:
+     * Slowness, as before). Server (a client knows the rule too).
+     */
+    public static boolean reactive(Entity e) {
+        return SubstrateConfigSC.empMobTargets && e instanceof IEmpReactiveSC && e instanceof EntityLivingBase && !(e instanceof EntityPlayer);
+    }
+
+    /**
+     * Ф3, ПБ-19, server: a Point / Pulse that got through the rules and the field's EMP screen meets `e`'s personal EMP screen
+     * (the Jammer's, a «Экранированный» elite's) - if it is up, it takes the shot and is down for EliteModSC.SCREEN_RECOVER_TICKS.
+     * Only for a mob target the ПЭ-1 really works on (pointable: a «down» suit's screen has no power either). @return taken
+     */
+    public static boolean screenTakes(Entity e) {
+        return pointable(e) && e instanceof IArmoredMobSC && ((IArmoredMobSC) e).mobArmor().screenTakes();
+    }
+
+    /**
+     * Ф3, ПБ-19, server: the Siphon's start or a stream's second meets a raised personal screen (dimension.siphonMobs - the
+     * stream's own rule): the screen drops, the stream stops (EmpSiphonSC). @return taken
+     */
+    public static boolean siphonScreenTakes(Entity e) {
+        return mob(e) && e instanceof IArmoredMobSC && ((IArmoredMobSC) e).mobArmor().screenTakes();
+    }
+
+    /** Ф3, ПБ-19: whole seconds until `e`'s personal screen is up again (the shooter's «sc.emp.hit.mob.screen»). */
+    public static int screenSeconds(Entity e) {
+        if (!(e instanceof IArmoredMobSC) || e.worldObj == null) {
+            return 0;
+        }
+        long left = ((IArmoredMobSC) e).mobArmor().screenDownUntil - e.worldObj.getTotalWorldTime();
+        return EmpShotSC.seconds((int) Math.max(0L, Math.min(Integer.MAX_VALUE, left)));
+    }
+
+    /**
      * ПБ-10: a Pulse never hits a villager (INpc) or somebody's pet among the mob targets - EmpNetSC.NO_OWN, asked
      * next to EmpRulesSC.refusal, before any EU is spent. EmpNetSC.OK otherwise (and for everything outside the
      * mob branch: the old behaviour). A settlement's Tuner (Ф2, ПЖ-2) is refused in every mode: it wears no armour and
@@ -75,8 +110,8 @@ public final class EmpMobSC {
                 && ((com.sc.settle.ISettlementGuardSC) target).settlementId() >= 0) {
             return EmpNetSC.NO_OWN;
         }
-        if (mode == EmpMode.PULSE && pointable(target) && (target instanceof INpc || owned(target))) {
-            return EmpNetSC.NO_OWN;
+        if (mode == EmpMode.PULSE && (pointable(target) || reactive(target)) && (target instanceof INpc || owned(target))) {
+            return EmpNetSC.NO_OWN;                         // Ф3, §3.6: the reactive ones by the same rule
         }
         return EmpNetSC.OK;
     }

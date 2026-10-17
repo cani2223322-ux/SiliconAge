@@ -320,10 +320,16 @@ public final class WorldTestSettlementSC {
         for (SettlementRegistrySC.Slot sl : rec == null ? new ArrayList<SettlementRegistrySC.Slot>() : rec.slots) {
             kinds.add(sl.kindOf());
         }
-        String rosterWhy = rec == null ? "no record" : SelfTestSettlementSC.rosterProblem(s.size, kinds);
+        // Ф3: a record made by an earlier run of Ф2 had its Ф3 slots appended (RosterSC.upgrade - WorldTestArmourerSC checks that): its roster
+        // is the Ф2 one with the new kinds after the guards, not the plan's of version 2. One still of version 1 - its core's first second
+        // (the upgrade) is yet to come: this test has just loaded its chunk - holds the Ф2 roster, which no plan of version 2 makes
+        boolean v1 = rec != null && rec.version < SettlementRegistrySC.VERSION;
+        boolean upgraded = rec != null && (v1 || rec.extra.getCompoundTag("S").hasKey("F3From"));
+        String rosterWhy = rec == null ? "no record" : upgraded ? null : SelfTestSettlementSC.rosterProblem(s.size, s.seed, kinds);
         boolean record = rec != null && rec.first == first && rec.size == s.size.ordinal() && rec.radius == s.radius && rec.floorY == plan.floorY
                 && rec.hasDock == plan.dock && (!plan.dock || rec.dockX == plan.dockX && rec.dockY == plan.dockY && rec.dockZ == plan.dockZ)
-                && rosterWhy == null && kinds.equals(SettlementLayoutSC.roster(s)) && rec.points.keySet().containsAll(plan.pointNames) && rec.madeAt >= 0L;
+                && rosterWhy == null && (upgraded || kinds.equals(SettlementLayoutSC.roster(s))) && rec.points.keySet().containsAll(plan.pointNames)
+                && rec.madeAt >= 0L;
         String dockWhy = plan.dock ? dockProblem() : null;
         int stone = 0;
         for (int cx = fc[0]; cx <= fc[2]; cx++) {
@@ -342,7 +348,9 @@ public final class WorldTestSettlementSC {
         print(coreOk && record && dockWhy == null && stone == 0 && cascade, "generation (package S, ПП-1..ПП-4) of " + (first ? "the First Dock" : "a settlement")
                 + " (" + s.size + " r " + s.radius + " at " + s.x + ", " + s.z + ", " + (fc[2] - fc[0] + 1) + " x " + (fc[3] - fc[1] + 1) + " chunks): the core"
                 + " at " + plan.coreX + ", " + plan.coreY + ", " + plan.coreZ + " with the record's id " + coreOk + "; the record (first " + (rec != null && rec.first)
-                + ", the roster of §4.2 " + (rosterWhy == null ? "ok" : rosterWhy) + ", the points, the dock) " + record + "; the dock "
+                + ", the roster of §4.2 " + (rosterWhy == null ? v1 ? "ok (a Ф2 record, its upgrade on the core's first second)" : upgraded
+                ? "ok (a Ф2 record upgraded)" : "ok" : rosterWhy) + ", the points, the dock) " + record
+                + "; the dock "
                 + (plan.dock ? dockWhy == null ? "ok" : dockWhy : "none (an Outpost)") + "; Minecraft stone " + stone + " (0); "
                 + (made ? "made by an earlier run - no cascade count" : watch.loaded.size() + " chunks loaded, " + outside + " of them past the ring"
                 + (far == null ? "" : " (" + far + ")") + " - no cascade " + cascade));
@@ -657,13 +665,17 @@ public final class WorldTestSettlementSC {
             return;
         }
         StringBuilder bad = new StringBuilder();
-        int sentries = 0, seniors = 0;
+        int sentries = 0, seniors = 0, chiefs = 0;
         FakePlayer fake = fake();
         for (EntityWardenSC g : gs) {
-            boolean senior = g.kind() == NpcKindSC.SENIOR_WARDEN;
-            sentries += senior ? 0 : 1;
+            boolean senior = g.kind() == NpcKindSC.SENIOR_WARDEN, captain = g.kind() == NpcKindSC.CAPTAIN, commandant = g.kind() == NpcKindSC.COMMANDANT;
+            sentries += senior || captain || commandant ? 0 : 1;
             seniors += senior ? 1 : 0;
-            ArmorSuit want = senior ? ArmorSuit.QUANTUM : ArmorSuit.NANO;
+            chiefs += captain || commandant ? 1 : 0;
+            // Ф3 (docs/plan-substrate-tech-f3.md §6.4, §6.5): the Captain's Exo with helium, the Commandant's Singular armour
+            ArmorSuit want = commandant ? ArmorSuit.SINGULAR : captain ? ArmorSuit.EXO : senior ? ArmorSuit.QUANTUM : ArmorSuit.NANO;
+            String rank = commandant ? "COMMANDANT" : captain ? "CAPTAIN" : senior ? "SENIOR" : "SENTRY";
+            float planLo = commandant ? 150F : captain ? 70F : senior ? 40F : 20F, planHi = commandant ? 250F : captain ? 110F : senior ? 70F : 40F;
             int pieces = 0;
             for (int t = 0; t < 4; t++) {
                 ItemStack s = g.getEquipmentInSlot(4 - t);
@@ -672,12 +684,12 @@ public final class WorldTestSettlementSC {
             // RESERVE_* are the blockable damage the reserve drains by (MobArmorSC.spawnReserveForDamage): the reserve is
             // that times the worn suit's absorb share
             int worn = g.mobArmor().wornPoints();
-            float lo = com.sc.mob.MobArmorMathSC.reserveFor(num(EntityWardenSC.class, senior ? "SENIOR_RESERVE_MIN" : "SENTRY_RESERVE_MIN", senior ? 40F : 20F), worn);
-            float hi = com.sc.mob.MobArmorMathSC.reserveFor(num(EntityWardenSC.class, senior ? "SENIOR_RESERVE_MAX" : "SENTRY_RESERVE_MAX", senior ? 70F : 40F), worn);
+            float lo = com.sc.mob.MobArmorMathSC.reserveFor(num(EntityWardenSC.class, rank + "_RESERVE_MIN", planLo), worn);
+            float hi = com.sc.mob.MobArmorMathSC.reserveFor(num(EntityWardenSC.class, rank + "_RESERVE_MAX", planHi), worn);
             float max = g.mobArmor().reserveMax;
             boolean cancelled = MinecraftForge.EVENT_BUS.post(new LivingAttackEvent(g, DamageSource.causePlayerDamage(fake), 4F));
             boolean siphon = EmpMobSC.refusal(g, EmpMode.SIPHON) != EmpNetSC.OK;
-            if (pieces != 4 || senior && !g.mobArmor().helium || max < lo - 0.01F || max > hi + 0.01F || !g.empArmoured() || !cancelled
+            if (pieces != 4 || (senior || captain) && !g.mobArmor().helium || max < lo - 0.01F || max > hi + 0.01F || !g.empArmoured() || !cancelled
                     || EmpMobSC.refusal(g, EmpMode.PULSE) == EmpNetSC.OK || !siphon) {
                 bad.append(' ').append(g.kind()).append(": ").append(pieces).append(" pieces of ").append(want).append(senior ? ", helium " + g.mobArmor().helium : "")
                         .append(", reserve ").append(max).append(" (").append(lo).append("..").append(hi).append("), armoured ").append(g.empArmoured())
@@ -685,7 +697,8 @@ public final class WorldTestSettlementSC {
             }
         }
         print(bad.length() == 0, "the guards (package N, ПГ-2, ПГ-3): " + sentries + " Sentries in Nano 4/4, " + seniors + " Senior Wardens in Quantum 4/4 with"
-                + " helium, the reserve within the rank's bounds, armoured for PE-1 and spared by its Pulse and Siphon, a FakePlayer's blow in the belt cancelled"
+                + " helium" + (chiefs > 0 ? ", " + chiefs + " Ф3 chiefs (the Captain in Exo with helium, the Commandant in Singular armour)" : "") + ", the"
+                + " reserve within the rank's bounds, armoured for PE-1 and spared by its Pulse and Siphon, a FakePlayer's blow in the belt cancelled"
                 + (bad.length() == 0 ? "" : " - NOT:" + bad));
     }
 
@@ -899,10 +912,10 @@ public final class WorldTestSettlementSC {
         clear(p);
     }
 
-    /** Every input an item (not chips) the test can hold. */
+    /** Every input an item (not chips) the test can hold; not a matcher (Ф3: the Salvager's trophy - a side never scaled). */
     private static boolean plain(TradeOfferSC o) {
         for (TradeOfferSC.Ingredient i : o.in) {
-            if (i == null || i.isChips() || i.display() == null) {
+            if (i == null || i.isChips() || i.display() == null || i.any()) {
                 return false;
             }
         }
@@ -1045,7 +1058,7 @@ public final class WorldTestSettlementSC {
         FakePlayer fake = fake();
         boolean coreOff = MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(plan.coreX, plan.coreY, plan.coreZ, w, SettlementBlocksSC.core, 0, fake));
         int[] fc = SettlementLayoutSC.footprintChunks(plan);
-        int[] count = new int[16];
+        int[] count = new int[16], count2 = new int[16];
         int noTile = 0, trim = 0, real = 0;
         for (int cx = fc[0]; cx <= fc[2]; cx++) {
             for (int cz = fc[1]; cz <= fc[3]; cz++) {
@@ -1057,6 +1070,8 @@ public final class WorldTestSettlementSC {
                             if (b == SettlementBlocksSC.showcase) {
                                 count[ch.getBlockMetadata(x, y, z) & 15]++;
                                 noTile += w.getTileEntity(cx * 16 + x, y, cz * 16 + z) instanceof TileEntityShowcaseSC ? 0 : 1;
+                            } else if (SettlementBlocksSC.showcase2 != null && b == SettlementBlocksSC.showcase2) {
+                                count2[ch.getBlockMetadata(x, y, z) & 15]++;    // Ф3: the Power Engineer's and the Salvager's machines
                             } else if (b == SettlementBlocksSC.decor || b == SettlementBlocksSC.glass) {
                                 trim++;
                             } else if (b == ModBlocks.metalBlock || b == ModBlocks.metalBlock2 || b == ModBlocks.leadGlass || b == ModBlocks.tokamakCoil) {
@@ -1076,10 +1091,19 @@ public final class WorldTestSettlementSC {
         }
         StringBuilder missing = new StringBuilder();
         Set<NpcKindSC> kinds = new HashSet<NpcKindSC>(SettlementLayoutSC.roster(site));
+        int second = showcase2From();
+        boolean upgraded = rec.extra.getCompoundTag("S").hasKey("F3From");
         for (NpcKindSC k : kinds) {
+            if (upgraded && (k == NpcKindSC.POWER_ENGINEER || k == NpcKindSC.SALVAGER)) {
+                continue;                                   // a Ф2 settlement upgraded in Ф3: its new Tuners have no workshop (ПЖ-10)
+            }
             for (int m : SettlementLayoutSC.workshopMachines(k)) {
-                if (count[m] == 0 && missing.indexOf(com.sc.block.BlockShowcaseSC.NAMES[m]) < 0) {
-                    missing.append(' ').append(com.sc.block.BlockShowcaseSC.NAMES[m]);
+                boolean two = m >= second;
+                int meta = two ? m - second : m;
+                String name = two ? "showcase2." + com.sc.block.BlockShowcase2SC.nameOf(meta)
+                        : com.sc.block.BlockShowcaseSC.NAMES[Math.max(0, Math.min(com.sc.block.BlockShowcaseSC.NAMES.length - 1, meta))];
+                if ((two ? count2[meta & 15] : count[meta & 15]) == 0 && missing.indexOf(name) < 0) {
+                    missing.append(' ').append(name);
                 }
             }
         }
@@ -1094,6 +1118,15 @@ public final class WorldTestSettlementSC {
                 + " cancelled " + coreOff + "; " + all + " showcase machines (" + count[com.sc.block.BlockShowcaseSC.SHOWER] + " showers, "
                 + count[com.sc.block.BlockShowcaseSC.CHARGE_PAD] + " charge pads, " + count[com.sc.block.BlockShowcaseSC.CLONE_CAPSULE] + " Clone Capsules), "
                 + noTile + " without their tile; every workshop of the roster has its machines" + (missing.length() == 0 ? " true" : " - MISSING:" + missing));
+    }
+
+    /** Ф3: SettlementLayoutSC.SHOWCASE2 (package S) - a workshopMachines code from it on is a BlockShowcase2SC meta; 16 until S has it. */
+    private static int showcase2From() {
+        try {
+            return SettlementLayoutSC.class.getField("SHOWCASE2").getInt(null);
+        } catch (Exception e) {
+            return 16;
+        }
     }
 
     // ------------------------------------------------------------------ 10. the spawn director (package C, ПП-11)

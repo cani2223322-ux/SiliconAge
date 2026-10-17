@@ -52,8 +52,12 @@ public class SettlementRegistrySC extends WorldSavedData {
     public static final int REGION_SHIFT = 9;
     /** Slot states. */
     public static final int NEVER = 0, ALIVE = 1, DEAD = 2;
-    /** The record layout's version (Settlement.version: a Ф3 core adds the Captain's slots to an older city). */
-    public static final int VERSION = 1;
+    /**
+     * The record layout's version (Settlement.version). 1 - Ф2's roster; 2 - Ф3's (docs/plan-substrate-tech-f3.md §6.2: the
+     * Power Engineer, the Armourer, the Salvager, the Captain, the Commandant). A record older than VERSION has the Ф3 slots
+     * appended at the end by its core (RosterSC.upgrade, package S) - slot numbers never move.
+     */
+    public static final int VERSION = 2;
     /** Named points of a settlement (Settlement.points). The pads are P_PAD + "0".."3". */
     public static final String P_PLAZA = "plaza", P_SQUARE = "square", P_CLONE = "clone", P_PAD = "pad", P_GATE = "gate", P_TOWER = "tower";
 

@@ -410,7 +410,7 @@ public final class SingularSensesSC {
             a.armor = e.getTotalArmorValue();
             IAttributeInstance atk = e.getEntityAttribute(SharedMonsterAttributes.attackDamage);
             a.attack = atk == null ? -1F : (float) atk.getAttributeValue();
-            a.flags = weaknessFlags(e);
+            a.flags = weaknessFlags(e) | com.sc.mob.MobAnalysisSC.flags(e);     // Подложка Ф3, ПИ-2: a Substrate mob's armour
         } else {
             a.kind = Analysis.MACHINE;
             a.x = te.xCoord;

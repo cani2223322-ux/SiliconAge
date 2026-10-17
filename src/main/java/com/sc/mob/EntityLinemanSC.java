@@ -82,10 +82,10 @@ public class EntityLinemanSC extends EntityArmoredMobSC implements IFactionLootS
         return true;
     }
 
-    /** ПС-4: the fist 3..4 (or what's in hand - MobCombatSC), never the held item's attributes. */
+    /** ПС-4: the fist 3..4 (or what's in hand - MobCombatSC), never the held item's attributes; Ф3: x damageMul() (ПС-21). */
     @Override
     public boolean attackEntityAsMob(Entity target) {
-        return MobCombatSC.melee(this, target, MobCombatSC.meleeDamage(getHeldItem(), MobCombatSC.FIST, rand));
+        return MobCombatSC.melee(this, target, MobCombatSC.meleeDamage(getHeldItem(), MobCombatSC.FIST, rand) * damageMul());
     }
 
     /** SpawnDirectorSC, the spawn egg, a spawner: the pieces, the cutter, the reserve. */

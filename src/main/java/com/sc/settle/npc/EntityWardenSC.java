@@ -4,10 +4,13 @@ import java.util.Collections;
 import java.util.List;
 
 import com.sc.emp.EmpMode;
+import com.sc.emp.EmpMobGunSC;
 import com.sc.emp.EmpSC;
 import com.sc.emp.IEmpTargetSC;
 import com.sc.init.ModItems;
+import com.sc.item.ItemArmorSC;
 import com.sc.item.ItemBladeSC;
+import com.sc.mob.BreakdownDamageSC;
 import com.sc.mob.IArmoredMobSC;
 import com.sc.mob.ISubstrateNativeSC;
 import com.sc.mob.MobArmorSC;
@@ -21,6 +24,9 @@ import com.sc.settle.ReputationSC;
 import com.sc.settle.SettlementProtectSC;
 import com.sc.settle.SettlementRegistrySC;
 import com.sc.settle.ViolationRulesSC;
+import com.sc.settle.npc.ai.EntityAICaptainBlowSC;
+import com.sc.settle.npc.ai.EntityAICommandantPostSC;
+import com.sc.settle.npc.ai.EntityAICommandantPulseSC;
 import com.sc.settle.npc.ai.EntityAIStrayWanderSC;
 import com.sc.settle.npc.ai.EntityAIWardenBeamSC;
 import com.sc.settle.npc.ai.EntityAIWardenBrainSC;
@@ -34,11 +40,14 @@ import com.sc.settle.npc.ai.NpcLinkSC;
 import com.sc.util.ArmorSuit;
 import com.sc.util.BladeFeature;
 import com.sc.util.BladeType;
+import com.sc.util.SingularLevel;
+import com.sc.util.SingularScheme;
 import com.sc.util.SoundsSC;
 import com.sc.util.WeaponType;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityCreature;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.IEntityLivingData;
 import net.minecraft.entity.INpc;
 import net.minecraft.entity.SharedMonsterAttributes;
@@ -46,6 +55,7 @@ import net.minecraft.entity.ai.EntityAIAttackOnCollide;
 import net.minecraft.entity.ai.EntityAILookIdle;
 import net.minecraft.entity.ai.EntityAISwimming;
 import net.minecraft.entity.ai.EntityAIWatchClosest;
+import net.minecraft.entity.monster.IMob;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
@@ -89,12 +99,36 @@ import net.minecraftforge.common.util.FakePlayer;
  * <li>death: SettlementRegistrySC.slotDied, the sparks, the equipment gone - only experience.</li>
  * </ul>
  * A stray (a spawn egg's, settlement -1) is a Sentry that only answers who hits it.
+ * <p>
+ * Ф3, package S (docs/plan-substrate-tech-f3.md §6.4, §6.5; rules ПГ-11..ПГ-14) - two more ranks, the Sentries and the
+ * Senior Wardens unchanged:
+ * <ul>
+ * <li>«Капитан купола» (CAPTAIN): Exo 4/4 with helium (the shield up), the Armour Chip (defenseTier 1), the reserve by
+ * CAPTAIN_RESERVE_*, the Exo Blade (CAPTAIN_BLADE), HP 80, experience 30. His post is the guard square (P_SQUARE); he
+ * leads the guard - any hostile in the dome or the belt he goes for himself, wherever it is (EntityAIWardenBrainSC, the
+ * leash as everyone's). The heavy blow (EntityAICaptainBlowSC): a target within HEAVY_REACH, HEAVY_WINDUP ticks of
+ * wind-up (the telegraph IMobActionSC.ACT_WINDUP in DW_ACTION - every client sees the blade charge), then HEAVY_BLOW of
+ * «Пробой» (BreakdownDamageSC.of(this): it passes armour and every shield), HEAVY_COOLDOWN after; a ПЭ-1 Point that hits
+ * him during the wind-up breaks it off (empHit), and with his chestplate suppressed he doesn't wind up at all.</li>
+ * <li>«Комендант города» (COMMANDANT): Singular 4/4 of the highest level (SingularLevel.MAX) in the settlement's colours
+ * (COMMANDANT_SCHEME, the dome's turquoise light - the stacks' NBT set once, when he is dressed), helium (the shield), the
+ * reserve by COMMANDANT_RESERVE_*, the Singular Blade (COMMANDANT_BLADE), HP 120, experience 50. He keeps to the plaza
+ * (P_PLAZA within PLAZA_STAY: EntityAICommandantPostSC) and cuts down who comes up to him; while EmpMobGunSC.allowed(),
+ * hostiles in the mod's armour in the dome or the belt that he sees get a ПЭ-1 Pulse (EntityAICommandantPulseSC over
+ * package A's EntityAIEmpShooterSC, his reach the dome's radius + COMMANDANT_RANGE_OUT) - he holds the ПЭ-1 for it, the
+ * blade otherwise; never at a player (the guards' refusal), and the ПЭ-1 never drops (nothing he wears does).</li>
+ * </ul>
+ * Both come back from the Clone Capsule after NpcKindSC.CHIEF_RESPAWN_TICKS; a Point at either is a provocation as at
+ * any guard (ПГ-14). Their looks: RenderWardenSC (their own skins, the Captain's cloak and the Commandant's mantle).
  */
-public class EntityWardenSC extends EntityCreature implements INpc, ISettlementGuardSC, IArmoredMobSC, IEmpTargetSC, ISubstrateNativeSC {
+public class EntityWardenSC extends EntityCreature implements INpc, ISettlementGuardSC, IArmoredMobSC, IEmpTargetSC, ISubstrateNativeSC,
+        com.sc.mob.IMobActionSC {
 
     public static final String NAME = "warden";
     /** DataWatcher (fixed): the rank (byte, NpcKindSC ordinal), the name code (int), the alert (byte, GuardAlertSC.CALM..ATTACKING). */
     public static final int DW_KIND = 24, DW_NAME = 25, DW_ALERT = 26;
+    /** Ф3 (the coordinator's, docs/plan-substrate-tech-f3.md §2.4): the telegraph (byte, IMobActionSC.ACT_*) - the Captain's wind-up, the Commandant's Pulse. 28..31 package S. */
+    public static final int DW_ACTION = 27;
 
     /** ПГ-2: HP by rank (Sentry, Senior Warden); its walk; the path search's reach (NpcNavSC walks farther in legs). TODO(balance) */
     public static final double SENTRY_HP = 40D, SENIOR_HP = 50D, SPEED = 0.3D, FOLLOW = 24D;
@@ -135,6 +169,31 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     /** The brain's look round, ticks. */
     public static final int THINK = 10;
 
+    // ---- Ф3 (§6.4, §6.5): the Captain and the Commandant
+    /** ПГ-11 / ПГ-12: HP. */
+    public static final double CAPTAIN_HP = 80D, COMMANDANT_HP = 120D;
+    /** ПГ-11 / ПГ-12: the reserve - blockable damage that drains it (MobArmorSC.spawnReserveForDamage). */
+    public static final float CAPTAIN_RESERVE_MIN = 70F, CAPTAIN_RESERVE_MAX = 110F, COMMANDANT_RESERVE_MIN = 150F, COMMANDANT_RESERVE_MAX = 250F;
+    /** ПГ-11: the Captain's Armour Chip (MobArmorSC.defenseTier: suppression -30%, the Siphon -40%). TODO(balance) */
+    public static final int CAPTAIN_DEFENSE_TIER = 1;
+    /** Their blades: the Exo Blade 10, the Singular Blade 12 (MobCombatSC's Singular 13..14 is the hostiles'). TODO(balance) */
+    public static final int CAPTAIN_BLADE = 10, COMMANDANT_BLADE = 12;
+    /** ПГ-13: only experience. */
+    public static final int XP_CAPTAIN = 30, XP_COMMANDANT = 50;
+    /**
+     * ПГ-11: the Captain's heavy blow - a target within HEAVY_REACH blocks, HEAVY_WINDUP ticks of wind-up, HEAVY_BLOW of
+     * «Пробой», HEAVY_COOLDOWN ticks before the next wind-up. TODO(balance): the cooldown.
+     */
+    public static final int HEAVY_BLOW = 5, HEAVY_REACH = 3, HEAVY_WINDUP = 20, HEAVY_COOLDOWN = 100;
+    /**
+     * ПГ-12: the Commandant's ПЭ-1 reaches his dome's radius + this; he keeps within PLAZA_STAY blocks of P_PLAZA; a target
+     * nearer than COMMANDANT_GUN_FROM gets the blade, not the Pulse. TODO(balance)
+     */
+    public static final int COMMANDANT_RANGE_OUT = 8, PLAZA_STAY = 7, COMMANDANT_GUN_FROM = 4;
+    /** ПГ-12: «в цветах поселения» - the Singular scheme of his pieces (the dome's cyan on the near-black plating) and their level. */
+    public static final SingularScheme COMMANDANT_SCHEME = SingularScheme.B;
+    public static final int COMMANDANT_LEVEL = SingularLevel.MAX;
+
     private final MobArmorSC armor;
     protected int settlementId = -1, slot = -1;
     /** The core column {x, z} of the record bound to (ISettlementMemberSC.boundCore), null unknown. */
@@ -144,6 +203,10 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     private EntityPlayer warned, watched;
     private boolean returning;
     private List<EntityPlayer> partners = Collections.emptyList();
+    /** Server, Ф3: a ПЭ-1 Point hit the Captain during his wind-up (EntityAICaptainBlowSC takes it). */
+    private boolean windupBroken;
+    /** Server, Ф3: the Commandant's Pulse task, made once his dome's radius is known (its reach); null for the others. */
+    private EntityAICommandantPulseSC pulse;
 
     public EntityWardenSC(World world) {
         super(world);
@@ -157,6 +220,8 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         getNavigator().setAvoidsWater(true);
         tasks.addTask(0, new EntityAISwimming(this));
         tasks.addTask(1, new EntityAIWardenReturnSC(this));
+        tasks.addTask(1, new EntityAICommandantPostSC(this));          // Ф3: only the Commandant's - the plaza
+        tasks.addTask(2, new EntityAICaptainBlowSC(this));             // Ф3: only the Captain's - the heavy blow
         tasks.addTask(2, new EntityAIWardenBeamSC(this, CHASE));
         tasks.addTask(3, new EntityAIAttackOnCollide(this, CHASE, true));
         tasks.addTask(4, new EntityAIWardenWarnSC(this));
@@ -177,6 +242,21 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         dataWatcher.addObject(DW_KIND, Byte.valueOf((byte) NpcKindSC.SENTRY.ordinal()));
         dataWatcher.addObject(DW_NAME, Integer.valueOf(0));
         dataWatcher.addObject(DW_ALERT, Byte.valueOf((byte) 0));
+        dataWatcher.addObject(DW_ACTION, Byte.valueOf((byte) com.sc.mob.IMobActionSC.ACT_NONE));
+    }
+
+    // ------------------------------------------------------------------ Ф3: the telegraph (IMobActionSC)
+
+    @Override
+    public int mobAction() {
+        return dataWatcher.getWatchableObjectByte(DW_ACTION);
+    }
+
+    @Override
+    public void setMobAction(int action) {
+        if (mobAction() != action) {
+            dataWatcher.updateObject(DW_ACTION, Byte.valueOf((byte) action));
+        }
     }
 
     @Override
@@ -273,9 +353,13 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
 
     /**
      * ПГ-2, server: dressed for `rank` - the suit 4/4 lit turquoise, a sheathed blade or a beam gun, the reserve, HP,
-     * experience. Anything worn before is replaced.
+     * experience. Anything worn before is replaced. Ф3: the Captain and the Commandant - equipChief.
      */
     public void equip(NpcKindSC rank) {
+        if (rank != null && rank.chief()) {
+            equipChief(rank);
+            return;
+        }
         boolean senior = rank == NpcKindSC.SENIOR_WARDEN;
         for (int i = 1; i <= 4; i++) {
             setCurrentItemOrArmor(i, null);
@@ -298,14 +382,80 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         experienceValue = senior ? XP_SENIOR : XP_SENTRY;
     }
 
-    /** ПГ-2: the rank's suit (pure). */
+    /**
+     * Ф3, server (ПГ-11, ПГ-12): the Captain / the Commandant dressed - the four pieces of his suit lit turquoise (the
+     * Commandant's at COMMANDANT_LEVEL in COMMANDANT_SCHEME: the stacks' NBT set here, once), helium in the loop (the
+     * shield), the Captain's Armour Chip, the reserve, his blade (sheathed - its light off - until a warning or a fight),
+     * HP, experience. Anything worn before is replaced.
+     */
+    private void equipChief(NpcKindSC rank) {
+        boolean commandant = rank == NpcKindSC.COMMANDANT;
+        ItemArmorSC[] pieces = ModItems.ARMOR.get(suitOf(rank));
+        for (int t = 0; t < 4; t++) {
+            ItemStack st = null;
+            if (pieces != null && pieces[t] != null) {
+                st = new ItemStack(pieces[t]);
+                ItemArmorSC.setGlowColor(st, GLOW);
+                if (commandant) {
+                    SingularLevel.setLevel(st, COMMANDANT_LEVEL);
+                    SingularScheme.setScheme(st, COMMANDANT_SCHEME);
+                }
+            }
+            setCurrentItemOrArmor(4 - t, st);                  // armorType 0 (helmet) is slot 4
+        }
+        setCurrentItemOrArmor(0, chiefBlade(rank));
+        armor.helium = true;
+        armor.emergency = false;
+        armor.regenPerSecond = 0F;
+        armor.defenseTier = commandant ? 0 : CAPTAIN_DEFENSE_TIER;
+        float[] r = reserveFor(rank);
+        armor.spawnReserveForDamage(r[0], r[1]);
+        getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(commandant ? COMMANDANT_HP : CAPTAIN_HP);
+        setHealth(getMaxHealth());
+        experienceValue = xpOf(rank);
+    }
+
+    /** Ф3: a chief's blade - the Captain's Exo, the Commandant's Singular - sheathed (drawBlade lights it). */
+    private static ItemStack chiefBlade(NpcKindSC rank) {
+        return new ItemStack(ModItems.BLADES.get(rank == NpcKindSC.COMMANDANT ? BladeType.SINGULAR : BladeType.EXO));
+    }
+
+    /** ПГ-2 / ПГ-11 / ПГ-12: the rank's suit (pure). */
     public static ArmorSuit suitOf(NpcKindSC rank) {
+        if (rank == NpcKindSC.CAPTAIN) {
+            return ArmorSuit.EXO;
+        }
+        if (rank == NpcKindSC.COMMANDANT) {
+            return ArmorSuit.SINGULAR;
+        }
         return rank == NpcKindSC.SENIOR_WARDEN ? ArmorSuit.QUANTUM : ArmorSuit.NANO;
     }
 
-    /** ПГ-2: {min, max} blockable damage that drains the rank's reserve (pure). */
+    /** ПГ-2 / ПГ-11 / ПГ-12: {min, max} blockable damage that drains the rank's reserve (pure). */
     public static float[] reserveFor(NpcKindSC rank) {
+        if (rank == NpcKindSC.CAPTAIN) {
+            return new float[]{CAPTAIN_RESERVE_MIN, CAPTAIN_RESERVE_MAX};
+        }
+        if (rank == NpcKindSC.COMMANDANT) {
+            return new float[]{COMMANDANT_RESERVE_MIN, COMMANDANT_RESERVE_MAX};
+        }
         return rank == NpcKindSC.SENIOR_WARDEN ? new float[]{SENIOR_RESERVE_MIN, SENIOR_RESERVE_MAX} : new float[]{SENTRY_RESERVE_MIN, SENTRY_RESERVE_MAX};
+    }
+
+    /** ПГ-9 / ПГ-13: the experience a rank gives (pure). */
+    public static int xpOf(NpcKindSC rank) {
+        if (rank == NpcKindSC.CAPTAIN) {
+            return XP_CAPTAIN;
+        }
+        if (rank == NpcKindSC.COMMANDANT) {
+            return XP_COMMANDANT;
+        }
+        return rank == NpcKindSC.SENIOR_WARDEN ? XP_SENIOR : XP_SENTRY;
+    }
+
+    /** Ф3: a chief's blade blow (CAPTAIN_BLADE, COMMANDANT_BLADE), 0 for the other ranks (theirs are MobCombatSC's). Pure. */
+    public static int chiefBladeDamage(NpcKindSC rank) {
+        return rank == NpcKindSC.CAPTAIN ? CAPTAIN_BLADE : rank == NpcKindSC.COMMANDANT ? COMMANDANT_BLADE : 0;
     }
 
     // ------------------------------------------------------------------ duty (pure; EntityAIWardenPatrolSC asks)
@@ -327,14 +477,16 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     /**
      * ПГ-5: slot `slot`'s duty - a Senior at its post (a tower, the gate); Sentry #0 at the gate; the next HEART_GUARDS
      * Sentries at the Heart at night; the other Sentries on patrol (an Outpost's two: the gate and one patrolling, who
-     * stands at the Heart at night).
+     * stands at the Heart at night). Ф3: the Captain and the Commandant - their posts (the guard square, the plaza), day
+     * and night.
      */
     public static int role(SettlementRegistrySC.Settlement s, int slot, boolean night) {
         int n = rankIndex(s, slot);
         if (n < 0) {
             return ROLE_PATROL;
         }
-        if (s.slots.get(slot).kindOf() == NpcKindSC.SENIOR_WARDEN) {
+        NpcKindSC k = s.slots.get(slot).kindOf();
+        if (k == NpcKindSC.SENIOR_WARDEN || k.chief()) {
             return ROLE_POST;
         }
         if (n == 0) {
@@ -346,7 +498,8 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     /**
      * Where slot `slot` stands for `role` (ROLE_PATROL: null - it walks the ring): the gate - its post, else P_GATE;
      * a Senior - its post, else its tower (P_TOWER + its index), else P_GATE; the Heart - beside the Clone Capsule's
-     * spot (P_CLONE), else beside the core. Pure.
+     * spot (P_CLONE), else beside the core. Ф3: the Captain - his post, else P_SQUARE; the Commandant - his post, else
+     * P_PLAZA. Pure.
      */
     public static int[] dutyPoint(SettlementRegistrySC.Settlement s, int slot, int role) {
         if (s == null || role == ROLE_PATROL) {
@@ -360,6 +513,9 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
                 return p != null ? p : NpcLinkSC.point(s, SettlementRegistrySC.P_GATE);
             case ROLE_POST:
                 p = NpcLinkSC.post(sl);
+                if (p == null && sl != null && sl.kindOf().chief()) {
+                    p = NpcLinkSC.point(s, sl.kindOf() == NpcKindSC.COMMANDANT ? SettlementRegistrySC.P_PLAZA : SettlementRegistrySC.P_SQUARE);
+                }
                 if (p == null) {
                     p = NpcLinkSC.point(s, SettlementRegistrySC.P_TOWER + Math.max(0, rankIndex(s, slot)));
                 }
@@ -420,6 +576,101 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     /** ПГ-10: the «Партнёры» (and better) within reach - it helps them, nods to them. Don't keep the list. */
     public List<EntityPlayer> partners() {
         return partners;
+    }
+
+    // ------------------------------------------------------------------ Ф3: the Captain and the Commandant (server)
+
+    /** The Commandant of a dome (bound): he keeps to the plaza (ПГ-12). */
+    public boolean holdsPlaza() {
+        return kind() == NpcKindSC.COMMANDANT && isBound();
+    }
+
+    /** The Commandant's plaza: his post, else P_PLAZA, else the core's column; null without a record. */
+    public int[] plaza() {
+        SettlementRegistrySC.Settlement s = link.get();
+        if (s == null) {
+            return null;
+        }
+        int[] p = NpcLinkSC.post(link.slot());
+        if (p == null) {
+            p = NpcLinkSC.point(s, SettlementRegistrySC.P_PLAZA);
+        }
+        return p != null ? p : NpcLinkSC.core(s);
+    }
+
+    /** `e` is within `extra` blocks past PLAZA_STAY of the plaza `p` (across) - the Commandant reaches it from there. */
+    public static boolean nearPlaza(Entity e, int[] p, double extra) {
+        double r = PLAZA_STAY + extra;
+        return p != null && NpcLinkSC.distSq(e, p) <= r * r;
+    }
+
+    /** ПГ-12: the Commandant's ПЭ-1 reach - his dome's radius + COMMANDANT_RANGE_OUT; 0 without a record. */
+    public double pulseRange() {
+        SettlementRegistrySC.Settlement s = link.get();
+        return s == null ? 0D : s.radius + COMMANDANT_RANGE_OUT;
+    }
+
+    /** ПГ-12: a target worth the Commandant's Pulse - a hostile in the mod's armour that still holds its reserve (server). */
+    public static boolean empWorthy(Entity e) {
+        return e instanceof IMob && e instanceof IEmpTargetSC && !(e instanceof ISettlementMemberSC) && ((IEmpTargetSC) e).empArmoured();
+    }
+
+    /**
+     * ПГ-11, server: the Captain's heavy blow lands on `target` - HEAVY_BLOW of «Пробой» (BreakdownDamageSC.of(this): past
+     * armour, the mob's shield and the player's full Exo / Singular shield), a zap and sparks every watcher sees. The wind-up
+     * before it is EntityAICaptainBlowSC's; the world test calls this directly. @return the target took it
+     */
+    public boolean heavyBlow(EntityLivingBase target) {
+        if (target == null || worldObj.isRemote) {
+            return false;
+        }
+        boolean hit = target.attackEntityFrom(BreakdownDamageSC.of(this), HEAVY_BLOW);
+        double y = target.posY + target.height * 0.5D;
+        SoundsSC.play(worldObj, target.posX, y, target.posZ, "field.zap", 1.0F, 0.8F);
+        if (worldObj instanceof WorldServer) {
+            ((WorldServer) worldObj).func_147487_a("magicCrit", target.posX, y, target.posZ, 16, 0.3D, 0.4D, 0.3D, 0.15D);
+        }
+        return hit;
+    }
+
+    /** ПГ-11: a ПЭ-1 Point hit the Captain during his wind-up since the last ask (EntityAICaptainBlowSC) - and forgets it. */
+    public boolean takeWindupBroken() {
+        boolean b = windupBroken;
+        windupBroken = false;
+        return b;
+    }
+
+    /**
+     * Server, now and then: the Commandant's Pulse task - made (and put among his tasks) once his record gives its reach,
+     * made again if that changes, dropped if he isn't the Commandant any more (another slot's kind); and the ПЭ-1 in his hand
+     * while his target is a far hostile in armour that the Pulse may hit, the Singular Blade otherwise (one equipment
+     * change when it switches).
+     */
+    private void chiefDuty() {
+        boolean commandant = kind() == NpcKindSC.COMMANDANT;
+        double range = commandant ? pulseRange() : 0D;
+        if (pulse != null && (!commandant || pulse.reach() != range)) {
+            tasks.removeTask(pulse);
+            pulse = null;
+        }
+        if (commandant && range > 0D && pulse == null) {
+            pulse = new EntityAICommandantPulseSC(this, range);
+            tasks.addTask(2, pulse);
+        }
+        if (!commandant || armor.suit() == null) {
+            return;
+        }
+        EntityLivingBase t = getAttackTarget();
+        boolean gun = t != null && t.isEntityAlive() && EmpMobGunSC.allowed() && empWorthy(t)
+                && getDistanceSqToEntity(t) > COMMANDANT_GUN_FROM * COMMANDANT_GUN_FROM;
+        ItemStack held = getHeldItem();
+        boolean holdsGun = held != null && held.getItem() == ModItems.empGun;
+        if (gun && !holdsGun && ModItems.empGun != null) {
+            setCurrentItemOrArmor(0, new ItemStack(ModItems.empGun));
+        } else if (!gun && holdsGun) {
+            setCurrentItemOrArmor(0, chiefBlade(NpcKindSC.COMMANDANT));
+            drawBlade(alert() >= GuardAlertSC.WARNING);
+        }
     }
 
     /**
@@ -490,6 +741,9 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
                 return;                                         // ПВ-8: a bound guard out of the Substrate is removed
             }
             armor.serverTick();
+            if ((pulse != null || kind() == NpcKindSC.COMMANDANT) && (worldObj.getTotalWorldTime() + getEntityId()) % 5L == 0L) {
+                chiefDuty();                                    // Ф3: after the AI's update - its task list is free to change
+            }
         }
     }
 
@@ -503,9 +757,16 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         return false;
     }
 
-    /** ПС-4: the blade 6 / 8, the fist 3..4 with a gun in hand - never the held item's attributes. */
+    /**
+     * ПС-4: the blade 6 / 8, the fist 3..4 with a gun in hand - never the held item's attributes. Ф3: the Captain's and the
+     * Commandant's blades their own numbers (chiefBladeDamage).
+     */
     @Override
     public boolean attackEntityAsMob(Entity target) {
+        int chief = chiefBladeDamage(kind());
+        if (chief > 0 && MobCombatSC.blade(this) != null) {
+            return MobCombatSC.melee(this, target, chief);
+        }
         return MobCombatSC.melee(this, target, MobCombatSC.meleeDamage(getHeldItem(), MobCombatSC.FIST, rand));
     }
 
@@ -542,8 +803,10 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
             int level = ReputationSC.localLevel(rec == null ? 0 : rec.reputation, l != null && l.enemy(worldObj.getTotalWorldTime()));
             say = level >= ReputationSC.PARTNER ? "partner" : ReputationSC.LEVEL_KEYS[level];
         }
+        // Ф3: the Captain and the Commandant have words of their own (sc.settle.warden.<captain|commandant>.say.*; a stray is a Sentry)
+        String words = kind().chief() && s != null ? "sc.settle.warden." + kind().key + ".say." + say : "sc.settle.warden.say." + say;
         IChatComponent msg = new ChatComponentTranslation("sc.settle.warden.info", NpcNamesSC.name(nameCode()),
-                new ChatComponentTranslation(kind().langKey()), new ChatComponentTranslation("sc.settle.warden.say." + say));
+                new ChatComponentTranslation(kind().langKey()), new ChatComponentTranslation(words));
         msg.getChatStyle().setColor(EnumChatFormatting.DARK_AQUA);
         return msg;
     }
@@ -623,7 +886,7 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         }
         setKind(NpcKindSC.of(tag.getByte("scKind")));
         setNameCode(tag.getInteger("scName"));
-        experienceValue = kind() == NpcKindSC.SENIOR_WARDEN ? XP_SENIOR : XP_SENTRY;
+        experienceValue = xpOf(kind());
         link.forget();
     }
 
@@ -637,7 +900,10 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         return worldObj != null && worldObj.isRemote ? !MobArmorSC.clientFlag(this, MobArmorSC.FLAG_DOWN) : !armor.down();
     }
 
-    /** ПГ-6: a Point by a real player provokes (SettlementProtectSC.violation POINT_WARDEN) - before the armour's answer. */
+    /**
+     * ПГ-6 / ПГ-14: a Point by a real player provokes (SettlementProtectSC.violation POINT_WARDEN) - before the armour's
+     * answer. Ф3 (ПГ-11): a Point that reaches the Captain during his wind-up breaks it off (EntityAICaptainBlowSC).
+     */
     @Override
     public EmpSC.HitResult empHit(Entity shooter, EmpMode mode, boolean upgraded, int[] pieces) {
         if (mode == EmpMode.POINT && !worldObj.isRemote && shooter instanceof EntityPlayer && !(shooter instanceof FakePlayer)) {
@@ -645,6 +911,9 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
             if (s != null) {
                 SettlementProtectSC.violation((EntityPlayer) shooter, s, ViolationRulesSC.POINT_WARDEN);
             }
+        }
+        if (mode == EmpMode.POINT && !worldObj.isRemote && mobAction() == com.sc.mob.IMobActionSC.ACT_WINDUP) {
+            windupBroken = true;
         }
         return armor.empHit(shooter, mode, upgraded, pieces);
     }

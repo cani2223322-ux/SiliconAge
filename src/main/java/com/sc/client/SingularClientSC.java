@@ -228,6 +228,7 @@ public class SingularClientSC {
                     lines.add("§e" + Lang.tr(f[1]));
                 }
             }
+            com.sc.mob.client.MobAnalysisClientSC.lines(lines, e, a.flags);   // Подложка Ф3, ПИ-2: the armour of a Substrate mob
         } else {
             Block b = mc.theWorld.getBlock(a.x, a.y, a.z);
             Item it = Item.getItemFromBlock(b);

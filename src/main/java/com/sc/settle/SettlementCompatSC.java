@@ -2,6 +2,7 @@ package com.sc.settle;
 
 import com.sc.block.BlockDockSC;
 import com.sc.block.BlockSettlementDecorSC;
+import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
 
 import cpw.mods.fml.common.FMLLog;
@@ -17,7 +18,8 @@ import net.minecraft.item.ItemStack;
  * exist with the dimension off too). Only those - blocks no player has: the player's own Field Generator, machines and
  * metal are never blacklisted (and so neither is the settlements' brick or the ground under them: the Substrate rock's).
  * Spatial IO moves the creatures in its box too - a bound one out of the Substrate is removed (NpcLinkSC.exiled). A
- * missing AE2: IMC to an absent mod is dropped by FML. Called from SettlementSC.init.
+ * missing AE2: IMC to an absent mod is dropped by FML. Called from SettlementSC.init. Ф3 (docs/plan-substrate-tech-f3.md §6.3,
+ * ПК-16): the second showcase block (showcase2SC, the Power Engineer's and the Salvager's workshops) too.
  * <p>
  * The key checked against the pack's AE2 (appliedenergistics2-rv3-beta-6): appeng.core.IMCHandler registers
  * "blacklist-block-spatial" -> IMCBlackListSpatial, which takes the message's ItemStack, Block.getBlockFromItem of its
@@ -35,7 +37,8 @@ public final class SettlementCompatSC {
     public static void sendImc() {
         int sent = blacklist(SettlementBlocksSC.core, 1) + blacklist(SettlementBlocksSC.showcase, BlockShowcaseSC.NAMES.length)
                 + blacklist(SettlementBlocksSC.dock, BlockDockSC.NAMES.length)
-                + blacklist(SettlementBlocksSC.decor, BlockSettlementDecorSC.NAMES.length) + blacklist(SettlementBlocksSC.glass, 1);
+                + blacklist(SettlementBlocksSC.decor, BlockSettlementDecorSC.NAMES.length) + blacklist(SettlementBlocksSC.glass, 1)
+                + blacklist(SettlementBlocksSC.showcase2, BlockShowcase2SC.NAMES.length);   // Ф3 (ПК-16): the second showcase block
         if (Loader.isModLoaded(AE2)) {
             FMLLog.info("[Silicon Age] Si-14 settlements: %d stacks of the core, showcases, dock and trim sent to AE2's spatial IO blacklist (%s)",
                     sent, AE2_SPATIAL_BLACKLIST);

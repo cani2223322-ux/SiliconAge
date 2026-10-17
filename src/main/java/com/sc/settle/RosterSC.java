@@ -1,6 +1,8 @@
 package com.sc.settle;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -43,6 +45,12 @@ import net.minecraft.world.chunk.IChunkProvider;
  * At most SPAWNS_PER_TICK creatures a tick (a new City: 27 at once otherwise). restore() makes a record the registry
  * lost again from the core's own NBT (id, radius, floor) - and, while the generator's maths still puts this very
  * settlement here, its plan's dock, points and slots (all NEVER: the census adopts the creatures still there).
+ * <p>
+ * Ф3, package S (docs/plan-substrate-tech-f3.md §6.2, rule ПЖ-10): a record older than SettlementRegistrySC.VERSION (a Ф2
+ * world's) gets the Ф3 slots appended at the end before its core's first second does anything else - upgrade(): the old
+ * slots, their creatures and the buildings stay as they are, the new ones (NEVER) stand at the existing points, their
+ * home their post; the roster then makes their creatures as any NEVER slot's. A restored record is made from the plan of
+ * the current version (its roster may then differ from a Ф2 settlement's buildings - a rare case, logged by restore).
  */
 public final class RosterSC {
 
@@ -54,6 +62,11 @@ public final class RosterSC {
     public static final int SPAWNS_PER_TICK = 4;
     /** Package C's key in Settlement.extra; in it: the game day of the last Tuner's copy, a record restored by a core. */
     public static final String EXTRA = "C", CLONE_DAY = "CloneDay", RESTORED = "Restored";
+    /**
+     * Ф3, package S's key in Settlement.extra (docs/plan-substrate-tech-f3.md §2.7); in it F3_FROM - the record version the
+     * Ф3 slots were appended to (upgrade). A record made as version 2 has none.
+     */
+    public static final String EXTRA_S = "S", F3_FROM = "F3From";
     /** How far up from a post / the capsule a free place to stand is looked for. */
     private static final int FREE_UP = 3;
 
@@ -69,6 +82,12 @@ public final class RosterSC {
 
     /** The core's second: census, roster, Clone Capsule, visitors. `s` is this core's own record. */
     public static void tick(World w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, State st, long now) {
+        if (s.version < SettlementRegistrySC.VERSION) {        // Ф3: a Ф2 world's record - once, at its core's first second
+            int from = s.version, added = upgrade(s);
+            r.markDirty();
+            FMLLog.info("[Silicon Age] Si-14 settlements: settlement %d (record version %d) got the Ф3 roster - %d slots appended at the end",
+                    s.id, from, added);
+        }
         if (st.ticks++ % CENSUS_EVERY == 0) {
             census(w, r, s, st, now);
         }
@@ -379,6 +398,10 @@ public final class RosterSC {
         r.restore(s);
         FMLLog.warning("[Silicon Age] Si-14 settlements: record %d was missing - made again from its core at %d %d %d in dimension %d (%s)",
                 id, x, y, z, s.dim, planned ? s.slots.size() + " slots from the plan" : "no roster");
+        if (planned) {                                          // Ф3 (§6.2): the plan is the current version's
+            FMLLog.info("[Silicon Age] Si-14 settlements: record %d took the roster of record version %d - in a settlement built by an older"
+                    + " version its creatures stand where the newer plan puts them", id, SettlementRegistrySC.VERSION);
+        }
         return r.byId(id);
     }
 
@@ -414,6 +437,111 @@ public final class RosterSC {
             s.slots.add(sl);
         }
         return true;
+    }
+
+    // ------------------------------------------------------------------ Ф3: a Ф2 record's new slots (package S)
+
+    /**
+     * The kinds a record of version 1 of `size` and `seed` gets appended (ПЖ-10), in this order: a Settlement and a City -
+     * the Armourer, the Power Engineer, the Salvager; an Outpost - the Salvager; then the Captain (SettlementSizeSC.captain:
+     * the same answer as a new plan's), the City's Commandant. Pure.
+     */
+    public static List<NpcKindSC> upgradeKinds(SettlementSizeSC size, long seed) {
+        List<NpcKindSC> out = new ArrayList<NpcKindSC>();
+        if (size != SettlementSizeSC.OUTPOST) {
+            out.add(NpcKindSC.ARMOURER);
+            out.add(NpcKindSC.POWER_ENGINEER);
+        }
+        out.add(NpcKindSC.SALVAGER);
+        if (size.captain(seed)) {
+            out.add(NpcKindSC.CAPTAIN);
+        }
+        if (size.commandant) {
+            out.add(NpcKindSC.COMMANDANT);
+        }
+        return out;
+    }
+
+    /**
+     * Ф3 (docs/plan-substrate-tech-f3.md §6.2, rule ПЖ-10): a record older than SettlementRegistrySC.VERSION gets the slots of
+     * upgradeKinds appended at the END - no old slot moves or changes, nor its creature, nor any building. Each new slot is
+     * NEVER (the roster makes its creature), named afresh (none of the record's names twice, nor the settlement's own), its
+     * home its post: the Armourer at the guard square (P_SQUARE, a block aside - see besideSquare), the Power Engineer on the
+     * first charge pad (P_PAD + 0), the Salvager at the gate (P_GATE), the Captain at P_SQUARE, the Commandant on the plaza
+     * (P_PLAZA); a point the record lacks - the core's column. Then version = VERSION and extra "S" F3_FROM = the old version.
+     * Pure (the record only: the self-test calls it); a record of the current version is left alone. @return slots appended
+     */
+    public static int upgrade(SettlementRegistrySC.Settlement s) {
+        if (s == null || s.version >= SettlementRegistrySC.VERSION) {
+            return 0;
+        }
+        int from = s.version;
+        Set<Integer> used = new HashSet<Integer>();
+        used.add(Integer.valueOf(NpcNamesSC.code(s.nameElement, s.nameNumber)));
+        for (SettlementRegistrySC.Slot sl : s.slots) {
+            used.add(Integer.valueOf(sl.nameCode()));
+        }
+        Random rand = new Random(s.seed ^ 0xF3L ^ ((long) s.id << 20));
+        List<NpcKindSC> kinds = upgradeKinds(s.sizeKind(), s.seed);
+        for (NpcKindSC k : kinds) {
+            int[] at;
+            switch (k) {
+                case ARMOURER:
+                    at = besideSquare(s);
+                    break;
+                case POWER_ENGINEER:
+                    at = s.point(SettlementRegistrySC.P_PAD + "0");
+                    break;
+                case SALVAGER:
+                    at = s.point(SettlementRegistrySC.P_GATE);
+                    break;
+                case CAPTAIN:
+                    at = s.point(SettlementRegistrySC.P_SQUARE);
+                    break;
+                default:
+                    at = s.point(SettlementRegistrySC.P_PLAZA);
+                    break;
+            }
+            if (at == null || at.length != 3) {
+                at = new int[]{s.x, s.floorY + 1, s.z};
+            }
+            int code;
+            do {
+                code = NpcNamesSC.random(rand);
+            } while (!used.add(Integer.valueOf(code)));
+            SettlementRegistrySC.Slot sl = new SettlementRegistrySC.Slot();
+            sl.kind = k.ordinal();
+            sl.nameElement = NpcNamesSC.element(code);
+            sl.nameNumber = NpcNamesSC.number(code);
+            sl.postX = sl.homeX = at[0];
+            sl.postY = sl.homeY = at[1];
+            sl.postZ = sl.homeZ = at[2];
+            sl.state = SettlementRegistrySC.NEVER;
+            s.slots.add(sl);
+        }
+        s.version = SettlementRegistrySC.VERSION;
+        NBTTagCompound c = s.extra.getCompoundTag(EXTRA_S);
+        c.setInteger(F3_FROM, from);
+        s.extra.setTag(EXTRA_S, c);
+        return kinds.size();
+    }
+
+    /**
+     * The Armourer's post in a record without its plan: a block across from P_SQUARE (the plan's AT_ARMOURER[0]: the square's
+     * axis runs from P_SQUARE to P_PLAZA, across is that turned clockwise); P_SQUARE itself if the two aren't on one line, null
+     * without P_SQUARE. Pure.
+     */
+    public static int[] besideSquare(SettlementRegistrySC.Settlement s) {
+        int[] sq = s.point(SettlementRegistrySC.P_SQUARE), pl = s.point(SettlementRegistrySC.P_PLAZA);
+        if (sq == null || sq.length != 3) {
+            return null;
+        }
+        if (pl == null || pl.length != 3 || (pl[0] != sq[0]) == (pl[2] != sq[2])) {
+            return sq.clone();
+        }
+        int ax = Integer.signum(pl[0] - sq[0]), az = Integer.signum(pl[2] - sq[2]);
+        int da = SettlementLayoutSC.AT_ARMOURER[0][0] - SettlementLayoutSC.AT_SQUARE[0], dp = SettlementLayoutSC.AT_ARMOURER[0][1] - SettlementLayoutSC.AT_SQUARE[1];
+        return new int[]{sq[0] + da * ax - dp * az, sq[1], sq[2] + da * az + dp * ax};
     }
 
     /** The size a dome of `radius` is (the record lost it; the self-test asks it). */
