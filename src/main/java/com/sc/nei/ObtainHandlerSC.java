@@ -24,6 +24,11 @@ import com.sc.manual.BookWorldSC;
 import com.sc.manual.Lang;
 import com.sc.mob.MobEntitiesSC;
 import com.sc.mob.MobItemsSC;
+import com.sc.settle.ReputationSC;
+import com.sc.settle.SettlementBlocksSC;
+import com.sc.settle.SettlementItemsSC;
+import com.sc.settle.trade.TradeRulesSC;
+import com.sc.settle.travel.TravelRulesSC;
 import com.sc.util.ConfigSC;
 import com.sc.util.Material;
 import com.sc.util.OreEntry;
@@ -50,7 +55,8 @@ import net.minecraftforge.oredict.OreDictionary;
  * generate, from the config), the singularity crumb (the Singular drill's black hole), scrap dust (machine
  * defects), the creative generator, the fluids of other mods that the mod's generators burn, the Substrate's
  * rock, ores and druse (generated there), its trophies and combat loot (off its mobs) and the spawn eggs (creative
- * only), and - in a pack that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
+ * only), the settlements' Credit Chip, Return Capsule and Settlement Map (Ф2: the settlers and the Cartographer's
+ * deal), and - in a pack that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
  */
 public class ObtainHandlerSC extends TemplateRecipeHandler {
 
@@ -134,6 +140,10 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (item == ModItems.fluidDrop) {
             return fluidPage(s);
         }
+        Page settle = settlementPage(s);
+        if (settle != null) {
+            return settle;
+        }
         Page substrate = substratePage(s);
         if (substrate != null) {
             return substrate;
@@ -212,18 +222,64 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
             return p;
         }
         if (MobItemsSC.combatLoot != null && item == MobItemsSC.combatLoot) {
+            boolean cargo = meta == BookWorldSC.LOOT_STOLEN_CARGO;          // Ф2: back to an Elder, never into the Crusher
             Page p = new Page(s);
             p.text(BookWorldSC.lootLine(meta));
             p.text(Lang.tr("sc.nei.obtain.mobrules"));
             if (MobItemsSC.spawnEgg != null) {
-                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, meta == BookWorldSC.LOOT_NANO_SCRAP ? MobEntitiesSC.ID_MARAUDER : MobEntitiesSC.ID_LINEMAN));
+                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, meta == BookWorldSC.LOOT_NANO_SCRAP || cargo ? MobEntitiesSC.ID_MARAUDER : MobEntitiesSC.ID_LINEMAN));
             }
-            p.rel(BlockMachineSC.stackOf(MachineType.CRUSHER, 1));
+            if (cargo) {
+                p.rel(MobItemsSC.spawnEgg == null ? null : new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_TUNER));
+            } else {
+                p.rel(BlockMachineSC.stackOf(MachineType.CRUSHER, 1));
+            }
             return p;
         }
         if (MobItemsSC.spawnEgg != null && item == MobItemsSC.spawnEgg) {
             Page p = new Page(s);
-            p.text(Lang.tr("sc.nei.obtain.egg"));
+            p.text(Lang.tr(meta == MobEntitiesSC.ID_TUNER || meta == MobEntitiesSC.ID_WARDEN ? "sc.nei.obtain.egg.settle" : "sc.nei.obtain.egg"));
+            return p;
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ the settlements (Подложка Ф2, docs/plan-substrate-tech-f2.md §10.3)
+
+    /**
+     * The Credit Chip (the settlers' pay, the first pass), the Return Capsule and the Settlement Map (the Cartographer's
+     * deal of TradeTableSC: its chips, level, limit), and what only the settlement generator places (hidden in NEI, but
+     * R in cheat mode still asks): the core, the showcases, the dock, the trim, the Settlement Brick. Null: none of them.
+     */
+    private Page settlementPage(ItemStack s) {
+        Item item = s.getItem();
+        if (SettlementItemsSC.creditChip != null && item == SettlementItemsSC.creditChip) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.creditChip", ReputationSC.PASS_CHIPS));
+            p.text(Lang.tr("sc.nei.obtain.creditChip.limit", TradeRulesSC.CHIPS_PER_DAY));
+            p.text(Lang.tr("sc.nei.obtain.settlerules"));
+            if (MobItemsSC.spawnEgg != null) {
+                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_TUNER));
+            }
+            return p;
+        }
+        if (SettlementItemsSC.returnCapsule != null && item == SettlementItemsSC.returnCapsule
+                || SettlementItemsSC.settlementMap != null && item == SettlementItemsSC.settlementMap) {
+            Page p = new Page(s);
+            String seller = BookWorldSC.sellerLine(s);
+            p.text(seller != null ? seller : Lang.tr("sc.nei.obtain.cartographer"));
+            p.text(item == SettlementItemsSC.returnCapsule ? Lang.tr("sc.tooltip.returnCapsule.details", TravelRulesSC.CAPSULE_TICKS / 20)
+                    : Lang.tr("sc.tooltip.settlementMap.details", TravelRulesSC.MAP_DOCKS));
+            p.rel(SettlementItemsSC.chips(1));
+            return p;
+        }
+        boolean placed = blockItem(item, SettlementBlocksSC.core) || blockItem(item, SettlementBlocksSC.showcase) || blockItem(item, SettlementBlocksSC.dock)
+                || blockItem(item, SettlementBlocksSC.decor) || blockItem(item, SettlementBlocksSC.glass)
+                || blockItem(item, SubstrateBlocksSC.rock) && s.getItemDamage() == BookWorldSC.BRICK;
+        if (placed) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.settlement"));
+            p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
             return p;
         }
         return null;

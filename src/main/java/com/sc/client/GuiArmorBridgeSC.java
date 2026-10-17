@@ -401,6 +401,9 @@ public class GuiArmorBridgeSC extends GuiBridgeFarSC {
         if (t != null) {
             return t;
         }
+        if (tab != T_COORDS && (t = listTip(tab, 6, 114, 290, 7)) != null) {
+            return t;                                           // ПР-3: a Substrate target row
+        }
         for (Btn b : btns) {
             if (b.visible && b.over(vmx, vmy) && b.id >= B_LINK && b.id < B_LINK + BridgeMathSC.MAX_LINKS) {
                 t = new ArrayList<String>();

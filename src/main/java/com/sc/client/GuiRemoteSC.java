@@ -285,6 +285,9 @@ public class GuiRemoteSC extends GuiBridgeFarSC {
         if (t != null) {
             return t;
         }
+        if (tab != T_COORDS && (t = listTip(tab, 6, 58, 238, 8)) != null) {
+            return t;                                           // ПР-3: a Substrate target row
+        }
         t = new ArrayList<String>();
         NBTTagCompound it = item();
         if (over(220, 140, 22, 22)) {

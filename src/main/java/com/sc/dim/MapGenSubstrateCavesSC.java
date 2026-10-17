@@ -22,6 +22,10 @@ import net.minecraft.world.gen.MapGenBase;
  * <p>
  * Called from ChunkProviderSubstrateSC.provideChunk as func_151539_a(provider, world, cx, cz, blocks): MapGenBase
  * walks the origin chunks within `range` and seeds `rand` for each, so every chunk cuts its share of the same caves.
+ * <p>
+ * Ф2 (package S): no via inside a built settlement's box either (MapGenSettlementSC.covers - the provider lets the
+ * settlements make their starts before it calls the carver). Its tunnels stay: the settlement's ground closes what
+ * opens under its floor.
  */
 public class MapGenSubstrateCavesSC extends MapGenBase {
 
@@ -34,6 +38,17 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
 
     /** Caves start below this (the plateaus are 64..74): a tunnel that climbs may still come out on a terrace. */
     private static final int CAVE_START_MAX = 56;
+
+    /** The settlements the vias keep out of (null: none). */
+    private final com.sc.settle.gen.MapGenSettlementSC settlements;
+
+    public MapGenSubstrateCavesSC() {
+        this(null);
+    }
+
+    public MapGenSubstrateCavesSC(com.sc.settle.gen.MapGenSettlementSC settlements) {
+        this.settlements = settlements;
+    }
 
     @Override
     protected void func_151538_a(World world, int ox, int oz, int cx, int cz, Block[] blocks) {
@@ -70,7 +85,7 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
         }
         int d = VIA_MIN + rand.nextInt(VIA_MAX - VIA_MIN + 1);
         int vx = ox * 16 + 4 + rand.nextInt(8), vz = oz * 16 + 4 + rand.nextInt(8);
-        if (SubstrateTerrainSC.inCanyonBelt(vx, vz) || nearSpawn(vx, vz)) {
+        if (SubstrateTerrainSC.inCanyonBelt(vx, vz) || nearSpawn(vx, vz) || settlements != null && settlements.covers(vx, vz, d)) {
             return;
         }
         double c = d % 2 == 1 ? 0.5D : 0D, r2 = d * d / 4D;      // odd: around a block's centre, even: a block's corner

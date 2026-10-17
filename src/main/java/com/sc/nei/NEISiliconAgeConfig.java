@@ -45,6 +45,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         }
         // the bundle block itself is never an item you hold - the cable / pipe / tube items are
         API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.conduitBundle));
+        hideSettlementBlocks();
         // the Energy Converter and its modules: no other energy in this game (no RF API, Mekanism, Galacticraft) - no use, no recipe
         if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.energyConverter));
@@ -71,6 +72,39 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
                 new Rectangle(GuiMachineSC.PROGRESS_X - 5, GuiMachineSC.PROGRESS_Y - 1 - 11, 52,
                         GuiMachineSC.PROGRESS_H + 2), MachineRecipeHandlerSC.ID_OPEN_MACHINE));
         TemplateRecipeHandler.RecipeTransferRectHandler.registerRectsToGuis(guis, rects);
+    }
+
+    /**
+     * Подложка Ф2 (docs/plan-substrate-tech-f2.md §10.3): what only the settlement generator places - the core, every
+     * showcase machine, both dock blocks, the trim (every meta, its glass), the Settlement Brick (the rock's meta
+     * BookWorldSC.BRICK). The chip, the
+     * capsule, the map, the Stolen Cargo and the eggs stay, with their «Как получить» pages (ObtainHandlerSC).
+     */
+    static void hideSettlementBlocks() {
+        if (com.sc.settle.SettlementBlocksSC.core != null) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.settle.SettlementBlocksSC.core));
+        }
+        if (com.sc.settle.SettlementBlocksSC.showcase != null) {
+            for (int m = 0; m < com.sc.block.BlockShowcaseSC.NAMES.length; m++) {
+                API.hideItem(new net.minecraft.item.ItemStack(com.sc.settle.SettlementBlocksSC.showcase, 1, m));
+            }
+        }
+        if (com.sc.settle.SettlementBlocksSC.dock != null) {
+            for (int m = 0; m < com.sc.block.BlockDockSC.NAMES.length; m++) {
+                API.hideItem(new net.minecraft.item.ItemStack(com.sc.settle.SettlementBlocksSC.dock, 1, m));
+            }
+        }
+        if (com.sc.settle.SettlementBlocksSC.decor != null) {
+            for (int m = 0; m < com.sc.block.BlockSettlementDecorSC.NAMES.length; m++) {
+                API.hideItem(new net.minecraft.item.ItemStack(com.sc.settle.SettlementBlocksSC.decor, 1, m));
+            }
+        }
+        if (com.sc.settle.SettlementBlocksSC.glass != null) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.settle.SettlementBlocksSC.glass));
+        }
+        if (com.sc.dim.SubstrateBlocksSC.rock != null) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.dim.SubstrateBlocksSC.rock, 1, com.sc.manual.BookWorldSC.BRICK));
+        }
     }
 
     @Override

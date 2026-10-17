@@ -49,9 +49,9 @@ import net.minecraftforge.common.DimensionManager;
  */
 final class SelfTestSubstrateSC {
 
-    /** The rules of Ф1, the public fields SubstrateNetSC sends a joining client (docs/plan-substrate.md §8). */
+    /** The rules of Ф1 and Ф2, the public fields SubstrateNetSC sends a joining client (docs/plan-substrate.md §8, docs/plan-substrate-tech-f2.md §2.1). */
     private static final String[] RULES = {"strictEntry", "respawnDimension", "bridgeCostMultiplier", "nativesCrossBridge", "empMobTargets",
-            "siphonMobs", "gearDropMultiplier"};
+            "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations"};
     /** The ids: private behind getters, never synced (ПК-4). */
     private static final String[] IDS = {"enabled", "dimensionId", "providerId", "biomeIdPlateaus", "biomeIdCanyons", "keepLoaded"};
 
@@ -539,7 +539,7 @@ final class SelfTestSubstrateSC {
         return n;
     }
 
-    /** The WORLD chapter: its 6 articles build with no raw key, the armour table by suit, links resolve; G on the blocks, trophies, loot, eggs. */
+    /** The WORLD chapter: its 6 Ф1 articles build with no raw key (and Ф2's 6 follow), the armour table by suit; G on the blocks, trophies, loot, eggs. */
     private static void handbook() {
         StringBuilder bad = new StringBuilder();
         for (String id : ARTICLES) {
@@ -583,8 +583,10 @@ final class SelfTestSubstrateSC {
             System.out.println("[SC-TEST] INFO substrate: the bestiary still prints the plan's numbers for (package M's constants by these names, or "
                     + "direct references in BookWorldSC): " + unresolved);
         }
-        check(bad.length() == 0 && chapter == ARTICLES.length && table && noG.length() == 0 && iconOk, "handbook: the chapter \"" + BookChapter.WORLD.title()
-                + "\" - " + chapter + " articles (" + ARTICLES.length + ") with no raw keys, the armour table by suit " + table + ", G on the rock / ore / druse"
+        int articles = ARTICLES.length + SelfTestSettlementSC.ARTICLES.length;          // Ф2 appends its six (SelfTestSettlementSC checks them)
+        check(bad.length() == 0 && chapter == articles && table && noG.length() == 0 && iconOk, "handbook: the chapter \"" + BookChapter.WORLD.title()
+                + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys and Ф2's), the armour table by suit " + table
+                + ", G on the rock / ore / druse"
                 + " / trophy / loot / eggs" + (noG.length() == 0 ? "" : " - NOT:" + noG) + ", the tile's icon " + iconOk + (bad.length() == 0 ? "" : " -" + bad));
     }
 

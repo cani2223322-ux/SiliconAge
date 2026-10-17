@@ -50,6 +50,8 @@ public final class MobDropsSC {
     /** Ф1's faction drops (the mobs' factionLoot): the Lineman's Firmware and 0..TRANSISTOR_MAX Transistors, the Marauder's scrap. */
     public static final int FIRMWARE = 1, TRANSISTOR_MAX = 2;
     public static final float SCRAP_CHANCE = 0.4F;
+    /** Ф2 (rule ПТ-10): the Marauder's Stolen Cargo, rolled on its own after the scrap. TODO(balance) */
+    public static final float CARGO_CHANCE = 0.05F;
 
     private MobDropsSC() {
     }

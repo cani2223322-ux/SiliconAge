@@ -120,7 +120,7 @@ public class EntityAIBeamAttackSC extends EntityAIBase {
             return;
         }
         aim = 0;
-        reload = RELOAD_TICKS - AIM_TICKS;                   // the next aim is the rest of the 2 s
+        reload = reloadTicks();                              // the next aim is the rest of the 2 s
         if (!mob.canEntityBeSeen(target)) {                  // stepped behind cover in the last moment
             return;
         }
@@ -128,6 +128,14 @@ public class EntityAIBeamAttackSC extends EntityAIBase {
         SoundsSC.play(mob.worldObj, mob.posX, mob.posY + mob.getEyeHeight(), mob.posZ, "mob.beam.shot", 1F, 1F);
         WeaponType gun = MobCombatSC.gun(mob);
         target.attackEntityFrom(DamageSource.causeMobDamage(mob), MobCombatSC.beamDamage(gun));
+    }
+
+    /**
+     * Ticks from a shot to the next aim: the rest of the 2 s (RELOAD_TICKS - AIM_TICKS). A subclass may make it longer
+     * (Ф2: the dome guards' Plasma Rifle fires every 2..3 s - settle.npc.ai.EntityAIWardenBeamSC).
+     */
+    protected int reloadTicks() {
+        return RELOAD_TICKS - AIM_TICKS;
     }
 
     /** Sparks from the mob's eyes to the target's chest, `n` points (server: sent to the players within 16 blocks of each). */

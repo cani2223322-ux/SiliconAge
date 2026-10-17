@@ -28,6 +28,8 @@ import net.minecraft.nbt.NBTTagList;
  * the scanner's finds, the coordinator or «Моё» / «Взгляд» - «Проверить место» with its answer and «Взять его»,
  * «В закладки» / «В координатор», the friend's name and «к вам» (ДР4), «Открыть» / «Закрыть»; the server's
  * answer (BridgeFarSC) comes every second and after every command.
+ * Подложка Ф2 (ПР-3): the bookmarks tab lists the bridge's `si14` targets after the bookmarks («Первый причал», the
+ * docks the player knows, his death mark; ◆, turquoise / red) - a click takes the point like a bookmark's.
  */
 public abstract class GuiBridgeFarSC extends GuiScreen {
 
@@ -114,7 +116,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
     protected int famColor() {
         NBTTagCompound b = bridge();
         int[] f = b == null ? new int[0] : b.getIntArray("fam");
-        return f.length < 4 ? DIM : f[0] == 1 && f[3] == 0 ? OK : WARN;
+        return f.length < 4 ? DIM : f[0] == 1 && f[3] == 0 || GuiBridgeControllerSC.atDock(f) ? OK : WARN;
     }
 
     protected boolean space() {
@@ -428,12 +430,42 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         return st == null ? new NBTTagList() : st.getTagList("finds", 10);
     }
 
-    protected NBTTagList listOf(int t) {
-        return t == T_BM ? bookmarks() : t == T_HIST ? history() : finds();
+    /** ПР-3: the Substrate's targets of the bridge's state (TileEntityBridgeControllerSC.si14Targets). */
+    protected NBTTagList si14() {
+        NBTTagCompound b = bridge();
+        return b == null ? new NBTTagList() : b.getTagList("si14", 10);
     }
 
-    /** A row's name: a bookmark's / history's name, a find's kind. */
+    /** The bookmarks tab: the bookmarks, then (ПР-3) the Substrate's targets - same {p} rows, never deleted. */
+    protected NBTTagList bookmarksAndTargets() {
+        NBTTagList bm = bookmarks(), si = si14();
+        if (si.tagCount() == 0) {
+            return bm;
+        }
+        NBTTagList out = new NBTTagList();
+        for (int i = 0; i < bm.tagCount(); i++) {
+            out.appendTag(bm.getCompoundTagAt(i));
+        }
+        for (int i = 0; i < si.tagCount(); i++) {
+            out.appendTag(si.getCompoundTagAt(i));
+        }
+        return out;
+    }
+
+    /** A row of the bookmarks tab that is a Substrate target (it has a kind; a bookmark has none). */
+    protected static boolean isTarget(int t, NBTTagCompound e) {
+        return t == T_BM && e.hasKey("k");
+    }
+
+    protected NBTTagList listOf(int t) {
+        return t == T_BM ? bookmarksAndTargets() : t == T_HIST ? history() : finds();
+    }
+
+    /** A row's name: a bookmark's / history's name, a find's kind, a Substrate target's label. */
     protected String rowName(int t, NBTTagCompound e) {
+        if (isTarget(t, e)) {
+            return "◆ " + GuiBridgeControllerSC.si14Label(e);
+        }
         if (t == T_FINDS) {
             return Lang.tr("sc.bridge.far.find." + Math.max(0, Math.min(3, e.getInteger("k"))));
         }
@@ -482,7 +514,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
                 continue;
             }
             NBTTagCompound e = l.getCompoundTagAt(i);
-            small(rowName(t, e), x + 3, ry + 2, w / 2 - 4, TEXT);
+            small(rowName(t, e), x + 3, ry + 2, w / 2 - 4, isTarget(t, e) ? GuiBridgeControllerSC.si14Color(e) : TEXT);
             String pos = rowPos(e);
             if (t == T_FINDS && mc.thePlayer != null) {
                 int[] p = e.getIntArray("p");
@@ -498,6 +530,20 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         }
     }
 
+    /** ПР-3: the hover lines of the Substrate target row under the mouse in a list tab at (x, y, w, rows); null if none. */
+    protected List<String> listTip(int t, int x, int y, int w, int rows) {
+        NBTTagList l = listOf(t);
+        for (int r = 0; r < rows; r++) {
+            int i = listScroll + r;
+            if (i < l.tagCount() && over(x, y + r * 9, w, 9) && isTarget(t, l.getCompoundTagAt(i))) {
+                List<String> tip = new ArrayList<String>();
+                GuiBridgeControllerSC.si14Tip(tip, l.getCompoundTagAt(i));
+                return tip;
+            }
+        }
+        return null;
+    }
+
     /** A click in a list tab. @return whether it hit a row */
     protected boolean clickList(int t, int x, int y, int w, int rows, int mx, int my) {
         NBTTagList l = listOf(t);
@@ -506,7 +552,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
             if (i < l.tagCount() && mx >= x && mx < x + w && my >= y + r * 9 && my < y + r * 9 + 9) {
                 sel = i;
                 NBTTagCompound e = l.getCompoundTagAt(i);
-                setPoint(e.getIntArray("p"), t == T_FINDS ? rowName(t, e) : e.getString("n"));
+                setPoint(e.getIntArray("p"), t == T_FINDS ? rowName(t, e) : isTarget(t, e) ? GuiBridgeControllerSC.si14Label(e) : e.getString("n"));
                 fromFind = t == T_FINDS;
                 if (BridgeMathSC.needsPoint(mode) == false) {
                     mode = BridgeMathSC.MODE_FROM_ME;

@@ -66,6 +66,18 @@ public class WailaSC implements IWailaDataProvider {
         if (t == null) {
             return tip;
         }
+        if (t.hasKey("scSettleSize")) {                            // ПП-6: the settlement core - its dome, not a field
+            com.sc.settle.SettlementSizeSC[] sizes = com.sc.settle.SettlementSizeSC.values();
+            int size = t.getInteger("scSettleSize");
+            if (size < 0 || size >= sizes.length) {
+                tip.add(Lang.tr("sc.waila.settle.none"));
+            } else {
+                String name = new net.minecraft.util.ChatComponentTranslation("sc.settle.name",
+                        com.sc.settle.npc.NpcNamesSC.name(t.getInteger("scSettleName"))).getUnformattedText();
+                tip.add(Lang.tr("sc.waila.settle.core", name, Lang.tr(sizes[size].langKey())));
+            }
+            return tip;
+        }
         if (t.hasKey("scIgnition")) {
             // an unlit fusion reactor: what counts is how far its ignition charge has got, not the buffer
             tip.add(Lang.tr("sc.waila.ignition", String.valueOf(t.getLong("scIgnition")), String.valueOf(t.getLong("scIgnitionMax"))));
@@ -546,7 +558,27 @@ public class WailaSC implements IWailaDataProvider {
                 tag.setInteger("scTankAmount", f.amount);
             }
         }
+        if (te instanceof com.sc.tileentity.TileEntitySettlementCoreSC) {
+            settlementCore((com.sc.tileentity.TileEntitySettlementCoreSC) te, tag);
+        }
         return tag;
+    }
+
+    /**
+     * ПП-6: a settlement core is a field that takes no energy and whose settings nobody changes - none of the field's
+     * lines (buffer, tier, state, shape, owner), only its dome: the name and the size (the core's right-click line
+     * without the reader's Trust), or «no settlement» (a core put by a command; a record of its id standing elsewhere).
+     */
+    private static void settlementCore(com.sc.tileentity.TileEntitySettlementCoreSC c, NBTTagCompound tag) {
+        for (String k : new String[]{"scEnergy", "scMax", "scIn", "scOut", "scSource", "scSink", "scOff", "scFieldRole", "scFieldMaster",
+                "scFieldMasterE", "scFieldMX", "scFieldMY", "scFieldMZ", "scFieldSt", "scFieldMode", "scFieldNodes", "scOwner"}) {
+            tag.removeTag(k);
+        }
+        com.sc.settle.SettlementRegistrySC r = com.sc.settle.SettlementSC.registry(c.getWorldObj());
+        com.sc.settle.SettlementRegistrySC.Settlement s = r == null || c.settlementId() < 0 ? null : r.byId(c.settlementId());
+        boolean ours = s != null && s.x == c.xCoord && s.z == c.zCoord;
+        tag.setInteger("scSettleSize", ours ? s.size : -1);
+        tag.setInteger("scSettleName", ours ? com.sc.settle.npc.NpcNamesSC.code(s.nameElement, s.nameNumber) : 0);
     }
 
     /** A transmitter / receiver: status, the other end, distance and loss; a translator: pair, role, the other end, crystal. */

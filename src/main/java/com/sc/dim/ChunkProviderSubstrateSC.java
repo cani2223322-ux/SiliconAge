@@ -6,6 +6,7 @@ import java.util.Random;
 
 import com.sc.block.BlockCrystalDruseSC;
 import com.sc.block.BlockSubstrateRockSC;
+import com.sc.settle.gen.MapGenSettlementSC;
 
 import net.minecraft.block.Block;
 import net.minecraft.entity.EnumCreatureType;
@@ -47,6 +48,11 @@ import net.minecraft.world.chunk.IChunkProvider;
  * edge of the generated land the chunk two over isn't yet - and vanilla's later passes (Chunk.func_150811_f,
  * enqueueRelightChecks) ask the meta-less Block.getLightValue(), 0 for the rock: there glow() spreads the block light
  * by hand through the loaded chunks (a node's 6 never leaves the window's four).
+ * <p>
+ * Ф2 (package S, docs/plan-substrate-tech-f2.md §4.4): the settlements are a vanilla structure (MapGenSettlementSC) -
+ * provideChunk lets it make its starts first (before the carver: a via is never cut into a settlement), recreateStructures
+ * does the same for a chunk loaded from disk, populate builds them LAST (they lie over the ores, traces and druses);
+ * a trace, a druse and a pond never go inside a built settlement's box (MapGenSettlementSC.covers).
  */
 public class ChunkProviderSubstrateSC implements IChunkProvider {
 
@@ -71,11 +77,18 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     protected final World world;
     protected final long seed;
     private final Random rand = new Random(), popRand = new Random();
-    private final MapGenSubstrateCavesSC caves = new MapGenSubstrateCavesSC();
+    /** Ф2: the settlements (made before the carver - it keeps its vias out of them). */
+    private final MapGenSettlementSC settlements = new MapGenSettlementSC();
+    private final MapGenSubstrateCavesSC caves = new MapGenSubstrateCavesSC(settlements);
 
     public ChunkProviderSubstrateSC(World world, long seed) {
         this.world = world;
         this.seed = seed;
+    }
+
+    /** Ф2: the settlements' structure (the world test asks it for a site's start). */
+    public MapGenSettlementSC settlements() {
+        return settlements;
     }
 
     @Override
@@ -93,6 +106,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
                 column(cx * 16 + x, cz * 16 + z, (x * 16 + z) * 256, blocks, metas);   // Chunk(World, Block[], byte[], x, z): index (x * 16 + z) * 256 + y
             }
         }
+        settlements.func_151539_a(this, world, cx, cz, blocks);     // the starts within 8 chunks (no block is touched)
         caves.func_151539_a(this, world, cx, cz, blocks);
         pond(cx, cz, blocks, metas);
         Chunk chunk = new Chunk(world, blocks, metas, cx, cz);
@@ -148,7 +162,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         int rx = 2 + rand.nextInt(2), rz = 2 + rand.nextInt(2), depth = 1 + rand.nextInt(2);
         int px = rx + 1 + rand.nextInt(14 - 2 * rx), pz = rz + 1 + rand.nextInt(14 - 2 * rz);
         int wx = cx * 16 + px, wz = cz * 16 + pz;
-        if (SubstrateTerrainSC.inCanyonBelt(wx, wz) || MapGenSubstrateCavesSC.nearSpawn(wx, wz)) {
+        if (SubstrateTerrainSC.inCanyonBelt(wx, wz) || MapGenSubstrateCavesSC.nearSpawn(wx, wz) || settlements.covers(wx, wz, Math.max(rx, rz) + 1)) {
             return;
         }
         int level = -1;
@@ -207,13 +221,18 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         long a = popRand.nextLong() / 2L * 2L + 1L, b = popRand.nextLong() / 2L * 2L + 1L;
         popRand.setSeed(cx * a + cz * b ^ seed);
         SubstrateOreGenSC.generate(world, popRand, cx * 16, cz * 16);
+        townNear = settlements.covers(cx * 16 + 16, cz * 16 + 16, 9);      // the window (+8..+23) and a block round it
         for (int ox = cx - TRACE_REACH; ox <= cx + TRACE_REACH; ox++) {
             for (int oz = cz - TRACE_REACH; oz <= cz + TRACE_REACH; oz++) {
                 trace(ox, oz, cx * 16 + 8, cz * 16 + 8);
             }
         }
         druse(cx * 16 + 8, cz * 16 + 8);
+        settlements.generateStructuresInChunk(world, popRand, cx, cz);    // last: the settlements lie over everything
     }
+
+    /** The window being populated meets a settlement: its traces and druses ask covers() block by block. */
+    private boolean townNear;
 
     /** The part of origin chunk (ox, oz)'s trace segment (if it has one) inside the window from (wx0, wz0), 16 x 16. */
     private void trace(int ox, int oz, int wx0, int wz0) {
@@ -270,8 +289,11 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         }
     }
 
-    /** A trace block as the column's top block (turf, crust or a canyon's floor; never water). */
+    /** A trace block as the column's top block (turf, crust or a canyon's floor; never water, never in a settlement). */
     private void surfaceTrace(int x, int z, boolean node) {
+        if (townNear && settlements.covers(x, z, 0)) {
+            return;
+        }
         int y = world.getHeightValue(x, z) - 1;
         if (y > 0 && world.getBlock(x, y, z) == SubstrateBlocksSC.rock) {
             world.setBlock(x, y, z, SubstrateBlocksSC.rock, node ? SubstrateBlocksSC.TRACE_NODE : SubstrateBlocksSC.COPPER_TRACE, 2);
@@ -298,10 +320,14 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         }
     }
 
-    /** A crystal `h` high on the column's top rock (a plateau's, not a canyon's floor), the last block its tip; false where it doesn't fit. */
+    /**
+     * A crystal `h` high on the column's top rock (a plateau's, not a canyon's floor, not in a settlement), the last block
+     * its tip; false where it doesn't fit.
+     */
     private boolean crystal(int x, int z, int h) {
         int y = world.getHeightValue(x, z);
-        if (y <= 1 || y + h >= 255 || world.getBlock(x, y - 1, z) != SubstrateBlocksSC.rock || SubstrateTerrainSC.canyonFloorY(seed, x, z) >= 0) {
+        if (y <= 1 || y + h >= 255 || world.getBlock(x, y - 1, z) != SubstrateBlocksSC.rock || SubstrateTerrainSC.canyonFloorY(seed, x, z) >= 0
+                || townNear && settlements.covers(x, z, 1)) {
             return false;
         }
         for (int k = 0; k < h; k++) {
@@ -323,6 +349,11 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
      * than one crystal.
      */
     private void glow(int x, int y, int z, int light) {
+        glow(world, x, y, z, light);
+    }
+
+    /** glow() for any world being populated - the settlements' pieces light their lamps and showcases with it (Ф2). */
+    public static void glow(World world, int x, int y, int z, int light) {
         if (light <= 0 || world.doChunksNearChunkExist(x, y, z, 17)) {
             return;                                              // setBlock worked it out
         }
@@ -373,9 +404,10 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         return new ArrayList();
     }
 
+    /** The nearest settlement for "SCSi14Settlement" (vanilla's structure finder), nothing else. */
     @Override
     public ChunkPosition func_147416_a(World w, String structure, int x, int y, int z) {
-        return null;
+        return MapGenSettlementSC.START_NAME.equals(structure) ? settlements.func_151545_a(w, x, y, z) : null;
     }
 
     @Override
@@ -383,8 +415,10 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         return 0;
     }
 
+    /** A chunk loaded from disk: the settlements' starts round it (in land of a Ф1 world they come out empty - ПП-2). */
     @Override
     public void recreateStructures(int x, int z) {
+        settlements.func_151539_a(this, world, x, z, null);
     }
 
     @Override

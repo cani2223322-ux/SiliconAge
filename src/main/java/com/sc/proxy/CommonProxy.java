@@ -61,6 +61,10 @@ public class CommonProxy {
     public void bridgeArrive(int kind) {
     }
 
+    /** Подложка Ф2: a settlement message from the server (SettleNetSC.ToClient; client only, any thread). */
+    public void settleMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

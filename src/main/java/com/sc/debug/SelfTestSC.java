@@ -109,6 +109,7 @@ public final class SelfTestSC {
             SelfTestConverterSC.run();
             SelfTestEmpSC.run();
             SelfTestSubstrateSC.run();
+            SelfTestSettlementSC.run();
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();

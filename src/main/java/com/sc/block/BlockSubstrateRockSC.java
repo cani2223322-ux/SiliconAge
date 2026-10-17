@@ -22,14 +22,15 @@ import net.minecraft.world.World;
 
 /**
  * «Порода Подложки» (docs/plan-substrate.md §3.2): the Substrate's rock, one block of opaque full cubes by meta
- * (SubstrateBlocksSC: Crystallite, the four Oxide Crusts, Copper Trace, Trace Node, Quartz Turf). A stone pickaxe,
+ * (SubstrateBlocksSC: Crystallite, the four Oxide Crusts, Copper Trace, Trace Node, Quartz Turf; Ф2 - the Settlement
+ * Brick, the settlements' own block: never in the wild, not in the creative tab, NEI hides it). A stone pickaxe,
  * hardness 2, blast resistance as stone's.
  * <ul>
  * <li>isReplaceableOreGen: only Crystallite and only for a generator that asks for this block - vanilla's
  * WorldGenMinable doesn't look at metas, without this the Substrate's ores would eat the crust, the turf and the
  * traces; anyone asking for minecraft:stone (other mods' ores, OreGenSC) gets no.</li>
  * <li>the drops: the turf crumbles to Crystallite, a trace (and its node) gives 1..2 Crushed Copper Ore (+ fortune),
- * the rest itself; Silk Touch keeps any of them.</li>
+ * the rest itself (the brick too); Silk Touch keeps any of them.</li>
  * <li>a Trace Node glows (light 6); nothing else does. The turf never ticks or spreads.</li>
  * </ul>
  */
@@ -57,7 +58,8 @@ public class BlockSubstrateRockSC extends Block {
     @Override
     @SideOnly(Side.CLIENT)
     public void registerBlockIcons(IIconRegister register) {
-        String[] tex = {"crystallite", "oxide_violet", "oxide_blue", "oxide_gold", "oxide_green", "copper_trace", "trace_node", "crystallite"};
+        String[] tex = {"crystallite", "oxide_violet", "oxide_blue", "oxide_gold", "oxide_green", "copper_trace", "trace_node", "crystallite",
+                "settlement_brick"};
         icons = new IIcon[SubstrateBlocksSC.ROCK_METAS];
         for (int m = 0; m < icons.length; m++) {
             icons[m] = register.registerIcon(Reference.ASSETS + ":substrate_" + tex[m]);
@@ -82,7 +84,9 @@ public class BlockSubstrateRockSC extends Block {
     @SuppressWarnings("unchecked")
     public void getSubBlocks(Item item, CreativeTabs tab, List list) {
         for (int m = 0; m < SubstrateBlocksSC.ROCK_METAS; m++) {
-            list.add(new ItemStack(item, 1, m));
+            if (m != SubstrateBlocksSC.SETTLEMENT_BRICK) {           // the settlements' own: no tab (as their other blocks)
+                list.add(new ItemStack(item, 1, m));
+            }
         }
     }
 

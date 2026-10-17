@@ -207,6 +207,8 @@ public final class ModBlocks {
                 com.sc.tileentity.TileEntityEnergyConverterSC.TILE_ID);
         // Подложка (Si-14): its rock, ores and druses (appended; package W, docs/plan-substrate-tech.md §3.4)
         com.sc.dim.SubstrateBlocksSC.init();
+        // Подложка Ф2: the settlement core, the showcase machines, the dock (appended; docs/plan-substrate-tech-f2.md §2.2)
+        com.sc.settle.SettlementBlocksSC.init();
 
         registerOreDict();
     }

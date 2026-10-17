@@ -69,6 +69,9 @@ public final class EmpSiphonSC {
             return false;
         }
         int r = EmpGunLogicSC.refusal(p, target, true);
+        if (r == EmpNetSC.OK && !(target instanceof EntityPlayer)) {
+            r = EmpMobSC.refusal(target, EmpMode.SIPHON);       // Ф2: a settlement's Tuner and its bound guard
+        }
         if (r != EmpNetSC.OK) {
             EmpGunLogicSC.say(p, "sc.emp.refuse." + r);
             return false;

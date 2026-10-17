@@ -36,6 +36,9 @@ import net.minecraftforge.fluids.FluidStack;
  * delete), the cost need / have, «Открыть» / «Закрыть»; right the capacitors (the machines' energy gauge), the
  * six tanks (the machines' gauges, × pours one out), stability; under it the journal and the access
  * (owner only in stage 1). A screen smaller than 420 x 300 GUI pixels gets the same screen scaled down.
+ * Подложка Ф2 (ПР-3): after the bookmarks, in the same rows, the server's `si14` targets - «Первый причал», the docks
+ * the viewer knows, his death mark (turquoise / red, ◆): a click aims the bridge there (A_TARGET), they take no
+ * bookmark and can't be renamed or deleted.
  *
  * It holds no container: the state comes from the server (BridgeNetSC) twice a second while it's open.
  */
@@ -52,6 +55,8 @@ public class GuiBridgeControllerSC extends GuiScreen {
     private static final int B_REPAIR = 47;
     private static final int MODES = 6;
     private static final int BM_ROWS = 4, BM_Y = 131, BM_ROW_H = 9;
+    /** ПР-3: the Substrate's targets after the bookmarks - a dock (the dome's turquoise), the death mark. */
+    static final int SI14_DOCK = 0x6FD8D0, SI14_DEATH = 0xE8908A;
 
     private final int cx, cy, cz;
     private NBTTagCompound st;
@@ -291,23 +296,30 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 return;
             }
         }
-        // the bookmark rows
-        NBTTagList bm = bookmarks();
+        // the bookmark rows, then (ПР-3) the Substrate's targets: a click aims the bridge there at once
+        NBTTagList bm = bookmarks(), si = si14();
         for (int r = 0; r < BM_ROWS; r++) {
             int i = bmScroll + r;
-            if (i < bm.tagCount() && x >= 110 && x < 302 && y >= BM_Y + r * BM_ROW_H && y < BM_Y + (r + 1) * BM_ROW_H) {
-                selBm = i;
-                int[] p = bm.getCompoundTagAt(i).getIntArray("p");
-                if (p.length == 4) {
-                    fx.setText(String.valueOf(p[0]));
-                    fy.setText(p[1] == TileEntityBridgeControllerSC.AUTO_Y ? "" : String.valueOf(p[1]));
-                    fz.setText(String.valueOf(p[2]));
-                    if (space()) {
-                        dim = p[3];
-                    }
-                }
-                return;
+            if (i >= bm.tagCount() + si.tagCount() || x < 110 || x >= 302 || y < BM_Y + r * BM_ROW_H || y >= BM_Y + (r + 1) * BM_ROW_H) {
+                continue;
             }
+            boolean target = i >= bm.tagCount();
+            selBm = target ? -1 : i;                           // a Substrate target is never renamed or deleted
+            int[] p = (target ? si.getCompoundTagAt(i - bm.tagCount()) : bm.getCompoundTagAt(i)).getIntArray("p");
+            if (p.length == 4) {
+                fx.setText(String.valueOf(p[0]));
+                fy.setText(p[1] == TileEntityBridgeControllerSC.AUTO_Y ? "" : String.valueOf(p[1]));
+                fz.setText(String.valueOf(p[2]));
+                if (space()) {
+                    dim = p[3];
+                }
+                int[] t = target();
+                if (target && t != null) {
+                    act(TileEntityBridgeControllerSC.A_TARGET, t, null);
+                    lastSent = targetKey();
+                }
+            }
+            return;
         }
     }
 
@@ -485,7 +497,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
         if (wheel != 0) {
-            int max = Math.max(0, bookmarks().tagCount() - BM_ROWS);
+            int max = Math.max(0, bookmarks().tagCount() + si14().tagCount() - BM_ROWS);
             bmScroll = Math.max(0, Math.min(max, bmScroll + (wheel > 0 ? -1 : 1)));
         }
     }
@@ -500,6 +512,32 @@ public class GuiBridgeControllerSC extends GuiScreen {
 
     private NBTTagList bookmarks() {
         return has() ? st.getTagList("bookmarks", 10) : new NBTTagList();
+    }
+
+    /** ПР-3: the Substrate's targets (TileEntityBridgeControllerSC.si14Targets) - listed after the bookmarks, no bookmark taken. */
+    private NBTTagList si14() {
+        return has() ? st.getTagList("si14", 10) : new NBTTagList();
+    }
+
+    /** ПР-3: a Substrate target's label in this client's language: «Первый причал · Купол «Ниобий-4»», «Метка гибели». */
+    static String si14Label(NBTTagCompound e) {
+        if (e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_DEATH) {
+            return Lang.tr(e.getString("l"));
+        }
+        return Lang.tr(e.getString("l"), com.sc.settle.travel.ItemSettlementMapSC.settlementName(e.getInteger("e"), e.getInteger("num")));
+    }
+
+    static int si14Color(NBTTagCompound e) {
+        return e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_DEATH ? SI14_DEATH : SI14_DOCK;
+    }
+
+    /** ПР-3: the hover lines of a Substrate target. */
+    static void si14Tip(List<String> t, NBTTagCompound e) {
+        t.add(si14Label(e));
+        boolean death = e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_DEATH;
+        t.add("§7" + (death ? Lang.tr("sc.bridge.target.death.hint", com.sc.settle.travel.TravelRulesSC.DEATH_SCATTER, com.sc.settle.travel.TravelRulesSC.DEATH_CLEAR)
+                : Lang.tr("sc.bridge.target.dock.hint")));
+        t.add("§8" + Lang.tr("sc.bridge.target.hint"));
     }
 
     // ------------------------------------------------------------------ drawing helpers
@@ -852,16 +890,35 @@ public class GuiBridgeControllerSC extends GuiScreen {
         } else {
             small(Lang.tr("sc.bridge.gui.place.hint"), 110, 104, 192, DIM);
         }
-        // the bookmarks
-        NBTTagList bm = bookmarks();
-        text(Lang.tr("sc.bridge.gui.bookmarks", bm.tagCount(), st.getInteger("bmMax")), 110, 121, LABEL);
+        // the bookmarks, then (ПР-3) the Substrate's targets - a block of their own, never deleted
+        NBTTagList bm = bookmarks(), si = si14();
+        int total = bm.tagCount() + si.tagCount();
+        bmScroll = Math.max(0, Math.min(bmScroll, total - BM_ROWS));
+        String bmHead = Lang.tr("sc.bridge.gui.bookmarks", bm.tagCount(), st.getInteger("bmMax"));
+        text(bmHead, 110, 121, LABEL);
+        if (si.tagCount() > 0) {
+            small(Lang.tr("sc.bridge.gui.si14", si.tagCount()), 114 + fontRendererObj.getStringWidth(bmHead), 122, 60, SI14_DOCK);
+        }
+        int[] aim = target();
         for (int r = 0; r < BM_ROWS; r++) {
             int i = bmScroll + r, y = BM_Y + r * BM_ROW_H;
-            rect(110, y, 192, BM_ROW_H - 1, i == selBm ? 0xFF22402C : (r % 2 == 0 ? 0xFF141A17 : 0xFF111613));
-            if (i >= bm.tagCount()) {
-                if (bm.tagCount() == 0 && r == 0) {
+            boolean isSi = i >= bm.tagCount() && i < total;
+            int[] sp = isSi ? si.getCompoundTagAt(i - bm.tagCount()).getIntArray("p") : null;
+            boolean aimed = isSi && aim != null && sp.length == 4 && sp[0] == aim[0] && sp[1] == aim[1] && sp[2] == aim[2] && (!space() || sp[3] == aim[3]);
+            rect(110, y, 192, BM_ROW_H - 1, i == selBm || aimed ? 0xFF22402C : isSi ? (r % 2 == 0 ? 0xFF122020 : 0xFF0F1B1B)
+                    : (r % 2 == 0 ? 0xFF141A17 : 0xFF111613));
+            if (i >= total) {
+                if (total == 0 && r == 0) {
                     small(Lang.tr("sc.bridge.gui.bm.none"), 113, y + 2, 186, DIM);
                 }
+                continue;
+            }
+            if (isSi) {
+                NBTTagCompound e = si.getCompoundTagAt(i - bm.tagCount());
+                String pos = sp.length == 4 ? sp[0] + " " + sp[2] : "";
+                int pw = (int) Math.ceil(fontRendererObj.getStringWidth(pos) * 0.75F);
+                small("◆ " + si14Label(e), 113, y + 2, 182 - pw, si14Color(e));
+                smallRight(pos, 299, y + 2, LABEL);
                 continue;
             }
             if (i == renaming) {
@@ -878,19 +935,20 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 smallRight(pos, 299, y + 2, LABEL);
             }
         }
-        if (bm.tagCount() > BM_ROWS) {
-            smallRight((bmScroll + 1) + "-" + Math.min(bm.tagCount(), bmScroll + BM_ROWS) + "/" + bm.tagCount(), 250, 122, DIM);
+        if (total > BM_ROWS) {
+            smallRight((bmScroll + 1) + "-" + Math.min(total, bmScroll + BM_ROWS) + "/" + total, 250, 122, DIM);
         }
         // the target summary and the cost
         int[] c = ints("cost", 11);
         long dist = st.getLong("dist");
         String sum = space() ? Lang.tr(c[10] != 0 ? "sc.bridge.gui.sum.anchor" : "sc.bridge.gui.sum.noanchor", dimName(ints("target", 4)[3]))
                 : Lang.tr("sc.bridge.gui.sum.ground", g(dist)) + (c[9] != 0 ? "  " + Lang.tr("sc.bridge.gui.beacon", BridgeMathSC.BEACON_DISCOUNT) : "");
-        String fam = famText(ints("fam", 4));
+        int[] fm = ints("fam", 4);
+        String fam = famText(fm);
         if (fam.length() > 0) {
             sum += "  " + fam;
         }
-        small(sum, 110, 170, 192, ints("fam", 4)[0] == 0 ? WARN : c[9] != 0 || c[10] != 0 ? OK : LABEL);
+        small(sum, 110, 170, 192, atDock(fm) ? OK : fm[0] == 0 ? WARN : c[9] != 0 || c[10] != 0 ? OK : LABEL);
         text(Lang.tr("sc.bridge.gui.cost"), 110, 178, LABEL);
         long capEu = st.getLong("capEu"), costEu = st.getLong("costEu");
         int[] tk = ints("tanks", BridgeMathSC.GASES.length);
@@ -1025,18 +1083,28 @@ public class GuiBridgeControllerSC extends GuiScreen {
         }
     }
 
-    /** С5 / С7: «знакомое место: -25%» / «незнакомое: +50%, разброс до 30 бл.» / «разведка: разброс до 100 бл.»; "" for the server. */
+    /**
+     * С5 / С7: «знакомое место: -25%» / «незнакомое: +50%, разброс до 30 бл.» / «разведка: разброс до 100 бл.»; "" for the
+     * server. ПР-2 / ПР-6 (famInfo's 5th value): «Причал · ...» (no scatter), «Метка гибели · ...» (scatter 30) before it.
+     */
     static String famText(int[] f) {
         if (f == null || f.length < 4 || f[0] < 0) {
             return "";
         }
+        String at = f.length < 5 ? "" : f[4] == com.sc.settle.travel.TravelRulesSC.AT_DOCK ? Lang.tr("sc.bridge.target.atDock") + " · "
+                : f[4] == com.sc.settle.travel.TravelRulesSC.AT_MARK ? Lang.tr("sc.bridge.target.atMark") + " · " : "";
         if (f[3] != 0) {
-            return Lang.tr("sc.bridge.fam.scout", f[2]);
+            return at + Lang.tr("sc.bridge.fam.scout", f[2]);
         }
         if (f[0] != 0) {
-            return Lang.tr(f[2] > 0 ? "sc.bridge.fam.knownScatter" : "sc.bridge.fam.known", -BridgeMathSC.FAMILIAR_PCT, f[2]);
+            return at + Lang.tr(f[2] > 0 ? "sc.bridge.fam.knownScatter" : "sc.bridge.fam.known", -BridgeMathSC.FAMILIAR_PCT, f[2]);
         }
-        return Lang.tr(f[2] > 0 ? "sc.bridge.fam.unknown" : "sc.bridge.fam.unknownPrecise", BridgeMathSC.UNFAMILIAR_PCT, f[2]);
+        return at + Lang.tr(f[2] > 0 ? "sc.bridge.fam.unknown" : "sc.bridge.fam.unknownPrecise", BridgeMathSC.UNFAMILIAR_PCT, f[2]);
+    }
+
+    /** ПР-2: famInfo says the target point is a settlement's dock (an exact landing). */
+    static boolean atDock(int[] f) {
+        return f != null && f.length >= 5 && f[0] >= 0 && f[4] == com.sc.settle.travel.TravelRulesSC.AT_DOCK;
     }
 
     // ------------------------------------------------------------------ tooltips
@@ -1143,6 +1211,15 @@ public class GuiBridgeControllerSC extends GuiScreen {
         if (over(206, 268, 206, 18) && !chips.isEmpty()) {
             t.add(Lang.tr("sc.bridge.gui.friends.hint"));
             return t;
+        }
+        // ПР-3: a Substrate target's row
+        NBTTagList bm = bookmarks(), si = si14();
+        for (int r = 0; r < BM_ROWS; r++) {
+            int i = bmScroll + r - bm.tagCount();
+            if (i >= 0 && i < si.tagCount() && over(110, BM_Y + r * BM_ROW_H, 192, BM_ROW_H)) {
+                si14Tip(t, si.getCompoundTagAt(i));
+                return t;
+            }
         }
         if (over(8, 189, 92, 8)) {
             t.add(Lang.tr("sc.bridge.gui.heat") + ": " + st.getInteger("heat") / 10 + "%");

@@ -9,6 +9,8 @@ import java.util.UUID;
 import com.sc.dim.BiomeSubstrateSC;
 import com.sc.dim.SubstrateSC;
 import com.sc.dim.SubstrateTerrainSC;
+import com.sc.settle.SettlementRegistrySC;
+import com.sc.settle.SettlementSC;
 
 import cpw.mods.fml.common.eventhandler.Event;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -41,6 +43,8 @@ import net.minecraftforge.event.ForgeEventFactory;
  * group (Linemen a pair, Marauders 2..4) cut down to what the limits allow - at most 8 natives within 64 blocks of the
  * player, about 40 in the whole dimension. The members stand round the first spot. Light doesn't matter (a «technical»
  * world: getCanSpawnHere isn't asked); other mods' LivingSpawnEvent.CheckSpawn is. Despawning is vanilla's (ПС-3).
+ * Ф2 (ПП-11, package C): no spot within SettlementSC.SPAWN_MARGIN past a settlement's dome - by the registry, so a
+ * dome whose core isn't loaded keeps its margin too.
  * <p>
  * The census of the natives (ISubstrateNativeSC and IMob) runs once a world tick over loadedEntityList and is kept as
  * their positions for that tick only - two players in one tick share it, no entity is held.
@@ -155,10 +159,17 @@ public final class SpawnDirectorSC {
         return made;
     }
 
-    /** A place to stand on at column (x, z): its top by the height map, solid under it, two free blocks, no player within MIN_DIST. */
-    private static int[] spotAt(World w, int x, int z) {
+    /**
+     * A place to stand on at column (x, z): its top by the height map, solid under it, two free blocks, no player within
+     * MIN_DIST, not within SPAWN_MARGIN past a settlement's dome; null none. Public for the world test (ПП-11).
+     */
+    public static int[] spotAt(World w, int x, int z) {
         if (!w.blockExists(x, 64, z)) {
             return null;                                     // never loads a chunk
+        }
+        SettlementRegistrySC settlements = SettlementSC.registry(w);
+        if (settlements != null && settlements.within(w.provider.dimensionId, x + 0.5D, z + 0.5D, SettlementSC.SPAWN_MARGIN) != null) {
+            return null;                                     // ПП-11: no closer than SPAWN_MARGIN past a dome's edge (the core may be unloaded)
         }
         int y = w.getHeightValue(x, z);
         if (y <= 1 || y >= w.getHeight() - 2) {

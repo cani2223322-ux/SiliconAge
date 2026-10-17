@@ -84,6 +84,17 @@ public class BridgeMarksSC extends WorldSavedData {
         return false;
     }
 
+    /** Any mark of this kind in `dim` but the one at (x, y, z) (a block just placed there: is it the first?). */
+    public boolean anyOther(int kind, int dim, int x, int y, int z) {
+        for (int i = marks.size() - 1; i >= 0; i--) {
+            int[] m = marks.get(i);
+            if (m[0] == kind && m[1] == dim && (m[2] != x || m[3] != y || m[4] != z) && stillThere(i)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** МС-10: false (and the mark dropped) when its chunk is loaded and the block is gone; an unloaded chunk is trusted. */
     private boolean stillThere(int i) {
         int[] m = marks.get(i);

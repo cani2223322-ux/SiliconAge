@@ -395,6 +395,11 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (worldObj == null || worldObj.isRemote || !master) {
             return null;
         }
+        // Подложка Ф2, ПП-8: no zone over a settlement - its record exists before its core ever ticks (or loads)
+        String settlement = com.sc.settle.SettlementSC.fieldOverlapOwner(worldObj, zoneBounds(), this);
+        if (settlement != null) {
+            return settlement;
+        }
         ZoneRegistry reg = ZoneRegistry.get(worldObj);
         if (reg == null) {
             return null;

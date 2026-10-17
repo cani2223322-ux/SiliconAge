@@ -8,7 +8,8 @@ Writes into src/main/resources/assets/siliconage/textures/blocks:
   substrate_turf_top / substrate_turf_side - the Quartz Turf (the side: Crystallite under a pale fringe);
   substrate_druse / substrate_druse_top - the druse's crystals on a transparent ground (crossed quads, the top pointed);
   substrate_ore_<name> - every ore of the mod in Crystallite: the ore's own pattern (the pixels of ore_<name>.png that
-  aren't its stone) over the Crystallite.
+  aren't its stone) over the Crystallite;
+  substrate_settlement_brick - the Settlement Brick (Ф2): pale fired crystallite in a running bond, violet oxide mortar.
 
 Usage: python tools/gen_substrate_tex.py [project dir] [--preview file.png]
   --preview: also a x8 sheet of all of them.
@@ -49,6 +50,10 @@ TURF_LO = (104, 150, 146)
 CRYSTAL = (176, 222, 246)
 CRYSTAL_HI = (240, 252, 255)
 CRYSTAL_LO = (136, 118, 214)
+BRICK = (170, 184, 190)
+BRICK_HI = (214, 226, 230)
+BRICK_LO = (128, 140, 150)
+MORTAR = (92, 80, 118)
 
 
 def clamp(v):
@@ -219,6 +224,39 @@ def druse(tip):
     return im
 
 
+def settlement_brick(seed=808):
+    """Four rows of bricks 8 x 3 in a running bond (each row half a brick over), 1-pixel violet mortar; each brick a
+    shade of its own, a light top edge, a dark bottom one, a sparkle or two of the crystallite it is fired from."""
+    r = random.Random(seed)
+    im = stone(BRICK, seed, grain=0.05, blotch=0.04)
+    for row in range(4):
+        y0 = row * 4
+        shift = 4 if row % 2 else 0
+        for x in range(S):
+            im.putpixel((x, y0 + 3), MORTAR + (255,))          # the bed joint under the row
+        for b in range(2):
+            x0 = (shift + b * 8) % S
+            im.putpixel((x0, y0), mix(MORTAR, BRICK_LO, 0.3) + (255,))   # the head joints
+            im.putpixel((x0, y0 + 1), MORTAR + (255,))
+            im.putpixel((x0, y0 + 2), MORTAR + (255,))
+            k = 0.94 + r.random() * 0.12                         # this brick's shade
+            for dx in range(1, 8):
+                x = (x0 + dx) % S
+                for dy in range(3):
+                    c = im.getpixel((x, y0 + dy))[:3]
+                    c = scale(c, k)
+                    if dy == 0:
+                        c = mix(c, BRICK_HI, 0.45)
+                    elif dy == 2:
+                        c = mix(c, BRICK_LO, 0.35)
+                    im.putpixel((x, y0 + dy), c + (255,))
+    for _ in range(3):
+        x, y = r.randrange(S), r.randrange(S)
+        if im.getpixel((x, y))[:3] != MORTAR:
+            im.putpixel((x, y), SPARK_LO + (255,))
+    return im
+
+
 def is_stone(c):
     """The mod's ore textures share one grey stone: r == g, b == r + 3 (the ore's own pixels are anything else)."""
     r, g, b = c[:3]
@@ -243,7 +281,7 @@ def ore(name, seed):
 def main():
     tex = {'substrate_crystallite': crystallite(), 'substrate_copper_trace': copper_tile(), 'substrate_trace_node': trace_node(),
            'substrate_turf_top': turf_top(), 'substrate_turf_side': turf_side(), 'substrate_druse': druse(False),
-           'substrate_druse_top': druse(True)}
+           'substrate_druse_top': druse(True), 'substrate_settlement_brick': settlement_brick()}
     for i, name in enumerate(('violet', 'blue', 'gold', 'green')):
         tex['substrate_oxide_' + name] = oxide(name, 300 + i * 17)
     for i, name in enumerate(ORES):

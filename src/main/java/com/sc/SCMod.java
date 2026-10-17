@@ -82,6 +82,14 @@ public class SCMod {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.mob.MobEventsSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.mob.MobEventsSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.mob.SpawnDirectorSC.INSTANCE);
+        // Подложка Ф2, docs/plan-substrate-tech-f2.md: the settlements' protection (package C - Forge's bus, priority HIGH,
+        // before ShieldEventHandler), the economy's events (package T), the docks / capsule / death mark (package B)
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.SettlementProtectSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.settle.SettlementProtectSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.trade.EconomyEventsSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.settle.trade.EconomyEventsSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.travel.TravelEventsSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.settle.travel.TravelEventsSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -122,6 +130,7 @@ public class SCMod {
         // its mobs in this mod's own entity pool
         com.sc.dim.SubstrateSC.init();
         com.sc.mob.MobEntitiesSC.init();
+        com.sc.settle.SettlementSC.init();               // Ф2: the settlements' structure names (MapGenStructureIO), the IMC
         net.minecraftforge.common.ForgeChunkManager.setForcedChunkLoadingCallback(instance, new com.sc.energy.ChunkLoaderSC());
         registerRecipes();
         com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
@@ -161,6 +170,11 @@ public class SCMod {
         com.sc.dim.TeleportQueueSC.clear();              // Подложка: the queued moves, the arrival grants, the director's counts
         com.sc.dim.SubstrateEntrySC.clearAll();
         com.sc.mob.SpawnDirectorSC.clearAll();
+        com.sc.settle.SettlementProtectSC.clearAll();    // Ф2: the escalation windows, the guards' grudges, the trade screens, the capsules
+        com.sc.settle.GuardAlertSC.clearAll();
+        com.sc.settle.trade.TradeServerSC.clearAll();
+        com.sc.settle.trade.EconomyEventsSC.clearAll();
+        com.sc.settle.travel.TravelEventsSC.clearAll();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
@@ -185,6 +199,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestConverterSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmpSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSubstrateSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSettlementSC());
         }
     }
 }

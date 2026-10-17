@@ -27,6 +27,9 @@ public class ClientProxy extends CommonProxy {
         com.sc.dim.client.SubstrateClientSC.register();
         com.sc.mob.client.MobClientSC.register();
         com.sc.dim.client.SubstrateIdsClientSC.register();
+        // Подложка Ф2: the settlements' creatures (package N) and blocks (package S)
+        com.sc.settle.client.SettlementClientSC.register();
+        com.sc.settle.client.SettlementBlocksClientSC.register();
         // the Singular tools: the black hole's zone frame, the blade's effects, Shift + wheel (form / mode)
         MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);
@@ -116,6 +119,11 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void openManual() {
         Minecraft.getMinecraft().displayGuiScreen(new com.sc.manual.GuiBook());
+    }
+
+    @Override
+    public void settleMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+        com.sc.settle.client.TradeClientSC.onMessage(kind, data);
     }
 
     @Override

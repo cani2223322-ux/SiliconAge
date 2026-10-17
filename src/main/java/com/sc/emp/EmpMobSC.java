@@ -62,9 +62,19 @@ public final class EmpMobSC {
     /**
      * ПБ-10: a Pulse never hits a villager (INpc) or somebody's pet among the mob targets - EmpNetSC.NO_OWN, asked
      * next to EmpRulesSC.refusal, before any EU is spent. EmpNetSC.OK otherwise (and for everything outside the
-     * mob branch: the old behaviour).
+     * mob branch: the old behaviour). A settlement's Tuner (Ф2, ПЖ-2) is refused in every mode: it wears no armour and
+     * would only be slowed. A settlement's bound guard is refused the Siphon (Ф2, ПГ-6): its suit is charged free at the
+     * dome's Charge Pads, so its reserve would be EU out of nothing - the Point still works on it (and provokes). Server
+     * (a client doesn't know the guard's settlement: EmpSiphonSC asks this on the server).
      */
     public static int refusal(Entity target, EmpMode mode) {
+        if (target instanceof com.sc.settle.ISettlementNpcSC) {
+            return EmpNetSC.NO_OWN;
+        }
+        if (mode == EmpMode.SIPHON && target instanceof com.sc.settle.ISettlementGuardSC
+                && ((com.sc.settle.ISettlementGuardSC) target).settlementId() >= 0) {
+            return EmpNetSC.NO_OWN;
+        }
         if (mode == EmpMode.PULSE && pointable(target) && (target instanceof INpc || owned(target))) {
             return EmpNetSC.NO_OWN;
         }

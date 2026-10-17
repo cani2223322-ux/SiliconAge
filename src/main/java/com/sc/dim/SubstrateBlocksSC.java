@@ -28,11 +28,13 @@ public final class SubstrateBlocksSC {
     /** Metas of `rock`. */
     public static final int CRYSTALLITE = 0, OXIDE_VIOLET = 1, OXIDE_BLUE = 2, OXIDE_GOLD = 3, OXIDE_GREEN = 4, COPPER_TRACE = 5,
             TRACE_NODE = 6, QUARTZ_TURF = 7;
-    /** Metas Ф1 registers (SETTLEMENT_BRICK = 8 comes with the settlements, Ф2). */
-    public static final int ROCK_METAS = 8;
+    /** «Кирпич Поселения» (Ф2, package S): the settlements' building block - never generated in the wild, drops itself. */
+    public static final int SETTLEMENT_BRICK = 8;
+    /** Metas registered: Ф1's eight and the Settlement Brick. */
+    public static final int ROCK_METAS = 9;
     /** The rock's metas by name (lang keys tile.siliconage.substrateRock.<name>.name, sc.tooltip.substrateRock.<name>). Append only. */
     public static final String[] ROCK_NAMES = {"crystallite", "oxideViolet", "oxideBlue", "oxideGold", "oxideGreen", "copperTrace",
-            "traceNode", "quartzTurf"};
+            "traceNode", "quartzTurf", "settlementBrick"};
 
     /** The rock (metas above), the ores (meta = OreEntry ordinal, dropping ModBlocks.oreSC of the same meta), the druse. */
     public static Block rock, ore, druse;

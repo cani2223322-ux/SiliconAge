@@ -36,6 +36,16 @@ public class GuiHandlerSC implements IGuiHandler {
     public static final int CONDUIT_GUI_BASE = 10;
     /** Item filter set-up (the filter in the player's hand). */
     public static final int FILTER_GUI_ID = 20;
+    /** Подложка Ф2: a Tuner's «Терминал обмена» - x is the Tuner's entity id, not a position. */
+    public static final int TRADE_GUI_ID = 21;
+
+    /** The Tuner of a trade screen: the entity `id`, alive and within ContainerTradeSC.REACH of the player. */
+    private static com.sc.settle.npc.EntityTunerSC tuner(EntityPlayer player, World world, int id) {
+        net.minecraft.entity.Entity e = world.getEntityByID(id);
+        return e instanceof com.sc.settle.npc.EntityTunerSC && e.isEntityAlive()
+                && player.getDistanceSqToEntity(e) <= com.sc.inventory.ContainerTradeSC.REACH * com.sc.inventory.ContainerTradeSC.REACH
+                ? (com.sc.settle.npc.EntityTunerSC) e : null;
+    }
 
     /** The filter menu's "x" is the hotbar slot holding the filter. */
     private static boolean filterSlot(EntityPlayer player, int slot) {
@@ -46,6 +56,10 @@ public class GuiHandlerSC implements IGuiHandler {
     public Object getServerGuiElement(int id, EntityPlayer player, World world, int x, int y, int z) {
         if (id == FILTER_GUI_ID) {           // x is a hotbar slot here, not a position - no block lookup
             return filterSlot(player, x) ? new com.sc.inventory.ContainerFilterSC(player, x) : null;
+        }
+        if (id == TRADE_GUI_ID) {            // x is the Tuner's entity id
+            com.sc.settle.npc.EntityTunerSC t = tuner(player, world, x);
+            return t == null ? null : new com.sc.inventory.ContainerTradeSC(player, t);
         }
         TileEntity te = world.getTileEntity(x, y, z);
         if (id == QUARRY_GUI_ID && te instanceof com.sc.tileentity.TileEntityQuarrySC) {
@@ -89,6 +103,10 @@ public class GuiHandlerSC implements IGuiHandler {
     public Object getClientGuiElement(int id, EntityPlayer player, World world, int x, int y, int z) {
         if (id == FILTER_GUI_ID) {
             return filterSlot(player, x) ? new com.sc.inventory.GuiFilterSC(player, x) : null;
+        }
+        if (id == TRADE_GUI_ID) {
+            com.sc.settle.npc.EntityTunerSC t = tuner(player, world, x);
+            return t == null ? null : new com.sc.settle.client.GuiTradeSC(player, t);
         }
         TileEntity te = world.getTileEntity(x, y, z);
         if (id == QUARRY_GUI_ID && te instanceof com.sc.tileentity.TileEntityQuarrySC) {

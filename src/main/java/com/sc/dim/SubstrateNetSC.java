@@ -61,6 +61,7 @@ public final class SubstrateNetSC {
 
     public static void init() {
         CHANNEL.registerMessage(Handler.class, Message.class, 0, Side.CLIENT);
+        com.sc.settle.SettleNetSC.register(CHANNEL);          // Ф2: the settlements' messages, discriminators 1 and 2
         FMLCommonHandler.instance().bus().register(new Events());
     }
 

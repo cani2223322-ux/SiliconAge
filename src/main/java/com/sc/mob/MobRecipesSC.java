@@ -22,6 +22,7 @@ import net.minecraft.item.ItemStack;
  * <li>4 Nano Armour Scrap -> 1 Titanium Concentrate (Nano is built of titanium and polymer plates: a chestplate holds
  * 2 titanium ingots - a tenth of that is about what four scraps of 40% Marauders give back).</li>
  * </ul>
+ * The Stolen Cargo (Ф2, rule ПТ-10) has no recipe: a settlement's crate goes back to an Elder, not into a machine.
  * The inputs are this mod's own items: no other recipe in the pack can match them (-Dsc.packcheck).
  */
 public final class MobRecipesSC {
@@ -50,8 +51,11 @@ public final class MobRecipesSC {
                 TICKS, 0F));
     }
 
-    /** How many of a kind one Crusher run takes (the tooltip). */
+    /** How many of a kind one Crusher run takes (the tooltip); 0 - the Crusher never takes it (the Stolen Cargo, ПТ-10). */
     public static int inputCount(ItemCombatLootSC.LootKind kind) {
+        if (kind == ItemCombatLootSC.LootKind.STOLEN_CARGO) {
+            return 0;
+        }
         return kind == ItemCombatLootSC.LootKind.NANO_SCRAP ? SCRAP_IN : FIRMWARE_IN;
     }
 }

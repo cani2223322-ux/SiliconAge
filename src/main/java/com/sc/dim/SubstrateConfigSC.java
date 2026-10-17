@@ -55,6 +55,10 @@ public final class SubstrateConfigSC {
     public static boolean siphonMobs = true;
     /** ПТ-4: every trophy chance times this (0 = no trophies). */
     public static float gearDropMultiplier = 1F;
+    /** Ф2, ПК-12: new settlements generate in land not explored yet (off: no new ones; those made stay, with their cores). */
+    public static boolean villages = true;
+    /** Ф2, ПГ-7: the guards attack after a third violation within 60 s (off - ★: warnings and «Доверие» only; a blow at a creature always provokes). */
+    public static boolean guardsAggroOnViolations = false;
 
     private SubstrateConfigSC() {
     }
@@ -95,6 +99,12 @@ public final class SubstrateConfigSC {
                 "PE-1 Siphon drains the armour of the Substrate's mobs / ПЭ-1 «Сифон» выкачивает броню мобов Подложки");
         gearDropMultiplier = num(c, "gearDropMultiplier", d, 1F, 0F, 10F,
                 "Every trophy chance (pieces of armour and weapons off the Substrate's mobs), times this / Множитель шансов трофеев (части брони и оружие с мобов Подложки)");
+        villages = c.getBoolean("villages", d, true,
+                "Settlements of the Tuners generate in land not explored yet (off: no new ones; those already made stay)"
+                + " / Поселения Наладчиков появляются в ещё не открытых землях (выкл.: новых нет; уже созданные остаются)");
+        guardsAggroOnViolations = c.getBoolean("guardsAggroOnViolations", d, false,
+                "A settlement's guards attack a player after a third violation within 60 s (off: warnings and reputation only; hitting a settler or a guard always makes them attack)"
+                + " / Стражи поселения нападают после третьего нарушения за 60 с (выкл.: только предупреждения и репутация; удар по жителю или стражу - нападение всегда)");
     }
 
     /** As ConfigSC.num: Forge clamps by comparisons and NaN passes them - NaN / infinity in the file: the default. */

@@ -140,13 +140,20 @@ public class EntityMarauderSC extends EntityArmoredMobSC implements IFactionLoot
     protected void dropEquipment(boolean recentlyHit, int looting) {
     }
 
-    /** ПТ-1 (MobDropsSC's numbers): Nano Armour Scrap, SCRAP_CHANCE. */
+    /** ПТ-1 (MobDropsSC's numbers): Nano Armour Scrap, SCRAP_CHANCE; a Stolen Cargo, CARGO_CHANCE (Ф2, ПТ-10). */
     @Override
     public void factionLoot(List<ItemStack> out, Random rand) {
         if (rand.nextFloat() < MobDropsSC.SCRAP_CHANCE) {
             ItemStack scrap = MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1);
             if (scrap != null) {
                 out.add(scrap);
+            }
+        }
+        // Ф2, ПТ-10: a settlement's crate it robbed - an Elder takes it back
+        if (rand.nextFloat() < MobDropsSC.CARGO_CHANCE) {
+            ItemStack cargo = MobItemsSC.loot(ItemCombatLootSC.LootKind.STOLEN_CARGO, 1);
+            if (cargo != null) {
+                out.add(cargo);
             }
         }
     }

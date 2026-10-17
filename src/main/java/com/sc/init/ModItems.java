@@ -312,6 +312,8 @@ public final class ModItems {
         GameRegistry.registerItem(singularClot, "singularClot");
         // Подложка (Si-14): trophies, combat loot, the spawn egg (appended; package M, docs/plan-substrate-tech.md §5.7)
         com.sc.mob.MobItemsSC.init();
+        // Подложка Ф2: the Credit Chip, the Return Capsule, the Settlement Map (appended; docs/plan-substrate-tech-f2.md §2.2)
+        com.sc.settle.SettlementItemsSC.init();
     }
 
     public static com.sc.item.ItemConverterModuleSC converterModule;

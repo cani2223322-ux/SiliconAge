@@ -920,18 +920,127 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     /**
      * С5 / С7 for a target point: {familiar (1 / 0; -1 the server itself - neutral), the price percent, the scatter
-     * radius, scouting (1 / 0)}. A Receiver Beacon makes a place familiar.
+     * radius, scouting (1 / 0), Подложка (TravelRulesSC.AT_*: a dock, the viewer's death mark)}. A Receiver Beacon makes
+     * a place familiar. ПР-2: within DOCK_SNAP of a settlement's dock beacon - no scatter and no scouting shift (the
+     * price stays as it is: no familiar-place or beacon discount for a dock); ПР-6: within MARK_SNAP of the viewer's
+     * death mark - a scatter of at least DEATH_SCATTER.
      */
     public int[] famInfo(EntityPlayer p, int dim, int x, int z, boolean beacon, boolean anchor, boolean preciseFind) {
         if (p == null) {
-            return new int[]{-1, 0, 0, 0};
+            return new int[]{-1, 0, 0, 0, com.sc.settle.travel.TravelRulesSC.AT_NONE};
         }
         BridgeFamiliarSCRef f = new BridgeFamiliarSCRef(worldObj);
         String me = p.getCommandSenderName();
         boolean familiar = beacon || f.familiar(me, dim, x, z);
-        boolean scouting = bridgeKind() == BridgeMathSC.SPACE && dim != ownDim() && !anchor && !f.scouted(me, dim);
-        int r = BridgeMathSC.scatterRadius(familiar, beacon, scan != null && scan.nav, preciseFind, scouting);
-        return new int[]{familiar ? 1 : 0, familiar ? BridgeMathSC.FAMILIAR_PCT : BridgeMathSC.UNFAMILIAR_PCT, r, scouting ? 1 : 0};
+        boolean dock = dockAt(dim, x, z), mark = !dock && deathMarkAt(p, dim, x, z);
+        boolean scouting = !dock && bridgeKind() == BridgeMathSC.SPACE && dim != ownDim() && !anchor && !f.scouted(me, dim);
+        int r = com.sc.settle.travel.TravelRulesSC.scatter(BridgeMathSC.scatterRadius(familiar, beacon, scan != null && scan.nav, preciseFind, scouting),
+                dock, mark);
+        return new int[]{familiar ? 1 : 0, familiar ? BridgeMathSC.FAMILIAR_PCT : BridgeMathSC.UNFAMILIAR_PCT, r, scouting ? 1 : 0,
+                dock ? com.sc.settle.travel.TravelRulesSC.AT_DOCK : mark ? com.sc.settle.travel.TravelRulesSC.AT_MARK : com.sc.settle.travel.TravelRulesSC.AT_NONE};
+    }
+
+    // ------------------------------------------------------------------ Подложка Ф2: docks, the death mark, the list (package B)
+
+    /** The server's settlement registry (global storage: any world reaches it), null on a client. */
+    private com.sc.settle.SettlementRegistrySC settlements() {
+        return worldObj == null || worldObj.isRemote ? null : com.sc.settle.SettlementRegistrySC.get(worldObj);
+    }
+
+    /** ПР-2: the column (x, z) of `dim` is within TravelRulesSC.DOCK_SNAP of a settlement's dock beacon. */
+    private boolean dockAt(int dim, int x, int z) {
+        com.sc.settle.SettlementRegistrySC r = settlements();
+        return r != null && r.dockNear(dim, x, z, com.sc.settle.travel.TravelRulesSC.DOCK_SNAP) != null;
+    }
+
+    /** ПР-6: the column (x, z) of `dim` is within TravelRulesSC.MARK_SNAP of `p`'s death mark. */
+    private boolean deathMarkAt(EntityPlayer p, int dim, int x, int z) {
+        com.sc.settle.SettlementRegistrySC r = settlements();
+        com.sc.settle.SettlementRegistrySC.PlayerRec rec = r == null || p == null ? null : r.playerIfAny(p.getUniqueID());
+        return rec != null && rec.hasDeath && rec.deathDim == dim
+                && com.sc.settle.travel.TravelRulesSC.atMark((long) rec.deathX - x, (long) rec.deathZ - z);
+    }
+
+    /**
+     * ПР-3: the Substrate's targets for `viewer` - the screens show them next to the bookmarks (never deleted, no
+     * bookmark taken): «Первый причал» (always, once the registry has it), the docks the viewer knows (visited, from a
+     * Settlement Map; at most TravelRulesSC.LIST_DOCKS, nearest first), the viewer's death mark. Each {k: TravelRulesSC.T_*,
+     * l: the label's lang key, e / num: the settlement's name (element, number), p: {x, y, z, dim} as a bookmark's} - a
+     * dock's point is its beacon + 1 (the end stands on the plate), the mark's «Y авто». A Ground bridge lists only its
+     * own world's. Empty without a viewer or the Substrate.
+     */
+    public NBTTagList si14Targets(EntityPlayer viewer) {
+        NBTTagList out = new NBTTagList();
+        com.sc.settle.SettlementRegistrySC r = viewer == null ? null : settlements();
+        if (r == null || !com.sc.dim.SubstrateSC.active()) {
+            return out;
+        }
+        int sd = com.sc.dim.SubstrateSC.dimId();
+        boolean ground = bridgeKind() == BridgeMathSC.GROUND;
+        if (ground && sd != ownDim()) {
+            return out;
+        }
+        com.sc.settle.SettlementRegistrySC.Settlement first = r.first(sd);
+        if (first != null && first.hasDock) {
+            out.appendTag(si14Dock(first, com.sc.settle.travel.TravelRulesSC.T_FIRST, "sc.bridge.target.first"));
+        }
+        com.sc.settle.SettlementRegistrySC.PlayerRec rec = r.playerIfAny(viewer.getUniqueID());
+        if (rec == null) {
+            return out;
+        }
+        if (rec.hasDeath && rec.deathDim == sd) {
+            NBTTagCompound t = new NBTTagCompound();
+            t.setInteger("k", com.sc.settle.travel.TravelRulesSC.T_DEATH);
+            t.setString("l", "sc.bridge.target.death");
+            t.setIntArray("p", new int[]{rec.deathX, AUTO_Y, rec.deathZ, rec.deathDim});
+            out.appendTag(t);
+        }
+        // the known docks, nearest first: to the viewer standing in the Substrate, else to «Первый причал»
+        final double ox, oz;
+        if (viewer.worldObj != null && viewer.worldObj.provider.dimensionId == sd) {
+            ox = viewer.posX;
+            oz = viewer.posZ;
+        } else {
+            ox = first == null ? 0D : first.dockX + 0.5D;
+            oz = first == null ? 0D : first.dockZ + 0.5D;
+        }
+        List<com.sc.settle.SettlementRegistrySC.Settlement> known = new ArrayList<com.sc.settle.SettlementRegistrySC.Settlement>();
+        for (Integer id : rec.knownDocks) {
+            com.sc.settle.SettlementRegistrySC.Settlement s = r.byId(id.intValue());
+            if (s != null && s != first && s.hasDock && s.dim == sd) {
+                known.add(s);
+            }
+        }
+        java.util.Collections.sort(known, new java.util.Comparator<com.sc.settle.SettlementRegistrySC.Settlement>() {
+            @Override
+            public int compare(com.sc.settle.SettlementRegistrySC.Settlement a, com.sc.settle.SettlementRegistrySC.Settlement b) {
+                double da = (a.dockX + 0.5D - ox) * (a.dockX + 0.5D - ox) + (a.dockZ + 0.5D - oz) * (a.dockZ + 0.5D - oz);
+                double db = (b.dockX + 0.5D - ox) * (b.dockX + 0.5D - ox) + (b.dockZ + 0.5D - oz) * (b.dockZ + 0.5D - oz);
+                return Double.compare(da, db);
+            }
+        });
+        for (int i = 0; i < known.size() && i < com.sc.settle.travel.TravelRulesSC.LIST_DOCKS; i++) {
+            out.appendTag(si14Dock(known.get(i), com.sc.settle.travel.TravelRulesSC.T_DOCK, "sc.bridge.target.dock"));
+        }
+        return out;
+    }
+
+    /**
+     * ПР-2 (plan, «Проверить место», the world test): why a bridge end may not open at (x, y, z) of `w` for `p` -
+     * «sc.bridge.place.settlement» (the nearest dock's landing point) / «...NoDock» / «sc.bridge.place.field»; null if it may.
+     */
+    public static BridgeMsgSC endRefusal(World w, EntityPlayer p, int x, int y, int z) {
+        return ShieldEventHandlerPrivate.foreignField(w, p, x, y, z) ? ShieldEventHandlerPrivate.reason(w, x, y, z) : null;
+    }
+
+    private static NBTTagCompound si14Dock(com.sc.settle.SettlementRegistrySC.Settlement s, int kind, String label) {
+        NBTTagCompound t = new NBTTagCompound();
+        t.setInteger("k", kind);
+        t.setString("l", label);
+        t.setInteger("e", s.nameElement);
+        t.setInteger("num", s.nameNumber);
+        t.setIntArray("p", new int[]{s.dockX, Math.min(255, s.dockY + 1), s.dockZ, s.dim});
+        return t;
     }
 
     /** The familiar-places store (null-safe). */
@@ -1257,13 +1366,23 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         t.setIntArray("at", new int[]{r.x, r.y, r.z, d});
         t.setBoolean("air", r.free && r.inAir);
         t.setBoolean("void", r.free && r.voidBelow);
-        if (r.free && ShieldEventHandlerPrivate.foreignField(w, p, r.x, r.y, r.z)) {
+        String[] why = r.args;
+        // ПР-2: a settlement's dome refuses the place free or not - and the place to take then is its dock, not a free
+        // spot next to the refused one (that would be under the dome too)
+        boolean settled = com.sc.settle.SettlementSC.refusesBridgeEnd(w, r.x, r.y, r.z);
+        if (settled || r.free && ShieldEventHandlerPrivate.foreignField(w, p, r.x, r.y, r.z)) {
             t.setBoolean("free", false);
             t.setBoolean("air", false);
             t.setBoolean("void", false);
-            t.setString("reason", "sc.bridge.place.field");
+            BridgeMsgSC rm = ShieldEventHandlerPrivate.reason(w, r.x, r.y, r.z);
+            t.setString("reason", rm.key);
+            t.setTag("args", new BridgeMsgSC("x", (Object[]) rm.args).write());
+            why = rm.args;
         }
-        if (r.hasNearest) {
+        int[] dock = settled ? ShieldEventHandlerPrivate.nearestDock(w, r.x, r.z) : null;
+        if (dock != null) {
+            t.setIntArray("near", new int[]{dock[0], dock[1], dock[2], (int) BridgeMathSC.distance(r.x, r.y, r.z, dock[0], dock[1], dock[2])});
+        } else if (r.hasNearest) {
             t.setIntArray("near", new int[]{r.nx, r.ny, r.nz, r.nDist});
         }
         int[] c = ringCentre();
@@ -1276,7 +1395,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         t.setLong("time", worldObj.getTotalWorldTime());
         BridgeMsgSC m = t.getBoolean("free") ? new BridgeMsgSC(t.getBoolean("air") ? "sc.bridge.place.freeairat" : "sc.bridge.place.freeat", r.x, r.y, r.z)
                 .part(t.getBoolean("void") ? new BridgeMsgSC("sc.bridge.place.voidbelow") : null)
-                : new BridgeMsgSC("sc.bridge.place.blockedat", r.x, r.y, r.z).part(new BridgeMsgSC(t.getString("reason"), (Object[]) r.args));
+                : new BridgeMsgSC("sc.bridge.place.blockedat", r.x, r.y, r.z).part(new BridgeMsgSC(t.getString("reason"), (Object[]) why));
         t.setTag("msg", m.write());
         return t;
     }
@@ -1612,6 +1731,14 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     return pl;
                 }
                 e.axis = ringAxis();
+                // ПР-2: a point under a settlement's dome is refused before any place check (the registry knows it with
+                // the chunk unloaded too - the remote's preview says so); «Y авто» there is the dome's surface
+                int sy = o.py == AUTO_Y ? 255 : o.py;
+                if (com.sc.settle.SettlementSC.refusesBridgeEnd(ws, o.px, sy, o.pz)) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.place", o.px, o.py == AUTO_Y ? "@auto" : String.valueOf(o.py), o.pz)
+                            .part(ShieldEventHandlerPrivate.reason(ws, o.px, sy, o.pz));
+                    return pl;
+                }
                 if (preview && !ws.getChunkProvider().chunkExists(o.px >> 4, o.pz >> 4)) {
                     e.x = o.px;
                     e.y = o.py == AUTO_Y ? 0 : o.py;
@@ -1680,7 +1807,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 e.z = r.free ? r.z : r.nz;
             }
             if (ShieldEventHandlerPrivate.foreignField(ws, p, e.x, e.y, e.z)) {
-                pl.refuse = new BridgeMsgSC("sc.bridge.refuse.place", e.x, e.y, e.z).part("sc.bridge.place.field");
+                // someone's field, or ПР-2 a settlement's dome - with the nearest dock to aim at instead
+                pl.refuse = new BridgeMsgSC("sc.bridge.refuse.place", e.x, e.y, e.z).part(ShieldEventHandlerPrivate.reason(ws, e.x, e.y, e.z));
                 return pl;
             }
             long dist = e.dim == ownDim() ? BridgeMathSC.distance(c[0], 0, c[2], e.x, 0, e.z) : 0;
@@ -3030,6 +3158,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         t.setTag("bookmarks", bm);
         t.setInteger("bmMax", maxBookmarks());
+        t.setTag("si14", si14Targets(viewer));               // ПР-3: the remote's / armour's list shows them after the bookmarks
         if (viewer != null && viewer.worldObj != null && viewer.worldObj.provider.dimensionId == ownDim()) {
             int[] c = ringCentre();
             t.setLong("dist", BridgeMathSC.distance(c[0], 0, c[2], (int) Math.floor(viewer.posX), 0, (int) Math.floor(viewer.posZ)));
@@ -3296,6 +3425,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         t.setTag("bookmarks", bm);
         t.setInteger("bmMax", maxBookmarks());
+        if (ok) {
+            t.setTag("si14", si14Targets(viewer));           // ПР-3: «Первый причал», known docks, the death mark
+        }
         NBTTagList jl = new NBTTagList();
         if (trust) {
             for (NBTTagCompound j : journal) {
@@ -3618,10 +3750,37 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         tanks[i] = Math.max(0, mb);
     }
 
-    /** Is the field generator at the target someone else's (private for this player)? */
+    /**
+     * Is the field generator at the target someone else's (private for this player)? ПР-2: or a settlement's protected
+     * cylinder (the registry - a «cold» world's too, whose core never ticked; asked first, so its core field's chat line
+     * isn't said); its dock's zone is outside the dome and open.
+     */
     static final class ShieldEventHandlerPrivate {
         static boolean foreignField(World w, EntityPlayer p, int x, int y, int z) {
-            return p != null && com.sc.ShieldEventHandler.privateFor(w, p, x, y, z);
+            return com.sc.settle.SettlementSC.refusesBridgeEnd(w, x, y, z) || p != null && com.sc.ShieldEventHandler.privateFor(w, p, x, y, z);
+        }
+
+        /**
+         * Why foreignField refused (x, y, z): ПР-2 «sc.bridge.place.settlement» with the landing point of the nearest
+         * dock ({x, beacon y + 1, z}, «...NoDock» with none in that world), else someone's field.
+         */
+        static BridgeMsgSC reason(World w, int x, int y, int z) {
+            if (!com.sc.settle.SettlementSC.refusesBridgeEnd(w, x, y, z)) {
+                return new BridgeMsgSC("sc.bridge.place.field");
+            }
+            int[] d = nearestDock(w, x, z);
+            return d == null ? new BridgeMsgSC("sc.bridge.place.settlementNoDock") : new BridgeMsgSC("sc.bridge.place.settlement", d[0], d[1], d[2]);
+        }
+
+        /** The landing point {x, y, z} on the dock nearest to (x, z) of `w`'s dimension, or null. */
+        static int[] nearestDock(World w, int x, int z) {
+            com.sc.settle.SettlementRegistrySC r = com.sc.settle.SettlementSC.registry(w);
+            List<com.sc.settle.SettlementRegistrySC.Settlement> l = r == null ? null : r.nearestDocks(w.provider.dimensionId, x + 0.5D, z + 0.5D, 1, -1);
+            if (l == null || l.isEmpty()) {
+                return null;
+            }
+            com.sc.settle.SettlementRegistrySC.Settlement s = l.get(0);
+            return new int[]{s.dockX, Math.min(255, s.dockY + 1), s.dockZ};
         }
     }
 }

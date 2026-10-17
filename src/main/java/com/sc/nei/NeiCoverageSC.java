@@ -17,7 +17,8 @@ import net.minecraft.item.crafting.IRecipe;
 /**
  * Developer check (PackCheckSC, -Dsc.packcheck): every item of this mod as the creative tabs list it, and how many
  * recipes NEI's own handlers show for it ("item" lookups, as the R key asks). Items with none are listed, with any
- * crafting-table recipe NEI doesn't draw (a custom IRecipe class). Client only, NEI loaded.
+ * crafting-table recipe NEI doesn't draw (a custom IRecipe class); those hidden in NEI on purpose (the technical
+ * blocks, the settlements' core, showcases, dock, trim and brick) are listed apart - not a gap. Client only, NEI loaded.
  */
 public final class NeiCoverageSC {
 
@@ -56,7 +57,7 @@ public final class NeiCoverageSC {
             }
         }
         List<String> out = new ArrayList<String>();
-        List<String> missing = new ArrayList<String>();
+        List<String> missing = new ArrayList<String>(), hiddenOnes = new ArrayList<String>();
         for (ItemStack s : stacks) {
             int n = 0;
             for (ICraftingHandler h : new ArrayList<ICraftingHandler>(GuiCraftingRecipe.craftinghandlers)) {
@@ -68,12 +69,16 @@ public final class NeiCoverageSC {
                 }
             }
             if (n == 0) {
-                boolean hidden = codechicken.nei.api.ItemInfo.isHidden(s);
-                missing.add((hidden ? "(hidden in NEI) " : "") + line(s) + hiddenRecipes(s));
+                // hidden on purpose (technical blocks, the settlements' own - the core, showcases, dock, trim, brick): listed apart, not as a gap
+                (codechicken.nei.api.ItemInfo.isHidden(s) ? hiddenOnes : missing).add(line(s) + hiddenRecipes(s));
             }
         }
         out.add("# items " + stacks.size() + ", NEI handlers " + GuiCraftingRecipe.craftinghandlers.size() + ", without a recipe in NEI " + missing.size());
         out.addAll(missing);
+        out.add("# hidden in NEI on purpose, no page needed: " + hiddenOnes.size());
+        for (String h : hiddenOnes) {
+            out.add("(hidden in NEI) " + h);
+        }
         int pages = 0;
         for (ItemStack s : stacks) {
             int over = ObtainHandlerSC.overflow(s);
