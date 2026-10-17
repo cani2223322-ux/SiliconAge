@@ -10,6 +10,11 @@ import net.minecraft.nbt.NBTTagCompound;
  * and its glow layers. A new scheme = a row here, a palette row in the texture generator
  * (gen_singular_tex.py), its textures and the lang name "sc.singular.scheme.<key>".
  * The Singular station (a later stage) changes it; for now setScheme / the creative tab / NEI.
+ * <p>
+ * Подложка Ф5 (docs/plan-substrate-tech-f5.md §9.1, ПТ-25): L «Литограф» and M «Наладчик» are appended - the first two schemes a player
+ * must unlock (unlockable(): an «Схема окраски» item used once - ItemPaintSchemeSC, package P; the Breakdown Warden's 25% and the
+ * Elder's deal); the station offers a locked one only to a player who unlocked it (SingularStationMath.cycle with his mask,
+ * FinaleRulesSC.unlockedSchemes). Their textures - package P (gen_singular_tex.py's palette rows).
  */
 public enum SingularScheme {
 
@@ -23,7 +28,9 @@ public enum SingularScheme {
     H(0x0C0C0C, 0xEBEBEB),   // Пустота / Void
     I(0x2C1A0A, 0xFFE678),   // Сверхновая / Supernova
     J(0x0E282E, 0xFF78BE),   // Туманность / Nebula
-    K(0x343A42, 0x3C8CFF);   // Нейтронная звезда / Neutron Star
+    K(0x343A42, 0x3C8CFF),   // Нейтронная звезда / Neutron Star
+    L(0x1C1A24, 0xF0E2B4),   // Подложка Ф5: Литограф / Lithographer (unlockable - the Breakdown Warden's)
+    M(0x24423F, 0x3CD2C8);   // Подложка Ф5: Наладчик / Tuner (unlockable - the Elder's)
 
     /** Piece NBT key: the scheme's ordinal. */
     public static final String NBT = "SingScheme";
@@ -44,6 +51,16 @@ public enum SingularScheme {
 
     public String langKey() {
         return "sc.singular.scheme." + key();
+    }
+
+    /** Подложка Ф5: a scheme a player must unlock first (L, M) - the station offers it only to who did (FinaleRulesSC). */
+    public boolean unlockable() {
+        return this == L || this == M;
+    }
+
+    /** Подложка Ф5: the bit of an unlockable scheme in a player's mask (FinaleRulesSC.unlockedSchemes); 0 for the others. */
+    public int unlockBit() {
+        return unlockable() ? 1 << (ordinal() - L.ordinal()) : 0;
     }
 
     public static SingularScheme of(int ordinal) {

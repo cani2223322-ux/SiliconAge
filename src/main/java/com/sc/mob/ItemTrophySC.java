@@ -160,7 +160,8 @@ public class ItemTrophySC extends Item {
             text = Lang.tr("sc.tooltip.trophy.howto", Lang.tr(ReputationSC.levelKey(armourer.level)),
                     Lang.tr("sc.restore.chips", armourer.chips) + " + " + parts(armourer.parts), parts(station.parts), num(station.eu));
         } else if (singular != null && TrophyRestoreSC.singular(meta)) {
-            text = Lang.tr("sc.tooltip.trophy.howto.singular", parts(singular.parts), num(singular.eu));
+            text = Lang.tr(meta == TrophyTableSC.META_PE1M ? "sc.tooltip.trophy.howto.pe1m" : "sc.tooltip.trophy.howto.singular",
+                    parts(singular.parts), num(singular.eu));
         } else {
             text = Lang.tr("sc.tooltip.trophy.howto.none");
         }

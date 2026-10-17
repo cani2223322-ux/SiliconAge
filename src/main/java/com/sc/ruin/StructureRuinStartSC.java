@@ -1,5 +1,6 @@
 package com.sc.ruin;
 
+import java.io.File;
 import java.util.List;
 
 import net.minecraft.world.World;
@@ -55,6 +56,32 @@ public class StructureRuinStartSC extends StructureStart {
             for (int z = z0 >> 4; z <= z1 >> 4; z++) {
                 if (server != null && server.chunkExists(x, z)
                         || loader instanceof AnvilChunkLoader && ((AnvilChunkLoader) loader).chunkExists(w, x, z)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * As explored, but never touching a region file that isn't there: AnvilChunkLoader.chunkExists goes through
+     * RegionFileCache.createOrLoadRegionFile, which MAKES an empty r.X.Z.mca (and keeps it open in the shared cache of 256 for every
+     * world) - harmless next to chunks being made anyway (the starts), not for a player's item asking about land far off (the
+     * Arena Coordinator). No region file - none of its chunks is on disk (one waiting for the IO thread's first write there may be
+     * missed: the record made with its start decides then). Server; never loads a chunk.
+     */
+    public static boolean exploredNoCreate(World w, int x0, int z0, int x1, int z1) {
+        IChunkProvider cp = w.getChunkProvider();
+        ChunkProviderServer server = cp instanceof ChunkProviderServer ? (ChunkProviderServer) cp : null;
+        IChunkLoader loader = server == null ? null : server.currentChunkLoader;
+        File dir = loader instanceof AnvilChunkLoader ? new File(((AnvilChunkLoader) loader).chunkSaveLocation, "region") : null;
+        for (int x = x0 >> 4; x <= x1 >> 4; x++) {
+            for (int z = z0 >> 4; z <= z1 >> 4; z++) {
+                if (server != null && server.chunkExists(x, z)) {
+                    return true;
+                }
+                if (dir != null && new File(dir, "r." + (x >> 5) + "." + (z >> 5) + ".mca").isFile()
+                        && ((AnvilChunkLoader) loader).chunkExists(w, x, z)) {
                     return true;
                 }
             }

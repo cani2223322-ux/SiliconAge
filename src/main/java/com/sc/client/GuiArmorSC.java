@@ -1170,6 +1170,9 @@ public class GuiArmorSC extends GuiScreen {
         boolean done = com.sc.util.SingularLevel.taskDone(p, target);
         for (int i = 0; i < com.sc.util.SingularLevel.TASKS && y + 9 <= bottom; i++) {
             int[] pr = com.sc.util.SingularLevel.taskProgress(p, target, i);
+            if (pr[1] <= 0) {
+                continue;                                      // Подложка Ф5: the fourth task exists for some levels only
+            }
             boolean ok = pr[1] > 0 && pr[0] >= pr[1];
             drawRect(x, y, x + 7, y + 7, ok ? 0xFF50E050 : 0xFF3A3A44);
             String prog = taskProgress(target, i, pr);

@@ -107,8 +107,10 @@ final class SelfTestCombatSC {
             "restoring", "trophies shown", "loot kinds", "kinds and sizes", "roster", "roster upgrade", "trade", "ruins layout", "texts", "handbook"};
     /** Ф1's six trophies and Ф3's thirteen (ПТ-14): the Quantum and Exo pieces, both blades, the Pulse Emitter, the Plasma Rifle, the ПЭ-1. */
     private static final int[] SHOWN_F3 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17, 18, 20, 21, 22, 23};
-    /** Ф4 (ПТ-16, docs/plan-substrate-tech-f4.md §9.1) appends the Singular pieces and the Singular Blade: SHOWN is 24 now. */
+    /** Ф4 (ПТ-16, docs/plan-substrate-tech-f4.md §9.1) appends the Singular pieces and the Singular Blade. */
     private static final int[] SHOWN_F4 = {12, 13, 14, 15, 19};
+    /** Ф5 (ПТ-26, docs/plan-substrate-tech-f5.md §5.7) appends the Breakdown Warden's ПЭ-1М: SHOWN is 25 now. */
+    private static final int[] SHOWN_F5 = {TrophyTableSC.META_PE1M};
     /** The core's mob classes by pool id 4..11 (MobEntitiesSC). */
     private static final Class<?>[] MOBS = {EntityTrooperSC.class, EntityJammerSC.class, EntityHollowShellSC.class, EntityRepairDroneSC.class,
             EntityExecutionerSC.class, EntityNaniteSC.class, EntitySentryDroneSC.class, EntityMimicSC.class};
@@ -171,9 +173,10 @@ final class SelfTestCombatSC {
         for (Field f : rules) {
             rule |= "mobsUseEmp".equals(f.getName()) && f.getType() == boolean.class;
         }
-        // Ф4 appended empStorms and raids (docs/plan-substrate-tech-f4.md §2.1): 12 rules now (SelfTestHazardSC checks the two)
-        check(rule && rules.size() == 12, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
-                + ", true by default) " + rule + ", " + rules.size() + " rules (12 with Ф4's)");
+        // Ф4 appended empStorms and raids (docs/plan-substrate-tech-f4.md §2.1), Ф5 requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1):
+        // 14 rules now (SelfTestHazardSC / SelfTestFinaleSC check the new ones)
+        check(rule && rules.size() == 14, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
+                + ", true by default) " + rule + ", " + rules.size() + " rules (14 with Ф4's and Ф5's)");
     }
 
     // ------------------------------------------------------------------ 2. «Пробой» (ПБ-15, ПБ-16)
@@ -269,9 +272,11 @@ final class SelfTestCombatSC {
         double[] hp = {EntityTrooperSC.HP, EntityJammerSC.HP, EntityHollowShellSC.HP, EntityRepairDroneSC.HP, EntityExecutionerSC.HP, EntityNaniteSC.HP,
                 EntitySentryDroneSC.HP, EntityMimicSC.HP};
         boolean hps = Arrays.equals(hp, MOB_HP);
-        // Ф4 appended its ten (12..21, docs/plan-substrate-tech-f4.md §2.2): the pool is 22 now, Ф3's 4..11 unchanged
-        boolean pool = MobEntitiesSC.NAMES.length == 22 && MobEntitiesSC.EGG_COLORS.length == 22 && "trooper".equals(MobEntitiesSC.nameOf(4))
-                && "mimic".equals(MobEntitiesSC.nameOf(11)) && MobEntitiesSC.nameOf(22) == null && MobEntitiesSC.ID_TROOPER == 4 && MobEntitiesSC.ID_MIMIC == 11;
+        // Ф4 appended its ten (12..21, docs/plan-substrate-tech-f4.md §2.2), Ф5 its four (22..25, docs/plan-substrate-tech-f5.md §2.2): the pool is
+        // 26 now, Ф3's 4..11 unchanged
+        boolean pool = MobEntitiesSC.NAMES.length == 26 && MobEntitiesSC.EGG_COLORS.length == 26 && "trooper".equals(MobEntitiesSC.nameOf(4))
+                && "mimic".equals(MobEntitiesSC.nameOf(11)) && "breakdownWarden".equals(MobEntitiesSC.nameOf(22)) && MobEntitiesSC.nameOf(26) == null
+                && MobEntitiesSC.ID_TROOPER == 4 && MobEntitiesSC.ID_MIMIC == 11;
         // the caps (ПС-10): MobCombatSC's tables, the mobs' own by name
         boolean caps = MobCombatSC.BLADE[BladeType.QUANTUM.ordinal()] == 8 && MobCombatSC.BLADE[BladeType.EXO.ordinal()] == 10
                 && MobCombatSC.BEAM[WeaponType.PLASMA_RIFLE.ordinal()] == 7 && MobCombatSC.BEAM[WeaponType.PULSE_EMITTER.ordinal()] == 3
@@ -437,8 +442,9 @@ final class SelfTestCombatSC {
     private static void restoring() {
         StringBuilder bad = new StringBuilder();
         for (int m = -1; m <= TrophyTableSC.METAS; m++) {
-            boolean known = m >= 0 && m < TrophyTableSC.META_PE1M;              // ПЭ-1М (24) - Ф5: unknown for now
-            boolean singular = known && TrophyTableSC.level(m) == ArmorSuit.SINGULAR;
+            // Ф5 (ПТ-26, docs/plan-substrate-tech-f5.md §9.6): the ПЭ-1М (24) is known now - Singular-level, the Singular station's alone
+            boolean known = m >= 0 && m < TrophyTableSC.METAS;
+            boolean singular = known && (TrophyTableSC.level(m) == ArmorSuit.SINGULAR || m == TrophyTableSC.META_PE1M);
             int arm = TrophyRestoreSC.refusal(m, TrophyRestoreSC.WHERE_ARMOURER), st = TrophyRestoreSC.refusal(m, TrophyRestoreSC.WHERE_STATION),
                     sing = TrophyRestoreSC.refusal(m, TrophyRestoreSC.WHERE_SINGULAR_STATION);
             int wantOther = !known ? TrophyRestoreSC.R_UNKNOWN : singular ? TrophyRestoreSC.R_SINGULAR_ONLY : TrophyRestoreSC.OK;
@@ -466,7 +472,7 @@ final class SelfTestCombatSC {
         }
         boolean consts = TrophyRestoreSC.STATION_EU == 10000 && TrophyRestoreSC.SINGULAR_STATION_EU == 1000000 && TrophyRestoreSC.CONFIRM_TICKS == 100;
         check(bad.length() == 0 && tiers.length() == 0 && unknownTier && fresh.length() == 0 && consts, "restoring (TrophyRestoreSC, ПТ-11, ПТ-12): a Singular"
-                + " piece or blade only at the Singular station, ПЭ-1М and unknown metas refused everywhere" + (bad.length() == 0 ? "" : " - BAD:" + bad)
+                + " piece or blade and the ПЭ-1М (Ф5) only at the Singular station, unknown metas refused everywhere" + (bad.length() == 0 ? "" : " - BAD:" + bad)
                 + "; tier() of all 25 (armour and blades by suit, the cutter Nano, the emitter and the rifle Quantum, ПЭ-1 Exo, ПЭ-1М Singular)"
                 + (tiers.length() == 0 ? "" : " - BAD:" + tiers) + ", -1 for none " + unknownTier + "; restored() - a fresh real stack, no NBT"
                 + (fresh.length() == 0 ? "" : " - NOT:" + fresh) + "; 10 000 / 1 000 000 EU, 5 s to confirm " + consts);
@@ -480,6 +486,9 @@ final class SelfTestCombatSC {
             want.add(m);
         }
         for (int m : SHOWN_F4) {
+            want.add(m);
+        }
+        for (int m : SHOWN_F5) {
             want.add(m);
         }
         for (int m : TrophyTableSC.SHOWN) {
@@ -507,8 +516,8 @@ final class SelfTestCombatSC {
                 droppers.append(' ').append(m);
             }
         }
-        check(shown.equals(want) && SHOWN_F3.length + SHOWN_F4.length == 24 && (subErr != null || tab.equals(want)) && pe1 && chances
-                && droppers.length() == 0, "trophies shown (TrophyTableSC.SHOWN, ПТ-14, ПТ-16): Ф1's 6 + Ф3's 13 + Ф4's 5 = 24 - " + shown + " "
+        check(shown.equals(want) && SHOWN_F3.length + SHOWN_F4.length + SHOWN_F5.length == 25 && (subErr != null || tab.equals(want)) && pe1 && chances
+                && droppers.length() == 0, "trophies shown (TrophyTableSC.SHOWN, ПТ-14, ПТ-16, ПТ-26): Ф1's 6 + Ф3's 13 + Ф4's 5 + Ф5's 1 = 25 - " + shown + " "
                 + shown.equals(want) + "; the creative tab / NEI the same "
                 + (subErr != null ? "(not checked: " + subErr + ")" : String.valueOf(tab.equals(want))) + "; TrophyTableSC.PE1 2% " + pe1 + ", the Quantum /"
                 + " Exo chances " + chances + "; the handbook and NEI name who drops each, its chance and its restoring"
@@ -871,10 +880,11 @@ final class SelfTestCombatSC {
         for (String n : TradeTableSC.boughtAndSold()) {
             both.append(' ').append(n);
         }
-        // ПТ-12: every trophy that drops now, but the Singular ones, restored at the Armourer's (the ПЭ-1 too)
+        // ПТ-12: every trophy that drops now, but the Singular ones, restored at the Armourer's (the ПЭ-1 too); Ф5's ПЭ-1М is Singular-level -
+        // the Singular station's alone (ПТ-26), never the Armourer's
         StringBuilder notRestored = new StringBuilder();
         for (int m : TrophyTableSC.SHOWN) {
-            if (TrophyTableSC.level(m) != ArmorSuit.SINGULAR && !restorable.contains(m)) {
+            if (TrophyTableSC.level(m) != ArmorSuit.SINGULAR && m != TrophyTableSC.META_PE1M && !restorable.contains(m)) {
                 notRestored.append(' ').append(m);
             }
         }
@@ -1114,7 +1124,7 @@ final class SelfTestCombatSC {
             System.out.println("[SC-TEST] INFO combat: the handbook still prints the plan's numbers for (public static constants of these names in packages"
                     + " A / M / X / S / T, or direct references in BookWorldSC): " + unresolved);
         }
-        int want = 20 + BookWorldSC.F4_ARTICLES.length;                       // Ф1..Ф3's 20 and Ф4's (SelfTestHazardSC checks them)
+        int want = 20 + BookWorldSC.F4_ARTICLES.length + BookWorldSC.F5_ARTICLES.length;   // Ф1..Ф3's 20, Ф4's and Ф5's (SelfTestHazardSC / SelfTestFinaleSC)
         check(bad.length() == 0 && tables && noG.length() == 0 && chapter == want, "handbook (§10.2): the " + ARTICLES.length + " new WORLD articles (the"
                 + " chapter " + chapter + " of " + want + ") build with no raw keys, the extended ones too" + (bad.length() == 0 ? "" : " -" + bad) + "; tables: the"
                 + " elites " + elites + ", the ranks " + wardens + " (4), the restoring " + restore + ", the trophies " + trophies + " (SHOWN) " + tables

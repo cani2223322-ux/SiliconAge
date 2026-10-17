@@ -112,6 +112,7 @@ public final class SelfTestSC {
             SelfTestSettlementSC.run();
             SelfTestCombatSC.run();                      // Подложка Ф3 (docs/plan-substrate-tech-f3.md §11.1)
             SelfTestHazardSC.run();                      // Подложка Ф4 (docs/plan-substrate-tech-f4.md §11.1)
+            SelfTestFinaleSC.run();                      // Подложка Ф5 (docs/plan-substrate-tech-f5.md §11.1)
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
@@ -1728,7 +1729,7 @@ public final class SelfTestSC {
         // colour schemes: default A, set / get, an unknown value falls back to A; 11 schemes
         com.sc.util.SingularScheme[] all = com.sc.util.SingularScheme.values();
         ItemStack piece = new ItemStack(p[1]);
-        boolean schemes = all.length == 11 && com.sc.util.SingularScheme.DEFAULT == com.sc.util.SingularScheme.A
+        boolean schemes = all.length == 13 && com.sc.util.SingularScheme.DEFAULT == com.sc.util.SingularScheme.A   // Подложка Ф5: + L, M
                 && com.sc.util.SingularScheme.of(piece) == com.sc.util.SingularScheme.A
                 && com.sc.item.ItemArmorSC.textureBase(piece).equals("singular_a")
                 && com.sc.item.ItemArmorSC.textureBase(new ItemStack(ModItems.ARMOR.get(exo)[1])).equals("exo")
@@ -2298,8 +2299,8 @@ public final class SelfTestSC {
         store.setInteger(com.sc.util.SingularLevel.C_SM, 4999);
         tasks &= !com.sc.util.SingularLevel.taskDoneIn(per, 5);
         store.setInteger(com.sc.util.SingularLevel.C_DRAGON, 1);
-        tasks &= com.sc.util.SingularLevel.taskDoneIn(per, 5) && com.sc.util.SingularLevel.taskValues(per).length == 12
-                && com.sc.util.SingularLevel.taskValues(per)[3 * 3 + 0] == 1 && com.sc.util.SingularLevel.taskValues(per)[2 * 3 + 1] == 299;
+        tasks &= com.sc.util.SingularLevel.taskDoneIn(per, 5) && com.sc.util.SingularLevel.taskValues(per).length == 16   // Подложка Ф5: 4 tasks a level
+                && com.sc.util.SingularLevel.taskValues(per)[3 * 4 + 0] == 1 && com.sc.util.SingularLevel.taskValues(per)[2 * 4 + 1] == 299;
         com.sc.util.SingularLevel.clientSet(com.sc.util.SingularLevel.taskValues(per), 4, 2);
         check(tasks, "Singular tasks: one of three per level, read from the persisted NBT (scSingLv + the stage 2b counters), "
                 + "under the need - not done");

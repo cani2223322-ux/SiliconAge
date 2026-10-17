@@ -106,6 +106,16 @@ public class SCMod {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.ruin.RuinWorldSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.mob.ScrapperSC.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.mob.ScrapperSC.INSTANCE);
+        // Подложка Ф5, docs/plan-substrate-tech-f5.md: the arenas' slow life (package A - FML's world tick, Forge's chunk events), the
+        // Warden's loot kept for later (package B - FML's logins and respawns), the Lithographers' Signal (package J - FML's world
+        // tick and logins, Forge's chunk events), the caravans (package K - the same)
+        FMLCommonHandler.instance().bus().register(com.sc.arena.ArenaWorldSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.arena.ArenaWorldSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.mob.WardenLootSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.lore.SignalSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.lore.SignalSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.settle.caravan.CaravanSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.caravan.CaravanSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -136,6 +146,7 @@ public class SCMod {
         ModRecipesMachineBlocks.init();
         com.sc.dim.SubstrateRecipesSC.init();            // the Substrate's blocks (package W)
         com.sc.mob.MobRecipesSC.init();                  // the Substrate mobs' combat loot (package M)
+        com.sc.finale.FinaleRecipesSC.init();            // Ф5: the Breakdown Key, the Navigation Record (the coordinator's)
     }
 
     @Mod.EventHandler
@@ -148,6 +159,7 @@ public class SCMod {
         com.sc.mob.MobEntitiesSC.init();
         com.sc.settle.SettlementSC.init();               // Ф2: the settlements' structure names (MapGenStructureIO), the IMC
         com.sc.ruin.RuinSC.init();                       // Ф3: the Dead Nodes' and the lithographs' structure names
+        com.sc.arena.ArenaSC.init();                     // Ф5: the Breakdown Epicentres', the Lithographers' bridge wrecks' names
         net.minecraftforge.common.ForgeChunkManager.setForcedChunkLoadingCallback(instance, new com.sc.energy.ChunkLoaderSC());
         registerRecipes();
         com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
@@ -201,6 +213,10 @@ public class SCMod {
         com.sc.hazard.BridgeEchoSC.clearAll();
         com.sc.ruin.RuinWorldSC.clearAll();
         com.sc.mob.ScrapperSC.clearAll();
+        com.sc.arena.ArenaWorldSC.clearAll();            // Ф5: the arenas' countdowns, the kept loot's cache, the Signal, the caravans
+        com.sc.mob.WardenLootSC.clearAll();
+        com.sc.lore.SignalSC.clearAll();
+        com.sc.settle.caravan.CaravanSC.clearAll();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
@@ -230,6 +246,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestArmourerSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestHazardSC());   // Подложка Ф4 (package D)
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWildSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestFinaleSC());   // Подложка Ф5 (package D)
         }
     }
 }

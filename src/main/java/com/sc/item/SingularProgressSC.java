@@ -221,9 +221,14 @@ public final class SingularProgressSC {
         if (!SingularLevel.wearsSingular(p)) {
             return;
         }
-        boolean boss = victim instanceof net.minecraft.entity.boss.IBossDisplayData;
+        // Подложка Ф5 (ПТ-1): the Breakdown Warden is a boss only as its arena's own - from an egg, /summon or a spawner it is a mob
+        boolean boss = victim instanceof net.minecraft.entity.boss.IBossDisplayData && !(victim instanceof com.sc.mob.EntityBreakdownWardenSC
+                && !((com.sc.mob.EntityBreakdownWardenSC) victim).arenaWarden());
         NBTTagCompound s = SingularLevel.store(p, true);
         s.setInteger(SingularLevel.C_KILLS, satAdd(s.getInteger(SingularLevel.C_KILLS), 1));
+        if (suppressedArmoured(victim)) {                       // Подложка Ф5: «Подавить ПЭ-1 25 бронированных врагов»
+            s.setInteger(SingularLevel.C_EMP_KILLS, satAdd(s.getInteger(SingularLevel.C_EMP_KILLS), 1));
+        }
         if (victim instanceof net.minecraft.entity.boss.EntityWither) {
             s.setInteger(SingularLevel.C_WITHER, satAdd(s.getInteger(SingularLevel.C_WITHER), 1));
         } else if (victim instanceof net.minecraft.entity.boss.EntityDragon) {
@@ -242,6 +247,34 @@ public final class SingularProgressSC {
         if (boss) {
             sync(p);
         }
+    }
+
+    /**
+     * Подложка Ф5 (docs/plan-substrate-tech-f5.md §9.2): an armoured enemy of the Substrate (ISubstrateNativeSC with the mod's
+     * armour on it) dying with a piece suppressed by a ПЭ-1 - the same test as the Elder's contract «Подавить ПЭ-1 и добить»
+     * (EconomyEventsSC). Its kill counts in C_KILLS as any hostile's (it is IMob) - that was so since Ф1.
+     */
+    public static boolean suppressedArmoured(EntityLivingBase e) {
+        if (!(e instanceof com.sc.mob.ISubstrateNativeSC) || !(e instanceof com.sc.mob.IArmoredMobSC)) {
+            return false;
+        }
+        com.sc.mob.MobArmorSC a = ((com.sc.mob.IArmoredMobSC) e).mobArmor();
+        return a != null && a.suit() != null && a.anySuppressed();
+    }
+
+    /**
+     * Подложка Ф5: `p` beat the Breakdown Warden with a personal loot's share of the damage (package B: once a kill for each such
+     * player) - the task «Победить Смотрителя Пробоя», counted in the suit as the other kill tasks. The kill's 500 points stay the
+     * killer's (onDeath, as for any IBossDisplayData).
+     */
+    public static void wardenDefeated(EntityPlayer p) {
+        if (p == null || p.worldObj == null || p.worldObj.isRemote || p instanceof net.minecraftforge.common.util.FakePlayer
+                || !SingularLevel.wearsSingular(p)) {
+            return;
+        }
+        NBTTagCompound s = SingularLevel.store(p, true);
+        s.setInteger(SingularLevel.C_WARDEN, satAdd(s.getInteger(SingularLevel.C_WARDEN), 1));
+        sync(p);
     }
 
     /**

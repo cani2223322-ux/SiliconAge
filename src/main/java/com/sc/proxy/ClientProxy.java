@@ -37,6 +37,11 @@ public class ClientProxy extends CommonProxy {
         // biomes' fog and the armoured ones' renders live in SubstrateClientSC (W) and MobClientSC (M) registered above
         com.sc.hazard.client.StormClientSC.register();
         com.sc.mob.client.NoiseClientSC.register();
+        // Подложка Ф5: the Breakdown Warden and its coils (package B), the Lithographers' Signal's beam (package J), the caravan
+        // (package K); the own sky is asked by the provider itself (dim.client.SubstrateSkySC, package P)
+        com.sc.mob.client.BossClientSC.register();
+        com.sc.lore.client.SignalClientSC.register();
+        com.sc.settle.client.CaravanClientSC.register();
         // the Singular tools: the black hole's zone frame, the blade's effects, Shift + wheel (form / mode)
         MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);
@@ -136,6 +141,16 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void hazardMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
         com.sc.hazard.client.StormClientSC.onMessage(kind, data);
+    }
+
+    @Override
+    public void finaleMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+        com.sc.finale.client.FinaleClientSC.onMessage(kind, data);
+    }
+
+    @Override
+    public void openJournal(int number) {
+        com.sc.lore.client.JournalClientSC.open(number);
     }
 
     @Override

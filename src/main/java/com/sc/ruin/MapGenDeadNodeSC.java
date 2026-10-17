@@ -36,7 +36,9 @@ public class MapGenDeadNodeSC extends MapGenStructure {
 
     @Override
     protected boolean canSpawnStructureAtCoords(int cx, int cz) {
-        return worldObj != null && RuinSC.generates() && RuinLayoutSC.nodeAtChunk(cx, cz) != null;
+        int[] n = worldObj == null || !RuinSC.generates() ? null : RuinLayoutSC.nodeAtChunk(cx, cz);
+        // Ф5 (docs/plan-substrate-tech-f5.md §4.2, the coordinator's): an arena's crossing gets the Breakdown Epicentre instead
+        return n != null && !com.sc.arena.ArenaLayoutSC.isArena(worldObj.getSeed(), n[0], n[1]);
     }
 
     @Override

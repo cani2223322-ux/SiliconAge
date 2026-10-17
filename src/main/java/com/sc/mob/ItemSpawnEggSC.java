@@ -121,7 +121,9 @@ public class ItemSpawnEggSC extends Item {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void getSubItems(Item item, CreativeTabs tab, List list) {
         for (int id = 0; id < MobEntitiesSC.NAMES.length; id++) {
-            list.add(new ItemStack(item, 1, id));
+            if (MobEntitiesSC.hasEgg(id)) {                       // Ф5: no egg for the boss's coils and the caravan
+                list.add(new ItemStack(item, 1, id));
+            }
         }
     }
 

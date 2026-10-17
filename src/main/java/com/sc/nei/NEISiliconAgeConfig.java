@@ -48,6 +48,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         hideSettlementBlocks();
         showRuinBlocks();
         hideWildBlocks();
+        hideArenaBlocks();
         // the Energy Converter and its modules: no other energy in this game (no RF API, Mekanism, Galacticraft) - no use, no recipe
         if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.energyConverter));
@@ -150,6 +151,28 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         if (com.sc.dim.SubstrateWildBlocksSC.glass != null) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.dim.SubstrateWildBlocksSC.glass, 1, com.sc.dim.SubstrateWildBlocksSC.PILLAR_CORE));
         }
+    }
+
+    /**
+     * Ф5 (docs/plan-substrate-tech-f5.md §11.5): the Breakdown Epicentre's blocks (arenaSC, every meta - the Console, the pedestal,
+     * the column, the floor, the wall, the lamp) stand only in an arena, unbreakable: hidden, each with its «Как получить» page for R in
+     * cheat mode. The boss's coils and the caravan have no egg (MobEntitiesSC.hasEgg - ItemSpawnEggSC never lists them). Shown with
+     * their pages (ObtainHandlerSC): the relics 3..4, the Coordinator, the twelve journals, the two schemes, the Module, the Record, the
+     * Burnt Coil (ruinSC meta 7 - showRuinBlocks lists every name), the ПЭ-1М trophy (TrophyTableSC.SHOWN) and the boss's egg.
+     */
+    static void hideArenaBlocks() {
+        for (net.minecraft.item.ItemStack s : arenaStacks()) {
+            API.hideItem(s);
+        }
+    }
+
+    /** Ф5: every meta of the arena block (none before it is registered). */
+    static List<net.minecraft.item.ItemStack> arenaStacks() {
+        List<net.minecraft.item.ItemStack> out = new ArrayList<net.minecraft.item.ItemStack>();
+        for (int m = 0; com.sc.arena.ArenaBlocksSC.arena != null && m < com.sc.arena.ArenaBlocksSC.NAMES.length; m++) {
+            out.add(new net.minecraft.item.ItemStack(com.sc.arena.ArenaBlocksSC.arena, 1, m));
+        }
+        return out;
     }
 
     /** Ф4: the wild and camp blocks NEI lists meta by meta (registered ones only). */

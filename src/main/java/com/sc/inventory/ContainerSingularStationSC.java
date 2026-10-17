@@ -257,8 +257,8 @@ public class ContainerSingularStationSC extends Container {
             case BTN_SYNC: say(player, te.startSync(player)); return true;
             case BTN_TRANSFER: say(player, te.startTransfer(player)); return true;
             case BTN_LINK: say(player, te.linkModule(player)); return true;
-            case BTN_SCHEME_PREV: te.cycleScheme(-1); return true;
-            case BTN_SCHEME_NEXT: te.cycleScheme(1); return true;
+            case BTN_SCHEME_PREV: te.cycleScheme(-1, player); return true;     // Подложка Ф5 (ПТ-25): with the schemes this player unlocked
+            case BTN_SCHEME_NEXT: te.cycleScheme(1, player); return true;
             default: return false;
         }
     }

@@ -2022,6 +2022,9 @@ public class GuiSingularStationSC extends GuiContainer {
                     tip.add(Lang.tr("sc.tooltip.armor.singular.tasks", t));
                     for (int k = 0; k < SingularLevel.TASKS; k++) {
                         int[] pr = SingularLevel.taskProgress(me(), t, k);
+                        if (pr[1] <= 0) {
+                            continue;                          // Подложка Ф5: the fourth task exists for some levels only
+                        }
                         tip.add((pr[0] >= pr[1] ? "§a+ " : "§7- ") + Lang.tr("sc.tooltip.armor.singular.task." + t + "." + k, pr[0], pr[1]));
                     }
                 }

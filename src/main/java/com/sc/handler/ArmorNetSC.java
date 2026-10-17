@@ -357,7 +357,7 @@ public final class ArmorNetSC {
     }
 
     /**
-     * Server -> client: the Singular level task counters ((target-2) x 3 + task, SingularLevel.taskValues)
+     * Server -> client: the Singular level task counters ((target-2) x SingularLevel.TASKS + task, SingularLevel.taskValues; Подложка Ф5: 4 a level)
      * and how many biomes / dimensions were explored; kept in SingularLevel for the tooltip and the K menu.
      */
     public static class LevelMessage implements IMessage {

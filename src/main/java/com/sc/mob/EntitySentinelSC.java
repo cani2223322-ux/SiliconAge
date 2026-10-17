@@ -327,7 +327,10 @@ public class EntitySentinelSC extends EntityArmoredMobSC implements IFactionLoot
 
     // ------------------------------------------------------------------ drops, trophies
 
-    /** ПТ-1, ПТ-17: Shell Firmware 3..5, a Sealed Crumb 25% (x2 in the Emission), the Fragment of the Breakdown Key. */
+    /**
+     * ПТ-1, ПТ-17: Shell Firmware 3..5, a Sealed Crumb 25% (x2 in the Emission), the Fragment of the Breakdown Key; Ф5 (package J,
+     * ПЛ-2): a Lithographer's Journal №5..№8 on JournalSC.SENTINEL_CHANCE (50%).
+     */
     @Override
     public void factionLoot(List<ItemStack> out, Random rand) {
         ItemStack firmware = MobItemsSC.loot(ItemCombatLootSC.LootKind.SHELL_FIRMWARE, FIRMWARE_MIN + rand.nextInt(FIRMWARE_MAX - FIRMWARE_MIN + 1));
@@ -343,6 +346,10 @@ public class EntitySentinelSC extends EntityArmoredMobSC implements IFactionLoot
         ItemStack fragment = RelicItemsSC.relic(ItemRelicSC.KEY_FRAGMENT, 1);
         if (fragment != null) {
             out.add(fragment);
+        }
+        ItemStack journal = com.sc.finale.FinaleItemsSC.journal(com.sc.lore.JournalSC.roll(com.sc.lore.JournalSC.SRC_SENTINEL, rand));
+        if (journal != null) {                                  // Ф5 (ПЛ-2): roll 0 (a miss) - journal(0) is null
+            out.add(journal);
         }
     }
 

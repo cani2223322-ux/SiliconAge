@@ -30,5 +30,9 @@
   "mob.beam.aim": {"category": "hostile", "sounds": [{"name": "quarry/beam", "pitch": 1.8, "volume": 0.5}]},
   "mob.beam.shot": {"category": "hostile", "sounds": [{"name": "field/zap", "pitch": 1.9, "volume": 0.8}]},
   "storm.siren": {"category": "block", "sounds": ["storm/siren"]},
-  "storm.crackle": {"category": "weather", "sounds": ["storm/crackle"]}
+  "storm.crackle": {"category": "weather", "sounds": ["storm/crackle"]},
+  "warden.hold": {"category": "hostile", "sounds": [{"name": "machine/hum", "pitch": 0.4, "volume": 1.0}]},
+  "warden.silence": {"category": "hostile", "sounds": [{"name": "machine/hum", "pitch": 0.55, "volume": 1.0}, {"name": "quarry/beam", "pitch": 0.5, "volume": 0.6}]},
+  "warden.siren": {"category": "hostile", "sounds": [{"name": "storm/siren", "pitch": 0.7, "volume": 1.0}]},
+  "warden.blast": {"category": "hostile", "sounds": [{"name": "field/zap", "pitch": 0.4, "volume": 1.0}]}
 }

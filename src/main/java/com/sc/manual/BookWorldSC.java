@@ -61,12 +61,14 @@ import com.sc.mob.EntityWaferCrabSC;
 import com.sc.mob.EntityWarlordSC;
 import com.sc.mob.MobArmorMathSC;
 import com.sc.mob.MobCombatSC;
+import com.sc.mob.MobDropsSC;
 import com.sc.mob.MobEntitiesSC;
 import com.sc.mob.MobItemsSC;
 import com.sc.mob.ScrapperSC;
 import com.sc.mob.SpawnRulesSC;
 import com.sc.mob.TrophyRestoreSC;
 import com.sc.mob.TrophyTableSC;
+import com.sc.mob.WardenRulesSC;
 import com.sc.ruin.CampBlocksSC;
 import com.sc.ruin.CampLayoutSC;
 import com.sc.ruin.ItemRelicSC;
@@ -149,6 +151,15 @@ import net.minecraftforge.oredict.OreDictionary;
  * the first article (the three biome ids). The numbers the core fixes (the stubs' constants) are read directly; what packages
  * W / S / M / N / C keep beyond them is read by name (stat, weight) as before. G on every new block, item, egg and loot meta
  * opens these pages.
+ * <p>
+ * Ф5 «Финал» (docs/plan-substrate-tech-f5.md §11.4) adds at the chapter's end the thirteen articles of BookFinaleSC (F5_ARTICLES:
+ * «Литографы», «Эпицентр Пробоя», «Смотритель Пробоя» with its Containment Coils, «Добыча Смотрителя», «Журналы Литографа»,
+ * «Обломки моста Литографов», «Сигнал Литографов», «Караваны», «Схемы окраски и купол», «Модуль Литографов», «Навигационная
+ * запись Si-14», «Сингулярный прогресс в Подложке», «Небо Подложки») - every number from the core's classes (WardenRulesSC,
+ * ArenaLayoutSC, JournalSC, WreckLayoutSC, SignalRulesSC, CaravanRulesSC, FinaleRulesSC), what packages A / B / J / K / P keep
+ * beyond them by name; and extends «Подложка (Si-14)» (requireSignal, caravans, customSky), «Трофеи и добыча» (the ПЭ-1М, the
+ * Warden's roll), «Терминал обмена» (the finale's deals), «Крупицы» (the Warden's beyond the cap, the Signal's cache), «Элита» (the
+ * Arena Coordinator), «Хранилища» (the Journals, the Fragments into a Key) and «Восстановление трофеев» (the ПЭ-1М).
  */
 public final class BookWorldSC {
 
@@ -170,6 +181,9 @@ public final class BookWorldSC {
     public static final int RUIN_VAULT_PLATING = 4, RUIN_VAULT_LAMP = 5, RUIN_CAMP_TARP = 6;
     /** Ф4: their names - BlockRuinSC.nameOf answers them once package C has appended them. */
     static final String[] RUIN_F4_NAMES = {"vaultPlating", "vaultLamp", "campTarp"};
+    /** Ф5: the bridge wrecks' Burnt Coil package J appended to the ruin block (BlockRuinSC.NAMES; docs/plan-substrate-tech-f5.md §2.2). */
+    public static final int RUIN_BURNT_COIL = BlockRuinSC.BURNT_COIL;
+    static final String RUIN_F5_NAME = "burntCoil";
     /** The trophy's lang key by meta (item.siliconage.trophy.<key>.name; the metas of TrophyTableSC). */
     public static final String[] TROPHY_KEYS = trophyKeys();
 
@@ -246,6 +260,8 @@ public final class BookWorldSC {
         list.add(scrapper(c));
         list.add(fauna(c));
         list.add(crumbs(c));
+        // Ф5 «Финал» (docs/plan-substrate-tech-f5.md §11.4): at the chapter's end
+        BookFinaleSC.add(list, c);
     }
 
     /** Ф3: the eight new articles, in the chapter's order (the self-test counts and checks them). */
@@ -254,6 +270,9 @@ public final class BookWorldSC {
     /** Ф4: the fifteen new articles (§10.2's fourteen and the Overheated's bestiary page), in the chapter's order (SelfTestHazardSC). */
     public static final String[] F4_ARTICLES = {"world.biomes4", "world.radiation", "world.resources4", "world.storm", "world.haze", "world.raids",
             "world.echo", "world.camps", "world.vaults", "world.overheated", "world.eclipse", "world.noise4", "world.scrapper", "world.fauna", "world.crumbs"};
+    /** Ф5: the thirteen new articles (§11.4), in the chapter's order (BookFinaleSC; SelfTestFinaleSC counts and checks them). */
+    public static final String[] F5_ARTICLES = {"world.lithographers", "world.arena", "world.warden", "world.wardenLoot", "world.journals",
+            "world.wrecks", "world.signal", "world.caravans", "world.cosmetics", "world.lithoModule", "world.navrecord", "world.progress", "world.sky"};
 
     /** The chapter's tile: Crystallite while the Substrate's blocks exist, else a compass. */
     static ItemStack icon() {
@@ -311,6 +330,12 @@ public final class BookWorldSC {
                 Lang.tr(SubstrateConfigSC.empStorms ? "sc.manual.world.rule.storms.on" : "sc.manual.world.rule.storms.off")));
         e.add(BookEl.item(null, Lang.tr("sc.manual.world.rule.raids"),
                 Lang.tr(SubstrateConfigSC.raids ? "sc.manual.world.rule.raids.on" : "sc.manual.world.rule.raids.off")));
+        // Ф5 (ПВ-13, ПН-12, ПМ-19): the server's two rules, this client's own sky
+        e.add(BookEl.item(com.sc.finale.FinaleItemsSC.navRecord(1), Lang.tr("sc.manual.world.rule.signal"),
+                Lang.tr(SubstrateConfigSC.requireSignal ? "sc.manual.world.rule.signal.on" : "sc.manual.world.rule.signal.off")));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.rule.caravans"),
+                Lang.tr(SubstrateConfigSC.caravans ? "sc.manual.world.rule.caravans.on" : "sc.manual.world.rule.caravans.off")));
+        e.add(BookEl.dim(Lang.tr(SubstrateConfigSC.customSky() ? "sc.manual.world.rule.sky.on" : "sc.manual.world.rule.sky.off")));
         e.add(BookEl.link("world.terrain", Lang.tr("sc.manual.world.terrain.title")));
         e.add(BookEl.link("world.biomes4", Lang.tr("sc.manual.world.biomes4.title")));
         e.add(BookEl.link("world.storm", Lang.tr("sc.manual.world.storm.title")));
@@ -318,6 +343,9 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
         e.add(BookEl.link("world.settlements", Lang.tr("sc.manual.world.settlements.title")));
         e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
+        e.add(BookEl.link("world.lithographers", Lang.tr("sc.manual.world.lithographers.title")));
+        e.add(BookEl.link("world.arena", Lang.tr("sc.manual.world.arena.title")));
+        e.add(BookEl.link("world.navrecord", Lang.tr("sc.manual.world.navrecord.title")));
         e.add(BookEl.link("bridge", Lang.tr("sc.manual.bridge.title")));
         return e;
     }
@@ -518,6 +546,9 @@ public final class BookWorldSC {
         e.add(BookEl.dim(Lang.tr("sc.manual.world.trophies.singular", mobName(EntitySentinelSC.NAME), mobName(EntityEclipseSC.NAME),
                 pct(trophyChance(stat(SENTINEL, "CARRIER_PE1", 0.1F))))));
         e.add(BookEl.dim(Lang.tr("sc.manual.world.trophies.storm", n(TrophyTableSC.STORM_MUL), n(TrophyTableSC.EVENT_CAP))));
+        // Ф5 (ПТ-23, ПТ-26): the Breakdown Warden's one roll - the Singular chestplate, the blade, the ПЭ-1М (meta 24)
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.trophies.warden", mobName(com.sc.mob.EntityBreakdownWardenSC.NAME), wardenTrophyPct(WardenRulesSC.TROPHY_CHEST),
+                wardenTrophyPct(WardenRulesSC.TROPHY_BLADE), wardenTrophyPct(WardenRulesSC.TROPHY_PE1M), TrophyTableSC.SHOWN.length)));
 
         e.add(BookEl.head(Lang.tr("sc.manual.world.trophyitemshead")));
         e.addAll(BookContent.paras("sc.manual.world.trophyitems"));
@@ -545,6 +576,7 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.eclipse", mobName(EntityEclipseSC.NAME)));
         e.add(BookEl.link("world.crumbs", Lang.tr("sc.manual.world.crumbs.title")));
         e.add(BookEl.link("world.trade", Lang.tr("sc.manual.world.trade.title")));
+        e.add(BookEl.link("world.wardenLoot", Lang.tr("sc.manual.world.wardenLoot.title")));
         if (MobItemsSC.trophy != null) {
             e.about(new ItemStack(MobItemsSC.trophy, 1, OreDictionary.WILDCARD_VALUE));
         }
@@ -778,6 +810,13 @@ public final class BookWorldSC {
         e.add(BookEl.head(Lang.tr("sc.manual.world.trade.f4head")));
         e.addAll(BookContent.paras("sc.manual.world.trade.f4", null, new Object[]{days(RaidRulesSC.CLOSED_TICKS)},
                 new Object[]{CrumbLimitSC.DAY_CAP}));
+        // Ф5 (ПО-17..ПО-22): the Coordinator, the Module, the scheme, the caravan's rare deal - in the tables above
+        e.add(BookEl.head(Lang.tr("sc.manual.world.trade.f5head")));
+        e.addAll(BookContent.paras("sc.manual.world.trade.f5", null, new Object[]{Lang.tr(NpcKindSC.ARMOURER.langKey()),
+                com.sc.settle.caravan.CaravanRulesSC.RARE_DAYS}));
+        e.add(BookEl.link("world.caravans", Lang.tr("sc.manual.world.caravans.title")));
+        e.add(BookEl.link("world.lithoModule", Lang.tr("sc.manual.world.lithoModule.title")));
+        e.add(BookEl.link("world.cosmetics", Lang.tr("sc.manual.world.cosmetics.title")));
         e.add(BookEl.link("world.trust", Lang.tr("sc.manual.world.trust.title")));
         e.add(BookEl.link("world.tuners", Lang.tr("sc.manual.world.tuners.title")));
         e.add(BookEl.link("world.raids", Lang.tr("sc.manual.world.raids.title")));
@@ -1428,6 +1467,11 @@ public final class BookWorldSC {
                 Lang.tr(EliteModSC.VETERAN.langKey()))));
         e.addAll(BookContent.paras("sc.manual.world.elites.tips", new Object[]{Lang.tr(EliteModSC.AVENGER.langKey()), sec(EliteModSC.AVENGER_FUSE_TICKS)},
                 new Object[]{Lang.tr(EliteModSC.COMMANDER.langKey())}));
+        // Ф5 (ПС-23): an elite killed by a player may drop the Arena Coordinator
+        ItemStack coordinator = com.sc.finale.FinaleItemsSC.arenaCoordinator(1);
+        e.add(BookEl.item(coordinator, coordinator != null ? coordinator.getDisplayName() : Lang.tr("item.siliconage.arenaCoordinator.name"),
+                Lang.tr("sc.manual.world.elites.coordinator", pct(MobDropsSC.ARENA_COORDINATOR_CHANCE))));
+        e.add(BookEl.link("world.arena", Lang.tr("sc.manual.world.arena.title")));
         e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
         e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
         e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
@@ -1527,6 +1571,9 @@ public final class BookWorldSC {
         }
         ItemStack singular = trophy(TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 1));
         t.row(singular, Lang.tr("sc.manual.world.restore.singular"), "-", "-", Lang.tr("sc.manual.world.restore.singular.price", clotName(),
+                BookContent.num(TrophyRestoreSC.SINGULAR_STATION_EU)));
+        // Ф5 (ПТ-26): the Warden's ПЭ-1М - the Singular station, a ПЭ-1М without modules
+        t.row(trophy(TrophyTableSC.META_PE1M), Lang.tr("sc.manual.world.restore.pe1m"), "-", "-", Lang.tr("sc.manual.world.restore.pe1m.price", clotName(),
                 BookContent.num(TrophyRestoreSC.SINGULAR_STATION_EU)));
         e.add(t);
         if (rows == 0) {
@@ -1994,10 +2041,18 @@ public final class BookWorldSC {
         e.add(BookEl.head(Lang.tr("sc.manual.world.vaults.findhead"), finder));
         e.add(BookEl.item(fragment, relicName(ItemRelicSC.KEY_FRAGMENT), relicLine(ItemRelicSC.KEY_FRAGMENT)));
         e.add(BookEl.item(finder, finder != null ? finder.getDisplayName() : Lang.tr("item.siliconage.ruinFinder.name"), finderLine()));
+        // Ф5 (ПЛ-2, ПУ-11): the Journals of the Vaults, the four Fragments made into the Breakdown Key
+        ItemStack journal = com.sc.finale.FinaleItemsSC.journal(5), key = RelicItemsSC.relic(ItemRelicSC.BREAKDOWN_KEY, 1);
+        e.add(BookEl.item(journal, Lang.tr("sc.manual.world.vaults.journals"), Lang.tr("sc.manual.world.vaults.journals.desc",
+                journalNumbers(com.sc.lore.JournalSC.SRC_VAULT), pct(com.sc.lore.JournalSC.chance(com.sc.lore.JournalSC.SRC_VAULT)), sentinel,
+                pct(com.sc.lore.JournalSC.chance(com.sc.lore.JournalSC.SRC_SENTINEL)))));
+        e.add(BookEl.item(key, relicName(ItemRelicSC.BREAKDOWN_KEY), relicLine(ItemRelicSC.BREAKDOWN_KEY)));
         e.addAll(BookContent.paras("sc.manual.world.vaults.tips"));
         e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
         e.add(BookEl.link("world.crumbs", Lang.tr("sc.manual.world.crumbs.title")));
         e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.add(BookEl.link("world.arena", Lang.tr("sc.manual.world.arena.title")));
+        e.add(BookEl.link("world.journals", Lang.tr("sc.manual.world.journals.title")));
         e.about(plating, ruin(RUIN_VAULT_LAMP), sentinelEgg, fragment, finder);
         return e;
     }
@@ -2020,7 +2075,11 @@ public final class BookWorldSC {
             case ItemRelicSC.CAMP_KEY:
                 return Lang.tr(k, mobName(EntityWarlordSC.NAME));
             case ItemRelicSC.KEY_FRAGMENT:
-                return Lang.tr(k, mobName(EntitySentinelSC.NAME));
+                return Lang.tr(k, mobName(EntitySentinelSC.NAME), ItemRelicSC.FRAGMENTS);
+            case ItemRelicSC.BREAKDOWN_KEY:                             // Ф5 (ПУ-11): four Fragments, into the Console
+                return Lang.tr(k, ItemRelicSC.FRAGMENTS, mobName(EntitySentinelSC.NAME));
+            case ItemRelicSC.BREAKDOWN_MATRIX:                          // Ф5 (ПТ-22, ПО-18): the Warden's, the Elder's Module
+                return Lang.tr(k, mobName(com.sc.mob.EntityBreakdownWardenSC.NAME), Lang.tr(NpcKindSC.ELDER.langKey()));
             default:
                 return Lang.tr(k, mobName(EntitySentinelSC.NAME), pct(stat(SENTINEL, "CRUMB_CHANCE", 0.25F)), mobName(EntityEclipseSC.NAME),
                         pct(stat(ECLIPSE, "CRUMB_CHANCE", 0.3F)), CrumbLimitSC.DAY_CAP);
@@ -2239,6 +2298,10 @@ public final class BookWorldSC {
         e.add(BookEl.item(kindIcon(NpcKindSC.ELDER), Lang.tr(NpcKindSC.ELDER.langKey()), (elder != null ? elder + " " : "")
                 + Lang.tr("sc.manual.world.crumbs.elder")));
         e.add(BookEl.dim(Lang.tr("sc.manual.world.crumbs.emission", n(StormRulesSC.EMISSION_CRUMB_MUL))));
+        // Ф5 (ПЛ-7, ПТ-22): the Signal's cache gives a sealed one; the Breakdown Warden - real ones, beyond the cap
+        e.add(BookEl.item(new ItemStack(Blocks.beacon), Lang.tr("sc.manual.world.signal.title"), Lang.tr("sc.manual.world.crumbs.signal")));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_BREAKDOWN_WARDEN), mobName(com.sc.mob.EntityBreakdownWardenSC.NAME), Lang.tr("sc.manual.world.crumbs.warden",
+                WardenRulesSC.CRUMBS_MIN, WardenRulesSC.CRUMBS_MAX)));
 
         // opening one (ПТ-17)
         e.add(BookEl.head(Lang.tr("sc.manual.world.crumbs.openhead"), crumb));
@@ -2247,6 +2310,7 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.camps", Lang.tr("sc.manual.world.camps.title")));
         e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
         e.add(BookEl.link("world.eclipse", mobName(EntityEclipseSC.NAME)));
+        e.add(BookEl.link("world.wardenLoot", Lang.tr("sc.manual.world.wardenLoot.title")));
         e.about(sealed);
         return e;
     }
@@ -2338,16 +2402,16 @@ public final class BookWorldSC {
 
     // ------------------------------------------------------------------ Ф3's stacks and numbers
 
-    private static ItemStack ruin(int meta) {
+    static ItemStack ruin(int meta) {
         return RuinBlocksSC.ruin == null ? null : new ItemStack(RuinBlocksSC.ruin, 1, meta);
     }
 
-    private static String ruinName(int meta) {
+    static String ruinName(int meta) {
         ItemStack s = ruin(meta);
         return s != null ? s.getDisplayName() : Lang.tr("tile.siliconage.ruin." + BlockRuinSC.nameOf(meta) + ".name");
     }
 
-    private static ItemStack quantumPiece(int armorType) {
+    static ItemStack quantumPiece(int armorType) {
         return new ItemStack(ModItems.ARMOR.get(ArmorSuit.QUANTUM)[armorType]);
     }
 
@@ -2381,7 +2445,7 @@ public final class BookWorldSC {
 
     // ------------------------------------------------------------------ Ф2's stacks and numbers
 
-    private static ItemStack core() {
+    static ItemStack core() {
         return SettlementBlocksSC.core == null ? null : new ItemStack(SettlementBlocksSC.core);
     }
 
@@ -2399,7 +2463,7 @@ public final class BookWorldSC {
     }
 
     /** A profession's workshop machine (the Elder: the core). */
-    private static ItemStack kindIcon(NpcKindSC k) {
+    static ItemStack kindIcon(NpcKindSC k) {
         switch (k) {
             case ELDER:
                 return core();
@@ -2430,7 +2494,7 @@ public final class BookWorldSC {
     }
 
     /** «3-5», or «24» when both ends agree. */
-    private static String span(int lo, int hi) {
+    static String span(int lo, int hi) {
         return lo == hi ? String.valueOf(lo) : lo + "-" + hi;
     }
 
@@ -2441,12 +2505,12 @@ public final class BookWorldSC {
     }
 
     /** Ticks as whole game days: «3». */
-    private static String days(long ticks) {
+    static String days(long ticks) {
         return n(ticks / (float) SettlementSC.DAY);
     }
 
     /** Ticks as minutes: «5». */
-    private static String minutes(int ticks) {
+    static String minutes(int ticks) {
         return n(ticks / 1200F);
     }
 
@@ -2491,10 +2555,14 @@ public final class BookWorldSC {
             return Lang.tr("sc.manual.world.cell.carrier", mobName(EntityJammerSC.NAME)) + ", "
                     + Lang.tr("sc.manual.world.cell.carrier", mobName(EntitySentinelSC.NAME));
         }
-        // Ф4 (ПТ-16): the Singular pieces and blade - the Vaults' Sentinel and «Затмение»
+        // Ф4 (ПТ-16): the Singular pieces and blade - the Vaults' Sentinel and «Затмение»; Ф5 (ПТ-23): the chestplate and the blade the Warden's too
         if (meta >= TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 0) && meta <= TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 3)
                 || meta == TrophyTableSC.bladeMeta(BladeType.SINGULAR)) {
-            return mobName(EntitySentinelSC.NAME) + ", " + mobName(EntityEclipseSC.NAME);
+            boolean warden = meta == TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 1) || meta == TrophyTableSC.bladeMeta(BladeType.SINGULAR);
+            return mobName(EntitySentinelSC.NAME) + ", " + mobName(EntityEclipseSC.NAME) + (warden ? ", " + mobName(com.sc.mob.EntityBreakdownWardenSC.NAME) : "");
+        }
+        if (meta == TrophyTableSC.META_PE1M) {                     // Ф5 (ПТ-23): the Breakdown Warden's alone
+            return mobName(com.sc.mob.EntityBreakdownWardenSC.NAME);
         }
         return null;
     }
@@ -2503,6 +2571,9 @@ public final class BookWorldSC {
     public static String trophyChancePct(int meta) {
         if (meta == TrophyTableSC.META_PE1) {
             return pct(trophyChance(stat(TROPHIES, "PE1", 0.02F)));     // Ф3: the carrier's ПЭ-1 (package M's TrophyTableSC.PE1)
+        }
+        if (meta == TrophyTableSC.META_PE1M) {
+            return wardenTrophyPct(WardenRulesSC.TROPHY_PE1M);          // Ф5 (ПТ-23): the Warden's roll
         }
         if (meta >= 0 && meta < TrophyTableSC.META_BLADE) {
             return pct(trophyChance(TrophyTableSC.PIECE[Math.min(TrophyTableSC.PIECE.length - 1, meta / 4)]));
@@ -2514,6 +2585,50 @@ public final class BookWorldSC {
             return pct(trophyChance(TrophyTableSC.WEAPON[meta - TrophyTableSC.META_WEAPON]));
         }
         return null;
+    }
+
+    /** Ф5 (ПТ-23): one of the Warden's trophy chances as percent text - its share times the server's gearDropMultiplier (WardenRulesSC.trophyMeta). */
+    static String wardenTrophyPct(float share) {
+        return pct(Math.max(0F, share * SubstrateConfigSC.gearDropMultiplier));
+    }
+
+    /** Ф5: where a JournalSC source is - «Сундуки Мёртвых Узлов», the Sentinel's / the Warden's name (the handbook's table, NEI's page). */
+    public static String journalSource(int source) {
+        if (source == com.sc.lore.JournalSC.SRC_SENTINEL) {
+            return mobName(EntitySentinelSC.NAME);
+        }
+        if (source == com.sc.lore.JournalSC.SRC_WARDEN) {
+            return mobName(com.sc.mob.EntityBreakdownWardenSC.NAME);
+        }
+        return Lang.tr("sc.manual.world.journals.src." + source);
+    }
+
+    /** Ф5: a JournalSC source's chance as text - «6%», the Warden's «первая победа». */
+    public static String journalChance(int source) {
+        return source == com.sc.lore.JournalSC.SRC_WARDEN ? Lang.tr("sc.manual.world.journals.firstkill") : pct(com.sc.lore.JournalSC.chance(source)) + "%";
+    }
+
+    /** Ф5, NEI's «Как получить» of journal №`number`: every source whose pool has it, with its chance («Сундуки Хранилищ - 30%; ...»). */
+    public static String journalWhere(int number) {
+        StringBuilder sb = new StringBuilder();
+        for (int src = 0; src < com.sc.lore.JournalSC.POOLS.length; src++) {
+            for (int n : com.sc.lore.JournalSC.POOLS[src]) {
+                if (n == number) {
+                    sb.append(sb.length() == 0 ? "" : "; ").append(journalSource(src)).append(" - ").append(journalChance(src));
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Ф5: «№5, №6, №7, №8» - the journals' numbers a JournalSC source gives. */
+    static String journalNumbers(int source) {
+        StringBuilder sb = new StringBuilder();
+        int[] pool = source >= 0 && source < com.sc.lore.JournalSC.POOLS.length ? com.sc.lore.JournalSC.POOLS[source] : new int[0];
+        for (int i = 0; i < pool.length; i++) {
+            sb.append(i == 0 ? "" : ", ").append(Lang.tr("sc.manual.world.journals.no", pool[i]));
+        }
+        return sb.toString();
     }
 
     /** The real item a trophy of `meta` stands for (its armour piece, blade, weapon, ПЭ-1 / ПЭ-1М), or null. */
@@ -2640,6 +2755,8 @@ public final class BookWorldSC {
                 return Lang.tr(k, n(stat(RUIN_BLOCK, "PLATING_LEVEL", 3F)), n(stat(RUIN_BLOCK, "PLATING_SCRAP_PCT", 50F)));
             case RUIN_VAULT_LAMP:
                 return Lang.tr(k, n(stat(RUIN_BLOCK, "LAMP_LIGHT", 10F)));
+            case RUIN_BURNT_COIL:                       // Ф5 (ПЛ-4): package J's numbers
+                return Lang.tr("sc.manual.world.ruin." + RUIN_F5_NAME, BlockRuinSC.COIL_SCRAP_PCT, BlockRuinSC.COIL_FIRMWARE_PCT);
             default:
                 return Lang.tr(k);
         }
@@ -2651,6 +2768,9 @@ public final class BookWorldSC {
      * chips + TrophyRestoreSC.STATION_EU); a Singular one only at the Singular station; null - it isn't restored (ПЭ-1М, Ф5).
      */
     public static String restoreLine(int meta) {
+        if (meta == TrophyTableSC.META_PE1M) {                     // Ф5 (ПТ-26): Singular-level, the Singular station alone
+            return Lang.tr("sc.manual.world.restore.line.pe1m", clotName(), BookContent.num(TrophyRestoreSC.SINGULAR_STATION_EU));
+        }
         if (TrophyTableSC.level(meta) == ArmorSuit.SINGULAR) {
             return Lang.tr("sc.manual.world.restore.line.singular", clotName(), BookContent.num(TrophyRestoreSC.SINGULAR_STATION_EU));
         }
@@ -2682,7 +2802,7 @@ public final class BookWorldSC {
         return parts.isEmpty() ? eu : parts + " + " + eu;
     }
 
-    private static String clotName() {
+    static String clotName() {
         return ModItems.singularClot != null ? new ItemStack(ModItems.singularClot).getDisplayName() : Lang.tr("item.siliconage.singularClot.name");
     }
 
@@ -2803,28 +2923,28 @@ public final class BookWorldSC {
         return new ItemStack(SubstrateBlocksSC.ore != null ? SubstrateBlocksSC.ore : ModBlocks.oreSC, 1, ore.meta());
     }
 
-    private static ItemStack egg(int poolId) {
+    static ItemStack egg(int poolId) {
         return MobItemsSC.spawnEgg == null ? null : new ItemStack(MobItemsSC.spawnEgg, 1, poolId);
     }
 
-    private static ItemStack trophy(int meta) {
+    static ItemStack trophy(int meta) {
         return MobItemsSC.trophy == null ? null : new ItemStack(MobItemsSC.trophy, 1, meta);
     }
 
-    private static ItemStack loot(int meta) {
+    static ItemStack loot(int meta) {
         return MobItemsSC.combatLoot == null ? null : new ItemStack(MobItemsSC.combatLoot, 1, meta);
     }
 
-    private static String lootName(int meta) {
+    static String lootName(int meta) {
         ItemStack s = loot(meta);
         return s != null ? s.getDisplayName() : Lang.tr("item.siliconage.combatLoot." + LOOT_NAMES[meta] + ".name");
     }
 
-    private static ItemStack nanoPiece(int armorType) {
+    static ItemStack nanoPiece(int armorType) {
         return new ItemStack(ModItems.ARMOR.get(ArmorSuit.NANO)[armorType]);
     }
 
-    private static ItemStack blade(BladeType t) {
+    static ItemStack blade(BladeType t) {
         return new ItemStack(ModItems.BLADES.get(t));
     }
 
@@ -2832,7 +2952,7 @@ public final class BookWorldSC {
         return new ItemStack(ModItems.WEAPONS.get(t));
     }
 
-    private static String suitName(ArmorSuit s) {
+    static String suitName(ArmorSuit s) {
         return Lang.tr("sc.suit." + s.name().toLowerCase(Locale.ROOT));
     }
 
@@ -2865,7 +2985,7 @@ public final class BookWorldSC {
     }
 
     /** One roll's chance at the base of a category, with the server's gearDropMultiplier (no Looting, no bad luck). */
-    private static float trophyChance(float base) {
+    static float trophyChance(float base) {
         return TrophyTableSC.chance(base, 0, false, false, SubstrateConfigSC.gearDropMultiplier, 1);
     }
 
@@ -2878,17 +2998,17 @@ public final class BookWorldSC {
     }
 
     /** "4", "1.5" ("1,5" in Russian): one decimal at most. */
-    private static String n(float v) {
+    static String n(float v) {
         return BookContent.number(Math.round(v * 10F) / 10F);
     }
 
     /** "0.5" ("0,5"): a multiplier with up to two decimals. */
-    private static String multiplier(float m) {
+    static String multiplier(float m) {
         return BookContent.number(Math.round(m * 100F) / 100F);
     }
 
     /** Ticks as seconds: "16", "8.8" ("8,8" in Russian). */
-    private static String sec(int ticks) {
+    static String sec(int ticks) {
         return n(ticks / 20F);
     }
 }

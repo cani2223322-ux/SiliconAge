@@ -195,7 +195,8 @@ final class SelfTestHazardSC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        boolean rules = sent.size() == 12 && sent.contains("empStorms") && sent.contains("raids") && SubstrateConfigSC.empStorms && SubstrateConfigSC.raids;
+        // Ф5 appended requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1): 14 rules now (SelfTestFinaleSC checks the two)
+        boolean rules = sent.size() == 14 && sent.contains("empStorms") && sent.contains("raids") && SubstrateConfigSC.empStorms && SubstrateConfigSC.raids;
         StringBuilder pub = new StringBuilder();
         for (String n : new String[]{"biomeIdRidges", "biomeIdOxide", "biomeIdRift"}) {
             try {
@@ -208,7 +209,7 @@ final class SelfTestHazardSC {
             }
         }
         boolean ids = SubstrateConfigSC.biomeIdRidges() == 242 && SubstrateConfigSC.biomeIdOxide() == 243 && SubstrateConfigSC.biomeIdRift() == 244;
-        check(rules && ids && pub.length() == 0, "config (§2.1): " + sent.size() + " rules the server sends (12), empStorms " + SubstrateConfigSC.empStorms
+        check(rules && ids && pub.length() == 0, "config (§2.1): " + sent.size() + " rules the server sends (14 with Ф5's), empStorms " + SubstrateConfigSC.empStorms
                 + " / raids " + SubstrateConfigSC.raids + " (true by default) " + rules + "; the new biome ids " + SubstrateConfigSC.biomeIdRidges() + " / "
                 + SubstrateConfigSC.biomeIdOxide() + " / " + SubstrateConfigSC.biomeIdRift() + " (242 / 243 / 244) " + ids + ", private statics"
                 + (pub.length() == 0 ? "" : " - NOT:" + pub) + (rules && ids ? "" : " (the dimension section of the test config edited?)"));
@@ -900,8 +901,10 @@ final class SelfTestHazardSC {
     // ------------------------------------------------------------------ 15. the pool (§2.2, §7)
 
     private static void pool() {
-        boolean names = MobEntitiesSC.NAMES.length == 22 && MobEntitiesSC.EGG_COLORS.length == 22 && "overheated".equals(MobEntitiesSC.nameOf(12))
-                && "waferCrab".equals(MobEntitiesSC.nameOf(21)) && MobEntitiesSC.nameOf(22) == null && MobEntitiesSC.ID_OVERHEATED == 12 && MobEntitiesSC.ID_WARLORD == 13
+        // Ф5 appended its four (22..25, docs/plan-substrate-tech-f5.md §2.2): the pool is 26 now, Ф4's 12..21 unchanged
+        boolean names = MobEntitiesSC.NAMES.length == 26 && MobEntitiesSC.EGG_COLORS.length == 26 && "overheated".equals(MobEntitiesSC.nameOf(12))
+                && "waferCrab".equals(MobEntitiesSC.nameOf(21)) && "breakdownWarden".equals(MobEntitiesSC.nameOf(22)) && MobEntitiesSC.nameOf(26) == null
+                && MobEntitiesSC.ID_OVERHEATED == 12 && MobEntitiesSC.ID_WARLORD == 13
                 && MobEntitiesSC.ID_SENTINEL == 14 && MobEntitiesSC.ID_ECLIPSE == 15 && MobEntitiesSC.ID_PHANTOM == 16 && MobEntitiesSC.ID_LEECH == 17
                 && MobEntitiesSC.ID_COLOSSUS == 18 && MobEntitiesSC.ID_STRIDER == 19 && MobEntitiesSC.ID_SCRAPPER == 20 && MobEntitiesSC.ID_WAFER_CRAB == 21;
         StringBuilder bad = new StringBuilder();
@@ -929,7 +932,7 @@ final class SelfTestHazardSC {
                 bad.append(' ').append(n).append(i == 9 ? ":the crab is a monster" : ":not a monster");
             }
         }
-        check(names && hps && bad.length() == 0, "pool (MobEntitiesSC, §2.2): 22 names and eggs, 12 overheated .. 21 waferCrab, 22 none " + names + "; HP 30 / 90 /"
+        check(names && hps && bad.length() == 0, "pool (MobEntitiesSC, §2.2): 26 names and eggs (Ф5's four after them), 12 overheated .. 21 waferCrab, 22 breakdownWarden " + names + "; HP 30 / 90 /"
                 + " 100 / 140 / 20 / 30 / 120 / 60 / 60 / 8 " + hps + "; armoured 12..15, noise 16..20, the peaceful crab; IEmpReactiveSC on the Phantom, Leech,"
                 + " Strider, Scrapper, IEmpUselessSC on the Colossus" + (bad.length() == 0 ? " ok" : " - BAD:" + bad));
     }
@@ -977,10 +980,11 @@ final class SelfTestHazardSC {
                 singular.append(' ').append(m);
             }
         }
-        boolean trophies = TrophyTableSC.SHOWN.length == 24 && !shown.contains(TrophyTableSC.META_PE1M) && singular.length() == 0 && TrophyTableSC.STORM_MUL == 1.5F;
+        // Ф5 appended the Breakdown Warden's ПЭ-1М (ПТ-26, docs/plan-substrate-tech-f5.md §5.7): SHOWN is 25 now
+        boolean trophies = TrophyTableSC.SHOWN.length == 25 && shown.contains(TrophyTableSC.META_PE1M) && singular.length() == 0 && TrophyTableSC.STORM_MUL == 1.5F;
         check(order && bad.length() == 0 && trophies, "loot and trophies (ПТ-16, ПТ-18): LootKind 12 in their order, the last naturalWafer, BookWorldSC.LOOT_NAMES"
                 + " the same " + order + "; Ф4's five with icon, name, tooltip, handbook line and the egg of who drops it" + (bad.length() == 0 ? " ok" : " - BAD:" + bad)
-                + "; SHOWN " + TrophyTableSC.SHOWN.length + " (24) with the Singular pieces and blade, droppers / chance / restoring named"
+                + "; SHOWN " + TrophyTableSC.SHOWN.length + " (25 with Ф5's ПЭ-1М) with the Singular pieces and blade, droppers / chance / restoring named"
                 + (singular.length() == 0 ? "" : " - NOT:" + singular) + ", the storm x1.5 " + trophies);
     }
 
@@ -997,7 +1001,8 @@ final class SelfTestHazardSC {
     private static void relics() {
         Map<String, String> en = SelfTestSC.langMap("en_US"), ru = SelfTestSC.langMap("ru_RU");
         StringBuilder bad = new StringBuilder();
-        boolean metas = ItemRelicSC.CAMP_KEY == 0 && ItemRelicSC.KEY_FRAGMENT == 1 && ItemRelicSC.SEALED_CRUMB == 2 && ItemRelicSC.NAMES.length == 3
+        // Ф5 appended the Breakdown Key and the Breakdown Matrix (metas 3, 4; docs/plan-substrate-tech-f5.md §2.2): 5 names now
+        boolean metas = ItemRelicSC.CAMP_KEY == 0 && ItemRelicSC.KEY_FRAGMENT == 1 && ItemRelicSC.SEALED_CRUMB == 2 && ItemRelicSC.NAMES.length == 5
                 && "scCamp".equals(ItemRelicSC.KEY_NBT) && ItemRuinFinderSC.USES == 8 && ItemRuinFinderSC.SEARCH_BLOCKS == 2;
         for (String n : ItemRelicSC.NAMES) {
             for (String k : new String[]{"item.siliconage.relic." + n + ".name", "sc.tooltip.relic." + n, "sc.tooltip.relic." + n + ".details",
@@ -1229,7 +1234,7 @@ final class SelfTestHazardSC {
                         .append(got == null ? "nothing" : got.id);
             }
         }
-        int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + ARTICLES.length;
+        int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + ARTICLES.length + BookWorldSC.F5_ARTICLES.length;   // + Ф5's (SelfTestFinaleSC)
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {

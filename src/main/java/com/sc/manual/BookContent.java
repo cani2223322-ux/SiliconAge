@@ -1488,7 +1488,8 @@ public final class BookContent {
         for (com.sc.util.SingularScheme sc : com.sc.util.SingularScheme.values()) {
             names.append(names.length() > 0 ? ", " : "").append(sc.name()).append(" - ").append(Lang.tr(sc.langKey()));
         }
-        sch.add(BookEl.dim(names.toString())).add(BookEl.link("singulararmor", Lang.tr("sc.manual.singular.head")));
+        sch.add(BookEl.dim(names.toString())).add(BookEl.link("singulararmor", Lang.tr("sc.manual.singular.head")))
+                .add(BookEl.link("world.cosmetics", Lang.tr("sc.manual.world.cosmetics.title")));   // Подложка Ф5: L and M are unlocked there
         list.add(sch);
         e = new BookEntry("singulararmor.fn", c, new ItemStack(pieces[2]), Lang.tr("sc.book.singfn.title"));
         e.add(BookEl.title(Lang.tr("sc.book.singfn.title")));

@@ -36,22 +36,23 @@ public final class SpawnRulesSC {
      * drone, -; Ф4: Overheated, -, -, -, Phantom, Leech, Colossus, -, Scrapper, -) on the plateaus, in the canyons and in a
      * Dead Node's zone; Ф4 (§7.12) on the Ridges, on the Oxide Fields and in the Rift. The Warlord (13), the Sentinel (14) and
      * «Затмение» (15) weigh 0 everywhere, the Arc Strider (19) too - it comes only with a storm (stormWeights); the Wafer Crab
-     * (21) has the peaceful branch. TODO(balance)
+     * (21) has the peaceful branch. Ф5: 0 for the Breakdown Warden, its coils and the caravan (22..25) - never from the director.
+     * TODO(balance)
      */
-    public static final int[] PLATEAU_WEIGHTS = {60, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 3, 0},
-            CANYON_WEIGHTS = {30, 70, 0, 0, 30, 15, 0, 0, 3, 5, 0, 0, 0, 0, 0, 0, 8, 10, 0, 0, 3, 0},
-            NODE_WEIGHTS = {0, 10, 0, 0, 0, 0, 70, 0, 0, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-            RIDGES_WEIGHTS = {15, 25, 0, 0, 30, 10, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 8, 10, 12, 0, 0, 0},
-            OXIDE_WEIGHTS = {0, 10, 0, 0, 10, 20, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 4, 0},
-            RIFT_WEIGHTS = {0, 0, 0, 0, 0, 0, 20, 0, 15, 10, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 0, 0};
+    public static final int[] PLATEAU_WEIGHTS = {60, 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 0, 3, 0, 0, 0, 0, 0},
+            CANYON_WEIGHTS = {30, 70, 0, 0, 30, 15, 0, 0, 3, 5, 0, 0, 0, 0, 0, 0, 8, 10, 0, 0, 3, 0, 0, 0, 0, 0},
+            NODE_WEIGHTS = {0, 10, 0, 0, 0, 0, 70, 0, 0, 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+            RIDGES_WEIGHTS = {15, 25, 0, 0, 30, 10, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 8, 10, 12, 0, 0, 0, 0, 0, 0, 0},
+            OXIDE_WEIGHTS = {0, 10, 0, 0, 10, 20, 0, 0, 0, 0, 0, 0, 40, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0},
+            RIFT_WEIGHTS = {0, 0, 0, 0, 0, 0, 20, 0, 15, 10, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     /**
      * Group sizes by pool id: Linemen walk in pairs, Marauders 2..4; Ф3 - Troopers 1..2, a Jammer alone (an escort aside),
      * Hollow Shells 2..3, a patrol's repair drones 2, the Executioner alone, a swarm of 6..10 particles (one census place),
      * sentry drones 1..2. Ф4 (§7.12): the Overheated 1..2, Phantoms 1..2, a Leech, a Colossus, a Strider, a Scrapper and
      * «Затмение» alone, the Wafer Crabs 1..3 (the peaceful branch); the Warlord and the Sentinel never from here (0).
      */
-    public static final int[] GROUP_MIN = {2, 2, 0, 0, 1, 1, 2, 2, 1, 6, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1},
-            GROUP_MAX = {2, 4, 0, 0, 2, 1, 3, 2, 1, 10, 2, 0, 2, 0, 0, 1, 2, 1, 1, 1, 1, 3};
+    public static final int[] GROUP_MIN = {2, 2, 0, 0, 1, 1, 2, 2, 1, 6, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+            GROUP_MAX = {2, 4, 0, 0, 2, 1, 3, 2, 1, 10, 2, 0, 2, 0, 0, 1, 2, 1, 1, 1, 1, 3, 0, 0, 0, 0};
     /** The group's members appear within this many blocks of the first one; tries for each member's spot; tries for the first spot. */
     public static final int GROUP_SPREAD = 3, MEMBER_TRIES = 4, SPOT_TRIES = 6;
     /** Ф3, ПС-8: the Executioner never closer than this to the world's spawn point (blocks, horizontal). TODO(balance) */

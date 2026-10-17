@@ -5,7 +5,9 @@ import java.util.List;
 import java.util.Random;
 
 import com.sc.emp.EmpModule;
+import com.sc.finale.FinaleItemsSC;
 import com.sc.init.ModItems;
+import com.sc.lore.JournalSC;
 import com.sc.mob.ItemCombatLootSC;
 import com.sc.mob.MobItemsSC;
 import com.sc.util.ChipType;
@@ -39,6 +41,11 @@ import net.minecraft.item.ItemStack;
  * wafers, Transistors), a ПЭ-1 module on VAULT_MODULE_CHANCE, a Sealed Crumb on VAULT_CRUMB_CHANCE.</li>
  * </ul>
  * Every Crumb of the world but the boss's comes Sealed (ПХ-5): the daily three are counted when one is opened.
+ * <p>
+ * Ф5 (package J, docs/plan-substrate-tech-f5.md §6.1, rule ПЛ-2): a chest of the ruins may hold a Lithographer's Journal - one
+ * JournalSC.roll of its source from the chest's own Random, after its rolls: a Dead Node's chest (fillNode - SRC_NODE: №1, №2), a
+ * lithograph's (lithoChest - SRC_LITHO: №3, №4), a Vault's (vaultChest - SRC_VAULT: №5..№8). nodeChest itself stays without one: a
+ * raid's reward rolls it too (RaidRunSC), and №1, №2 are the Nodes' own.
  */
 public final class RuinLootSC {
 
@@ -127,6 +134,7 @@ public final class RuinLootSC {
         if (rand.nextFloat() < VAULT_CRUMB_CHANCE) {
             add(out, RelicItemsSC.relic(ItemRelicSC.SEALED_CRUMB, 1));
         }
+        journal(out, JournalSC.SRC_VAULT, rand);              // Ф5 (ПЛ-2): №5..№8
         return out;
     }
 
@@ -145,6 +153,7 @@ public final class RuinLootSC {
         if (rand.nextFloat() < LITHO_MODULE_CHANCE) {
             add(out, randomModule(rand));
         }
+        journal(out, JournalSC.SRC_LITHO, rand);              // Ф5 (ПЛ-2): №3, №4
         return out;
     }
 
@@ -160,9 +169,11 @@ public final class RuinLootSC {
         }
     }
 
-    /** Fills a Dead Node chest (empty slots at random). */
+    /** Fills a Dead Node chest (empty slots at random). Ф5: and, on its chance, a Journal №1 / №2 (not nodeChest's - raids roll that). */
     public static void fillNode(IInventory inv, Random rand) {
-        fill(inv, nodeChest(rand), rand);
+        List<ItemStack> out = nodeChest(rand);
+        journal(out, JournalSC.SRC_NODE, rand);               // Ф5 (ПЛ-2)
+        fill(inv, out, rand);
     }
 
     /** Fills a lithograph chest. */
@@ -224,6 +235,14 @@ public final class RuinLootSC {
     private static void add(List<ItemStack> out, ItemStack s) {
         if (s != null) {
             out.add(s);
+        }
+    }
+
+    /** Ф5 (package J, ПЛ-2): one roll of `source`'s journal (JournalSC.roll) into `out` - nothing on a miss or before the items exist. */
+    private static void journal(List<ItemStack> out, int source, Random rand) {
+        int n = JournalSC.roll(source, rand);
+        if (n > 0) {
+            add(out, FinaleItemsSC.journal(n));
         }
     }
 }

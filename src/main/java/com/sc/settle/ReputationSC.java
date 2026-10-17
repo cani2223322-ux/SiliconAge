@@ -48,6 +48,8 @@ public final class ReputationSC {
             SRC_PENANCE = 6, SRC_ANCHOR = 7, SRC_PENALTY = 8;
     /** Ф4 (docs/plan-substrate-tech-f4.md §6.1, ПН-3, the coordinator's): a raid beaten off (RaidRulesSC.REP: +30..+50, no day cap). */
     public static final int SRC_RAID = 9;
+    /** Ф5 (docs/plan-substrate-tech-f5.md §8, ПН-15, the coordinator's): a caravan's ambush beaten off (CaravanRulesSC.REWARD_REP, no day cap). */
+    public static final int SRC_CARAVAN = 10;
 
     private ReputationSC() {
     }

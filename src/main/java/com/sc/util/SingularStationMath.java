@@ -441,10 +441,24 @@ public final class SingularStationMath {
 
     /** A colour scheme `dir` steps on (wraps round), for the station's ◄ ►. */
     public static SingularScheme cycle(SingularScheme s, int dir) {
+        return cycle(s, dir, 0);
+    }
+
+    /**
+     * Подложка Ф5 (docs/plan-substrate-tech-f5.md §9.1): the next scheme `dir` steps on among those open to a player whose unlocked
+     * mask is `unlocked` (SingularScheme.unlockBit - L «Литограф», M «Наладчик»; 0: only the eleven open to all, as before). A locked
+     * scheme a piece already wears is stepped off like any other.
+     */
+    public static SingularScheme cycle(SingularScheme s, int dir, int unlocked) {
         SingularScheme[] v = SingularScheme.values();
-        int n = v.length;
-        int i = ((s == null ? 0 : s.ordinal()) + dir) % n;
-        return v[(i + n) % n];
+        int n = v.length, step = dir < 0 ? -1 : 1, i = s == null ? 0 : s.ordinal();
+        for (int k = 0; k < n; k++) {
+            i = ((i + step) % n + n) % n;
+            if (!v[i].unlockable() || (unlocked & v[i].unlockBit()) != 0) {
+                return v[i];
+            }
+        }
+        return SingularScheme.DEFAULT;
     }
 
     /** "1,24 млрд"-style short amount for the screen: plain below 10 000, then тыс / млн / млрд. */

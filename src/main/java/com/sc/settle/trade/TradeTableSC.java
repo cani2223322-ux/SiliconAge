@@ -5,11 +5,14 @@ import java.util.Collections;
 import java.util.List;
 
 import com.sc.emp.EmpModule;
+import com.sc.finale.FinaleItemsSC;
+import com.sc.finale.FinaleRulesSC;
 import com.sc.init.ModBlocks;
 import com.sc.init.ModItems;
 import com.sc.mob.ItemCombatLootSC;
 import com.sc.mob.MobItemsSC;
 import com.sc.mob.TrophyRestoreSC;
+import com.sc.ruin.ItemRelicSC;
 import com.sc.ruin.RelicItemsSC;
 import com.sc.settle.NpcKindSC;
 import com.sc.settle.ReputationSC;
@@ -38,7 +41,7 @@ import net.minecraft.item.ItemStack;
  * come out as the mod's own ingots; everything else is an exact item and meta.
  * <p>
  * Not in Ф2, left out: the Cartographer's «Координатор арены» and the Elder's «Схема окраски «Наладчик»» and «Модуль
- * Литографов» (Ф5); the Power Engineer, the Armourer and the Salvager came in Ф3, the Ф4 deals below. So that the Gas
+ * Литографов» (they came in Ф5, below); the Power Engineer, the Armourer and the Salvager came in Ф3, the Ф4 deals below. So that the Gas
  * Technician and the Cartographer bought something from a «Чужак» in Ф2, each takes one of the mod's things for chips
  * (gasPtfe, cartLenses: never sold by anyone - ПО-7); they stay beside the Ф4 deals.
  * <p>
@@ -55,6 +58,16 @@ import net.minecraft.item.ItemStack;
  * Cartographer sells the Ruin Direction Finder for 10 chips and a Focusing Lens («Партнёр», one a day). ПО-7 holds: the loot is
  * only bought, the finder only sold, the lens only a price. The Elder's Crumb counts towards the player's three a day
  * (TradeServerSC, CrumbLimitSC); a lost raid closes the settlement's trade for a day (TradeServerSC.R_RAID).
+ * <p>
+ * Ф5 (package P, docs/plan-substrate-tech-f5.md §9.5, rules ПО-17..ПО-22; the keys appended, the deals after each profession's
+ * own - buildF5; TODO(balance)): the Cartographer sells the Arena Coordinator for 16 chips + a Singularity Crumb («Почётный», one a
+ * day); the Elder the Lithographers' Module for a Breakdown Matrix + 48 chips («Свой», no limit of its own - the Matrix is the
+ * Breakdown Warden's, and rare) and the paint scheme «Наладчик» for 3 Crumbs + 32 chips («Почётный», one a day); the Armourer the
+ * ПЭ-1 module «Широкий канал» for 24 chips + 2 Controllers («Знакомый», one a day) - only while the caravan's rare deal is open to
+ * the player (CaravanSC.dealOpen; closed - TradeServerSC.R_CARAVAN_DEAL), the deal made uses it up (CaravanSC.useDeal). ПО-7 (ПО-22):
+ * the Crumb and the Matrix are only a part of a price (boughtAndSold never counts a purchase's part); the Coordinator, the Module,
+ * the scheme and the module only come out, none of them forbiddenOut (no armour, blade or ПЭ-1). A Crumb paid is never counted
+ * towards the player's Crumbs a day (CrumbLimitSC counts what a player gets - the Elder's ELDER_CRUMB alone, TradeServerSC).
  */
 public final class TradeTableSC {
 
@@ -76,7 +89,10 @@ public final class TradeTableSC {
             SAL_EXO_SCRAP = "salExoScrap", SAL_NANITE = "salNaniteDust", SAL_TROPHY = "salNanoTrophy",
             // ---- Ф4 (appended)
             GAS_BOILED_LOOP = "gasBoiledLoop", TECH_NATURAL_WAFERS = "techNaturalWafer", SAL_SINGULAR_SCRAP = "salSingularScrap",
-            SAL_INDUCTION = "salInductionThread", SAL_PLASMA = "salPlasmaCondensate", CART_FINDER = "cartRuinFinder";
+            SAL_INDUCTION = "salInductionThread", SAL_PLASMA = "salPlasmaCondensate", CART_FINDER = "cartRuinFinder",
+            // ---- Ф5 (appended)
+            CART_ARENA_COORDINATOR = "cartArenaCoordinator", ELDER_LITHO_MODULE = "elderLithoModule", ELDER_TUNER_SCHEME = "elderTunerScheme",
+            ARM_MOD_WIDE = "armModWide";
     /** The Power Engineer's three charges share one limit (4 a day for all of them, ПО-10): their counter. */
     public static final String PE_CHARGE_COUNTER = "peCharge";
     /** The charge service's chips by suit (Nano, Quantum, Exo; ПО-10). TODO(balance) */
@@ -152,7 +168,7 @@ public final class TradeTableSC {
         l.add(purchase(GAS_DEUTERIUM, k, chipsIn(14), item(stack(ModItems.deuteriumCell)), partner, 2));
         // ---- the Rift Cartographer: the Return Capsule, the Settlement Map
         k = NpcKindSC.CARTOGRAPHER;
-        // TODO(Ф5): «Координатор арены». Plain lenses (the Focuser's optics). TODO(balance)
+        // Plain lenses (the Focuser's optics; Ф5's «Координатор арены» - buildF5). TODO(balance)
         l.add(sale(CART_LENSES, k, item(component("lens"), 6), 1, anyone, 6));
         l.add(purchase(CART_CAPSULE, k, chipsIn(8), item(SettlementItemsSC.capsules(1)), stranger, 2));
         l.add(new TradeOfferSC(CART_MAP, k, chipsIn(3), null, TradeOfferSC.OUT_MAP, 0, acq, 4, false, 1));
@@ -164,10 +180,11 @@ public final class TradeTableSC {
                 ReputationSC.PENANCE, ReputationSC.VIOLATOR, 1, true, 1));
         l.add(new TradeOfferSC(ELDER_CARGO, k, new TradeOfferSC.Ingredient[]{item(MobItemsSC.loot(ItemCombatLootSC.LootKind.STOLEN_CARGO, 1))},
                 null, TradeOfferSC.OUT_REPUTATION, ReputationSC.CARGO, ReputationSC.VIOLATOR, 8, false, 1));
-        // TODO(Ф3/Ф5): «3 Крупицы + 32 КЧ -> Схема окраски», «Матрица Пробоя + 48 КЧ -> Модуль Литографов»
+        // Ф5's «3 Крупицы + 32 КЧ -> Схема окраски «Наладчик»», «Матрица Пробоя + 48 КЧ -> Модуль Литографов» - buildF5
         l.add(new TradeOfferSC(ELDER_CRUMB, k, chipsIn(64), item(stack(ModItems.singularCrumb)), TradeOfferSC.OUT_ITEM, 0,
                 ReputationSC.HONOURED, TradeRulesSC.CRUMBS_PER_WEEK, true, SettlementSC.WEEK_DAYS));
         buildF3(l, anyone, acq, partner, own);
+        buildF5(l, acq, own);
         for (TradeOfferSC o : l) {
             if (!complete(o)) {
                 return Collections.emptyList();                 // an item missing (not registered yet): ask again later
@@ -226,6 +243,28 @@ public final class TradeTableSC {
                 6, anyone, 4));
         l.add(sale(SAL_INDUCTION, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.INDUCTION_THREAD, 1), 4), 2, anyone, 8));     // Ф4 (ПО-14)
         l.add(sale(SAL_PLASMA, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.PLASMA_CONDENSATE, 1), 2), 3, anyone, 8));
+    }
+
+    /**
+     * Ф5 (ПО-17..ПО-21): the Cartographer's Arena Coordinator, the Elder's Lithographers' Module and «Наладчик» scheme, the
+     * Armourer's «Широкий канал» (the caravan's rare deal - TradeServerSC asks CaravanSC.dealOpen) - appended after every
+     * profession's earlier deals. Their «one a day» is at this settlement, as the Cartographer's finder (the proposal's «1», not
+     * «глоб.»); the Module has no limit of its own (TradeOfferSC.UNLIMITED: the Matrix it takes is the boss's).
+     */
+    private static void buildF5(List<TradeOfferSC> l, int acq, int own) {
+        int honoured = ReputationSC.HONOURED;
+        ItemStack crumb = stack(ModItems.singularCrumb);
+        // ---- the Cartographer: 16 chips + a Crumb -> the Arena Coordinator (ПО-17)
+        l.add(purchase(CART_ARENA_COORDINATOR, NpcKindSC.CARTOGRAPHER, new TradeOfferSC.Ingredient[]{TradeOfferSC.Ingredient.chips(16), item(crumb, 1)},
+                item(FinaleItemsSC.arenaCoordinator(1)), honoured, 1));
+        // ---- the Elder: a Breakdown Matrix + 48 chips -> the Lithographers' Module (ПО-18); 3 Crumbs + 32 chips -> «Наладчик» (ПО-19)
+        l.add(new TradeOfferSC(ELDER_LITHO_MODULE, NpcKindSC.ELDER, new TradeOfferSC.Ingredient[]{item(RelicItemsSC.relic(ItemRelicSC.BREAKDOWN_MATRIX, 1), 1),
+                TradeOfferSC.Ingredient.chips(48)}, item(FinaleItemsSC.lithoModule(1)), TradeOfferSC.OUT_ITEM, 0, own, TradeOfferSC.UNLIMITED, false, 1));
+        l.add(purchase(ELDER_TUNER_SCHEME, NpcKindSC.ELDER, new TradeOfferSC.Ingredient[]{item(crumb, 3), TradeOfferSC.Ingredient.chips(32)},
+                item(FinaleItemsSC.paintScheme(FinaleRulesSC.PAINT_TUNER, 1)), honoured, 1));
+        // ---- the Armourer: 24 chips + 2 Controllers -> «Широкий канал» (ПО-21) - only while the caravan's rare deal is open (TradeServerSC)
+        l.add(purchase(ARM_MOD_WIDE, NpcKindSC.ARMOURER, new TradeOfferSC.Ingredient[]{TradeOfferSC.Ingredient.chips(24),
+                item(silicon(SiliconMaterial.CONTROLLER), 2)}, item(module(EmpModule.WIDE), 1), acq, 1));
     }
 
     /**

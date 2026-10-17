@@ -246,7 +246,14 @@ public class GuiBook extends GuiScreen {
         marksView = false;
         jumpEl = -1;
         flashEl = -1;
-        lastState = state();
+        if (inContent(e)) {
+            lastState = state();                                      // a Journal's page isn't: the book reopens where it was left
+        }
+    }
+
+    /** The article is the handbook's own (not a page made on the fly, as a Lithographer's Journal). */
+    private static boolean inContent(BookEntry e) {
+        return BookContent.byId(e.id) == e;
     }
 
     /** A hit: its article, scrolled to the first match's element, which glows a moment. */
@@ -635,7 +642,7 @@ public class GuiBook extends GuiScreen {
         mask(RIBBON, x + 4, y + 1, marksView ? GOLD : 0xFFE6DCC0, false);
         x += 17;
         boolean list = resultsView && searching();
-        if (entry != null && chapter != null && !list) {
+        if (entry != null && chapter != null && !list && inContent(entry)) {   // a Journal's page (made on the fly) takes no bookmark
             boolean m = BookProgressSC.isMarked(entry.id);
             headBox(x, y, "mark", Lang.tr(m ? "sc.book.unmark" : "sc.book.mark"), false);
             mask(STAR, x + 3, y + 1, m ? GOLD : 0xFFE6DCC0, !m);

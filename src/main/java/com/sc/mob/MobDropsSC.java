@@ -66,6 +66,10 @@ import net.minecraftforge.event.entity.living.LivingDropsEvent;
  * x2.5, ПТ-4);</li>
  * <li>the Sealed Crumbs of the Sentinel and «Затмение» x2 in the Singular Emission - crumbChance (their own factionLoot asks).</li>
  * </ul>
+ * Ф5 (docs/plan-substrate-tech-f5.md §5.6, §4.6; the coordinator's lines): a class that decides its own drops (IOwnDropsSC - the
+ * Breakdown Warden's personal loot) gets the event and every player's damage share instead of all of the above; an elite (an elite
+ * modifier, or one of its kind - the Executioner, the Warlord, the Sentinel, «Затмение») with a qualifying kill drops an Arena
+ * Coordinator on ARENA_COORDINATOR_CHANCE (ПС-23).
  */
 public final class MobDropsSC {
 
@@ -79,6 +83,8 @@ public final class MobDropsSC {
     public static final float CARGO_CHANCE = 0.05F;
     /** Ф4: the standard categories' places in the array the roll goes by (ITrophyCategoriesSC adds its own from OWN on). */
     public static final int C_PIECE = 0, C_BLADE = 1, C_GUN = 2, C_PE1 = 3, OWN = 4;
+    /** Ф5 (ПС-23; proposal §9 «ещё он выпадает с любой элиты с шансом 2%»): an elite's Arena Coordinator. TODO(balance) */
+    public static final float ARENA_COORDINATOR_CHANCE = 0.02F;
 
     /** Ф4, ПТ-19: a class's public takeBag() (null - none; looked up once a class). */
     private static final Map<Class<?>, Method> BAGS = new HashMap<Class<?>, Method>();
@@ -106,6 +112,12 @@ public final class MobDropsSC {
             return;
         }
         EntityLivingBase mob = event.entityLiving;
+        if (mob instanceof IOwnDropsSC) {                            // Ф5: the Breakdown Warden's personal loot (package B)
+            Map<java.util.UUID, Float> shares = MobEventsSC.damageShares(mob);
+            MobEventsSC.forget(mob);
+            ((IOwnDropsSC) mob).ownDrops(event, shares, mob.worldObj.getGameRules().getGameRuleBooleanValue("doMobLoot"));
+            return;
+        }
         List<ItemStack> out = new ArrayList<ItemStack>();
         if (mob instanceof EntityMarauderSC) {
             out.addAll(((EntityMarauderSC) mob).takeBag());
@@ -121,6 +133,9 @@ public final class MobDropsSC {
             }
             if (mob instanceof EntityArmoredMobSC) {                 // ПТ-15: the trophy roll is the armoured ones' only
                 trophy = rollTrophy((EntityArmoredMobSC) mob, killer, mob.getRNG());
+                if (((EntityArmoredMobSC) mob).executeImmune() && mob.getRNG().nextFloat() < ARENA_COORDINATOR_CHANCE) {
+                    out.add(com.sc.finale.FinaleItemsSC.arenaCoordinator(1));   // Ф5, ПС-23: an elite's 2%
+                }
             }
         }
         for (ItemStack s : out) {

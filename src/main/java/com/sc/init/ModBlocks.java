@@ -214,6 +214,7 @@ public final class ModBlocks {
         // Подложка Ф4: the new biomes' glass, flora and vents (package W), the camps' blocks (package C) - appended, docs/plan-substrate-tech-f4.md §2.2
         com.sc.dim.SubstrateWildBlocksSC.init();
         com.sc.ruin.CampBlocksSC.init();
+        com.sc.arena.ArenaBlocksSC.init();              // Подложка Ф5: the Breakdown Epicentre's blocks and its Console
 
         registerOreDict();
     }

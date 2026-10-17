@@ -7,16 +7,20 @@ import java.util.Set;
 
 import org.lwjgl.opengl.GL11;
 
+import com.sc.arena.ArenaBlocksSC;
 import com.sc.block.BlockMachineSC;
 import com.sc.dim.SubstrateBlocksSC;
 import com.sc.dim.SubstrateOreTableSC;
 import com.sc.dim.SubstrateWildBlocksSC;
 import com.sc.emp.EmpTooltipSC;
 import com.sc.energy.GeneratorType;
+import com.sc.finale.FinaleItemsSC;
+import com.sc.finale.FinaleRulesSC;
 import com.sc.init.ModBlocks;
 import com.sc.init.ModItems;
 import com.sc.item.ItemFluidDropSC;
 import com.sc.item.ItemSingularCrumbSC;
+import com.sc.lore.JournalSC;
 import com.sc.machine.MachineRecipe;
 import com.sc.machine.MachineType;
 import com.sc.machine.RecipeRegistry;
@@ -67,7 +71,11 @@ import net.minecraftforge.oredict.OreDictionary;
  * deal), Ф3's ruin blocks (the Dead Nodes and the lithographs), its loot (who drops it, who buys it) and its trophies'
  * restoring (the Armourer, one's own station - BookWorldSC.restoreLine), Ф4's blocks (the Singular Glass, the flora, the vents,
  * the monocrystal - generated there; the camps' blocks; the Vaults' and camps' ruin metas), its relics (who drops them, what they
- * open), the Pelengator (the Cartographer's deal) and its loot and Singular trophies, and - in a pack that unifies metals
+ * open), the Pelengator (the Cartographer's deal) and its loot and Singular trophies, Ф5's (docs/plan-substrate-tech-f5.md §11.5) arena
+ * blocks (hidden: only in a Breakdown Epicentre), the Breakdown Key (its recipe; the Fragments - the Sentinels') and Matrix (the
+ * Warden's), the Arena Coordinator (the Cartographer, an elite's 2%), the twelve journals by number (JournalSC), the two paint
+ * schemes (the Warden's 25%, the Elder's), the Lithographers' Module (the Elder for a Matrix), the Navigation Record (its recipe),
+ * the Burnt Coil (the bridge wrecks), the ПЭ-1М trophy (the Warden's 2%) and the boss's egg, and - in a pack that unifies metals
  * (UniDict) - the mod's ingots and dusts it swaps for another mod's.
  */
 public class ObtainHandlerSC extends TemplateRecipeHandler {
@@ -156,6 +164,10 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (settle != null) {
             return settle;
         }
+        Page finale = finalePage(s);
+        if (finale != null) {
+            return finale;
+        }
         Page substrate = substratePage(s);
         if (substrate != null) {
             return substrate;
@@ -229,7 +241,8 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         // Ф3 (docs/plan-substrate-tech-f3.md §10.3): the ruin blocks - the Dead Nodes' and the lithographs', broken into scrap
         if (blockItem(item, RuinBlocksSC.ruin)) {
             Page p = new Page(s);
-            p.text(Lang.tr(meta >= BookWorldSC.RUIN_VAULT_PLATING ? "sc.nei.obtain.ruin4" : "sc.nei.obtain.ruin"));   // Ф4: the Vaults' and camps' metas
+            p.text(Lang.tr(meta == BookWorldSC.RUIN_BURNT_COIL ? "sc.nei.obtain.wreck"                        // Ф5: the bridge wrecks'
+                    : meta >= BookWorldSC.RUIN_VAULT_PLATING ? "sc.nei.obtain.ruin4" : "sc.nei.obtain.ruin"));   // Ф4: the Vaults' and camps' metas
             p.text(BookWorldSC.ruinLine(meta));
             p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
             p.rel(MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1));
@@ -269,6 +282,10 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (MobItemsSC.spawnEgg != null && item == MobItemsSC.spawnEgg) {
             Page p = new Page(s);
             p.text(Lang.tr(meta == MobEntitiesSC.ID_TUNER || meta == MobEntitiesSC.ID_WARDEN ? "sc.nei.obtain.egg.settle" : "sc.nei.obtain.egg"));
+            if (meta == MobEntitiesSC.ID_BREAKDOWN_WARDEN) {                // Ф5 (ПС-50): from the egg - no coils, no loot
+                p.text(Lang.tr("sc.nei.obtain.egg.warden"));
+                p.rel(ArenaBlocksSC.stack(ArenaBlocksSC.CONSOLE, 1));
+            }
             return p;
         }
         return null;
@@ -314,6 +331,26 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
             }
             return p;
         }
+        if (RelicItemsSC.relic != null && item == RelicItemsSC.relic && meta >= ItemRelicSC.BREAKDOWN_KEY) {
+            // Ф5 (ПУ-11, ПТ-22): the Key - four Fragments (the recipe is NEI's own page too); the Matrix - the Warden's, the Elder's Module
+            boolean key = meta == ItemRelicSC.BREAKDOWN_KEY;
+            Page p = new Page(s);
+            p.text(BookWorldSC.relicLine(meta));
+            p.text(Lang.tr(key ? "sc.nei.obtain.breakdownKey" : "sc.nei.obtain.breakdownMatrix"));
+            if (key) {
+                p.rel(RelicItemsSC.relic(ItemRelicSC.KEY_FRAGMENT, ItemRelicSC.FRAGMENTS));
+                if (MobItemsSC.spawnEgg != null) {
+                    p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_SENTINEL));
+                }
+            } else {
+                p.rel(FinaleItemsSC.lithoModule(1));
+                if (MobItemsSC.spawnEgg != null) {
+                    p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_BREAKDOWN_WARDEN));
+                }
+            }
+            p.rel(ArenaBlocksSC.stack(ArenaBlocksSC.CONSOLE, 1));
+            return p;
+        }
         if (RelicItemsSC.relic != null && item == RelicItemsSC.relic) {
             Page p = new Page(s);
             p.text(BookWorldSC.relicLine(meta));
@@ -335,6 +372,68 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
             p.text(seller != null ? seller : Lang.tr("sc.nei.obtain.finder"));
             p.text(Lang.tr("sc.manual.world.vaults.finder", ItemRuinFinderSC.USES));
             p.rel(SettlementItemsSC.chips(1));
+            return p;
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ Подложка Ф5 (docs/plan-substrate-tech-f5.md §11.5)
+
+    /**
+     * The arena blocks (hidden in NEI - only in a Breakdown Epicentre; R in cheat mode still asks), the Arena Coordinator (the
+     * Cartographer's deal of TradeTableSC, an elite's drop), the journals (where each number is found - JournalSC), the paint
+     * schemes (the Warden's 25% / the Elder's deal), the Lithographers' Module (the Elder's deal for a Matrix), the Navigation Record
+     * (crafted - the shapeless recipe is NEI's own page; here what it does). Null: none of them.
+     */
+    private Page finalePage(ItemStack s) {
+        Item item = s.getItem();
+        int meta = s.getItemDamage();
+        if (blockItem(item, ArenaBlocksSC.arena)) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.arena"));
+            p.text(Lang.tr("sc.manual.world.arena.block." + ArenaBlocksSC.nameOf(meta)));
+            p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1)).rel(FinaleItemsSC.arenaCoordinator(1));
+            return p;
+        }
+        if (FinaleItemsSC.arenaCoordinator != null && item == FinaleItemsSC.arenaCoordinator) {
+            Page p = new Page(s);
+            String seller = BookWorldSC.sellerLine(new ItemStack(item));
+            p.text(seller != null ? seller : Lang.tr("sc.nei.obtain.coordinator"));
+            p.text(Lang.tr("sc.manual.world.arena.coordinator.elite", BookWorldSC.pct(com.sc.mob.MobDropsSC.ARENA_COORDINATOR_CHANCE)));
+            p.text(Lang.tr("sc.tooltip.arenaCoordinator.details"));
+            p.rel(SettlementItemsSC.chips(1)).rel(new ItemStack(ModItems.singularCrumb)).rel(ArenaBlocksSC.stack(ArenaBlocksSC.CONSOLE, 1));
+            return p;
+        }
+        if (FinaleItemsSC.journal != null && item == FinaleItemsSC.journal) {
+            int n = JournalSC.numberOf(meta);
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.journal", n, BookWorldSC.journalWhere(n)));
+            p.text(Lang.tr("sc.tooltip.journal.howto"));
+            p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
+            return p;
+        }
+        if (FinaleItemsSC.paintScheme != null && item == FinaleItemsSC.paintScheme) {
+            Page p = new Page(s);
+            String seller = BookWorldSC.sellerLine(new ItemStack(item, 1, meta));
+            p.text(meta == FinaleRulesSC.PAINT_LITHOGRAPHER ? Lang.tr("sc.nei.obtain.paint.lithographer", BookWorldSC.pct(com.sc.mob.WardenRulesSC.PAINT_CHANCE))
+                    : seller != null ? seller : Lang.tr("sc.nei.obtain.paint.tuner"));
+            p.text(Lang.tr("sc.nei.obtain.paint.use"));
+            p.rel(new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[1])).rel(new ItemStack(ModBlocks.singularStation));
+            return p;
+        }
+        if (FinaleItemsSC.lithoModule != null && item == FinaleItemsSC.lithoModule) {
+            Page p = new Page(s);
+            String seller = BookWorldSC.sellerLine(new ItemStack(item));
+            p.text(seller != null ? seller : Lang.tr("sc.nei.obtain.lithoModule"));
+            p.text(Lang.tr("sc.tooltip.lithoModule.details", Math.round((1F - FinaleRulesSC.UPKEEP_SHARE) * 100)));
+            p.rel(RelicItemsSC.relic(ItemRelicSC.BREAKDOWN_MATRIX, 1)).rel(new ItemStack(ModBlocks.fieldGeneratorSC));
+            return p;
+        }
+        if (FinaleItemsSC.navRecord != null && item == FinaleItemsSC.navRecord) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.navRecord"));
+            p.text(Lang.tr(com.sc.dim.SubstrateConfigSC.requireSignal ? "sc.tooltip.navRecord.details.on" : "sc.tooltip.navRecord.details.off"));
+            p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
             return p;
         }
         return null;

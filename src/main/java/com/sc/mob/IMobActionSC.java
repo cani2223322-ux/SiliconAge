@@ -23,6 +23,11 @@ public interface IMobActionSC {
     int ACT_PRESS = 12, ACT_BLINK = 13, ACT_FLEE = 14, ACT_STOMP = 15, ACT_THROW = 16, ACT_ARC = 17, ACT_COLLAPSED = 18, ACT_WRAP = 19,
             ACT_STUNNED = 20, ACT_BURROW = 21;
 
+    /** Ф5 (docs/plan-substrate-tech-f5.md §2.6): the Breakdown Warden's «Импульс глушения» (3 s of a hum, radius 16) / its overheat (the
+     * 4 s with no protection - the chestplate glows white-hot) / its «сброс ядра» winding up (the last seconds of the 60 before the blast)
+     * / its call of a wave (Hollow Shells from the canyons' mouths, nanite swarms) - the gravity press is ACT_PRESS, as the Sentinel's. */
+    int ACT_SILENCE = 22, ACT_OVERHEAT = 23, ACT_CORE_RESET = 24, ACT_SUMMON = 25;
+
     /** Both sides (the DataWatcher). */
     int mobAction();
 

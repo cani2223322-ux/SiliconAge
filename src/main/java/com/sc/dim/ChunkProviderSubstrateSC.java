@@ -96,12 +96,26 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     /** Ф4 (package C, docs/plan-substrate-tech-f4.md §8): the Renegades' camps in the canyons, the Vaults under the Dead Nodes. */
     private final com.sc.ruin.MapGenCampSC camps = new com.sc.ruin.MapGenCampSC();
     private final com.sc.ruin.MapGenVaultSC vaults = new com.sc.ruin.MapGenVaultSC();
+    /** Ф5 (package A / J): the Breakdown Epicentres, the Lithographers' bridge wrecks. */
+    private final com.sc.arena.MapGenArenaSC arenas = new com.sc.arena.MapGenArenaSC();
+    private final com.sc.lore.MapGenWreckSC wrecks = new com.sc.lore.MapGenWreckSC();
     /** The carver - after the structures above: it keeps out of the settlements' boxes and (Ф4) the built camps' and Vaults'. */
     private final MapGenSubstrateCavesSC caves = new MapGenSubstrateCavesSC(settlements, camps, vaults);
+
+    /** Ф5: the arenas' generator (package A asks it: covers, startAt). */
+    public com.sc.arena.MapGenArenaSC arenas() {
+        return arenas;
+    }
+
+    /** Ф5: the wrecks' generator (package J). */
+    public com.sc.lore.MapGenWreckSC wrecks() {
+        return wrecks;
+    }
 
     public ChunkProviderSubstrateSC(World world, long seed) {
         this.world = world;
         this.seed = seed;
+        caves.keepOut(arenas, wrecks);                          // Ф5: no via or cave into an arena's pit or a wreck
     }
 
     /** Ф2: the settlements' structure (the world test asks it for a site's start). */
@@ -175,7 +189,10 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         lithographs.func_151539_a(this, world, cx, cz, blocks);
         camps.func_151539_a(this, world, cx, cz, blocks);           // Ф4: the camps' and the Vaults' starts (before the carver: it keeps out of them)
         vaults.func_151539_a(this, world, cx, cz, blocks);
+        arenas.func_151539_a(this, world, cx, cz, blocks);          // Ф5: after the Nodes' (their saved starts are loaded by now)
+        wrecks.func_151539_a(this, world, cx, cz, blocks);
         caves.func_151539_a(this, world, cx, cz, blocks);
+        arenas.carve(cx, cz, blocks, metas);                       // Ф5 (package A): a built arena's pit, into the arrays
         pond(cx, cz, cell, blocks, metas);
         Chunk chunk = new Chunk(world, blocks, metas, cx, cz);
         byte[] biomes = chunk.getBiomeArray();
@@ -304,6 +321,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         lithographs.generateStructuresInChunk(world, popRand, cx, cz);
         camps.generateStructuresInChunk(world, popRand, cx, cz);          // Ф4: the camps; the Vaults after the Nodes (their hatch in a plaza)
         vaults.generateStructuresInChunk(world, popRand, cx, cz);
+        arenas.generateStructuresInChunk(world, popRand, cx, cz);         // Ф5: the arenas' plating and Console; the wrecks
+        wrecks.generateStructuresInChunk(world, popRand, cx, cz);
         settlements.generateStructuresInChunk(world, popRand, cx, cz);    // last: the settlements lie over everything
     }
 
@@ -317,7 +336,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
      * or under a lithograph's entrance hut - no trace, druse or pond there (the ruins are built after them and over them).
      */
     private boolean ruinCovers(int x, int z, int margin) {
-        return nodes.covers(x, z, margin) || lithographs.covers(x, z, margin) || camps.covers(x, z, margin);
+        return nodes.covers(x, z, margin) || lithographs.covers(x, z, margin) || camps.covers(x, z, margin)
+                || arenas.covers(x, z, margin) || wrecks.covers(x, z, margin);   // Ф5
     }
 
     /** The part of origin chunk (ox, oz)'s trace segment (if it has one) inside the window from (wx0, wz0), 16 x 16. */
@@ -505,6 +525,12 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         if (com.sc.ruin.MapGenCampSC.START_NAME.equals(structure)) {
             return camps.func_151545_a(w, x, y, z);
         }
+        if (com.sc.arena.MapGenArenaSC.START_NAME.equals(structure)) {
+            return arenas.func_151545_a(w, x, y, z);
+        }
+        if (com.sc.lore.MapGenWreckSC.START_NAME.equals(structure)) {
+            return wrecks.func_151545_a(w, x, y, z);
+        }
         if (com.sc.ruin.MapGenVaultSC.START_NAME.equals(structure)) {
             return vaults.func_151545_a(w, x, y, z);
         }
@@ -524,6 +550,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         lithographs.func_151539_a(this, world, x, z, null);
         camps.func_151539_a(this, world, x, z, null);
         vaults.func_151539_a(this, world, x, z, null);
+        arenas.func_151539_a(this, world, x, z, null);
+        wrecks.func_151539_a(this, world, x, z, null);
     }
 
     @Override

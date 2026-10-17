@@ -40,6 +40,12 @@ public final class SubstrateConfigSC {
     private static int biomeIdRidges = 242, biomeIdOxide = 243, biomeIdRift = 244;
     /** ПК-5: the world unloads ~20 s after the last player leaves (the server already keeps ~27 GC / GS worlds). */
     private static boolean keepLoaded = false;
+    /**
+     * Ф5 (docs/plan-substrate-tech-f5.md §2.1, ПК-22): the Substrate's own sky renderer (stars as a circuit grid, a dim ring on the
+     * horizon) - each client's own look, never the server's (so not a rule: a private field, read at start); off by default, and
+     * off whatever it says while ShadersModCore is there (its shaders draw the sky themselves).
+     */
+    private static boolean customSky = false;
 
     /** Kept from load() to write back a biome id moved off a taken slot (SubstrateSC.init). */
     private static Configuration config;
@@ -81,6 +87,17 @@ public final class SubstrateConfigSC {
      * 5 days a settlement, three waves). Off: no raid begins.
      */
     public static boolean raids = true;
+    /**
+     * Ф5 (docs/plan-substrate-tech-f5.md §2.1, ПВ-13): the Substrate shows in a Space Bridge's list, and a bridge opens an end there,
+     * only for a player who has used a «Навигационная запись Si-14» (per player, by UUID; each LAN friend his own). Off (★): it is
+     * there for everyone, as in Ф1..Ф4.
+     */
+    public static boolean requireSignal = false;
+    /**
+     * Ф5, ПН-12: a caravan - a trader with two guards - comes to a settlement every 2 game days when a player is near it; 40% are
+     * ambushed on the way. Off: no caravans.
+     */
+    public static boolean caravans = true;
 
     private SubstrateConfigSC() {
     }
@@ -112,6 +129,10 @@ public final class SubstrateConfigSC {
                 "Biome id of the Rift (the same rule) / Id биома «Разлом» (то же правило)");
         keepLoaded = c.getBoolean("keepLoaded", d, false,
                 "Keep the world loaded with nobody there (chunk loaders keep their chunks anyway) / Держать мир загруженным без игроков (загрузчики чанков держат свои чанки в любом случае)");
+        customSky = c.getBoolean("customSky", d, false,
+                "This client draws the Substrate's own sky - stars as a circuit grid, a dim ring on the horizon (each client's own choice; off by itself"
+                + " while ShadersModCore is installed) / Этот клиент рисует своё небо Подложки - звёзды сеткой микросхемы, тусклое кольцо у горизонта"
+                + " (у каждого клиента своё; само выключается при ShadersModCore)");
         strictEntry = c.getBoolean("strictEntry", d, true,
                 "Only the Space Bridge (and the Vehicles ship's Jump) lets players in; anything else sends them back; the nether portal doesn't work there"
                 + " / Войти можно только Космическим мостом (и «Прыжком» корабля Vehicles); остальное отправляет назад; адский портал там не работает");
@@ -144,6 +165,14 @@ public final class SubstrateConfigSC {
                 "The Renegades raid a settlement at night when a player it knows (\"Acquaintance\" or better) is near: 10% a night, at most once in 5 days,"
                 + " three waves (off: no raids) / Отступники ночью нападают на поселение, если рядом игрок с «Доверием» от «Знакомого»: 10% за ночь, не чаще"
                 + " раза в 5 дней, три волны (выкл.: налётов нет)");
+        requireSignal = c.getBoolean("requireSignal", d, false,
+                "The Substrate shows in a Space Bridge's list (and a bridge opens an end there) only for a player who has used a \"Si-14 Navigation Record\""
+                + " (off: for everyone) / Подложка видна в списке Космического моста (и мост открывает туда конец) только игроку, который применил"
+                + " «Навигационную запись Si-14» (выкл.: всем)");
+        caravans = c.getBoolean("caravans", d, true,
+                "Every 2 game days a caravan - a trader and two guards - comes to a settlement a player is near; 40% are ambushed on the way;"
+                + " beating the ambush off gives reputation and a rare deal (off: no caravans) / Раз в 2 игровых дня к поселению, у которого есть"
+                + " игрок, идёт караван - торговец и два стража; 40% попадают в засаду; отбитая засада - «Доверие» и редкая сделка (выкл.: караванов нет)");
     }
 
     /** As ConfigSC.num: Forge clamps by comparisons and NaN passes them - NaN / infinity in the file: the default. */
@@ -191,6 +220,11 @@ public final class SubstrateConfigSC {
 
     public static boolean keepLoaded() {
         return keepLoaded;
+    }
+
+    /** Ф5: this client asked for the Substrate's own sky (SubstrateSkySC also checks ShadersModCore). */
+    public static boolean customSky() {
+        return customSky;
     }
 
     /**

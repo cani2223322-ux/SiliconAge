@@ -14,7 +14,8 @@ import net.minecraft.item.ItemStack;
  * PACKAGE X (docs/plan-substrate-tech-f3.md §8.3): the ruin blocks as items - a name per meta (tile.siliconage.ruin.<name>.name);
  * the TooltipSC tooltip per meta: sc.tooltip.ruin.<name> (what it is), under Shift .details (where it is found), under Ctrl
  * .howto (the pickaxe and what it gives - the chances from BlockRuinSC as %s). Ф4 (package C): the vault plating (its scrap's
- * chance), the vault lamp and the camp's tarp (100: they always give theirs).
+ * chance), the vault lamp and the camp's tarp (100: they always give theirs). Ф5 (package J): the burnt coil - two chances, the Nano
+ * Scrap's and the Shell Firmware's (its .howto: %1$s, %2$s; every other meta's .howto takes the first only).
  */
 public class ItemBlockRuinSC extends ItemBlock {
 
@@ -40,12 +41,14 @@ public class ItemBlockRuinSC extends ItemBlock {
         int meta = getMetadata(stack.getItemDamage());
         String key = "sc.tooltip.ruin." + BlockRuinSC.nameOf(meta);
         list.add("§7" + Lang.tr(key));
-        TooltipSC.more(list, Lang.tr(key + ".details"), Lang.tr(key + ".howto", chance(meta)));
+        TooltipSC.more(list, Lang.tr(key + ".details"), Lang.tr(key + ".howto", chance(meta), BlockRuinSC.COIL_FIRMWARE_PCT));
     }
 
     /** The meta's drop chance for its .howto line (%). */
     private static int chance(int meta) {
         switch (meta) {
+            case BlockRuinSC.BURNT_COIL:                        // Ф5: the Nano Scrap's (the Firmware's - the second argument)
+                return BlockRuinSC.COIL_SCRAP_PCT;
             case BlockRuinSC.BURNT_PANEL:
                 return BlockRuinSC.PANEL_FIRMWARE_PCT;
             case BlockRuinSC.MACHINE_HUSK:

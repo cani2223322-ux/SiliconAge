@@ -36,8 +36,13 @@ import net.minecraftforge.common.util.FakePlayer;
  * <li>SEALED_CRUMB «Опечатанная Крупица» - every world source of a Singularity Crumb but the boss (the ruins' and Vaults'
  * chests, the Sentinel 25%, «Затмение» 30%): a right click opens it into a Crumb if CrumbLimitSC.take allows today, else it
  * stays sealed («лимит на сегодня исчерпан» - try tomorrow).</li>
+ * <li>Ф5 (docs/plan-substrate-tech-f5.md §4.4, the coordinator's): BREAKDOWN_KEY «Ключ Пробоя» - four Fragments, shapeless
+ * (FinaleRecipesSC); goes into a Breakdown Console (package A) and is spent when the Warden falls; stack 1;</li>
+ * <li>Ф5 (§5.6): BREAKDOWN_MATRIX «Матрица Пробоя» - the Breakdown Warden's guaranteed personal loot; the Elder takes it with 48
+ * chips for the Lithographers' Module (package P's deal); stack 16.</li>
  * </ul>
- * Fixed (the coordinator's): the class, the metas and names, the NBT key; the rest C's.
+ * Fixed (the coordinator's): the class, the metas and names, the NBT key; the rest C's (Ф5: the new metas' tooltips and icons -
+ * package A).
  * <p>
  * The Sealed Crumb opens in any world (the limit is the player's, by UUID, over every world - CrumbLimitSC); the server
  * decides, a FakePlayer never opens one (no player behind it, no limit to count). The key's safe: campKey / safeOf (the
@@ -46,7 +51,11 @@ import net.minecraftforge.common.util.FakePlayer;
 public class ItemRelicSC extends Item {
 
     public static final int CAMP_KEY = 0, KEY_FRAGMENT = 1, SEALED_CRUMB = 2;
-    public static final String[] NAMES = {"campKey", "keyFragment", "sealedCrumb"};
+    /** Ф5: the Breakdown Key, the Breakdown Matrix (appended). */
+    public static final int BREAKDOWN_KEY = 3, BREAKDOWN_MATRIX = 4;
+    public static final String[] NAMES = {"campKey", "keyFragment", "sealedCrumb", "breakdownKey", "breakdownMatrix"};
+    /** Ф5: the Matrix's stack. */
+    public static final int MATRIX_STACK = 16;
     /** The camp key's NBT: its safe's position. */
     public static final String KEY_NBT = "scCamp";
     /** The Warlord's entity NBT (getEntityData, set by the camp - MapGenCampSC / RuinWorldSC): its camp's safe, int[3]. */
@@ -74,12 +83,14 @@ public class ItemRelicSC extends Item {
 
     @Override
     public int getItemStackLimit(ItemStack stack) {
-        return stack.getItemDamage() == CAMP_KEY ? 1 : stack.getItemDamage() == KEY_FRAGMENT ? FRAGMENTS : 64;
+        int m = stack.getItemDamage();
+        return m == CAMP_KEY || m == BREAKDOWN_KEY ? 1 : m == KEY_FRAGMENT ? FRAGMENTS : m == BREAKDOWN_MATRIX ? MATRIX_STACK : 64;
     }
 
     @Override
     public EnumRarity getRarity(ItemStack stack) {
-        return stack.getItemDamage() == KEY_FRAGMENT ? EnumRarity.rare : EnumRarity.uncommon;
+        int m = stack.getItemDamage();
+        return m == BREAKDOWN_KEY || m == BREAKDOWN_MATRIX ? EnumRarity.epic : m == KEY_FRAGMENT ? EnumRarity.rare : EnumRarity.uncommon;
     }
 
     // ------------------------------------------------------------------ the camp's key
@@ -186,8 +197,9 @@ public class ItemRelicSC extends Item {
         if (safe != null) {
             list.add("§6" + Lang.tr("sc.tooltip.relic.campKey.at", safe[0], safe[1], safe[2]));
         }
+        // Ф5 (package A): the Key's howto names the Fragments it is made of too; the Matrix's has no number
         String howto = meta == SEALED_CRUMB ? Lang.tr(k + ".howto", CrumbLimitSC.DAY_CAP)
-                : meta == KEY_FRAGMENT ? Lang.tr(k + ".howto", FRAGMENTS) : Lang.tr(k + ".howto");
+                : meta == KEY_FRAGMENT || meta == BREAKDOWN_KEY ? Lang.tr(k + ".howto", FRAGMENTS) : Lang.tr(k + ".howto");
         TooltipSC.more(list, Lang.tr(k + ".details"), howto);
     }
 }

@@ -38,6 +38,10 @@ import net.minecraft.world.chunk.IChunkProvider;
  * Ф4 (docs/plan-substrate-tech-f4.md §5.4, ПФ-4; the coordinator's lines): an EMP storm turns the sky and the fog violet - the
  * colours lean to SKY_STORM / FOG_STORM by StormStateSC.skyFactor (growing over the 30 s warning, fading after the storm). The
  * Rift's own violet-black fog is package W's (SubstrateClientSC, EntityViewRenderEvent).
+ * <p>
+ * Ф5 (docs/plan-substrate-tech-f5.md §10.2, ПМ-19; the coordinator's lines): getSkyRenderer - the Substrate's own sky
+ * (dim.client.SubstrateSkySC, package P) only when this client's dimension.customSky is on and ShadersModCore isn't there;
+ * otherwise null - vanilla's sky with the colours above, as in Ф1..Ф4.
  */
 public class WorldProviderSubstrateSC extends WorldProvider implements INamedDimensionSC {
 
@@ -255,5 +259,13 @@ public class WorldProviderSubstrateSC extends WorldProvider implements INamedDim
     @SideOnly(Side.CLIENT)
     public double getVoidFogYFactor() {
         return VOID_FOG;
+    }
+
+    /** Ф5, ПМ-19: the own sky (customSky on, no ShadersModCore) or vanilla's (null) - asked by RenderGlobal every frame. */
+    @Override
+    @SideOnly(Side.CLIENT)
+    public net.minecraftforge.client.IRenderHandler getSkyRenderer() {
+        net.minecraftforge.client.IRenderHandler own = com.sc.dim.client.SubstrateSkySC.renderer();
+        return own != null ? own : super.getSkyRenderer();
     }
 }

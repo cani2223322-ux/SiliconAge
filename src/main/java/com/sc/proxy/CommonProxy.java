@@ -69,6 +69,14 @@ public class CommonProxy {
     public void hazardMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
     }
 
+    /** Подложка Ф5: a finale message from the server (FinaleNetSC.ToClient - the Signal, the Warden's effects; client only, any thread). */
+    public void finaleMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+    }
+
+    /** Подложка Ф5: a right click with Lithographer's Journal №`number` - its pages (client only; ItemJournalSC calls it on the client). */
+    public void openJournal(int number) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

@@ -13,6 +13,9 @@ import com.sc.util.WeaponType;
  * Ф4 (docs/plan-substrate-tech-f4.md §9.1, rules ПТ-16, ПТ-20): the Singular trophies shown (SHOWN - 24 metas), the Warlord's
  * and the Sentinel's own categories (ITrophyCategoriesSC on their classes - the numbers here), the storm's x1.5 (STORM_MUL:
  * MobDropsSC asks EmpStormSC.active; with an elite at most EVENT_CAP).
+ * <p>
+ * Ф5 (docs/plan-substrate-tech-f5.md §5.7, rules ПТ-23, ПТ-26; package B): the ПЭ-1М trophy (24) shown - the Breakdown Warden's
+ * (WardenRulesSC.trophyMeta, 2% of its personal loot when it held one): 25 metas, every one of the trophy item.
  */
 public final class TrophyTableSC {
 
@@ -36,10 +39,11 @@ public final class TrophyTableSC {
      * Blade, the Ion Cutter). Each phase adds the trophies of its mobs. Ф3 (ПТ-14): the Quantum (4..7) and Exo (8..11)
      * pieces, the Quantum and Exo Blades (17, 18), the Pulse Emitter and the Plasma Rifle (21, 22), the ПЭ-1 (23) - kept in
      * meta order (the creative tab and NEI list them so). Ф4 (ПТ-16, docs/plan-substrate-tech-f4.md §9.1): the Singular pieces
-     * (12..15) and the Singular Blade (19) - the Sentinel's and «Затмение»'s: 24 metas (the ПЭ-1М, 24, is the boss's - Ф5).
+     * (12..15) and the Singular Blade (19) - the Sentinel's and «Затмение»'s: 24 metas. Ф5 (ПТ-23, ПТ-26): the ПЭ-1М (24) - the
+     * Breakdown Warden's: 25 metas.
      */
     public static final int[] SHOWN = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, META_BLADE, META_BLADE + 1, META_BLADE + 2,
-            META_BLADE + 3, META_WEAPON, META_WEAPON + 1, META_WEAPON + 2, META_PE1};
+            META_BLADE + 3, META_WEAPON, META_WEAPON + 1, META_WEAPON + 2, META_PE1, META_PE1M};
     /**
      * Ф4 (ПТ-16, §9.1): the categories of their own (ITrophyCategoriesSC) - the camp's Warlord: a worn Quantum piece
      * WARLORD_QUANTUM (2%) and its Exo chestplate WARLORD_EXO_CHEST (0.5%); a Sentinel carrier's ПЭ-1 SENTINEL_PE1 (10% - about

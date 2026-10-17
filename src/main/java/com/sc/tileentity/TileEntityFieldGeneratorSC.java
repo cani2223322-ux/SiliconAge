@@ -139,8 +139,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public static final int RGB_SHELL = 0, RGB_OUTLINE = 1, RGB_FLASH = 2, RGB_TARGETS = 3;
     public static final int DEFAULT_RGB = 0x59E6FF;
     /** The screen's eight ready colours: cyan, green, red, violet, gold, white, pink, orange. */
-    /** Ready colours, named sc.fieldzone.preset.N (the first eight are the old ones - cycleColor went through them). */
-    public static final int[] PRESETS = {0x59E6FF, 0x59FF73, 0xFF4D4D, 0xBF73FF, 0xFFCC4D, 0xFFFFFF, 0xFF78BE, 0xFF8C1E, 0xFFF04D, 0xB4FF3C, 0x2EE6A0, 0x3CD2C8, 0x78B4FF, 0x3C64FF, 0x7850FF, 0xE63CE6, 0xE6286E, 0xFF7F66, 0xFFA028, 0xE6C88C, 0xA06432, 0xA0A0A0, 0x505A64, 0xC8F0FF};
+    /**
+     * Ready colours, named sc.fieldzone.preset.N (the first eight are the old ones - cycleColor went through them). Подложка Ф5
+     * (docs/plan-substrate-tech-f5.md §9.3): 24 «Бирюза Наладчиков» - the Tuners' domes as they glow at night, a brighter turquoise
+     * than 11 (each preset's colour must stay unique: the screen finds the preset by it). Append only.
+     */
+    public static final int[] PRESETS = {0x59E6FF, 0x59FF73, 0xFF4D4D, 0xBF73FF, 0xFFCC4D, 0xFFFFFF, 0xFF78BE, 0xFF8C1E, 0xFFF04D, 0xB4FF3C, 0x2EE6A0, 0x3CD2C8, 0x78B4FF, 0x3C64FF, 0x7850FF, 0xE63CE6, 0xE6286E, 0xFF7F66, 0xFFA028, 0xE6C88C, 0xA06432, 0xA0A0A0, 0x505A64, 0xC8F0FF,
+            com.sc.finale.FinaleRulesSC.TUNER_DOME_RGB};
 
     private int flags = DEFAULT_FLAGS;
     private int redstone = REDSTONE_OFF, filter = FILTER_HOSTILE;      // a new one: works without a signal, a signal stops it
@@ -1515,7 +1520,18 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      * (BASE x 6 x nodes + RANGE_EU_PER_BLOCK x range) x multiplier. Also shown in the GUI.
      */
     public int upkeepPerTick() {
-        return upkeepFor(getNodeCount(), range, height, mode) + com.sc.util.ConfigSC.scale(extrasPerTick(), com.sc.util.ConfigSC.fieldUpkeep, 0);
+        int upkeep = upkeepFor(getNodeCount(), range, height, mode) + com.sc.util.ConfigSC.scale(extrasPerTick(), com.sc.util.ConfigSC.fieldUpkeep, 0);
+        return com.sc.finale.FinaleRulesSC.upkeep(upkeep, hasLithoModule());   // Подложка Ф5: the Lithographers' Module -50%
+    }
+
+    /** Подложка Ф5 (docs/plan-substrate-tech-f5.md §9.4, ПО-20): the Lithographers' Module sits in an upgrade slot (one is enough). */
+    public boolean hasLithoModule() {
+        for (ItemStack s : upgrades) {
+            if (com.sc.finale.FinaleItemsSC.isLithoModule(s)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** What the switched-on protections add to the upkeep (charging and healing are paid as used). */
@@ -2480,6 +2496,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public static boolean isFieldUpgrade(ItemStack s) {
+        if (com.sc.finale.FinaleItemsSC.isLithoModule(s)) {
+            return true;                                  // Подложка Ф5: the Lithographers' Module (its own item, not an UpgradeType)
+        }
         if (s == null || !(s.getItem() instanceof com.sc.item.ItemUpgradeSC)) {
             return false;
         }

@@ -29,6 +29,9 @@ import net.minecraft.item.ItemStack;
  * Ф4 (package C, docs/plan-substrate-tech-f4.md §8.4, rule ПЗ-7): the Renegades' camp blocks too - campSC (its safe can't leave
  * its camp: unbreakable, and so unmovable; AE2 keys by the Block, so the stolen panels and pad go with it) and the Stolen Field
  * Generator (its dome, owned by «[Отступники]», must not be carried into a player's base).
+ * <p>
+ * Ф5 (package A, docs/plan-substrate-tech-f5.md §4.7, rule ПУ-10): the Breakdown Epicentre's arenaSC too (every meta) - its
+ * Console keeps no key (the record does), but a pit carried off would leave the arena's record without its Console and plating.
  */
 public final class SettlementCompatSC {
 
@@ -45,10 +48,12 @@ public final class SettlementCompatSC {
                 + blacklist(SettlementBlocksSC.showcase2, BlockShowcase2SC.NAMES.length);   // Ф3 (ПК-16): the second showcase block
         int camp = blacklist(com.sc.ruin.CampBlocksSC.camp, com.sc.ruin.CampBlocksSC.CAMP_NAMES.length)   // Ф4 (ПЗ-7): the safe, the stolen field
                 + blacklist(com.sc.ruin.CampBlocksSC.stolenField, 1);
+        int arena = blacklist(com.sc.arena.ArenaBlocksSC.arena, com.sc.arena.ArenaBlocksSC.NAMES.length);   // Ф5 (ПУ-10): the Epicentre whole
         if (Loader.isModLoaded(AE2)) {
             FMLLog.info("[Silicon Age] Si-14 settlements: %d stacks of the core, showcases, dock and trim sent to AE2's spatial IO blacklist (%s)",
                     sent, AE2_SPATIAL_BLACKLIST);
             FMLLog.info("[Silicon Age] Si-14 camps: %d stacks of the Renegades' safe, panels, pad and Stolen Field Generator sent to it too", camp);
+            FMLLog.info("[Silicon Age] Si-14 arenas: %d stacks of the Breakdown Epicentre's blocks (the Console, pedestals, plating) sent to it too", arena);
         }
     }
 

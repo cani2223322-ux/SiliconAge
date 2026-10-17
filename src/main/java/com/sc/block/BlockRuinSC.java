@@ -50,14 +50,23 @@ import net.minecraft.world.World;
  * has no soft spot); glowstone dust 1..2, never itself (no Silk Touch either);</li>
  * <li>CAMP_TARP «Навес Отступников» - the Renegades' tarps over their camp: soft, no tool needed; string 1..2.</li>
  * </ul>
+ * Ф5 (package J, docs/plan-substrate-tech-f5.md §6.2, rules ПЛ-3, ПЛ-4; appended): BURNT_COIL «Выгоревшая катушка» - a coil of the
+ * Lithographers' bridge ring, burnt out in the Breakdown; the bridge wrecks' rings are made of it (lore.ComponentWreckSC). A ruin block
+ * like the first four: a pickaxe, Nano Scrap COIL_SCRAP_PCT %, else Shell Firmware COIL_FIRMWARE_PCT %; no recipe, Silk Touch keeps it.
  */
 public class BlockRuinSC extends Block {
 
-    /** Metas: the ruin metal, a burnt panel, a tank's husk, a machine's husk; Ф4 - the vault plating, the vault lamp, the camp's tarp. */
-    public static final int RUIN_METAL = 0, BURNT_PANEL = 1, TANK_HUSK = 2, MACHINE_HUSK = 3, VAULT_PLATING = 4, VAULT_LAMP = 5, CAMP_TARP = 6;
-    public static final String[] NAMES = {"ruinMetal", "burntPanel", "tankHusk", "machineHusk", "vaultPlating", "vaultLamp", "campTarp"};
+    /**
+     * Metas: the ruin metal, a burnt panel, a tank's husk, a machine's husk; Ф4 - the vault plating, the vault lamp, the camp's tarp;
+     * Ф5 - the bridge wrecks' burnt coil.
+     */
+    public static final int RUIN_METAL = 0, BURNT_PANEL = 1, TANK_HUSK = 2, MACHINE_HUSK = 3, VAULT_PLATING = 4, VAULT_LAMP = 5, CAMP_TARP = 6,
+            BURNT_COIL = 7;
+    public static final String[] NAMES = {"ruinMetal", "burntPanel", "tankHusk", "machineHusk", "vaultPlating", "vaultLamp", "campTarp", "burntCoil"};
     /** The drops' chances (%) - see the class comment. TODO(balance) */
     public static final int METAL_SCRAP_PCT = 30, PANEL_FIRMWARE_PCT = 20, HUSK_TRANSISTOR_PCT = 10, PLATING_SCRAP_PCT = 50;
+    /** Ф5: a burnt coil - Nano Scrap, else (of the rest) Shell Firmware (%). TODO(balance) */
+    public static final int COIL_SCRAP_PCT = 30, COIL_FIRMWARE_PCT = 20;
     /** ПХ-2: the vault plating (and its lamps) - pickaxe level, hardness, blast resistance (setResistance's scale); the lamp's light. TODO(balance) */
     public static final int PLATING_LEVEL = 3, LAMP_LIGHT = 10;
     public static final float PLATING_HARDNESS = 30F, PLATING_RESISTANCE = 2000F, TARP_HARDNESS = 0.8F;
@@ -179,6 +188,13 @@ public class BlockRuinSC extends Block {
                 break;
             case CAMP_TARP:
                 out.add(new ItemStack(Items.string, 1 + rand.nextInt(2)));
+                break;
+            case BURNT_COIL:                                    // Ф5 (ПЛ-4)
+                if (rand.nextInt(100) < COIL_SCRAP_PCT) {
+                    add(out, MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1));
+                } else if (rand.nextInt(100) < COIL_FIRMWARE_PCT) {
+                    add(out, MobItemsSC.loot(ItemCombatLootSC.LootKind.SHELL_FIRMWARE, 1));
+                }
                 break;
             default:                                            // RUIN_METAL
                 if (rand.nextInt(100) < METAL_SCRAP_PCT) {

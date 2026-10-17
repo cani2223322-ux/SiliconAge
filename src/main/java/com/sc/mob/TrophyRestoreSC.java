@@ -56,6 +56,13 @@ import net.minecraftforge.common.util.FakePlayer;
  * one (holding the button repeats a click every 4 ticks - a stream of clicks never confirms) and within CONFIRM_TICKS of
  * the first. Two players at one station: each has his own. A FakePlayer (a mod's machine) never restores
  * (onStationClick); the world test calls click() itself.
+ * <p>
+ * Ф5 (package P, docs/plan-substrate-tech-f5.md §9.6, rule ПТ-26): the ПЭ-1М trophy (TrophyTableSC.META_PE1M, 24 - the Breakdown
+ * Warden's 2%) is of the Singular tier (tier() said so already): singular() answers it too, so only the Singular station restores
+ * it - for one Singularity Clot and SINGULAR_STATION_EU, as a Singular piece; the Armourer and the plain station refuse it
+ * (R_SINGULAR_ONLY, sc.restore.singularOnly). It becomes a fresh ПЭ-1М (ModItems.empGun meta 1): no modules, charge 0, the default
+ * settings - the trophy's NBT never copied. Its price group stays G_NONE and metas() never lists it: no Armourer's service takes it.
+ * What metas 0..23 answered before is unchanged; 25 and on stay unknown.
  */
 public final class TrophyRestoreSC {
 
@@ -84,10 +91,13 @@ public final class TrophyRestoreSC {
     private TrophyRestoreSC() {
     }
 
-    /** ПТ-11 (pure): may trophy meta `meta` be restored `where` - OK, R_UNKNOWN (no such trophy), R_SINGULAR_ONLY. */
+    /**
+     * ПТ-11 (pure): may trophy meta `meta` be restored `where` - OK, R_UNKNOWN (no such trophy), R_SINGULAR_ONLY (a Singular piece or
+     * blade, Ф5: the ПЭ-1М too - the Singular station's alone).
+     */
     public static int refusal(int meta, int where) {
-        if (meta < 0 || meta >= TrophyTableSC.META_PE1M || where < WHERE_ARMOURER || where > WHERE_SINGULAR_STATION) {
-            return R_UNKNOWN;                                   // the ПЭ-1М (24): Ф5
+        if (meta < 0 || meta >= TrophyTableSC.METAS || where < WHERE_ARMOURER || where > WHERE_SINGULAR_STATION) {
+            return R_UNKNOWN;
         }
         if (singular(meta)) {
             return where == WHERE_SINGULAR_STATION ? OK : R_SINGULAR_ONLY;
@@ -95,7 +105,10 @@ public final class TrophyRestoreSC {
         return OK;
     }
 
-    /** ПТ-11: what trophy `meta` becomes - a fresh real stack (null for an unknown meta). */
+    /**
+     * ПТ-11: what trophy `meta` becomes - a fresh real stack (null for an unknown meta); Ф5 (ПТ-26): the ПЭ-1М's - ModItems.empGun
+     * meta 1 with no NBT at all: no modules, charge 0, the default settings.
+     */
     public static ItemStack restored(int meta) {
         return ItemTrophySC.realStack(meta);
     }
@@ -118,8 +131,11 @@ public final class TrophyRestoreSC {
         return meta == TrophyTableSC.META_PE1M ? ArmorSuit.SINGULAR.ordinal() : -1;
     }
 
-    /** A Singular piece or blade (metas 12..15, 19): the Singular station's alone (pure). */
+    /** A Singular piece or blade (metas 12..15, 19), Ф5 (ПТ-26) the ПЭ-1М (24): the Singular station's alone (pure). */
     public static boolean singular(int meta) {
+        if (meta == TrophyTableSC.META_PE1M) {
+            return true;
+        }
         return meta >= 0 && meta < TrophyTableSC.META_WEAPON && TrophyTableSC.level(meta) == ArmorSuit.SINGULAR;
     }
 
@@ -134,7 +150,10 @@ public final class TrophyRestoreSC {
         return meta == TrophyTableSC.META_PE1 ? G_PE1 : G_NONE;
     }
 
-    /** The trophies priced alike (pure): every meta of `group` at `tier`, Singular ones aside (in meta order). */
+    /**
+     * The trophies priced alike (pure): every meta of `group` at `tier`, Singular ones aside (in meta order) - the ПЭ-1М (Ф5) too: its
+     * group is G_NONE and it is singular(), so no Armourer's service ever lists it.
+     */
     public static int[] metas(int group, int tier) {
         int[] buf = new int[TrophyTableSC.METAS];
         int n = 0;

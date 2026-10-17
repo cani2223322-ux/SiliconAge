@@ -862,6 +862,8 @@ public class GuiFieldGeneratorSC extends GuiContainer {
         }
         int upkeep = TileEntityFieldGeneratorSC.upkeepFor(field.getNodeCount(), draft[D_RANGE], draft[D_HEIGHT], mode)
                 + com.sc.util.ConfigSC.scale(field.extrasPerTick(), com.sc.util.ConfigSC.fieldUpkeep, 0);
+        // Подложка Ф5 (ПО-20): the Lithographers' Module in an upgrade slot halves it - as upkeepPerTick does (the slots are synced)
+        upkeep = com.sc.finale.FinaleRulesSC.upkeep(upkeep, field.hasLithoModule());
         String info = Lang.tr("sc.fieldzone.info", thousands(volume), upkeep);
         boolean pending = previewMode && differs();
         if (pending) {

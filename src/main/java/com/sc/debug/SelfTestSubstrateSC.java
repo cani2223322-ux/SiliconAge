@@ -54,10 +54,13 @@ final class SelfTestSubstrateSC {
      * docs/plan-substrate-tech-f2.md §2.1, docs/plan-substrate-tech-f3.md §2.1).
      */
     private static final String[] RULES = {"strictEntry", "respawnDimension", "bridgeCostMultiplier", "nativesCrossBridge", "empMobTargets",
-            "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations", "mobsUseEmp", "empStorms", "raids"};
-    /** The ids: private behind getters, never synced (ПК-4); Ф4's three biomes (docs/plan-substrate-tech-f4.md §2.1). */
+            "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations", "mobsUseEmp", "empStorms", "raids", "requireSignal", "caravans"};
+    /**
+     * The ids: private behind getters, never synced (ПК-4); Ф4's three biomes (docs/plan-substrate-tech-f4.md §2.1); Ф5's customSky -
+     * not an id, but each client's own look: private as they are, never the server's (docs/plan-substrate-tech-f5.md §2.1).
+     */
     private static final String[] IDS = {"enabled", "dimensionId", "providerId", "biomeIdPlateaus", "biomeIdCanyons", "biomeIdRidges", "biomeIdOxide",
-            "biomeIdRift", "keepLoaded"};
+            "biomeIdRift", "keepLoaded", "customSky"};
 
     /** docs/plan-substrate-tech.md §7.1: the fixed keys every package uses. */
     private static final String[] KEYS = {"sc.dim.substrate.name", "sc.dim.ids.mismatch", "sc.dim.biome.plateaus", "sc.dim.biome.canyons",
@@ -592,9 +595,10 @@ final class SelfTestSubstrateSC {
         }
         int articles = ARTICLES.length + SelfTestSettlementSC.ARTICLES.length          // Ф2 appends its six (SelfTestSettlementSC checks them)
                 + SelfTestCombatSC.ARTICLES.length                                      // Ф3 its eight (SelfTestCombatSC)
-                + SelfTestHazardSC.ARTICLES.length;                                     // Ф4 its fifteen (SelfTestHazardSC)
+                + SelfTestHazardSC.ARTICLES.length                                      // Ф4 its fifteen (SelfTestHazardSC)
+                + SelfTestFinaleSC.ARTICLES.length;                                     // Ф5 its thirteen (SelfTestFinaleSC)
         check(bad.length() == 0 && chapter == articles && table && noG.length() == 0 && iconOk, "handbook: the chapter \"" + BookChapter.WORLD.title()
-                + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys, Ф2's, Ф3's and Ф4's), the armour table by suit " + table
+                + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys, Ф2's, Ф3's, Ф4's and Ф5's), the armour table by suit " + table
                 + ", G on the rock / ore / druse"
                 + " / trophy / loot / eggs" + (noG.length() == 0 ? "" : " - NOT:" + noG) + ", the tile's icon " + iconOk + (bad.length() == 0 ? "" : " -" + bad));
     }

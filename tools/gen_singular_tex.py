@@ -8,21 +8,33 @@ For each row of SCHEMES it writes
               _gloww_<1|2>.png, _glowred_<1|2>.png                         white for a picked light colour, red when empty)
 and once: blocks/fluids/singularmatter_still/_flow.png (+ .mcmeta), and a preview sheet of all schemes.
 
+The Singular tools' icons (items/bladeSingular[On]_<key>, bladeSingular[On]_<form>_<key> with the On frames' .mcmeta,
+drillSingular_<key>) of a scheme that has none yet are made here too (tool_icons): every pixel of the icons already there is,
+to a texel or two, a fixed mix of its scheme's plate base, accent and white - fitted per pixel over the dark schemes (not the
+pale White Dwarf) and painted with the new scheme's colours. An icon already there is never rewritten.
+
 The Exo textures are only the silhouette and the plate shading: Exo's own details (glow strips, gold
 studs, its chip) are wiped and the Singular ones painted instead - the singularity core (a glowing
 ring round a dark centre) on the chest, orbit arcs, rings on helmet / shoulders / knees / ankles,
 accent lines. Adding a scheme = a row in SCHEMES (and SingularScheme.java + lang), then run again.
 
-Usage: python gen_singular_tex.py [project dir] [preview png]
+Usage: python gen_singular_tex.py [project dir] [preview png] [--only=l,m]
+  --only: write just these schemes' textures (and the tool icons they lack); the fluid is skipped then.
+
+Подложка Ф5 (package P, docs/plan-substrate-tech-f5.md §9.1): L «Литограф» and M «Наладчик» appended (SingularScheme.L / M).
 """
 import math
 import os
+import re
+import shutil
 import sys
 
 from PIL import Image
 
-PROJECT = sys.argv[1] if len(sys.argv) > 1 else 'C:/Users/Aleksandr/Documents/MineMod/SiliconAge'
-PREVIEW = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'singular_tex_preview.png')
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
+ONLY = [k for a in sys.argv[1:] if a.startswith('--only=') for k in a[len('--only='):].split(',') if k]
+PROJECT = ARGS[0] if len(ARGS) > 0 else 'C:/Users/Aleksandr/Documents/MineMod/SiliconAge'
+PREVIEW = ARGS[1] if len(ARGS) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'singular_tex_preview.png')
 TEX = os.path.join(PROJECT, 'src', 'main', 'resources', 'assets', 'siliconage', 'textures')
 
 # key, name, plate base (RGB), accent (RGB) - same order as SingularScheme.java (append only)
@@ -38,6 +50,8 @@ SCHEMES = [
     ('i', 'Supernova',       (44, 26, 10),    (255, 230, 120)),
     ('j', 'Nebula',          (14, 40, 46),    (255, 120, 190)),
     ('k', 'Neutron Star',    (52, 58, 66),    (60, 140, 255)),
+    ('l', 'Lithographer',    (28, 26, 36),    (240, 226, 180)),   # Подложка Ф5: unlockable (the Breakdown Warden's)
+    ('m', 'Tuner',           (36, 66, 63),    (60, 210, 200)),    # Подложка Ф5: unlockable (the Elder's)
 ]
 
 PIECES = ['Helmet', 'Chestplate', 'Leggings', 'Boots']
@@ -465,6 +479,70 @@ def fluid_textures():
             fh.write('{"animation": {"frametime": %d}}' % (2 if kind == 'still' else 1))
 
 
+# ---------------------------------------------------------------------------------------------- the Singular tools' icons
+
+TOOL_ICON = re.compile(r'^((?:bladeSingular|drillSingular)(?:On)?(?:_[a-z]+)?)_a\.png$')
+
+
+def solve3(m, v):
+    """m (3 x 3) x = v by Cramer's rule."""
+    def det(a):
+        return (a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
+                + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
+    d = det(m)
+    out = []
+    for c in range(3):
+        mc = [[v[r] if k == c else m[r][k] for k in range(3)] for r in range(3)]
+        out.append(det(mc) / d)
+    return out
+
+
+def tool_icons(keys):
+    """The tool icons the schemes `keys` lack, fitted from the dark schemes' icons already there. @return files written"""
+    items = os.path.join(TEX, 'items')
+    rows = {k: (b, a) for k, n, b, a in SCHEMES}
+    written = 0
+    for fname in sorted(os.listdir(items)):
+        mt = TOOL_ICON.match(fname)
+        if not mt:
+            continue
+        stem = mt.group(1)
+        want = [k for k in keys if k in rows and not os.path.exists(os.path.join(items, '%s_%s.png' % (stem, k)))]
+        if not want:
+            continue
+        train = [k for k, n, b, a in SCHEMES if k not in want and not Palette(b, a).light_suit
+                 and os.path.exists(os.path.join(items, '%s_%s.png' % (stem, k)))]
+        imgs = [Image.open(os.path.join(items, '%s_%s.png' % (stem, k))).convert('RGBA') for k in train]
+        # least squares, the same design for every pixel: colour[ch] = x0 * base[ch] + x1 * accent[ch] + x2 * 255
+        xs = [(rows[k][0][ch], rows[k][1][ch], 255.0) for k in train for ch in range(3)]
+        ata = [[sum(x[i] * x[j] for x in xs) for j in range(3)] for i in range(3)]
+        w, h = imgs[0].size
+        pix = [im.load() for im in imgs]
+        outs = {k: Image.new('RGBA', (w, h), (0, 0, 0, 0)) for k in want}
+        opx = {k: outs[k].load() for k in want}
+        for y in range(h):
+            for x in range(w):
+                first = pix[0][x, y]
+                if first[3] == 0:
+                    for k in want:
+                        opx[k][x, y] = first
+                    continue
+                ys = [pix[n][x, y][ch] for n in range(len(train)) for ch in range(3)]
+                atb = [sum(xs[r][i] * ys[r] for r in range(len(xs))) for i in range(3)]
+                c = solve3(ata, atb)
+                for k in want:
+                    b, a = rows[k]
+                    opx[k][x, y] = tuple(clamp(c[0] * b[ch] + c[1] * a[ch] + c[2] * 255.0) for ch in range(3)) + (first[3],)
+        for k in want:
+            outs[k].save(os.path.join(items, '%s_%s.png' % (stem, k)))
+            written += 1
+            meta = os.path.join(items, '%s_%s.png.mcmeta' % (stem, train[0]))
+            if os.path.exists(meta):
+                shutil.copyfile(meta, os.path.join(items, '%s_%s.png.mcmeta' % (stem, k)))
+                written += 1
+    return written
+
+
 # ---------------------------------------------------------------------------------------------- main
 
 def main():
@@ -474,6 +552,8 @@ def main():
     rows = []
     written = 0
     for key, name, base, accent in SCHEMES:
+        if ONLY and key not in ONLY:
+            continue
         pal = Palette(base, accent)
         icons = []
         for p in PIECES:
@@ -492,10 +572,12 @@ def main():
             layers.append(c.img)
             written += 1 + 3 + FRAMES
         rows.append((key, name, icons, layers, glows))
-    fluid_textures()
-    written += 4
+    if not ONLY:
+        fluid_textures()
+        written += 4
+    written += tool_icons([k for k, n, b, a in SCHEMES if not ONLY or k in ONLY])
     preview(rows)
-    print('ok: %d schemes, %d files, preview %s' % (len(SCHEMES), written, PREVIEW))
+    print('ok: %d schemes, %d files, preview %s' % (len(rows), written, PREVIEW))
 
 
 def preview(rows):

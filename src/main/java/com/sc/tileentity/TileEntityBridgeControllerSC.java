@@ -972,8 +972,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     public NBTTagList si14Targets(EntityPlayer viewer) {
         NBTTagList out = new NBTTagList();
         com.sc.settle.SettlementRegistrySC r = viewer == null ? null : settlements();
-        if (r == null || !com.sc.dim.SubstrateSC.active()) {
-            return out;
+        if (r == null || !com.sc.dim.SubstrateSC.active() || !com.sc.dim.SubstrateSignalSC.openTo(viewer, ownDim())) {
+            return out;                                       // Ф5, ПВ-13: no Navigation Record under requireSignal - no Substrate targets
         }
         int sd = com.sc.dim.SubstrateSC.dimId();
         boolean ground = bridgeKind() == BridgeMathSC.GROUND;
@@ -1721,6 +1721,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     pl.refuse = new BridgeMsgSC("sc.bridge.refuse.crossDim");      // МС-1: the server keeps bridges in their own dimension
                     return pl;
                 }
+                if (com.sc.dim.SubstrateSignalSC.refuses(p, e.dim, ownDim())) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.noSignal");      // Подложка Ф5, ПВ-13: requireSignal, no Navigation Record
+                    return pl;
+                }
                 ws = worldFor(e.dim);
                 if (ws == null) {
                     pl.refuse = new BridgeMsgSC("sc.bridge.refuse.nodim", e.dim);
@@ -1788,6 +1792,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 }
                 if (!com.sc.util.ConfigSC.bridgeCrossDimension && e.dim != ownDim()) {
                     pl.refuse = new BridgeMsgSC("sc.bridge.refuse.crossDim");
+                    return pl;
+                }
+                if (com.sc.dim.SubstrateSignalSC.refuses(p, e.dim, ownDim())) {
+                    pl.refuse = new BridgeMsgSC("sc.bridge.refuse.noSignal");      // ПВ-13: the one who orders has no Navigation Record
                     return pl;
                 }
                 ws = worldFor(e.dim);
@@ -2540,6 +2548,15 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (!com.sc.dim.SubstrateEntrySC.mayCross(e, dim)) {
             return;                                          // ПВ-8: the Substrate's own creatures stay there (no EU, no cooldown)
         }
+        if (player && com.sc.dim.SubstrateSignalSC.refuses((EntityPlayer) e, dim, e.worldObj.provider.dimensionId)) {
+            // Ф5, ПВ-13 (requireSignal): into the Substrate only a traveller who has used his own Navigation Record - a friend's
+            // bridge opened there doesn't carry him in either; told at most once in 3 s
+            if (data.getLong("scBridgeSignalMsg") <= now) {
+                data.setLong("scBridgeSignalMsg", now + 60);
+                tell((EntityPlayer) e, new BridgeMsgSC("sc.bridge.msg.noSignal"));
+            }
+            return;
+        }
         data.setLong("scBridgeCd", now + BridgeMathSC.TELEPORT_COOLDOWN);
         // never out into someone else's private field (the exit cell next to the end; a turbulent shift below)
         EntityPlayer rights = player ? (EntityPlayer) e : playerByName(opener);
@@ -3204,7 +3221,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             }
         }
         if (scan != null && scan.kind == BridgeMathSC.SPACE) {
-            t.setTag("dims", dimList());
+            t.setTag("dims", com.sc.dim.SubstrateSignalSC.filterDims(dimList(), viewer, ownDim()));   // Ф5, ПВ-13: per viewer
         }
         return t;
     }
@@ -3447,7 +3464,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         t.setInteger("dimHere", ownDim());
         if (s != null && s.kind == BridgeMathSC.SPACE) {
-            t.setTag("dims", dimList());
+            t.setTag("dims", com.sc.dim.SubstrateSignalSC.filterDims(dimList(), viewer, ownDim()));   // Ф5, ПВ-13: per viewer
         }
         return t;
     }

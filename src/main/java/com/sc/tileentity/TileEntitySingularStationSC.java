@@ -1262,7 +1262,24 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (now == null) {
             return false;
         }
-        SingularScheme next = SingularStationMath.cycle(now, dir);
+        return paintScheme(SingularStationMath.cycle(now, dir));
+    }
+
+    /**
+     * Подложка Ф5 (docs/plan-substrate-tech-f5.md §9.1, ПТ-25): ◄ ► pressed by `player` (the screen's button - server) - the same, among
+     * the eleven schemes open to all and the ones he unlocked («Литограф», «Наладчик»: FinaleRulesSC.unlockedSchemes, his persisted
+     * NBT). Two players at one station: each steps through his own. A locked scheme a piece already wears is stepped off as any other.
+     */
+    public boolean cycleScheme(int dir, EntityPlayer player) {
+        SingularScheme now = shownScheme();
+        if (now == null) {
+            return false;
+        }
+        return paintScheme(SingularStationMath.cycle(now, dir, com.sc.finale.FinaleRulesSC.unlockedSchemes(player)));
+    }
+
+    /** Every Singular piece in the armour slots and the Singular tool take `next`. */
+    private boolean paintScheme(SingularScheme next) {
         for (int i = 0; i < SLOTS; i++) {
             if (SingularLevel.isSingular(getStackInSlot(i))) {
                 SingularScheme.setScheme(getStackInSlot(i), next);

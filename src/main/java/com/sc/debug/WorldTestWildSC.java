@@ -128,7 +128,7 @@ import net.minecraftforge.event.world.BlockEvent;
  * Built on the core alone (packages W / M / N / C write the bodies - a missing one fails its own lines). The test players are
  * never spawned (a vent's or a creature's search finds them listed in their chunk, as WorldTestCombatSC's targets); every
  * ticket released, every block placed removed, the test's creatures and items removed. What the world generated stays (the
- * test world's camp and Vault).
+ * test world's camp and Vault). WorldTestFinaleSC waits for `finished`.
  */
 public final class WorldTestWildSC {
 
@@ -138,6 +138,8 @@ public final class WorldTestWildSC {
     private static final int TIMEOUT = 3600;
     private static final String[] MOB_NAMES = {"overheated", "warlord", "sentinel", "eclipse", "phantom", "leech", "colossus", "strider", "scrapper", "waferCrab"};
     private static final double[] MOB_HP = {30, 90, 100, 140, 20, 30, 120, 60, 60, 8};
+    /** Ф5 (docs/plan-substrate-tech-f5.md §11.2): done or skipped - WorldTestFinaleSC begins after it. */
+    static volatile boolean finished;
 
     private int ticks, stage, startAt;
     private boolean done, started;
@@ -214,12 +216,14 @@ public final class WorldTestWildSC {
         if (!SubstrateSC.active()) {
             System.out.println("[SC-WORLDTEST] SKIP wild: the dimension is off (" + SubstrateSC.offReason() + ")");
             done = true;
+            finished = true;
             return;
         }
         w = MinecraftServer.getServer().worldServerForDimension(SubstrateSC.dimId());
         if (w == null) {
             print(false, "the Substrate's world not there");
             done = true;
+            finished = true;
             return;
         }
         bx = -27 * SubstrateCellsSC.CELL + 128;
@@ -356,6 +360,7 @@ public final class WorldTestWildSC {
         made.clear();
         listed.clear();
         w = null;
+        finished = true;
         System.out.println("[SC-WORLDTEST] DONE wild");
     }
 

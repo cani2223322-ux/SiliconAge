@@ -39,7 +39,7 @@ import net.minecraftforge.event.entity.player.EntityInteractEvent;
  * locks it again for what is left - or lifts the lock that ran out meanwhile.
  * <p>
  * The damage log is transient - kept beside the mob (weakly), never saved: a mob reloaded from its chunk starts a new
- * fight. Only real players (EntityPlayerMP, not a FakePlayer) are named in it; everything else - mobs, fire, a mob
+ * fight (Ф5: but the Breakdown Warden, whose fight outlives a reload - it keeps its log in its NBT, exportLog / restoreLog). Only real players (EntityPlayerMP, not a FakePlayer) are named in it; everything else - mobs, fire, a mob
  * grinder's FakePlayer - only adds to the total, so a tap by a player and a grinder's kill don't make a trophy.
  * <p>
  * Ф3 (docs/plan-substrate-tech-f3.md §4.10, rule ПТ-15): the log is kept for every hostile native (ISubstrateNativeSC and
@@ -207,6 +207,63 @@ public final class MobEventsSC {
             }
         }
         return null;
+    }
+
+    /**
+     * Ф5 (docs/plan-substrate-tech-f5.md §5.6, the coordinator's): every real player's share of the damage the mob took (0..1, by
+     * UUID; a copy - empty when no one fought it). The Breakdown Warden's personal loot goes by it (IOwnDropsSC, WardenRulesSC.LOOT_SHARE).
+     */
+    public static Map<UUID, Float> damageShares(EntityLivingBase mob) {
+        Map<UUID, Float> out = new HashMap<UUID, Float>();
+        synchronized (LOGS) {
+            DamageLog log = LOGS.get(mob);
+            if (log == null || log.total <= 0F) {
+                return out;
+            }
+            for (Map.Entry<UUID, Float> en : log.players.entrySet()) {
+                out.put(en.getKey(), Float.valueOf(Math.min(1F, en.getValue().floatValue() / log.total)));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Ф5 (docs/plan-substrate-tech-f5.md §5.6): the mob's damage log as it stands, to keep in its own NBT - the Breakdown Warden's
+     * fight outlives an unload and a restart (WardenFightSC's scWarden), so its log must too: each real player's damage by UUID put
+     * into `into`. @return the total (0 - no one fought it)
+     */
+    public static float exportLog(EntityLivingBase mob, Map<UUID, Float> into) {
+        synchronized (LOGS) {
+            DamageLog log = LOGS.get(mob);
+            if (log == null || log.total <= 0F) {
+                return 0F;
+            }
+            into.putAll(log.players);
+            return log.total;
+        }
+    }
+
+    /** Ф5: the log `exportLog` gave, back on the mob read from its NBT (server; the old one, if any, replaced). */
+    public static void restoreLog(EntityLivingBase mob, Map<UUID, Float> players, float total) {
+        if (mob == null || mob.worldObj == null || mob.worldObj.isRemote || players == null) {
+            return;
+        }
+        DamageLog log = new DamageLog();
+        float sum = 0F;
+        for (Map.Entry<UUID, Float> en : players.entrySet()) {
+            if (en.getKey() != null && en.getValue() != null && en.getValue().floatValue() > 0F) {
+                log.players.put(en.getKey(), en.getValue());
+                sum += en.getValue().floatValue();
+            }
+        }
+        log.total = Math.max(total, sum);
+        synchronized (LOGS) {
+            if (log.total > 0F) {
+                LOGS.put(mob, log);
+            } else {
+                LOGS.remove(mob);
+            }
+        }
     }
 
     /** The mob's fight is over (its drops are decided). */

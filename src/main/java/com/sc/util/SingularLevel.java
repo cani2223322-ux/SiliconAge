@@ -180,17 +180,26 @@ public final class SingularLevel {
     /** Counters in STORE. */
     public static final String C_FLY = "fly", C_H2ABS = "h2abs", C_GAS = "gas", C_KILLS = "kills", C_NETHER = "nether",
             C_DASHES = "dashes", C_WITHER = "wither", C_DRAGON = "dragon", C_SM = "sm", C_BIOMES = "biomes", C_DIMS = "dims";
+    /**
+     * Подложка Ф5 (docs/plan-substrate-tech-f5.md §9.2; proposal §10 «Новые задания»): armoured Substrate enemies killed in the suit
+     * while a piece of theirs was suppressed by a ПЭ-1 (as the Elder's contract counts them - SingularProgressSC.onDeath); the
+     * Breakdown Warden beaten with a personal loot's share of the damage (SingularProgressSC.wardenDefeated - package B calls it).
+     */
+    public static final String C_EMP_KILLS = "empKills", C_WARDEN = "warden";
     /** Root keys of the persisted NBT kept by stage 2b. */
     public static final String HOLE_KILLS = "scHoleKills", RES_REACTOR_SEC = "scResReactorSec", SPAWNERS = "scSpawnersScanned";
 
-    /** What each task needs: [target level 2..5][task 0..2]. */
+    /**
+     * What each task needs: [target level 2..5][task 0..3]; 0 - no such task (the screens skip it). Подложка Ф5 appended a fourth
+     * column without touching the first three: to 3 «Подавить ПЭ-1 25 бронированных врагов», to 5 «Победить Смотрителя Пробоя».
+     */
     private static final int[][] TASK_NEED = {
-        {5000, 300, 2000},      // to 2: fly 5 km in gravity flight, Н2 absorbs 300 damage, spend 2 000 mB of gases
-        {100, 600, 50},         // to 3: 100 mobs in the suit, 10 min in the Nether under 50% heat, 50 phase dashes
-        {1, 300, 20},           // to 4: a Wither, 5 min of resonance with the Singular reactor, 20 spawners scanned
-        {1, 30, 5000},          // to 5: the Ender Dragon in the suit, 30 mobs by the black hole, 5 000 mB of SM poured
+        {5000, 300, 2000, 0},   // to 2: fly 5 km in gravity flight, Н2 absorbs 300 damage, spend 2 000 mB of gases
+        {100, 600, 50, 25},     // to 3: 100 mobs in the suit, 10 min in the Nether under 50% heat, 50 phase dashes; Ф5: 25 armoured ones suppressed
+        {1, 300, 20, 0},        // to 4: a Wither, 5 min of resonance with the Singular reactor, 20 spawners scanned
+        {1, 30, 5000, 1},       // to 5: the Ender Dragon in the suit, 30 mobs by the black hole, 5 000 mB of SM poured; Ф5: the Breakdown Warden
     };
-    public static final int TASKS = 3;
+    public static final int TASKS = 4;
 
     /** What task `index` for `target` level needs (0: no such task). */
     public static int taskNeed(int target, int index) {
@@ -233,6 +242,8 @@ public final class SingularLevel {
             case 50: return s.getInteger(C_DRAGON);
             case 51: return persisted.getInteger(HOLE_KILLS);
             case 52: return s.getInteger(C_SM);
+            case 33: return s.getInteger(C_EMP_KILLS);          // Подложка Ф5
+            case 53: return s.getInteger(C_WARDEN);             // Подложка Ф5
             default: return 0;
         }
     }

@@ -250,6 +250,9 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
             list.add((done ? "\u00a7a" : "\u00a7d") + Lang.tr(done ? "sc.tooltip.armor.singular.tasks.done" : "sc.tooltip.armor.singular.tasks", next));
             for (int i = 0; i < com.sc.util.SingularLevel.TASKS; i++) {
                 int[] pr = com.sc.util.SingularLevel.taskProgress(player, next, i);
+                if (pr[1] <= 0) {
+                    continue;                                  // Подложка Ф5: the fourth task exists for some levels only
+                }
                 boolean ok = pr[0] >= pr[1];
                 com.sc.util.TooltipSC.wrap(list, (ok ? "+ " : "- ") + Lang.tr("sc.tooltip.armor.singular.task." + next + "." + i, pr[0], pr[1]),
                         ok ? "\u00a7a" : "\u00a77");

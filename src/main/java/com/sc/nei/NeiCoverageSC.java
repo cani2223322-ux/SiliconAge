@@ -21,7 +21,10 @@ import net.minecraft.item.crafting.IRecipe;
  * blocks, the settlements' core, showcases (Ф3: both blocks), dock, trim and brick; Ф4's vents, the camp's safe and the
  * puncture pillar's core - NEISiliconAgeConfig.hideWildBlocks) are listed apart - not a gap. Ф3's ruin blocks (no tab; Ф4's
  * metas 4..6 among them) are taken meta by meta as NEI lists them; Ф4's wild and camp blocks (no tab either) come through their
- * getSubBlocks for a null tab, every meta - each shown one has its «Как получить» page. Client only, NEI loaded.
+ * getSubBlocks for a null tab, every meta - each shown one has its «Как получить» page. Ф5's arena blocks (no tab, every meta
+ * taken) are hidden on purpose, with pages all the same; its items (the relics 3..4, the Coordinator, the journals, the schemes, the
+ * Module, the Record), the Burnt Coil, the ПЭ-1М trophy and the boss's egg each have a page (ObtainHandlerSC.finalePage and the
+ * older branches) or a recipe - none is a gap. Client only, NEI loaded.
  */
 public final class NeiCoverageSC {
 
@@ -60,6 +63,9 @@ public final class NeiCoverageSC {
                 if (item == Item.getItemFromBlock(b)) {
                     subs.addAll(NEISiliconAgeConfig.wildStacks(b)); // Ф4: the same for the wild and camp blocks
                 }
+            }
+            if (com.sc.arena.ArenaBlocksSC.arena != null && item == Item.getItemFromBlock(com.sc.arena.ArenaBlocksSC.arena)) {
+                subs.addAll(NEISiliconAgeConfig.arenaStacks());     // Ф5: in no tab, every meta (hidden, each with its page)
             }
             for (ItemStack s : subs) {
                 if (s != null && s.getItem() != null && seen.add(Item.itemRegistry.getNameForObject(s.getItem()) + ":" + s.getItemDamage())) {

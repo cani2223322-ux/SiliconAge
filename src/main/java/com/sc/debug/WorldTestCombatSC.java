@@ -1022,10 +1022,10 @@ public final class WorldTestCombatSC {
             return;
         }
         int g = SubstrateTerrainSC.GRID;
-        // a Dead Node on land nobody has seen yet
+        // a Dead Node on land nobody has seen yet (Ф5: never a Breakdown Epicentre's crossing - the arena replaces its Node, ПУ-8)
         int[] node = null;
         for (int k = 12; k < 60 && node == null; k++) {
-            if (fresh(k * 16 - 2, -k * 16 - 2, k * 16 + 2, -k * 16 + 2)) {
+            if (fresh(k * 16 - 2, -k * 16 - 2, k * 16 + 2, -k * 16 + 2) && !com.sc.arena.ArenaLayoutSC.isArena(seed, k, -k)) {
                 node = new int[]{k, -k};
             }
         }
@@ -1044,7 +1044,7 @@ public final class WorldTestCombatSC {
             StructureStart empty = startAt(new MapGenDeadNodeSC(), cx, cz);
             int[] fresher = null;
             for (int k = 61; k < 120 && fresher == null; k++) {
-                if (fresh(k * 16 - 2, -k * 16 - 2, k * 16 + 2, -k * 16 + 2)) {
+                if (fresh(k * 16 - 2, -k * 16 - 2, k * 16 + 2, -k * 16 + 2) && !com.sc.arena.ArenaLayoutSC.isArena(seed, k, -k)) {
                     fresher = new int[]{k * 16, -k * 16};
                 }
             }

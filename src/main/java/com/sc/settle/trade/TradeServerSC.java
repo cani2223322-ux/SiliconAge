@@ -62,19 +62,27 @@ import net.minecraftforge.common.util.FakePlayer;
  * Ф4 (package C, docs/plan-substrate-tech-f4.md §9.4, §9.5, rules ПО-16, ПТ-17): a settlement that lost a raid trades nothing
  * for a day (RaidSC.tradeClosed - R_RAID, every deal; contracts stay open); the Elder's Crumb counts towards the player's three a
  * day from the world (CrumbLimitSC - R_CRUMBS when today's are taken; counted when the deal is made).
+ * <p>
+ * Ф5 (package P, docs/plan-substrate-tech-f5.md §9.5, rules ПО-21, ПО-22): the Armourer's «Широкий канал» (TradeTableSC.ARM_MOD_WIDE)
+ * is the caravan's rare deal - refused with R_CARAVAN_DEAL unless CaravanSC.dealOpen(player) (an ambush beaten off within its days,
+ * not used yet; a FakePlayer never has one), and the deal made uses it up (CaravanSC.useDeal) - one, whatever its daily limit says.
+ * The Crumbs a Ф5 deal takes as a part of its price (the Coordinator, the «Наладчик» scheme) are never counted towards the day's
+ * Crumbs: CrumbLimitSC counts only the Elder's ELDER_CRUMB, the one deal that gives a Crumb out.
  */
 public final class TradeServerSC {
 
     /** execute's results and TRADE_RESULT's "code": OK, or why not (lang sc.trade.result.<RESULT_KEYS[code]>). */
     public static final int OK = 0, R_UNKNOWN = 1, R_ENEMY = 2, R_LEVEL = 3, R_LIMIT = 4, R_CHIPS_CAP = 5, R_MISSING = 6,
             R_NO_SETTLEMENT = 7, R_NOT_HERE = 8, R_CONTRACTS_CAP = 9, R_TAKEN = 10, R_NOT_ON_BOARD = 11, R_NOT_DONE = 12,
-            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16, R_RAID = 17, R_CRUMBS = 18;
+            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16, R_RAID = 17, R_CRUMBS = 18, R_CARAVAN_DEAL = 19;
     /**
      * Appended only (Ф3: "noItem" - a service found nothing of the player's to work on; Ф4: "raid" - the settlement's trade closed
-     * after a lost raid, "crumbs" - the player's Crumbs for today are taken).
+     * after a lost raid, "crumbs" - the player's Crumbs for today are taken; Ф5: "caravanDeal" - the caravan's rare deal isn't open
+     * to the player).
      */
     public static final String[] RESULT_KEYS = {"ok", "unknown", "enemy", "level", "limit", "chipsCap", "missing", "noSettlement",
-            "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem", "raid", "crumbs"};
+            "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem", "raid", "crumbs",
+            "caravanDeal"};
     /** TRADE_STATE "anchor": nobody placed the first anchor yet / it is the viewer's, unpaid / paid to the viewer / someone else's. */
     public static final int ANCHOR_OPEN = 0, ANCHOR_YOURS = 1, ANCHOR_PAID = 2, ANCHOR_OTHER = 3;
     /** TRADE_STATE board "st": on the board, not taken / taken and open / handed in today. */
@@ -253,6 +261,9 @@ public final class TradeServerSC {
         if (!TradeRulesSC.available(o, c.level)) {
             return R_LEVEL;
         }
+        if (TradeTableSC.ARM_MOD_WIDE.equals(o.key) && !com.sc.settle.caravan.CaravanSC.dealOpen(c.p)) {
+            return R_CARAVAN_DEAL;                              // Ф5 (ПО-21, ПН-15): the caravan's rare deal - not open, or used
+        }
         if (TradeRulesSC.remaining(o, used(c, o)) <= 0) {
             return R_LIMIT;
         }
@@ -302,6 +313,9 @@ public final class TradeServerSC {
                 c.rec.chips += out.stackSize;
             }
             give(c.p, out);
+            if (TradeTableSC.ARM_MOD_WIDE.equals(o.key)) {
+                com.sc.settle.caravan.CaravanSC.useDeal(c.p);   // Ф5 (ПО-21): the rare deal made - used up (refusal saw it open)
+            }
         } else if (o.outKind == TradeOfferSC.OUT_MAP) {
             give(c.p, ItemSettlementMapSC.make(c.reg, c.s));
         } else {

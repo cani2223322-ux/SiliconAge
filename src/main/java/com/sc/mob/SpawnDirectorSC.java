@@ -342,7 +342,25 @@ public final class SpawnDirectorSC {
         if (VaultLayoutSC.inVault(w.getSeed(), x, y, z) || VaultLayoutSC.inVault(w.getSeed(), x, y + 1, z)) {
             return null;                                     // Ф4, ПС-41: a Vault has only its Sentinel
         }
+        if (builtArenaNear(w, x, z)) {
+            return null;                                     // Ф5, ПС-57: a Breakdown Epicentre has only the Warden's waves
+        }
         return new int[]{x, y, z};
+    }
+
+    /**
+     * Ф5, ПС-57: the column lies in a built Breakdown Epicentre's box (+ 8) - its record READY / FIGHT / KEYED. An arena crossing
+     * whose record is EMPTY (a world of 0.2.x: explored ground, or its Dead Node made already) keeps its Node's zone and spawns;
+     * no record yet - its start not made, nothing of it is loaded.
+     */
+    private static boolean builtArenaNear(World w, int x, int z) {
+        int[] c = com.sc.arena.ArenaLayoutSC.arenaNear(w.getSeed(), x, z, 8);
+        if (c == null) {
+            return false;
+        }
+        com.sc.arena.ArenaDataSC d = com.sc.arena.ArenaDataSC.get(w);
+        com.sc.arena.ArenaDataSC.Arena a = d == null ? null : d.arenaAt(c[0], c[1]);
+        return a != null && a.state != com.sc.arena.ArenaDataSC.EMPTY;
     }
 
     /** The column's biome kind: the world's own biome, else the cells' (Ф4: SubstrateCellsSC - five kinds). */
