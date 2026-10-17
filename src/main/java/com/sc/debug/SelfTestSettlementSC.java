@@ -1459,10 +1459,11 @@ public final class SelfTestSettlementSC {
         // the names BookWorldSC keeps for package S's and T's appended metas
         boolean names = "settlementBrick".equals(BookWorldSC.ROCK_NAMES[BookWorldSC.BRICK]) && "stolenCargo".equals(BookWorldSC.LOOT_NAMES[BookWorldSC.LOOT_STOLEN_CARGO]);
         String brickMeta = staticInt(SubstrateBlocksSC.class, "SETTLEMENT_BRICK");
-        boolean sMetas = SubstrateBlocksSC.ROCK_METAS == BookWorldSC.ROCK_NAMES.length && String.valueOf(BookWorldSC.BRICK).equals(brickMeta);
+        boolean sMetas = SubstrateBlocksSC.ROCK_METAS == BookWorldSC.ROCK_NAMES.length && SubstrateBlocksSC.ROCK_METAS == 10       // Ф4: + monocrystal
+                && "monocrystal".equals(BookWorldSC.ROCK_NAMES[SubstrateBlocksSC.MONOCRYSTAL]) && String.valueOf(BookWorldSC.BRICK).equals(brickMeta);
         ItemCombatLootSC.LootKind[] loot = ItemCombatLootSC.LootKind.values();
         boolean tMetas = loot.length == BookWorldSC.LOOT_NAMES.length && "stolenCargo".equals(loot[BookWorldSC.LOOT_STOLEN_CARGO].key)
-                && "shieldCore".equals(loot[loot.length - 1].key);           // Ф3 appended four after it (docs/plan-substrate-tech-f3.md §2.2)
+                && "naturalWafer".equals(loot[loot.length - 1].key);         // Ф3 appended four after it, Ф4 five more (docs/plan-substrate-tech-f4.md §0)
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {

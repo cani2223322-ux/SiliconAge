@@ -111,6 +111,7 @@ public final class SelfTestSC {
             SelfTestSubstrateSC.run();
             SelfTestSettlementSC.run();
             SelfTestCombatSC.run();                      // Подложка Ф3 (docs/plan-substrate-tech-f3.md §11.1)
+            SelfTestHazardSC.run();                      // Подложка Ф4 (docs/plan-substrate-tech-f4.md §11.1)
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();

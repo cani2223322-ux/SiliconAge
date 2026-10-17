@@ -10,6 +10,7 @@ import com.sc.init.ModItems;
 import com.sc.mob.ItemCombatLootSC;
 import com.sc.mob.MobItemsSC;
 import com.sc.mob.TrophyRestoreSC;
+import com.sc.ruin.RelicItemsSC;
 import com.sc.settle.NpcKindSC;
 import com.sc.settle.ReputationSC;
 import com.sc.settle.SettlementItemsSC;
@@ -36,19 +37,24 @@ import net.minecraft.item.ItemStack;
  * «Нарушитель» only sells (ПД-1, at x2), so they must stay open to him; every purchase needs its level and buys(). Metals go in by their ore name (UniDict's ingots are as good as ours) and
  * come out as the mod's own ingots; everything else is an exact item and meta.
  * <p>
- * Not in Ф2, left out (TODO): the Technologist's «4 Природные пластины -> 2 КЧ» (the Substrate Dweller, Ф4), the Gas
- * Technician's «1 Выкипевший контур -> 3 КЧ» (the Overheated, Ф4), the Cartographer's «Пеленгатор руин» and
- * «Координатор арены» (Ф3-Ф5), the Elder's «Схема окраски «Наладчик»» and «Модуль Литографов» (Ф3 / Ф5), the Power
- * Engineer, the Armourer and the Salvager (Ф3). So that the Gas Technician and the Cartographer buy something from a
- * «Чужак» meanwhile, each takes one of the mod's things for chips (gasPtfe, cartLenses: never sold by anyone - ПО-7).
+ * Not in Ф2, left out: the Cartographer's «Координатор арены» and the Elder's «Схема окраски «Наладчик»» and «Модуль
+ * Литографов» (Ф5); the Power Engineer, the Armourer and the Salvager came in Ф3, the Ф4 deals below. So that the Gas
+ * Technician and the Cartographer bought something from a «Чужак» in Ф2, each takes one of the mod's things for chips
+ * (gasPtfe, cartLenses: never sold by anyone - ПО-7); they stay beside the Ф4 deals.
  * <p>
  * Ф3 (docs/plan-substrate-tech-f3.md §6.7, rules ПО-10..ПО-13; the keys appended): the Power Engineer (parts for chips,
  * the HV cell, the He-Loop Module; the charge service for Nano / Quantum / Exo pieces - one limit for the three), the
  * Armourer (the Defense Chip, three ПЭ-1 modules; the restoring services - TrophyRestoreSC's prices, one row per price
  * group and tier, no limit TODO(balance)), the Salvager (firmware, scrap, nanite dust and a Nano trophy piece for chips).
  * The services stand aside of ПО-7's «nothing sold»: what they give is the player's own thing (a piece charged, a trophy
- * made real). Not in Ф3: the Singular armour scrap (Ф4). ПО-7's «both bought and sold» has its one definition here
- * (boughtAndSold) - the self-tests ask it.
+ * made real). ПО-7's «both bought and sold» has its one definition here (boughtAndSold) - the self-tests ask it.
+ * <p>
+ * Ф4 (package C, docs/plan-substrate-tech-f4.md §9.5, rules ПО-14..ПО-16; the keys appended; TODO(balance)): the Gas Technician
+ * buys a Boiled-out Loop (the Overheated's) for 3 chips, the Technologist four Natural Wafers (the Wafer Crab's) for 2, the
+ * Salvager two Singular Armour Scraps for 8, four Induction Threads for 2, two Plasma Condensates for 3 - all «Чужак»; the
+ * Cartographer sells the Ruin Direction Finder for 10 chips and a Focusing Lens («Партнёр», one a day). ПО-7 holds: the loot is
+ * only bought, the finder only sold, the lens only a price. The Elder's Crumb counts towards the player's three a day
+ * (TradeServerSC, CrumbLimitSC); a lost raid closes the settlement's trade for a day (TradeServerSC.R_RAID).
  */
 public final class TradeTableSC {
 
@@ -67,7 +73,10 @@ public final class TradeTableSC {
             ARM_RESTORE_ARMS_NANO = "armRestoreArmsNano", ARM_RESTORE_ARMS_QUANTUM = "armRestoreArmsQuantum",
             ARM_RESTORE_ARMS_EXO = "armRestoreArmsExo", ARM_RESTORE_PE1 = "armRestorePe1",
             SAL_FIRMWARE = "salFirmware", SAL_NANO_SCRAP = "salNanoScrap", SAL_QUANTUM_SCRAP = "salQuantumScrap",
-            SAL_EXO_SCRAP = "salExoScrap", SAL_NANITE = "salNaniteDust", SAL_TROPHY = "salNanoTrophy";
+            SAL_EXO_SCRAP = "salExoScrap", SAL_NANITE = "salNaniteDust", SAL_TROPHY = "salNanoTrophy",
+            // ---- Ф4 (appended)
+            GAS_BOILED_LOOP = "gasBoiledLoop", TECH_NATURAL_WAFERS = "techNaturalWafer", SAL_SINGULAR_SCRAP = "salSingularScrap",
+            SAL_INDUCTION = "salInductionThread", SAL_PLASMA = "salPlasmaCondensate", CART_FINDER = "cartRuinFinder";
     /** The Power Engineer's three charges share one limit (4 a day for all of them, ПО-10): their counter. */
     public static final String PE_CHARGE_COUNTER = "peCharge";
     /** The charge service's chips by suit (Nano, Quantum, Exo; ПО-10). TODO(balance) */
@@ -124,7 +133,7 @@ public final class TradeTableSC {
         NpcKindSC k = NpcKindSC.TECHNOLOGIST;
         l.add(sale(TECH_WAFERS, k, item(silicon(SiliconMaterial.SI_WAFER), 16), 3, anyone, 8));
         l.add(sale(TECH_TRANSISTORS, k, item(silicon(SiliconMaterial.TRANSISTOR), 8), 2, anyone, 8));
-        // TODO(Ф4): «4 Природные пластины -> 2 КЧ» (the Substrate Dweller's), Чужак, 8
+        l.add(sale(TECH_NATURAL_WAFERS, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.NATURAL_WAFER, 1), 4), 2, anyone, 8));   // Ф4 (ПО-14)
         l.add(sale(TECH_MEMORY, k, item(silicon(SiliconMaterial.MEMORY_CHIP), 3), 3, acq, 6));
         l.add(purchase(TECH_GAAS, k, new TradeOfferSC.Ingredient[]{TradeOfferSC.Ingredient.chips(6), item(silicon(SiliconMaterial.SI_WAFER), 1)},
                 item(silicon(SiliconMaterial.GAAS_WAFER), 1), acq, 4));
@@ -137,16 +146,18 @@ public final class TradeTableSC {
         l.add(purchase(MET_HAFNIUM, k, chipsIn(10), item(ModItems.ingot.stackOf(Material.HAFNIUM), 2), own, 4));
         // ---- the Gas Technician: liquid helium, deuterium
         k = NpcKindSC.GAS_TECH;
-        // TODO(Ф4): «1 Выкипевший контур -> 3 КЧ» (the Overheated's), Чужак, 6. Meanwhile PTFE (the cryo tanks' seals). TODO(balance)
-        l.add(sale(GAS_PTFE, k, item(component("ptfeSheet"), 6), 2, anyone, 6));
+        l.add(sale(GAS_BOILED_LOOP, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.BOILED_LOOP, 1), 1), 3, anyone, 6));   // Ф4 (ПО-14)
+        l.add(sale(GAS_PTFE, k, item(component("ptfeSheet"), 6), 2, anyone, 6));          // PTFE (the cryo tanks' seals). TODO(balance)
         l.add(purchase(GAS_HELIUM, k, chipsIn(8), item(stack(ModItems.liquidHeCell)), acq, 4));
         l.add(purchase(GAS_DEUTERIUM, k, chipsIn(14), item(stack(ModItems.deuteriumCell)), partner, 2));
         // ---- the Rift Cartographer: the Return Capsule, the Settlement Map
         k = NpcKindSC.CARTOGRAPHER;
-        // TODO(Ф3-Ф5): «Пеленгатор руин», «Координатор арены». Meanwhile plain lenses (the Focuser's optics). TODO(balance)
+        // TODO(Ф5): «Координатор арены». Plain lenses (the Focuser's optics). TODO(balance)
         l.add(sale(CART_LENSES, k, item(component("lens"), 6), 1, anyone, 6));
         l.add(purchase(CART_CAPSULE, k, chipsIn(8), item(SettlementItemsSC.capsules(1)), stranger, 2));
         l.add(new TradeOfferSC(CART_MAP, k, chipsIn(3), null, TradeOfferSC.OUT_MAP, 0, acq, 4, false, 1));
+        l.add(purchase(CART_FINDER, k, new TradeOfferSC.Ingredient[]{TradeOfferSC.Ingredient.chips(10), item(component("focusLens"), 1)},
+                item(stack(RelicItemsSC.ruinFinder)), partner, 1));                    // Ф4 (ПО-15, ПХ-6): one a day
         // ---- the Elder: the penance, a Stolen Cargo back, the Singularity Crumb
         k = NpcKindSC.ELDER;
         l.add(new TradeOfferSC(ELDER_PENANCE, k, chipsIn(ReputationSC.PENANCE_CHIPS), null, TradeOfferSC.OUT_REPUTATION,
@@ -209,10 +220,12 @@ public final class TradeTableSC {
         l.add(sale(SAL_NANO_SCRAP, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1), 8), 2, anyone, 8));
         l.add(sale(SAL_QUANTUM_SCRAP, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.QUANTUM_SCRAP, 1), 6), 3, anyone, 8));
         l.add(sale(SAL_EXO_SCRAP, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.EXO_SCRAP, 1), 4), 5, anyone, 8));
-        // TODO(Ф4): «2 Лома Сингулярной брони -> 8 КЧ»
+        l.add(sale(SAL_SINGULAR_SCRAP, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.SINGULAR_SCRAP, 1), 2), 8, anyone, 8));   // Ф4 (ПО-14)
         l.add(sale(SAL_NANITE, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.NANITE_DUST, 1), 16), 1, anyone, 8));
         l.add(sale(SAL_TROPHY, k, TradeOfferSC.Ingredient.trophies(TrophyRestoreSC.metas(TrophyRestoreSC.G_PIECE, ArmorSuit.NANO.ordinal())),
                 6, anyone, 4));
+        l.add(sale(SAL_INDUCTION, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.INDUCTION_THREAD, 1), 4), 2, anyone, 8));     // Ф4 (ПО-14)
+        l.add(sale(SAL_PLASMA, k, item(MobItemsSC.loot(ItemCombatLootSC.LootKind.PLASMA_CONDENSATE, 1), 2), 3, anyone, 8));
     }
 
     /**

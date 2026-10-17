@@ -62,6 +62,7 @@ public final class SubstrateNetSC {
     public static void init() {
         CHANNEL.registerMessage(Handler.class, Message.class, 0, Side.CLIENT);
         com.sc.settle.SettleNetSC.register(CHANNEL);          // Ф2: the settlements' messages, discriminators 1 and 2
+        com.sc.hazard.HazardNetSC.register(CHANNEL);          // Ф4: the EMP storm's state and pulses, discriminator 3
         FMLCommonHandler.instance().bus().register(new Events());
     }
 
@@ -151,9 +152,10 @@ public final class SubstrateNetSC {
             if (SubstrateSC.dimId() != msg.dim) {
                 diff.append("dimensionId ").append(SubstrateSC.dimId()).append(" / server ").append(msg.dim).append("; ");
             }
-            if (SubstrateSC.plateaus().biomeID != msg.biomePlateaus || SubstrateSC.canyons().biomeID != msg.biomeCanyons) {
-                diff.append("biomes ").append(SubstrateSC.plateaus().biomeID).append(",").append(SubstrateSC.canyons().biomeID)
-                        .append(" / server ").append(msg.biomePlateaus).append(",").append(msg.biomeCanyons).append("; ");
+            int[] mineIds = biomeIds(), theirs = msg.biomes();
+            if (!java.util.Arrays.equals(mineIds, theirs)) {
+                diff.append("biomes ").append(java.util.Arrays.toString(mineIds)).append(" / server ").append(java.util.Arrays.toString(theirs))
+                        .append("; ");
             }
             if (SubstrateSC.dimId() != msg.dim && !DimensionManager.isDimensionRegistered(msg.dim)) {
                 try {
@@ -190,9 +192,26 @@ public final class SubstrateNetSC {
         }
     }
 
+    /** This side's biome ids by BiomeSubstrateSC kind (-1 for one that isn't made). */
+    static int[] biomeIds() {
+        int[] out = new int[BiomeSubstrateSC.KINDS];
+        for (int k = 0; k < out.length; k++) {
+            BiomeSubstrateSC b = SubstrateSC.active() ? SubstrateSC.biome(k) : null;
+            out[k] = b == null || b.kind != k ? -1 : b.biomeID;
+        }
+        return out;
+    }
+
     public static class Message implements IMessage {
         boolean active;
         int dim, provider, biomePlateaus, biomeCanyons;
+        /** Ф4: the Ridges', the Oxide Fields', the Rift's ids - after the rules on the wire (a client of Ф1..Ф3 stops reading before them). */
+        int biomeRidges = -1, biomeOxide = -1, biomeRift = -1;
+
+        /** The server's biome ids by kind (-1: not sent - a server of Ф1..Ф3). */
+        int[] biomes() {
+            return new int[]{biomePlateaus, biomeCanyons, biomeRidges, biomeOxide, biomeRift};
+        }
         final Map<String, Object> rules = new HashMap<String, Object>();
         final Map<String, Byte> types = new HashMap<String, Byte>();
 
@@ -206,8 +225,12 @@ public final class SubstrateNetSC {
             if (m.active) {
                 m.dim = SubstrateSC.dimId();
                 m.provider = SubstrateSC.providerId();
-                m.biomePlateaus = SubstrateSC.plateaus().biomeID;
-                m.biomeCanyons = SubstrateSC.canyons().biomeID;
+                int[] ids = biomeIds();
+                m.biomePlateaus = ids[BiomeSubstrateSC.PLATEAUS];
+                m.biomeCanyons = ids[BiomeSubstrateSC.CANYONS];
+                m.biomeRidges = ids[BiomeSubstrateSC.RIDGES];
+                m.biomeOxide = ids[BiomeSubstrateSC.OXIDE];
+                m.biomeRift = ids[BiomeSubstrateSC.RIFT];
             }
             for (Field f : ruleFields()) {
                 try {
@@ -243,6 +266,11 @@ public final class SubstrateNetSC {
                 rules.put(name, v);
                 types.put(name, type);
             }
+            if (buf.readableBytes() >= 3) {                     // Ф4's biomes (a server of Ф1..Ф3 sends none: -1)
+                biomeRidges = buf.readUnsignedByte();
+                biomeOxide = buf.readUnsignedByte();
+                biomeRift = buf.readUnsignedByte();
+            }
         }
 
         @Override
@@ -266,6 +294,9 @@ public final class SubstrateNetSC {
                     default: buf.writeLong((Long) v); break;
                 }
             }
+            buf.writeByte(biomeRidges);                         // Ф4: after the rules (see biomeRidges)
+            buf.writeByte(biomeOxide);
+            buf.writeByte(biomeRift);
         }
     }
 

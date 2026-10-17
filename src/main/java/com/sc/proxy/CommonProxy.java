@@ -65,6 +65,10 @@ public class CommonProxy {
     public void settleMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
     }
 
+    /** Подложка Ф4: a world event's message from the server (HazardNetSC.ToClient - the EMP storm; client only, any thread). */
+    public void hazardMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

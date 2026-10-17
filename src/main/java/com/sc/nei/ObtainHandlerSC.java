@@ -10,6 +10,7 @@ import org.lwjgl.opengl.GL11;
 import com.sc.block.BlockMachineSC;
 import com.sc.dim.SubstrateBlocksSC;
 import com.sc.dim.SubstrateOreTableSC;
+import com.sc.dim.SubstrateWildBlocksSC;
 import com.sc.emp.EmpTooltipSC;
 import com.sc.energy.GeneratorType;
 import com.sc.init.ModBlocks;
@@ -26,6 +27,10 @@ import com.sc.mob.ItemCombatLootSC;
 import com.sc.mob.MobEntitiesSC;
 import com.sc.mob.MobItemsSC;
 import com.sc.mob.MobRecipesSC;
+import com.sc.ruin.CampBlocksSC;
+import com.sc.ruin.ItemRelicSC;
+import com.sc.ruin.ItemRuinFinderSC;
+import com.sc.ruin.RelicItemsSC;
 import com.sc.ruin.RuinBlocksSC;
 import com.sc.settle.ReputationSC;
 import com.sc.settle.SettlementBlocksSC;
@@ -60,8 +65,10 @@ import net.minecraftforge.oredict.OreDictionary;
  * rock, ores and druse (generated there), its trophies and combat loot (off its mobs) and the spawn eggs (creative
  * only), the settlements' Credit Chip, Return Capsule and Settlement Map (Ф2: the settlers and the Cartographer's
  * deal), Ф3's ruin blocks (the Dead Nodes and the lithographs), its loot (who drops it, who buys it) and its trophies'
- * restoring (the Armourer, one's own station - BookWorldSC.restoreLine), and - in a pack that unifies metals (UniDict) -
- * the mod's ingots and dusts it swaps for another mod's.
+ * restoring (the Armourer, one's own station - BookWorldSC.restoreLine), Ф4's blocks (the Singular Glass, the flora, the vents,
+ * the monocrystal - generated there; the camps' blocks; the Vaults' and camps' ruin metas), its relics (who drops them, what they
+ * open), the Pelengator (the Cartographer's deal) and its loot and Singular trophies, and - in a pack that unifies metals
+ * (UniDict) - the mod's ingots and dusts it swaps for another mod's.
  */
 public class ObtainHandlerSC extends TemplateRecipeHandler {
 
@@ -190,6 +197,8 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
                 p.rel(ModItems.siliconMaterial.stackOf(SiliconMaterial.SILICA_SAND));
             } else if (meta == SubstrateBlocksSC.COPPER_TRACE || meta == SubstrateBlocksSC.TRACE_NODE) {
                 p.rel(ModItems.crushedOre.stackOf(Material.COPPER));
+            } else if (meta == SubstrateBlocksSC.MONOCRYSTAL) {                  // Ф4: the geodes' lining (ПМ-16)
+                p.rel(ModItems.siliconMaterial.stackOf(SiliconMaterial.METALLURGICAL_SI));
             }
             return p;
         }
@@ -220,11 +229,15 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         // Ф3 (docs/plan-substrate-tech-f3.md §10.3): the ruin blocks - the Dead Nodes' and the lithographs', broken into scrap
         if (blockItem(item, RuinBlocksSC.ruin)) {
             Page p = new Page(s);
-            p.text(Lang.tr("sc.nei.obtain.ruin"));
+            p.text(Lang.tr(meta >= BookWorldSC.RUIN_VAULT_PLATING ? "sc.nei.obtain.ruin4" : "sc.nei.obtain.ruin"));   // Ф4: the Vaults' and camps' metas
             p.text(BookWorldSC.ruinLine(meta));
             p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
             p.rel(MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1));
             return p;
+        }
+        Page wild = wildPage(s);
+        if (wild != null) {
+            return wild;
         }
         if (MobItemsSC.trophy != null && item == MobItemsSC.trophy) {
             String from = BookWorldSC.trophyDroppers(meta), restore = BookWorldSC.restoreLine(meta);
@@ -256,6 +269,72 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (MobItemsSC.spawnEgg != null && item == MobItemsSC.spawnEgg) {
             Page p = new Page(s);
             p.text(Lang.tr(meta == MobEntitiesSC.ID_TUNER || meta == MobEntitiesSC.ID_WARDEN ? "sc.nei.obtain.egg.settle" : "sc.nei.obtain.egg"));
+            return p;
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ Подложка Ф4 (docs/plan-substrate-tech-f4.md §10.3)
+
+    /**
+     * The new biomes' blocks (the Singular Glass, the flora, the vents - generated there; the vents and the pillar's core are
+     * hidden, R in cheat mode still asks), the camps' blocks (the Stolen Field Generator, the stolen panel and pad, the safe), the
+     * relics (who drops them, what they open) and the Pelengator (the Cartographer's deal). Null: none of them.
+     */
+    private Page wildPage(ItemStack s) {
+        Item item = s.getItem();
+        int meta = s.getItemDamage();
+        ItemStack bridge = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1);
+        Block wild = blockItem(item, SubstrateWildBlocksSC.glass) ? SubstrateWildBlocksSC.glass : blockItem(item, SubstrateWildBlocksSC.flora)
+                ? SubstrateWildBlocksSC.flora : blockItem(item, SubstrateWildBlocksSC.vent) ? SubstrateWildBlocksSC.vent : null;
+        if (wild != null) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.substrate"));
+            p.text(BookWorldSC.wildLine(wild, meta));
+            p.rel(bridge);
+            if (wild == SubstrateWildBlocksSC.flora) {
+                p.rel(new ItemStack(Items.shears));
+            } else if (wild == SubstrateWildBlocksSC.vent && meta == SubstrateWildBlocksSC.FUMAROLE) {
+                p.rel(new ItemStack(ModBlocks.pipeSC, 1, 0));                    // the mod's pipe beside it takes the helium
+            } else if (wild == SubstrateWildBlocksSC.vent && meta == SubstrateWildBlocksSC.ARC_CRACK) {
+                p.rel(new ItemStack(ModBlocks.cableSC, 1, 0));                   // the mod's cable beside it takes the EU
+            } else if (wild == SubstrateWildBlocksSC.vent && meta == SubstrateWildBlocksSC.CRACKED_RTG) {
+                p.rel(new ItemStack(ModItems.dosimeter));
+            }
+            return p;
+        }
+        boolean field = blockItem(item, CampBlocksSC.stolenField);
+        if (field || blockItem(item, CampBlocksSC.camp)) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.camp"));
+            p.text(BookWorldSC.campLine(field ? -1 : meta));
+            p.rel(bridge).rel(MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1));
+            if (MobItemsSC.spawnEgg != null) {
+                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_WARLORD));
+            }
+            return p;
+        }
+        if (RelicItemsSC.relic != null && item == RelicItemsSC.relic) {
+            Page p = new Page(s);
+            p.text(BookWorldSC.relicLine(meta));
+            p.text(Lang.tr(meta == ItemRelicSC.SEALED_CRUMB ? "sc.nei.obtain.relic" : "sc.nei.obtain.mobrules"));
+            if (meta == ItemRelicSC.SEALED_CRUMB) {
+                p.rel(new ItemStack(ModItems.singularCrumb));
+            }
+            if (MobItemsSC.spawnEgg != null) {
+                p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, meta == ItemRelicSC.CAMP_KEY ? MobEntitiesSC.ID_WARLORD : MobEntitiesSC.ID_SENTINEL));
+                if (meta == ItemRelicSC.SEALED_CRUMB) {
+                    p.rel(new ItemStack(MobItemsSC.spawnEgg, 1, MobEntitiesSC.ID_ECLIPSE));
+                }
+            }
+            return p;
+        }
+        if (RelicItemsSC.ruinFinder != null && item == RelicItemsSC.ruinFinder) {
+            Page p = new Page(s);
+            String seller = BookWorldSC.sellerLine(new ItemStack(item));
+            p.text(seller != null ? seller : Lang.tr("sc.nei.obtain.finder"));
+            p.text(Lang.tr("sc.manual.world.vaults.finder", ItemRuinFinderSC.USES));
+            p.rel(SettlementItemsSC.chips(1));
             return p;
         }
         return null;

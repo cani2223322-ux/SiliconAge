@@ -40,6 +40,10 @@ import net.minecraft.world.World;
  * Ф3 (docs/plan-substrate-tech-f3.md §3.3, §3.5): in that branch a mob's personal EMP screen takes the shot first
  * (sc.emp.hit.mob.screen, the EU spent); the reactive technology (IEmpReactiveSC: drones, swarms, mimics) answers before
  * the Slowness - both under the same rule. A mob's own ПЭ-1 is EmpMobGunSC's.
+ *
+ * Ф4 (docs/plan-substrate-tech-f4.md §7.7, ПБ-26): one more branch before the Slowness - a creature the ПЭ-1 does nothing to
+ * (IEmpUselessSC: the Quartzite Colossus): the EU are spent, nothing happens, the shooter hears sc.emp.hit.useless. The
+ * player path is untouched.
  */
 public final class EmpGunLogicSC {
 
@@ -406,6 +410,8 @@ public final class EmpGunLogicSC {
         } else if (EmpMobSC.reactive(target) && ((IEmpReactiveSC) target).empStruck(p, mode, h.at.xCoord, h.at.yCoord, h.at.zCoord)) {
             suppressedFx(p, target);                            // Ф3, ПБ-20: a drone falls, a swarm burns, a mimic wakes up stunned
             say(p, "sc.emp.hit.reactive", EmpMobSC.name(target));
+        } else if (target instanceof IEmpUselessSC && target instanceof EntityLivingBase) {
+            say(p, "sc.emp.hit.useless", EmpMobSC.name(target));  // Ф4, ПБ-26: the Colossus - the EU spent, no effect, not even the Slowness
         } else if (target instanceof EntityLivingBase) {
             EmpSC.applyNoArmour((EntityLivingBase) target);
             say(p, "sc.emp.noarmour");

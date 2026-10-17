@@ -94,6 +94,18 @@ public class SCMod {
         // sparing items (Forge's ExplosionEvent.Detonate)
         FMLCommonHandler.instance().bus().register(com.sc.mob.EliteSC.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.mob.EliteSC.INSTANCE);
+        // Подложка Ф4, docs/plan-substrate-tech-f4.md: the EMP storm, the raids, the bridge's echo (package S - FML's bus: the world /
+        // server ticks, logins, dimension changes; Forge's for the world events), the camps' and Vaults' slow life (package C), the
+        // Scrapper's errands (package N - Forge's PlayerDropsEvent, FML's world tick)
+        FMLCommonHandler.instance().bus().register(com.sc.hazard.EmpStormSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.hazard.EmpStormSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.hazard.RaidSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.hazard.RaidSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.hazard.BridgeEchoSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.ruin.RuinWorldSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.ruin.RuinWorldSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.mob.ScrapperSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.mob.ScrapperSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -183,6 +195,12 @@ public class SCMod {
         com.sc.mob.EliteSC.clearAll();                   // Ф3: the Avenger's pending blasts, mobs' ПЭ-1 charge-ups, the stations' pending restorings
         com.sc.emp.EmpMobGunSC.clearAll();
         com.sc.mob.TrophyRestoreSC.clearAll();
+        com.sc.dim.SubstrateCellsSC.clearAll();          // Ф4: the cells' cache, the storm's and raids' memory, the echo's squads,
+        com.sc.hazard.EmpStormSC.clearAll();             // the camps' / Vaults' and the Scrapper's
+        com.sc.hazard.RaidSC.clearAll();
+        com.sc.hazard.BridgeEchoSC.clearAll();
+        com.sc.ruin.RuinWorldSC.clearAll();
+        com.sc.mob.ScrapperSC.clearAll();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
@@ -210,6 +228,8 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestSettlementSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestCombatSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestArmourerSC());
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestHazardSC());   // Подложка Ф4 (package D)
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWildSC());
         }
     }
 }

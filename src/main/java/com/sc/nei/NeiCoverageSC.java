@@ -18,8 +18,10 @@ import net.minecraft.item.crafting.IRecipe;
  * Developer check (PackCheckSC, -Dsc.packcheck): every item of this mod as the creative tabs list it, and how many
  * recipes NEI's own handlers show for it ("item" lookups, as the R key asks). Items with none are listed, with any
  * crafting-table recipe NEI doesn't draw (a custom IRecipe class); those hidden in NEI on purpose (the technical
- * blocks, the settlements' core, showcases (Ф3: both blocks), dock, trim and brick) are listed apart - not a gap. Ф3's
- * ruin blocks (no tab) are taken meta by meta as NEI lists them. Client only, NEI loaded.
+ * blocks, the settlements' core, showcases (Ф3: both blocks), dock, trim and brick; Ф4's vents, the camp's safe and the
+ * puncture pillar's core - NEISiliconAgeConfig.hideWildBlocks) are listed apart - not a gap. Ф3's ruin blocks (no tab; Ф4's
+ * metas 4..6 among them) are taken meta by meta as NEI lists them; Ф4's wild and camp blocks (no tab either) come through their
+ * getSubBlocks for a null tab, every meta - each shown one has its «Как получить» page. Client only, NEI loaded.
  */
 public final class NeiCoverageSC {
 
@@ -53,6 +55,11 @@ public final class NeiCoverageSC {
             }
             if (com.sc.ruin.RuinBlocksSC.ruin != null && item == Item.getItemFromBlock(com.sc.ruin.RuinBlocksSC.ruin)) {
                 subs.addAll(NEISiliconAgeConfig.ruinStacks());      // Ф3: in no tab, every meta listed in NEI (and checked here)
+            }
+            for (net.minecraft.block.Block b : NEISiliconAgeConfig.wildBlocks()) {
+                if (item == Item.getItemFromBlock(b)) {
+                    subs.addAll(NEISiliconAgeConfig.wildStacks(b)); // Ф4: the same for the wild and camp blocks
+                }
             }
             for (ItemStack s : subs) {
                 if (s != null && s.getItem() != null && seen.add(Item.itemRegistry.getNameForObject(s.getItem()) + ":" + s.getItemDamage())) {

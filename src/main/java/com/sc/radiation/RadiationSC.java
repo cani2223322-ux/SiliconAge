@@ -13,6 +13,7 @@ import com.sc.util.ArmorSuit;
 import com.sc.util.ConfigSC;
 
 import net.minecraft.block.Block;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
@@ -67,7 +68,8 @@ public final class RadiationSC {
     public static final DamageSource DAMAGE = new DamageSource("sc.radiation").setDamageBypassesArmor();
 
     private static final class Source {
-        final int x, y, z;
+        /** Its place (a block's; a moving one's - reportEntity - follows it). */
+        int x, y, z;
         float level;
         int radius;
         long seen;
@@ -83,6 +85,11 @@ public final class RadiationSC {
 
     /** dimension -> packed position -> source; a source not reported for two seconds is gone. */
     private static final Map<Integer, Map<Long, Source>> SOURCES = new HashMap<Integer, Map<Long, Source>>();
+    /** A moving source's key: this + its entity id (one record per entity; a block's key never reaches it within the world's border). */
+    private static final long ENTITY_KEY = Long.MIN_VALUE;
+    /** How long a source lives unreported (ticks); dimension -> when its gone ones were last dropped (report does it too). */
+    private static final int STALE_TICKS = 40;
+    private static final Map<Integer, Long> PURGED = new HashMap<Integer, Long>();
 
     private RadiationSC() {
     }
@@ -101,25 +108,53 @@ public final class RadiationSC {
         report(w, x, y, z, level, radius, true);
     }
 
+    /**
+     * A moving source (a mob: the Overheated) radiating at block (x, y, z) - once a second. One record for the entity, moved
+     * with it: keyed by the block, the places it walked through would stay sources for two more seconds and add up.
+     */
+    public static void reportEntity(Entity e, int x, int y, int z, float level, int radius) {
+        if (e != null) {
+            put(e.worldObj, ENTITY_KEY + e.getEntityId(), x, y, z, level, radius, false);
+        }
+    }
+
     private static void report(World w, int x, int y, int z, float level, int radius, boolean pierce) {
+        put(w, key(x, y, z), x, y, z, level, radius, pierce);
+    }
+
+    private static void put(World w, long k, int x, int y, int z, float level, int radius, boolean pierce) {
         if (w == null || w.isRemote || level <= 0 || radius <= 0) {
             return;
         }
-        Map<Long, Source> map = SOURCES.get(w.provider.dimensionId);
+        Integer dim = Integer.valueOf(w.provider.dimensionId);
+        Map<Long, Source> map = SOURCES.get(dim);
         if (map == null) {
             map = new HashMap<Long, Source>();
-            SOURCES.put(w.provider.dimensionId, map);
+            SOURCES.put(dim, map);
         }
-        long k = key(x, y, z);
+        long now = w.getTotalWorldTime();
+        Long last = PURGED.get(dim);
+        if (last == null || now - last.longValue() >= STALE_TICKS || now < last.longValue()) {
+            PURGED.put(dim, Long.valueOf(now));                 // the gone ones out here too: no player asking (fromSources) - no growth
+            for (Iterator<Source> it = map.values().iterator(); it.hasNext(); ) {
+                Source o = it.next();
+                if (now - o.seen > STALE_TICKS || now < o.seen) {
+                    it.remove();
+                }
+            }
+        }
         Source s = map.get(k);
         if (s == null) {
             s = new Source(x, y, z);
             map.put(k, s);
         }
+        s.x = x;
+        s.y = y;
+        s.z = z;
         s.level = level;
         s.radius = radius;
         s.pierce = pierce;
-        s.seen = w.getTotalWorldTime();
+        s.seen = now;
     }
 
     /** What the sources send to a point (after distance and the blocks in the way). */
@@ -132,7 +167,7 @@ public final class RadiationSC {
         float sum = 0F;
         for (Iterator<Source> it = map.values().iterator(); it.hasNext(); ) {
             Source s = it.next();
-            if (now - s.seen > 40 || now < s.seen) {
+            if (now - s.seen > STALE_TICKS || now < s.seen) {
                 it.remove();
                 continue;
             }
@@ -159,7 +194,7 @@ public final class RadiationSC {
         double px = p.posX, py = p.posY + 1.0, pz = p.posZ;
         float sum = 0F;
         for (Source s : map.values()) {
-            if (!s.pierce || now - s.seen > 40 || now < s.seen) {
+            if (!s.pierce || now - s.seen > STALE_TICKS || now < s.seen) {
                 continue;
             }
             double sx = s.x + 0.5, sy = s.y + 0.5, sz = s.z + 0.5;
@@ -277,7 +312,8 @@ public final class RadiationSC {
 
     /** The radiation level where a player is (sources and carried things, x the config's multiplier). */
     public static float levelAt(EntityPlayer p) {
-        float level = fromSources(p.worldObj, p.posX, p.posY + 1.0, p.posZ) + carried(p);
+        // + the Substrate's background (Ф4, ПА-1: the Oxide Fields, the Rift - SubstrateRadiationSC, package W)
+        float level = fromSources(p.worldObj, p.posX, p.posY + 1.0, p.posZ) + carried(p) + com.sc.dim.SubstrateRadiationSC.background(p);
         return Math.min(MAX_LEVEL, level * ConfigSC.radiationMultiplier);
     }
 
@@ -474,12 +510,14 @@ public final class RadiationSC {
     /** Server stop (and tests): forget every source. */
     public static void clearSources() {
         SOURCES.clear();
+        PURGED.clear();
         com.sc.block.BlockMetalSC.clearCache();   // keyed by block id - the next world may number its blocks differently
     }
 
     /** A dimension unloads: its sources go. */
     public static void forgetDimension(int dim) {
         SOURCES.remove(dim);
+        PURGED.remove(dim);
     }
 
     /** The dose keeps up this effect (the suit's cleansing leaves it: radiation sickness isn't a poison). */

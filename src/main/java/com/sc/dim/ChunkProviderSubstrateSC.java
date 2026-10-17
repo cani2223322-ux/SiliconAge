@@ -56,6 +56,14 @@ import net.minecraft.world.chunk.IChunkProvider;
  * <p>
  * Ф3 (package X, docs/plan-substrate-tech-f3.md §8.2): the same for the ruins - no trace, druse or pond in a built Dead Node's
  * zone or under a lithograph's entrance hut (ruinCovers: MapGenDeadNodeSC / MapGenLithographSC.covers).
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §3, the coordinator's wiring): a chunk lies in one plateau cell (16 chunks a cell) - its
+ * kind (SubstrateCellsSC.cellKind: decided once on the server, ПМ-11) picks the terrain of the cell's inner square
+ * (SubstrateWildTerrainSC.column, package W: the Ridges, the Oxide Fields, the Rift; a column it doesn't take keeps Ф1's) and
+ * every column's biome (SubstrateCellsSC.columnKind); populate adds the new biomes' details after Ф1's (SubstrateWildGenSC,
+ * package W). The Renegades' camps on the canyons' floors and the Vaults under the Dead Nodes are two more vanilla structures
+ * (MapGenCampSC, MapGenVaultSC - package C): their starts are made with the others, built after the Nodes and lithographs;
+ * no trace, druse or pond goes into a built camp's box (ruinCovers).
  */
 public class ChunkProviderSubstrateSC implements IChunkProvider {
 
@@ -82,10 +90,14 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     private final Random rand = new Random(), popRand = new Random();
     /** Ф2: the settlements (made before the carver - it keeps its vias out of them). */
     private final MapGenSettlementSC settlements = new MapGenSettlementSC();
-    private final MapGenSubstrateCavesSC caves = new MapGenSubstrateCavesSC(settlements);
     /** Ф3 (package X, docs/plan-substrate-tech-f3.md §8): the Dead Nodes at the crossings, the abandoned lithographs under the plateaus. */
     private final com.sc.ruin.MapGenDeadNodeSC nodes = new com.sc.ruin.MapGenDeadNodeSC();
     private final com.sc.ruin.MapGenLithographSC lithographs = new com.sc.ruin.MapGenLithographSC();
+    /** Ф4 (package C, docs/plan-substrate-tech-f4.md §8): the Renegades' camps in the canyons, the Vaults under the Dead Nodes. */
+    private final com.sc.ruin.MapGenCampSC camps = new com.sc.ruin.MapGenCampSC();
+    private final com.sc.ruin.MapGenVaultSC vaults = new com.sc.ruin.MapGenVaultSC();
+    /** The carver - after the structures above: it keeps out of the settlements' boxes and (Ф4) the built camps' and Vaults'. */
+    private final MapGenSubstrateCavesSC caves = new MapGenSubstrateCavesSC(settlements, camps, vaults);
 
     public ChunkProviderSubstrateSC(World world, long seed) {
         this.world = world;
@@ -107,6 +119,37 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         return lithographs;
     }
 
+    /** Ф4: the camps' structure (the world test, the camps' tick). */
+    public com.sc.ruin.MapGenCampSC camps() {
+        return camps;
+    }
+
+    /** Ф4: the Vaults' structure. */
+    public com.sc.ruin.MapGenVaultSC vaults() {
+        return vaults;
+    }
+
+    /**
+     * Ф4 (package W): the Substrate's generator behind world `w` (the server's ChunkProviderServer wraps it), or null - another
+     * world, a client. SubstrateWildGenSC asks it for covered().
+     */
+    public static ChunkProviderSubstrateSC of(World w) {
+        IChunkProvider p = w == null || w.isRemote ? null : w.getChunkProvider();
+        if (p instanceof net.minecraft.world.gen.ChunkProviderServer) {
+            p = ((net.minecraft.world.gen.ChunkProviderServer) p).currentChunkProvider;
+        }
+        return p instanceof ChunkProviderSubstrateSC ? (ChunkProviderSubstrateSC) p : null;
+    }
+
+    /**
+     * Ф4 (package W): the column (x, z), `margin` round it, lies in a built settlement's box, a Dead Node's zone, under a
+     * lithograph's hut, in a camp's or a Vault's box - SubstrateWildGenSC's flora, moss and vents keep out (those are built after
+     * it and over it).
+     */
+    public boolean covered(int x, int z, int margin) {
+        return settlements.covers(x, z, margin) || ruinCovers(x, z, margin) || vaults.covers(x, z, margin);
+    }
+
     @Override
     public boolean chunkExists(int x, int z) {
         return true;
@@ -117,22 +160,28 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         rand.setSeed(cx * 341873128712L + cz * 132897987541L ^ seed);
         Block[] blocks = new Block[65536];
         byte[] metas = new byte[65536];
+        // Ф4: the chunk's cell (a chunk with no column of its cell's inner square needs no kind - its ground is Ф1's)
+        int cell = SubstrateCellsSC.chunkHasInner(cx, cz) ? SubstrateCellsSC.cellKind(world, cx >> 4, cz >> 4) : BiomeSubstrateSC.PLATEAUS;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                column(cx * 16 + x, cz * 16 + z, (x * 16 + z) * 256, blocks, metas);   // Chunk(World, Block[], byte[], x, z): index (x * 16 + z) * 256 + y
+                int wx = cx * 16 + x, wz = cz * 16 + z, col = (x * 16 + z) * 256;   // Chunk(World, Block[], byte[], x, z): index (x * 16 + z) * 256 + y
+                if (cell == BiomeSubstrateSC.PLATEAUS || !SubstrateWildTerrainSC.column(cell, seed, wx, wz, col, blocks, metas)) {
+                    column(wx, wz, col, blocks, metas);
+                }
             }
         }
         settlements.func_151539_a(this, world, cx, cz, blocks);     // the starts within 8 chunks (no block is touched)
         nodes.func_151539_a(this, world, cx, cz, blocks);           // Ф3: the ruins' starts, the same way
         lithographs.func_151539_a(this, world, cx, cz, blocks);
+        camps.func_151539_a(this, world, cx, cz, blocks);           // Ф4: the camps' and the Vaults' starts (before the carver: it keeps out of them)
+        vaults.func_151539_a(this, world, cx, cz, blocks);
         caves.func_151539_a(this, world, cx, cz, blocks);
-        pond(cx, cz, blocks, metas);
+        pond(cx, cz, cell, blocks, metas);
         Chunk chunk = new Chunk(world, blocks, metas, cx, cz);
         byte[] biomes = chunk.getBiomeArray();
-        BiomeGenBase plateaus = SubstrateSC.plateaus(), canyons = SubstrateSC.canyons();
         for (int z = 0; z < 16; z++) {
             for (int x = 0; x < 16; x++) {
-                BiomeGenBase b = SubstrateTerrainSC.biomeKind(cx * 16 + x, cz * 16 + z) == BiomeSubstrateSC.CANYONS ? canyons : plateaus;
+                BiomeGenBase b = SubstrateSC.biome(SubstrateCellsSC.columnKind(cell, cx * 16 + x, cz * 16 + z));
                 biomes[z << 4 | x] = (byte) (b == null ? 0 : b.biomeID);
             }
         }
@@ -171,9 +220,10 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     /**
      * A rare pond: an ellipse of water flush with the terrace, wholly inside the chunk with a ring of 1 around it; only
      * where every column of its box has the same top and is solid to below the pond's bottom (no spill, no leak into a
-     * cave).
+     * cave). Ф4 (package W): only on the plateaus and the dunes - never in the inner square of a Ridges or a Rift cell (`cell`
+     * the chunk's cell kind); the draws come first, so a plateau chunk's pond is the one of Ф1.
      */
-    private void pond(int cx, int cz, Block[] blocks, byte[] metas) {
+    private void pond(int cx, int cz, int cell, Block[] blocks, byte[] metas) {
         if (rand.nextInt(POND_CHANCE) != 0) {
             return;
         }
@@ -181,7 +231,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         int px = rx + 1 + rand.nextInt(14 - 2 * rx), pz = rz + 1 + rand.nextInt(14 - 2 * rz);
         int wx = cx * 16 + px, wz = cz * 16 + pz;
         if (SubstrateTerrainSC.inCanyonBelt(wx, wz) || MapGenSubstrateCavesSC.nearSpawn(wx, wz) || settlements.covers(wx, wz, Math.max(rx, rz) + 1)
-                || ruinCovers(wx, wz, Math.max(rx, rz) + 1)) {
+                || ruinCovers(wx, wz, Math.max(rx, rz) + 1)
+                || (cell == BiomeSubstrateSC.RIDGES || cell == BiomeSubstrateSC.RIFT) && SubstrateCellsSC.inner(wx, wz)) {
             return;
         }
         int level = -1;
@@ -248,8 +299,11 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
             }
         }
         druse(cx * 16 + 8, cz * 16 + 8);
+        SubstrateWildGenSC.populate(world, popRand, cx, cz);              // Ф4 (package W): the new biomes' flora, geodes, vents, the Rift's islands
         nodes.generateStructuresInChunk(world, popRand, cx, cz);          // Ф3: the ruins over the land (they never meet a settlement)
         lithographs.generateStructuresInChunk(world, popRand, cx, cz);
+        camps.generateStructuresInChunk(world, popRand, cx, cz);          // Ф4: the camps; the Vaults after the Nodes (their hatch in a plaza)
+        vaults.generateStructuresInChunk(world, popRand, cx, cz);
         settlements.generateStructuresInChunk(world, popRand, cx, cz);    // last: the settlements lie over everything
     }
 
@@ -263,7 +317,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
      * or under a lithograph's entrance hut - no trace, druse or pond there (the ruins are built after them and over them).
      */
     private boolean ruinCovers(int x, int z, int margin) {
-        return nodes.covers(x, z, margin) || lithographs.covers(x, z, margin);
+        return nodes.covers(x, z, margin) || lithographs.covers(x, z, margin) || camps.covers(x, z, margin);
     }
 
     /** The part of origin chunk (ox, oz)'s trace segment (if it has one) inside the window from (wx0, wz0), 16 x 16. */
@@ -448,6 +502,12 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         if (com.sc.ruin.MapGenLithographSC.START_NAME.equals(structure)) {
             return lithographs.func_151545_a(w, x, y, z);
         }
+        if (com.sc.ruin.MapGenCampSC.START_NAME.equals(structure)) {
+            return camps.func_151545_a(w, x, y, z);
+        }
+        if (com.sc.ruin.MapGenVaultSC.START_NAME.equals(structure)) {
+            return vaults.func_151545_a(w, x, y, z);
+        }
         return MapGenSettlementSC.START_NAME.equals(structure) ? settlements.func_151545_a(w, x, y, z) : null;
     }
 
@@ -462,6 +522,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         settlements.func_151539_a(this, world, x, z, null);
         nodes.func_151539_a(this, world, x, z, null);
         lithographs.func_151539_a(this, world, x, z, null);
+        camps.func_151539_a(this, world, x, z, null);
+        vaults.func_151539_a(this, world, x, z, null);
     }
 
     @Override

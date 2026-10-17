@@ -2,6 +2,7 @@ package com.sc.mob;
 
 import com.sc.emp.EmpMobSC;
 import com.sc.emp.IEmpReactiveSC;
+import com.sc.emp.IEmpUselessSC;
 import com.sc.util.ArmorSuit;
 import com.sc.util.SingularSenseData.Analysis;
 
@@ -16,6 +17,11 @@ import net.minecraft.entity.player.EntityPlayer;
  * the packing (pack / suitOf / reserveOf round trip). The player armour code only calls flags().
  * <p>
  * The same readings serve WAILA (compat.WailaEntitySC, from the client's DataWatcher): modPieces, elite, reactiveKey.
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §7.5-§7.9, package N): EMP_USELESS for a creature the ПЭ-1 does nothing to (IEmpUselessSC:
+ * the Colossus - the analyzer's «ПЭ-1 здесь бесполезен», ПБ-26); WEAK_WATER for the ones water hurts (the Current Leech, the Arc
+ * Strider, the Overheated); the reactive keys of the new «noise»: "kill" (the Phantom), "burst" (the Leech), "collapse" (the
+ * Strider), "stun" (the Scrapper).
  */
 public final class MobAnalysisSC {
 
@@ -43,6 +49,12 @@ public final class MobAnalysisSC {
         }
         if (EmpMobSC.reactive(e)) {
             f |= Analysis.EMP_REACTS;
+        }
+        if (e instanceof IEmpUselessSC) {
+            f |= Analysis.EMP_USELESS;                  // Ф4, ПБ-26: nothing in it for a ПЭ-1
+        }
+        if (e instanceof EntityLeechSC || e instanceof EntityStriderSC || e instanceof EntityOverheatedSC) {
+            f |= Analysis.WEAK_WATER;                   // Ф4: water shorts them (a bucket, standing in it)
         }
         return f;
     }
@@ -99,7 +111,8 @@ public final class MobAnalysisSC {
 
     /**
      * What a ПЭ-1 does to a reactive one (ПБ-20), the tail of its lang key: "drop" (the drones fall), "burn" (a swarm's
-     * particle), "wake" (the mimic); null - not reactive technology, or one of another kind (a generic line).
+     * particle), "wake" (the mimic); Ф4: "kill", "burst", "collapse", "stun"; null - not reactive technology, or one of another
+     * kind (a generic line).
      */
     public static String reactiveKey(Entity e) {
         if (!(e instanceof IEmpReactiveSC)) {
@@ -110,6 +123,18 @@ public final class MobAnalysisSC {
         }
         if (e instanceof EntityNaniteSC) {
             return "burn";
+        }
+        if (e instanceof EntityPhantomSC) {
+            return "kill";                              // Ф4: any hit kills it (ПБ-22)
+        }
+        if (e instanceof EntityLeechSC) {
+            return "burst";                             // a Pulse or a Siphon bursts it (ПБ-23)
+        }
+        if (e instanceof EntityStriderSC) {
+            return "collapse";                          // a Pulse collapses its arc (ПБ-24)
+        }
+        if (e instanceof EntityScrapperSC) {
+            return "stun";                              // a Point stuns it (ПБ-25)
         }
         return e instanceof EntityMimicSC ? "wake" : null;
     }

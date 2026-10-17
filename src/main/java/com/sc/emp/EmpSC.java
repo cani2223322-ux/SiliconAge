@@ -313,6 +313,40 @@ public final class EmpSC {
         return r;
     }
 
+    /**
+     * Ф4, ПФ-2 (docs/plan-substrate-tech-f4.md §5.3, the coordinator's; only a new helper - the ПЭ-1's paths are untouched): an
+     * EMP storm's pulse on the worn piece `slot` of `target` - suppressed for `ticks` (the storm's own 3..4 s), the usual
+     * immunity after it, the helium loop boiling `boilMul` times as fast for `boilTicks` («гелий подкипает»); no heat, no
+     * Slowness. An immune piece, none of the mod's in that slot, ПЭ-1 off in the config: nothing. Syncs, and tells the target
+     * as a ПЭ-1 hit does («Ваша броня подавлена ЭМИ»). @return the ticks given (0: nothing happened)
+     */
+    public static int stormHit(EntityPlayer target, int slot, int ticks, int boilMul, int boilTicks) {
+        if (target == null || target.worldObj.isRemote || slot < 0 || slot > 3 || ticks <= 0 || !ConfigSC.empEnabled) {
+            return 0;
+        }
+        ItemStack piece = modPiece(target, slot);
+        long now = now(target);
+        EmpStateSC s = state(target);
+        if (piece == null || s.immune(slot, now)) {
+            return 0;
+        }
+        long until = Math.max(s.until[slot], now + ticks);
+        s.until[slot] = until;
+        s.immuneUntil[slot] = until + EmpMathSC.immunityTicks(ConfigSC.empImmunitySeconds);
+        if (boilMul > 1 && boilTicks > 0 && modPiece(target, 1) != null) {
+            long[] b = EmpMathSC.mergeBoil(s.boilMulAt(now), s.boilUntil, boilMul, now + boilTicks, now);
+            s.boilMul = (int) b[0];
+            s.boilUntil = b[1];
+        }
+        HitResult r = new HitResult();
+        r.anyArmour = true;
+        r.ticks[slot] = (int) (until - now);
+        EmpArmorSC.notifySuppressed(target, r);
+        save(target, s);
+        sync(target);
+        return r.ticks[slot];
+    }
+
     /** Server: a target without the mod's armour in the hit zone (players and mobs): Slowness 2 s. */
     public static void applyNoArmour(EntityLivingBase target) {
         if (target != null && !target.worldObj.isRemote) {

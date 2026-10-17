@@ -11,6 +11,10 @@ import com.sc.util.OreEntry;
  * Where: the rare ores (the six of x1.5..x2) in the metallization layer, Y 20..40, with a DEEP_SHARE of their veins
  * lower, Y 5..20; quartzite, spodumene and ilmenite in the silicon base, Y 2..20; everything else Y 10..55 (the
  * Crystallite between the base and the crust - the canyons' floors at 24..34 show some).
+ * <p>
+ * Ф4 (package W, docs/plan-substrate-tech-f4.md §3.4): the Quartzite Ridges' columns get x SubstrateWildTerrainSC.RIDGE_VEIN_MUL
+ * («самые богатые жилы» - veinMultiplier(ore, RIDGES)); in the Rift ores lie only in the islands (SubstrateOreGenSC moves a
+ * vein's height into the island over its centre, drops it on the rim). Ф1's multipliers are unchanged.
  */
 public final class SubstrateOreTableSC {
 
@@ -40,6 +44,16 @@ public final class SubstrateOreTableSC {
             default:
                 return 1F;
         }
+    }
+
+    /** Ф4: veins a chunk in a column of BiomeSubstrateSC kind `kind` against the Overworld's (x RIDGE_VEIN_MUL in the Ridges). */
+    public static float veinMultiplier(OreEntry ore, int kind) {
+        return veinMultiplier(ore) * (kind == BiomeSubstrateSC.RIDGES ? SubstrateWildTerrainSC.RIDGE_VEIN_MUL : 1F);
+    }
+
+    /** Ф4: the Ridges' extra veins on top of veinMultiplier (SubstrateOreGenSC's second pass). */
+    public static float ridgeExtra(OreEntry ore) {
+        return veinMultiplier(ore) * (SubstrateWildTerrainSC.RIDGE_VEIN_MUL - 1F);
     }
 
     /** The ore is one of the rare six (metallization layer, some veins deeper). */

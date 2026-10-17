@@ -9,6 +9,10 @@ import com.sc.util.WeaponType;
  * chances by level (rules ПТ-4, ПТ-5, ПТ-9 of docs/plan-substrate.md), the multipliers with their caps, the bad-luck
  * protection. MobDropsSC rolls by these, the self-test and the handbook read them. Signatures fixed; the bodies are
  * M's (the stub has the plan's numbers).
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §9.1, rules ПТ-16, ПТ-20): the Singular trophies shown (SHOWN - 24 metas), the Warlord's
+ * and the Sentinel's own categories (ITrophyCategoriesSC on their classes - the numbers here), the storm's x1.5 (STORM_MUL:
+ * MobDropsSC asks EmpStormSC.active; with an elite at most EVENT_CAP).
  */
 public final class TrophyTableSC {
 
@@ -31,10 +35,17 @@ public final class TrophyTableSC {
      * ПТ-7: the metas that already drop - the creative tab and NEI show only these (Ф1: the four Nano pieces, the Nano
      * Blade, the Ion Cutter). Each phase adds the trophies of its mobs. Ф3 (ПТ-14): the Quantum (4..7) and Exo (8..11)
      * pieces, the Quantum and Exo Blades (17, 18), the Pulse Emitter and the Plasma Rifle (21, 22), the ПЭ-1 (23) - kept in
-     * meta order (the creative tab and NEI list them so).
+     * meta order (the creative tab and NEI list them so). Ф4 (ПТ-16, docs/plan-substrate-tech-f4.md §9.1): the Singular pieces
+     * (12..15) and the Singular Blade (19) - the Sentinel's and «Затмение»'s: 24 metas (the ПЭ-1М, 24, is the boss's - Ф5).
      */
-    public static final int[] SHOWN = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, META_BLADE, META_BLADE + 1, META_BLADE + 2,
-            META_WEAPON, META_WEAPON + 1, META_WEAPON + 2, META_PE1};
+    public static final int[] SHOWN = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, META_BLADE, META_BLADE + 1, META_BLADE + 2,
+            META_BLADE + 3, META_WEAPON, META_WEAPON + 1, META_WEAPON + 2, META_PE1};
+    /**
+     * Ф4 (ПТ-16, §9.1): the categories of their own (ITrophyCategoriesSC) - the camp's Warlord: a worn Quantum piece
+     * WARLORD_QUANTUM (2%) and its Exo chestplate WARLORD_EXO_CHEST (0.5%); a Sentinel carrier's ПЭ-1 SENTINEL_PE1 (10% - about
+     * 0.5% a Sentinel). TODO(balance)
+     */
+    public static final float WARLORD_QUANTUM = 0.02F, WARLORD_EXO_CHEST = 0.005F, SENTINEL_PE1 = 0.1F;
     /** The key in the bad-luck counters' tag (EntityPlayer.PERSISTED_NBT_TAG: survives death): int[4] by level. */
     public static final String DRY_NBT = "scTrophyDry";
 

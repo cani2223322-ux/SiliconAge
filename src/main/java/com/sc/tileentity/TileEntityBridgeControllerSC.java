@@ -2582,6 +2582,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             if (moved instanceof net.minecraft.entity.player.EntityPlayerMP) {      // ВП11: the arrival's flash and trail
                 com.sc.bridge.BridgeNetSC.CHANNEL.sendTo(new com.sc.bridge.BridgeNetSC.Arrive(openKind),
                         (net.minecraft.entity.player.EntityPlayerMP) moved);
+                // Подложка Ф4, ПН-9..ПН-11: the bridge's echo (package S) - the Portal Shield keeps the swarm out
+                com.sc.hazard.BridgeEchoSC.crossed((net.minecraft.entity.player.EntityPlayerMP) moved, from.provider.dimensionId, dim, x, y, z,
+                        scan != null && scan.shield);
             }
             if (shaken) {
                 moved.addVelocity((worldObj.rand.nextDouble() - 0.5) * 0.8, 0.35, (worldObj.rand.nextDouble() - 0.5) * 0.8);

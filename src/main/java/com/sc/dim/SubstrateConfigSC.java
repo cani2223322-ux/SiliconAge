@@ -33,6 +33,11 @@ public final class SubstrateConfigSC {
     private static int dimensionId = -1414, providerId = -1414;
     /** ПК-3: explicit per biome; a taken id moves to the next free one and is written back here. */
     private static int biomeIdPlateaus = 240, biomeIdCanyons = 241;
+    /**
+     * Ф4 (docs/plan-substrate-tech-f4.md §2.1, ПК-17): the Quartzite Ridges, the Oxide Fields and the Rift - the slots kept for
+     * them since Ф1 (242..244); the same rule (a taken id moves to the next free one and is written back).
+     */
+    private static int biomeIdRidges = 242, biomeIdOxide = 243, biomeIdRift = 244;
     /** ПК-5: the world unloads ~20 s after the last player leaves (the server already keeps ~27 GC / GS worlds). */
     private static boolean keepLoaded = false;
 
@@ -65,6 +70,17 @@ public final class SubstrateConfigSC {
      * ПЭ-1: a carrier gets the Ion Cutter instead, the Commandant only its blade).
      */
     public static boolean mobsUseEmp = true;
+    /**
+     * Ф4, ПФ-1 (docs/plan-substrate-tech-f4.md §2.1): the Substrate's own weather - the EMP storm (20% a game day, 3..5 min, a
+     * pulse every 20..40 s suppressing a piece of armour of players and mobs under the open sky). Off: no storm ever begins
+     * (one running ends at its next check).
+     */
+    public static boolean empStorms = true;
+    /**
+     * Ф4, ПН-1: the Renegades raid the settlements at night (a player of «Знакомый» or above near, 10% a night, at most once in
+     * 5 days a settlement, three waves). Off: no raid begins.
+     */
+    public static boolean raids = true;
 
     private SubstrateConfigSC() {
     }
@@ -88,6 +104,12 @@ public final class SubstrateConfigSC {
                 "Biome id of the Silicon Plateaus; a taken id moves to the next free one and is written here / Id биома «Кремниевые плато»; занятый сдвигается на следующий свободный и записывается сюда");
         biomeIdCanyons = c.getInt("biomeIdCanyons", d, 241, 40, 254,
                 "Biome id of the Scribe Canyons (the same rule) / Id биома «Скрайб-каньоны» (то же правило)");
+        biomeIdRidges = c.getInt("biomeIdRidges", d, 242, 40, 254,
+                "Biome id of the Quartzite Ridges (the same rule) / Id биома «Кварцитовые гряды» (то же правило)");
+        biomeIdOxide = c.getInt("biomeIdOxide", d, 243, 40, 254,
+                "Biome id of the Oxide Fields (the same rule) / Id биома «Окисные поля» (то же правило)");
+        biomeIdRift = c.getInt("biomeIdRift", d, 244, 40, 254,
+                "Biome id of the Rift (the same rule) / Id биома «Разлом» (то же правило)");
         keepLoaded = c.getBoolean("keepLoaded", d, false,
                 "Keep the world loaded with nobody there (chunk loaders keep their chunks anyway) / Держать мир загруженным без игроков (загрузчики чанков держат свои чанки в любом случае)");
         strictEntry = c.getBoolean("strictEntry", d, true,
@@ -114,6 +136,14 @@ public final class SubstrateConfigSC {
         mobsUseEmp = c.getBoolean("mobsUseEmp", d, true,
                 "The Substrate's mobs use the PE-1: one Jammer in 50 carries one, a City's Commandant fires it at hostiles (off: no mob ever holds a PE-1)"
                 + " / Мобы Подложки применяют ПЭ-1: он есть у 1 из 50 Глушителей, Комендант города стреляет им по враждебным (выкл.: ПЭ-1 ни у одного моба)");
+        empStorms = c.getBoolean("empStorms", d, true,
+                "EMP storms, the Substrate's own weather: on 20% of the game days for 3-5 minutes; every 20-40 s a pulse suppresses a piece of armour of players"
+                + " and mobs under the open sky (off: no storm begins) / ЭМИ-бури, своя погода Подложки: в 20% игровых суток на 3-5 минут; каждые 20-40 с"
+                + " импульс подавляет часть брони у игроков и мобов под открытым небом (выкл.: бурь нет)");
+        raids = c.getBoolean("raids", d, true,
+                "The Renegades raid a settlement at night when a player it knows (\"Acquaintance\" or better) is near: 10% a night, at most once in 5 days,"
+                + " three waves (off: no raids) / Отступники ночью нападают на поселение, если рядом игрок с «Доверием» от «Знакомого»: 10% за ночь, не чаще"
+                + " раза в 5 дней, три волны (выкл.: налётов нет)");
     }
 
     /** As ConfigSC.num: Forge clamps by comparisons and NaN passes them - NaN / infinity in the file: the default. */
@@ -144,6 +174,21 @@ public final class SubstrateConfigSC {
         return biomeIdCanyons;
     }
 
+    /** Ф4: the Quartzite Ridges' biome id. */
+    public static int biomeIdRidges() {
+        return biomeIdRidges;
+    }
+
+    /** Ф4: the Oxide Fields' biome id. */
+    public static int biomeIdOxide() {
+        return biomeIdOxide;
+    }
+
+    /** Ф4: the Rift's biome id. */
+    public static int biomeIdRift() {
+        return biomeIdRift;
+    }
+
     public static boolean keepLoaded() {
         return keepLoaded;
     }
@@ -163,6 +208,12 @@ public final class SubstrateConfigSC {
                 biomeIdPlateaus = id;
             } else if ("biomeIdCanyons".equals(key)) {
                 biomeIdCanyons = id;
+            } else if ("biomeIdRidges".equals(key)) {
+                biomeIdRidges = id;
+            } else if ("biomeIdOxide".equals(key)) {
+                biomeIdOxide = id;
+            } else if ("biomeIdRift".equals(key)) {
+                biomeIdRift = id;
             }
             return true;
         } catch (Exception e) {

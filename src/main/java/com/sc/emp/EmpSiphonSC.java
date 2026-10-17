@@ -40,6 +40,9 @@ import net.minecraft.world.World;
  *
  * Ф3 (docs/plan-substrate-tech-f3.md §3.3, ПБ-19): a mob's raised personal EMP screen takes the stream's first second (its
  * start) or any later one - the screen drops for 30 s and the stream stops (sc.emp.siphon.stop.mobscreen).
+ *
+ * Ф4 (docs/plan-substrate-tech-f4.md §7.6, ПБ-23): a start at unarmoured reactive technology (IEmpReactiveSC) asks it
+ * empStruck with SIPHON instead (reactiveStart) - the Current Leech bursts; the stream never starts. The player path is untouched.
  */
 public final class EmpSiphonSC {
 
@@ -64,11 +67,44 @@ public final class EmpSiphonSC {
         return e instanceof EntityPlayer && EmpSC.wearsModArmour((EntityPlayer) e) ? (EntityPlayer) e : null;
     }
 
+    /**
+     * Ф4 (docs/plan-substrate-tech-f4.md §7.6, ПБ-23; dimension.siphonMobs): the stream's start at unarmoured reactive technology
+     * in the crosshair (IEmpReactiveSC - the Current Leech bursts, the Induction Phantom dies). The rules (refused: nothing, «нет
+     * цели» as before) and a field's EMP screen (it takes the start: «поглощено») as for any target, then empStruck with SIPHON -
+     * the stream never starts; a reaction costs the start's EU_SIPHON_START. One that doesn't react to a Siphon (a drone, a swarm,
+     * a mimic) - «нет цели» as before. Server; the client never starts its use here (targetOf is null). @return it was answered
+     */
+    private static boolean reactiveStart(EntityPlayerMP p, ItemStack gun) {
+        EmpShotSC.Hit h = EmpShotSC.aim(p.worldObj, p, EmpGunLogicSC.range(gun, EmpMode.SIPHON));
+        Entity e = h.entity;
+        if (!EmpMobSC.siphonOn() || !(e instanceof IEmpReactiveSC) || !(e instanceof EntityLivingBase) || e instanceof EntityPlayer) {
+            return false;
+        }
+        if (EmpGunLogicSC.refusal(p, e, true) != EmpNetSC.OK || EmpMobSC.refusal(e, EmpMode.SIPHON) != EmpNetSC.OK) {
+            return false;
+        }
+        double[] border = EmpRulesSC.screenAbsorbs(p, e, EmpMathSC.screenCost(EmpMode.SIPHON));
+        if (border != null) {
+            EmpGunLogicSC.fx(p, EmpNetSC.FX_ABSORBED, e.getEntityId(), border[0], border[1], border[2]);
+            EmpGunLogicSC.say(p, "sc.emp.absorbed");
+            return true;
+        }
+        if (!((IEmpReactiveSC) e).empStruck(p, EmpMode.SIPHON, h.at.xCoord, h.at.yCoord, h.at.zCoord)) {
+            return false;
+        }
+        ItemEmpGunSC.discharge(gun, EmpMathSC.EU_SIPHON_START);
+        EmpGunLogicSC.fx(p, EmpNetSC.FX_SUPPRESSED, e.getEntityId(), h.at.xCoord, h.at.yCoord, h.at.zCoord);
+        EmpGunLogicSC.say(p, "sc.emp.hit.reactive", EmpMobSC.name(e));
+        return true;
+    }
+
     /** Server: the stream starts (5 000 EU owed by the gun) - or why not. @return started */
     static boolean start(EntityPlayerMP p, ItemStack gun, long now) {
         EntityLivingBase target = targetOf(p.worldObj, p, gun);
         if (target == null) {
-            EmpGunLogicSC.say(p, "sc.emp.siphon.notarget");
+            if (!reactiveStart(p, gun)) {
+                EmpGunLogicSC.say(p, "sc.emp.siphon.notarget");
+            }
             return false;
         }
         int r = EmpGunLogicSC.refusal(p, target, true);

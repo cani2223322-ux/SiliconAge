@@ -46,6 +46,8 @@ public final class ReputationSC {
     /** Where a change comes from (the caps go by it). */
     public static final int SRC_TRADE = 0, SRC_KILL_SMALL = 1, SRC_KILL_BIG = 2, SRC_CONTRACT = 3, SRC_CARGO = 4, SRC_PASS = 5,
             SRC_PENANCE = 6, SRC_ANCHOR = 7, SRC_PENALTY = 8;
+    /** Ф4 (docs/plan-substrate-tech-f4.md §6.1, ПН-3, the coordinator's): a raid beaten off (RaidRulesSC.REP: +30..+50, no day cap). */
+    public static final int SRC_RAID = 9;
 
     private ReputationSC() {
     }

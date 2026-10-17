@@ -16,6 +16,13 @@ public interface IMobActionSC {
     int ACT_NONE = 0, ACT_AIM = 1, ACT_WINDUP = 2, ACT_DASH = 3, ACT_EMP_POINT = 4, ACT_EMP_PULSE = 5, ACT_REBOOT = 6, ACT_RECOVER = 7,
             ACT_DORMANT = 8, ACT_ORDER = 9, ACT_REPAIR = 10, ACT_SEARCHLIGHT = 11;
 
+    /** Ф4 (docs/plan-substrate-tech-f4.md §2.6): the Sentinel's gravity press (3 s of a low hum, then the press) / «Затмение»'s
+     * blink (a flicker where it stands) / its flight to recover (HP under 25%) / the Colossus's stomp wind-up / its crystal's aim /
+     * the Arc Strider's chain lightning charging / its arc collapsed by a Pulse (it lies down, x2 damage) / the Current Leech
+     * coiled round its prey / the Scrapper stunned by a Point / a Wafer Crab burrowing. */
+    int ACT_PRESS = 12, ACT_BLINK = 13, ACT_FLEE = 14, ACT_STOMP = 15, ACT_THROW = 16, ACT_ARC = 17, ACT_COLLAPSED = 18, ACT_WRAP = 19,
+            ACT_STUNNED = 20, ACT_BURROW = 21;
+
     /** Both sides (the DataWatcher). */
     int mobAction();
 

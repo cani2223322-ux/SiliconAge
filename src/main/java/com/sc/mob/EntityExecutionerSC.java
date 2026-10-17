@@ -62,6 +62,9 @@ public class EntityExecutionerSC extends EntityArmoredMobSC implements IFactionL
     public static final float CORE_CHANCE = 0.15F, HELIUM_CELL_CHANCE = 0.5F;
     /** Where (SpawnRulesSC's): the canyons, no closer than this to the world's spawn. */
     public static final int MIN_DIST = SpawnRulesSC.EXECUTIONER_MIN_DIST;
+    /** Ф4 (ПЗ-6): a camp's Stolen Charge Pad within PAD_REACH blocks gives PAD_UNITS of reserve every PAD_EVERY ticks. */
+    public static final int PAD_REACH = 2, PAD_EVERY = 20;
+    public static final float PAD_UNITS = 1F;
     public static final int XP = 25;
 
     private final EntityAICleaveSC cleave;
@@ -157,11 +160,42 @@ public class EntityExecutionerSC extends EntityArmoredMobSC implements IFactionL
         return mobAction() == IMobActionSC.ACT_WINDUP;
     }
 
-    /** The clients: the wind-up's red glints along the blade's arc (ПС-9), frost off the tank now and then. */
+    /**
+     * Server, Ф4 (docs/plan-substrate-tech-f4.md §7.13, rule ПЗ-6): within PAD_REACH of a camp's Stolen Charge Pad
+     * (CampBlocksSC.isStolenPad) PAD_UNITS into its reserve every PAD_EVERY ticks (MobArmorSC.recharge: not while a siphon
+     * draws) - the pad must be broken first. Looked for in the loaded blocks round it only.
+     */
+    private void padRecharge() {
+        MobArmorSC a = mobArmor();
+        if (a.reserveMax <= 0F || a.reserve >= a.reserveMax || (ticksExisted + getEntityId()) % PAD_EVERY != 0) {
+            return;
+        }
+        int bx = net.minecraft.util.MathHelper.floor_double(posX), by = net.minecraft.util.MathHelper.floor_double(posY),
+                bz = net.minecraft.util.MathHelper.floor_double(posZ);
+        for (int dx = -PAD_REACH; dx <= PAD_REACH; dx++) {
+            for (int dz = -PAD_REACH; dz <= PAD_REACH; dz++) {
+                for (int dy = -PAD_REACH; dy <= 1; dy++) {
+                    int x = bx + dx, y = by + dy, z = bz + dz;
+                    if (worldObj.blockExists(x, y, z) && com.sc.ruin.CampBlocksSC.isStolenPad(worldObj.getBlock(x, y, z), worldObj.getBlockMetadata(x, y, z))) {
+                        a.recharge(PAD_UNITS);
+                        if (worldObj instanceof net.minecraft.world.WorldServer) {
+                            ((net.minecraft.world.WorldServer) worldObj).func_147487_a("reddust", x + 0.5D, y + 1.1D, z + 0.5D, 4, 0.2D, 0.1D, 0.2D, 0D);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /** The clients: the wind-up's red glints along the blade's arc (ПС-9), frost off the tank now and then. Ф4: the server - the pad. */
     @Override
     public void onLivingUpdate() {
         super.onLivingUpdate();
         if (!worldObj.isRemote) {
+            if (isEntityAlive()) {
+                padRecharge();
+            }
             return;
         }
         if (windingUp()) {

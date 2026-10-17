@@ -187,7 +187,8 @@ public final class EmpMobGunSC {
      * Server: the shot after the charge-up (Point / Pulse; `upgraded` - a ПЭ-1М, the boss's) within `range` blocks. The line
      * of sight, the rules, the screens, then the hit as described above. @return what it did to a mod-armoured target (null -
      * refused, out of sight or range, absorbed, or a target without such armour; HitResult.screened - a mob's personal
-     * screen took it)
+     * screen took it). Ф4 (docs/plan-substrate-tech-f4.md §5.5, rule ПФ-9; package M): in the Silica Haze `range` is at most
+     * EmpStormSC.sightRange's (24 blocks).
      */
     public static EmpSC.HitResult fire(EntityLivingBase shooter, Entity target, EmpMode mode, boolean upgraded, double range) {
         if (shooter == null || target == null || shooter.worldObj == null || shooter.worldObj.isRemote
@@ -196,6 +197,7 @@ public final class EmpMobGunSC {
         }
         telegraphOff(shooter);
         World w = shooter.worldObj;
+        range = com.sc.hazard.EmpStormSC.sightRange(w, range);
         if (!allowed() || shooter.isDead || target.isDead || shooterSuppressed(shooter)
                 || !EmpShotSC.inSight(w, shooter, target, range)) {
             return null;                                        // cover saves: no shot at all, nothing to see

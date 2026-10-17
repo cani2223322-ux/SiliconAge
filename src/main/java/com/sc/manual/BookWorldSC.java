@@ -3,6 +3,7 @@ package com.sc.manual;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -11,42 +12,71 @@ import com.sc.block.BlockRuinSC;
 import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
 import com.sc.bridge.BridgeMathSC;
+import com.sc.dim.BiomeSubstrateSC;
 import com.sc.dim.EntryRulesSC;
 import com.sc.dim.SubstrateBlocksSC;
+import com.sc.dim.SubstrateCellsSC;
 import com.sc.dim.SubstrateConfigSC;
 import com.sc.dim.SubstrateOreTableSC;
+import com.sc.dim.SubstrateRadiationSC;
 import com.sc.dim.SubstrateSC;
 import com.sc.dim.SubstrateTerrainSC;
+import com.sc.dim.SubstrateWildBlocksSC;
+import com.sc.dim.SubstrateWildGenSC;
+import com.sc.dim.SubstrateWildTerrainSC;
 import com.sc.dim.WorldProviderSubstrateSC;
 import com.sc.emp.EmpMathSC;
 import com.sc.emp.EmpMobGunSC;
 import com.sc.emp.EmpMode;
 import com.sc.emp.EmpTooltipSC;
+import com.sc.energy.GeneratorType;
+import com.sc.hazard.BridgeEchoSC;
+import com.sc.hazard.RaidRulesSC;
+import com.sc.hazard.StormRulesSC;
 import com.sc.init.ModBlocks;
 import com.sc.init.ModItems;
 import com.sc.machine.MachineRecipe;
 import com.sc.machine.MachineType;
 import com.sc.machine.RecipeRegistry;
 import com.sc.mob.EliteModSC;
+import com.sc.mob.EntityColossusSC;
+import com.sc.mob.EntityEclipseSC;
 import com.sc.mob.EntityExecutionerSC;
 import com.sc.mob.EntityHollowShellSC;
 import com.sc.mob.EntityJammerSC;
+import com.sc.mob.EntityLeechSC;
 import com.sc.mob.EntityLinemanSC;
 import com.sc.mob.EntityMarauderSC;
 import com.sc.mob.EntityMimicSC;
 import com.sc.mob.EntityNaniteSC;
+import com.sc.mob.EntityOverheatedSC;
+import com.sc.mob.EntityPhantomSC;
 import com.sc.mob.EntityRepairDroneSC;
+import com.sc.mob.EntityScrapperSC;
+import com.sc.mob.EntitySentinelSC;
 import com.sc.mob.EntitySentryDroneSC;
+import com.sc.mob.EntityStriderSC;
 import com.sc.mob.EntityTrooperSC;
+import com.sc.mob.EntityWaferCrabSC;
+import com.sc.mob.EntityWarlordSC;
 import com.sc.mob.MobArmorMathSC;
 import com.sc.mob.MobCombatSC;
 import com.sc.mob.MobEntitiesSC;
 import com.sc.mob.MobItemsSC;
+import com.sc.mob.ScrapperSC;
 import com.sc.mob.SpawnRulesSC;
 import com.sc.mob.TrophyRestoreSC;
 import com.sc.mob.TrophyTableSC;
+import com.sc.ruin.CampBlocksSC;
+import com.sc.ruin.CampLayoutSC;
+import com.sc.ruin.ItemRelicSC;
+import com.sc.ruin.ItemRuinFinderSC;
+import com.sc.ruin.RelicItemsSC;
 import com.sc.ruin.RuinBlocksSC;
 import com.sc.ruin.RuinLayoutSC;
+import com.sc.ruin.RuinWorldSC;
+import com.sc.ruin.VaultLayoutSC;
+import com.sc.settle.CrumbLimitSC;
 import com.sc.settle.NpcKindSC;
 import com.sc.settle.ReputationSC;
 import com.sc.settle.SettlementBlocksSC;
@@ -63,6 +93,9 @@ import com.sc.settle.trade.TradeOfferSC;
 import com.sc.settle.trade.TradeRulesSC;
 import com.sc.settle.trade.TradeTableSC;
 import com.sc.settle.travel.TravelRulesSC;
+import com.sc.tileentity.TileEntityArcCrackSC;
+import com.sc.tileentity.TileEntityStolenSolarSC;
+import com.sc.tileentity.TileEntitySubstrateVentSC;
 import com.sc.util.ArmorSuit;
 import com.sc.util.BladeType;
 import com.sc.util.ConfigSC;
@@ -103,20 +136,40 @@ import net.minecraftforge.oredict.OreDictionary;
  * купола» (the Captain, the Commandant), «Терминал обмена» (the services) and «Трофеи и добыча» (the trophies SHOWN now, the
  * new loot). The numbers of packages M / X / A / S / T that the core doesn't fix are read by name too (stat, weight, member). G on
  * the eggs, the new loot and the ruin blocks opens these pages.
+ * <p>
+ * Ф4 «Опасный мир» (docs/plan-substrate-tech-f4.md §10.2) adds at the chapter's end «Гряды, Окисные поля, Разлом» (the cells
+ * of SubstrateCellsSC, the terrain's numbers of SubstrateWildTerrainSC, «the land of Ф1..Ф3 stays the plateaus»), «Фоновая
+ * радиация» (SubstrateRadiationSC, the protection), «Фумаролы, трещины, жеоды, гейзеры» (the vents' tiles, SubstrateWildGenSC),
+ * «ЭМИ-буря» (StormRulesSC, the cover), «Мгла и Выброс», «Налёты» (RaidRulesSC's waves and rewards), «Эхо моста»
+ * (BridgeEchoSC), «Лагеря Отступников» (CampLayoutSC, the Stolen Field and panels, the Warlord, the safe, RuinWorldSC's return),
+ * «Хранилища и Часовой» (VaultLayoutSC, the Sentinel, the Fragments, the Pelengator), the bestiary of Ф4 («Перегретый»,
+ * «Затмение», «Наводка, Токоед, Колосс, Ходок», «Утилизатор и Метка гибели», «Подложник») and «Крупицы сингулярности»
+ * (CrumbLimitSC, the Sealed Crumbs); and extends «Мир-микросхема» (the three biomes, the monocrystal), «Трофеи и добыча» (the
+ * Singular trophies, the storm's multiplier, the new loot), «Терминал обмена» (the raid's closed trade, the Crumbs' cap) and
+ * the first article (the three biome ids). The numbers the core fixes (the stubs' constants) are read directly; what packages
+ * W / S / M / N / C keep beyond them is read by name (stat, weight) as before. G on every new block, item, egg and loot meta
+ * opens these pages.
  */
 public final class BookWorldSC {
 
     /** The rock's metas by name, SubstrateBlocksSC's order (tile.siliconage.substrateRock.<name>.name, sc.tooltip.substrateRock.<name>). */
     public static final String[] ROCK_NAMES = {"crystallite", "oxideViolet", "oxideBlue", "oxideGold", "oxideGreen", "copperTrace", "traceNode",
-            "quartzTurf", "settlementBrick"};
+            "quartzTurf", "settlementBrick", "monocrystal"};
     /** Ф2: the Settlement Brick is the rock's meta 8 (SubstrateBlocksSC.SETTLEMENT_BRICK, package S; docs/plan-substrate-tech-f2.md §2.2). */
     public static final int BRICK = 8;
     /** The combat loot by meta (ItemCombatLootSC.LootKind, appended only): item.siliconage.combatLoot.<name>.name, sc.tooltip.loot.<name>. */
-    public static final String[] LOOT_NAMES = {"shellFirmware", "nanoScrap", "stolenCargo", "quantumScrap", "exoScrap", "naniteDust", "shieldCore"};
+    public static final String[] LOOT_NAMES = {"shellFirmware", "nanoScrap", "stolenCargo", "quantumScrap", "exoScrap", "naniteDust", "shieldCore",
+            "boiledLoop", "inductionThread", "plasmaCondensate", "singularScrap", "naturalWafer"};
     /** Ф2: the Stolen Cargo is meta 2 (LootKind.STOLEN_CARGO, package T). */
     public static final int LOOT_FIRMWARE = 0, LOOT_NANO_SCRAP = 1, LOOT_STOLEN_CARGO = 2;
     /** Ф3: the core's LootKind QUANTUM_SCRAP..SHIELD_CORE (docs/plan-substrate-tech-f3.md §2.2). */
     public static final int LOOT_QUANTUM_SCRAP = 3, LOOT_EXO_SCRAP = 4, LOOT_NANITE_DUST = 5, LOOT_SHIELD_CORE = 6;
+    /** Ф4: the core's LootKind BOILED_LOOP..NATURAL_WAFER (docs/plan-substrate-tech-f4.md §2.2). */
+    public static final int LOOT_BOILED_LOOP = 7, LOOT_INDUCTION_THREAD = 8, LOOT_PLASMA_CONDENSATE = 9, LOOT_SINGULAR_SCRAP = 10, LOOT_NATURAL_WAFER = 11;
+    /** Ф4: the ruin block's metas package C appends (BlockRuinSC.NAMES; docs/plan-substrate-tech-f4.md §2.2). */
+    public static final int RUIN_VAULT_PLATING = 4, RUIN_VAULT_LAMP = 5, RUIN_CAMP_TARP = 6;
+    /** Ф4: their names - BlockRuinSC.nameOf answers them once package C has appended them. */
+    static final String[] RUIN_F4_NAMES = {"vaultPlating", "vaultLamp", "campTarp"};
     /** The trophy's lang key by meta (item.siliconage.trophy.<key>.name; the metas of TrophyTableSC). */
     public static final String[] TROPHY_KEYS = trophyKeys();
 
@@ -134,6 +187,14 @@ public final class BookWorldSC {
             SENTRY_DRONE = "com.sc.mob.EntitySentryDroneSC", MIMIC = "com.sc.mob.EntityMimicSC", RULES = "com.sc.mob.SpawnRulesSC",
             TROPHIES = "com.sc.mob.TrophyTableSC", ELITE_MOD = "com.sc.mob.EliteModSC", RUIN_LOOT = "com.sc.ruin.RuinLootSC", LITHO = "com.sc.ruin.MapGenLithographSC",
             RUIN_LAYOUT = "com.sc.ruin.RuinLayoutSC", RUIN_BLOCK = "com.sc.block.BlockRuinSC", OFFER = "com.sc.settle.trade.TradeOfferSC";
+    /**
+     * Ф4: the classes of packages W / M / N / C whose numbers the core's stubs don't fix (the creatures' weapons and drops, the
+     * monocrystal's drop, the camps' and Vaults' chests) - read by name like the above; the stubs' own constants are read directly.
+     */
+    private static final String OVERHEATED = "com.sc.mob.EntityOverheatedSC", WARLORD = "com.sc.mob.EntityWarlordSC", SENTINEL = "com.sc.mob.EntitySentinelSC",
+            ECLIPSE = "com.sc.mob.EntityEclipseSC", PHANTOM = "com.sc.mob.EntityPhantomSC", LEECH = "com.sc.mob.EntityLeechSC",
+            COLOSSUS = "com.sc.mob.EntityColossusSC", STRIDER = "com.sc.mob.EntityStriderSC", SCRAPPER = "com.sc.mob.EntityScrapperSC",
+            CRAB = "com.sc.mob.EntityWaferCrabSC", ROCK_BLOCK = "com.sc.block.BlockSubstrateRockSC";
     /** Ф3 (docs/plan-substrate-tech-f3.md §2.3): the services' output kinds package T appends to TradeOfferSC (charge a piece, restore a trophy). */
     static final int OUT_CHARGE = (int) stat(OFFER, "OUT_CHARGE", 3F), OUT_RESTORE = (int) stat(OFFER, "OUT_RESTORE", 4F);
     /** A limit at least this big reads «без лимита» (a service without one, TODO(balance)). */
@@ -169,11 +230,30 @@ public final class BookWorldSC {
         list.add(elites(c));
         list.add(ruins(c));
         list.add(restore(c));
+        // Ф4 «Опасный мир» (docs/plan-substrate-tech-f4.md §10.2): at the chapter's end
+        list.add(biomes4(c));
+        list.add(radiation(c));
+        list.add(resources4(c));
+        list.add(storm(c));
+        list.add(haze(c));
+        list.add(raids(c));
+        list.add(echo(c));
+        list.add(camps(c));
+        list.add(vaults(c));
+        list.add(overheated(c));
+        list.add(eclipse(c));
+        list.add(noise4(c));
+        list.add(scrapper(c));
+        list.add(fauna(c));
+        list.add(crumbs(c));
     }
 
     /** Ф3: the eight new articles, in the chapter's order (the self-test counts and checks them). */
     public static final String[] F3_ARTICLES = {"world.mobemp", "world.renegades", "world.shells", "world.executioner", "world.noise", "world.elites",
             "world.ruins", "world.restore"};
+    /** Ф4: the fifteen new articles (§10.2's fourteen and the Overheated's bestiary page), in the chapter's order (SelfTestHazardSC). */
+    public static final String[] F4_ARTICLES = {"world.biomes4", "world.radiation", "world.resources4", "world.storm", "world.haze", "world.raids",
+            "world.echo", "world.camps", "world.vaults", "world.overheated", "world.eclipse", "world.noise4", "world.scrapper", "world.fauna", "world.crumbs"};
 
     /** The chapter's tile: Crystallite while the Substrate's blocks exist, else a compass. */
     static ItemStack icon() {
@@ -224,7 +304,16 @@ public final class BookWorldSC {
         e.add(BookEl.head(Lang.tr("sc.manual.world.mphead")));
         e.addAll(BookContent.paras("sc.manual.world.mp", null, new Object[]{on ? SubstrateSC.dimId() : SubstrateConfigSC.dimensionId(),
                 on ? SubstrateSC.plateaus().biomeID : SubstrateConfigSC.biomeIdPlateaus(), on ? SubstrateSC.canyons().biomeID : SubstrateConfigSC.biomeIdCanyons()}));
+        // Ф4 (ПК-17): the three new biomes' ids - the same on the server and every client
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.mp.f4", biomeId(BiomeSubstrateSC.RIDGES), biomeId(BiomeSubstrateSC.OXIDE), biomeId(BiomeSubstrateSC.RIFT))));
+        // Ф4: the world's own dangers (ПФ-1, ПН-1): the server's two rules
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.rule.storms"),
+                Lang.tr(SubstrateConfigSC.empStorms ? "sc.manual.world.rule.storms.on" : "sc.manual.world.rule.storms.off")));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.rule.raids"),
+                Lang.tr(SubstrateConfigSC.raids ? "sc.manual.world.rule.raids.on" : "sc.manual.world.rule.raids.off")));
         e.add(BookEl.link("world.terrain", Lang.tr("sc.manual.world.terrain.title")));
+        e.add(BookEl.link("world.biomes4", Lang.tr("sc.manual.world.biomes4.title")));
+        e.add(BookEl.link("world.storm", Lang.tr("sc.manual.world.storm.title")));
         e.add(BookEl.link("world.armoured", Lang.tr("sc.manual.world.armoured.title")));
         e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
         e.add(BookEl.link("world.settlements", Lang.tr("sc.manual.world.settlements.title")));
@@ -248,6 +337,14 @@ public final class BookWorldSC {
                 Lang.tr("sc.manual.world.biome.plateaus", SubstrateTerrainSC.PLATEAU_MIN, SubstrateTerrainSC.PLATEAU_MAX)));
         e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), Lang.tr("sc.dim.biome.canyons"),
                 Lang.tr("sc.manual.world.biome.canyons", SubstrateTerrainSC.CANYON_BELT)));
+        // Ф4 (ПМ-10): the three new biomes - whole cells' inner squares, their own article
+        e.add(BookEl.item(rock(SubstrateBlocksSC.CRYSTALLITE), Lang.tr("sc.dim.biome.ridges"),
+                Lang.tr("sc.manual.world.biome.ridges", SubstrateWildTerrainSC.RIDGE_MAX)));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_GOLD), Lang.tr("sc.dim.biome.oxide"),
+                Lang.tr("sc.manual.world.biome.oxide", SubstrateWildTerrainSC.DUNE_MIN, SubstrateWildTerrainSC.DUNE_MAX)));
+        e.add(BookEl.item(wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.GLASS), Lang.tr("sc.dim.biome.rift"),
+                Lang.tr("sc.manual.world.biome.rift", SubstrateCellsSC.RIFT_MIN_DIST)));
+        e.add(BookEl.link("world.biomes4", Lang.tr("sc.manual.world.biomes4.title")));
 
         // the layers (§3.3 of docs/plan-substrate.md), from SubstrateTerrainSC
         e.add(BookEl.head(Lang.tr("sc.manual.world.layershead")));
@@ -330,6 +427,12 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
         e.add(BookEl.link("world.noise", Lang.tr("sc.manual.world.noise.title")));
         e.add(BookEl.link("world.elites", Lang.tr("sc.manual.world.elites.title")));
+        // Ф4's bestiary
+        e.add(BookEl.link("world.overheated", mobName(EntityOverheatedSC.NAME)));
+        e.add(BookEl.link("world.camps", Lang.tr("sc.manual.world.camps.title")));
+        e.add(BookEl.link("world.vaults", Lang.tr("sc.manual.world.vaults.title")));
+        e.add(BookEl.link("world.eclipse", mobName(EntityEclipseSC.NAME)));
+        e.add(BookEl.link("world.noise4", Lang.tr("sc.manual.world.noise4.title")));
         return e;
     }
 
@@ -411,6 +514,10 @@ public final class BookWorldSC {
         e.add(t);
         e.add(BookEl.dim(Lang.tr("sc.manual.world.trophies.pe1", pct(trophyChance(stat(TROPHIES, "PE1", 0.02F))),
                 n(1F / Math.max(1e-6F, stat(JAMMER, "CARRIER_CHANCE", 0.02F))))));
+        // Ф4 (ПТ-16, ПТ-20): the Singular trophies - the Sentinel and «Затмение» only; the storm's multiplier
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.trophies.singular", mobName(EntitySentinelSC.NAME), mobName(EntityEclipseSC.NAME),
+                pct(trophyChance(stat(SENTINEL, "CARRIER_PE1", 0.1F))))));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.trophies.storm", n(TrophyTableSC.STORM_MUL), n(TrophyTableSC.EVENT_CAP))));
 
         e.add(BookEl.head(Lang.tr("sc.manual.world.trophyitemshead")));
         e.addAll(BookContent.paras("sc.manual.world.trophyitems"));
@@ -423,7 +530,7 @@ public final class BookWorldSC {
                 pct(stat(DROPS, "SCRAP_CHANCE", 0.4F)))));
         e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.t.bag"), Lang.tr("sc.manual.world.loot.bag")));
         e.add(BookEl.item(loot(LOOT_STOLEN_CARGO), lootName(LOOT_STOLEN_CARGO), lootLine(LOOT_STOLEN_CARGO)));   // Ф2: back to the Elders
-        for (int m = LOOT_QUANTUM_SCRAP; m <= LOOT_SHIELD_CORE; m++) {
+        for (int m = LOOT_QUANTUM_SCRAP; m < LOOT_NAMES.length; m++) {          // Ф3's four and Ф4's five (ПТ-18)
             e.add(BookEl.item(loot(m), lootName(m), lootLine(m)));
         }
         for (MachineRecipe r : lootRecipes()) {
@@ -434,6 +541,9 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.renegades", Lang.tr("sc.manual.world.renegades.title")));
         e.add(BookEl.link("world.shells", Lang.tr("sc.manual.world.shells.title")));
         e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
+        e.add(BookEl.link("world.vaults", Lang.tr("sc.manual.world.vaults.title")));
+        e.add(BookEl.link("world.eclipse", mobName(EntityEclipseSC.NAME)));
+        e.add(BookEl.link("world.crumbs", Lang.tr("sc.manual.world.crumbs.title")));
         e.add(BookEl.link("world.trade", Lang.tr("sc.manual.world.trade.title")));
         if (MobItemsSC.trophy != null) {
             e.about(new ItemStack(MobItemsSC.trophy, 1, OreDictionary.WILDCARD_VALUE));
@@ -664,8 +774,14 @@ public final class BookWorldSC {
         e.add(BookEl.item(SettlementItemsSC.chips(ReputationSC.PENANCE_CHIPS), Lang.tr("sc.manual.world.trade.penance"),
                 Lang.tr("sc.manual.world.trade.penance.desc", ReputationSC.PENANCE_CHIPS, ReputationSC.PENANCE)));
         e.add(BookEl.item(loot(LOOT_STOLEN_CARGO), lootName(LOOT_STOLEN_CARGO), lootLine(LOOT_STOLEN_CARGO)));
+        // Ф4 (ПО-14..ПО-16): the new loot is bought (the deals above), a lost raid closes the trade, the Elder's Crumb is in the day's cap
+        e.add(BookEl.head(Lang.tr("sc.manual.world.trade.f4head")));
+        e.addAll(BookContent.paras("sc.manual.world.trade.f4", null, new Object[]{days(RaidRulesSC.CLOSED_TICKS)},
+                new Object[]{CrumbLimitSC.DAY_CAP}));
         e.add(BookEl.link("world.trust", Lang.tr("sc.manual.world.trust.title")));
         e.add(BookEl.link("world.tuners", Lang.tr("sc.manual.world.tuners.title")));
+        e.add(BookEl.link("world.raids", Lang.tr("sc.manual.world.raids.title")));
+        e.add(BookEl.link("world.crumbs", Lang.tr("sc.manual.world.crumbs.title")));
         e.about(chip, loot(LOOT_STOLEN_CARGO));
         return e;
     }
@@ -1426,6 +1542,800 @@ public final class BookWorldSC {
         return e;
     }
 
+    // ================================================================== Ф4 «Опасный мир» (docs/plan-substrate-tech-f4.md §10.2)
+
+    // ------------------------------------------------------------------ «Гряды, Окисные поля, Разлом»
+
+    private static BookEntry biomes4(BookChapter c) {
+        ItemStack glass = wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.GLASS);
+        BookEntry e = new BookEntry("world.biomes4", c, glass != null ? glass : icon(), Lang.tr("sc.manual.world.biomes4.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.biomes4.title"))).addAll(BookContent.paras("sc.manual.world.biomes4",
+                new Object[]{SubstrateCellsSC.CELL, SubstrateCellsSC.CELL, SubstrateCellsSC.INNER_MARGIN},
+                new Object[]{SubstrateCellsSC.RIFT_PCT, SubstrateCellsSC.RIFT_MIN_DIST, SubstrateCellsSC.RIDGES_PCT, SubstrateCellsSC.OXIDE_PCT}));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.biomes4.old")));                   // ПМ-11: the land of Ф1..Ф3 is never torn
+        String relief = Lang.tr("sc.manual.world.biomes4.relief"), riches = Lang.tr("sc.manual.world.biomes4.riches"),
+                danger = Lang.tr("sc.manual.world.biomes4.danger"), who = Lang.tr("sc.manual.world.biomes4.who");
+        ItemStack dosimeter = new ItemStack(ModItems.dosimeter);
+
+        // the Quartzite Ridges (ПМ-12)
+        e.add(BookEl.head(Lang.tr("sc.dim.biome.ridges"), rock(SubstrateBlocksSC.QUARTZ_TURF)));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.CRYSTALLITE), relief, Lang.tr("sc.manual.world.biomes4.ridges.relief", SubstrateWildTerrainSC.RIDGE_MAX,
+                SubstrateWildTerrainSC.RIDGE_BLEND)));
+        e.add(BookEl.item(ore(OreEntry.TANTALITE), riches, Lang.tr("sc.manual.world.biomes4.ridges.riches", multiplier(SubstrateWildTerrainSC.RIDGE_VEIN_MUL))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_COLOSSUS), who, Lang.tr("sc.manual.world.biomes4.ridges.who")));
+
+        // the Oxide Fields (ПМ-13)
+        e.add(BookEl.head(Lang.tr("sc.dim.biome.oxide"), rock(SubstrateBlocksSC.OXIDE_GOLD)));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), relief, Lang.tr("sc.manual.world.biomes4.oxide.relief", SubstrateWildTerrainSC.DUNE_MIN,
+                SubstrateWildTerrainSC.DUNE_MAX)));
+        e.add(BookEl.item(wild(SubstrateWildBlocksSC.vent, SubstrateWildBlocksSC.FUMAROLE), riches, Lang.tr("sc.manual.world.biomes4.oxide.riches",
+                SubstrateWildGenSC.FUMAROLE_CHANCE, SubstrateWildGenSC.RTG_CHANCE)));
+        e.add(BookEl.item(dosimeter, danger, Lang.tr("sc.manual.world.biomes4.oxide.danger", n(SubstrateRadiationSC.OXIDE))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_OVERHEATED), who, Lang.tr("sc.manual.world.biomes4.oxide.who")));
+
+        // the Rift (ПМ-14)
+        e.add(BookEl.head(Lang.tr("sc.dim.biome.rift"), glass));
+        e.add(BookEl.item(glass, relief, Lang.tr("sc.manual.world.biomes4.rift.relief", SubstrateWildTerrainSC.RIFT_RIM, SubstrateWildTerrainSC.RIFT_FLOOR,
+                SubstrateWildTerrainSC.ISLANDS_MIN, SubstrateWildTerrainSC.ISLANDS_MAX, SubstrateWildTerrainSC.ISLAND_MIN_Y, SubstrateWildTerrainSC.ISLAND_MAX_Y)));
+        e.add(BookEl.item(wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.PILLAR_CORE), Lang.tr("sc.manual.world.biomes4.pillar"),
+                Lang.tr("sc.manual.world.biomes4.pillar.desc", SubstrateWildTerrainSC.PILLAR_RADIUS, SubstrateWildTerrainSC.PILLAR_TOP)));
+        e.add(BookEl.item(dosimeter, danger, Lang.tr("sc.manual.world.biomes4.rift.danger", n(SubstrateRadiationSC.RIFT))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_ECLIPSE), who, Lang.tr("sc.manual.world.biomes4.rift.who", EliteModSC.chancePct(0, true))));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.mp.f4", biomeId(BiomeSubstrateSC.RIDGES), biomeId(BiomeSubstrateSC.OXIDE), biomeId(BiomeSubstrateSC.RIFT))));
+        e.add(BookEl.link("world.radiation", Lang.tr("sc.manual.world.radiation.title")));
+        e.add(BookEl.link("world.resources4", Lang.tr("sc.manual.world.resources4.title")));
+        e.add(BookEl.link("world.terrain", Lang.tr("sc.manual.world.terrain.title")));
+        e.add(BookEl.link("world.eclipse", mobName(EntityEclipseSC.NAME)));
+        if (SubstrateWildBlocksSC.glass != null) {
+            e.about(new ItemStack(SubstrateWildBlocksSC.glass, 1, OreDictionary.WILDCARD_VALUE));
+        }
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Фоновая радиация»
+
+    private static BookEntry radiation(BookChapter c) {
+        ItemStack dosimeter = new ItemStack(ModItems.dosimeter);
+        BookEntry e = new BookEntry("world.radiation", c, dosimeter, Lang.tr("sc.manual.world.radiation.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.radiation.title"))).addAll(BookContent.paras("sc.manual.world.radiation", null,
+                new Object[]{n(StormRulesSC.EMISSION_RADIATION_MUL)}));
+
+        // the background by biome (ПА-1): SubstrateRadiationSC
+        BookEl t = BookEl.table(Lang.tr("sc.manual.world.t.biome"), Lang.tr("sc.manual.world.t.background"));
+        for (int k = 0; k < BiomeSubstrateSC.KINDS; k++) {
+            float lv = SubstrateRadiationSC.backgroundLevel(k);
+            t.row(biomeIcon(k), Lang.tr("sc.dim.biome." + BiomeSubstrateSC.KEYS[k]), lv > 0F ? n(lv) : Lang.tr("sc.manual.world.cell.none"));
+        }
+        e.add(t);
+
+        // the sources on top (ПА-2)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.radiation.sourceshead")));
+        e.add(BookEl.item(wild(SubstrateWildBlocksSC.vent, SubstrateWildBlocksSC.CRACKED_RTG), wildName(SubstrateWildBlocksSC.vent, SubstrateWildBlocksSC.CRACKED_RTG),
+                Lang.tr("sc.manual.world.radiation.rtg", n(SubstrateRadiationSC.RTG_LEVEL), SubstrateRadiationSC.RTG_RADIUS,
+                        n(SubstrateRadiationSC.OXIDE + SubstrateRadiationSC.RTG_LEVEL))));
+        e.add(BookEl.item(wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.PILLAR_CORE), Lang.tr("sc.manual.world.biomes4.pillar"),
+                Lang.tr("sc.manual.world.radiation.pillar", n(SubstrateRadiationSC.PILLAR_LEVEL), SubstrateRadiationSC.PILLAR_RADIUS,
+                        n(SubstrateRadiationSC.RIFT + SubstrateRadiationSC.PILLAR_LEVEL))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_OVERHEATED), mobName(EntityOverheatedSC.NAME), Lang.tr("sc.manual.world.radiation.overheated",
+                n(stat(OVERHEATED, "RADIATION_LEVEL", 2F)), n(stat(OVERHEATED, "RADIATION_RADIUS", 4F)))));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.radiation.blocks")));
+
+        // the protection (ПА-3): everything the radiation already has
+        e.add(BookEl.head(Lang.tr("sc.manual.world.radiation.protecthead")));
+        e.add(BookEl.item(new ItemStack(ModItems.leadSuit[1]), Lang.tr("sc.manual.world.radiation.lead"), Lang.tr("sc.manual.world.radiation.lead.desc")));
+        e.add(BookEl.item(quantumPiece(2), Lang.tr("sc.manual.world.radiation.suits"), Lang.tr("sc.manual.world.radiation.suits.desc")));
+        e.add(BookEl.item(new ItemStack(ModBlocks.fieldGeneratorSC), Lang.tr("sc.manual.world.radiation.field"), Lang.tr("sc.manual.world.radiation.field.desc")));
+        e.add(BookEl.item(core(), Lang.tr("sc.manual.world.radiation.dome"), Lang.tr("sc.manual.world.radiation.dome.desc")));
+        e.add(BookEl.item(new ItemStack(ModBlocks.shower), Lang.tr("sc.manual.world.radiation.shower"), Lang.tr("sc.manual.world.radiation.shower.desc",
+                n(com.sc.tileentity.TileEntityShowerSC.DOSE_PER_SECOND))));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.radiation.exo")));
+        e.add(BookEl.link("radiation", Lang.tr("sc.manual.safety.radiationhead")));
+        e.add(BookEl.link("world.biomes4", Lang.tr("sc.manual.world.biomes4.title")));
+        e.add(BookEl.link("world.haze", Lang.tr("sc.manual.world.haze.title")));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Фумаролы, трещины, жеоды, гейзеры»
+
+    private static BookEntry resources4(BookChapter c) {
+        ItemStack fumarole = wild(SubstrateWildBlocksSC.vent, SubstrateWildBlocksSC.FUMAROLE);
+        BookEntry e = new BookEntry("world.resources4", c, fumarole != null ? fumarole : icon(), Lang.tr("sc.manual.world.resources4.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.resources4.title"))).addAll(BookContent.paras("sc.manual.world.resources4"));
+
+        // the vents (ПА-4..ПА-7): their tiles' numbers
+        e.add(BookEl.head(Lang.tr("sc.manual.world.resources4.ventshead"), fumarole));
+        for (int m = 0; m < SubstrateWildBlocksSC.VENT_NAMES.length; m++) {
+            e.add(BookEl.item(wild(SubstrateWildBlocksSC.vent, m), wildName(SubstrateWildBlocksSC.vent, m), wildLine(SubstrateWildBlocksSC.vent, m)));
+        }
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.resources4.vents.note")));
+
+        // the monocrystal geodes (ПМ-16)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.resources4.geodehead"), rock(SubstrateBlocksSC.MONOCRYSTAL)));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.MONOCRYSTAL), rockName(SubstrateBlocksSC.MONOCRYSTAL), Lang.tr("sc.manual.world.resources4.geode",
+                SubstrateWildGenSC.GEODE_Y_MIN, SubstrateWildGenSC.GEODE_Y_MAX, SubstrateWildGenSC.GEODE_CHANCE, SubstrateWildGenSC.GEODE_R_MIN,
+                SubstrateWildGenSC.GEODE_R_MAX)));
+        e.add(BookEl.item(ModItems.siliconMaterial.stackOf(SiliconMaterial.METALLURGICAL_SI), Lang.tr("sc.manual.world.t.loot"),
+                Lang.tr("sc.manual.world.resources4.geode.drop", n(1F), n(stat(ROCK_BLOCK, "MONO_DROP_MAX", 3F)))));
+
+        // the flora and the glass (ПМ-15, ПМ-14)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.resources4.florahead"), wild(SubstrateWildBlocksSC.flora, SubstrateWildBlocksSC.WIREWEED)));
+        for (int m = 0; m < SubstrateWildBlocksSC.FLORA_NAMES.length; m++) {
+            e.add(BookEl.item(wild(SubstrateWildBlocksSC.flora, m), wildName(SubstrateWildBlocksSC.flora, m), wildLine(SubstrateWildBlocksSC.flora, m)));
+        }
+        for (int m = 0; m < SubstrateWildBlocksSC.GLASS_NAMES.length; m++) {
+            e.add(BookEl.item(wild(SubstrateWildBlocksSC.glass, m), wildName(SubstrateWildBlocksSC.glass, m), wildLine(SubstrateWildBlocksSC.glass, m)));
+        }
+        e.add(BookEl.link("world.biomes4", Lang.tr("sc.manual.world.biomes4.title")));
+        e.add(BookEl.link("world.radiation", Lang.tr("sc.manual.world.radiation.title")));
+        e.add(BookEl.link("world.terrain", Lang.tr("sc.manual.world.terrain.title")));
+        if (SubstrateWildBlocksSC.vent != null) {
+            e.about(new ItemStack(SubstrateWildBlocksSC.vent, 1, OreDictionary.WILDCARD_VALUE));
+        }
+        if (SubstrateWildBlocksSC.flora != null) {
+            e.about(new ItemStack(SubstrateWildBlocksSC.flora, 1, OreDictionary.WILDCARD_VALUE));
+        }
+        e.about(rock(SubstrateBlocksSC.MONOCRYSTAL));
+        return e;
+    }
+
+    /**
+     * Ф4: what the handbook says of a wild block's meta (SubstrateWildBlocksSC: the glass, the flora, the vents - where it is, what it
+     * gives or does, the tiles' and the generator's numbers) - NEI's «Как получить» too. sc.manual.world.wild.<name>.
+     */
+    public static String wildLine(net.minecraft.block.Block b, int meta) {
+        String[] names = SubstrateWildBlocksSC.namesOf(b);
+        String name = names.length == 0 ? "singularGlass" : names[meta >= 0 && meta < names.length ? meta : 0];
+        String k = "sc.manual.world.wild." + name;
+        if (b == SubstrateWildBlocksSC.vent) {
+            switch (meta) {
+                case SubstrateWildBlocksSC.FUMAROLE:
+                    return Lang.tr(k, TileEntitySubstrateVentSC.HELIUM_MB_MIN, TileEntitySubstrateVentSC.HELIUM_MB_MAX, SubstrateWildGenSC.FUMAROLE_CHANCE);
+                case SubstrateWildBlocksSC.ARC_CRACK:
+                    return Lang.tr(k, TileEntityArcCrackSC.EU_PER_TICK, TileEntityArcCrackSC.HAZARD_RADIUS, n(TileEntityArcCrackSC.DRAIN_TENTHS_PCT / 10F),
+                            TileEntityArcCrackSC.HAZARD_DAMAGE, SubstrateWildGenSC.CRACK_CHANCE);
+                case SubstrateWildBlocksSC.ION_GEYSER:
+                    return Lang.tr(k, SubstrateWildGenSC.GEYSERS_MIN, SubstrateWildGenSC.GEYSERS_MAX, sec(TileEntitySubstrateVentSC.GEYSER_MIN),
+                            sec(TileEntitySubstrateVentSC.GEYSER_MAX), TileEntitySubstrateVentSC.GEYSER_RADIUS, TileEntitySubstrateVentSC.GEYSER_DAMAGE,
+                            TileEntitySubstrateVentSC.GEYSER_DRAIN_PCT);
+                default:
+                    return Lang.tr(k, SubstrateWildGenSC.RTG_CHANCE, n(SubstrateRadiationSC.RTG_LEVEL), SubstrateRadiationSC.RTG_RADIUS);
+            }
+        }
+        if (b == SubstrateWildBlocksSC.flora) {
+            return meta == SubstrateWildBlocksSC.DIODE_MOSS ? Lang.tr(k, com.sc.block.BlockSubstrateFloraSC.MOSS_LIGHT, SubstrateWildGenSC.MOSS_MAX) : Lang.tr(k);
+        }
+        return meta == SubstrateWildBlocksSC.PILLAR_CORE ? Lang.tr(k, com.sc.block.BlockSingularGlassSC.CORE_LIGHT, SubstrateWildTerrainSC.PILLAR_TOP)
+                : Lang.tr(k, SubstrateWildTerrainSC.RIFT_FLOOR);
+    }
+
+    // ------------------------------------------------------------------ «ЭМИ-буря»
+
+    private static BookEntry storm(BookChapter c) {
+        BookEntry e = new BookEntry("world.storm", c, new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.storm.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.storm.title"))).addAll(BookContent.paras("sc.manual.world.storm",
+                new Object[]{StormRulesSC.CHANCE_PCT, minutes(StormRulesSC.MIN_TICKS), minutes(StormRulesSC.MAX_TICKS), sec(StormRulesSC.WARN_TICKS)},
+                new Object[]{sec(StormRulesSC.PULSE_MIN), sec(StormRulesSC.PULSE_MAX), sec(StormRulesSC.SUPPRESS_MIN), sec(StormRulesSC.SUPPRESS_MAX),
+                        StormRulesSC.BOIL_MUL, sec(StormRulesSC.BOIL_TICKS)}));
+        if (!SubstrateConfigSC.empStorms) {
+            e.add(BookEl.warn(Lang.tr("sc.manual.world.storm.off")));
+        }
+
+        // the cover (ПФ-3)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.storm.coverhead")));
+        e.add(BookEl.item(new ItemStack(Blocks.stonebrick), Lang.tr("sc.manual.world.storm.roof"), Lang.tr("sc.manual.world.storm.roof.desc",
+                StormRulesSC.COVER_BLOCKS, StormRulesSC.COVER_SCAN)));
+        e.add(BookEl.item(new ItemStack(ModBlocks.fieldGeneratorSC), Lang.tr("sc.manual.world.storm.field"), Lang.tr("sc.manual.world.storm.field.desc",
+                BookContent.num(EmpMathSC.SCREEN_EU_PULSE))));
+        e.add(BookEl.item(core(), Lang.tr("sc.manual.world.storm.dome"), Lang.tr("sc.manual.world.storm.dome.desc")));
+
+        // who else (ПФ-2, ПБ-21)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.storm.whohead")));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_TROOPER), Lang.tr("sc.manual.world.storm.mobs"), Lang.tr("sc.manual.world.storm.mobs.desc", StormRulesSC.REACH)));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_HOLLOW_SHELL), mobName(EntityHollowShellSC.NAME), Lang.tr("sc.manual.world.storm.shell",
+                sec(StormRulesSC.SHELL_REBOOT_TICKS))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_TUNER), Lang.tr("sc.manual.world.storm.spared"), Lang.tr("sc.manual.world.storm.spared.desc")));
+
+        // what else changes (ПФ-5..ПФ-7)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.storm.changeshead")));
+        e.add(BookEl.item(ModBlocks.generatorStack(GeneratorType.SOLAR_SI, 1), Lang.tr("sc.manual.world.storm.solar"), Lang.tr("sc.manual.world.storm.solar.desc")));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_NANITE), mobName(EntityNaniteSC.NAME), Lang.tr("sc.manual.world.storm.swarm", StormRulesSC.SWARM_MUL)));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_STRIDER), mobName(EntityStriderSC.NAME), Lang.tr("sc.manual.world.storm.strider")));
+        e.add(BookEl.item(trophy(TrophyTableSC.armorMeta(ArmorSuit.QUANTUM, 1)), Lang.tr("sc.manual.world.t.trophies"), Lang.tr("sc.manual.world.storm.trophies",
+                n(StormRulesSC.TROPHY_MUL), n(TrophyTableSC.EVENT_CAP))));
+        e.addAll(BookContent.paras("sc.manual.world.storm.tips"));
+        e.add(BookEl.link("world.haze", Lang.tr("sc.manual.world.haze.title")));
+        e.add(BookEl.link("world.noise4", Lang.tr("sc.manual.world.noise4.title")));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.add(BookEl.link("world.armoured", Lang.tr("sc.manual.world.armoured.title")));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Мгла и Выброс»
+
+    private static BookEntry haze(BookChapter c) {
+        ItemStack sand = ModItems.siliconMaterial.stackOf(SiliconMaterial.SILICA_SAND);
+        BookEntry e = new BookEntry("world.haze", c, sand, Lang.tr("sc.manual.world.haze.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.haze.title"))).addAll(BookContent.paras("sc.manual.world.haze",
+                new Object[]{StormRulesSC.HAZE_CHANCE_PCT, minutes(StormRulesSC.HAZE_MIN), minutes(StormRulesSC.HAZE_MAX), StormRulesSC.HAZE_SIGHT},
+                new Object[]{StormRulesSC.HAZE_SIGHT}));
+        if (!SubstrateConfigSC.empStorms) {
+            e.add(BookEl.warn(Lang.tr("sc.manual.world.haze.off")));
+        }
+
+        // the Singular Emission (ПФ-10)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.emissionhead"), wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.PILLAR_CORE)));
+        e.addAll(BookContent.paras("sc.manual.world.emission", new Object[]{StormRulesSC.WEEK_DAYS, minutes(StormRulesSC.EMISSION_TICKS)},
+                new Object[]{n(StormRulesSC.EMISSION_RADIATION_MUL), n(StormRulesSC.EMISSION_CRUMB_MUL), mobName(EntityEclipseSC.NAME),
+                        n(StormRulesSC.EMISSION_ECLIPSE_MUL)}));
+        e.add(BookEl.link("world.storm", Lang.tr("sc.manual.world.storm.title")));
+        e.add(BookEl.link("world.radiation", Lang.tr("sc.manual.world.radiation.title")));
+        e.add(BookEl.link("world.eclipse", mobName(EntityEclipseSC.NAME)));
+        e.add(BookEl.link("world.crumbs", Lang.tr("sc.manual.world.crumbs.title")));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Налёты»
+
+    private static BookEntry raids(BookChapter c) {
+        ItemStack core = core();
+        BookEntry e = new BookEntry("world.raids", c, core != null ? core : icon(), Lang.tr("sc.manual.world.raids.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.raids.title"))).addAll(BookContent.paras("sc.manual.world.raids",
+                new Object[]{clock(RaidRulesSC.NIGHT_FROM), clock(RaidRulesSC.NIGHT_TO), levelName(ReputationSC.ACQUAINTANCE), RaidRulesSC.reach(0),
+                        RaidRulesSC.reach(1), RaidRulesSC.reach(2)},
+                new Object[]{RaidRulesSC.CHANCE_PCT, RaidRulesSC.COOLDOWN_DAYS}));
+        if (!SubstrateConfigSC.raids) {
+            e.add(BookEl.warn(Lang.tr("sc.manual.world.raids.off")));
+        }
+
+        // the waves (ПН-2): RaidRulesSC.wave by size - the third one's two kinds by a fixed roll
+        e.add(BookEl.head(Lang.tr("sc.manual.world.raids.waveshead"), egg(MobEntitiesSC.ID_MARAUDER)));
+        SettlementSizeSC[] sizes = SettlementSizeSC.values();
+        String[] header = new String[sizes.length + 1];
+        header[0] = Lang.tr("sc.manual.world.t.wave");
+        for (int s = 0; s < sizes.length; s++) {
+            header[s + 1] = Lang.tr(sizes[s].langKey());
+        }
+        BookEl t = BookEl.table(header);
+        for (int row = 0; row < RaidRulesSC.WAVES + 1; row++) {
+            int wave = Math.min(row, RaidRulesSC.WAVES - 1);
+            boolean column = row == RaidRulesSC.WAVES;            // the third wave without its elite: the Shells' column
+            String[] cells = new String[sizes.length + 1];
+            cells[0] = (wave + 1) + (wave < RaidRulesSC.WAVES - 1 ? "" : ": " + Lang.tr(column ? "sc.manual.world.raids.column" : "sc.manual.world.raids.elite"));
+            for (int s = 0; s < sizes.length; s++) {
+                cells[s + 1] = waveText(RaidRulesSC.wave(wave, s, new FixedRoll(column ? 0.999F : 0F)));
+            }
+            t.row(egg(column ? MobEntitiesSC.ID_HOLLOW_SHELL : wave == 0 ? MobEntitiesSC.ID_MARAUDER : MobEntitiesSC.ID_TROOPER), cells);
+        }
+        e.add(t);
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.raids.waves.note", pct(RaidRulesSC.ELITE_WAVE_CHANCE))));
+        e.addAll(BookContent.paras("sc.manual.world.raids.fight", new Object[]{RaidRulesSC.SPAWN_OUT_MIN, RaidRulesSC.SPAWN_OUT_MAX,
+                minutes(RaidRulesSC.WAVE_TICKS)}));
+
+        // won and lost (ПН-3, ПН-4)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.raids.endhead"), SettlementItemsSC.chips(1)));
+        BookEl r = BookEl.table(Lang.tr("sc.manual.world.t.size"), Lang.tr("sc.manual.world.t.trust"), Lang.tr("sc.manual.world.t.chips"),
+                Lang.tr("sc.manual.world.t.elderchest"));
+        for (int s = 0; s < sizes.length; s++) {
+            r.row(null, Lang.tr(sizes[s].langKey()), "+" + RaidRulesSC.rep(s), String.valueOf(RaidRulesSC.chips(s)),
+                    String.valueOf(RaidRulesSC.CHEST_ROLLS[Math.min(s, RaidRulesSC.CHEST_ROLLS.length - 1)]));
+        }
+        e.add(r);
+        e.addAll(BookContent.paras("sc.manual.world.raids.end", null, new Object[]{minutes(RaidRulesSC.RAID_TICKS), minutes(RaidRulesSC.ABANDON_TICKS),
+                days(RaidRulesSC.CLOSED_TICKS)}));
+        e.add(BookEl.link("world.settlements", Lang.tr("sc.manual.world.settlements.title")));
+        e.add(BookEl.link("world.trust", Lang.tr("sc.manual.world.trust.title")));
+        e.add(BookEl.link("world.wardens", Lang.tr("sc.manual.world.wardens.title")));
+        e.add(BookEl.link("world.trade", Lang.tr("sc.manual.world.trade.title")));
+        return e;
+    }
+
+    /** «Мародёр-отступник ×3, Обходчик ×2» - a wave's {pool id, count} pairs. */
+    private static String waveText(int[][] wave) {
+        StringBuilder sb = new StringBuilder();
+        for (int[] g : wave) {
+            String name = MobEntitiesSC.nameOf(g[0]);
+            sb.append(sb.length() == 0 ? "" : ", ").append(Lang.tr("sc.manual.world.cell.times", name == null ? "?" : mobName(name), g[1]));
+        }
+        return sb.toString();
+    }
+
+    /** A Random whose nextFloat is fixed: RaidRulesSC.wave's third wave of either kind for the handbook's table. */
+    private static final class FixedRoll extends Random {
+        private static final long serialVersionUID = 1L;
+        private final float roll;
+
+        FixedRoll(float roll) {
+            super(0L);
+            this.roll = roll;
+        }
+
+        @Override
+        public float nextFloat() {
+            return roll;
+        }
+    }
+
+    // ------------------------------------------------------------------ «Эхо моста»
+
+    private static BookEntry echo(BookChapter c) {
+        ItemStack shield = com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.SHIELD, 1);
+        BookEntry e = new BookEntry("world.echo", c, shield, Lang.tr("sc.manual.world.echo.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.echo.title"))).addAll(BookContent.paras("sc.manual.world.echo",
+                new Object[]{pct(BridgeEchoSC.HOME_CHANCE), BridgeEchoSC.PARTICLES_MIN, BridgeEchoSC.PARTICLES_MAX, sec(BridgeEchoSC.ECHO_LIFE_TICKS)},
+                new Object[]{pct(BridgeEchoSC.ARRIVAL_CHANCE), sec(BridgeEchoSC.SQUAD_DELAY), BridgeEchoSC.SQUAD_DIST_MIN, BridgeEchoSC.SQUAD_DIST_MAX,
+                        BridgeEchoSC.SQUAD_MIN, BridgeEchoSC.SQUAD_MAX, minutes(BridgeEchoSC.COOLDOWN_TICKS)}));
+        e.add(BookEl.item(shield, shield != null ? shield.getDisplayName() : Lang.tr("tile.siliconage.bridge.portalShield.name"),
+                Lang.tr("sc.manual.world.echo.shield")));
+        e.add(BookEl.item(dock(BlockDockSC.PLATE), Lang.tr("sc.manual.world.echo.dock"), Lang.tr("sc.manual.world.echo.dock.desc")));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_NANITE), mobName(EntityNaniteSC.NAME), Lang.tr("sc.manual.world.echo.swarm")));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_MARAUDER), mobName(EntityMarauderSC.NAME), Lang.tr("sc.manual.world.echo.squad")));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.echo.vehicles")));
+        e.add(BookEl.link("bridge", Lang.tr("sc.manual.bridge.title")));
+        e.add(BookEl.link("world.docks", Lang.tr("sc.manual.world.docks.title")));
+        e.add(BookEl.link("world.noise", Lang.tr("sc.manual.world.noise.title")));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Лагеря Отступников»
+
+    private static BookEntry camps(BookChapter c) {
+        ItemStack field = stolenField(), solar = campBlock(CampBlocksSC.STOLEN_SOLAR), safe = campBlock(CampBlocksSC.CAMP_SAFE);
+        ItemStack key = RelicItemsSC.relic(ItemRelicSC.CAMP_KEY, 1), warlordEgg = egg(MobEntitiesSC.ID_WARLORD);
+        BookEntry e = new BookEntry("world.camps", c, field != null ? field : icon(), Lang.tr("sc.manual.world.camps.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.camps.title"))).addAll(BookContent.paras("sc.manual.world.camps",
+                new Object[]{CampLayoutSC.CHANCE_PCT, CampLayoutSC.MIN_SPAWN_DIST, 2 * CampLayoutSC.HALF_LEN + 1, 2 * CampLayoutSC.HALF_ACROSS + 1},
+                new Object[]{mobName(EntityMarauderSC.NAME), CampLayoutSC.MARAUDERS_MIN, CampLayoutSC.MARAUDERS_MAX, mobName(EntityWarlordSC.NAME),
+                        CampLayoutSC.EXECUTIONER_PCT, CampLayoutSC.EXECUTIONER_MIN_DIST, mobName(EntityExecutionerSC.NAME)}));
+        if (!com.sc.ruin.RuinSC.generates()) {
+            e.add(BookEl.warn(Lang.tr("sc.manual.world.ruins.off")));
+        }
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.camps.old")));
+
+        // the Stolen Field Generator (ПЗ-2..ПЗ-5)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.camps.fieldhead"), field));
+        e.addAll(BookContent.paras("sc.manual.world.camps.field", new Object[]{CampLayoutSC.FIELD_RADIUS}, null));
+        e.add(BookEl.item(solar, campName(CampBlocksSC.STOLEN_SOLAR), Lang.tr("sc.manual.world.camp.stolenSolar", TileEntityStolenSolarSC.PANELS,
+                TileEntityStolenSolarSC.EU_DAY)));
+        e.add(BookEl.item(field, campName(-1), campLine(-1)));
+        e.add(BookEl.item(campBlock(CampBlocksSC.STOLEN_PAD), campName(CampBlocksSC.STOLEN_PAD), campLine(CampBlocksSC.STOLEN_PAD)));
+
+        // the Warlord (ПС-32)
+        String warlord = mobName(EntityWarlordSC.NAME);
+        e.add(BookEl.head(warlord, warlordEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityWarlordSC.HP), n((float) EntityWarlordSC.HP / 2F))));
+        e.add(BookEl.item(exoPiece(1), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.warlord.armour", suitName(ArmorSuit.EXO),
+                suitName(ArmorSuit.QUANTUM), n(stat(WARLORD, "RESERVE_DAMAGE_MIN", 80F)), n(stat(WARLORD, "RESERVE_DAMAGE_MAX", 100F)))));
+        e.add(BookEl.item(blade(BladeType.QUANTUM), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.warlord.weapon",
+                blade(BladeType.QUANTUM).getDisplayName(), n(stat(WARLORD, "BLADE_DAMAGE", 8F)), weapon(WeaponType.ION_CUTTER).getDisplayName(),
+                n(stat(WARLORD, "BEAM_DAMAGE", 4F)), n(stat(WARLORD, "SWITCH_RANGE", 6F)), n(stat(WARLORD, "BACKSTAB_MUL", 1.5F)))));
+        e.add(BookEl.item(key, Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.warlord.loot", relicName(ItemRelicSC.CAMP_KEY),
+                lootName(LOOT_QUANTUM_SCRAP), n(stat(WARLORD, "SCRAP", 4F)))));
+        e.add(BookEl.item(trophy(TrophyTableSC.armorMeta(ArmorSuit.EXO, 1)), Lang.tr("sc.manual.world.t.trophies"), Lang.tr("sc.manual.world.warlord.trophies",
+                pct(trophyChance(stat(WARLORD, "TROPHY_PIECE", 0.02F))), pct(trophyChance(stat(WARLORD, "TROPHY_EXO_CHEST", 0.005F))))));
+
+        // the safe and the camp's return (ПЗ-6, ПЗ-7)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.camps.safehead"), safe));
+        e.add(BookEl.item(safe, campName(CampBlocksSC.CAMP_SAFE), campLine(CampBlocksSC.CAMP_SAFE)));
+        e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.camps.safe.loot"), Lang.tr("sc.manual.world.camps.safe.loot.desc",
+                pct(stat(RUIN_LOOT, "CAMP_MODULE_CHANCE", 0.05F)), pct(stat(RUIN_LOOT, "CAMP_CHIP_CHANCE", 0.03F)), pct(stat(RUIN_LOOT, "CAMP_CRUMB_CHANCE", 0.05F)))));
+        e.add(BookEl.item(warlordEgg, Lang.tr("sc.manual.world.camps.return"), Lang.tr("sc.manual.world.camps.return.desc", days(RuinWorldSC.CAMP_RESTORE_TICKS),
+                RuinWorldSC.RESPAWN_CLEAR)));
+        e.addAll(BookContent.paras("sc.manual.world.camps.tips", new Object[]{clock(18000)}));
+        e.add(BookEl.link("world.renegades", Lang.tr("sc.manual.world.renegades.title")));
+        e.add(BookEl.link("world.executioner", mobName(EntityExecutionerSC.NAME)));
+        e.add(BookEl.link("world.crumbs", Lang.tr("sc.manual.world.crumbs.title")));
+        e.add(BookEl.link("field", Lang.tr("sc.manual.field.title")));
+        e.about(field, warlordEgg, key, ruin(RUIN_CAMP_TARP));
+        if (CampBlocksSC.camp != null) {
+            e.about(new ItemStack(CampBlocksSC.camp, 1, OreDictionary.WILDCARD_VALUE));
+        }
+        return e;
+    }
+
+    /**
+     * Ф4: what the handbook says of a camp block (CampBlocksSC: `meta` of campSC, -1 the Stolen Field Generator) - where it stands,
+     * what breaking it gives (package C's numbers by name) - NEI's «Как получить» too. sc.manual.world.camp.<name>.
+     */
+    public static String campLine(int meta) {
+        if (meta < 0) {
+            return Lang.tr("sc.manual.world.camp.stolenField", n(com.sc.block.BlockStolenFieldSC.HARDNESS));
+        }
+        String name = CampBlocksSC.CAMP_NAMES[Math.min(CampBlocksSC.CAMP_NAMES.length - 1, meta)];
+        if (meta == CampBlocksSC.STOLEN_SOLAR) {
+            return Lang.tr("sc.manual.world.camp." + name, TileEntityStolenSolarSC.PANELS, TileEntityStolenSolarSC.EU_DAY);
+        }
+        if (meta == CampBlocksSC.STOLEN_PAD) {
+            return Lang.tr("sc.manual.world.camp." + name, mobName(EntityExecutionerSC.NAME), n(stat(EXECUTIONER, "PAD_UNITS", 1F)));
+        }
+        return Lang.tr("sc.manual.world.camp." + name);
+    }
+
+    // ------------------------------------------------------------------ «Хранилища и Часовой»
+
+    private static BookEntry vaults(BookChapter c) {
+        ItemStack plating = ruin(RUIN_VAULT_PLATING), sentinelEgg = egg(MobEntitiesSC.ID_SENTINEL), fragment = RelicItemsSC.relic(ItemRelicSC.KEY_FRAGMENT, 1);
+        ItemStack finder = RelicItemsSC.ruinFinder == null ? null : new ItemStack(RelicItemsSC.ruinFinder);
+        BookEntry e = new BookEntry("world.vaults", c, plating != null ? plating : icon(), Lang.tr("sc.manual.world.vaults.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.vaults.title"))).addAll(BookContent.paras("sc.manual.world.vaults",
+                new Object[]{VaultLayoutSC.BLOCK, VaultLayoutSC.BLOCK, VaultLayoutSC.HALF, VaultLayoutSC.DEPTH},
+                new Object[]{n(stat(RUIN_BLOCK, "PLATING_LEVEL", 3F)), n(stat(RUIN_BLOCK, "PLATING_HARDNESS", 30F)), n(stat(RUIN_BLOCK, "PLATING_SCRAP_PCT", 50F))}));
+        if (!com.sc.ruin.RuinSC.generates()) {
+            e.add(BookEl.warn(Lang.tr("sc.manual.world.ruins.off")));
+        }
+        e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.ruins.chests"), Lang.tr("sc.manual.world.vaults.loot",
+                pct(stat(RUIN_LOOT, "VAULT_MODULE_CHANCE", 0.1F)), pct(stat(RUIN_LOOT, "VAULT_CRUMB_CHANCE", 0.1F)))));
+
+        // the Singular Sentinel (ПС-33)
+        String sentinel = mobName(EntitySentinelSC.NAME);
+        e.add(BookEl.head(sentinel, sentinelEgg));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntitySentinelSC.HP), n((float) EntitySentinelSC.HP / 2F))));
+        e.add(BookEl.item(new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[1]), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.sentinel.armour",
+                suitName(ArmorSuit.SINGULAR), pct(stat(SENTINEL, "SENIOR_CHANCE", 0.2F)), n(stat(SENTINEL, "RESERVE_DAMAGE_MIN", 150F)),
+                n(stat(SENTINEL, "RESERVE_DAMAGE_MAX", 250F)), n(stat(SENTINEL, "REGEN_PER_SECOND", 4F)), sec((int) stat(SENTINEL, "REGEN_DELAY_TICKS", 100F)))));
+        e.add(BookEl.item(blade(BladeType.SINGULAR), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.sentinel.weapon",
+                blade(BladeType.SINGULAR).getDisplayName(), pct(stat(SENTINEL, "SINGULAR_BLADE_CHANCE", 0.3F)), n(stat(SENTINEL, "SINGULAR_BLADE_DAMAGE", 14F)),
+                blade(BladeType.EXO).getDisplayName(), n(stat(SENTINEL, "EXO_BLADE_DAMAGE", 10F)))));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.jammer.carrier"), EmpMobGunSC.allowed()
+                ? Lang.tr("sc.manual.world.sentinel.carrier.on", pct(stat(SENTINEL, "CARRIER_CHANCE", 0.05F)), n(stat(SENTINEL, "EMP_RANGE", 32F)))
+                : Lang.tr("sc.manual.world.sentinel.carrier.off", weapon(WeaponType.ION_CUTTER).getDisplayName())));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.sentinel.press"), Lang.tr("sc.manual.world.sentinel.press.desc", sec((int) stat(SENTINEL, "PRESS_EVERY", 600F)),
+                sec((int) stat(SENTINEL, "PRESS_HUM_TICKS", 60F)), n(stat(SENTINEL, "PRESS_RADIUS", 6F)), sec((int) stat(SENTINEL, "PRESS_TICKS", 100F)))));
+        e.add(BookEl.item(plating, Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.sentinel.where", n(stat(SENTINEL, "LEASH", 24F)))));
+        e.add(BookEl.item(fragment, Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.sentinel.loot", lootName(LOOT_FIRMWARE),
+                n(stat(SENTINEL, "FIRMWARE_MIN", 3F)), n(stat(SENTINEL, "FIRMWARE_MAX", 5F)), relicName(ItemRelicSC.SEALED_CRUMB), pct(stat(SENTINEL, "CRUMB_CHANCE", 0.25F)),
+                n(StormRulesSC.EMISSION_CRUMB_MUL), relicName(ItemRelicSC.KEY_FRAGMENT))));
+        e.add(BookEl.item(trophy(TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 1)), Lang.tr("sc.manual.world.t.trophies"), Lang.tr("sc.manual.world.sentinel.trophies",
+                pct(trophyChance(TrophyTableSC.PIECE[ArmorSuit.SINGULAR.ordinal()])), pct(trophyChance(TrophyTableSC.BLADE[BladeType.SINGULAR.ordinal()])),
+                pct(trophyChance(stat(SENTINEL, "CARRIER_PE1", 0.1F))))));
+        e.add(BookEl.item(sentinelEgg, Lang.tr("sc.manual.world.vaults.return"), Lang.tr("sc.manual.world.vaults.return.desc",
+                days(RuinWorldSC.SENTINEL_RESPAWN_TICKS), RuinWorldSC.RESPAWN_CLEAR)));
+
+        // the Fragments and the Pelengator (ПХ-3, ПХ-6)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.vaults.findhead"), finder));
+        e.add(BookEl.item(fragment, relicName(ItemRelicSC.KEY_FRAGMENT), relicLine(ItemRelicSC.KEY_FRAGMENT)));
+        e.add(BookEl.item(finder, finder != null ? finder.getDisplayName() : Lang.tr("item.siliconage.ruinFinder.name"), finderLine()));
+        e.addAll(BookContent.paras("sc.manual.world.vaults.tips"));
+        e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
+        e.add(BookEl.link("world.crumbs", Lang.tr("sc.manual.world.crumbs.title")));
+        e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.about(plating, ruin(RUIN_VAULT_LAMP), sentinelEgg, fragment, finder);
+        return e;
+    }
+
+    /** Ф4: the Pelengator's line - who sells it (TradeTableSC: «Картограф прокола: 10 КЧ ...»), what it shows, its uses. */
+    public static String finderLine() {
+        ItemStack finder = RelicItemsSC.ruinFinder == null ? null : new ItemStack(RelicItemsSC.ruinFinder);
+        String seller = sellerLine(finder);
+        return Lang.tr("sc.manual.world.vaults.finder", ItemRuinFinderSC.USES) + " "
+                + (seller != null ? seller : Lang.tr("sc.manual.world.vaults.finder.seller", Lang.tr(NpcKindSC.CARTOGRAPHER.langKey())));
+    }
+
+    /**
+     * Ф4: what the handbook says of a relic (ItemRelicSC: the camp's key, the Breakdown Key's Fragment, the Sealed Crumb - who drops
+     * it, what it opens; package M's / C's chances by name) - NEI's «Как получить» too. sc.manual.world.relic.<name>.
+     */
+    public static String relicLine(int meta) {
+        String k = "sc.manual.world.relic." + ItemRelicSC.nameOf(meta);
+        switch (meta) {
+            case ItemRelicSC.CAMP_KEY:
+                return Lang.tr(k, mobName(EntityWarlordSC.NAME));
+            case ItemRelicSC.KEY_FRAGMENT:
+                return Lang.tr(k, mobName(EntitySentinelSC.NAME));
+            default:
+                return Lang.tr(k, mobName(EntitySentinelSC.NAME), pct(stat(SENTINEL, "CRUMB_CHANCE", 0.25F)), mobName(EntityEclipseSC.NAME),
+                        pct(stat(ECLIPSE, "CRUMB_CHANCE", 0.3F)), CrumbLimitSC.DAY_CAP);
+        }
+    }
+
+    // ------------------------------------------------------------------ «Перегретый»
+
+    private static BookEntry overheated(BookChapter c) {
+        String name = mobName(EntityOverheatedSC.NAME);
+        ItemStack egg = egg(MobEntitiesSC.ID_OVERHEATED);
+        BookEntry e = new BookEntry("world.overheated", c, egg != null ? egg : quantumPiece(1), name);
+        e.add(BookEl.title(name)).addAll(BookContent.paras("sc.manual.world.overheated"));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityOverheatedSC.HP),
+                n((float) EntityOverheatedSC.HP / 2F))));
+        e.add(BookEl.item(quantumPiece(1), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.overheated.armour", suitName(ArmorSuit.QUANTUM),
+                n(stat(OVERHEATED, "PIECES_MIN", 2F)), n(stat(OVERHEATED, "PIECES_MAX", 4F)), n(stat(OVERHEATED, "RESERVE_DAMAGE_MIN", 0F)),
+                n(stat(OVERHEATED, "RESERVE_DAMAGE_MAX", 15F)), ironPoints())));
+        e.add(BookEl.item(new ItemStack(Items.flint_and_steel), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.overheated.weapon",
+                n(stat(OVERHEATED, "FIST_MIN", 3F)), n(stat(OVERHEATED, "FIST_MAX", 4F)), n(stat(OVERHEATED, "FIRE_SECONDS", 3F)))));
+        e.add(BookEl.item(new ItemStack(ModItems.dosimeter), Lang.tr("sc.manual.world.overheated.radiation"), Lang.tr("sc.manual.world.overheated.radiation.desc",
+                n(stat(OVERHEATED, "RADIATION_LEVEL", 2F)), n(stat(OVERHEATED, "RADIATION_RADIUS", 4F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.overheated.steam"), Lang.tr("sc.manual.world.overheated.steam.desc",
+                n(stat(OVERHEATED, "STEAM_DAMAGE", 4F)), n(stat(OVERHEATED, "STEAM_RADIUS", 3F)))));
+        e.add(BookEl.item(new ItemStack(Items.water_bucket), Lang.tr("sc.manual.world.overheated.water"), Lang.tr("sc.manual.world.overheated.water.desc",
+                n(stat(OVERHEATED, "WATER_DAMAGE", 6F)), pct(stat(OVERHEATED, "WATER_ARMOUR_CUT", 0.5F)), sec((int) stat(OVERHEATED, "WATER_TICKS", 200F)))));
+        e.add(BookEl.item(ModBlocks.generatorStack(GeneratorType.SOLAR_SI, 1), Lang.tr("sc.manual.world.overheated.energy"),
+                Lang.tr("sc.manual.world.overheated.energy.desc", n(stat(OVERHEATED, "SEEK_RADIUS", 16F)))));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.emp.mode.point"), Lang.tr("sc.manual.world.overheated.emp")));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_GOLD), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.overheated.where",
+                weight("OXIDE_WEIGHTS", MobEntitiesSC.ID_OVERHEATED, 40), weight("RIFT_WEIGHTS", MobEntitiesSC.ID_OVERHEATED, 10),
+                group(MobEntitiesSC.ID_OVERHEATED, 1, 2))));
+        e.add(BookEl.item(loot(LOOT_BOILED_LOOP), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.overheated.loot", lootName(LOOT_FIRMWARE),
+                n(stat(OVERHEATED, "FIRMWARE", 1F)), lootName(LOOT_BOILED_LOOP), pct(stat(OVERHEATED, "LOOP_CHANCE", 0.2F)))));
+        e.add(BookEl.item(trophy(TrophyTableSC.armorMeta(ArmorSuit.QUANTUM, 1)), Lang.tr("sc.manual.world.t.trophies"),
+                Lang.tr("sc.manual.world.overheated.trophies", pct(trophyChance(TrophyTableSC.PIECE[ArmorSuit.QUANTUM.ordinal()])))));
+        e.addAll(BookContent.paras("sc.manual.world.overheated.tips"));
+        e.add(BookEl.link("world.armoured", Lang.tr("sc.manual.world.armoured.title")));
+        e.add(BookEl.link("world.radiation", Lang.tr("sc.manual.world.radiation.title")));
+        e.add(BookEl.link("world.trophies", Lang.tr("sc.manual.world.trophies.title")));
+        e.about(egg, loot(LOOT_BOILED_LOOP));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Затмение»
+
+    private static BookEntry eclipse(BookChapter c) {
+        String name = mobName(EntityEclipseSC.NAME);
+        ItemStack egg = egg(MobEntitiesSC.ID_ECLIPSE);
+        BookEntry e = new BookEntry("world.eclipse", c, egg != null ? egg : new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[0]), name);
+        e.add(BookEl.title(name)).addAll(BookContent.paras("sc.manual.world.eclipse"));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityEclipseSC.HP), n((float) EntityEclipseSC.HP / 2F))));
+        e.add(BookEl.item(new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[1]), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.eclipse.armour",
+                suitName(ArmorSuit.SINGULAR), n(stat(ECLIPSE, "RESERVE_DAMAGE_MIN", 200F)), n(stat(ECLIPSE, "RESERVE_DAMAGE_MAX", 250F)))));
+        e.add(BookEl.item(blade(BladeType.SINGULAR), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.eclipse.weapon",
+                blade(BladeType.SINGULAR).getDisplayName(), n(stat(ECLIPSE, "BLADE_DAMAGE", 13F)), sec((int) stat(ECLIPSE, "HEAVY_WINDUP", 20F)),
+                n(stat(ECLIPSE, "HEAVY_BLOW", 8F)), sec((int) stat(ECLIPSE, "HEAVY_COOLDOWN", 100F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.eclipse.hunt"), Lang.tr("sc.manual.world.eclipse.hunt.desc", n(stat(ECLIPSE, "HUNT_RANGE", 32F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.eclipse.blink"), Lang.tr("sc.manual.world.eclipse.blink.desc", n(stat(ECLIPSE, "BLINK_DISTANCE", 8F)),
+                sec((int) stat(ECLIPSE, "BLINK_MIN", 100F)), sec((int) stat(ECLIPSE, "BLINK_MAX", 200F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.eclipse.flee"), Lang.tr("sc.manual.world.eclipse.flee.desc", pct(stat(ECLIPSE, "FLEE_BELOW", 0.25F)),
+                n(stat(ECLIPSE, "FLEE_DISTANCE", 24F)), n(stat(ECLIPSE, "HEAL_PER_SECOND", 1F)), pct(stat(ECLIPSE, "RECHARGE_TO", 0.6F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.eclipse.sound"), Lang.tr("sc.manual.world.eclipse.sound.desc", n(stat(ECLIPSE, "MUFFLE_RADIUS", 16F)))));
+        e.add(BookEl.item(wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.GLASS), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.eclipse.where",
+                n(stat(RULES, "ECLIPSE_PCT", 2F)), n(StormRulesSC.EMISSION_ECLIPSE_MUL), days((long) stat(RULES, "ECLIPSE_RESPAWN_TICKS", 72000F)))));
+        e.add(BookEl.item(loot(LOOT_SINGULAR_SCRAP), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.eclipse.loot", lootName(LOOT_SINGULAR_SCRAP),
+                n(stat(ECLIPSE, "SCRAP_MIN", 2F)), n(stat(ECLIPSE, "SCRAP_MAX", 3F)), relicName(ItemRelicSC.SEALED_CRUMB), pct(stat(ECLIPSE, "CRUMB_CHANCE", 0.3F)),
+                n(StormRulesSC.EMISSION_CRUMB_MUL))));
+        e.add(BookEl.item(trophy(TrophyTableSC.bladeMeta(BladeType.SINGULAR)), Lang.tr("sc.manual.world.t.trophies"), Lang.tr("sc.manual.world.eclipse.trophies",
+                pct(trophyChance(TrophyTableSC.PIECE[ArmorSuit.SINGULAR.ordinal()])), pct(trophyChance(TrophyTableSC.BLADE[BladeType.SINGULAR.ordinal()])))));
+        e.addAll(BookContent.paras("sc.manual.world.eclipse.tips"));
+        e.add(BookEl.link("world.biomes4", Lang.tr("sc.manual.world.biomes4.title")));
+        e.add(BookEl.link("world.haze", Lang.tr("sc.manual.world.haze.title")));
+        e.add(BookEl.link("world.elites", Lang.tr("sc.manual.world.elites.title")));
+        e.about(egg, loot(LOOT_SINGULAR_SCRAP));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Наводка, Токоед, Колосс, Ходок»
+
+    private static BookEntry noise4(BookChapter c) {
+        ItemStack phantomEgg = egg(MobEntitiesSC.ID_PHANTOM), leechEgg = egg(MobEntitiesSC.ID_LEECH), colossusEgg = egg(MobEntitiesSC.ID_COLOSSUS),
+                striderEgg = egg(MobEntitiesSC.ID_STRIDER);
+        BookEntry e = new BookEntry("world.noise4", c, colossusEgg != null ? colossusEgg : icon(), Lang.tr("sc.manual.world.noise4.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.noise4.title"))).addAll(BookContent.paras("sc.manual.world.noise4"));
+        String hp = Lang.tr("sc.manual.world.t.hp"), where = Lang.tr("sc.manual.world.t.where"), lootT = Lang.tr("sc.manual.world.t.loot"),
+                empT = Lang.tr("sc.manual.world.noise4.emp");
+        ItemStack gun = new ItemStack(ModItems.empGun);
+
+        // the Induction Phantom (ПС-35, ПБ-22)
+        e.add(BookEl.head(mobName(EntityPhantomSC.NAME), phantomEgg));
+        e.add(BookEl.item(null, hp, Lang.tr("sc.manual.world.mob.hp", n((float) EntityPhantomSC.HP), n((float) EntityPhantomSC.HP / 2F))));
+        e.add(BookEl.item(new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[0]), Lang.tr("sc.manual.world.phantom.sight"), Lang.tr("sc.manual.world.phantom.sight.desc")));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.phantom.weapon", sec((int) stat(PHANTOM, "HELMET_TICKS", 80F)),
+                n(stat(PHANTOM, "BREAKDOWN", 3F)), sec((int) stat(PHANTOM, "STRIKE_EVERY", 40F)), pct(stat(PHANTOM, "WEAPON_MUL", 0.5F)))));
+        e.add(BookEl.item(gun, empT, Lang.tr("sc.manual.world.phantom.emp")));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), where, Lang.tr("sc.manual.world.phantom.where", weight("CANYON_WEIGHTS", MobEntitiesSC.ID_PHANTOM, 8),
+                weight("RIDGES_WEIGHTS", MobEntitiesSC.ID_PHANTOM, 8), weight("RIFT_WEIGHTS", MobEntitiesSC.ID_PHANTOM, 10))));
+        e.add(BookEl.item(loot(LOOT_INDUCTION_THREAD), lootT, lootLine(LOOT_INDUCTION_THREAD)));
+
+        // the Current Leech (ПС-36, ПБ-23)
+        e.add(BookEl.head(mobName(EntityLeechSC.NAME), leechEgg));
+        e.add(BookEl.item(null, hp, Lang.tr("sc.manual.world.mob.hp", n((float) EntityLeechSC.HP), n((float) EntityLeechSC.HP / 2F))));
+        e.add(BookEl.item(nanoPiece(1), Lang.tr("sc.manual.world.leech.wrap"), Lang.tr("sc.manual.world.leech.wrap.desc", sec((int) stat(LEECH, "WRAP_TICKS", 100F)),
+                pct(stat(LEECH, "DRAIN", 0.01F)), n(stat(LEECH, "BITE", 2F)), sec((int) stat(LEECH, "WRAP_COOLDOWN", 100F)))));
+        e.add(BookEl.item(new ItemStack(Items.water_bucket), Lang.tr("sc.manual.world.leech.water"), Lang.tr("sc.manual.world.leech.water.desc",
+                n(stat(LEECH, "SHORT_DAMAGE", 10F)), sec((int) stat(LEECH, "STUN_TICKS", 60F)))));
+        e.add(BookEl.item(gun, empT, Lang.tr("sc.manual.world.leech.emp", n(stat(LEECH, "BURST_DAMAGE", 6F)), n(stat(LEECH, "BURST_RADIUS", 3F)))));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.OXIDE_VIOLET), where, Lang.tr("sc.manual.world.leech.where", weight("CANYON_WEIGHTS", MobEntitiesSC.ID_LEECH, 10),
+                weight("RIDGES_WEIGHTS", MobEntitiesSC.ID_LEECH, 10))));
+        e.add(BookEl.item(null, lootT, Lang.tr("sc.manual.world.leech.loot", pct(stat(LEECH, "CELL_CHANCE", 0.4F)), n(stat(LEECH, "COPPER_MIN", 1F)),
+                n(stat(LEECH, "COPPER_MAX", 3F)))));
+
+        // the Quartzite Colossus (ПС-37, ПБ-26)
+        e.add(BookEl.head(mobName(EntityColossusSC.NAME), colossusEgg));
+        e.add(BookEl.item(null, hp, Lang.tr("sc.manual.world.colossus.hp", n((float) EntityColossusSC.HP), n(stat(COLOSSUS, "NATURAL_ARMOUR", 12F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.colossus.temper"), Lang.tr("sc.manual.world.colossus.temper.desc")));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.colossus.weapon", sec((int) stat(COLOSSUS, "STOMP_WINDUP", 20F)),
+                n(stat(COLOSSUS, "STOMP_DAMAGE", 6F)), n(stat(COLOSSUS, "STOMP_RADIUS", 4F)), sec((int) stat(COLOSSUS, "THROW_AIM", 20F)),
+                n(stat(COLOSSUS, "THROW_RANGE", 12F)), n(stat(COLOSSUS, "THROW_DAMAGE", 7F)))));
+        e.add(BookEl.item(new ItemStack(Items.arrow), Lang.tr("sc.manual.world.colossus.faces"), Lang.tr("sc.manual.world.colossus.faces.desc",
+                n(stat(COLOSSUS, "BEAM_MUL", 0.5F)), n(stat(COLOSSUS, "BLAST_MUL", 1.5F)), n(stat(COLOSSUS, "DRILL_MUL", 3F)), n(stat(COLOSSUS, "FRONT_MUL", 0.7F)))));
+        e.add(BookEl.item(gun, empT, Lang.tr("sc.manual.world.colossus.emp")));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.QUARTZ_TURF), where, Lang.tr("sc.manual.world.colossus.where", weight("PLATEAU_WEIGHTS", MobEntitiesSC.ID_COLOSSUS, 6),
+                weight("RIDGES_WEIGHTS", MobEntitiesSC.ID_COLOSSUS, 12))));
+        e.add(BookEl.item(null, lootT, Lang.tr("sc.manual.world.colossus.loot", n(stat(COLOSSUS, "QUARTZITE_MIN", 4F)), n(stat(COLOSSUS, "QUARTZITE_MAX", 8F)),
+                n(stat(COLOSSUS, "SAND_MIN", 4F)), n(stat(COLOSSUS, "SAND_MAX", 8F)), pct(stat(COLOSSUS, "ORE_CHANCE", 0.5F)))));
+
+        // the Arc Strider (ПС-38, ПБ-24)
+        e.add(BookEl.head(mobName(EntityStriderSC.NAME), striderEgg));
+        e.add(BookEl.item(null, hp, Lang.tr("sc.manual.world.mob.hp", n((float) EntityStriderSC.HP), n((float) EntityStriderSC.HP / 2F))));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.strider.storm"), Lang.tr("sc.manual.world.strider.storm.desc",
+                n(stat(RULES, "STORM_STRIDER_WEIGHT", 12F)), sec((int) stat(STRIDER, "DISPERSE_TICKS", 600F)))));
+        e.add(BookEl.item(exoPiece(1), Lang.tr("sc.manual.world.t.weapon"), Lang.tr("sc.manual.world.strider.weapon", sec((int) stat(STRIDER, "ARC_CHARGE", 20F)),
+                n(stat(STRIDER, "ARC_DAMAGE", 5F)), n(stat(STRIDER, "CHAIN_JUMPS", 3F)), n(stat(STRIDER, "CHAIN_STEP", 6F)))));
+        e.add(BookEl.item(new ItemStack(Items.arrow), Lang.tr("sc.manual.world.strider.arrows"), Lang.tr("sc.manual.world.strider.arrows.desc")));
+        e.add(BookEl.item(gun, empT, Lang.tr("sc.manual.world.strider.emp", sec((int) stat(STRIDER, "COLLAPSE_TICKS", 100F)), n(stat(STRIDER, "COLLAPSED_MUL", 2F)))));
+        e.add(BookEl.item(new ItemStack(Items.water_bucket), Lang.tr("sc.manual.world.strider.water"), Lang.tr("sc.manual.world.strider.water.desc",
+                n(stat(STRIDER, "WATER_DAMAGE", 8F)))));
+        e.add(BookEl.item(loot(LOOT_PLASMA_CONDENSATE), lootT, lootLine(LOOT_PLASMA_CONDENSATE)));
+        e.addAll(BookContent.paras("sc.manual.world.noise4.tips"));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.add(BookEl.link("world.storm", Lang.tr("sc.manual.world.storm.title")));
+        e.add(BookEl.link("world.noise", Lang.tr("sc.manual.world.noise.title")));
+        e.about(phantomEgg, leechEgg, colossusEgg, striderEgg, loot(LOOT_INDUCTION_THREAD), loot(LOOT_PLASMA_CONDENSATE));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Утилизатор и Метка гибели»
+
+    private static BookEntry scrapper(BookChapter c) {
+        String name = mobName(EntityScrapperSC.NAME);
+        ItemStack egg = egg(MobEntitiesSC.ID_SCRAPPER);
+        BookEntry e = new BookEntry("world.scrapper", c, egg != null ? egg : new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.scrapper.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.scrapper.title"))).addAll(BookContent.paras("sc.manual.world.scrapper", new Object[]{name},
+                new Object[]{sec(ScrapperSC.ARRIVE_TICKS), ScrapperSC.SPAWN_MIN, ScrapperSC.SPAWN_MAX, ScrapperSC.TELL_RANGE}));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityScrapperSC.HP), n((float) EntityScrapperSC.HP / 2F))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.scrapper.armour", n(stat(SCRAPPER, "NATURAL_ARMOUR", 10F)),
+                n(stat(SCRAPPER, "BACK_MUL", 2F)))));
+        e.add(BookEl.item(new ItemStack(Blocks.chest), Lang.tr("sc.manual.world.t.bag"), Lang.tr("sc.manual.world.scrapper.bag", n(stat(SCRAPPER, "COLLECT_RADIUS", 6F)),
+                ScrapperSC.BAG_STACKS)));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.emp.mode.point"), Lang.tr("sc.manual.world.scrapper.emp", sec((int) stat(SCRAPPER, "STUN_TICKS", 80F)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.scrapper.loot", ScrapperSC.ORES_MIN, ScrapperSC.ORES_MAX)));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.QUARTZ_TURF), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.scrapper.where",
+                weight("PLATEAU_WEIGHTS", MobEntitiesSC.ID_SCRAPPER, 3), weight("CANYON_WEIGHTS", MobEntitiesSC.ID_SCRAPPER, 3),
+                weight("OXIDE_WEIGHTS", MobEntitiesSC.ID_SCRAPPER, 4))));
+        e.add(BookEl.item(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1), Lang.tr("sc.manual.world.scrapper.mark"),
+                Lang.tr("sc.manual.world.scrapper.mark.desc", ScrapperSC.HOME_LEASH)));
+        e.addAll(BookContent.paras("sc.manual.world.scrapper.tips"));
+        e.add(BookEl.link("world.docks", Lang.tr("sc.manual.world.docks.title")));
+        e.add(BookEl.link("world.substrate", Lang.tr("sc.manual.world.substrate.title")));
+        e.add(BookEl.link("world.mobemp", Lang.tr("sc.manual.world.mobemp.title")));
+        e.about(egg);
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Подложник»
+
+    private static BookEntry fauna(BookChapter c) {
+        String name = mobName(EntityWaferCrabSC.NAME);
+        ItemStack egg = egg(MobEntitiesSC.ID_WAFER_CRAB);
+        BookEntry e = new BookEntry("world.fauna", c, egg != null ? egg : icon(), name);
+        e.add(BookEl.title(name)).addAll(BookContent.paras("sc.manual.world.fauna"));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.mob.hp", n((float) EntityWaferCrabSC.HP), n((float) EntityWaferCrabSC.HP / 2F))));
+        e.add(BookEl.item(rock(SubstrateBlocksSC.QUARTZ_TURF), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.fauna.where",
+                group(MobEntitiesSC.ID_WAFER_CRAB, 1, 3), n(stat(RULES, "PEACEFUL_NEAR_MAX", 4F)), n(stat(RULES, "PEACEFUL_WORLD_MAX", 12F)))));
+        e.add(BookEl.item(loot(LOOT_NATURAL_WAFER), Lang.tr("sc.manual.world.t.loot"), lootLine(LOOT_NATURAL_WAFER)));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.fauna.note")));
+        e.add(BookEl.link("world.tuners", Lang.tr("sc.manual.world.tuners.title")));
+        e.add(BookEl.link("world.trade", Lang.tr("sc.manual.world.trade.title")));
+        e.about(egg, loot(LOOT_NATURAL_WAFER));
+        return e;
+    }
+
+    // ------------------------------------------------------------------ «Крупицы сингулярности»
+
+    private static BookEntry crumbs(BookChapter c) {
+        ItemStack sealed = RelicItemsSC.relic(ItemRelicSC.SEALED_CRUMB, 1), crumb = new ItemStack(ModItems.singularCrumb);
+        BookEntry e = new BookEntry("world.crumbs", c, sealed != null ? sealed : crumb, Lang.tr("sc.manual.world.crumbs.title"));
+        e.add(BookEl.title(Lang.tr("sc.manual.world.crumbs.title"))).addAll(BookContent.paras("sc.manual.world.crumbs",
+                new Object[]{CrumbLimitSC.DAY_CAP}, null));
+
+        // where they come from (ПТ-17): every source of the world but the boss gives them sealed
+        e.add(BookEl.head(Lang.tr("sc.manual.world.crumbs.sourceshead"), sealed));
+        e.add(BookEl.item(ruin(BlockRuinSC.MACHINE_HUSK), Lang.tr("sc.manual.world.crumbs.nodes"), Lang.tr("sc.manual.world.crumbs.chance",
+                pct(stat(RUIN_LOOT, "NODE_CRUMB_CHANCE", 0.03F)))));
+        e.add(BookEl.item(ruin(RUIN_VAULT_PLATING), Lang.tr("sc.manual.world.crumbs.vaults"), Lang.tr("sc.manual.world.crumbs.chance",
+                pct(stat(RUIN_LOOT, "VAULT_CRUMB_CHANCE", 0.1F)))));
+        e.add(BookEl.item(campBlock(CampBlocksSC.CAMP_SAFE), Lang.tr("sc.manual.world.crumbs.camps"), Lang.tr("sc.manual.world.crumbs.chance",
+                pct(stat(RUIN_LOOT, "CAMP_CRUMB_CHANCE", 0.05F)))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_SENTINEL), mobName(EntitySentinelSC.NAME), Lang.tr("sc.manual.world.crumbs.chance",
+                pct(stat(SENTINEL, "CRUMB_CHANCE", 0.25F)))));
+        e.add(BookEl.item(egg(MobEntitiesSC.ID_ECLIPSE), mobName(EntityEclipseSC.NAME), Lang.tr("sc.manual.world.crumbs.chance",
+                pct(stat(ECLIPSE, "CRUMB_CHANCE", 0.3F)))));
+        String elder = sellerLine(crumb);
+        e.add(BookEl.item(kindIcon(NpcKindSC.ELDER), Lang.tr(NpcKindSC.ELDER.langKey()), (elder != null ? elder + " " : "")
+                + Lang.tr("sc.manual.world.crumbs.elder")));
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.crumbs.emission", n(StormRulesSC.EMISSION_CRUMB_MUL))));
+
+        // opening one (ПТ-17)
+        e.add(BookEl.head(Lang.tr("sc.manual.world.crumbs.openhead"), crumb));
+        e.addAll(BookContent.paras("sc.manual.world.crumbs.open", new Object[]{CrumbLimitSC.DAY_CAP}));
+        e.add(BookEl.link("world.vaults", Lang.tr("sc.manual.world.vaults.title")));
+        e.add(BookEl.link("world.camps", Lang.tr("sc.manual.world.camps.title")));
+        e.add(BookEl.link("world.ruins", Lang.tr("sc.manual.world.ruins.title")));
+        e.add(BookEl.link("world.eclipse", mobName(EntityEclipseSC.NAME)));
+        e.about(sealed);
+        return e;
+    }
+
+    // ------------------------------------------------------------------ Ф4's stacks and numbers
+
+    /** `meta` of one of SubstrateWildBlocksSC's blocks, null before it is registered. */
+    static ItemStack wild(net.minecraft.block.Block b, int meta) {
+        return b == null ? null : new ItemStack(b, 1, meta);
+    }
+
+    /** The wild block's name in the language (tile.siliconage.wild.<name>.name). */
+    public static String wildName(net.minecraft.block.Block b, int meta) {
+        ItemStack s = wild(b, meta);
+        if (s != null) {
+            return s.getDisplayName();
+        }
+        String[] names = SubstrateWildBlocksSC.namesOf(b);
+        return Lang.tr("tile.siliconage.wild." + (names.length == 0 ? "singularGlass" : names[Math.max(0, Math.min(names.length - 1, meta))]) + ".name");
+    }
+
+    /** The Stolen Field Generator, null before it is registered. */
+    static ItemStack stolenField() {
+        return CampBlocksSC.stolenField == null ? null : new ItemStack(CampBlocksSC.stolenField);
+    }
+
+    /** `meta` of the camp block (campSC), null before it is registered. */
+    static ItemStack campBlock(int meta) {
+        return CampBlocksSC.camp == null ? null : new ItemStack(CampBlocksSC.camp, 1, meta);
+    }
+
+    /** A camp block's name (`meta` of campSC; -1 the Stolen Field Generator). */
+    static String campName(int meta) {
+        ItemStack s = meta < 0 ? stolenField() : campBlock(meta);
+        if (s != null) {
+            return s.getDisplayName();
+        }
+        return Lang.tr("tile.siliconage.camp." + (meta < 0 ? CampBlocksSC.FIELD_NAMES[0] : CampBlocksSC.CAMP_NAMES[Math.min(CampBlocksSC.CAMP_NAMES.length - 1, meta)])
+                + ".name");
+    }
+
+    /** A relic's name (item.siliconage.relic.<name>.name). */
+    static String relicName(int meta) {
+        ItemStack s = RelicItemsSC.relic(meta, 1);
+        return s != null ? s.getDisplayName() : Lang.tr("item.siliconage.relic." + ItemRelicSC.nameOf(meta) + ".name");
+    }
+
+    /** A biome kind's icon (the plateaus' turf, the canyons' violet oxide, Crystallite, the gold oxide, the Singular Glass). */
+    private static ItemStack biomeIcon(int kind) {
+        switch (kind) {
+            case BiomeSubstrateSC.CANYONS:
+                return rock(SubstrateBlocksSC.OXIDE_VIOLET);
+            case BiomeSubstrateSC.RIDGES:
+                return rock(SubstrateBlocksSC.CRYSTALLITE);
+            case BiomeSubstrateSC.OXIDE:
+                return rock(SubstrateBlocksSC.OXIDE_GOLD);
+            case BiomeSubstrateSC.RIFT:
+                return wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.GLASS);
+            default:
+                return rock(SubstrateBlocksSC.QUARTZ_TURF);
+        }
+    }
+
+    /** ПК-17: the biome id of a BiomeSubstrateSC kind - the registered biome's, the config's while the dimension is off. */
+    static int biomeId(int kind) {
+        BiomeSubstrateSC b = SubstrateSC.active() ? SubstrateSC.biome(kind) : null;
+        if (b != null && b.kind == kind) {
+            return b.biomeID;
+        }
+        switch (kind) {
+            case BiomeSubstrateSC.CANYONS:
+                return SubstrateConfigSC.biomeIdCanyons();
+            case BiomeSubstrateSC.RIDGES:
+                return SubstrateConfigSC.biomeIdRidges();
+            case BiomeSubstrateSC.OXIDE:
+                return SubstrateConfigSC.biomeIdOxide();
+            case BiomeSubstrateSC.RIFT:
+                return SubstrateConfigSC.biomeIdRift();
+            default:
+                return SubstrateConfigSC.biomeIdPlateaus();
+        }
+    }
+
+    /** «1-2»: a pool id's group in SpawnRulesSC.GROUP_MIN / GROUP_MAX (package M's, by pool id), the plan's while the tables are shorter. */
+    private static String group(int id, int planMin, int planMax) {
+        int lo = id < SpawnRulesSC.GROUP_MIN.length ? SpawnRulesSC.GROUP_MIN[id] : planMin, hi = id < SpawnRulesSC.GROUP_MAX.length ? SpawnRulesSC.GROUP_MAX[id] : planMax;
+        return span(Math.max(1, lo), Math.max(1, Math.max(lo, hi)));
+    }
+
     // ------------------------------------------------------------------ Ф3's stacks and numbers
 
     private static ItemStack ruin(int meta) {
@@ -1577,8 +2487,14 @@ public final class BookWorldSC {
         if (meta == TrophyTableSC.weaponMeta(WeaponType.PLASMA_RIFLE)) {
             return mobName(EntityTrooperSC.NAME);
         }
-        if (meta == TrophyTableSC.META_PE1) {
-            return Lang.tr("sc.manual.world.cell.carrier", mobName(EntityJammerSC.NAME));
+        if (meta == TrophyTableSC.META_PE1) {                      // Ф4 (ПТ-16): a Sentinel carrier's too
+            return Lang.tr("sc.manual.world.cell.carrier", mobName(EntityJammerSC.NAME)) + ", "
+                    + Lang.tr("sc.manual.world.cell.carrier", mobName(EntitySentinelSC.NAME));
+        }
+        // Ф4 (ПТ-16): the Singular pieces and blade - the Vaults' Sentinel and «Затмение»
+        if (meta >= TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 0) && meta <= TrophyTableSC.armorMeta(ArmorSuit.SINGULAR, 3)
+                || meta == TrophyTableSC.bladeMeta(BladeType.SINGULAR)) {
+            return mobName(EntitySentinelSC.NAME) + ", " + mobName(EntityEclipseSC.NAME);
         }
         return null;
     }
@@ -1641,7 +2557,46 @@ public final class BookWorldSC {
         if (meta == LOOT_SHIELD_CORE) {
             return Lang.tr("sc.manual.world.loot.shieldCore", pct(stat(EXECUTIONER, "CORE_CHANCE", 0.15F)));
         }
+        // Ф4 (ПТ-18): package M's / N's chances by name; who buys them - TradeTableSC (ПО-14)
+        if (meta == LOOT_BOILED_LOOP) {
+            return Lang.tr("sc.manual.world.loot.boiledLoop", pct(stat(OVERHEATED, "LOOP_CHANCE", 0.2F)))
+                    + buyerSuffix(meta);
+        }
+        if (meta == LOOT_INDUCTION_THREAD) {
+            return Lang.tr("sc.manual.world.loot.inductionThread", pct(stat(PHANTOM, "THREAD_CHANCE", 0.3F)))
+                    + buyerSuffix(meta);
+        }
+        if (meta == LOOT_PLASMA_CONDENSATE) {
+            return Lang.tr("sc.manual.world.loot.plasmaCondensate", pct(stat(STRIDER, "CONDENSATE_CHANCE", 0.5F)))
+                    + buyerSuffix(meta);
+        }
+        if (meta == LOOT_SINGULAR_SCRAP) {
+            return Lang.tr("sc.manual.world.loot.singularScrap", n(stat(ECLIPSE, "SCRAP_MIN", 2F)),
+                    n(stat(ECLIPSE, "SCRAP_MAX", 3F))) + buyerSuffix(meta);
+        }
+        if (meta == LOOT_NATURAL_WAFER) {
+            return Lang.tr("sc.manual.world.loot.naturalWafer", pct(stat(CRAB, "WAFER_CHANCE", 0.05F)))
+                    + buyerSuffix(meta);
+        }
         return Lang.tr("sc.manual.world.loot.shellFirmware");
+    }
+
+    /**
+     * Ф4 (ПО-14): « Покупает Газовщик: 1 шт. - 3 КЧ.» - the settler whose TradeTableSC deal takes loot `meta` for chips (package C's
+     * table), "" while there is none.
+     */
+    static String buyerSuffix(int meta) {
+        ItemStack s = loot(meta);
+        if (s == null) {
+            return "";
+        }
+        for (TradeOfferSC o : TradeTableSC.all()) {
+            if (o.outKind == TradeOfferSC.OUT_ITEM && o.out != null && o.out.isChips() && o.in != null && o.in.length > 0 && o.in[0] != null
+                    && !o.in[0].isChips() && o.in[0].matches(s)) {
+                return " " + Lang.tr("sc.manual.world.loot.buyer", Lang.tr(o.kind.langKey()), o.in[0].count, o.out.count);
+            }
+        }
+        return "";
     }
 
     /** Ф3, NEI's «Как получить» of the loot: the spawn egg of the mob that drops loot `meta` (the Salvager's buyers aside), or null. */
@@ -1656,6 +2611,16 @@ public final class BookWorldSC {
                 return egg(MobEntitiesSC.ID_EXECUTIONER);
             case LOOT_NANITE_DUST:
                 return egg(MobEntitiesSC.ID_NANITE);
+            case LOOT_BOILED_LOOP:                      // Ф4 (ПТ-18): who drops the new loot
+                return egg(MobEntitiesSC.ID_OVERHEATED);
+            case LOOT_INDUCTION_THREAD:
+                return egg(MobEntitiesSC.ID_PHANTOM);
+            case LOOT_PLASMA_CONDENSATE:
+                return egg(MobEntitiesSC.ID_STRIDER);
+            case LOOT_SINGULAR_SCRAP:
+                return egg(MobEntitiesSC.ID_ECLIPSE);
+            case LOOT_NATURAL_WAFER:
+                return egg(MobEntitiesSC.ID_WAFER_CRAB);
             default:
                 return egg(MobEntitiesSC.ID_MARAUDER);
         }
@@ -1671,6 +2636,10 @@ public final class BookWorldSC {
                 return Lang.tr(k, n(stat(RUIN_BLOCK, "PANEL_FIRMWARE_PCT", 20F)));
             case BlockRuinSC.MACHINE_HUSK:
                 return Lang.tr(k, n(stat(RUIN_BLOCK, "HUSK_TRANSISTOR_PCT", 10F)));
+            case RUIN_VAULT_PLATING:                    // Ф4 (ПХ-2): package C's numbers by name
+                return Lang.tr(k, n(stat(RUIN_BLOCK, "PLATING_LEVEL", 3F)), n(stat(RUIN_BLOCK, "PLATING_SCRAP_PCT", 50F)));
+            case RUIN_VAULT_LAMP:
+                return Lang.tr(k, n(stat(RUIN_BLOCK, "LAMP_LIGHT", 10F)));
             default:
                 return Lang.tr(k);
         }

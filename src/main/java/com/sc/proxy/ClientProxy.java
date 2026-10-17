@@ -33,6 +33,10 @@ public class ClientProxy extends CommonProxy {
         // Подложка Ф3: the armoured mobs' elites and telegraphs (package A), the ruins' creatures and blocks (package X)
         com.sc.mob.client.MobArmorClientSC.register();
         com.sc.ruin.client.RuinClientSC.register();
+        // Подложка Ф4: the EMP storm's sky, scan lines and pulses (package S), the «noise» and the crab (package N); the new
+        // biomes' fog and the armoured ones' renders live in SubstrateClientSC (W) and MobClientSC (M) registered above
+        com.sc.hazard.client.StormClientSC.register();
+        com.sc.mob.client.NoiseClientSC.register();
         // the Singular tools: the black hole's zone frame, the blade's effects, Shift + wheel (form / mode)
         MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);
@@ -127,6 +131,11 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void settleMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
         com.sc.settle.client.TradeClientSC.onMessage(kind, data);
+    }
+
+    @Override
+    public void hazardMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+        com.sc.hazard.client.StormClientSC.onMessage(kind, data);
     }
 
     @Override

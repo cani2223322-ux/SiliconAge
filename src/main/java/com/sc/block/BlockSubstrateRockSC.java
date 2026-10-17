@@ -32,6 +32,9 @@ import net.minecraft.world.World;
  * <li>the drops: the turf crumbles to Crystallite, a trace (and its node) gives 1..2 Crushed Copper Ore (+ fortune),
  * the rest itself (the brick too); Silk Touch keeps any of them.</li>
  * <li>a Trace Node glows (light 6); nothing else does. The turf never ticks or spreads.</li>
+ * <li>Ф4 (package W, docs/plan-substrate-tech-f4.md §3.3, ПМ-16): the Monocrystal of the geodes (meta MONOCRYSTAL) - an iron
+ * pickaxe (MONO_HARVEST), a little harder (MONO_HARDNESS); it drops 1..MONO_DROP_MAX Metallurgical Silicon (+ 0..fortune) - the
+ * purification chain is never skipped; Silk Touch keeps it.</li>
  * </ul>
  */
 public class BlockSubstrateRockSC extends Block {
@@ -39,6 +42,9 @@ public class BlockSubstrateRockSC extends Block {
     public static final int NODE_LIGHT = 6;
     /** A trace's drop: 1..TRACE_DROP_MAX Crushed Copper Ore, + 0..fortune. */
     public static final int TRACE_DROP_MAX = 2;
+    /** Ф4: the Monocrystal - its pickaxe level, its drop 1..MONO_DROP_MAX Metallurgical Silicon (+ 0..fortune), its hardness. */
+    public static final int MONO_HARVEST = 2, MONO_DROP_MAX = 3;
+    public static final float MONO_HARDNESS = 3.0F;
 
     @SideOnly(Side.CLIENT)
     private IIcon[] icons;
@@ -53,13 +59,21 @@ public class BlockSubstrateRockSC extends Block {
         setResistance(10.0F);
         setStepSound(soundTypeStone);
         setHarvestLevel("pickaxe", 1);                          // a stone pickaxe, every meta
+        setHarvestLevel("pickaxe", MONO_HARVEST, SubstrateBlocksSC.MONOCRYSTAL);    // Ф4: but iron for the Monocrystal
+    }
+
+    /** Ф4: the Monocrystal is a little harder than the rest. */
+    @Override
+    public float getBlockHardness(World world, int x, int y, int z) {
+        return world.getBlock(x, y, z) == this && world.getBlockMetadata(x, y, z) == SubstrateBlocksSC.MONOCRYSTAL ? MONO_HARDNESS
+                : super.getBlockHardness(world, x, y, z);
     }
 
     @Override
     @SideOnly(Side.CLIENT)
     public void registerBlockIcons(IIconRegister register) {
         String[] tex = {"crystallite", "oxide_violet", "oxide_blue", "oxide_gold", "oxide_green", "copper_trace", "trace_node", "crystallite",
-                "settlement_brick"};
+                "settlement_brick", "monocrystal"};
         icons = new IIcon[SubstrateBlocksSC.ROCK_METAS];
         for (int m = 0; m < icons.length; m++) {
             icons[m] = register.registerIcon(Reference.ASSETS + ":substrate_" + tex[m]);
@@ -103,6 +117,14 @@ public class BlockSubstrateRockSC extends Block {
             if (copper != null) {
                 copper.stackSize = 1 + world.rand.nextInt(TRACE_DROP_MAX) + (fortune > 0 ? world.rand.nextInt(fortune + 1) : 0);
                 drops.add(copper);
+            }
+            return drops;
+        }
+        if (meta == SubstrateBlocksSC.MONOCRYSTAL) {                // Ф4: Metallurgical Silicon - the chain's first step, no more
+            ItemStack si = ModItems.siliconMaterial == null ? null : ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.METALLURGICAL_SI);
+            if (si != null) {
+                si.stackSize = 1 + world.rand.nextInt(MONO_DROP_MAX) + (fortune > 0 ? world.rand.nextInt(fortune + 1) : 0);
+                drops.add(si);
             }
             return drops;
         }

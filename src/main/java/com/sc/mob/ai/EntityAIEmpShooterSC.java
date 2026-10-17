@@ -6,6 +6,7 @@ import com.sc.emp.EmpMode;
 import com.sc.emp.EmpNetSC;
 import com.sc.emp.EmpShotSC;
 import com.sc.emp.ItemEmpGunSC;
+import com.sc.hazard.EmpStormSC;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityCreature;
@@ -27,6 +28,9 @@ import net.minecraft.world.World;
  * SIGHT_CHECK ticks; while charging it checks the sight as often and breaks off once the target was out of it longer than
  * EmpMathSC.PULSE_LOS_GRACE. State per task (per mob): two carriers never share a charge-up. Server only (vanilla runs the
  * AI on the server).
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §5.5, §7.13, rule ПФ-9; package M - the reach only): in the Silica Haze the reach is
+ * EmpStormSC.sightRange (at most 24 blocks) - for the look for a shot, the sight checks of the charge-up and the shot itself.
  */
 public class EntityAIEmpShooterSC extends EntityAIBase {
 
@@ -74,7 +78,7 @@ public class EntityAIEmpShooterSC extends EntityAIBase {
             return false;
         }
         EmpMode m = pick(t, now);
-        if (m == null || EmpMobGunSC.refusal(mob, t, m) != EmpNetSC.OK || !EmpShotSC.inSight(w, mob, t, range)) {
+        if (m == null || EmpMobGunSC.refusal(mob, t, m) != EmpNetSC.OK || !EmpShotSC.inSight(w, mob, t, sightReach(w))) {
             return false;                                       // a creative player, a pet, behind cover: no charge-up at all
         }
         target = t;
@@ -111,7 +115,7 @@ public class EntityAIEmpShooterSC extends EntityAIBase {
         look();
         int charge = EmpMobGunSC.chargeTicks(mode, upgraded);
         if (ticks % SIGHT_CHECK == 0 && ticks < charge) {       // the end's sight is fire()'s own: cover saves
-            if (EmpShotSC.inSight(w, mob, target, range)) {
+            if (EmpShotSC.inSight(w, mob, target, sightReach(w))) {
                 lost = 0;
             } else if ((lost += SIGHT_CHECK) > EmpMathSC.PULSE_LOS_GRACE) {
                 breakOff(now);
@@ -123,7 +127,7 @@ public class EntityAIEmpShooterSC extends EntityAIBase {
             Entity t = target;
             EmpMode m = mode;
             target = null;
-            EmpMobGunSC.fire(mob, t, m, upgraded, range);
+            EmpMobGunSC.fire(mob, t, m, upgraded, sightReach(w));
             nextShotAt = now + EmpMobGunSC.pointDelay(mob.getRNG());
             if (m == EmpMode.PULSE) {
                 nextPulseAt = now + EmpMathSC.PULSE_COOLDOWN;
@@ -136,6 +140,11 @@ public class EntityAIEmpShooterSC extends EntityAIBase {
         if (target != null) {
             breakOff(mob.worldObj == null ? 0L : mob.worldObj.getTotalWorldTime());
         }
+    }
+
+    /** Ф4, ПФ-9: its reach in `w` now - `range`, or less in the Silica Haze (EmpStormSC.sightRange). */
+    protected double sightReach(World w) {
+        return EmpStormSC.sightRange(w, range);
     }
 
     /** It holds the ПЭ-1 (the Jammer carrier, the Commandant; a subclass may answer otherwise). */

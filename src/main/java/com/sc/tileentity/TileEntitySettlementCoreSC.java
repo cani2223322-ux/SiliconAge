@@ -37,8 +37,11 @@ import net.minecraftforge.common.util.ForgeDirection;
  */
 public class TileEntitySettlementCoreSC extends TileEntityFieldGeneratorSC {
 
-    /** ПП-6: the core's switches. */
-    public static final int FLAGS = F_PRIVATE | F_NO_MECHANISMS | F_NO_SPAWN | F_NO_ENDER | F_DAMAGE | F_EMP_SCREEN | F_SHOW;
+    /**
+     * ПП-6: the core's switches. Ф4 (ПА-3, docs/plan-substrate-tech-f4.md §4.1): F_RADIATION too - no background radiation and no
+     * Overheated's glow under a dome (free, as everything the core does: pay() is always true).
+     */
+    public static final int FLAGS = F_PRIVATE | F_NO_MECHANISMS | F_NO_SPAWN | F_NO_ENDER | F_DAMAGE | F_EMP_SCREEN | F_SHOW | F_RADIATION;
     /** «Бирюза Наладчиков» (PRESETS[11]). */
     public static final int SHELL_RGB = 0x3CD2C8;
     /** The roster and the rest of package C's work run this often (ticks). */
@@ -127,6 +130,24 @@ public class TileEntitySettlementCoreSC extends TileEntityFieldGeneratorSC {
 
     @Override
     public boolean pay(int eu) {
+        return true;
+    }
+
+    /** Ф4 (ПА-3): the dome's F_RADIATION is free... */
+    @Override
+    public boolean payRadiation(int eu) {
+        return true;
+    }
+
+    /** ...and for everyone under it - the core's owner is the settlement, nobody is on its access list. */
+    @Override
+    public boolean shieldsFromRadiation(EntityPlayer p) {
+        return true;
+    }
+
+    /** Ф4 (ПФ-3): its EMP screen (free) covers everyone under it from a storm's pulse too. */
+    @Override
+    public boolean shieldsFromStorm(net.minecraft.entity.Entity e) {
         return true;
     }
 

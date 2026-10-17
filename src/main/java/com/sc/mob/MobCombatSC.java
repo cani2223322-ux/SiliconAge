@@ -31,6 +31,10 @@ import net.minecraft.util.DamageSource;
  * Ф3 (docs/plan-substrate-tech-f3.md §4, rule ПС-10): the caps of the new mobs - the Quantum Blade 8, the Exo Blade 10 (the
  * Executioner's own 11 - EntityExecutionerSC), a Hollow Shell's fist 6, the Plasma Rifle's beam 7, the Pulse Emitter's 3
  * a ray (a burst of 3); every blow and beam of an armoured native times its damageMul() (a Commander's group, ПС-21).
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §7.1..§7.4): the caps of the new armoured ones are their own (the Sentinel's Singular Blade
+ * 14 and Exo 10, «Затмение»'s 13 and its heavy blow, the Warlord's Quantum 8 and the Ion Cutter's 4); wear / dressSingular put on
+ * the exact pieces they wear (the Warlord's Exo chestplate over Quantum, the Singular suits' level and colour scheme).
  */
 public final class MobCombatSC {
 
@@ -121,6 +125,71 @@ public final class MobCombatSC {
             ItemArmorSC.setGlowColor(s, glow);
             mob.setCurrentItemOrArmor(4 - slots[i], s);
         }
+    }
+
+    /**
+     * Ф4 (docs/plan-substrate-tech-f4.md §7.2..§7.4): spawning - one piece of `suit` worn in armour slot `armorType` (0 helmet ..
+     * 3 boots) with the light `glow` (0 - the suit's own; the stack's NBT is set here and by the caller once, before the mob is
+     * in the world - never again). @return the worn stack (null before the items exist)
+     */
+    public static ItemStack wear(EntityLiving mob, ArmorSuit suit, int armorType, int glow) {
+        ItemArmorSC[] pieces = ModItems.ARMOR.get(suit);
+        if (pieces == null || armorType < 0 || armorType > 3) {
+            return null;
+        }
+        ItemStack s = new ItemStack(pieces[armorType]);
+        if (glow != 0) {
+            ItemArmorSC.setGlowColor(s, glow);
+        }
+        mob.setCurrentItemOrArmor(4 - armorType, s);
+        return s;
+    }
+
+    /**
+     * Ф4 (§7.3, §7.4): spawning - the full Singular suit of `level` (SingularLevel, 1..5) in the colour scheme `scheme`
+     * (SingularScheme: the worn model's textures and its own animated light) - the Sentinel's «Пустота», «Затмение»'s «Багровая».
+     * Set once here, before the mob is in the world (the stacks' NBT is never changed after).
+     */
+    public static void dressSingular(EntityLiving mob, int level, com.sc.util.SingularScheme scheme) {
+        for (int t = 0; t < 4; t++) {
+            ItemStack s = wear(mob, ArmorSuit.SINGULAR, t, 0);
+            if (s != null) {
+                com.sc.util.SingularLevel.setLevel(s, level);
+                com.sc.util.SingularScheme.setScheme(s, scheme);
+            }
+        }
+    }
+
+    /** Ф4 (§2.7): the Forge data key of a camp's / a Vault's resident's home - {x, y, z, r: the structure's half size, l: the leash}. */
+    public static final String HOME_NBT = "scHome";
+
+    /**
+     * Ф4 (§7.2, §7.3; package C's RuinWorldSC.settle writes the same): `mob`'s home at (x, y, z), the structure's half size `r`,
+     * the leash `leash` - kept in its Forge data (saved with it) and set as vanilla's home area (not saved by vanilla).
+     */
+    public static void setHome(net.minecraft.entity.EntityCreature mob, int x, int y, int z, int r, int leash) {
+        net.minecraft.nbt.NBTTagCompound h = new net.minecraft.nbt.NBTTagCompound();
+        h.setInteger("x", x);
+        h.setInteger("y", y);
+        h.setInteger("z", z);
+        h.setInteger("r", r);
+        h.setInteger("l", leash);
+        mob.getEntityData().setTag(HOME_NBT, h);
+        mob.setHomeArea(x, y, z, Math.max(1, leash));
+    }
+
+    /**
+     * Ф4: after a reload - vanilla's home area back from the Forge data (HOME_NBT: the leash "l", else "r", else `fallback`);
+     * nothing without a home. @return it has a home now
+     */
+    public static boolean restoreHome(net.minecraft.entity.EntityCreature mob, int fallback) {
+        if (!mob.getEntityData().hasKey(HOME_NBT)) {
+            return false;
+        }
+        net.minecraft.nbt.NBTTagCompound h = mob.getEntityData().getCompoundTag(HOME_NBT);
+        int leash = h.hasKey("l") ? h.getInteger("l") : h.hasKey("r") ? h.getInteger("r") : fallback;
+        mob.setHomeArea(h.getInteger("x"), h.getInteger("y"), h.getInteger("z"), Math.max(1, leash > 0 ? leash : fallback));
+        return true;
     }
 
     /** Spawning: a fresh stack of the mod's blade, lit (a hilt in a mob's hand would look like a stick). */

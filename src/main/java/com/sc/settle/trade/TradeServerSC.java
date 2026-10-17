@@ -58,16 +58,23 @@ import net.minecraftforge.common.util.FakePlayer;
  * thing worked on in its slot (TradeServicesSC: the hand first, else the first that fits; none - R_NO_ITEM): the price is
  * taken, then the piece charged or the trophy replaced. Deals sharing a counter (TradeOfferSC.counter: the three charges)
  * count and limit together; an unlimited one (the restoring) isn't counted at all.
+ * <p>
+ * Ф4 (package C, docs/plan-substrate-tech-f4.md §9.4, §9.5, rules ПО-16, ПТ-17): a settlement that lost a raid trades nothing
+ * for a day (RaidSC.tradeClosed - R_RAID, every deal; contracts stay open); the Elder's Crumb counts towards the player's three a
+ * day from the world (CrumbLimitSC - R_CRUMBS when today's are taken; counted when the deal is made).
  */
 public final class TradeServerSC {
 
     /** execute's results and TRADE_RESULT's "code": OK, or why not (lang sc.trade.result.<RESULT_KEYS[code]>). */
     public static final int OK = 0, R_UNKNOWN = 1, R_ENEMY = 2, R_LEVEL = 3, R_LIMIT = 4, R_CHIPS_CAP = 5, R_MISSING = 6,
             R_NO_SETTLEMENT = 7, R_NOT_HERE = 8, R_CONTRACTS_CAP = 9, R_TAKEN = 10, R_NOT_ON_BOARD = 11, R_NOT_DONE = 12,
-            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16;
-    /** Appended only (Ф3: "noItem" - a service found nothing of the player's to work on). */
+            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16, R_RAID = 17, R_CRUMBS = 18;
+    /**
+     * Appended only (Ф3: "noItem" - a service found nothing of the player's to work on; Ф4: "raid" - the settlement's trade closed
+     * after a lost raid, "crumbs" - the player's Crumbs for today are taken).
+     */
     public static final String[] RESULT_KEYS = {"ok", "unknown", "enemy", "level", "limit", "chipsCap", "missing", "noSettlement",
-            "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem"};
+            "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem", "raid", "crumbs"};
     /** TRADE_STATE "anchor": nobody placed the first anchor yet / it is the viewer's, unpaid / paid to the viewer / someone else's. */
     public static final int ANCHOR_OPEN = 0, ANCHOR_YOURS = 1, ANCHOR_PAID = 2, ANCHOR_OTHER = 3;
     /** TRADE_STATE board "st": on the board, not taken / taken and open / handed in today. */
@@ -239,11 +246,18 @@ public final class TradeServerSC {
         if (c.enemy) {
             return R_ENEMY;
         }
+        if (com.sc.hazard.RaidSC.tradeClosed(c.p.worldObj, c.s)) {
+            return R_RAID;                                      // Ф4 (ПО-16): a lost raid closed this settlement's trade for a day
+                                                                // («closed» is kept in getWorldTime(), not in c.now)
+        }
         if (!TradeRulesSC.available(o, c.level)) {
             return R_LEVEL;
         }
         if (TradeRulesSC.remaining(o, used(c, o)) <= 0) {
             return R_LIMIT;
+        }
+        if (TradeTableSC.ELDER_CRUMB.equals(o.key) && com.sc.settle.CrumbLimitSC.left(c.p) <= 0) {
+            return R_CRUMBS;                                    // Ф4 (ПТ-17): today's three Crumbs are taken
         }
         int out = o.sell() ? TradeRulesSC.outCount(o, c.level, c.pct(o)) : 0;
         if (o.sell() && TradeRulesSC.chipsAllowed(c.rec.chips, out) < out) {
@@ -280,6 +294,9 @@ public final class TradeServerSC {
             TradeServicesSC.apply(c.p, o, slot);
         } else if (o.outKind == TradeOfferSC.OUT_ITEM) {
             ItemStack out = o.out.display();
+            if (TradeTableSC.ELDER_CRUMB.equals(o.key)) {
+                com.sc.settle.CrumbLimitSC.take(c.p, 1);        // Ф4 (ПТ-17): counted as one of today's (refusal saw one left)
+            }
             if (o.sell()) {
                 out.stackSize = TradeRulesSC.outCount(o, c.level, c.pct(o));    // a trophy's sale: by the level (ПО-6)
                 c.rec.chips += out.stackSize;

@@ -107,6 +107,8 @@ final class SelfTestCombatSC {
             "restoring", "trophies shown", "loot kinds", "kinds and sizes", "roster", "roster upgrade", "trade", "ruins layout", "texts", "handbook"};
     /** Ф1's six trophies and Ф3's thirteen (ПТ-14): the Quantum and Exo pieces, both blades, the Pulse Emitter, the Plasma Rifle, the ПЭ-1. */
     private static final int[] SHOWN_F3 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16, 17, 18, 20, 21, 22, 23};
+    /** Ф4 (ПТ-16, docs/plan-substrate-tech-f4.md §9.1) appends the Singular pieces and the Singular Blade: SHOWN is 24 now. */
+    private static final int[] SHOWN_F4 = {12, 13, 14, 15, 19};
     /** The core's mob classes by pool id 4..11 (MobEntitiesSC). */
     private static final Class<?>[] MOBS = {EntityTrooperSC.class, EntityJammerSC.class, EntityHollowShellSC.class, EntityRepairDroneSC.class,
             EntityExecutionerSC.class, EntityNaniteSC.class, EntitySentryDroneSC.class, EntityMimicSC.class};
@@ -169,8 +171,9 @@ final class SelfTestCombatSC {
         for (Field f : rules) {
             rule |= "mobsUseEmp".equals(f.getName()) && f.getType() == boolean.class;
         }
-        check(rule && rules.size() == 10, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
-                + ", true by default) " + rule + ", " + rules.size() + " rules (10)");
+        // Ф4 appended empStorms and raids (docs/plan-substrate-tech-f4.md §2.1): 12 rules now (SelfTestHazardSC checks the two)
+        check(rule && rules.size() == 12, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
+                + ", true by default) " + rule + ", " + rules.size() + " rules (12 with Ф4's)");
     }
 
     // ------------------------------------------------------------------ 2. «Пробой» (ПБ-15, ПБ-16)
@@ -266,8 +269,9 @@ final class SelfTestCombatSC {
         double[] hp = {EntityTrooperSC.HP, EntityJammerSC.HP, EntityHollowShellSC.HP, EntityRepairDroneSC.HP, EntityExecutionerSC.HP, EntityNaniteSC.HP,
                 EntitySentryDroneSC.HP, EntityMimicSC.HP};
         boolean hps = Arrays.equals(hp, MOB_HP);
-        boolean pool = MobEntitiesSC.NAMES.length == 12 && MobEntitiesSC.EGG_COLORS.length == 12 && "trooper".equals(MobEntitiesSC.nameOf(4))
-                && "mimic".equals(MobEntitiesSC.nameOf(11)) && MobEntitiesSC.nameOf(12) == null && MobEntitiesSC.ID_TROOPER == 4 && MobEntitiesSC.ID_MIMIC == 11;
+        // Ф4 appended its ten (12..21, docs/plan-substrate-tech-f4.md §2.2): the pool is 22 now, Ф3's 4..11 unchanged
+        boolean pool = MobEntitiesSC.NAMES.length == 22 && MobEntitiesSC.EGG_COLORS.length == 22 && "trooper".equals(MobEntitiesSC.nameOf(4))
+                && "mimic".equals(MobEntitiesSC.nameOf(11)) && MobEntitiesSC.nameOf(22) == null && MobEntitiesSC.ID_TROOPER == 4 && MobEntitiesSC.ID_MIMIC == 11;
         // the caps (ПС-10): MobCombatSC's tables, the mobs' own by name
         boolean caps = MobCombatSC.BLADE[BladeType.QUANTUM.ordinal()] == 8 && MobCombatSC.BLADE[BladeType.EXO.ordinal()] == 10
                 && MobCombatSC.BEAM[WeaponType.PLASMA_RIFLE.ordinal()] == 7 && MobCombatSC.BEAM[WeaponType.PULSE_EMITTER.ordinal()] == 3
@@ -331,7 +335,7 @@ final class SelfTestCombatSC {
             System.out.println("[SC-TEST] INFO combat: made without a world - no (the world test checks them):" + noWorld);
         }
         check(hps && pool && caps && bad.length() == 0 && gun && acts && reserves && kinds.length() == 0, "mobs (packages M, X): HP 40 / 36 / 50 / 8 / 70 / 2 /"
-                + " 16 / 40 " + hps + ", the pool 4..11 and its eggs " + pool + "; the caps (blades 8 / 10, the rifle 7, the emitter 3, the cutter 4) " + caps
+                + " 16 / 40 " + hps + ", the pool 4..11 and its eggs (22 with Ф4's) " + pool + "; the caps (blades 8 / 10, the rifle 7, the emitter 3, the cutter 4) " + caps
                 + ", the Executioner 11, the Cleave 6, a Shell's fist 6, chewing 6, the Captain's blow 5, a burst of 3, the telegraph 10 / 30 / 20 by name"
                 + (bad.length() == 0 ? "" : " - BAD:" + bad) + ", ПЭ-1 20 / 60 " + gun + ", the telegraph's codes " + acts + "; reserves of a full Quantum ("
                 + quantum + " pts) " + n(q40) + ".." + n(q70) + ", Exo (" + exo + ") " + n(e70) + ".." + n(e140) + " " + reserves
@@ -475,6 +479,9 @@ final class SelfTestCombatSC {
         for (int m : SHOWN_F3) {
             want.add(m);
         }
+        for (int m : SHOWN_F4) {
+            want.add(m);
+        }
         for (int m : TrophyTableSC.SHOWN) {
             shown.add(m);
         }
@@ -500,8 +507,9 @@ final class SelfTestCombatSC {
                 droppers.append(' ').append(m);
             }
         }
-        check(shown.equals(want) && SHOWN_F3.length == 19 && (subErr != null || tab.equals(want)) && pe1 && chances && droppers.length() == 0, "trophies shown"
-                + " (TrophyTableSC.SHOWN, ПТ-14): Ф1's 6 + Ф3's 13 = 19 - " + shown + " " + shown.equals(want) + "; the creative tab / NEI the same "
+        check(shown.equals(want) && SHOWN_F3.length + SHOWN_F4.length == 24 && (subErr != null || tab.equals(want)) && pe1 && chances
+                && droppers.length() == 0, "trophies shown (TrophyTableSC.SHOWN, ПТ-14, ПТ-16): Ф1's 6 + Ф3's 13 + Ф4's 5 = 24 - " + shown + " "
+                + shown.equals(want) + "; the creative tab / NEI the same "
                 + (subErr != null ? "(not checked: " + subErr + ")" : String.valueOf(tab.equals(want))) + "; TrophyTableSC.PE1 2% " + pe1 + ", the Quantum /"
                 + " Exo chances " + chances + "; the handbook and NEI name who drops each, its chance and its restoring"
                 + (droppers.length() == 0 ? "" : " - NOT:" + droppers));
@@ -511,9 +519,12 @@ final class SelfTestCombatSC {
 
     private static void lootKinds() {
         Map<String, String> en = SelfTestSC.langMap("en_US"), ru = SelfTestSC.langMap("ru_RU");
-        String[] keys = {"shellFirmware", "nanoScrap", "stolenCargo", "quantumScrap", "exoScrap", "naniteDust", "shieldCore"};
+        // Ф4 appended five after shieldCore (docs/plan-substrate-tech-f4.md §0): 12 kinds, the last naturalWafer
+        String[] keys = {"shellFirmware", "nanoScrap", "stolenCargo", "quantumScrap", "exoScrap", "naniteDust", "shieldCore", "boiledLoop", "inductionThread",
+                "plasmaCondensate", "singularScrap", "naturalWafer"};
         ItemCombatLootSC.LootKind[] all = ItemCombatLootSC.LootKind.values();
-        boolean order = all.length == keys.length && Arrays.equals(BookWorldSC.LOOT_NAMES, keys) && BookWorldSC.LOOT_SHIELD_CORE == all.length - 1;
+        boolean order = all.length == keys.length && Arrays.equals(BookWorldSC.LOOT_NAMES, keys) && BookWorldSC.LOOT_SHIELD_CORE == 6
+                && BookWorldSC.LOOT_NATURAL_WAFER == all.length - 1;
         for (int i = 0; order && i < all.length; i++) {
             order = keys[i].equals(all[i].key) && ItemCombatLootSC.LootKind.of(i) == all[i];
         }
@@ -533,8 +544,9 @@ final class SelfTestCombatSC {
                 bad.append(' ').append(k.key).append(":handbook line");
             }
         }
-        check(order && "shieldCore".equals(all[all.length - 1].key) && bad.length() == 0, "loot kinds (ItemCombatLootSC.LootKind, ПТ-13): 7 in their order, the"
-                + " last shieldCore, BookWorldSC.LOOT_NAMES the same " + order + "; each with its icon, name, tooltip and handbook line"
+        check(order && "naturalWafer".equals(all[all.length - 1].key) && bad.length() == 0, "loot kinds (ItemCombatLootSC.LootKind, ПТ-13, ПТ-18): 12 in"
+                + " their order (Ф3's shieldCore the 7th), the last naturalWafer, BookWorldSC.LOOT_NAMES the same " + order + "; each with its icon, name, tooltip"
+                + " and handbook line"
                 + (bad.length() == 0 ? "" : " - NOT:" + bad));
     }
 
@@ -1091,7 +1103,7 @@ final class SelfTestCombatSC {
         for (int i = 0; i < lootTo.length; i++) {
             g(noG, MobItemsSC.combatLoot == null ? null : new ItemStack(MobItemsSC.combatLoot, 1, BookWorldSC.LOOT_QUANTUM_SCRAP + i), lootTo[i]);
         }
-        for (int m = 0; m < BlockRuinSC.NAMES.length; m++) {
+        for (int m = 0; m <= BlockRuinSC.MACHINE_HUSK; m++) {          // Ф3's four (Ф4's 4..6 open «Хранилища» / «Лагеря»: SelfTestHazardSC)
             g(noG, RuinBlocksSC.ruin == null ? null : new ItemStack(RuinBlocksSC.ruin, 1, m), "world.ruins");
         }
         g(noG, MobItemsSC.trophy == null ? null : new ItemStack(MobItemsSC.trophy, 1, TrophyTableSC.armorMeta(ArmorSuit.EXO, 1)), "world.trophies");
@@ -1102,8 +1114,9 @@ final class SelfTestCombatSC {
             System.out.println("[SC-TEST] INFO combat: the handbook still prints the plan's numbers for (public static constants of these names in packages"
                     + " A / M / X / S / T, or direct references in BookWorldSC): " + unresolved);
         }
-        check(bad.length() == 0 && tables && noG.length() == 0 && chapter == 20, "handbook (§10.2): the " + ARTICLES.length + " new WORLD articles (the"
-                + " chapter " + chapter + " of 20) build with no raw keys, the extended ones too" + (bad.length() == 0 ? "" : " -" + bad) + "; tables: the"
+        int want = 20 + BookWorldSC.F4_ARTICLES.length;                       // Ф1..Ф3's 20 and Ф4's (SelfTestHazardSC checks them)
+        check(bad.length() == 0 && tables && noG.length() == 0 && chapter == want, "handbook (§10.2): the " + ARTICLES.length + " new WORLD articles (the"
+                + " chapter " + chapter + " of " + want + ") build with no raw keys, the extended ones too" + (bad.length() == 0 ? "" : " -" + bad) + "; tables: the"
                 + " elites " + elites + ", the ranks " + wardens + " (4), the restoring " + restore + ", the trophies " + trophies + " (SHOWN) " + tables
                 + "; G on the eight eggs, the new loot, the ruin blocks" + (noG.length() == 0 ? "" : " - NOT:" + noG));
     }

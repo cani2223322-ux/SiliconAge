@@ -34,6 +34,10 @@ import net.minecraft.world.chunk.IChunkProvider;
  * renderer (ShadersModCore), the sun and the moon as vanilla. The horizon (the dark lower half of the sky) and the
  * void fog are moved below the canyons' floors, so a canyon isn't gloomy. The spawn point: the middle of the first
  * plateau (SPAWN_X, the terrain's top + 1, SPAWN_Z) - DerivedWorldInfo would give the Overworld's coordinates.
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §5.4, ПФ-4; the coordinator's lines): an EMP storm turns the sky and the fog violet - the
+ * colours lean to SKY_STORM / FOG_STORM by StormStateSC.skyFactor (growing over the 30 s warning, fading after the storm). The
+ * Rift's own violet-black fog is package W's (SubstrateClientSC, EntityViewRenderEvent).
  */
 public class WorldProviderSubstrateSC extends WorldProvider implements INamedDimensionSC {
 
@@ -45,9 +49,13 @@ public class WorldProviderSubstrateSC extends WorldProvider implements INamedDim
     /** Day sky, night sky, day fog, night fog (0..1 RGB). */
     private static final float[] SKY_DAY = {0xA8 / 255F, 0xC9 / 255F, 0xC6 / 255F}, SKY_NIGHT = {0x0B / 255F, 0x14 / 255F, 0x30 / 255F};
     private static final float[] FOG_DAY = {0xC9 / 255F, 0xDE / 255F, 0xDC / 255F}, FOG_NIGHT = {0.035F, 0.06F, 0.15F};
+    /** Ф4: the storm's sky and fog (a deep violet; W may retune). */
+    private static final float[] SKY_STORM = {0x5A / 255F, 0x2A / 255F, 0x8C / 255F}, FOG_STORM = {0x4A / 255F, 0x2A / 255F, 0x6A / 255F};
     /** Twilight while |cos(the sun's angle)| is under this (vanilla: 0.4). */
     private static final float DUSK = 0.55F;
     private static final float STARS = 1.5F, CLOUDS = 200F;
+    /** Ф4: how far the storm's colour takes the sky over at its height (the rest stays day / night). */
+    private static final float STORM_SHARE = 0.7F;
     /** The horizon and the void fog: below the lowest canyon floor (vanilla: 63 and darkening under Y 32). */
     private static final double HORIZON = 16D, VOID_FOG = 1D / 16D;
 
@@ -188,13 +196,23 @@ public class WorldProviderSubstrateSC extends WorldProvider implements INamedDim
     @Override
     @SideOnly(Side.CLIENT)
     public Vec3 getSkyColor(Entity camera, float partialTicks) {
-        return mix(SKY_NIGHT, SKY_DAY, daylight(worldObj.getCelestialAngle(partialTicks)));
+        return storm(mix(SKY_NIGHT, SKY_DAY, daylight(worldObj.getCelestialAngle(partialTicks))), SKY_STORM, partialTicks);
     }
 
     @Override
     @SideOnly(Side.CLIENT)
     public Vec3 getFogColor(float angle, float partialTicks) {
-        return mix(FOG_NIGHT, FOG_DAY, daylight(angle));
+        return storm(mix(FOG_NIGHT, FOG_DAY, daylight(angle)), FOG_STORM, partialTicks);
+    }
+
+    /** Ф4: `c` leaned towards the storm's colour by the storm's share now (0: unchanged). */
+    @SideOnly(Side.CLIENT)
+    private Vec3 storm(Vec3 c, float[] to, float partialTicks) {
+        float t = com.sc.hazard.StormStateSC.skyFactor(worldObj, partialTicks) * STORM_SHARE;
+        if (t <= 0F) {
+            return c;
+        }
+        return Vec3.createVectorHelper(c.xCoord + (to[0] - c.xCoord) * t, c.yCoord + (to[1] - c.yCoord) * t, c.zCoord + (to[2] - c.zCoord) * t);
     }
 
     /** Copper towards the day, violet towards the night; the alpha as vanilla's, over a wider window. */

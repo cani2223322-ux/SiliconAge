@@ -1,5 +1,6 @@
 package com.sc.mob.ai;
 
+import com.sc.hazard.EmpStormSC;
 import com.sc.mob.EntitySentryDroneSC;
 import com.sc.util.SoundsSC;
 
@@ -16,6 +17,9 @@ import net.minecraft.world.WorldServer;
  * moment; then the light is off for the rest of RELOAD_TICKS. Losing sight puts the light out and starts the aim again. The
  * beam's sparks are vanilla's reddust in the cutter's ion blue, as the mobs' guns (EntityAIBeamAttackSC). Look only (mutex 2):
  * the flight is EntityAISentryDroneFlySC's.
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §5.5, ПФ-9; package N): in the Silica Haze it aims no farther than EmpStormSC.sightRange (24
+ * blocks) - asked with the sight check, every SIGHT_CHECK ticks.
  */
 public class EntityAISentryDroneBeamSC extends EntityAIBase {
 
@@ -28,6 +32,8 @@ public class EntityAISentryDroneBeamSC extends EntityAIBase {
     private EntityLivingBase target;
     private boolean seen;
     private int sightIn, aim, reload;
+    /** How far it aims now (the haze's EmpStormSC.sightRange), with the sight check. */
+    private double range = EntitySentryDroneSC.RANGE;
 
     public EntityAISentryDroneBeamSC(EntitySentryDroneSC drone) {
         this.drone = drone;
@@ -73,13 +79,14 @@ public class EntityAISentryDroneBeamSC extends EntityAIBase {
         face();
         if (--sightIn <= 0) {
             seen = drone.getEntitySenses().canSee(target);
+            range = EmpStormSC.sightRange(drone.worldObj, EntitySentryDroneSC.RANGE);
             sightIn = SIGHT_CHECK;
         }
         if (reload > 0) {
             reload--;
             return;
         }
-        double r = EntitySentryDroneSC.RANGE;
+        double r = range;
         if (!seen || drone.getDistanceSqToEntity(target) > r * r) {
             aim = 0;
             drone.setLight(null);

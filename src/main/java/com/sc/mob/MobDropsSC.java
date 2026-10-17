@@ -1,13 +1,18 @@
 package com.sc.mob;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import com.sc.dim.SubstrateConfigSC;
 import com.sc.dim.SubstrateSC;
 import com.sc.emp.ItemEmpGunSC;
+import com.sc.hazard.EmpStormSC;
 import com.sc.item.ItemArmorSC;
+import com.sc.settle.ISettlementMemberSC;
 import com.sc.util.ArmorSuit;
 import com.sc.util.BladeType;
 import com.sc.util.WeaponType;
@@ -48,6 +53,19 @@ import net.minecraftforge.event.entity.living.LivingDropsEvent;
  * (ISubstrateNativeSC and IMob - the swarm's particles, the drones and the mimic of package X too, through their
  * IFactionLootSC); the trophy roll only for an armoured one (EntityArmoredMobSC). A fourth category: a ПЭ-1 in hand (a
  * Jammer carrier) - TrophyTableSC.META_PE1 at TrophyTableSC.PE1 (a ПЭ-1М: META_PE1M, the boss's - Ф5).
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §9.1, §9.2, rules ПТ-16, ПТ-18..ПТ-20):
+ * <ul>
+ * <li>the faction drops for a peaceful native too (lootNative: ISubstrateNativeSC with IFactionLootSC, not IMob - the Wafer
+ * Crab's Natural Wafer), never for a settlement's creature (ISettlementMemberSC); the trophy roll stays the armoured ones';</li>
+ * <li>the bags always: the Marauder's, and any hostile native's that has a public takeBag() (the Scrapper Crab, package N -
+ * looked up once per class, ПТ-19: a dead player's things are in it);</li>
+ * <li>a class's own trophy categories (ITrophyCategoriesSC: the Warlord's Quantum piece 2% and Exo chestplate 0.5%, a Sentinel
+ * carrier's ПЭ-1 10%);</li>
+ * <li>an EMP storm in the world (EmpStormSC.active) - the trophy chance x1.5 (TrophyTableSC.STORM_MUL; with an elite at most
+ * x2.5, ПТ-4);</li>
+ * <li>the Sealed Crumbs of the Sentinel and «Затмение» x2 in the Singular Emission - crumbChance (their own factionLoot asks).</li>
+ * </ul>
  */
 public final class MobDropsSC {
 
@@ -59,19 +77,40 @@ public final class MobDropsSC {
     public static final float SCRAP_CHANCE = 0.4F;
     /** Ф2 (rule ПТ-10): the Marauder's Stolen Cargo, rolled on its own after the scrap. TODO(balance) */
     public static final float CARGO_CHANCE = 0.05F;
+    /** Ф4: the standard categories' places in the array the roll goes by (ITrophyCategoriesSC adds its own from OWN on). */
+    public static final int C_PIECE = 0, C_BLADE = 1, C_GUN = 2, C_PE1 = 3, OWN = 4;
+
+    /** Ф4, ПТ-19: a class's public takeBag() (null - none; looked up once a class). */
+    private static final Map<Class<?>, Method> BAGS = new HashMap<Class<?>, Method>();
 
     private MobDropsSC() {
     }
 
+    /**
+     * Ф4: whose drops are decided here - a hostile native (ISubstrateNativeSC and IMob), or a peaceful one with faction drops
+     * (IFactionLootSC: the Wafer Crab) that is no settlement's creature.
+     */
+    public static boolean lootNative(Entity e) {
+        return MobCombatSC.hostileNative(e)
+                || e instanceof ISubstrateNativeSC && e instanceof IFactionLootSC && !(e instanceof ISettlementMemberSC);
+    }
+
+    /** Ф4, ПТ-20: a Sealed Crumb's chance from the Sentinel or «Затмение» in world of `mob` - x2 while the Singular Emission runs. */
+    public static float crumbChance(Entity mob, float chance) {
+        return mob != null && EmpStormSC.emission(mob.worldObj) ? Math.min(1F, chance * com.sc.hazard.StormRulesSC.EMISSION_CRUMB_MUL) : chance;
+    }
+
     /** LivingDropsEvent of a hostile Substrate native (server). */
     public static void onDrops(LivingDropsEvent event) {
-        if (!MobCombatSC.hostileNative(event.entityLiving) || event.entityLiving.worldObj.isRemote) {
+        if (!lootNative(event.entityLiving) || event.entityLiving.worldObj.isRemote) {
             return;
         }
         EntityLivingBase mob = event.entityLiving;
         List<ItemStack> out = new ArrayList<ItemStack>();
         if (mob instanceof EntityMarauderSC) {
             out.addAll(((EntityMarauderSC) mob).takeBag());
+        } else {
+            out.addAll(bagOf(mob));                                  // Ф4, ПТ-19: the Scrapper's - always, whoever killed it
         }
         EntityPlayerMP killer = MobEventsSC.killerOf(mob);
         MobEventsSC.forget(mob);
@@ -115,8 +154,8 @@ public final class MobDropsSC {
         }
         ArmorSuit lvl = level(mob);
         int luck = killer == null ? 1 : TrophyTableSC.badLuckFactor(dry(killer)[lvl.ordinal()], lvl);
-        return TrophyTableSC.chance(sum, killer == null ? 0 : EnchantmentHelper.getLootingModifier(killer), mob.mobArmor().elite, false,
-                SubstrateConfigSC.gearDropMultiplier, luck);
+        return TrophyTableSC.chance(sum, killer == null ? 0 : EnchantmentHelper.getLootingModifier(killer), mob.mobArmor().elite,
+                EmpStormSC.active(mob.worldObj), SubstrateConfigSC.gearDropMultiplier, luck);    // Ф4, ПТ-20: the storm x1.5
     }
 
     /**
@@ -139,38 +178,86 @@ public final class MobDropsSC {
         dry[lvl.ordinal()] = 0;
         saveDry(killer, dry);
         int meta;
-        switch (TrophyTableSC.pickCategory(c, rand.nextFloat())) {
-            case 0:
+        int cat = TrophyTableSC.pickCategory(c, rand.nextFloat());
+        switch (cat) {
+            case C_PIECE:
                 meta = randomPiece(mob, rand);
                 break;
-            case 1:
-                meta = TrophyTableSC.bladeMeta(MobCombatSC.blade(mob));
+            case C_BLADE:
+                meta = MobCombatSC.blade(mob) == null ? -1 : TrophyTableSC.bladeMeta(MobCombatSC.blade(mob));
                 break;
-            case 2:
-                meta = TrophyTableSC.weaponMeta(MobCombatSC.gun(mob));
+            case C_GUN:
+                meta = MobCombatSC.gun(mob) == null ? -1 : TrophyTableSC.weaponMeta(MobCombatSC.gun(mob));
                 break;
-            case 3:
+            case C_PE1:
                 meta = ItemEmpGunSC.upgraded(mob.getHeldItem()) ? TrophyTableSC.META_PE1M : TrophyTableSC.META_PE1;
                 break;
             default:
-                return null;
+                meta = cat >= OWN && mob instanceof ITrophyCategoriesSC ? ((ITrophyCategoriesSC) mob).trophyMeta(cat, rand) : -1;
+                break;
         }
         return meta < 0 ? null : MobItemsSC.trophyStack(meta);
     }
 
     /**
      * The categories' chances: {a worn piece, the blade in hand, the gun in hand, a ПЭ-1 in hand} (ПТ-9 by level; Ф3, ПТ-14:
-     * the ПЭ-1's own TrophyTableSC.PE1).
+     * the ПЭ-1's own TrophyTableSC.PE1); Ф4 (ПТ-16) - a class with its own categories changes or extends them
+     * (ITrophyCategoriesSC). Public for the tests.
      */
-    private static float[] categories(EntityArmoredMobSC mob) {
+    public static float[] categories(EntityArmoredMobSC mob) {
         ArmorSuit suit = mob.mobArmor().suit();
         BladeType blade = MobCombatSC.blade(mob);
         WeaponType gun = MobCombatSC.gun(mob);
-        return new float[]{
+        float[] c = {
                 suit == null ? 0F : TrophyTableSC.PIECE[suit.ordinal()],
                 blade == null ? 0F : TrophyTableSC.BLADE[blade.ordinal()],
                 gun == null ? 0F : TrophyTableSC.WEAPON[gun.ordinal()],
                 MobCombatSC.holdsPe1(mob) ? TrophyTableSC.PE1 : 0F};
+        if (mob instanceof ITrophyCategoriesSC) {
+            float[] own = ((ITrophyCategoriesSC) mob).trophyCategories(c);
+            return own == null ? new float[0] : own;
+        }
+        return c;
+    }
+
+    /** Ф4, ПТ-19: the bag of a native with a public takeBag() (the Scrapper Crab's, package N), emptied; none - an empty list. */
+    @SuppressWarnings("unchecked")
+    private static List<ItemStack> bagOf(EntityLivingBase mob) {
+        Class<?> k = mob.getClass();
+        Method m;
+        synchronized (BAGS) {
+            if (BAGS.containsKey(k)) {
+                m = BAGS.get(k);
+            } else {
+                m = null;
+                try {
+                    Method found = k.getMethod("takeBag");
+                    if (List.class.isAssignableFrom(found.getReturnType())) {
+                        m = found;
+                    }
+                } catch (NoSuchMethodException ex) {
+                    // no bag on this class
+                }
+                BAGS.put(k, m);
+            }
+        }
+        List<ItemStack> out = new ArrayList<ItemStack>();
+        if (m == null) {
+            return out;
+        }
+        try {
+            Object got = m.invoke(mob);
+            if (got instanceof List) {
+                for (Object o : (List<Object>) got) {
+                    if (o instanceof ItemStack) {
+                        out.add((ItemStack) o);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            cpw.mods.fml.common.FMLLog.warning("[Silicon Age] Si-14: the bag of %s couldn't be taken (%s)", k.getName(), ex);
+        }
+        return out;
     }
 
     private static float sum(float[] c) {

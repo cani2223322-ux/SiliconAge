@@ -5,9 +5,13 @@ import java.util.List;
 import com.sc.dim.SubstrateConfigSC;
 import com.sc.emp.IEmpReactiveSC;
 import com.sc.emp.IEmpTargetSC;
+import com.sc.emp.IEmpUselessSC;
 import com.sc.manual.Lang;
 import com.sc.mob.EliteModSC;
 import com.sc.mob.EntityArmoredMobSC;
+import com.sc.mob.EntityColossusSC;
+import com.sc.mob.EntityScrapperSC;
+import com.sc.mob.EntityStriderSC;
 import com.sc.mob.EntitySubstrateMobSC;
 import com.sc.mob.IArmoredMobSC;
 import com.sc.mob.IDisguisedSC;
@@ -36,6 +40,11 @@ import net.minecraft.world.World;
  * Head: WAILA's own name line («§f<name>») gets a gold star for an elite, becomes «???» for a mimic asleep. Body: «Броня:
  * Квант (4/4), запас 60%», then the state lines; a reactive one (IEmpReactiveSC: drones, swarm, mimic) - what a ПЭ-1 does
  * to it. A mimic asleep shows an empty body (the health line WAILA put before ours is taken away too).
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §7.5-§7.9, package N): the new «noise» are EntitySubstrateMobSC (registered already) - their
+ * reactive lines by MobAnalysisSC.reactiveKey ("kill", "burst", "collapse", "stun"); «ПЭ-1 бесполезен» for IEmpUselessSC (the
+ * Colossus, ПБ-26) and its facets; the Arc Strider's collapsed arc (its telegraph); the Scrapper's bag (DW_BAG) when it holds
+ * something - the things of a dead player may be in it.
  */
 public class WailaEntitySC implements IWailaEntityProvider {
 
@@ -90,7 +99,22 @@ public class WailaEntitySC implements IWailaEntityProvider {
             String k = MobAnalysisSC.reactiveKey(e);
             tip.add("§e" + Lang.tr(k != null ? "sc.waila.mob.reactive." + k : "sc.waila.mob.reactive"));
         }
+        if (e instanceof IEmpUselessSC) {
+            tip.add("§8" + Lang.tr("sc.waila.mob.useless"));
+        }
+        noise(e, tip);
         return tip;
+    }
+
+    /** Ф4: what the «noise» shows of itself - the Colossus's facets, a collapsed arc, the Scrapper's bag. */
+    private static void noise(EntityLivingBase e, List<String> tip) {
+        if (e instanceof EntityColossusSC) {
+            tip.add("§7" + Lang.tr("sc.waila.mob.facets"));
+        } else if (e instanceof EntityStriderSC && ((EntityStriderSC) e).collapsed()) {
+            tip.add("§b" + Lang.tr("sc.waila.mob.collapsed"));
+        } else if (e instanceof EntityScrapperSC && ((EntityScrapperSC) e).bagStacks() > 0) {
+            tip.add("§6" + Lang.tr("sc.waila.mob.bag", ((EntityScrapperSC) e).bagStacks(), EntityScrapperSC.BAG_SLOTS));
+        }
     }
 
     @Override

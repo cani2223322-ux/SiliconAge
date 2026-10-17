@@ -423,9 +423,10 @@ public final class WorldTestSubstrateSC {
         int py = w.getHeightValue(GX, GZ);
         FakePlayer p = fake("SubstrateWalker");
         p.setLocationAndAngles(GX + 0.5, py, GZ + 0.5, 0F, 0F);
+        // Ф4 (docs/plan-substrate-tech-f4.md §7.12): the plateaus' table has the noise too (the Colossus, the Scrapper) - every native the director made
         List<Entity> before = new ArrayList<Entity>();
         for (Object o : w.loadedEntityList) {
-            if (o instanceof EntityArmoredMobSC) {
+            if (o instanceof EntityLiving && o instanceof com.sc.mob.ISubstrateNativeSC) {
                 before.add((Entity) o);
             }
         }
@@ -434,21 +435,23 @@ public final class WorldTestSubstrateSC {
             made = SpawnDirectorSC.tryGroup(w, p);
             tries++;
         }
-        List<EntityArmoredMobSC> group = new ArrayList<EntityArmoredMobSC>();
+        List<EntityLiving> group = new ArrayList<EntityLiving>();
         for (Object o : w.loadedEntityList) {
-            if (o instanceof EntityArmoredMobSC && !before.contains(o) && !((Entity) o).isDead) {
-                group.add((EntityArmoredMobSC) o);
+            if (o instanceof EntityLiving && o instanceof com.sc.mob.ISubstrateNativeSC && o instanceof net.minecraft.entity.monster.IMob && !before.contains(o)
+                    && !((Entity) o).isDead) {
+                group.add((EntityLiving) o);
             }
         }
         int lo = SpawnRulesSC.MIN_DIST - SpawnRulesSC.GROUP_SPREAD - 1, hi = SpawnRulesSC.MAX_DIST + SpawnRulesSC.GROUP_SPREAD + 1;
         boolean placed = made >= 1 && made <= 4 && group.size() == made;
         StringBuilder where = new StringBuilder();
-        for (EntityArmoredMobSC m : group) {
+        for (EntityLiving m : group) {
             double d = Math.sqrt((m.posX - p.posX) * (m.posX - p.posX) + (m.posZ - p.posZ) * (m.posZ - p.posZ));
             int x = MathHelper.floor_double(m.posX), y = MathHelper.floor_double(m.posY), z = MathHelper.floor_double(m.posZ);
             boolean onRock = w.getBlock(x, y - 1, z) == SubstrateBlocksSC.rock || w.getBlock(x, y - 1, z) == SubstrateBlocksSC.ore;
-            placed &= d >= lo && d <= hi && BornInSubstrateSC.isBorn(m) && onRock && !w.isAnyLiquid(m.boundingBox) && m.mobArmor().suit() != null
-                    && m.mobArmor().reserve > 0F;
+            boolean armour = !(m instanceof EntityArmoredMobSC)                // the noise wears no armour of the mod
+                    || ((EntityArmoredMobSC) m).mobArmor().suit() != null && ((EntityArmoredMobSC) m).mobArmor().reserve > 0F;
+            placed &= d >= lo && d <= hi && BornInSubstrateSC.isBorn(m) && onRock && !w.isAnyLiquid(m.boundingBox) && armour;
             where.append(' ').append(m.getClass().getSimpleName().replace("Entity", "").replace("SC", "")).append(" at ").append((int) Math.round(d))
                     .append(onRock ? "" : " (not on rock)");
             m.setDead();

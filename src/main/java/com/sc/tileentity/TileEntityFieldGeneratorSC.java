@@ -921,11 +921,25 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
      */
     public static boolean payRadiationAt(World world, EntityPlayer p, double x, double y, double z, int eu) {
         for (TileEntityFieldGeneratorSC f : activeFieldsIn(world)) {
-            if (f.has(F_RADIATION) && f.allowed(p) && f.fieldContains(x, y, z) && f.payRadiation(eu)) {
+            if (f.has(F_RADIATION) && f.shieldsFromRadiation(p) && f.fieldContains(x, y, z) && f.payRadiation(eu)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Whose radiation this field stops: its owner's and its access list's (allowed); a settlement core - everyone's. */
+    public boolean shieldsFromRadiation(EntityPlayer p) {
+        return allowed(p);
+    }
+
+    /**
+     * Ф4 (ПФ-3): whom this field's EMP screen covers from a storm's pulse (and pays SCREEN_EU_PULSE for): a player - its owner's
+     * side (allowed: a stranger under it drains nobody's buffer); a mob - one it lets stay (not targets: an intruder takes the
+     * pulse). A settlement's core and a camp's Stolen Field cover everyone under them.
+     */
+    public boolean shieldsFromStorm(Entity e) {
+        return e instanceof EntityPlayer ? allowed((EntityPlayer) e) : !targets(e);
     }
 
     /** Pays for stopping radiation round a player this second; false (nothing taken) when the buffer can't. */
@@ -2323,7 +2337,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         // Projectiles from anything but a player are turned back at the shield.
         List<Entity> all = worldObj.getEntitiesWithinAABB(Entity.class, box);
         for (Entity e : all) {
-            if (!isHostileProjectile(e) || e.getEntityData().getBoolean("scDeflected")
+            if (!deflects(e) || e.getEntityData().getBoolean("scDeflected")
                     || !fieldContains(e.posX, e.posY, e.posZ) || !pay(DEFLECT_COST)) {
                 continue;
             }
@@ -2417,6 +2431,20 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return ((net.minecraft.entity.projectile.EntityThrowable) e).getThrower();
         }
         return null;
+    }
+
+    /**
+     * Подложка Ф4 (docs/plan-substrate-tech-f4.md §8.3, rule ПЗ-3, the coordinator's): the field turns projectile `e` back - every
+     * hostile one (isHostileProjectile, as before); a subclass may spare its own side (TileEntityStolenFieldSC: the Renegades'
+     * shots). The player's own field is this method unchanged.
+     */
+    protected boolean deflects(Entity e) {
+        return isHostileProjectile(e);
+    }
+
+    /** Ф4: who fired an arrow, fireball or thrown thing, for a subclass's deflects (null: no shooter saved, or not a projectile). */
+    protected static Entity projectileShooter(Entity e) {
+        return shooterOf(e);
     }
 
     private static boolean isHostileProjectile(Entity e) {

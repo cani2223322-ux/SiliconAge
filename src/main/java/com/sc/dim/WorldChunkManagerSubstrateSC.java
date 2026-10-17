@@ -19,21 +19,29 @@ import net.minecraft.world.biome.WorldChunkManager;
  * that would read the base class's genBiomes / biomeIndexLayer / biomeCache, as WorldChunkManagerHell does. The
  * «generation» methods (getBiomesForGeneration, areBiomesViable, findBiomePosition) work in vanilla's 4-block cells,
  * so other mods' structure checks get the same answers as from a vanilla manager.
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §3.1, the coordinator's): the kind of a column is SubstrateCellsSC.biomeKind - the
+ * canyon belts, the plateaus' band along the lines, and inside a cell its kind (the Ridges, the Oxide Fields, the Rift);
+ * the server decides a cell once (ПМ-11), a client answers by the seed alone.
  */
 public class WorldChunkManagerSubstrateSC extends WorldChunkManager {
 
+    /** The world this manager serves (its seed, its cells' decisions); null for one made without a world. */
+    private final World world;
+
     public WorldChunkManagerSubstrateSC(World world) {
         super();
+        this.world = world;
     }
 
     /** The biome of a kind (a plain vanilla one only if the Substrate's never got made - it can't be loaded then). */
     private static BiomeGenBase biome(int kind) {
-        BiomeGenBase b = kind == BiomeSubstrateSC.CANYONS ? SubstrateSC.canyons() : SubstrateSC.plateaus();
+        BiomeGenBase b = SubstrateSC.biome(kind);
         return b != null ? b : BiomeGenBase.desert;
     }
 
-    private static BiomeGenBase at(int x, int z) {
-        return biome(SubstrateTerrainSC.biomeKind(x, z));
+    private BiomeGenBase at(int x, int z) {
+        return biome(SubstrateCellsSC.biomeKind(world, x, z));
     }
 
     /** Where a player could start: the plateaus (WorldServer.createSpawnPosition and the like). */

@@ -30,11 +30,16 @@ public final class SubstrateBlocksSC {
             TRACE_NODE = 6, QUARTZ_TURF = 7;
     /** «Кирпич Поселения» (Ф2, package S): the settlements' building block - never generated in the wild, drops itself. */
     public static final int SETTLEMENT_BRICK = 8;
-    /** Metas registered: Ф1's eight and the Settlement Brick. */
-    public static final int ROCK_METAS = 9;
+    /**
+     * «Монокристалл» (Ф4, package W, docs/plan-substrate-tech-f4.md §3.3): the lining of the monocrystal geodes in the silicon base
+     * (SubstrateWildGenSC) - drops Metallurgical Silicon (the purification chain is never skipped).
+     */
+    public static final int MONOCRYSTAL = 9;
+    /** Metas registered: Ф1's eight, the Settlement Brick, Ф4's monocrystal. */
+    public static final int ROCK_METAS = 10;
     /** The rock's metas by name (lang keys tile.siliconage.substrateRock.<name>.name, sc.tooltip.substrateRock.<name>). Append only. */
     public static final String[] ROCK_NAMES = {"crystallite", "oxideViolet", "oxideBlue", "oxideGold", "oxideGreen", "copperTrace",
-            "traceNode", "quartzTurf", "settlementBrick"};
+            "traceNode", "quartzTurf", "settlementBrick", "monocrystal"};
 
     /** The rock (metas above), the ores (meta = OreEntry ordinal, dropping ModBlocks.oreSC of the same meta), the druse. */
     public static Block rock, ore, druse;

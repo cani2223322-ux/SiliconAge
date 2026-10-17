@@ -122,10 +122,13 @@ public final class MobEventsSC {
 
     // ------------------------------------------------------------------ who fought it (ПТ-2)
 
-    /** Last, after every mod changed the amount: the blow as it lands (before the armour - that is the fight too). */
+    /**
+     * Last, after every mod changed the amount: the blow as it lands (before the armour - that is the fight too). Ф4: a peaceful
+     * native with faction drops (the Wafer Crab - MobDropsSC.lootNative) is logged too: its drop goes to its real killer (ПТ-1).
+     */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onHurt(LivingHurtEvent e) {
-        if (!MobCombatSC.hostileNative(e.entityLiving) || e.entityLiving.worldObj.isRemote || !(e.ammount > 0F)) {
+        if (!MobDropsSC.lootNative(e.entityLiving) || e.entityLiving.worldObj.isRemote || !(e.ammount > 0F)) {
             return;
         }
         EntityLivingBase mob = e.entityLiving;

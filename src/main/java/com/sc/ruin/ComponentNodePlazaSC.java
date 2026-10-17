@@ -26,6 +26,9 @@ import net.minecraft.world.gen.structure.StructureBoundingBox;
  * </ul>
  * Nothing stands where the floor below is gone (a cave opened it). The layout is the Node's seed's (the same list in every
  * window, ComponentRuinSC). TODO(balance): the counts.
+ * <p>
+ * Ф4 (package C, docs/plan-substrate-tech-f4.md §8.6, rule ПХ-2): over a Vault (MapGenVaultSC.builtAt) the middle stays free -
+ * no dead heart: the Vault's sealed hatch (ComponentVaultShaftSC, built after the Node) takes the plaza's middle 3 x 3.
  */
 public class ComponentNodePlazaSC extends ComponentRuinSC {
 
@@ -83,7 +86,9 @@ public class ComponentNodePlazaSC extends ComponentRuinSC {
     @Override
     protected void build(World w, StructureBoundingBox win) {
         floor(w, win);
-        heart(w, win);
+        if (!MapGenVaultSC.builtAt(w, SubstrateTerrainSC.lineIndex(cx0), SubstrateTerrainSC.lineIndex(cz0))) {
+            heart(w, win);                                      // Ф4: over a Vault the middle is its hatch's
+        }
         List<int[]> things = things();
         for (int[] t : things) {
             if (t[0] == HUSK) {

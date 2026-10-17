@@ -314,6 +314,8 @@ public final class ModItems {
         com.sc.mob.MobItemsSC.init();
         // Подложка Ф2: the Credit Chip, the Return Capsule, the Settlement Map (appended; docs/plan-substrate-tech-f2.md §2.2)
         com.sc.settle.SettlementItemsSC.init();
+        // Подложка Ф4: the camp's key, the Fragment of the Breakdown Key, the Sealed Crumb, the ruins' Pelengator (appended; package C)
+        com.sc.ruin.RelicItemsSC.init();
     }
 
     public static com.sc.item.ItemConverterModuleSC converterModule;

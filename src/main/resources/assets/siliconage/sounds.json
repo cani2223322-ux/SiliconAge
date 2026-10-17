@@ -28,5 +28,7 @@
   "emp.suppress": {"category": "player", "sounds": [{"name": "power/off", "pitch": 1.3, "volume": 1.0}]},
   "emp.reboot": {"category": "player", "sounds": [{"name": "power/on", "pitch": 0.75, "volume": 1.0}]},
   "mob.beam.aim": {"category": "hostile", "sounds": [{"name": "quarry/beam", "pitch": 1.8, "volume": 0.5}]},
-  "mob.beam.shot": {"category": "hostile", "sounds": [{"name": "field/zap", "pitch": 1.9, "volume": 0.8}]}
+  "mob.beam.shot": {"category": "hostile", "sounds": [{"name": "field/zap", "pitch": 1.9, "volume": 0.8}]},
+  "storm.siren": {"category": "block", "sounds": ["storm/siren"]},
+  "storm.crackle": {"category": "weather", "sounds": ["storm/crackle"]}
 }

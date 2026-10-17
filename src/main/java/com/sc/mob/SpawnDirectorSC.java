@@ -9,9 +9,13 @@ import java.util.Random;
 import java.util.UUID;
 
 import com.sc.dim.BiomeSubstrateSC;
+import com.sc.dim.SubstrateCellsSC;
 import com.sc.dim.SubstrateSC;
 import com.sc.dim.SubstrateTerrainSC;
+import com.sc.dim.SubstrateWildTerrainSC;
+import com.sc.hazard.EmpStormSC;
 import com.sc.ruin.RuinLayoutSC;
+import com.sc.ruin.VaultLayoutSC;
 import com.sc.settle.SettlementRegistrySC;
 import com.sc.settle.SettlementSC;
 
@@ -71,6 +75,24 @@ import net.minecraftforge.event.ForgeEventFactory;
  * spawn point) while the elite cap round the spot has room; a hit - EliteSC.apply(mob, EliteModSC.pick(...)) after
  * onSpawnWithEgg. Eggs and spawners never make elites (they never come here).</li>
  * </ul>
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §7.12, rules ПС-30, ПС-41, ПС-42):
+ * <ul>
+ * <li>the place of the spot - a Dead Node's zone, else the column's biome kind (SpawnRulesSC.placeOf(node, kind): the plateaus,
+ * the canyons, the Ridges, the Oxide Fields, the Rift); never inside a Vault's bunker (VaultLayoutSC.inVault - its Sentinel
+ * comes only with the generation, package C); the weights of the place, in an EMP storm the swarm x3 and the Arc Strider
+ * everywhere but at a Node (EmpStormSC.active);</li>
+ * <li>«Затмение» - its own roll at a Rift spot (SpawnRulesSC.eclipseChancePct: 2%, x3 in the Singular Emission) while its
+ * record (RareRegistrySC.ECLIPSE) isn't ALIVE and 3 days went by since it died; it is the record's ALIVE one from its
+ * first tick; a world tick watches the record - its place loaded and no such entity there LOST_CHECKS times: it counts as
+ * dead (missed). The Warlord and the Sentinel never come from here;</li>
+ * <li>the elite roll in the Rift - 12% (EliteModSC.chancePct(..., true), ПС-42);</li>
+ * <li>the rare ones' records from their own ticks (rareSeen, rareDied - the clock: rareNow);</li>
+ * <li>the peaceful branch (the Wafer Crab): its own try every SpawnRulesSC.PEACEFUL_PERIOD ticks a player, at most 4 within 64
+ * blocks and 12 in the world (its own count beside the hostiles' census), on the plateaus and the Ridges, a group of 1..3,
+ * «born in Si-14»; Peaceful difficulty doesn't stop it (World.spawnPeacefulMobs - a server's spawn-animals - does); a
+ * peaceful creature never counts in the hostiles' census (add).</li>
+ * </ul>
  */
 public final class SpawnDirectorSC {
 
@@ -83,14 +105,28 @@ public final class SpawnDirectorSC {
 
     /** Ticks since each player's last try (by UUID; a new one starts at a random point - the players don't all fire at once). */
     private static final Map<UUID, Integer> COUNTERS = new HashMap<UUID, Integer>();
+    /** Ф4: the same for the peaceful branch (SpawnRulesSC.PEACEFUL_PERIOD). */
+    private static final Map<UUID, Integer> PEACEFUL_COUNTERS = new HashMap<UUID, Integer>();
+    /** Ф4: a rare one looks at its record this often (ticks, ПС-30); «Затмение» unseen this long is looked for by the world tick. */
+    public static final int RARE_SEEN_TICKS = 100, ECLIPSE_WATCH_TICKS = 20, ECLIPSE_UNSEEN_TICKS = 140;
+    /** Ф4: the record's place must be loaded this far round (blocks) before a look without it counts as a miss. */
+    private static final int ECLIPSE_WATCH_RADIUS = 48;
+    /** Ф4: «Затмение» never comes lower than this in the Rift (its floor is the glass bottom of the void). */
+    private static final int ECLIPSE_MIN_Y = 30;
     /** The census: the world and its tick it is of, the natives' positions and flags (x, y, z, flags). */
     private static int censusDim = Integer.MIN_VALUE;
     private static long censusTime = Long.MIN_VALUE;
     private static double[] census = new double[4 * 64];
     private static int censusN;
+    /** Ф4: the peaceful natives of the same tick (x, y, z) - the Wafer Crabs, their own caps. */
+    private static double[] peace = new double[3 * 16];
+    private static int peaceN;
     /** World.spawnHostileMobs (protected), found once; null - not looked for yet. */
     private static Field hostileField;
     private static boolean hostileMissing;
+    /** Ф4: World.spawnPeacefulMobs (protected) - a server's spawn-animals - the same way. */
+    private static Field peacefulField;
+    private static boolean peacefulMissing;
 
     private SpawnDirectorSC() {
     }
@@ -113,12 +149,29 @@ public final class SpawnDirectorSC {
         return true;
     }
 
+    /** Ф4: the world lets animals spawn - World.spawnPeacefulMobs (server.properties' spawn-animals); no such field: yes. */
+    public static boolean peacefulAllowed(World w) {
+        if (!peacefulMissing) {
+            try {
+                if (peacefulField == null) {
+                    peacefulField = ReflectionHelper.findField(World.class, "spawnPeacefulMobs", "field_72992_H");
+                }
+                return peacefulField.getBoolean(w);
+            } catch (Exception ex) {
+                peacefulMissing = true;
+            }
+        }
+        return true;
+    }
+
     /** Server stopped: the counters and the census; the mobs' damage logs and trophy locks too (MobEventsSC). */
     public static void clearAll() {
         COUNTERS.clear();
+        PEACEFUL_COUNTERS.clear();
         censusDim = Integer.MIN_VALUE;
         censusTime = Long.MIN_VALUE;
         censusN = 0;
+        peaceN = 0;
         MobEventsSC.clearAll();
     }
 
@@ -132,16 +185,37 @@ public final class SpawnDirectorSC {
             return;
         }
         UUID id = p.getUniqueID();
-        Integer was = COUNTERS.get(id);
-        int n = (was == null ? p.worldObj.rand.nextInt(SpawnRulesSC.PERIOD) : was.intValue()) + 1;
-        if (n < SpawnRulesSC.PERIOD) {
-            COUNTERS.put(id, Integer.valueOf(n));
+        if (due(PEACEFUL_COUNTERS, id, SpawnRulesSC.PEACEFUL_PERIOD, p.worldObj.rand) && p.isEntityAlive()) {
+            tryPeaceful((WorldServer) p.worldObj, p);              // Ф4: the Wafer Crabs - creative or not, Peaceful or not
+        }
+        if (!due(COUNTERS, id, SpawnRulesSC.PERIOD, p.worldObj.rand)) {
             return;
         }
-        COUNTERS.put(id, Integer.valueOf(0));
         if (!p.capabilities.isCreativeMode && p.isEntityAlive()) {
             tryGroup((WorldServer) p.worldObj, p);
         }
+    }
+
+    /** One tick of player `id`'s counter in `counters`: true once every `period` ticks (a new player starts at a random point). */
+    private static boolean due(Map<UUID, Integer> counters, UUID id, int period, Random rand) {
+        Integer was = counters.get(id);
+        int n = (was == null ? rand.nextInt(period) : was.intValue()) + 1;
+        if (n < period) {
+            counters.put(id, Integer.valueOf(n));
+            return false;
+        }
+        counters.put(id, Integer.valueOf(0));
+        return true;
+    }
+
+    /** Ф4 (ПС-30): the record of «Затмение» watched once a second in the Substrate (FML bus, the world tick). */
+    @SubscribeEvent
+    public void onWorldTick(TickEvent.WorldTickEvent e) {
+        if (e.phase != TickEvent.Phase.END || e.side != Side.SERVER || !(e.world instanceof WorldServer) || !SubstrateSC.is(e.world)
+                || e.world.getTotalWorldTime() % ECLIPSE_WATCH_TICKS != 0) {
+            return;
+        }
+        eclipseWatch((WorldServer) e.world);
     }
 
     /** One try for one player (server). @return how many mobs appeared (a swarm's particles and a patrol's drones too) */
@@ -167,11 +241,17 @@ public final class SpawnDirectorSC {
             return 0;
         }
         int[] node = RuinLayoutSC.nodeNear(spot[0], spot[2]);
-        int place = SpawnRulesSC.placeOf(node != null, kindOf(w, spot[0], spot[2]) == BiomeSubstrateSC.CANYONS);
+        int place = SpawnRulesSC.placeOf(node != null, kindOf(w, spot[0], spot[2]));       // Ф4: the Ridges, the Oxide Fields, the Rift
         int elitesNear = near(spot[0] + 0.5D, spot[1], spot[2] + 0.5D, SpawnRulesSC.ELITE_RADIUS, F_ELITE);
         double fromSpawn = fromSpawn(w, spot[0], spot[2]);
+        if (place == SpawnRulesSC.PLACE_RIFT) {
+            int made = eclipse(w, spot, near, nearQuantum, elitesNear, rand);                // Ф4, ПС-34: its own roll first
+            if (made > 0) {
+                return made;
+            }
+        }
         int[] weights = SpawnRulesSC.weightsAt(place, fromSpawn, nearQuantum < SpawnRulesSC.QUANTUM_NEAR_MAX,
-                SpawnRulesSC.eliteAllowed(elitesNear));
+                SpawnRulesSC.eliteAllowed(elitesNear), EmpStormSC.active(w));
         int total = SpawnRulesSC.sum(weights);
         int kind = total <= 0 ? -1 : SpawnRulesSC.pick(weights, rand.nextInt(total));
         if (kind < 0 || kind >= SpawnRulesSC.GROUP_MIN.length || SpawnRulesSC.GROUP_MAX[kind] <= 0) {
@@ -184,7 +264,7 @@ public final class SpawnDirectorSC {
         boolean quantum = SpawnRulesSC.quantumKind(kind);
         int places = kind == MobEntitiesSC.ID_JAMMER && rand.nextFloat() < SpawnRulesSC.JAMMER_ESCORT_CHANCE ? want + 1 : want;
         int group = SpawnRulesSC.fitGroup(near, nearQuantum, censusN, places, 1, quantum, false);
-        Group g = new Group(w, kind, spot, node, fromSpawn, elitesNear);
+        Group g = new Group(w, kind, spot, node, fromSpawn, elitesNear, place == SpawnRulesSC.PLACE_RIFT);
         for (int m = 0; m < group; m++) {
             int[] at = m == 0 ? spot : null;
             for (int t = 0; at == null && t < SpawnRulesSC.MEMBER_TRIES; t++) {
@@ -211,24 +291,27 @@ public final class SpawnDirectorSC {
         final int[] spot, node;
         final double fromSpawn;
         final long patrol;
+        /** Ф4, ПС-42: the spot is in the Rift (the elite roll's 12%). */
+        final boolean rift;
         int elites, made;
         final List<EntityHollowShellSC> shells = new ArrayList<EntityHollowShellSC>();
 
-        Group(WorldServer w, int kind, int[] spot, int[] node, double fromSpawn, int elitesNear) {
+        Group(WorldServer w, int kind, int[] spot, int[] node, double fromSpawn, int elitesNear, boolean rift) {
             this.w = w;
             this.kind = kind;
             this.spot = spot;
             this.node = node;
             this.fromSpawn = fromSpawn;
             this.elites = elitesNear;
+            this.rift = rift;
             this.patrol = w.rand.nextLong() | 1L;                        // never 0 (0 - no patrol)
         }
     }
 
     /**
      * A place to stand on at column (x, z): its top by the height map, solid under it, two free blocks, no player within
-     * MIN_DIST, not within SPAWN_MARGIN past a settlement's dome, not in a lithograph's hall (Ф3); null none. Public for the
-     * world test (ПП-11).
+     * MIN_DIST, not within SPAWN_MARGIN past a settlement's dome, not in a lithograph's hall (Ф3), not in a Vault's bunker,
+     * not on the Rift's void floor or its pillar - islands and the rim only (Ф4); null none. Public for the world test (ПП-11).
      */
     public static int[] spotAt(World w, int x, int z) {
         if (!w.blockExists(x, 64, z)) {
@@ -242,6 +325,10 @@ public final class SpawnDirectorSC {
         if (y <= 1 || y >= w.getHeight() - 2) {
             return null;
         }
+        if (kindOf(w, x, z) == BiomeSubstrateSC.RIFT && (SubstrateWildTerrainSC.pillar(x, z)
+                || y <= SubstrateWildTerrainSC.RIFT_FLOOR + 1 && SubstrateWildTerrainSC.riftVoid(w.getSeed(), x, z))) {
+            return null;                                     // Ф4: the Rift's glass floor counts in the height map - nobody on it or on the pillar
+        }
         Block under = w.getBlock(x, y - 1, z);
         if (!under.getMaterial().isSolid() || under.getMaterial().isLiquid() || !w.isAirBlock(x, y, z) || !w.isAirBlock(x, y + 1, z)) {
             return null;
@@ -252,13 +339,16 @@ public final class SpawnDirectorSC {
         if (RuinLayoutSC.inLitho(w.getSeed(), x, y, z) || RuinLayoutSC.inLitho(w.getSeed(), x, y + 1, z)) {
             return null;                                     // ПС-8: a lithograph's hall has only its own residents
         }
+        if (VaultLayoutSC.inVault(w.getSeed(), x, y, z) || VaultLayoutSC.inVault(w.getSeed(), x, y + 1, z)) {
+            return null;                                     // Ф4, ПС-41: a Vault has only its Sentinel
+        }
         return new int[]{x, y, z};
     }
 
-    /** The column's biome kind: the world's own biome, else the terrain's maths. */
+    /** The column's biome kind: the world's own biome, else the cells' (Ф4: SubstrateCellsSC - five kinds). */
     private static int kindOf(World w, int x, int z) {
         BiomeGenBase b = w.getBiomeGenForCoords(x, z);
-        return b instanceof BiomeSubstrateSC ? ((BiomeSubstrateSC) b).kind : SubstrateTerrainSC.biomeKind(x, z);
+        return b instanceof BiomeSubstrateSC ? ((BiomeSubstrateSC) b).kind : SubstrateCellsSC.biomeKind(w, x, z);
     }
 
     /** Blocks (horizontal) from the world's spawn point. */
@@ -287,6 +377,26 @@ public final class SpawnDirectorSC {
                 return new EntityExecutionerSC(w);
             case MobEntitiesSC.ID_SENTRY_DRONE:
                 return new EntitySentryDroneSC(w);
+            case MobEntitiesSC.ID_OVERHEATED:                // Ф4 (the coordinator's: every pool id the world makes)
+                return new EntityOverheatedSC(w);
+            case MobEntitiesSC.ID_WARLORD:
+                return new EntityWarlordSC(w);
+            case MobEntitiesSC.ID_SENTINEL:
+                return new EntitySentinelSC(w);
+            case MobEntitiesSC.ID_ECLIPSE:
+                return new EntityEclipseSC(w);
+            case MobEntitiesSC.ID_PHANTOM:
+                return new EntityPhantomSC(w);
+            case MobEntitiesSC.ID_LEECH:
+                return new EntityLeechSC(w);
+            case MobEntitiesSC.ID_COLOSSUS:
+                return new EntityColossusSC(w);
+            case MobEntitiesSC.ID_STRIDER:
+                return new EntityStriderSC(w);
+            case MobEntitiesSC.ID_SCRAPPER:
+                return new EntityScrapperSC(w);
+            case MobEntitiesSC.ID_WAFER_CRAB:
+                return new EntityWaferCrabSC(w);
             default:
                 return null;
         }
@@ -320,6 +430,178 @@ public final class SpawnDirectorSC {
         }
         g.made++;
         return true;
+    }
+
+    /**
+     * Ф4 (the coordinator's, docs/plan-substrate-tech-f4.md §7.12): one creature of pool id `kind` at (x, y, z) outside the
+     * director's own tries and caps - a raid's wave (RaidSC), the bridge's echo squad (BridgeEchoSC), a camp's or a Vault's
+     * resident and its return (package C), the Scrapper's errand (ScrapperSC). The same checks as a group member's (room, no
+     * liquid, other mods' CheckSpawn), onSpawnWithEgg, an elite roll for an armoured one when `rollElite` (EliteModSC.chancePct by
+     * its distance from the world's spawn; `rift` - the Rift's 12%), «born in Si-14», into the world and this tick's census.
+     * Server. @return the creature, or null (no room, refused, an unknown id)
+     */
+    public static EntityLiving spawnAt(WorldServer w, int kind, double x, double y, double z, boolean rollElite, boolean rift) {
+        EntityLiving e = create(w, kind);
+        if (e == null) {
+            return null;
+        }
+        e.setLocationAndAngles(x, y, z, w.rand.nextFloat() * 360F, 0F);
+        if (!place(w, e, (float) x, (float) y, (float) z)) {
+            return null;
+        }
+        if (rollElite && e instanceof EntityArmoredMobSC && SpawnRulesSC.mayRollElite(kind) && !((EntityArmoredMobSC) e).executeImmune()
+                && w.rand.nextInt(100) < EliteModSC.chancePct(fromSpawn(w, (int) Math.floor(x), (int) Math.floor(z)), rift)) {
+            MobArmorSC a = ((EntityArmoredMobSC) e).mobArmor();
+            EliteSC.apply((EntityArmoredMobSC) e, EliteModSC.pick(w.rand, a.screen, a.heliumOn()));
+        }
+        return join(w, e) ? e : null;
+    }
+
+    // ------------------------------------------------------------------ Ф4: «Затмение», the rare ones, the peaceful branch
+
+    /**
+     * Ф4, ПС-34: «Затмение»'s own roll at a Rift spot - SpawnRulesSC.eclipseChancePct by its record, the caps (one more of the
+     * Quantum tier near the player, an elite place round the spot), not on the void's floor. @return 1 - it came, 0 - not now
+     */
+    private static int eclipse(WorldServer w, int[] spot, int near, int nearQuantum, int elitesNear, Random rand) {
+        RareRegistrySC reg = RareRegistrySC.get(w);
+        if (reg == null || spot[1] < ECLIPSE_MIN_Y || !SpawnRulesSC.maySpawn(near, nearQuantum, censusN, 1, true, false)) {
+            return 0;
+        }
+        RareRegistrySC.Rec r = reg.recIfAny(RareRegistrySC.ECLIPSE);
+        long now = rareNow(w);
+        int pct = SpawnRulesSC.eclipseChancePct(r == null ? RareRegistrySC.NONE : r.state, r == null ? 0L : r.diedAt, now,
+                EmpStormSC.emission(w), SpawnRulesSC.eliteAllowed(elitesNear));
+        if (pct <= 0 || rand.nextInt(100) >= pct) {
+            return 0;
+        }
+        EntityLiving e = create(w, MobEntitiesSC.ID_ECLIPSE);
+        float x = spot[0] + 0.5F, y = spot[1], z = spot[2] + 0.5F;
+        e.setLocationAndAngles(x, y, z, rand.nextFloat() * 360F, 0F);
+        if (!place(w, e, x, y, z) || !join(w, e)) {
+            return 0;
+        }
+        reg.alive(RareRegistrySC.ECLIPSE, e, now);                 // the one in the dimension, from now on
+        return 1;
+    }
+
+    /**
+     * Ф4, ПС-30: the record of «Затмение» ALIVE, yet not seen for ECLIPSE_UNSEEN_TICKS - its place loaded ECLIPSE_WATCH_RADIUS
+     * round and no living entity of its UUID in the world: one more miss (RareRegistrySC.missed: LOST_CHECKS of them - dead now,
+     * its 3 days begin). An unloaded place is never a miss (it sleeps there with its chunk).
+     */
+    private static void eclipseWatch(WorldServer w) {
+        RareRegistrySC reg = RareRegistrySC.get(w);
+        RareRegistrySC.Rec r = reg == null ? null : reg.recIfAny(RareRegistrySC.ECLIPSE);
+        if (r == null || r.state != RareRegistrySC.ALIVE) {
+            return;
+        }
+        long now = rareNow(w);
+        if (now - r.seenAt < ECLIPSE_UNSEEN_TICKS || r.dim != w.provider.dimensionId) {
+            return;
+        }
+        int d = ECLIPSE_WATCH_RADIUS;
+        if (!w.checkChunksExist(r.x - d, 0, r.z - d, r.x + d, 0, r.z + d)) {
+            return;
+        }
+        UUID id = r.uuid();
+        for (Object o : w.loadedEntityList) {
+            if (o instanceof EntityEclipseSC && !((Entity) o).isDead && id.equals(((Entity) o).getUniqueID())) {
+                reg.seen(RareRegistrySC.ECLIPSE, (Entity) o, now);
+                return;
+            }
+        }
+        reg.missed(RareRegistrySC.ECLIPSE, now);
+    }
+
+    /**
+     * Ф4, ПС-30: the clock of the rare ones' records (RareRegistrySC: alive, seen, died, the respawn's cooldowns) - the world's
+     * total time: it runs on with doDaylightCycle off, never goes back with /time set, and the Substrate shares the Overworld's.
+     * Package C's camps and Vaults read the same clock.
+     */
+    public static long rareNow(World w) {
+        return w == null ? 0L : w.getTotalWorldTime();
+    }
+
+    /**
+     * Ф4, ПС-30, server - a rare creature's own slow tick (every RARE_SEEN_TICKS): its record seen now. An ALIVE record of another
+     * UUID - this is a stale copy (an old chunk, a restored backup): it leaves the world, nothing dropped; a record not ALIVE (it
+     * was counted lost meanwhile) - it is the record's live one again. A creature without a key (an egg's) - nothing.
+     * @return it stays in the world
+     */
+    public static boolean rareSeen(EntityLiving e) {
+        String key = RareRegistrySC.keyOf(e);
+        RareRegistrySC reg = key == null || e.worldObj == null || e.worldObj.isRemote ? null : RareRegistrySC.get(e.worldObj);
+        if (reg == null) {
+            return true;
+        }
+        long now = rareNow(e.worldObj);
+        if (reg.seen(key, e, now)) {
+            return true;
+        }
+        RareRegistrySC.Rec r = reg.recIfAny(key);
+        if (r != null && r.state == RareRegistrySC.ALIVE) {
+            e.setDead();                                           // the other one is the live one: never two
+            return false;
+        }
+        reg.alive(key, e, now);
+        return true;
+    }
+
+    /** Ф4, ПС-30, server - from a rare creature's onDeath (vanilla's `dead` set: the death went through): its record DEAD now. */
+    public static void rareDied(EntityLiving e) {
+        String key = RareRegistrySC.keyOf(e);
+        RareRegistrySC reg = key == null || e.worldObj == null || e.worldObj.isRemote ? null : RareRegistrySC.get(e.worldObj);
+        RareRegistrySC.Rec r = reg == null ? null : reg.recIfAny(key);
+        if (r != null && r.state == RareRegistrySC.ALIVE && r.uuid().equals(e.getUniqueID())) {
+            reg.died(key, rareNow(e.worldObj));
+        }
+    }
+
+    /**
+     * Ф4, ПС-41: one peaceful try for one player (server) - the Wafer Crabs: doMobSpawning and spawn-animals on, at most
+     * SpawnRulesSC.PEACEFUL_NEAR_MAX within NEAR_RADIUS and PEACEFUL_WORLD_MAX in the world, a spot 24..48 blocks off on the
+     * plateaus or the Ridges (not a Node's zone), a group of 1..3 round it, «born in Si-14». Public for the world test.
+     * @return how many came
+     */
+    public static int tryPeaceful(WorldServer w, EntityPlayer p) {
+        if (!w.getGameRules().getGameRuleBooleanValue("doMobSpawning") || !peacefulAllowed(w)) {
+            return 0;
+        }
+        takeCensus(w);
+        int near = nearPeace(p.posX, p.posY, p.posZ, SpawnRulesSC.NEAR_RADIUS);
+        if (!SpawnRulesSC.peacefulMaySpawn(near, peaceN, 1)) {
+            return 0;
+        }
+        Random rand = w.rand;
+        double ang = rand.nextDouble() * Math.PI * 2D;
+        double dist = SpawnRulesSC.MIN_DIST + rand.nextDouble() * (SpawnRulesSC.MAX_DIST - SpawnRulesSC.MIN_DIST);
+        int[] spot = spotAt(w, MathHelper.floor_double(p.posX + Math.cos(ang) * dist), MathHelper.floor_double(p.posZ + Math.sin(ang) * dist));
+        if (spot == null || !SpawnRulesSC.peacefulPlace(SpawnRulesSC.placeOf(RuinLayoutSC.nodeNear(spot[0], spot[2]) != null,
+                kindOf(w, spot[0], spot[2])))) {
+            return 0;
+        }
+        int kind = MobEntitiesSC.ID_WAFER_CRAB;
+        int want = SpawnRulesSC.GROUP_MIN[kind] + rand.nextInt(SpawnRulesSC.GROUP_MAX[kind] - SpawnRulesSC.GROUP_MIN[kind] + 1);
+        int group = SpawnRulesSC.fitPeaceful(near, peaceN, want);
+        int made = 0;
+        for (int m = 0; m < group; m++) {
+            int[] at = m == 0 ? spot : null;
+            for (int t = 0; at == null && t < SpawnRulesSC.MEMBER_TRIES; t++) {
+                int s = SpawnRulesSC.GROUP_SPREAD;
+                at = spotAt(w, spot[0] + rand.nextInt(2 * s + 1) - s, spot[2] + rand.nextInt(2 * s + 1) - s);
+            }
+            if (at == null) {
+                continue;
+            }
+            EntityLiving e = create(w, kind);
+            float x = at[0] + 0.5F, y = at[1], z = at[2] + 0.5F;
+            e.setLocationAndAngles(x, y, z, rand.nextFloat() * 360F, 0F);
+            if (place(w, e, x, y, z) && join(w, e)) {
+                made++;
+            }
+        }
+        return made;
     }
 
     /** Two repair drones of a patrol: over its Shells' shoulders, bound to them, out of the census. */
@@ -366,7 +648,7 @@ public final class SpawnDirectorSC {
         if (!SpawnRulesSC.eliteAllowed(g.elites) || mob.executeImmune()) {
             return;
         }
-        if (g.w.rand.nextInt(100) >= EliteModSC.chancePct(g.fromSpawn, false)) {
+        if (g.w.rand.nextInt(100) >= EliteModSC.chancePct(g.fromSpawn, g.rift)) {      // Ф4, ПС-42: the Rift's 12%
             return;
         }
         MobArmorSC a = mob.mobArmor();
@@ -409,15 +691,49 @@ public final class SpawnDirectorSC {
         censusDim = w.provider.dimensionId;
         censusTime = now;
         censusN = 0;
+        peaceN = 0;
         for (Object o : w.loadedEntityList) {
-            if (MobCombatSC.hostileNative((Entity) o) && !((Entity) o).isDead) {
-                add((Entity) o);
+            Entity e = (Entity) o;
+            if (!e.isDead && (MobCombatSC.hostileNative(e) || e instanceof EntityWaferCrabSC)) {
+                add(e);
             }
         }
     }
 
-    /** One native into this tick's census by its ICensusSC answer (not one that doesn't count). */
+    private static void addPeace(double x, double y, double z) {
+        if (3 * peaceN + 3 > peace.length) {
+            double[] more = new double[peace.length * 2];
+            System.arraycopy(peace, 0, more, 0, peace.length);
+            peace = more;
+        }
+        peace[3 * peaceN] = x;
+        peace[3 * peaceN + 1] = y;
+        peace[3 * peaceN + 2] = z;
+        peaceN++;
+    }
+
+    /** Ф4: the peaceful natives in the box `r` round a point (this tick's census). */
+    private static int nearPeace(double x, double y, double z, int r) {
+        int n = 0;
+        for (int i = 0; i < peaceN; i++) {
+            if (Math.abs(peace[3 * i] - x) <= r && Math.abs(peace[3 * i + 1] - y) <= r && Math.abs(peace[3 * i + 2] - z) <= r) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * One native into this tick's census by its ICensusSC answer (not one that doesn't count). Ф4: a peaceful native (the Wafer
+     * Crab) goes to its own count, never the hostiles' (spawnAt and the peaceful branch come here too).
+     */
     private static void add(Entity e) {
+        if (!MobCombatSC.hostileNative(e)) {
+            if (e instanceof EntityWaferCrabSC) {
+                addPeace(e.posX, e.posY, e.posZ);
+            }
+            return;
+        }
         int flags = 0;
         if (e instanceof ICensusSC) {
             ICensusSC c = (ICensusSC) e;

@@ -33,12 +33,17 @@ public class ItemBlockSubstrateRockSC extends ItemBlock {
         return super.getUnlocalizedName() + "." + SubstrateBlocksSC.rockName(stack.getItemDamage());
     }
 
-    /** Per meta: sc.tooltip.substrateRock.<name>, under Shift .<name>.details, under Ctrl .<name>.howto (the pickaxe, the drop). */
+    /**
+     * Per meta: sc.tooltip.substrateRock.<name>, under Shift .<name>.details, under Ctrl .<name>.howto (the pickaxe, the drop).
+     * Ф4: the Monocrystal's howto takes its drop's numbers (1..MONO_DROP_MAX Metallurgical Silicon) as %1$s, %2$s.
+     */
     @Override
     @SuppressWarnings("unchecked")
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         String key = "sc.tooltip.substrateRock." + SubstrateBlocksSC.rockName(stack.getItemDamage());
         list.add("§7" + Lang.tr(key));
-        TooltipSC.more(list, Lang.tr(key + ".details"), Lang.tr(key + ".howto"));
+        String howto = getMetadata(stack.getItemDamage()) == SubstrateBlocksSC.MONOCRYSTAL
+                ? Lang.tr(key + ".howto", 1, BlockSubstrateRockSC.MONO_DROP_MAX) : Lang.tr(key + ".howto");
+        TooltipSC.more(list, Lang.tr(key + ".details"), howto);
     }
 }

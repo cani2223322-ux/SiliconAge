@@ -13,8 +13,10 @@ import net.minecraft.world.World;
  * the faction loot is MobDropsSC's under ПТ-1, through IFactionLootSC); DataWatcher DW_ACTION (25, the telegraph -
  * IMobActionSC); the census (ICensusSC: a plain native; a class answers otherwise - a swarm's other particles and the
  * mimic don't count). 20..24 and 26..31 belong to the subclasses. Subclasses call super in what they override here.
+ * Ф4 (docs/plan-substrate-tech-f4.md §8.3): the faction (IFactionSC) - FactionSC.defaultOf (the repair drone: the Shells'; the
+ * noise: none); a class may say its own.
  */
-public abstract class EntitySubstrateMobSC extends EntityMob implements ISubstrateNativeSC, ICensusSC, IMobActionSC {
+public abstract class EntitySubstrateMobSC extends EntityMob implements ISubstrateNativeSC, ICensusSC, IMobActionSC, IFactionSC {
 
     /** DataWatcher (fixed): the telegraph (byte, IMobActionSC.ACT_*) - the same slot as EntityArmoredMobSC's. */
     public static final int DW_ACTION = EntityArmoredMobSC.DW_ACTION;
@@ -67,5 +69,11 @@ public abstract class EntitySubstrateMobSC extends EntityMob implements ISubstra
     @Override
     public boolean censusElite() {
         return false;
+    }
+
+    /** Ф4, ПЗ-3: the side it is on. */
+    @Override
+    public String faction() {
+        return FactionSC.defaultOf(this);
     }
 }

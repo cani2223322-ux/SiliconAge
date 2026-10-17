@@ -2,10 +2,14 @@ package com.sc.dim;
 
 import java.util.Random;
 
+import com.sc.ruin.MapGenCampSC;
+import com.sc.ruin.MapGenVaultSC;
+
 import net.minecraft.block.Block;
 import net.minecraft.init.Blocks;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.gen.MapGenBase;
 
 /**
@@ -29,6 +33,16 @@ import net.minecraft.world.gen.MapGenBase;
  * <p>
  * Ф3 (package X, rule ПУ-5): no via through a lithograph's hall or its entrance either (RuinLayoutSC.lithoNear - pure, so it
  * holds where the lithograph's start comes out empty too); a cave tunnel may still reach the hall - its walls close it.
+ * <p>
+ * Ф4 (package W, docs/plan-substrate-tech-f4.md §3.2): an origin chunk in a Ridges cell's inner square starts a cave system
+ * RIDGE_CAVE_MUL times as often: Ф1's draw is kept (its systems and their heights - the same tunnels everywhere, so Ф1's land,
+ * the band and the canyons round a Ridges cell, keeps its caves), the extra ones start as high as RIDGE_CAVE_START_MAX (the
+ * ridges are hollow too - the diode moss grows there) and cut only the columns of a Ridges cell's inner square (ridgeCol[] - new
+ * land: no tunnel ends at an old chunk's wall). Before a chunk is cut its columns are masked (keep[]): nothing - caves or vias -
+ * is cut in a Rift cell's void (the islands stay whole, the pillar too), in a built Vault's bunker box or a built camp's box
+ * (MapGenVaultSC / MapGenCampSC.covers - the provider makes their starts before it calls the carver; an empty start - explored
+ * ground, no building - masks nothing, Ф1's caves go on there). Cell kinds: SubstrateCellsSC.cellKind (the server's kept
+ * decision; the chunk's own was made by the provider just before).
  */
 public class MapGenSubstrateCavesSC extends MapGenBase {
 
@@ -41,28 +55,82 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
 
     /** Caves start below this (the plateaus are 64..74): a tunnel that climbs may still come out on a terrace. */
     private static final int CAVE_START_MAX = 56;
+    /** Ф4: a Ridges origin chunk - cave systems this many times as often, starting up to this height. TODO(balance) */
+    public static final int RIDGE_CAVE_MUL = 2, RIDGE_CAVE_START_MAX = 104;
+    /** Ф4: the bunkers' and the camps' boxes are kept this much wider. */
+    private static final int BOX_MARGIN = 1;
 
-    /** The settlements the vias keep out of (null: none). */
+    /** Ф4: the columns of the chunk being cut that nothing may cut (index x * 16 + z); any of them. */
+    private final boolean[] keep = new boolean[256];
+    private boolean keepAny;
+    /** Ф4: the chunk's columns in a Ridges cell's inner square (an extra system cuts only those); an extra system being cut. */
+    private final boolean[] ridgeCol = new boolean[256];
+    private boolean extraCut;
+
+    /** The settlements the vias keep out of (null: none); Ф4: the camps and the Vaults nothing cuts into (null: none). */
     private final com.sc.settle.gen.MapGenSettlementSC settlements;
+    private final MapGenCampSC camps;
+    private final MapGenVaultSC vaults;
 
     public MapGenSubstrateCavesSC() {
-        this(null);
+        this(null, null, null);
     }
 
-    public MapGenSubstrateCavesSC(com.sc.settle.gen.MapGenSettlementSC settlements) {
+    public MapGenSubstrateCavesSC(com.sc.settle.gen.MapGenSettlementSC settlements, MapGenCampSC camps, MapGenVaultSC vaults) {
         this.settlements = settlements;
+        this.camps = camps;
+        this.vaults = vaults;
+    }
+
+    /** Ф4: masks the chunk's columns (the class comment), then cuts as MapGenBase does. */
+    @Override
+    public void func_151539_a(IChunkProvider provider, World world, int cx, int cz, Block[] blocks) {
+        mask(world, cx, cz);
+        super.func_151539_a(provider, world, cx, cz, blocks);
+    }
+
+    /** Ф4: keep[] for chunk (cx, cz) - the Rift's void, the built Vaults' and camps' boxes; ridgeCol[] - its Ridges inner columns. */
+    private void mask(World world, int cx, int cz) {
+        keepAny = false;
+        extraCut = false;
+        if (world == null) {
+            java.util.Arrays.fill(keep, false);
+            java.util.Arrays.fill(ridgeCol, false);
+            return;
+        }
+        long seed = world.getSeed();
+        int kind = SubstrateCellsSC.chunkHasInner(cx, cz) ? SubstrateCellsSC.cellKind(world, cx >> 4, cz >> 4) : BiomeSubstrateSC.PLATEAUS;
+        boolean rift = kind == BiomeSubstrateSC.RIFT, ridge = kind == BiomeSubstrateSC.RIDGES;
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                int wx = cx * 16 + x, wz = cz * 16 + z;
+                boolean k = rift && (SubstrateWildTerrainSC.riftVoid(seed, wx, wz) || SubstrateWildTerrainSC.pillar(wx, wz))
+                        || vaults != null && vaults.covers(wx, wz, BOX_MARGIN) || camps != null && camps.covers(wx, wz, BOX_MARGIN);
+                keep[x * 16 + z] = k;
+                keepAny |= k;
+                ridgeCol[x * 16 + z] = ridge && SubstrateCellsSC.inner(wx, wz);
+            }
+        }
+    }
+
+    /** Ф4: origin chunk (ox, oz) lies in a Ridges cell's inner square. */
+    private static boolean ridges(World world, int ox, int oz) {
+        return world != null && SubstrateCellsSC.chunkHasInner(ox, oz) && SubstrateCellsSC.cellKind(world, ox >> 4, oz >> 4) == BiomeSubstrateSC.RIDGES;
     }
 
     @Override
     protected void func_151538_a(World world, int ox, int oz, int cx, int cz, Block[] blocks) {
         via(ox, oz, cx, cz, blocks);
         int systems = rand.nextInt(rand.nextInt(rand.nextInt(15) + 1) + 1);
-        if (rand.nextInt(CAVE_CHANCE) != 0) {
+        int roll = rand.nextInt(CAVE_CHANCE);                    // Ф1's draw, as it was: Ф1's systems the same everywhere
+        boolean extra = roll != 0 && roll % (CAVE_CHANCE / RIDGE_CAVE_MUL) == 0 && ridges(world, ox, oz);
+        if (roll != 0 && !extra) {
             systems = 0;
         }
+        extraCut = extra;                                        // a Ridges' own system: its inner columns only (cut)
         for (int s = 0; s < systems; s++) {
             double x = ox * 16 + rand.nextInt(16);
-            double y = rand.nextInt(rand.nextInt(CAVE_START_MAX) + 8);
+            double y = rand.nextInt(rand.nextInt(extra ? RIDGE_CAVE_START_MAX : CAVE_START_MAX) + 8);
             double z = oz * 16 + rand.nextInt(16);
             int tunnels = 1;
             if (rand.nextInt(4) == 0) {
@@ -97,7 +165,7 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
             double ddx = cx * 16 + x + 0.5D - (vx + c);
             for (int z = 0; z < 16; z++) {
                 double ddz = cz * 16 + z + 0.5D - (vz + c);
-                if (ddx * ddx + ddz * ddz > r2) {
+                if (ddx * ddx + ddz * ddz > r2 || keepAny && keep[x * 16 + z]) {
                     continue;
                 }
                 int col = (x * 16 + z) * 256;
@@ -195,7 +263,7 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
             double ex = (bx + cx * 16 + 0.5D - x) / rh;
             for (int bz = z1; bz < z2; bz++) {
                 double ez = (bz + cz * 16 + 0.5D - z) / rh;
-                if (ex * ex + ez * ez >= 1D) {
+                if (ex * ex + ez * ez >= 1D || keepAny && keep[bx * 16 + bz] || extraCut && !ridgeCol[bx * 16 + bz]) {
                     continue;
                 }
                 int col = (bx * 16 + bz) * 256;

@@ -47,6 +47,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.conduitBundle));
         hideSettlementBlocks();
         showRuinBlocks();
+        hideWildBlocks();
         // the Energy Converter and its modules: no other energy in this game (no RF API, Mekanism, Galacticraft) - no use, no recipe
         if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.energyConverter));
@@ -123,6 +124,55 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         if (com.sc.ruin.RuinBlocksSC.ruin != null) {
             API.setItemListEntries(net.minecraft.item.Item.getItemFromBlock(com.sc.ruin.RuinBlocksSC.ruin), ruinStacks());
         }
+    }
+
+    /**
+     * Ф4 (docs/plan-substrate-tech-f4.md §10.3): what only the world has and nobody holds - every vent (the fumarole, the crack, the
+     * geyser, the RTG: unbreakable), the camp's safe shut and open (campSC metas 2..3: unbreakable), the puncture pillar's core
+     * (singularGlass meta 1). The flora, the Singular Glass, the monocrystal, the Stolen Field Generator, the stolen panel and pad,
+     * the ruin metas 4..6, the relics, the Pelengator, the new loot, the Singular trophies (TrophyTableSC.SHOWN) and the ten eggs
+     * stay - each with its «Как получить» page (ObtainHandlerSC). R in cheat mode still asks the hidden ones: they have pages too.
+     */
+    static void hideWildBlocks() {
+        // every meta listed explicitly (the blocks are in no creative tab), then the world's own hidden
+        for (net.minecraft.block.Block b : wildBlocks()) {
+            API.setItemListEntries(net.minecraft.item.Item.getItemFromBlock(b), wildStacks(b));
+        }
+        if (com.sc.dim.SubstrateWildBlocksSC.vent != null) {
+            for (int m = 0; m < com.sc.dim.SubstrateWildBlocksSC.VENT_NAMES.length; m++) {
+                API.hideItem(new net.minecraft.item.ItemStack(com.sc.dim.SubstrateWildBlocksSC.vent, 1, m));
+            }
+        }
+        if (com.sc.ruin.CampBlocksSC.camp != null) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.ruin.CampBlocksSC.camp, 1, com.sc.ruin.CampBlocksSC.CAMP_SAFE));
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.ruin.CampBlocksSC.camp, 1, com.sc.ruin.CampBlocksSC.CAMP_SAFE_OPEN));
+        }
+        if (com.sc.dim.SubstrateWildBlocksSC.glass != null) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.dim.SubstrateWildBlocksSC.glass, 1, com.sc.dim.SubstrateWildBlocksSC.PILLAR_CORE));
+        }
+    }
+
+    /** Ф4: the wild and camp blocks NEI lists meta by meta (registered ones only). */
+    static List<net.minecraft.block.Block> wildBlocks() {
+        List<net.minecraft.block.Block> out = new ArrayList<net.minecraft.block.Block>();
+        for (net.minecraft.block.Block b : new net.minecraft.block.Block[]{com.sc.dim.SubstrateWildBlocksSC.glass, com.sc.dim.SubstrateWildBlocksSC.flora,
+                com.sc.dim.SubstrateWildBlocksSC.vent, com.sc.ruin.CampBlocksSC.stolenField, com.sc.ruin.CampBlocksSC.camp}) {
+            if (b != null) {
+                out.add(b);
+            }
+        }
+        return out;
+    }
+
+    /** Every meta of a wild or camp block (SubstrateWildBlocksSC / CampBlocksSC names; NeiCoverageSC checks them too). */
+    static List<net.minecraft.item.ItemStack> wildStacks(net.minecraft.block.Block b) {
+        String[] names = b == com.sc.ruin.CampBlocksSC.stolenField || b == com.sc.ruin.CampBlocksSC.camp ? com.sc.ruin.CampBlocksSC.namesOf(b)
+                : com.sc.dim.SubstrateWildBlocksSC.namesOf(b);
+        List<net.minecraft.item.ItemStack> out = new ArrayList<net.minecraft.item.ItemStack>();
+        for (int m = 0; m < Math.max(1, names.length); m++) {
+            out.add(new net.minecraft.item.ItemStack(b, 1, m));
+        }
+        return out;
     }
 
     /** Every meta of the ruin block (NeiCoverageSC checks them too). */

@@ -25,6 +25,10 @@ import net.minecraft.item.ItemStack;
  * "blacklist-block-spatial" -> IMCBlackListSpatial, which takes the message's ItemStack, Block.getBlockFromItem of its
  * item and blacklists that Block in the movable registry (spatial IO leaves it where it stands). AE2 keys by the Block
  * - one message a block would do; one a meta is sent anyway, as the plan asks (a later AE2 keying by meta is covered).
+ * <p>
+ * Ф4 (package C, docs/plan-substrate-tech-f4.md §8.4, rule ПЗ-7): the Renegades' camp blocks too - campSC (its safe can't leave
+ * its camp: unbreakable, and so unmovable; AE2 keys by the Block, so the stolen panels and pad go with it) and the Stolen Field
+ * Generator (its dome, owned by «[Отступники]», must not be carried into a player's base).
  */
 public final class SettlementCompatSC {
 
@@ -39,9 +43,12 @@ public final class SettlementCompatSC {
                 + blacklist(SettlementBlocksSC.dock, BlockDockSC.NAMES.length)
                 + blacklist(SettlementBlocksSC.decor, BlockSettlementDecorSC.NAMES.length) + blacklist(SettlementBlocksSC.glass, 1)
                 + blacklist(SettlementBlocksSC.showcase2, BlockShowcase2SC.NAMES.length);   // Ф3 (ПК-16): the second showcase block
+        int camp = blacklist(com.sc.ruin.CampBlocksSC.camp, com.sc.ruin.CampBlocksSC.CAMP_NAMES.length)   // Ф4 (ПЗ-7): the safe, the stolen field
+                + blacklist(com.sc.ruin.CampBlocksSC.stolenField, 1);
         if (Loader.isModLoaded(AE2)) {
             FMLLog.info("[Silicon Age] Si-14 settlements: %d stacks of the core, showcases, dock and trim sent to AE2's spatial IO blacklist (%s)",
                     sent, AE2_SPATIAL_BLACKLIST);
+            FMLLog.info("[Silicon Age] Si-14 camps: %d stacks of the Renegades' safe, panels, pad and Stolen Field Generator sent to it too", camp);
         }
     }
 

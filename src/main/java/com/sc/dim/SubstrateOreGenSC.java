@@ -23,6 +23,12 @@ import net.minecraft.world.gen.feature.WorldGenMinable;
  * ellipsoids are too thin to hold a block's centre) - and tantalite, baddeleyite and sperrylite are size 2 by default.
  * Below SMALL_VEIN a vein is a short random walk of 1..size blocks instead (on average (size + 1) / 2: 1.5 for 2, 2 for
  * 3 - as much as WorldGenMinable gives at 4, so the yield still grows with the size). TODO(balance)
+ * <p>
+ * Ф4 (package W, docs/plan-substrate-tech-f4.md §3.4): a vein whose centre column is the Rift's (its biome kind) goes only into
+ * an island - at a height inside the island over that column (SubstrateWildTerrainSC.islandAt), else it is dropped (the rim and
+ * the void hold none); the draws are the same, so a vein outside the Rift is the one of Ф1. A window holding a column of the
+ * Ridges gets SubstrateOreTableSC.ridgeExtra more veins of every ore (x RIDGE_VEIN_MUL in all), each kept only where its centre is
+ * the Ridges' - drawn from a Random of their own, so the rest of populate (traces, druses, the ruins) draws as before.
  */
 public final class SubstrateOreGenSC {
 
@@ -40,9 +46,37 @@ public final class SubstrateOreGenSC {
         if (SubstrateBlocksSC.ore == null || SubstrateBlocksSC.rock == null) {
             return;
         }
+        veins(world, rand, x0, z0, false);
+        if (ridgesIn(world, x0 + 8, z0 + 8)) {
+            veins(world, new Random(SubstrateTerrainSC.mix(world.getSeed() ^ RIDGE_SALT, x0, z0)), x0, z0, true);
+        }
+    }
+
+    /** Ф4: the salt of the Ridges' extra veins' Random. */
+    private static final long RIDGE_SALT = 0x81D6E0BEL;
+
+    /** Ф4: the window from (wx0, wz0), 16 x 16, holds a Ridges column (its corners and middle asked - the cells are 256 wide). */
+    private static boolean ridgesIn(World world, int wx0, int wz0) {
+        int[] o = {0, 15, 8};
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (SubstrateCellsSC.biomeKind(world, wx0 + o[i], wz0 + o[j]) == BiomeSubstrateSC.RIDGES) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Every ore's veins in the window: veinsPerChunk x the multiplier (`extra`: the Ridges' share on top - their centres only
+     * in the Ridges' columns). A centre in the Rift: into the island over it, or none (the class comment).
+     */
+    private static void veins(World world, Random rand, int x0, int z0, boolean extra) {
+        long seed = world.getSeed();
         for (OreEntry ore : OreEntry.values()) {
             ConfigSC.OreGenSettings s = ConfigSC.settingsFor(ore);
-            float want = s.veinsPerChunk * SubstrateOreTableSC.veinMultiplier(ore);
+            float want = s.veinsPerChunk * (extra ? SubstrateOreTableSC.ridgeExtra(ore) : SubstrateOreTableSC.veinMultiplier(ore));
             int veins = (int) want;
             if (rand.nextFloat() < want - veins) {
                 veins++;
@@ -61,6 +95,17 @@ public final class SubstrateOreGenSC {
                     continue;
                 }
                 int x = x0 + rand.nextInt(16), y = lo + rand.nextInt(hi - lo), z = z0 + rand.nextInt(16);
+                int kind = SubstrateCellsSC.biomeKind(world, x + 8, z + 8);
+                if (extra && kind != BiomeSubstrateSC.RIDGES) {
+                    continue;
+                }
+                if (kind == BiomeSubstrateSC.RIFT) {                 // only into an island (the rim and the void: none)
+                    int[] is = SubstrateWildTerrainSC.islandAt(seed, x + 8, z + 8);
+                    if (is == null || !SubstrateWildTerrainSC.riftVoid(seed, x + 8, z + 8) || is[1] - is[0] < 2) {
+                        continue;
+                    }
+                    y = is[0] + 1 + rand.nextInt(Math.max(1, is[1] - is[0] - 1));
+                }
                 if (gen != null) {
                     gen.generate(world, rand, x, y, z);
                 } else {

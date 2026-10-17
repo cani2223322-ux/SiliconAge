@@ -1,15 +1,19 @@
 package com.sc.tileentity;
 
+import java.util.List;
 import java.util.Random;
 
 import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
+import com.sc.radiation.RadiationSC;
 
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.AxisAlignedBB;
 import net.minecraftforge.common.util.ForgeDirection;
 
 /**
@@ -17,13 +21,17 @@ import net.minecraftforge.common.util.ForgeDirection;
  * faces (set by the structure, sent to the client in the description packet: BlockShowcaseSC turns its icons by it)
  * and, on the client only, once in TICK ticks (staggered by position) the work's particles and now and then a quiet
  * sound: the workshop machines while their Tuners stand at them (world time 0..WORK_END, the Tuners' day), the guard
- * square's, the Clone Capsule's and the gate's always. Never an inventory, a recipe or energy; nothing on the server;
- * blockExists before a neighbour is read (the air over a machine).
+ * square's, the Clone Capsule's and the gate's always. Never an inventory, a recipe or energy; nothing on the server (but
+ * the gate's shower, Ф4 - below); blockExists before a neighbour is read (the air over a machine).
  * <p>
  * Ф3 (docs/plan-substrate-tech-f3.md §6.3): the tile of the second block too (BlockShowcase2SC - the same tile id
  * "SiliconAge.showcase", told apart by its block): the energy storage's and the transformer's sparks while the Power
  * Engineer works, the wind generator's gusts always, the scrap pile's sparks and clatter while the Salvager sorts it; the
  * rack only faces (its front).
+ * <p>
+ * Ф4 (package W, docs/plan-substrate-tech-f4.md §4.6, rule ПА-3): the gate's decontamination shower (BlockShowcaseSC.SHOWER) is
+ * the one thing a showcase does on the server - once a second (the same staggered phase) every player standing on it loses
+ * TileEntityShowerSC.DOSE_PER_SECOND of the radiation dose (2% of the scale), free: no water, no energy; burning stops too.
  */
 public class TileEntityShowcaseSC extends TileEntity {
 
@@ -59,9 +67,14 @@ public class TileEntityShowcaseSC extends TileEntity {
 
     @Override
     public void updateEntity() {
-        if (worldObj == null || !worldObj.isRemote
-                || (worldObj.getTotalWorldTime() + (xCoord * 7 + yCoord * 3 + zCoord * 13 & 15)) % TICK != 0) {
-            return;                                     // the server: nothing to do, ever
+        if (worldObj == null || (worldObj.getTotalWorldTime() + (xCoord * 7 + yCoord * 3 + zCoord * 13 & 15)) % TICK != 0) {
+            return;
+        }
+        if (!worldObj.isRemote) {                       // the server: only the gate's shower washes (Ф4, ПА-3)
+            if (getBlockType() instanceof BlockShowcaseSC && getBlockMetadata() == BlockShowcaseSC.SHOWER) {
+                wash();
+            }
+            return;
         }
         int meta = getBlockMetadata();
         boolean evening = worldObj.getWorldTime() % 24000L >= WORK_END;
@@ -75,6 +88,23 @@ public class TileEntityShowcaseSC extends TileEntity {
             return;                                     // the workshop's Tuners are off for the evening
         }
         effects(meta, worldObj.rand);
+    }
+
+    /** Ф4 (ПА-3): one second of the gate's shower - every player standing on it (feet in the block over it), free. */
+    @SuppressWarnings("unchecked")
+    private void wash() {
+        AxisAlignedBB box = AxisAlignedBB.getBoundingBox(xCoord + 0.05D, yCoord + 1D, zCoord + 0.05D, xCoord + 0.95D, yCoord + 1.6D, zCoord + 0.95D);
+        boolean any = false;
+        for (EntityPlayer p : (List<EntityPlayer>) worldObj.getEntitiesWithinAABB(EntityPlayer.class, box)) {
+            if (RadiationSC.doseOf(p) > 0F) {
+                RadiationSC.setDose(p, RadiationSC.doseOf(p) - TileEntityShowerSC.DOSE_PER_SECOND);
+                any = true;
+            }
+            p.extinguish();
+        }
+        if (any && worldObj.getTotalWorldTime() / TICK % 2 == 0) {
+            worldObj.playSoundEffect(xCoord + 0.5D, yCoord + 1.5D, zCoord + 0.5D, "liquid.water", 0.6F, 1.2F);
+        }
     }
 
     /** Ф3: the second block's particles and sound by meta (client). */

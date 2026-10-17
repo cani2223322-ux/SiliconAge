@@ -5,6 +5,9 @@ import java.util.List;
 import com.sc.manual.Lang;
 import com.sc.mob.EliteModSC;
 import com.sc.mob.EntityArmoredMobSC;
+import com.sc.mob.EntityColossusSC;
+import com.sc.mob.EntityScrapperSC;
+import com.sc.mob.EntityStriderSC;
 import com.sc.mob.IDisguisedSC;
 import com.sc.mob.MobAnalysisSC;
 import com.sc.util.ArmorSuit;
@@ -19,6 +22,9 @@ import net.minecraft.entity.Entity;
  * table, right of the crosshair) from the Ф3 flags MobAnalysisSC packed - «Броня: Квант, запас 60%», «Уязвим к ПЭ-1»,
  * «Аварийный режим», «Щит», «Элита: Командир», «ЭМИ-экран»; a disguised mimic's first line becomes «???». Client only.
  * The elite's modifier is read from the mob's DataWatcher (the flags only say «elite»); everything else from the flags.
+ * Ф4 (docs/plan-substrate-tech-f4.md §7.7-§7.9, package N): what the creature shows of itself - the Colossus's facets
+ * («стрелы отскакивают, лучи вдвое слабее»), the Arc Strider's collapsed arc, the Scrapper's bag («Мешок: 12 из 27»); the
+ * reactive keys and «ПЭ-1 здесь бесполезен» come with the flags as before.
  */
 @SideOnly(Side.CLIENT)
 public final class MobAnalysisClientSC {
@@ -65,6 +71,18 @@ public final class MobAnalysisClientSC {
         }
         if ((flags & Analysis.EMP_USELESS) != 0) {
             lines.add("§8" + Lang.tr("sc.analyzer.mob.useless"));
+        }
+        noise(lines, e);
+    }
+
+    /** Ф4: what the «noise» shows of itself: the Colossus's facets, a collapsed arc (its telegraph), the Scrapper's bag (DW_BAG). */
+    private static void noise(List<String> lines, Entity e) {
+        if (e instanceof EntityColossusSC) {
+            lines.add("§7" + Lang.tr("sc.analyzer.mob.facets"));
+        } else if (e instanceof EntityStriderSC && ((EntityStriderSC) e).collapsed()) {
+            lines.add("§b" + Lang.tr("sc.analyzer.mob.collapsed"));
+        } else if (e instanceof EntityScrapperSC) {
+            lines.add("§6" + Lang.tr("sc.analyzer.mob.bag", ((EntityScrapperSC) e).bagStacks(), EntityScrapperSC.BAG_SLOTS));
         }
     }
 }

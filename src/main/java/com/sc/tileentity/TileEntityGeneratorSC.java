@@ -1832,6 +1832,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             status = GeneratorStatus.NO_SUNLIGHT;
             return;
         }
+        if (com.sc.hazard.EmpStormSC.blocksSolar(worldObj, xCoord, yCoord, zCoord)) {
+            status = GeneratorStatus.NO_SUNLIGHT;           // Подложка Ф4, ПФ-5: an EMP storm - the mod's panels give nothing
+            return;
+        }
         double f = day ? 1.0 : 0.5;
         if (rain) {
             f *= 0.6;

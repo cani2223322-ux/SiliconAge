@@ -13,7 +13,8 @@ import net.minecraft.item.ItemStack;
 /**
  * PACKAGE X (docs/plan-substrate-tech-f3.md §8.3): the ruin blocks as items - a name per meta (tile.siliconage.ruin.<name>.name);
  * the TooltipSC tooltip per meta: sc.tooltip.ruin.<name> (what it is), under Shift .details (where it is found), under Ctrl
- * .howto (the pickaxe and what it gives - the chances from BlockRuinSC as %s).
+ * .howto (the pickaxe and what it gives - the chances from BlockRuinSC as %s). Ф4 (package C): the vault plating (its scrap's
+ * chance), the vault lamp and the camp's tarp (100: they always give theirs).
  */
 public class ItemBlockRuinSC extends ItemBlock {
 
@@ -50,7 +51,11 @@ public class ItemBlockRuinSC extends ItemBlock {
             case BlockRuinSC.MACHINE_HUSK:
                 return BlockRuinSC.HUSK_TRANSISTOR_PCT;
             case BlockRuinSC.TANK_HUSK:
+            case BlockRuinSC.VAULT_LAMP:
+            case BlockRuinSC.CAMP_TARP:
                 return 100;
+            case BlockRuinSC.VAULT_PLATING:
+                return BlockRuinSC.PLATING_SCRAP_PCT;
             default:
                 return BlockRuinSC.METAL_SCRAP_PCT;
         }

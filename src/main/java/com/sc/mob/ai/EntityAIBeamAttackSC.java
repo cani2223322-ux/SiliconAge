@@ -1,5 +1,6 @@
 package com.sc.mob.ai;
 
+import com.sc.hazard.EmpStormSC;
 import com.sc.mob.EntityArmoredMobSC;
 import com.sc.mob.IMobActionSC;
 import com.sc.mob.MobCombatSC;
@@ -28,6 +29,9 @@ import net.minecraft.world.WorldServer;
  * (the telegraph every client draws, ПС-9). An armoured native's beam is times its damageMul() (a Commander's group,
  * ПС-21 - 1 for everyone else, so the Ф1-Ф2 numbers stay). Subclasses may walk their own way (move / stop) and set their
  * own mutex (the Jammer keeps its distance with another task).
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §5.5, §7.13, rule ПФ-9): in the Silica Haze its reach is EmpStormSC.sightRange (at most 24
+ * blocks - «вражеские стрелки слепнут так же, как игрок»), asked at each sight check.
  */
 public class EntityAIBeamAttackSC extends EntityAIBase {
 
@@ -50,6 +54,8 @@ public class EntityAIBeamAttackSC extends EntityAIBase {
     private final boolean telegraph;
     protected EntityLivingBase target;
     private boolean seen;
+    /** Ф4: the reach now (range, or less in the haze), renewed at each sight check. */
+    private double reach;
     private int sightIn, aim, reload, fist, repath, burstLeft, burstIn;
 
     public EntityAIBeamAttackSC(EntityCreature mob, double speed) {
@@ -102,6 +108,7 @@ public class EntityAIBeamAttackSC extends EntityAIBase {
     @Override
     public void startExecuting() {
         sightIn = 0;
+        reach = range;
         aim = 0;
         repath = 0;
         burstLeft = 0;
@@ -124,10 +131,11 @@ public class EntityAIBeamAttackSC extends EntityAIBase {
         }
         if (--sightIn <= 0) {
             seen = mob.getEntitySenses().canSee(target);
+            reach = EmpStormSC.sightRange(mob.worldObj, range);      // Ф4, ПФ-9: the haze
             sightIn = SIGHT_CHECK;
         }
         double d = mob.getDistanceSqToEntity(target);
-        boolean inRange = d <= range * range;
+        boolean inRange = d <= reach * reach;
         mob.getLookHelper().setLookPositionWithEntity(target, 30F, 30F);
         move(d, seen, inRange);
         if (fist > 0) {

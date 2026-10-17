@@ -44,7 +44,18 @@ public class ItemCombatLootSC extends Item {
         /** «Нанитовая пыль» - a nanite particle's (50%). */
         NANITE_DUST("naniteDust"),
         /** «Сердечник щита» - the Exo Executioner's (15%); the Armourer wants two to restore an Exo piece. */
-        SHIELD_CORE("shieldCore");
+        SHIELD_CORE("shieldCore"),
+        // ---- Ф4 (the coordinator's, docs/plan-substrate-tech-f4.md §2.2): icons by the packages whose creatures drop them (M, N)
+        /** «Выкипевший контур» - the Overheated's (20%); the Gas Technician buys it (3 КЧ). */
+        BOILED_LOOP("boiledLoop"),
+        /** «Индукционная нить» - the Induction Phantom's (30%). */
+        INDUCTION_THREAD("inductionThread"),
+        /** «Плазменный конденсат» - the Arc Strider's (50%). */
+        PLASMA_CONDENSATE("plasmaCondensate"),
+        /** «Лом брони Сингулярный» - «Затмение»'s (2..3); the Salvager buys two for 8 КЧ. */
+        SINGULAR_SCRAP("singularScrap"),
+        /** «Природная пластина» - the Wafer Crab's (5%); the Technologist buys four for 2 КЧ. */
+        NATURAL_WAFER("naturalWafer");
 
         public final String key;
 
@@ -128,7 +139,26 @@ public class ItemCombatLootSC extends Item {
         if (sale != null && sale.out != null) {
             howto += "\n" + Lang.tr("sc.tooltip.loot.salvager", sale.in[0].count, sale.out.count);
         }
+        howto += otherBuyers(stack);
         TooltipSC.more(list, Lang.tr(k + ".details"), howto);
+    }
+
+    /**
+     * Ф4 (docs/plan-substrate-tech-f4.md §9.5, package M - the tooltip only): the other settlement folk who buy it for chips (the
+     * Gas Technician's Boiled Loop, the Technologist's Natural Wafers - TradeTableSC's sales, the base numbers) - a line each
+     * (sc.tooltip.loot.buyer: who, how many, chips); the Salvager's has its own line above. Empty when nobody else buys it.
+     */
+    @SideOnly(Side.CLIENT)
+    private static String otherBuyers(ItemStack stack) {
+        StringBuilder out = new StringBuilder();
+        for (com.sc.settle.trade.TradeOfferSC o : com.sc.settle.trade.TradeTableSC.all()) {
+            if (o.kind == com.sc.settle.NpcKindSC.SALVAGER || !o.sell() || o.in.length != 1 || o.in[0] == null || !o.in[0].matches(stack)
+                    || o.out == null) {
+                continue;
+            }
+            out.append('\n').append(Lang.tr("sc.tooltip.loot.buyer", Lang.tr(o.kind.langKey()), o.in[0].count, o.out.count));
+        }
+        return out.toString();
     }
 
     /** How many Shield Cores an Exo trophy piece's restoring takes (TrophyRestoreSC's parts), for the tooltip. */

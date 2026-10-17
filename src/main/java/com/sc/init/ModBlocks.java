@@ -211,6 +211,9 @@ public final class ModBlocks {
         com.sc.settle.SettlementBlocksSC.init();
         // Подложка Ф3: the ruins' blocks (appended; docs/plan-substrate-tech-f3.md §2.2)
         com.sc.ruin.RuinBlocksSC.init();
+        // Подложка Ф4: the new biomes' glass, flora and vents (package W), the camps' blocks (package C) - appended, docs/plan-substrate-tech-f4.md §2.2
+        com.sc.dim.SubstrateWildBlocksSC.init();
+        com.sc.ruin.CampBlocksSC.init();
 
         registerOreDict();
     }

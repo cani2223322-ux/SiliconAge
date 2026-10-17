@@ -8,6 +8,7 @@ import com.sc.util.ArmorSuit;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.util.DamageSource;
 import net.minecraft.world.World;
 
@@ -28,9 +29,12 @@ import net.minecraft.world.World;
  * EliteModSC, 0 none) and DW_ACTION (25, IMobActionSC's telegraph); 26..31 belong to the mob classes. An elite's «Казнь»
  * immunity (IExecuteImmuneSC), the census (ICensusSC), the modifier's work (EliteSC: serverTick, onDeath, damageMul - the
  * subclasses multiply their blows by damageMul()). NBT "scEliteMod".
+ * <p>
+ * Ф4 (docs/plan-substrate-tech-f4.md §8.3, the coordinator's): the faction (IFactionSC) - FactionSC.defaultOf by the class; a
+ * Ф4 class says its own (the Warlord, «Затмение» - Renegades; the Overheated, the Sentinel - Shells).
  */
 public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMobSC, IEmpTargetSC, ISubstrateNativeSC,
-        IExecuteImmuneSC, ICensusSC, IMobActionSC {
+        IExecuteImmuneSC, ICensusSC, IMobActionSC, IFactionSC {
 
     /** DataWatcher (fixed, Ф3): the elite modifier's code (byte: EliteModSC.code, 0 none), the telegraph (byte: IMobActionSC.ACT_*). */
     public static final int DW_ELITE = 24, DW_ACTION = 25;
@@ -45,6 +49,25 @@ public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMo
         for (int i = 0; i < 5; i++) {
             setEquipmentDropChance(i, 0F);
         }
+    }
+
+    /**
+     * Ф4: a camp's resident (MobCombatSC.HOME_NBT with "u" - RuinWorldSC.settle): its home area a column - across within the
+     * leash, up to "u" over the home (the canyon's rim: vanilla's EntityAITarget keeps to the home area, so a sphere would let
+     * the camp ignore a player shooting down at it; the walls keep it on the floor anyway). Else vanilla's sphere.
+     */
+    @Override
+    public boolean isWithinHomeDistance(int x, int y, int z) {
+        if (hasHome()) {
+            NBTTagCompound h = getEntityData().getCompoundTag(MobCombatSC.HOME_NBT);
+            if (h.hasKey("u")) {
+                ChunkCoordinates c = getHomePosition();
+                double dx = x - c.posX, dz = z - c.posZ, r = func_110174_bM();
+                int dy = y - c.posY;
+                return dx * dx + dz * dz < r * r && dy < h.getInteger("u") && dy > -r;
+            }
+        }
+        return super.isWithinHomeDistance(x, y, z);
     }
 
     /** ПС-6: never drops the worn equipment, Looting or not (see the class comment). */
@@ -116,6 +139,12 @@ public abstract class EntityArmoredMobSC extends EntityMob implements IArmoredMo
     @Override
     public boolean censusElite() {
         return executeImmune();
+    }
+
+    /** Ф4, ПЗ-3: the side it is on (a Stolen Field spares its own). */
+    @Override
+    public String faction() {
+        return FactionSC.defaultOf(this);
     }
 
     /** Server: what this mob's blows are multiplied by now (ПС-21: a Commander's group) - the subclasses' attackEntityAsMob and beams use it. */

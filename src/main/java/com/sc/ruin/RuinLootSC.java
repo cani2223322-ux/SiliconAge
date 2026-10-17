@@ -19,8 +19,8 @@ import net.minecraft.item.ItemStack;
  * this mod's items (and none of its machines, armour or weapons):
  * <ul>
  * <li>a Dead Node's chest (NODE_CHESTS_MIN..MAX a Node): ROLLS_MIN..ROLLS_MAX rolls of NODE (Controllers, Transistors, Memory
- * Chips, Nano Scrap, Shell Firmware), and a Singularity Crumb on NODE_CRUMB_CHANCE of the chests - it doesn't count towards a
- * player's daily crumbs (a chest knows no player);</li>
+ * Chips, Nano Scrap, Shell Firmware), and a Sealed Crumb on NODE_CRUMB_CHANCE of the chests (Ф4, ПТ-17: a chest knows no
+ * player - the Crumb opens into a Singularity Crumb in the hand of one who has some left of today's three, ItemRelicSC);</li>
  * <li>a lithograph's chest (LITHO_CHESTS_MIN..MAX a hall): the rolls of LITHO (GaAs wafers, Transistors, Silicon wafers), a
  * random armour chip (tier I) on LITHO_CHIP_CHANCE of the chests, a random ПЭ-1 module on LITHO_MODULE_CHANCE - never the ПЭ-1
  * itself;</li>
@@ -29,6 +29,16 @@ import net.minecraft.item.ItemStack;
  * </ul>
  * A roll picks an entry by its weight and gives MIN..MAX of it. The tables are public for the handbook (BookWorldSC) and the
  * self-test: {weight, min, max} by entry, the entries' stacks by the same index (NODE_ITEMS, LITHO_ITEMS).
+ * <p>
+ * Ф4 (package C, docs/plan-substrate-tech-f4.md §8.4, §8.6, §9.4, rules ПЗ-7, ПХ-2, ПХ-5, ПТ-17; TODO(balance) all of it):
+ * <ul>
+ * <li>the Renegades' safe (BlockCampSC - the camp's key, its field down): CAMP_ROLLS_MIN..MAX rolls of CAMP - what the
+ * Tuners pay chips for (Nano and Quantum Scrap, Shell Firmware, Transistors, a settlement's Stolen Cargo) -, a ПЭ-1 module on
+ * CAMP_MODULE_CHANCE, an armour chip on CAMP_CHIP_CHANCE, a Sealed Crumb on CAMP_CRUMB_CHANCE;</li>
+ * <li>a Vault's chest (VAULT_CHESTS_MIN..MAX a bunker): ROLLS_MIN..ROLLS_MAX rolls of VAULT (Controllers, Memory Chips, GaAs
+ * wafers, Transistors), a ПЭ-1 module on VAULT_MODULE_CHANCE, a Sealed Crumb on VAULT_CRUMB_CHANCE.</li>
+ * </ul>
+ * Every Crumb of the world but the boss's comes Sealed (ПХ-5): the daily three are counted when one is opened.
  */
 public final class RuinLootSC {
 
@@ -37,6 +47,12 @@ public final class RuinLootSC {
     public static final int NODE_CHESTS_MIN = 1, NODE_CHESTS_MAX = 3, LITHO_CHESTS_MIN = 2, LITHO_CHESTS_MAX = 4;
     /** Per chest. */
     public static final float NODE_CRUMB_CHANCE = 0.03F, LITHO_CHIP_CHANCE = 0.05F, LITHO_MODULE_CHANCE = 0.02F;
+    /** Ф4: the camp's safe - rolls, its extras' chances. */
+    public static final int CAMP_ROLLS_MIN = 4, CAMP_ROLLS_MAX = 7;
+    public static final float CAMP_MODULE_CHANCE = 0.05F, CAMP_CHIP_CHANCE = 0.03F, CAMP_CRUMB_CHANCE = 0.05F;
+    /** Ф4: a Vault's chests (ComponentVaultBunkerSC) and their extras' chances. */
+    public static final int VAULT_CHESTS_MIN = 1, VAULT_CHESTS_MAX = 2;
+    public static final float VAULT_MODULE_CHANCE = 0.10F, VAULT_CRUMB_CHANCE = 0.10F;
     /** A mimic's drop: rolls of the lithograph's table, the extra component's chance. */
     public static final int MIMIC_ROLLS_MIN = 1, MIMIC_ROLLS_MAX = 2;
     public static final float MIMIC_COMPONENT_CHANCE = 0.25F;
@@ -45,6 +61,10 @@ public final class RuinLootSC {
     public static final int[][] NODE = {{2, 1, 2}, {5, 2, 6}, {3, 1, 3}, {4, 1, 4}, {4, 1, 3}};
     /** The lithograph's table: GaAs wafers 1..3, Transistors 2..8, Silicon wafers 2..6. */
     public static final int[][] LITHO = {{3, 1, 3}, {5, 2, 8}, {4, 2, 6}};
+    /** Ф4, the camp's safe: Nano Scrap 2..5, Quantum Scrap 1..3, Shell Firmware 2..4, Transistors 2..6, a Stolen Cargo. */
+    public static final int[][] CAMP = {{4, 2, 5}, {4, 1, 3}, {3, 2, 4}, {3, 2, 6}, {1, 1, 1}};
+    /** Ф4, a Vault's chest: Controllers 1..3, Memory Chips 2..4, GaAs wafers 1..3, Transistors 2..6. */
+    public static final int[][] VAULT = {{3, 1, 3}, {4, 2, 4}, {4, 1, 3}, {2, 2, 6}};
 
     private RuinLootSC() {
     }
@@ -60,13 +80,59 @@ public final class RuinLootSC {
         return new ItemStack[]{silicon(SiliconMaterial.GAAS_WAFER), silicon(SiliconMaterial.TRANSISTOR), silicon(SiliconMaterial.SI_WAFER)};
     }
 
-    /** A Dead Node chest's contents (server; `rand` - the chest's own). */
+    /** CAMP's entries. */
+    public static ItemStack[] campItems() {
+        return new ItemStack[]{MobItemsSC.loot(ItemCombatLootSC.LootKind.NANO_SCRAP, 1), MobItemsSC.loot(ItemCombatLootSC.LootKind.QUANTUM_SCRAP, 1),
+                MobItemsSC.loot(ItemCombatLootSC.LootKind.SHELL_FIRMWARE, 1), silicon(SiliconMaterial.TRANSISTOR),
+                MobItemsSC.loot(ItemCombatLootSC.LootKind.STOLEN_CARGO, 1)};
+    }
+
+    /** VAULT's entries. */
+    public static ItemStack[] vaultItems() {
+        return new ItemStack[]{silicon(SiliconMaterial.CONTROLLER), silicon(SiliconMaterial.MEMORY_CHIP), silicon(SiliconMaterial.GAAS_WAFER),
+                silicon(SiliconMaterial.TRANSISTOR)};
+    }
+
+    /** A Dead Node chest's contents (server; `rand` - the chest's own). Ф4: its Crumb comes Sealed (ПТ-17). */
     public static List<ItemStack> nodeChest(Random rand) {
         List<ItemStack> out = rolls(NODE, nodeItems(), ROLLS_MIN + rand.nextInt(ROLLS_MAX - ROLLS_MIN + 1), rand);
-        if (rand.nextFloat() < NODE_CRUMB_CHANCE && ModItems.singularCrumb != null) {
-            out.add(new ItemStack(ModItems.singularCrumb));
+        if (rand.nextFloat() < NODE_CRUMB_CHANCE) {
+            add(out, RelicItemsSC.relic(ItemRelicSC.SEALED_CRUMB, 1));
         }
         return out;
+    }
+
+    /** Ф4 (ПЗ-7): what the Renegades' safe spills when its camp's key opens it. */
+    public static List<ItemStack> campSafe(Random rand) {
+        List<ItemStack> out = rolls(CAMP, campItems(), CAMP_ROLLS_MIN + rand.nextInt(CAMP_ROLLS_MAX - CAMP_ROLLS_MIN + 1), rand);
+        if (rand.nextFloat() < CAMP_MODULE_CHANCE) {
+            add(out, randomModule(rand));
+        }
+        if (rand.nextFloat() < CAMP_CHIP_CHANCE && ModItems.armorChip != null) {
+            ChipType[] types = ChipType.values();
+            out.add(ModItems.armorChip.stackOf(types[rand.nextInt(types.length)], 1));
+        }
+        if (rand.nextFloat() < CAMP_CRUMB_CHANCE) {
+            add(out, RelicItemsSC.relic(ItemRelicSC.SEALED_CRUMB, 1));
+        }
+        return out;
+    }
+
+    /** Ф4 (ПХ-2, ПХ-5): a Vault chest's contents. */
+    public static List<ItemStack> vaultChest(Random rand) {
+        List<ItemStack> out = rolls(VAULT, vaultItems(), ROLLS_MIN + rand.nextInt(ROLLS_MAX - ROLLS_MIN + 1), rand);
+        if (rand.nextFloat() < VAULT_MODULE_CHANCE) {
+            add(out, randomModule(rand));
+        }
+        if (rand.nextFloat() < VAULT_CRUMB_CHANCE) {
+            add(out, RelicItemsSC.relic(ItemRelicSC.SEALED_CRUMB, 1));
+        }
+        return out;
+    }
+
+    /** Fills a Vault chest. */
+    public static void fillVault(IInventory inv, Random rand) {
+        fill(inv, vaultChest(rand), rand);
     }
 
     /** A lithograph chest's contents. */
@@ -76,9 +142,8 @@ public final class RuinLootSC {
             ChipType[] types = ChipType.values();
             out.add(ModItems.armorChip.stackOf(types[rand.nextInt(types.length)], 1));
         }
-        if (rand.nextFloat() < LITHO_MODULE_CHANCE && ModItems.empModule != null) {
-            EmpModule[] mods = EmpModule.values();
-            out.add(ModItems.empModule.stackOf(mods[rand.nextInt(mods.length)]));
+        if (rand.nextFloat() < LITHO_MODULE_CHANCE) {
+            add(out, randomModule(rand));
         }
         return out;
     }
@@ -145,5 +210,20 @@ public final class RuinLootSC {
 
     private static ItemStack silicon(SiliconMaterial m) {
         return ModItems.siliconMaterial == null ? null : ModItems.siliconMaterial.stackOf(m);
+    }
+
+    /** A random ПЭ-1 module (never the ПЭ-1 itself), null before the items exist. */
+    private static ItemStack randomModule(Random rand) {
+        if (ModItems.empModule == null) {
+            return null;
+        }
+        EmpModule[] mods = EmpModule.values();
+        return ModItems.empModule.stackOf(mods[rand.nextInt(mods.length)]);
+    }
+
+    private static void add(List<ItemStack> out, ItemStack s) {
+        if (s != null) {
+            out.add(s);
+        }
     }
 }

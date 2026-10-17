@@ -399,6 +399,24 @@ public final class MobArmorSC {
     }
 
     /**
+     * Ф4, ПФ-2 (docs/plan-substrate-tech-f4.md §5.3, the coordinator's): an EMP storm's pulse on worn piece `piece` - suppressed
+     * for `ticks` (the storm's own 3..4 s, not EmpMathSC's by suit), the usual immunity after it; an immune piece, or none of
+     * the mod's there: nothing. No Slowness, no shield of its own to spare (a suppressed Exo / Singular chestplate drops the
+     * shield, as a Point does). @return it was suppressed now
+     */
+    public boolean stormHit(int piece, int ticks) {
+        if (!server() || piece < 0 || piece > 3 || ticks <= 0 || pieceSuit(mob, piece) == null || immune(piece) || !ConfigSC.empEnabled) {
+            return false;
+        }
+        long now = now();
+        long until = Math.max(suppressedUntil[piece], now + ticks);
+        suppressedUntil[piece] = until;
+        immuneUntil[piece] = until + EmpMathSC.immunityTicks(ConfigSC.empImmunitySeconds);
+        sync();
+        return true;
+    }
+
+    /**
      * Server, siphon: takes up to `eu` EU out of the reserve (units x the suit's euPerDamage; less than 1 EU left counts
      * as empty). @return EU taken
      */

@@ -50,6 +50,10 @@ import net.minecraftforge.event.ForgeEventFactory;
  * flight, and the first particle - none left (it died, its chunk unloaded): the lowest entity id takes over; two: the higher
  * one gives up. An egg's particle is a swarm of its own.
  * <p>
+ * Ф4, package S (docs/plan-substrate-tech-f4.md §6.3, ПН-9): «Эхо моста» - the particles that slipped through a bridge without
+ * the Portal Shield (spawnEcho, BridgeEchoSC): a swarm of their own at the arrival, not «born in Si-14» (no loot), draining
+ * nothing outside the Substrate (feed's rule); NBT NBT_ECHO (long, the world total time they fade at) - then sparks and gone.
+ * <p>
  * The drain, once a second a particle (staggered by the entity id): ARMOUR_DRAIN / (the swarm's size) of the capacity of
  * each worn ItemArmorSC piece of every survival player within ARMOUR_REACH (ItemArmorSC.discharge), and MACHINE_DRAIN / (the
  * size) of the buffer of every TileEntityEnergyBase within MACHINE_REACH, the swarm's whole at most MACHINE_DRAIN_CAP EU a
@@ -86,8 +90,12 @@ public class EntityNaniteSC extends EntitySubstrateMobSC implements IEmpReactive
     public static final int DW_SWARM = 20, DW_STATE = 21;
     public static final int STATE_FIRST = 1, STATE_SPLIT = 2;
     public static final String NBT_SWARM = "scSwarm", NBT_FLAGS = "scSwarmFlags";
+    /** Ф4, ПН-9: an echo particle's fade time (world total time; BridgeEchoSC.ECHO_NBT). */
+    public static final String NBT_ECHO = "scEcho";
 
     private long swarm;
+    /** Ф4, ПН-9: the world total time an echo particle fades at; 0 - not an echo's. */
+    private long echoUntil;
     /** Seconds fed (in memory: a reload starts it again). */
     private int fed;
     /** The last count: mates (itself included), their middle (none yet: its own place). */
@@ -154,6 +162,46 @@ public class EntityNaniteSC extends EntitySubstrateMobSC implements IEmpReactive
             }
         }
         return made;
+    }
+
+    /**
+     * Ф4, package S (ПН-9, BridgeEchoSC): `count` echo particles round (x, y, z) in any world - one new swarm, NOT «born in
+     * Si-14» (no loot), within the caps (12 to a swarm and to a 32 x 32 area) and other mods' CheckSpawn; each fades `lifeTicks`
+     * later (NBT_ECHO). Server. @return how many particles appeared
+     */
+    public static int spawnEcho(World w, double x, double y, double z, int count, int lifeTicks, Random rand) {
+        if (w == null || w.isRemote || count <= 0) {
+            return 0;
+        }
+        int room = Math.min(Math.min(count, SWARM_CAP), SWARM_CAP - inArea(w, x, z));
+        long id = rand.nextLong() | 1L, fade = w.getTotalWorldTime() + Math.max(1, lifeTicks);
+        int made = 0;
+        for (int k = 0; k < room; k++) {
+            EntityNaniteSC e = new EntityNaniteSC(w);
+            for (int t = 0; t < 4; t++) {
+                boolean last = t == 3;
+                double px = last ? x : x + rand.nextGaussian() * 0.8D, py = y + 0.5D + (last ? 0D : rand.nextDouble() * 1.5D);
+                double pz = last ? z : z + rand.nextGaussian() * 0.8D;
+                e.setLocationAndAngles(px, py, pz, rand.nextFloat() * 360F, 0F);
+                if (w.getCollidingBoundingBoxes(e, e.boundingBox).isEmpty() && !w.isAnyLiquid(e.boundingBox)) {
+                    break;
+                }
+            }
+            if (ForgeEventFactory.canEntitySpawn(e, w, (float) e.posX, (float) e.posY, (float) e.posZ) == Event.Result.DENY) {
+                continue;
+            }
+            e.setSwarm(id, made == 0 ? STATE_FIRST : 0);
+            e.echoUntil = fade;
+            if (w.spawnEntityInWorld(e)) {
+                made++;
+            }
+        }
+        return made;
+    }
+
+    /** Ф4, ПН-9: an echo particle (it fades). */
+    public boolean echo() {
+        return echoUntil > 0L;
     }
 
     /** The nanite particles (any swarm) in the AREA x AREA columns round (x, z). */
@@ -233,6 +281,10 @@ public class EntityNaniteSC extends EntitySubstrateMobSC implements IEmpReactive
     public void onLivingUpdate() {
         super.onLivingUpdate();
         if (worldObj.isRemote || isDead) {
+            return;
+        }
+        if (echoUntil > 0L && worldObj.getTotalWorldTime() >= echoUntil) {
+            fade();                                             // Ф4, ПН-9: an echo's time is up
             return;
         }
         if (swarm == 0L) {                                      // an egg's particle: a swarm of its own
@@ -323,6 +375,7 @@ public class EntityNaniteSC extends EntitySubstrateMobSC implements IEmpReactive
         EntityNaniteSC e = new EntityNaniteSC(worldObj);
         e.setLocationAndAngles(posX + (rand.nextDouble() - 0.5D) * 0.4D, posY, posZ + (rand.nextDouble() - 0.5D) * 0.4D, rand.nextFloat() * 360F, 0F);
         e.setSwarm(swarm, STATE_SPLIT);
+        e.echoUntil = echoUntil;                                // Ф4: an echo's split fades with it
         if (BornInSubstrateSC.isBorn(this)) {
             BornInSubstrateSC.mark(e);
         }
@@ -362,6 +415,15 @@ public class EntityNaniteSC extends EntitySubstrateMobSC implements IEmpReactive
         return te instanceof TileEntityEnergyBase && !te.isInvalid() && !(te instanceof TileEntitySettlementCoreSC)
                 && !(te instanceof TileEntityGeneratorSC && ((TileEntityGeneratorSC) te).getGeneratorType() == GeneratorType.CREATIVE)
                 && ((TileEntityEnergyBase) te).getEnergyStored() > 0;
+    }
+
+    /** Ф4, ПН-9: an echo particle fades - a spark burst, gone (no death: no drop, no XP). */
+    private void fade() {
+        if (worldObj instanceof WorldServer) {
+            ((WorldServer) worldObj).func_147487_a("fireworksSpark", posX, posY + 0.2D, posZ, 6, 0.15D, 0.15D, 0.15D, 0.05D);
+        }
+        playSound("random.fizz", 0.3F, 1.8F);
+        setDead();
     }
 
     private void sparks(double x, double y, double z) {
@@ -519,6 +581,9 @@ public class EntityNaniteSC extends EntitySubstrateMobSC implements IEmpReactive
         super.writeEntityToNBT(tag);
         tag.setLong(NBT_SWARM, swarm);
         tag.setByte(NBT_FLAGS, (byte) state());
+        if (echoUntil > 0L) {
+            tag.setLong(NBT_ECHO, echoUntil);
+        }
     }
 
     @Override
@@ -527,6 +592,7 @@ public class EntityNaniteSC extends EntitySubstrateMobSC implements IEmpReactive
         if (tag.hasKey(NBT_SWARM)) {
             setSwarm(tag.getLong(NBT_SWARM), tag.getByte(NBT_FLAGS));
         }
+        echoUntil = tag.getLong(NBT_ECHO);
     }
 
     // ------------------------------------------------------------------ sounds: a dry rustle (vanilla's), the first particle only
