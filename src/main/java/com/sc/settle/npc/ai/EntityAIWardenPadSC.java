@@ -13,7 +13,7 @@ import net.minecraft.world.WorldServer;
 /**
  * PACKAGE N (rule ПГ-3, «смена караула»): a guard with nothing to fight whose reserve is below
  * EntityWardenSC.RECHARGE_BELOW walks to the nearest free charge pad of the guard square (P_PAD + "0".."3"; all taken - the
- * nearest one: it waits its turn beside it) and stands on it, PAD_UNITS into the reserve every PAD_EVERY ticks
+ * nearest one: it waits its turn beside it) and stands on it, EntityWardenSC.padUnits into the reserve every PAD_EVERY ticks
  * (MobArmorSC.recharge - nothing while a ПЭ-1 Siphon draws it) until RECHARGE_UNTIL. A spark runs from the pad into the
  * suit each time - the players see who is «down». A fight or the leash takes it off the pad. Mutex 3. Ф3: the City
  * Commandant only uses the pads within EntityWardenSC.PLAZA_STAY of his plaza (a City's two front ones).
@@ -81,7 +81,7 @@ public class EntityAIWardenPadSC extends EntityAIBase {
         }
         g.getNavigator().clearPathEntity();
         if (++charging % EntityWardenSC.PAD_EVERY == 0) {
-            armor.recharge(EntityWardenSC.PAD_UNITS);
+            armor.recharge(EntityWardenSC.padUnits(armor.reserveMax));     // ПГ-17: a share of the full reserve
             if (g.worldObj instanceof WorldServer) {            // a turquoise spark off the pad into the suit
                 WorldServer ws = (WorldServer) g.worldObj;
                 for (int i = 0; i < 4; i++) {

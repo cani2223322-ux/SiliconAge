@@ -95,7 +95,8 @@ import net.minecraftforge.common.util.FakePlayer;
  * belt PATROL_OUT past it (the first HEART_GUARDS of them at the Heart at night), the Seniors at their posts (towers,
  * the gate); below RECHARGE_BELOW reserve it walks to a charge pad (P_PAD*) and recharges there to RECHARGE_UNTIL; it nods to a
  * «Партнёр» (EntityAIWardenNodSC);</li>
- * <li>a ПЭ-1 Point by a player: SettlementProtectSC.violation POINT_WARDEN first, then the armour's answer;</li>
+ * <li>a ПЭ-1 Point by a player: SettlementProtectSC.violation POINT_WARDEN first, then the armour's answer (2026-10-18, ПГ-20: any
+ * ПЭ-1 use - the Pulse and every Siphon second too);</li>
  * <li>death: SettlementRegistrySC.slotDied, the sparks, the equipment gone - only experience.</li>
  * </ul>
  * A stray (a spawn egg's, settlement -1) is a Sentry that only answers who hits it.
@@ -120,9 +121,14 @@ import net.minecraftforge.common.util.FakePlayer;
  * </ul>
  * Both come back from the Clone Capsule after NpcKindSC.CHIEF_RESPAWN_TICKS; a Point at either is a provocation as at
  * any guard (ПГ-14). Their looks: RenderWardenSC (their own skins, the Captain's cloak and the Commandant's mantle).
+ * <p>
+ * 2026-10-18 (docs/plan-substrate.md §25а, rules ПГ-15..ПГ-20): every rank's suit works as the player's of its tier - WardenSuitSC
+ * (the reserve of a charged player set, the plating proof against piercing, Regeneration, the dome's recharge, the heat, the Shield
+ * function, the Singular perks); HP 60 / 70 / 80 / 120; «Казнь» as for a player (IExecuteImmuneSC); ПЭ-1 in every mode, the Siphon's
+ * draw vented (EmpMobSC.ventsAll). A warden saved before is refitted on loading (WardenSuitSC.VERSION).
  */
 public class EntityWardenSC extends EntityCreature implements INpc, ISettlementGuardSC, IArmoredMobSC, IEmpTargetSC, ISubstrateNativeSC,
-        com.sc.mob.IMobActionSC {
+        com.sc.mob.IMobActionSC, com.sc.mob.IExecuteImmuneSC {
 
     public static final String NAME = "warden";
     /** DataWatcher (fixed): the rank (byte, NpcKindSC ordinal), the name code (int), the alert (byte, GuardAlertSC.CALM..ATTACKING). */
@@ -130,13 +136,15 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     /** Ф3 (the coordinator's, docs/plan-substrate-tech-f3.md §2.4): the telegraph (byte, IMobActionSC.ACT_*) - the Captain's wind-up, the Commandant's Pulse. 28..31 package S. */
     public static final int DW_ACTION = 27;
 
-    /** ПГ-2: HP by rank (Sentry, Senior Warden); its walk; the path search's reach (NpcNavSC walks farther in legs). TODO(balance) */
-    public static final double SENTRY_HP = 40D, SENIOR_HP = 50D, SPEED = 0.3D, FOLLOW = 24D;
+    /**
+     * ПГ-2: HP by rank (Sentry, Senior Warden; 2026-10-18, ПГ-15: 40 / 50 before - with the player's plating a Quantum blade's
+     * reference fight is WardenSuitSC.fightSeconds); its walk; the path search's reach (NpcNavSC walks farther in legs). TODO(balance)
+     */
+    public static final double SENTRY_HP = 60D, SENIOR_HP = 70D, SPEED = 0.3D, FOLLOW = 24D;
     /** Multiples of SPEED: the patrol, a chase, the way back from past the leash. */
     public static final double PATROL = 0.7D, CHASE = 1.0D, BACK = 0.9D;
-    /** ПГ-2: 4/4 of the rank's suit; its reserve - what blockable damage of RESERVE_* drains (MobArmorSC.spawnReserveForDamage). */
+    /** ПГ-2: 4/4 of the rank's suit; its reserve - ПГ-15, WardenSuitSC.reserveOf (a charged player set: Nano 800, Quantum 2000 units). */
     public static final int PIECES = 4;
-    public static final float SENTRY_RESERVE_MIN = 20F, SENTRY_RESERVE_MAX = 40F, SENIOR_RESERVE_MIN = 40F, SENIOR_RESERVE_MAX = 70F;
     /** The dome's turquoise on the pieces (ModelArmorGlowSC.COLORS[5]) - set once, when it is dressed. */
     public static final int GLOW = 5;
     /** ПГ-2: a blade, else a beam gun - half and half. TODO(balance) */
@@ -151,8 +159,8 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     public static final int SENTRY_AIM_TICKS = EntityAIBeamAttackSC.AIM_TICKS, SENIOR_AIM_TICKS = EntityAIBeamAttackSC.AIM_TICKS,
             RIFLE_RELOAD_SPREAD = 20;
     /**
-     * ПГ-3: below RECHARGE_BELOW of its reserve it goes to a charge pad and stands there until RECHARGE_UNTIL, PAD_UNITS
-     * every PAD_EVERY ticks. TODO(balance)
+     * ПГ-3: below RECHARGE_BELOW of its reserve it goes to a charge pad and stands there until RECHARGE_UNTIL, every PAD_EVERY
+     * ticks WardenSuitSC.padUnits (ПГ-17: PAD_SHARE of the full reserve a second, PAD_UNITS at least). TODO(balance)
      */
     public static final float RECHARGE_BELOW = 0.3F, RECHARGE_UNTIL = 0.9F, PAD_UNITS = 2F;
     public static final int PAD_EVERY = 20;
@@ -172,8 +180,7 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     // ---- Ф3 (§6.4, §6.5): the Captain and the Commandant
     /** ПГ-11 / ПГ-12: HP. */
     public static final double CAPTAIN_HP = 80D, COMMANDANT_HP = 120D;
-    /** ПГ-11 / ПГ-12: the reserve - blockable damage that drains it (MobArmorSC.spawnReserveForDamage). */
-    public static final float CAPTAIN_RESERVE_MIN = 70F, CAPTAIN_RESERVE_MAX = 110F, COMMANDANT_RESERVE_MIN = 150F, COMMANDANT_RESERVE_MAX = 250F;
+    /** ПГ-11 / ПГ-12: the reserve - ПГ-15, WardenSuitSC.CAPTAIN_RESERVE / COMMANDANT_RESERVE (1600 / 3000 units). */
     /** ПГ-11: the Captain's Armour Chip (MobArmorSC.defenseTier: suppression -30%, the Siphon -40%). TODO(balance) */
     public static final int CAPTAIN_DEFENSE_TIER = 1;
     /** Their blades: the Exo Blade 10, the Singular Blade 12 (MobCombatSC's Singular 13..14 is the hostiles'). TODO(balance) */
@@ -195,6 +202,8 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     public static final int COMMANDANT_LEVEL = SingularLevel.MAX;
 
     private final MobArmorSC armor;
+    /** 2026-10-18, ПГ-15..ПГ-20: the suit's functions on top of the armour (heat, Regeneration, the Shield, the Singular perks). */
+    private final WardenSuitSC suit;
     protected int settlementId = -1, slot = -1;
     /** The core column {x, z} of the record bound to (ISettlementMemberSC.boundCore), null unknown. */
     protected int[] boundCore;
@@ -212,6 +221,8 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         super(world);
         setSize(0.6F, 1.95F);
         armor = new MobArmorSC(this);
+        armor.pierceProof = true;                                      // ПГ-16: before anything is fitted (a /summon too)
+        suit = new WardenSuitSC(this);
         link = new NpcLinkSC(this);
         for (int i = 0; i < 5; i++) {
             setEquipmentDropChance(i, 0F);
@@ -374,10 +385,10 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         setCurrentItemOrArmor(0, weapon);
         armor.helium = senior;
         armor.emergency = false;
-        armor.regenPerSecond = 0F;
-        float[] r = reserveFor(rank);
-        armor.spawnReserveForDamage(r[0], r[1]);
-        getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(senior ? SENIOR_HP : SENTRY_HP);
+        WardenSuitSC.fit(armor, rank, true);
+        suit.heat = 0;
+        suit.hot = false;
+        getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(hpOf(rank));
         setHealth(getMaxHealth());
         experienceValue = senior ? XP_SENIOR : XP_SENTRY;
     }
@@ -406,11 +417,11 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         setCurrentItemOrArmor(0, chiefBlade(rank));
         armor.helium = true;
         armor.emergency = false;
-        armor.regenPerSecond = 0F;
         armor.defenseTier = commandant ? 0 : CAPTAIN_DEFENSE_TIER;
-        float[] r = reserveFor(rank);
-        armor.spawnReserveForDamage(r[0], r[1]);
-        getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(commandant ? COMMANDANT_HP : CAPTAIN_HP);
+        WardenSuitSC.fit(armor, rank, true);
+        suit.heat = 0;
+        suit.hot = false;
+        getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(hpOf(rank));
         setHealth(getMaxHealth());
         experienceValue = xpOf(rank);
     }
@@ -431,15 +442,25 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         return rank == NpcKindSC.SENIOR_WARDEN ? ArmorSuit.QUANTUM : ArmorSuit.NANO;
     }
 
-    /** ПГ-2 / ПГ-11 / ПГ-12: {min, max} blockable damage that drains the rank's reserve (pure). */
-    public static float[] reserveFor(NpcKindSC rank) {
+    /** ПГ-15: the rank's full reserve, damage units (pure; WardenSuitSC.reserveOf). */
+    public static float reserveOf(NpcKindSC rank) {
+        return WardenSuitSC.reserveOf(rank);
+    }
+
+    /** ПГ-2 / ПГ-11 / ПГ-12: the rank's HP (pure). */
+    public static double hpOf(NpcKindSC rank) {
         if (rank == NpcKindSC.CAPTAIN) {
-            return new float[]{CAPTAIN_RESERVE_MIN, CAPTAIN_RESERVE_MAX};
+            return CAPTAIN_HP;
         }
         if (rank == NpcKindSC.COMMANDANT) {
-            return new float[]{COMMANDANT_RESERVE_MIN, COMMANDANT_RESERVE_MAX};
+            return COMMANDANT_HP;
         }
-        return rank == NpcKindSC.SENIOR_WARDEN ? new float[]{SENIOR_RESERVE_MIN, SENIOR_RESERVE_MAX} : new float[]{SENTRY_RESERVE_MIN, SENTRY_RESERVE_MAX};
+        return rank == NpcKindSC.SENIOR_WARDEN ? SENIOR_HP : SENTRY_HP;
+    }
+
+    /** ПГ-3: units a charging plate gives every PAD_EVERY ticks (EntityAIWardenPadSC). */
+    public static float padUnits(float reserveMax) {
+        return WardenSuitSC.padUnits(reserveMax);
     }
 
     /** ПГ-9 / ПГ-13: the experience a rank gives (pure). */
@@ -707,6 +728,17 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         return armor;
     }
 
+    /** ПГ-15..ПГ-20: the suit's functions (heat, Regeneration...), server state. */
+    public WardenSuitSC suit() {
+        return suit;
+    }
+
+    /** ПГ-16: «Казнь» finishes a warden only where it may finish players (weapons.bladeExecutePlayers, off by default). */
+    @Override
+    public boolean executeImmune() {
+        return !com.sc.util.ConfigSC.bladeExecutePlayers;
+    }
+
     /** ПГ-9: never drops the worn equipment, Looting or not. */
     @Override
     protected void dropEquipment(boolean recentlyHit, int looting) {
@@ -741,6 +773,7 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
                 return;                                         // ПВ-8: a bound guard out of the Substrate is removed
             }
             armor.serverTick();
+            suit.serverTick();
             if ((pulse != null || kind() == NpcKindSC.COMMANDANT) && (worldObj.getTotalWorldTime() + getEntityId()) % 5L == 0L) {
                 chiefDuty();                                    // Ф3: after the AI's update - its task list is free to change
             }
@@ -861,6 +894,7 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     public void writeEntityToNBT(NBTTagCompound tag) {
         super.writeEntityToNBT(tag);
         armor.write(tag);
+        suit.write(tag);
         NBTTagCompound m = new NBTTagCompound();
         m.setInteger("id", settlementId);
         m.setInteger("slot", slot);
@@ -887,6 +921,17 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         setKind(NpcKindSC.of(tag.getByte("scKind")));
         setNameCode(tag.getInteger("scName"));
         experienceValue = xpOf(kind());
+        boolean old = suit.read(tag) < WardenSuitSC.VERSION;
+        if (armor.suit() != null) {
+            // the transient flags; the saved reserve's share stays. ПГ-15: a warden saved before its suit worked as the player's
+            // gets the rank's reserve (that share of it) and HP
+            WardenSuitSC.fit(armor, kind(), false);
+            if (old) {
+                getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(hpOf(kind()));
+            }
+        }
+        suit.version = WardenSuitSC.VERSION;
+        armor.overheated = suit.hot;
         link.forget();
     }
 
@@ -901,21 +946,36 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
     }
 
     /**
-     * ПГ-6 / ПГ-14: a Point by a real player provokes (SettlementProtectSC.violation POINT_WARDEN) - before the armour's
-     * answer. Ф3 (ПГ-11): a Point that reaches the Captain during his wind-up breaks it off (EntityAICaptainBlowSC).
+     * ПГ-6 / ПГ-14 / ПГ-20: any ПЭ-1 use on a guard by a real player - a Point, a Pulse, a Siphon stream's every second - is an
+     * attack on it (SettlementProtectSC.violation POINT_WARDEN: the warning, the -40 once a provocation, the guards' answer),
+     * before the armour's answer. Ф3 (ПГ-11): a Point or a Pulse that reaches the Captain during his wind-up breaks it off
+     * (EntityAICaptainBlowSC). ПГ-18: a hit that reached the armour heats the suit as a player's.
      */
     @Override
     public EmpSC.HitResult empHit(Entity shooter, EmpMode mode, boolean upgraded, int[] pieces) {
-        if (mode == EmpMode.POINT && !worldObj.isRemote && shooter instanceof EntityPlayer && !(shooter instanceof FakePlayer)) {
+        empProvokes(shooter);
+        if (mode != EmpMode.SIPHON && !worldObj.isRemote && mobAction() == com.sc.mob.IMobActionSC.ACT_WINDUP) {
+            windupBroken = true;
+        }
+        EmpSC.HitResult r = armor.empHit(shooter, mode, upgraded, pieces);
+        if (r.anyArmour && !worldObj.isRemote) {
+            boolean allImmune = true;
+            for (int i = 0; i < 4; i++) {
+                allImmune &= r.ticks[i] <= 0;
+            }
+            r.heat = suit.empHeat(mode, allImmune);
+        }
+        return r;
+    }
+
+    /** ПГ-20: a real player's ПЭ-1 at this guard (any mode) - SettlementProtectSC.violation POINT_WARDEN with its settlement. */
+    private void empProvokes(Entity shooter) {
+        if (!worldObj.isRemote && shooter instanceof EntityPlayer && !(shooter instanceof FakePlayer)) {
             SettlementRegistrySC.Settlement s = link.get();
             if (s != null) {
                 SettlementProtectSC.violation((EntityPlayer) shooter, s, ViolationRulesSC.POINT_WARDEN);
             }
         }
-        if (mode == EmpMode.POINT && !worldObj.isRemote && mobAction() == com.sc.mob.IMobActionSC.ACT_WINDUP) {
-            windupBroken = true;
-        }
-        return armor.empHit(shooter, mode, upgraded, pieces);
     }
 
     @Override
@@ -963,8 +1023,13 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         return armor.drainEu(eu);
     }
 
+    /** ПГ-20: a Siphon stream's second - an attack on the guard as any ПЭ-1 use; the suit heats (ПГ-18), its recharge waits. */
     @Override
     public void empStreamSecond(Entity shooter) {
+        empProvokes(shooter);
         armor.streamSecond(shooter);
+        if (!worldObj.isRemote && armor.suit() != null) {
+            suit.empHeat(EmpMode.SIPHON, false);
+        }
     }
 }

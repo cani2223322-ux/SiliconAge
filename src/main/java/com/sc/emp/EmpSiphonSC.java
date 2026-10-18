@@ -35,7 +35,8 @@ import net.minecraft.world.World;
  * a Substrate mob in the mod's armour (IEmpTargetSC, EmpMobSC) - its reserve as EU (units x the suit's EU a unit),
  * the rate by its chestplate's suit as for a player, its stream second instead of EmpSC.streamSecond (its recharge
  * stops; no heat or boil), no «Страж». One stream delivers at most MobArmorMathSC.MOB_SIPHON_STREAM_CAP EU out of a
- * mob: past that the mob keeps losing its reserve and the rest is vented. The stream's target goes through the
+ * mob: past that the mob keeps losing its reserve and the rest is vented (2026-10-18, ПГ-20: a dome's guard gives nothing at all -
+ * EmpMobSC.ventsAll: every limit vents it all, no receiver needed). The stream's target goes through the
  * target* helpers below: for a player they are exactly the old calls, so the player path is unchanged.
  *
  * Ф3 (docs/plan-substrate-tech-f3.md §3.3, ПБ-19): a mob's raised personal EMP screen takes the stream's first second (its
@@ -109,13 +110,14 @@ public final class EmpSiphonSC {
         }
         int r = EmpGunLogicSC.refusal(p, target, true);
         if (r == EmpNetSC.OK && !(target instanceof EntityPlayer)) {
-            r = EmpMobSC.refusal(target, EmpMode.SIPHON);       // Ф2: a settlement's Tuner and its bound guard
+            r = EmpMobSC.refusal(target, EmpMode.SIPHON);       // Ф2: a settlement's Tuner
         }
         if (r != EmpNetSC.OK) {
             EmpGunLogicSC.say(p, "sc.emp.refuse." + r);
             return false;
         }
-        if (pickReceiver(p, gun, null) < 0) {
+        boolean vents = EmpMobSC.ventsAll(target);              // ПГ-20: a dome's guard - all of it into sparks, no receiver needed
+        if (!vents && pickReceiver(p, gun, null) < 0) {
             EmpGunLogicSC.say(p, "sc.emp.noreceiver");
             return false;
         }
@@ -129,6 +131,9 @@ public final class EmpSiphonSC {
         u.throttled = ItemEmpGunSC.overheated(gun);                 // an overheated gun starts the stream weakened
         if (u.throttled) {
             EmpGunLogicSC.say(p, "sc.emp.siphon.throttled", EmpMathSC.SIPHON_THROTTLED_PCT, EmpMathSC.GUN_HEAT_RECOVER);
+        }
+        if (vents) {
+            EmpGunLogicSC.say(p, "sc.emp.siphon.vented.guard");
         }
         EmpGunLogicSC.USES.put(p, u);
         return true;
@@ -256,7 +261,9 @@ public final class EmpSiphonSC {
             return;
         }
         int limit = ItemEmpGunSC.limitOf(gun);
-        if (EmpShotSC.limitReached(limit, armourCharge(p), armourCapacity(p))) {
+        // ПГ-20: a dome's guard gives nothing - every limit vents it all (the stream runs on, the sparks fly)
+        boolean ventAll = EmpMobSC.ventsAll(target);
+        if (!ventAll && EmpShotSC.limitReached(limit, armourCharge(p), armourCapacity(p))) {
             stop(p, u, "sc.emp.siphon.stop.limit");
             return;
         }
@@ -265,9 +272,9 @@ public final class EmpSiphonSC {
             stop(p, u, "sc.emp.siphon.stop.empty");
             return;
         }
-        boolean stopWhenFull = EmpShotSC.stopsWhenFull(limit);
+        boolean stopWhenFull = !ventAll && EmpShotSC.stopsWhenFull(limit);
         // ПБ-12: what a mob may still give this stream (a player: no cap); «пока приёмник не полон» stops at the cap
-        long capLeft = EmpMobSC.streamRoomLeft(target, u);
+        long capLeft = ventAll ? 0L : EmpMobSC.streamRoomLeft(target, u);
         if (capLeft <= 0 && stopWhenFull) {
             EmpGunLogicSC.say(p, "sc.emp.siphon.mobcap.stop", MobArmorMathSC.MOB_SIPHON_STREAM_CAP);
             stop(p, u, null);
@@ -289,7 +296,7 @@ public final class EmpSiphonSC {
         int got = stopWhenFull ? give(p, u, recv, want) : giveAll(p, u, want);
         u.received += got;
         EmpMobSC.streamDelivered(target, got);
-        if (!stopWhenFull && capLeft != Long.MAX_VALUE && capLeft > 0 && got >= capLeft) {
+        if (!ventAll && !stopWhenFull && capLeft != Long.MAX_VALUE && capLeft > 0 && got >= capLeft) {
             EmpGunLogicSC.say(p, "sc.emp.siphon.mobcap", MobArmorMathSC.MOB_SIPHON_STREAM_CAP);   // once: the cap is reached now
         }
         int vented = arrived - got;

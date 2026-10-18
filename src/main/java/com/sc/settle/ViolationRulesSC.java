@@ -10,7 +10,10 @@ package com.sc.settle;
  */
 public final class ViolationRulesSC {
 
-    /** Kinds (lang sc.settle.violation.<KEYS[kind]>). The first four are «block» violations - the field's refusals. */
+    /**
+     * Kinds (lang sc.settle.violation.<KEYS[kind]>). The first four are «block» violations - the field's refusals. POINT_WARDEN
+     * (2026-10-18, ПГ-20): any ПЭ-1 use at a guard - a Point, a Pulse, a Siphon stream (EntityWardenSC.empHit / empStreamSecond).
+     */
     public static final int BREAK = 0, PLACE = 1, USE = 2, FIRE = 3, HIT_TUNER = 4, HIT_WARDEN = 5, POINT_WARDEN = 6, KILL_WARDEN = 7;
     public static final String[] KEYS = {"break", "place", "use", "fire", "hitTuner", "hitWarden", "pointWarden", "killWarden"};
     /** The escalation counts block violations within 60 s. */

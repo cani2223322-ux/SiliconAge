@@ -674,32 +674,78 @@ public final class WorldTestSettlementSC {
             chiefs += captain || commandant ? 1 : 0;
             // Ф3 (docs/plan-substrate-tech-f3.md §6.4, §6.5): the Captain's Exo with helium, the Commandant's Singular armour
             ArmorSuit want = commandant ? ArmorSuit.SINGULAR : captain ? ArmorSuit.EXO : senior ? ArmorSuit.QUANTUM : ArmorSuit.NANO;
-            String rank = commandant ? "COMMANDANT" : captain ? "CAPTAIN" : senior ? "SENIOR" : "SENTRY";
-            float planLo = commandant ? 150F : captain ? 70F : senior ? 40F : 20F, planHi = commandant ? 250F : captain ? 110F : senior ? 70F : 40F;
             int pieces = 0;
             for (int t = 0; t < 4; t++) {
                 ItemStack s = g.getEquipmentInSlot(4 - t);
                 pieces += s != null && s.getItem() instanceof ItemArmorSC && ((ItemArmorSC) s.getItem()).getSuit() == want ? 1 : 0;
             }
-            // RESERVE_* are the blockable damage the reserve drains by (MobArmorSC.spawnReserveForDamage): the reserve is
-            // that times the worn suit's absorb share
-            int worn = g.mobArmor().wornPoints();
-            float lo = com.sc.mob.MobArmorMathSC.reserveFor(num(EntityWardenSC.class, rank + "_RESERVE_MIN", planLo), worn);
-            float hi = com.sc.mob.MobArmorMathSC.reserveFor(num(EntityWardenSC.class, rank + "_RESERVE_MAX", planHi), worn);
-            float max = g.mobArmor().reserveMax;
+            // 2026-10-18, ПГ-15: the rank's full reserve (a charged player set / the chiefs' own) - a guard saved before is refitted on loading
+            float full = EntityWardenSC.reserveOf(g.kind()), max = g.mobArmor().reserveMax;
+            boolean hp = Math.abs(g.getMaxHealth() - EntityWardenSC.hpOf(g.kind())) < 0.01D;
             boolean cancelled = MinecraftForge.EVENT_BUS.post(new LivingAttackEvent(g, DamageSource.causePlayerDamage(fake), 4F));
-            boolean siphon = EmpMobSC.refusal(g, EmpMode.SIPHON) != EmpNetSC.OK;
-            if (pieces != 4 || (senior || captain) && !g.mobArmor().helium || max < lo - 0.01F || max > hi + 0.01F || !g.empArmoured() || !cancelled
-                    || EmpMobSC.refusal(g, EmpMode.PULSE) == EmpNetSC.OK || !siphon) {
+            // ПГ-20: the Point, the Pulse and the Siphon all work on a guard now
+            boolean works = EmpMobSC.refusal(g, EmpMode.POINT) == EmpNetSC.OK && EmpMobSC.refusal(g, EmpMode.PULSE) == EmpNetSC.OK
+                    && EmpMobSC.refusal(g, EmpMode.SIPHON) == EmpNetSC.OK && EmpMobSC.ventsAll(g);
+            if (pieces != 4 || (senior || captain) && !g.mobArmor().helium || Math.abs(max - full) > 0.01F || !hp || !g.mobArmor().pierceProof
+                    || !g.empArmoured() || !cancelled || !works) {
                 bad.append(' ').append(g.kind()).append(": ").append(pieces).append(" pieces of ").append(want).append(senior ? ", helium " + g.mobArmor().helium : "")
-                        .append(", reserve ").append(max).append(" (").append(lo).append("..").append(hi).append("), armoured ").append(g.empArmoured())
-                        .append(", a FakePlayer's blow cancelled ").append(cancelled).append(", the Siphon refused ").append(siphon);
+                        .append(", reserve ").append(max).append(" (").append(full).append("), HP ").append(g.getMaxHealth()).append(", pierce-proof ")
+                        .append(g.mobArmor().pierceProof).append(", armoured ").append(g.empArmoured()).append(", a FakePlayer's blow cancelled ")
+                        .append(cancelled).append(", Point / Pulse / Siphon allowed, the Siphon vented ").append(works);
             }
         }
-        print(bad.length() == 0, "the guards (package N, ПГ-2, ПГ-3): " + sentries + " Sentries in Nano 4/4, " + seniors + " Senior Wardens in Quantum 4/4 with"
-                + " helium" + (chiefs > 0 ? ", " + chiefs + " Ф3 chiefs (the Captain in Exo with helium, the Commandant in Singular armour)" : "") + ", the"
-                + " reserve within the rank's bounds, armoured for PE-1 and spared by its Pulse and Siphon, a FakePlayer's blow in the belt cancelled"
-                + (bad.length() == 0 ? "" : " - NOT:" + bad));
+        print(bad.length() == 0, "the guards (package N, ПГ-2, ПГ-3, ПГ-15, ПГ-20): " + sentries + " Sentries in Nano 4/4, " + seniors + " Senior Wardens in"
+                + " Quantum 4/4 with helium" + (chiefs > 0 ? ", " + chiefs + " Ф3 chiefs (the Captain in Exo with helium, the Commandant in Singular armour)" : "")
+                + ", the rank's reserve and HP, the plating pierce-proof, armoured for PE-1 - the Point, the Pulse and the Siphon (vented) all allowed, a"
+                + " FakePlayer's blow in the belt cancelled" + (bad.length() == 0 ? "" : " - NOT:" + bad));
+        empProvokes(gs.get(0));
+    }
+
+    /**
+     * 6a (2026-10-18, ПГ-20): any ПЭ-1 use on a guard by a real player is an attack on it - a Pulse (the whole suit suppressed) and a
+     * Siphon stream's second each put the guards after that player (GuardAlertSC.provoked); the test's players are forgotten after.
+     * A Tuner still refuses every mode (NO_OWN).
+     */
+    private void empProvokes(EntityWardenSC g) {
+        long now = w.getTotalWorldTime();
+        WorldTestArmourerSC.StationPlayer pulser = new WorldTestArmourerSC.StationPlayer(w, new GameProfile(UUID.fromString(
+                "5c0e7a1e-5e77-4000-8000-00000000f010"), "[SCTestPulser]"));
+        WorldTestArmourerSC.StationPlayer drainer = new WorldTestArmourerSC.StationPlayer(w, new GameProfile(UUID.fromString(
+                "5c0e7a1e-5e77-4000-8000-00000000f011"), "[SCTestDrainer]"));
+        pulser.setLocationAndAngles(g.posX + 2, g.posY, g.posZ, 0F, 0F);
+        drainer.setLocationAndAngles(g.posX - 2, g.posY, g.posZ, 0F, 0F);
+        com.sc.settle.GuardAlertSC.forget(rec.id, pulser);
+        com.sc.settle.GuardAlertSC.forget(rec.id, drainer);
+        boolean before = com.sc.settle.GuardAlertSC.provoked(rec.id, pulser.getUniqueID(), now)
+                || com.sc.settle.GuardAlertSC.provoked(rec.id, drainer.getUniqueID(), now);
+        com.sc.emp.EmpSC.HitResult r = g.empHit(pulser, EmpMode.PULSE, false, new int[]{0, 1, 2, 3});
+        int suppressed = 0;
+        for (int i = 0; i < 4; i++) {
+            suppressed += g.mobArmor().suppressed(i) ? 1 : 0;
+        }
+        boolean pulsed = com.sc.settle.GuardAlertSC.provoked(rec.id, pulser.getUniqueID(), now);
+        g.empStreamSecond(drainer);
+        boolean drained = com.sc.settle.GuardAlertSC.provoked(rec.id, drainer.getUniqueID(), now);
+        com.sc.settle.GuardAlertSC.forget(rec.id, pulser);
+        com.sc.settle.GuardAlertSC.forget(rec.id, drainer);
+        boolean tunerRefuses = true;
+        List<EntityTunerSC> ts = tuners();
+        if (!ts.isEmpty()) {
+            for (EmpMode m : EmpMode.values()) {
+                tunerRefuses &= EmpMobSC.refusal(ts.get(0), m) == EmpNetSC.NO_OWN;
+            }
+        }
+        print(!before && r.anyArmour && suppressed == 4 - countImmune(r) && pulsed && drained && tunerRefuses, "PE-1 on a guard (ПГ-20): a real player's"
+                + " Pulse at " + g.kind() + " - " + suppressed + " pieces suppressed, the guards after him " + pulsed + "; a Siphon stream's second by"
+                + " another - after him too " + drained + "; a Tuner refuses every mode (NO_OWN) " + tunerRefuses + (ts.isEmpty() ? " (no Tuner loaded)" : ""));
+    }
+
+    private static int countImmune(com.sc.emp.EmpSC.HitResult r) {
+        int n = 0;
+        for (boolean b : r.immune) {
+            n += b ? 1 : 0;
+        }
+        return n;
     }
 
     /** 7a: a Tuner killed (not by a player) - its slot DEAD; its time put in the past for the Clone Capsule. */

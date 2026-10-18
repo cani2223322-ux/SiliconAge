@@ -40,7 +40,9 @@ import com.sc.settle.SettlementSC;
 import com.sc.settle.SettlementSizeSC;
 import com.sc.settle.ViolationRulesSC;
 import com.sc.settle.gen.SettlementLayoutSC;
+import com.sc.settle.npc.EntityWardenSC;
 import com.sc.settle.npc.NpcNamesSC;
+import com.sc.settle.npc.WardenSuitSC;
 import com.sc.settle.trade.ContractTableSC;
 import com.sc.settle.trade.TradeOfferSC;
 import com.sc.settle.trade.TradeRulesSC;
@@ -111,7 +113,7 @@ public final class SelfTestSettlementSC {
     private static final String[] TOOLTIPS = {"settlementCore", "showcase", "dock.plate", "dock.beacon", "substrateRock.settlementBrick", "creditChip",
             "returnCapsule", "settlementMap", "loot.stolenCargo", "settlementDecor"};
     private static final String[] SECTIONS = {"config", "registry NBT", "registry queries", "sizes and kinds", "names", "reputation", "violations",
-            "layout", "trade", "contracts", "travel", "core", "texts", "handbook"};
+            "layout", "trade", "contracts", "travel", "core", "texts", "wardens' suit", "handbook"};
     /** The default dimension id: the registry keeps any int, the tests need no live one. */
     private static final int DIM = -1414, OTHER_DIM = 7;
     private static final UUID P1 = UUID.fromString("5c0e7a1e-0000-4000-8000-000000000001"), P2 = UUID.fromString("5c0e7a1e-0000-4000-8000-000000000002");
@@ -150,6 +152,7 @@ public final class SelfTestSettlementSC {
             case 10: travel(); break;
             case 11: core(); break;
             case 12: texts(); break;
+            case 13: wardenSuit(); break;
             default: handbook(); break;
         }
     }
@@ -1403,6 +1406,87 @@ public final class SelfTestSettlementSC {
     }
 
     /** The six new articles build with no raw key, their tables have a row per size / level / violation / rank, G on every new thing opens one. */
+    // ------------------------------------------------------------------ 13a. the wardens' suit (2026-10-18, ПГ-15..ПГ-20)
+
+    /** A creature that deals the test blows (no world needed). */
+    private static final class Hitter extends net.minecraft.entity.EntityCreature {
+        Hitter() {
+            super(null);
+        }
+    }
+
+    private static void wardenSuit() {
+        NpcKindSC[] ranks = {NpcKindSC.SENTRY, NpcKindSC.SENIOR_WARDEN, NpcKindSC.CAPTAIN, NpcKindSC.COMMANDANT};
+        // ПГ-15: the reserve - a charged player set (Nano 4 x 100k / 500, Quantum 4 x 1M / 2000) for the Sentry and the Senior, the chiefs' own
+        boolean defaults = com.sc.util.ConfigSC.armorCapacity == 1F && com.sc.util.ConfigSC.armorDamageCost == 1F;
+        float[] want = {defaults ? 800F : WardenSuitSC.playerSetUnits(ArmorSuit.NANO), defaults ? 2000F : WardenSuitSC.playerSetUnits(ArmorSuit.QUANTUM),
+                WardenSuitSC.CAPTAIN_RESERVE, WardenSuitSC.COMMANDANT_RESERVE};
+        StringBuilder got = new StringBuilder();
+        boolean reserves = true;
+        for (int i = 0; i < ranks.length; i++) {
+            float r = EntityWardenSC.reserveOf(ranks[i]);
+            reserves &= Math.abs(r - want[i]) < 0.01F;
+            got.append(i == 0 ? "" : " / ").append(r);
+        }
+        boolean exo = !defaults || Math.abs(WardenSuitSC.playerSetUnits(ArmorSuit.EXO) - 4000F) < 0.01F
+                && Math.abs(WardenSuitSC.playerSetUnits(ArmorSuit.SINGULAR) - 32000F) < 0.01F;
+        check(reserves && exo && WardenSuitSC.CAPTAIN_RESERVE < WardenSuitSC.playerSetUnits(ArmorSuit.EXO), "wardens' suit (ПГ-15): the reserve by rank " + got
+                + " (800 / 2000 - a charged player set - / 1600 / 3000) " + reserves + "; a charged player Exo / Singular set "
+                + WardenSuitSC.playerSetUnits(ArmorSuit.EXO) + " / " + WardenSuitSC.playerSetUnits(ArmorSuit.SINGULAR) + " (4000 / 32000) " + exo);
+        // the plating's points and share: the player's (20 / 22 / 24 / 28 points; iron 15 under a whole-set suppression)
+        int nano = WardenSuitSC.setPoints(ArmorSuit.NANO, false), quantum = WardenSuitSC.setPoints(ArmorSuit.QUANTUM, false),
+                exoP = WardenSuitSC.setPoints(ArmorSuit.EXO, false), singular = WardenSuitSC.setPoints(ArmorSuit.SINGULAR, false),
+                iron = WardenSuitSC.setPoints(ArmorSuit.EXO, true);
+        boolean points = nano == 20 && quantum == 22 && exoP == 24 && singular == 28 && iron == 15
+                && Math.abs(com.sc.mob.MobArmorMathSC.absorbShare(nano) - 0.8F) < 1e-4F && com.sc.mob.MobArmorMathSC.absorbShare(singular) == 1F;
+        check(points, "wardens' suit (ПГ-15): the set's points Nano " + nano + ", Quantum " + quantum + ", Exo " + exoP + ", Singular " + singular
+                + " (20 / 22 / 24 / 28 - 80..100%), iron's under a Pulse " + iron + " (15)");
+        // ПГ-16: what the plating stops - a piercing blow by somebody yes; absolute, «Пробой», the world's, a blockable one no
+        Hitter h = new Hitter();
+        net.minecraft.util.DamageSource pierce = new net.minecraft.util.EntityDamageSource("player", h).setDamageBypassesArmor(),
+                absolute = new net.minecraft.util.EntityDamageSource("player", h).setDamageBypassesArmor().setDamageIsAbsolute(),
+                plain = new net.minecraft.util.EntityDamageSource("player", h);
+        boolean pierced = com.sc.mob.MobArmorSC.pierce(pierce) && !com.sc.mob.MobArmorSC.pierce(absolute) && !com.sc.mob.MobArmorSC.pierce(plain)
+                && !com.sc.mob.MobArmorSC.pierce(com.sc.mob.BreakdownDamageSC.of(h)) && !com.sc.mob.MobArmorSC.pierce(net.minecraft.util.DamageSource.outOfWorld)
+                && !com.sc.mob.MobArmorSC.pierce(net.minecraft.util.DamageSource.fall) && !com.sc.mob.MobArmorSC.pierce(net.minecraft.util.DamageSource.magic);
+        check(pierced, "wardens' suit (ПГ-16): MobArmorSC.pierce - a blade's armour-piercing blow yes; absolute, Breakdown, the void, a fall, magic, a"
+                + " blockable blow no " + pierced);
+        // the reference fight: a Quantum blade 20 a blow, once a second - the Sentry 15..25 s, the Senior clearly longer, the chiefs much longer;
+        // a Pulse (the whole set suppressed) cuts each to well under half
+        float[] t = new float[4], p = new float[4];
+        StringBuilder f = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            t[i] = WardenSuitSC.fightSeconds(ranks[i], WardenSuitSC.REF_BLOW, WardenSuitSC.REF_HITS_PER_SECOND, false);
+            p[i] = WardenSuitSC.fightSeconds(ranks[i], WardenSuitSC.REF_BLOW, WardenSuitSC.REF_HITS_PER_SECOND, true);
+            f.append(i == 0 ? "" : ", ").append(ranks[i].name().toLowerCase()).append(' ').append(Math.round(t[i])).append(" s (2 a second ")
+                    .append(Math.round(WardenSuitSC.fightSeconds(ranks[i], WardenSuitSC.REF_BLOW, 2F * WardenSuitSC.REF_HITS_PER_SECOND, false)))
+                    .append(" s; under a Pulse ").append(Math.round(p[i])).append(" s)");
+        }
+        boolean fight = WardenSuitSC.REF_BLOW == 20F && t[0] >= 15F && t[0] <= 25F && t[1] >= 2F * t[0] && t[2] >= 3F * t[0] && t[3] >= 1.5F * t[2];
+        boolean pulsed = true;
+        for (int i = 0; i < 4; i++) {
+            pulsed &= p[i] < 0.6F * t[i];
+        }
+        check(fight && pulsed, "wardens' suit (ПГ-15..ПГ-17): the reference fight - a Quantum blade " + WardenSuitSC.REF_BLOW + " a blow, "
+                + WardenSuitSC.REF_HITS_PER_SECOND + " a second: " + f + " - the Sentry 15..25 s, the Senior 2x, the Captain 3x, the Commandant 1.5x the"
+                + " Captain " + fight + "; a Pulse cuts each under 60% " + pulsed);
+        // ПГ-17 / ПГ-18: Regeneration, the pads, the heat
+        boolean regen = WardenSuitSC.regenHeal(ArmorSuit.NANO) == 0.5F && WardenSuitSC.regenHeal(ArmorSuit.SINGULAR) == 3F
+                && Math.abs(WardenSuitSC.regenUnits(ArmorSuit.NANO) - 0.4F) < 1e-4F
+                && Math.abs(WardenSuitSC.padUnits(800F) - 40F) < 0.01F && WardenSuitSC.padUnits(10F) == EntityWardenSC.PAD_UNITS;
+        boolean heat = WardenSuitSC.cooling(ArmorSuit.NANO, false) == 2 && WardenSuitSC.cooling(ArmorSuit.QUANTUM, true) == 9
+                && WardenSuitSC.cooling(ArmorSuit.EXO, true) == 18 && WardenSuitSC.cooling(ArmorSuit.SINGULAR, true) == 34
+                && WardenSuitSC.hotAfter(false, 100, 100) && !WardenSuitSC.hotAfter(false, 99, 100) && WardenSuitSC.hotAfter(true, 51, 100)
+                && !WardenSuitSC.hotAfter(true, 50, 100);
+        check(regen && heat, "wardens' suit (ПГ-17, ПГ-18): Regeneration 0.5..3 HP a second for 200 EU (Nano 0.4 units), a pad 5% a second of 800 = 40"
+                + " (2 at least) " + regen + "; cooling Nano 2, Quantum / Exo / Singular with helium 9 / 18 / 34 a second, overheated at 100% until"
+                + " 50% " + heat);
+        // the HP (ПГ-2: 60 / 70; the chiefs' 80 / 120 as before)
+        boolean hp = EntityWardenSC.hpOf(NpcKindSC.SENTRY) == 60D && EntityWardenSC.hpOf(NpcKindSC.SENIOR_WARDEN) == 70D
+                && EntityWardenSC.hpOf(NpcKindSC.CAPTAIN) == 80D && EntityWardenSC.hpOf(NpcKindSC.COMMANDANT) == 120D;
+        check(hp, "wardens' suit (ПГ-2): HP by rank 60 / 70 / 80 / 120 " + hp);
+    }
+
     private static void handbook() {
         StringBuilder bad = new StringBuilder();
         for (String id : ARTICLES) {

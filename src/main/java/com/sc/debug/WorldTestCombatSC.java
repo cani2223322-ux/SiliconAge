@@ -53,6 +53,7 @@ import com.sc.settle.SettlementRegistrySC;
 import com.sc.settle.SettlementSC;
 import com.sc.settle.gen.SettlementLayoutSC;
 import com.sc.settle.npc.EntityWardenSC;
+import com.sc.settle.npc.WardenSuitSC;
 import com.sc.tileentity.TileEntityFieldGeneratorSC;
 import com.sc.tileentity.TileEntitySettlementCoreSC;
 import com.sc.util.ArmorFeature;
@@ -265,6 +266,7 @@ public final class WorldTestCombatSC {
         limits();
         fieldScreen();
         packagesBehaviour();
+        wardenSuit();
         steps.add(new Step(700, "regression") {
             @Override
             void run() {
@@ -1263,6 +1265,144 @@ public final class WorldTestCombatSC {
         cleave(ax - 30, az - 46, false);
         cleave(ax - 30, az - 58, true);
         aimedByAi(ax - 15, az - 46);
+    }
+
+    // ------------------------------------------------------------------ 12. the wardens' suit (2026-10-18, ПГ-15..ПГ-20)
+
+    /** A stray warden of `rank` dressed by its spawn egg's path (EntityWardenSC.equip), never spawned, never ticked. */
+    private EntityWardenSC warden(NpcKindSC rank, int x, int z) {
+        EntityWardenSC g = (EntityWardenSC) SettlementSC.newMember(w, rank);
+        g.setLocationAndAngles(x + 0.5, Y, z + 0.5, 180F, 0F);
+        g.onSpawnWithEgg(null);
+        made.add(g);
+        return g;
+    }
+
+    /**
+     * ПГ-15..ПГ-20 on stray wardens (no settlement - nobody to provoke; WorldTestSettlementSC checks that with the dome's own): a
+     * Sentry survives 8 armour-piercing blows of a Quantum blade (before: 40 HP and its plating pierced - dead after 2), each taking
+     * 4 off its health and 16 off its reserve; a Captain's shield takes 8 absolute blows of an Exo blade whole, «Пробой» passes it; a
+     * Pulse at a Sentry - not refused any more - suppresses all four pieces, heats the suit by the player's rule and lets the same blow
+     * take 8 (iron's 60%); a FakePlayer's Siphon (EmpGunLogicSC, 3 s) drains a Sentry's reserve and delivers nothing (vented).
+     */
+    private void wardenSuit() {
+        int x = ax + 50, z = az;
+        EntityHollowShellSC hitter = new EntityHollowShellSC(w);
+        hitter.setPosition(x + 0.5, Y, z - 6.5);
+        made.add(hitter);
+        float blade = BladeType.QUANTUM.onDamage;
+        DamageSource pierce = new net.minecraft.util.EntityDamageSource("mob", hitter).setDamageBypassesArmor();
+        // a Sentry and the piercing blade
+        EntityWardenSC sentry = warden(NpcKindSC.SENTRY, x + 3, z - 3);
+        float r0 = sentry.mobArmor().reserve, h0 = sentry.getHealth();
+        int landed = 0;
+        for (int i = 0; i < 8; i++) {
+            sentry.hurtResistantTime = 0;
+            landed += sentry.attackEntityFrom(pierce, blade) ? 1 : 0;
+        }
+        float hp = sentry.getHealth(), lost = r0 - sentry.mobArmor().reserve;
+        float share = MobArmorMathSC.absorbShare(sentry.mobArmor().points());
+        boolean survives = landed == 8 && sentry.isEntityAlive() && Math.abs(hp - (h0 - 8 * blade * (1F - share))) < 0.6F
+                && Math.abs(lost - 8 * blade * share) < 0.6F;
+        print(survives, "the wardens' suit (ПГ-15, ПГ-16): a Sentry (" + n(h0) + " HP, reserve " + n(r0) + ") took 8 armour-piercing Quantum blade"
+                + " blows of " + n(blade) + " (before ПГ-16 dead after 2) - alive " + sentry.isEntityAlive() + ", HP " + n(hp) + " (want "
+                + n(h0 - 8 * blade * (1F - share)) + "), the reserve " + n(lost) + " less (want " + n(8 * blade * share) + ")");
+        // a Captain's shield and the Exo blade's absolute damage, «Пробой» through it
+        EntityWardenSC captain = warden(NpcKindSC.CAPTAIN, x - 3, z - 3);
+        DamageSource absolute = new net.minecraft.util.EntityDamageSource("mob", hitter).setDamageBypassesArmor().setDamageIsAbsolute();
+        float c0 = captain.mobArmor().reserve, ch = captain.getHealth();
+        for (int i = 0; i < 8; i++) {
+            captain.hurtResistantTime = 0;
+            captain.attackEntityFrom(absolute, BladeType.EXO.onDamage);
+        }
+        float took = c0 - captain.mobArmor().reserve;
+        boolean shield = captain.getHealth() == ch && Math.abs(took - 8 * BladeType.EXO.onDamage) < 0.6F;
+        captain.hurtResistantTime = 0;
+        captain.attackEntityFrom(BreakdownDamageSC.of(hitter), EntityWardenSC.HEAVY_BLOW);
+        boolean through = Math.abs(ch - EntityWardenSC.HEAVY_BLOW - captain.getHealth()) < 0.01F;
+        print(shield && through, "the wardens' suit (ПГ-15): a Captain's shield took 8 absolute Exo blade blows of " + BladeType.EXO.onDamage + " whole - HP "
+                + n(captain.getHealth()) + " of " + n(ch) + ", the reserve " + n(took) + " less " + shield + "; " + EntityWardenSC.HEAVY_BLOW
+                + " of Breakdown passed it into the health " + through);
+        if (!com.sc.util.ConfigSC.empEnabled || !SubstrateConfigSC.empMobTargets) {
+            System.out.println("[SC-WORLDTEST] SKIP combat: PE-1 on a warden - weapons.pe1.enabled or dimension.empMobTargets is off");
+            return;
+        }
+        // a Pulse at a Sentry: allowed, all four pieces suppressed, the heat, the blow on iron's points
+        EntityWardenSC pulsed = warden(NpcKindSC.SENTRY, x + 6, z - 3);
+        FakePlayer pe = fake("[SCTestWardenPulse]", x + 6, Y, z - 8);
+        int refused = com.sc.emp.EmpMobSC.refusal(pulsed, EmpMode.PULSE);
+        EmpSC.HitResult r = pulsed.empHit(pe, EmpMode.PULSE, false, new int[]{0, 1, 2, 3});
+        int sup = 0;
+        for (int i = 0; i < 4; i++) {
+            sup += pulsed.mobArmor().suppressed(i) ? 1 : 0;
+        }
+        ArmorSuit cs = MobArmorSC.pieceSuit(pulsed, 1);
+        int wantHeat = EmpMathSC.heat(cs.heatCapacity, EmpMode.PULSE, false, false, false, 0, ConfigSC.empHeatMultiplier);
+        float ph = pulsed.getHealth();
+        pulsed.hurtResistantTime = 0;
+        pulsed.attackEntityFrom(pierce, blade);
+        float pTook = ph - pulsed.getHealth(), want = blade * (1F - MobArmorMathSC.absorbShare(WardenSuitSC.setPoints(ArmorSuit.NANO, true)));
+        boolean pulseOk = refused == EmpNetSC.OK && r.anyArmour && sup == 4 && pulsed.suit().heat == wantHeat && Math.abs(pTook - want) < 0.01F;
+        print(pulseOk, "the wardens' suit (ПГ-20): a Pulse at a Sentry - refusal " + refused + " (0 = OK), " + sup + " of 4 pieces suppressed, heat +"
+                + pulsed.suit().heat + " (want " + wantHeat + "); the same blade blow then took " + n(pTook) + " HP (want " + n(want) + ", iron's 60%)");
+        if (!SubstrateConfigSC.siphonMobs) {
+            System.out.println("[SC-WORLDTEST] SKIP combat: the Siphon on a warden - dimension.siphonMobs is off");
+            return;
+        }
+        // the Siphon at a Sentry: the reserve drains, nothing is delivered (the gun only paid the start, the shooter's empty suit still empty)
+        final EntityWardenSC drained = warden(NpcKindSC.SENTRY, x, z + 4);
+        list(drained);
+        final FakePlayer sh = fake("[SCTestWardenSiphon]", x, Y, z);
+        wear(sh, ArmorSuit.QUANTUM, 0, false);
+        final ItemStack[] gun = {new ItemStack(ModItems.empGun)};
+        ItemEmpGunSC.setCharge(gun[0], ItemEmpGunSC.capacityOf(gun[0]));
+        ItemEmpGunSC.setMode(gun[0], EmpMode.SIPHON);
+        ItemEmpGunSC.setHeat(gun[0], 0, w.getTotalWorldTime());
+        sh.inventory.currentItem = 0;
+        sh.inventory.mainInventory[0] = gun[0];
+        final float before = drained.mobArmor().reserve;
+        final int gunBefore = ItemEmpGunSC.chargeOf(gun[0]);
+        final int span = 60;
+        steps.add(new Step(2, "the Siphon on a warden") {
+            @Override
+            void run() {
+                ItemStack held = com.sc.emp.EmpGunLogicSC.rightClick(gun[0], w, sh);
+                if (held != null && held != gun[0]) {
+                    gun[0] = held;
+                    sh.inventory.mainInventory[0] = held;
+                }
+            }
+        });
+        for (int i = 1; i <= span; i++) {
+            final int tick = i;
+            steps.add(new Step(2 + i, "the Siphon on a warden") {
+                @Override
+                void run() {
+                    com.sc.emp.EmpGunLogicSC.usingTick(gun[0], sh, tick);
+                    com.sc.emp.EmpGunLogicSC.playerTick(sh);
+                }
+            });
+        }
+        steps.add(new Step(span + 4, "the Siphon on a warden") {
+            @Override
+            void run() {
+                boolean running = sh.isUsingItem();
+                com.sc.emp.EmpGunLogicSC.stoppedUsing(gun[0], w, sh, span);
+                sh.clearItemInUse();
+                float drawn = before - drained.mobArmor().reserve;
+                int gunAfter = ItemEmpGunSC.chargeOf(gun[0]);
+                long suit = 0;
+                for (int t = 0; t < 4; t++) {
+                    ItemStack st = ArmorLogicSC.piece(sh, t);
+                    suit += st == null ? 0 : ItemArmorSC.chargeOf(st);
+                }
+                boolean ok = running && drawn > 50F && gunAfter == gunBefore - EmpMathSC.EU_SIPHON_START && suit == 0L;
+                print(ok, "the wardens' suit (ПГ-20): a FakePlayer's Siphon at a Sentry for " + span + " ticks - running " + running + ", its reserve "
+                        + n(drawn) + " units less (" + (long) (drawn * ArmorSuit.NANO.euPerDamage) + " EU), delivered: the gun " + (gunAfter - gunBefore)
+                        + " EU (want -" + EmpMathSC.EU_SIPHON_START + ", the start only), the shooter's suit " + suit + " EU (want 0) - all vented");
+                unlist(drained);
+            }
+        });
     }
 
     /**

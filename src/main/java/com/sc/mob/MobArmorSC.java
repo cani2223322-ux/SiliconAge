@@ -93,6 +93,16 @@ public final class MobArmorSC {
      * on a Commander itself - when its current order was given (0: none under way; the group gets the bonus ORDER_TICKS after).
      */
     public long commandUntil, orderAt;
+    /**
+     * 2026-10-18, ПГ-16 (only the dome's wardens set these - EntityWardenSC / WardenSuitSC; a hostile keeps the defaults and its
+     * old behaviour): the plating stops an armour-piercing blow too (pierce: a blade's «Пробивание брони» - not absolute damage,
+     * not «Пробой», not the world's); what one stopped unit costs the reserve (the Quantum set's 0.7, ArmorLogicSC.absorbCostMul);
+     * the suit is overheated (no shield - as the player's chips shut down). Not saved: the warden sets them.
+     */
+    public boolean pierceProof, overheated;
+    public float absorbCost = 1F;
+    /** ПГ-18: blows the shield took since the warden's suit last asked (each heats the suit as the player's exoStops does). */
+    public int shieldHits;
     /** The «down» effects were played for this reserve-0 (not again until it is recharged above 0). Not saved. */
     private boolean downShown;
 
@@ -192,6 +202,13 @@ public final class MobArmorSC {
         return reserve <= 0F;
     }
 
+    /** Server: `units` off the reserve for a function of the suit (a warden's Regeneration, its Shield - WardenSuitSC). */
+    public void spend(float units) {
+        if (server()) {
+            take(units);
+        }
+    }
+
     /** Server: `units` off the reserve (a blow, the shield, the siphon); crossing 0 the suit goes «down» - once. */
     private void take(float units) {
         if (units <= 0F) {
@@ -226,7 +243,16 @@ public final class MobArmorSC {
 
     /** ПБ-4: the shield is up now - an Exo / Singular chestplate, helium, the chestplate not suppressed, a reserve. */
     public boolean shieldUp() {
-        return MobArmorMathSC.shieldUp(pieceSuit(mob, 1), heliumOn(), suppressed(1), reserve);
+        return !overheated && MobArmorMathSC.shieldUp(pieceSuit(mob, 1), heliumOn(), suppressed(1), reserve);
+    }
+
+    /**
+     * ПГ-16: an armour-piercing blow - unblockable but not absolute, dealt by somebody (a blade's «Пробивание брони», another
+     * mod's piercing weapon), not «Пробой», not magic, not the world's (the void, a fall, drowning, hunger, radiation).
+     */
+    public static boolean pierce(DamageSource src) {
+        return src != null && src.isUnblockable() && !src.isDamageAbsolute() && src.getEntity() != null && !src.isMagicDamage()
+                && !BreakdownDamageSC.is(src) && src != DamageSource.outOfWorld && !radiation(src);
     }
 
     /** Radiation is the radiation shield's job, not the energy shield's (as ArmorLogicSC.exoStops for a player). */
@@ -249,6 +275,9 @@ public final class MobArmorSC {
         }
         float[] r = MobArmorMathSC.shield(amount, reserve);
         take(r[1]);
+        if (r[1] > 0F) {
+            shieldHits++;
+        }
         MobEventsSC.shieldTook(mob, src, r[1]);         // Ф3: a blow the shield took is the fight too (the trophy's player, ПТ-2)
         return r[0];
     }
@@ -262,11 +291,12 @@ public final class MobArmorSC {
             return amount;
         }
         lastDamageAt = now();
-        if (src.isUnblockable() || down()) {
-            return amount;                              // ПБ-3: past the armour (and the down suit stops nothing)
+        if (src.isUnblockable() && !(pierceProof && pierce(src)) || down()) {
+            return amount;                              // ПБ-3: past the armour (and the down suit stops nothing); ПГ-16: a warden's isn't pierced
         }
-        float[] r = MobArmorMathSC.absorb(amount, points(), reserve);
-        take(r[1]);
+        float cost = Math.max(0.01F, absorbCost);       // 1 for every hostile: the old arithmetic exactly
+        float[] r = MobArmorMathSC.absorb(amount, points(), reserve / cost);
+        take(r[1] * cost);
         return r[0];
     }
 

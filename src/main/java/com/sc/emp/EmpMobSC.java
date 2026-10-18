@@ -98,22 +98,28 @@ public final class EmpMobSC {
      * ПБ-10: a Pulse never hits a villager (INpc) or somebody's pet among the mob targets - EmpNetSC.NO_OWN, asked
      * next to EmpRulesSC.refusal, before any EU is spent. EmpNetSC.OK otherwise (and for everything outside the
      * mob branch: the old behaviour). A settlement's Tuner (Ф2, ПЖ-2) is refused in every mode: it wears no armour and
-     * would only be slowed. A settlement's bound guard is refused the Siphon (Ф2, ПГ-6): its suit is charged free at the
-     * dome's Charge Pads, so its reserve would be EU out of nothing - the Point still works on it (and provokes). Server
-     * (a client doesn't know the guard's settlement: EmpSiphonSC asks this on the server).
+     * would only be slowed. 2026-10-18, ПГ-20: a dome's guard (ISettlementGuardSC - INpc, yet in the mod's armour for real) is
+     * no villager here - the Point, the Pulse and the Siphon all work on it (each use provokes: EntityWardenSC), and what the
+     * Siphon draws out of it is vented, never delivered (ventsAll: its suit is charged free at the dome's plates - a farm
+     * otherwise). Server and client alike (no settlement asked).
      */
     public static int refusal(Entity target, EmpMode mode) {
         if (target instanceof com.sc.settle.ISettlementNpcSC) {
             return EmpNetSC.NO_OWN;
         }
-        if (mode == EmpMode.SIPHON && target instanceof com.sc.settle.ISettlementGuardSC
-                && ((com.sc.settle.ISettlementGuardSC) target).settlementId() >= 0) {
-            return EmpNetSC.NO_OWN;
-        }
-        if (mode == EmpMode.PULSE && (pointable(target) || reactive(target)) && (target instanceof INpc || owned(target))) {
+        if (mode == EmpMode.PULSE && (pointable(target) || reactive(target))
+                && (target instanceof INpc && !(target instanceof com.sc.settle.ISettlementGuardSC) || owned(target))) {
             return EmpNetSC.NO_OWN;                         // Ф3, §3.6: the reactive ones by the same rule
         }
         return EmpNetSC.OK;
+    }
+
+    /**
+     * ПГ-20: the Siphon's draw out of `target` reaches no receiver - all of it is vented (sparks, the HUD's «в искры»): a dome's
+     * guard, whose reserve the dome's plates fill for nothing (it comes back from the Clone Capsule charged).
+     */
+    public static boolean ventsAll(Entity target) {
+        return target instanceof com.sc.settle.ISettlementGuardSC;
     }
 
     /** A tamed thing: an owner's UUID (or the owner entity) is set. */

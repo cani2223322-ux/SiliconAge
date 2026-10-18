@@ -90,6 +90,7 @@ import com.sc.settle.gen.SettlementLayoutSC;
 import com.sc.settle.npc.EntityTunerSC;
 import com.sc.settle.npc.EntityWardenSC;
 import com.sc.settle.npc.NpcNamesSC;
+import com.sc.settle.npc.WardenSuitSC;
 import com.sc.settle.trade.ContractTableSC;
 import com.sc.settle.trade.TradeOfferSC;
 import com.sc.settle.trade.TradeRulesSC;
@@ -1059,6 +1060,36 @@ public final class BookWorldSC {
 
     // ------------------------------------------------------------------ «Стражи купола»
 
+    /**
+     * ПГ-15..ПГ-20: the wardens' suit - the plating's share and the piercing, Regeneration and the dome's induction, the heat, the
+     * shield and the Shield function, the Singular perks, the reference fight without ПЭ-1 (WardenSuitSC.fightSeconds).
+     */
+    private static void wardenSuit(BookEntry e) {
+        e.add(BookEl.head(Lang.tr("sc.manual.world.wardens.suithead")));
+        e.add(BookEl.item(nanoPiece(1), Lang.tr("sc.manual.world.wardens.suit.plating"), Lang.tr("sc.manual.world.wardens.suit.plating.desc",
+                pct(MobArmorMathSC.absorbShare(WardenSuitSC.setPoints(ArmorSuit.NANO, false))),
+                pct(MobArmorMathSC.absorbShare(WardenSuitSC.setPoints(ArmorSuit.QUANTUM, false))),
+                pct(MobArmorMathSC.absorbShare(WardenSuitSC.setPoints(ArmorSuit.EXO, false))),
+                pct(MobArmorMathSC.absorbShare(WardenSuitSC.setPoints(ArmorSuit.SINGULAR, false))),
+                n(WardenSuitSC.playerSetUnits(ArmorSuit.EXO)), n(WardenSuitSC.playerSetUnits(ArmorSuit.SINGULAR)))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.wardens.suit.regen"), Lang.tr("sc.manual.world.wardens.suit.regen.desc",
+                n(WardenSuitSC.regenHeal(ArmorSuit.NANO)), n(WardenSuitSC.regenHeal(ArmorSuit.QUANTUM)), n(WardenSuitSC.regenHeal(ArmorSuit.EXO)),
+                n(WardenSuitSC.regenHeal(ArmorSuit.SINGULAR)), sec(WardenSuitSC.REGEN_DELAY), pct(WardenSuitSC.REGEN_SHARE),
+                pct(WardenSuitSC.PAD_SHARE))));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.wardens.suit.heat"), Lang.tr("sc.manual.world.wardens.suit.heat.desc",
+                EmpMathSC.HEAT_PCT_POINT, EmpMathSC.HEAT_PCT_PULSE, EmpMathSC.HEAT_PCT_SIPHON, WardenSuitSC.HEAT_RESUME_PCT)));
+        e.add(BookEl.item(null, Lang.tr("sc.manual.world.wardens.suit.shield"), Lang.tr("sc.manual.world.wardens.suit.shield.desc",
+                n((float) WardenSuitSC.REFLECT_RANGE))));
+        e.add(BookEl.item(blade(BladeType.QUANTUM), Lang.tr("sc.manual.world.wardens.suit.fight"), Lang.tr("sc.manual.world.wardens.suit.fight.desc",
+                n(WardenSuitSC.REF_BLOW), n(1F / WardenSuitSC.REF_HITS_PER_SECOND), fight(NpcKindSC.SENTRY, false), fight(NpcKindSC.SENIOR_WARDEN, false),
+                fight(NpcKindSC.CAPTAIN, false), fight(NpcKindSC.COMMANDANT, false))));
+    }
+
+    /** The reference fight's seconds (a Quantum blade, WardenSuitSC.REF_*), whole: `pulsed` - the whole set suppressed. */
+    private static String fight(NpcKindSC rank, boolean pulsed) {
+        return n(Math.round(WardenSuitSC.fightSeconds(rank, WardenSuitSC.REF_BLOW, WardenSuitSC.REF_HITS_PER_SECOND, pulsed)));
+    }
+
     private static BookEntry wardens(BookChapter c) {
         ItemStack egg = egg(MobEntitiesSC.ID_WARDEN);
         BookEntry e = new BookEntry("world.wardens", c, egg != null ? egg : nanoPiece(0), Lang.tr("sc.manual.world.wardens.title"));
@@ -1068,16 +1099,16 @@ public final class BookWorldSC {
         BookEl t = BookEl.table(Lang.tr("sc.manual.world.t.rank"), Lang.tr("sc.manual.world.t.armour"), Lang.tr("sc.manual.world.t.reserve"),
                 Lang.tr("sc.manual.world.t.hp"), Lang.tr("sc.manual.world.t.where"));
         t.row(nanoPiece(1), Lang.tr(NpcKindSC.SENTRY.langKey()), Lang.tr("sc.manual.world.cell.suit4", suitName(ArmorSuit.NANO)),
-                span((int) stat(WARDEN, "SENTRY_RESERVE_MIN", 20F), (int) stat(WARDEN, "SENTRY_RESERVE_MAX", 40F)), n(stat(WARDEN, "SENTRY_HP", 40F)),
+                n(EntityWardenSC.reserveOf(NpcKindSC.SENTRY)), n(stat(WARDEN, "SENTRY_HP", 60F)),
                 sizesWith(false));
         t.row(new ItemStack(ModItems.ARMOR.get(ArmorSuit.QUANTUM)[1]), Lang.tr(NpcKindSC.SENIOR_WARDEN.langKey()),
                 Lang.tr("sc.manual.world.cell.suit4.helium", suitName(ArmorSuit.QUANTUM)),
-                span((int) stat(WARDEN, "SENIOR_RESERVE_MIN", 40F), (int) stat(WARDEN, "SENIOR_RESERVE_MAX", 70F)), n(stat(WARDEN, "SENIOR_HP", 50F)),
+                n(EntityWardenSC.reserveOf(NpcKindSC.SENIOR_WARDEN)), n(stat(WARDEN, "SENIOR_HP", 70F)),
                 sizesWith(true));
         // Ф3 (ПГ-11, ПГ-12): the Captain and the Commandant - package S's numbers by name, where they serve from SettlementSizeSC
         t.row(new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[1]), Lang.tr(NpcKindSC.CAPTAIN.langKey()),
                 Lang.tr("sc.manual.world.cell.suit4.helium", suitName(ArmorSuit.EXO)),
-                span((int) stat(WARDEN, "CAPTAIN_RESERVE_MIN", 70F), (int) stat(WARDEN, "CAPTAIN_RESERVE_MAX", 110F)), n(stat(WARDEN, "CAPTAIN_HP", 80F)),
+                n(EntityWardenSC.reserveOf(NpcKindSC.CAPTAIN)), n(stat(WARDEN, "CAPTAIN_HP", 80F)),
                 captainSizes());
         StringBuilder cities = new StringBuilder();
         for (SettlementSizeSC s : SettlementSizeSC.values()) {
@@ -1087,8 +1118,7 @@ public final class BookWorldSC {
         }
         t.row(new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[1]), Lang.tr(NpcKindSC.COMMANDANT.langKey()),
                 Lang.tr("sc.manual.world.cell.suit4", suitName(ArmorSuit.SINGULAR)),
-                span((int) stat(WARDEN, "COMMANDANT_RESERVE_MIN", 150F), (int) stat(WARDEN, "COMMANDANT_RESERVE_MAX", 250F)),
-                n(stat(WARDEN, "COMMANDANT_HP", 120F)), cities.toString());
+                n(EntityWardenSC.reserveOf(NpcKindSC.COMMANDANT)), n(stat(WARDEN, "COMMANDANT_HP", 120F)), cities.toString());
         e.add(t);
         e.add(BookEl.item(blade(BladeType.NANO), Lang.tr(NpcKindSC.SENTRY.langKey()), Lang.tr("sc.manual.world.wardens.weapon.sentry",
                 blade(BladeType.NANO).getDisplayName(), MobCombatSC.BLADE[BladeType.NANO.ordinal()], weapon(WeaponType.ION_CUTTER).getDisplayName(),
@@ -1105,6 +1135,9 @@ public final class BookWorldSC {
         e.add(BookEl.item(blade(BladeType.SINGULAR), Lang.tr(NpcKindSC.COMMANDANT.langKey()), Lang.tr("sc.manual.world.wardens.weapon.commandant",
                 blade(BladeType.SINGULAR).getDisplayName(), n(stat(WARDEN, "COMMANDANT_BLADE", 12F)), n(stat(WARDEN, "PLAZA_STAY", 7F)))
                 + " " + commandantGun));
+
+        // 2026-10-18 (ПГ-15..ПГ-20): their suit works as the player's - WardenSuitSC's numbers
+        wardenSuit(e);
 
         // their work (ПГ-3, ПГ-5, ПГ-10)
         e.add(BookEl.head(Lang.tr("sc.manual.world.wardens.workhead")));
@@ -1129,7 +1162,8 @@ public final class BookWorldSC {
         e.add(BookEl.item(clone, clone != null ? clone.getDisplayName() : Lang.tr("tile.siliconage.showcase.cloneCapsule.name"),
                 Lang.tr("sc.manual.world.wardens.clone", minutes(NpcKindSC.GUARD_RESPAWN_TICKS), SettlementSC.RESPAWN_CLEAR)
                         + " " + Lang.tr("sc.manual.world.wardens.clone.chiefs", minutes(NpcKindSC.CAPTAIN.respawnTicks()))));
-        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.wardens.emp"), Lang.tr("sc.manual.world.wardens.emp.desc")));
+        e.add(BookEl.item(new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.wardens.emp"), Lang.tr("sc.manual.world.wardens.emp.desc",
+                fight(NpcKindSC.SENTRY, true), fight(NpcKindSC.SENIOR_WARDEN, true), fight(NpcKindSC.CAPTAIN, true), fight(NpcKindSC.COMMANDANT, true))));
         e.add(BookEl.item(egg, egg != null ? egg.getDisplayName() : mobName(EntityWardenSC.NAME), Lang.tr("sc.manual.world.wardens.egg")));
         e.add(BookEl.link("world.trust", Lang.tr("sc.manual.world.trust.title")));
         e.add(BookEl.link("world.armoured", Lang.tr("sc.manual.world.armoured.title")));
