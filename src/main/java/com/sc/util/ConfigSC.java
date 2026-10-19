@@ -213,19 +213,19 @@ public final class ConfigSC {
             singularScore = num(config, "score", sg, 1F, 0.1F, 10F,
                     "Points the Singular armour and tools need for each level, times this / Множитель очков на каждый уровень сингулярной брони и инструментов");
             String pe = "weapons.pe1";
-            config.setCategoryComment(pe, "PE-1 electronics suppressor gun (1 = as designed) / ПЭ-1 «Подавитель электроники» (1 - как задумано)");
+            config.setCategoryComment(pe, "PE-1 electronics suppressor gun (1 = as designed) / ПЭ-1 „Подавитель электроники“ (1 - как задумано)");
             empEnabled = config.getBoolean("enabled", pe, true,
                     "The PE-1 works at all (off: it never fires) / ПЭ-1 работает (выкл.: не стреляет)");
             empAffectsPlayers = config.getBoolean("affectsPlayers", pe, true,
                     "The PE-1 affects players (off: mobs only, Slowness) / ПЭ-1 действует на игроков (выкл.: только мобы, Медлительность)");
             empRespectClaims = config.getBoolean("respectClaims", pe, false,
-                    "The PE-1 refuses inside someone else's private field or another mod's claim (off: it works there too; PvP and friends still count) / ПЭ-1 не работает в чужом приватном поле и привате других модов (выкл.: работает и там; PvP и «свои» учитываются)");
+                    "The PE-1 refuses inside someone else's private field or another mod's claim (off: it works there too; PvP and friends still count) / ПЭ-1 не работает в чужом приватном поле и привате других модов (выкл.: работает и там; PvP и „свои“ учитываются)");
             empDurationMultiplier = num(config, "durationMultiplier", pe, 1F, 0.1F, 10F,
                     "Suppression time, times this / Множитель времени подавления");
             empSiphonRateMultiplier = num(config, "siphonRateMultiplier", pe, 1F, 0.1F, 10F,
                     "Siphon speed, times this / Множитель скорости сифона");
             empSiphonLoss = config.getInt("siphonLoss", pe, 25, 0, 90,
-                    "Siphon loss, % (the Efficient siphon module: 10/25 of it; a suppressed suit: none) / Потери сифона, % (модуль «Эффективный сифон»: 10/25 от них; по подавленной броне - 0)");
+                    "Siphon loss, % (the Efficient siphon module: 10/25 of it; a suppressed suit: none) / Потери сифона, % (модуль „Эффективный сифон“: 10/25 от них; по подавленной броне - 0)");
             empImmunitySeconds = config.getInt("immunitySeconds", pe, 20, 0, 600,
                     "Immunity after a suppression ends, seconds / Невосприимчивость после конца подавления, секунд");
             empHeatMultiplier = num(config, "heatMultiplier", pe, 1F, 0F, 10F,

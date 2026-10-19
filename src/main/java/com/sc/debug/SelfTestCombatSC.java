@@ -1024,8 +1024,8 @@ final class SelfTestCombatSC {
                     diff.append(' ').append(from == en ? "only en_US:" : "only ru_RU:").append(e.getKey());
                 } else if (from == en && positional(e.getValue()) != positional(to.get(e.getKey()))) {
                     diff.append(" args differ:").append(e.getKey());
-                } else if (from == en && e.getValue().matches(".*[\\u0400-\\u04FF«»].*")) {
-                    diff.append(" Cyrillic / «» in en_US:").append(e.getKey());
+                } else if (from == en && e.getValue().matches(".*[\\u0400-\\u04FF«»„].*")) {
+                    diff.append(" Cyrillic / «» / „ in en_US:").append(e.getKey());
                 }
             }
         }

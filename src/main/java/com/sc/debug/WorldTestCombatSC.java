@@ -81,6 +81,7 @@ import net.minecraft.init.Items;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityChest;
@@ -887,20 +888,29 @@ public final class WorldTestCombatSC {
         place(bx + 2, by, bz, Blocks.glass);
         final long[] diedAt = new long[1];
         final Entity[] loot = new Entity[2];
+        final boolean[] inWorld = new boolean[2];
         steps.add(new Step(5, "the Avenger") {
             @Override
             void run() {
                 blasts.clear();
+                // what an earlier run left by it (stopped before finish(): its item and orb were saved with the chunk) - an iron
+                // ingot lying there would swallow the new one (EntityItem.combineItems: the new stack dies), whatever the blast did
+                clearLoot(bx + 0.5, by, bz + 0.5, 8);
                 diedAt[0] = w.getTotalWorldTime();
                 avenger.attackEntityFrom(DamageSource.outOfWorld, 1000F);
-                // what its drops are: an item where MobDropsSC puts them, an orb as the death's experience
-                EntityItem item = new EntityItem(w, avenger.posX, avenger.posY + 0.5D, avenger.posZ, new ItemStack(Items.iron_ingot));
+                // what its drops are: an item where MobDropsSC puts them, an orb as the death's experience; the ingot has its own
+                // tag (no stray ingot merges with it), both lie still by it (vanilla's random toss could carry the orb off)
+                ItemStack ingot = new ItemStack(Items.iron_ingot);
+                ingot.setTagCompound(new NBTTagCompound());
+                ingot.getTagCompound().setLong("SCTestAvengerLoot", diedAt[0]);
+                EntityItem item = new EntityItem(w, avenger.posX, avenger.posY + 0.5D, avenger.posZ, ingot);
                 item.delayBeforeCanPickup = 32767;
                 loot[0] = item;
                 loot[1] = new EntityXPOrb(w, avenger.posX, avenger.posY + 0.5D, avenger.posZ, 3);
-                for (Entity o : loot) {
-                    w.spawnEntityInWorld(o);
-                    made.add(o);
+                for (int i = 0; i < loot.length; i++) {
+                    loot[i].motionX = loot[i].motionY = loot[i].motionZ = 0D;
+                    inWorld[i] = w.spawnEntityInWorld(loot[i]);
+                    made.add(loot[i]);
                 }
             }
         });
@@ -908,18 +918,28 @@ public final class WorldTestCombatSC {
             @Override
             void run() {
                 long at = -1;
+                double[] blast = null;
                 for (double[] b : blasts) {
                     if (Math.abs(b[0] - (bx + 0.5)) < 2 && Math.abs(b[2] - (bz + 0.5)) < 2) {
                         at = (long) b[3];
+                        blast = b;
                     }
                 }
                 long fuse = at < 0 ? -1 : at - diedAt[0];
                 boolean glass = w.getBlock(bx + 2, by, bz) == Blocks.glass;
-                boolean kept = !loot[0].isDead && !loot[1].isDead;
+                // whole: alive and in the world, and they were in the blast's reach (vanilla hits entities within twice its size)
+                boolean kept = true;
+                String where = "";
+                for (int i = 0; i < loot.length; i++) {
+                    double d = blast == null ? -1 : loot[i].getDistance(blast[0], blast[1], blast[2]);
+                    kept &= inWorld[i] && !loot[i].isDead && w.loadedEntityList.contains(loot[i]) && d >= 0 && d < EliteModSC.AVENGER_RADIUS * 2F;
+                    where += (i == 0 ? " (the item " : ", the orb ") + (loot[i].isDead ? "dead" : "alive") + " " + n((float) d) + " blocks off";
+                }
                 boolean hurt = !bystander.isEntityAlive() || bystander.getHealth() < bystander.getMaxHealth();
                 print(fuse >= EliteModSC.AVENGER_FUSE_TICKS - 1 && fuse <= EliteModSC.AVENGER_FUSE_TICKS + 2 && glass && kept && hurt, "the elites (ПС-21):"
                         + " «Мститель» - dead, its blast " + (fuse < 0 ? "never came" : fuse + " ticks later (" + EliteModSC.AVENGER_FUSE_TICKS + ")")
-                        + ", the glass beside it whole " + glass + ", the item and the orb by it whole " + kept + ", a Trooper 2 blocks off hurt " + hurt);
+                        + ", the glass beside it whole " + glass + ", the item and the orb by it whole " + kept + where + ")"
+                        + ", a Trooper 2 blocks off hurt " + hurt);
             }
         });
     }
@@ -933,6 +953,18 @@ public final class WorldTestCombatSC {
         for (Object o : w.getEntitiesWithinAABB(EntityLiving.class, AxisAlignedBB.getBoundingBox(x - r, 0, z - r, x + r, 256, z + r))) {
             if (o instanceof ISubstrateNativeSC && !made.contains(o)) {
                 ((Entity) o).setDead();
+            }
+        }
+    }
+
+    /** The same for the things lying round (x, y, z) within `r`: the items and experience orbs this run didn't make - removed. */
+    private void clearLoot(double x, double y, double z, double r) {
+        AxisAlignedBB box = AxisAlignedBB.getBoundingBox(x - r, y - r, z - r, x + r, y + r, z + r);
+        for (Class<?> c : new Class<?>[]{EntityItem.class, EntityXPOrb.class}) {
+            for (Object o : w.getEntitiesWithinAABB(c, box)) {
+                if (!made.contains(o)) {
+                    ((Entity) o).setDead();
+                }
             }
         }
     }

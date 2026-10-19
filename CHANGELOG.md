@@ -6,8 +6,10 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- Кавычки в текстах мода теперь „…“ (в английском — “…”): ресурс-паки шрифта, перерисовывающие расширенный ASCII (например, русский фикс для Thermal Expansion), больше не превращают «» в буквы. Кнопки страниц инструмента — «Уровень →» / «← Функции».
 
 ### English
+- Quotes in the mod's texts are now “…” (in Russian „…“), so font resource packs that redraw extended ASCII (e.g. the Russian fix for Thermal Expansion) no longer turn «» into letters. The tool page buttons read "Level →" / "← Functions".
 
 ## 0.2.2-beta — 2026-10-18
 

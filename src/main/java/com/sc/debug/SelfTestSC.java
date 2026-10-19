@@ -42,6 +42,7 @@ public final class SelfTestSC {
             handbookPagesBuild();
             bookBuilds();
             bookTexts();
+            langQuotes();
             fieldShapes();
             fluidDrops();
             energyStorage();
@@ -334,11 +335,11 @@ public final class SelfTestSC {
         // (b) English is English
         StringBuilder cyr = new StringBuilder();
         for (java.util.Map.Entry<String, String> e : en.entrySet()) {
-            if (isBookKey(e.getKey()) && (e.getValue().matches(".*[\\u0400-\\u04FF].*") || e.getValue().contains("«") || e.getValue().contains("»"))) {
+            if (isBookKey(e.getKey()) && (e.getValue().matches(".*[\\u0400-\\u04FF].*") || e.getValue().contains("«") || e.getValue().contains("»") || e.getValue().contains("„"))) {
                 cyr.append(' ').append(e.getKey());
             }
         }
-        check(cyr.length() == 0, "book texts (b): no Cyrillic letters and no «» quotes in the en_US handbook texts" + cyr);
+        check(cyr.length() == 0, "book texts (b): no Cyrillic letters and no «» / „ quotes in the en_US handbook texts" + cyr);
         // (c) the bridge article: its headings and paragraphs in both languages
         String[] bridge = {"title", "about.1", "about.2", "groundhead", "front", "ground.1", "ground.4", "spacehead", "space.1", "space.2", "calibhead",
                 "calib", "reshead", "t.ground", "t.space", "t.burst", "t.hold", "t.gases", "t.life", "tanks", "openhead", "open.1", "open.2", "cool",
@@ -461,6 +462,60 @@ public final class SelfTestSC {
 
     private static boolean isBookKey(String k) {
         return k.startsWith("sc.manual.") || k.startsWith("sc.book.");
+    }
+
+    /**
+     * The quotes of the mod's texts: no « or » in any value of en_US / ru_RU. Vanilla's FontRenderer draws those two
+     * from ascii.png, and font packs that redraw its extended-ASCII cells as Cyrillic (the Thermal Expansion fix) turn
+     * them into letters; Russian quotes are „…“ and English ones “…”, both drawn from the unicode pages. Each value's
+     * quotes close in order, no „ in English, no ” in Russian; the bridge screen's named title takes the language's own.
+     */
+    private static void langQuotes() {
+        StringBuilder bad = new StringBuilder();
+        int quotedRu = 0, quotedEn = 0;
+        String named = "";
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Map<String, String> m = langMap(lang);
+            boolean en = lang.equals("en_US");
+            char open = en ? '“' : '„', close = en ? '”' : '“', foreign = en ? '„' : '”';
+            for (java.util.Map.Entry<String, String> e : m.entrySet()) {
+                String v = e.getValue();
+                if (v.indexOf('«') >= 0 || v.indexOf('»') >= 0) {
+                    bad.append(' ').append(lang).append(" guillemets:").append(e.getKey());
+                }
+                if (v.indexOf(foreign) >= 0) {
+                    bad.append(' ').append(lang).append(" foreign quote:").append(e.getKey());
+                }
+                int depth = 0;
+                boolean ok = true;
+                for (int i = 0; i < v.length(); i++) {
+                    char c = v.charAt(i);
+                    if (c == open) {
+                        depth++;
+                    } else if (c == close && --depth < 0) {
+                        ok = false;
+                    }
+                }
+                if (!ok || depth != 0) {
+                    bad.append(' ').append(lang).append(" unpaired:").append(e.getKey());
+                }
+                if (v.indexOf(open) >= 0) {
+                    if (en) {
+                        quotedEn++;
+                    } else {
+                        quotedRu++;
+                    }
+                }
+            }
+            String fmt = m.get("sc.bridge.gui.title.named");
+            String title = fmt == null ? "" : String.format(fmt, "T", "N");
+            named += (en ? "" : " / ") + title;
+            if (!title.equals(en ? "T “N”" : "T „N“")) {
+                bad.append(' ').append(lang).append(" named title:").append(title);
+            }
+        }
+        check(bad.length() == 0 && quotedRu > 400 && quotedEn > 40, "lang quotes: no « » in any value of en_US / ru_RU (ascii.png glyphs), "
+                + quotedRu + " Russian values quoted „…“, " + quotedEn + " English “…”, all pairs closed, the bridge's named title " + named + bad);
     }
 
     /** A .lang file of the jar as key -> value (the first one wins, as in the game). */

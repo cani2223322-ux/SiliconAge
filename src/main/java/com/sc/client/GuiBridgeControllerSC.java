@@ -764,7 +764,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
         String title = !has() || !st.getBoolean("found") ? Lang.tr("sc.bridge.gui.title")
                 : Lang.tr(sp ? "sc.bridge.gui.title.space" : "sc.bridge.gui.title.ground");
         if (has() && st.getString("name").length() > 0) {
-            title = title + " «" + st.getString("name") + "»";
+            title = Lang.tr("sc.bridge.gui.title.named", title, st.getString("name"));
         }
         fit(title, 8, 6, 258, sp ? BLUE : OK);
         if (has() && st.getString("owner").length() > 0) {

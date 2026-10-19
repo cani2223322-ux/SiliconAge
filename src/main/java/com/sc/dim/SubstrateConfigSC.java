@@ -118,15 +118,15 @@ public final class SubstrateConfigSC {
         providerId = c.getInt("providerId", d, -1414, -100000, 100000,
                 "World provider type id (as Galacticraft, ExtraUtilities and Thaumcraft do: the same as the dimension id) / Id типа провайдера мира (как у GC, ExU, TC - равен id измерения)");
         biomeIdPlateaus = c.getInt("biomeIdPlateaus", d, 240, 40, 254,
-                "Biome id of the Silicon Plateaus; a taken id moves to the next free one and is written here / Id биома «Кремниевые плато»; занятый сдвигается на следующий свободный и записывается сюда");
+                "Biome id of the Silicon Plateaus; a taken id moves to the next free one and is written here / Id биома „Кремниевые плато“; занятый сдвигается на следующий свободный и записывается сюда");
         biomeIdCanyons = c.getInt("biomeIdCanyons", d, 241, 40, 254,
-                "Biome id of the Scribe Canyons (the same rule) / Id биома «Скрайб-каньоны» (то же правило)");
+                "Biome id of the Scribe Canyons (the same rule) / Id биома „Скрайб-каньоны“ (то же правило)");
         biomeIdRidges = c.getInt("biomeIdRidges", d, 242, 40, 254,
-                "Biome id of the Quartzite Ridges (the same rule) / Id биома «Кварцитовые гряды» (то же правило)");
+                "Biome id of the Quartzite Ridges (the same rule) / Id биома „Кварцитовые гряды“ (то же правило)");
         biomeIdOxide = c.getInt("biomeIdOxide", d, 243, 40, 254,
-                "Biome id of the Oxide Fields (the same rule) / Id биома «Окисные поля» (то же правило)");
+                "Biome id of the Oxide Fields (the same rule) / Id биома „Окисные поля“ (то же правило)");
         biomeIdRift = c.getInt("biomeIdRift", d, 244, 40, 254,
-                "Biome id of the Rift (the same rule) / Id биома «Разлом» (то же правило)");
+                "Biome id of the Rift (the same rule) / Id биома „Разлом“ (то же правило)");
         keepLoaded = c.getBoolean("keepLoaded", d, false,
                 "Keep the world loaded with nobody there (chunk loaders keep their chunks anyway) / Держать мир загруженным без игроков (загрузчики чанков держат свои чанки в любом случае)");
         customSky = c.getBoolean("customSky", d, false,
@@ -135,7 +135,7 @@ public final class SubstrateConfigSC {
                 + " (у каждого клиента своё; само выключается при ShadersModCore)");
         strictEntry = c.getBoolean("strictEntry", d, true,
                 "Only the Space Bridge (and the Vehicles ship's Jump) lets players in; anything else sends them back; the nether portal doesn't work there"
-                + " / Войти можно только Космическим мостом (и «Прыжком» корабля Vehicles); остальное отправляет назад; адский портал там не работает");
+                + " / Войти можно только Космическим мостом (и „Прыжком“ корабля Vehicles); остальное отправляет назад; адский портал там не работает");
         respawnDimension = c.getInt("respawnDimension", d, 0, -100000, 100000,
                 "Dying in the Substrate, players wake up in this dimension (an unknown id: the Overworld) / Погибнув в Подложке, игрок возрождается в этом измерении (неизвестное - Верхний мир)");
         bridgeCostMultiplier = num(c, "bridgeCostMultiplier", d, 0.5F, 0.1F, 10F,
@@ -143,9 +143,9 @@ public final class SubstrateConfigSC {
         nativesCrossBridge = c.getBoolean("nativesCrossBridge", d, false,
                 "The Substrate's creatures may pass a bridge out of it (with the Mass Compensator) / Существа Подложки проходят через мост (с Компенсатором массы)");
         empMobTargets = c.getBoolean("empMobTargets", d, true,
-                "PE-1 Point and Pulse suppress the armour of the Substrate's mobs (off: they only slow them, as before) / ПЭ-1 «Точка» и «Импульс» подавляют броню мобов Подложки (выкл.: только замедляют, как раньше)");
+                "PE-1 Point and Pulse suppress the armour of the Substrate's mobs (off: they only slow them, as before) / ПЭ-1 „Точка“ и „Импульс“ подавляют броню мобов Подложки (выкл.: только замедляют, как раньше)");
         siphonMobs = c.getBoolean("siphonMobs", d, true,
-                "PE-1 Siphon drains the armour of the Substrate's mobs / ПЭ-1 «Сифон» выкачивает броню мобов Подложки");
+                "PE-1 Siphon drains the armour of the Substrate's mobs / ПЭ-1 „Сифон“ выкачивает броню мобов Подложки");
         gearDropMultiplier = num(c, "gearDropMultiplier", d, 1F, 0F, 10F,
                 "Every trophy chance (pieces of armour and weapons off the Substrate's mobs), times this / Множитель шансов трофеев (части брони и оружие с мобов Подложки)");
         villages = c.getBoolean("villages", d, true,
@@ -163,16 +163,16 @@ public final class SubstrateConfigSC {
                 + " импульс подавляет часть брони у игроков и мобов под открытым небом (выкл.: бурь нет)");
         raids = c.getBoolean("raids", d, true,
                 "The Renegades raid a settlement at night when a player it knows (\"Acquaintance\" or better) is near: 10% a night, at most once in 5 days,"
-                + " three waves (off: no raids) / Отступники ночью нападают на поселение, если рядом игрок с «Доверием» от «Знакомого»: 10% за ночь, не чаще"
+                + " three waves (off: no raids) / Отступники ночью нападают на поселение, если рядом игрок с „Доверием“ от „Знакомого“: 10% за ночь, не чаще"
                 + " раза в 5 дней, три волны (выкл.: налётов нет)");
         requireSignal = c.getBoolean("requireSignal", d, false,
                 "The Substrate shows in a Space Bridge's list (and a bridge opens an end there) only for a player who has used a \"Si-14 Navigation Record\""
                 + " (off: for everyone) / Подложка видна в списке Космического моста (и мост открывает туда конец) только игроку, который применил"
-                + " «Навигационную запись Si-14» (выкл.: всем)");
+                + " „Навигационную запись Si-14“ (выкл.: всем)");
         caravans = c.getBoolean("caravans", d, true,
                 "Every 2 game days a caravan - a trader and two guards - comes to a settlement a player is near; 40% are ambushed on the way;"
                 + " beating the ambush off gives reputation and a rare deal (off: no caravans) / Раз в 2 игровых дня к поселению, у которого есть"
-                + " игрок, идёт караван - торговец и два стража; 40% попадают в засаду; отбитая засада - «Доверие» и редкая сделка (выкл.: караванов нет)");
+                + " игрок, идёт караван - торговец и два стража; 40% попадают в засаду; отбитая засада - „Доверие“ и редкая сделка (выкл.: караванов нет)");
     }
 
     /** As ConfigSC.num: Forge clamps by comparisons and NaN passes them - NaN / infinity in the file: the default. */
