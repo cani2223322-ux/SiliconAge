@@ -51,6 +51,13 @@ import net.minecraft.world.chunk.IChunkProvider;
  * slots, their creatures and the buildings stay as they are, the new ones (NEVER) stand at the existing points, their
  * home their post; the roster then makes their creatures as any NEVER slot's. A restored record is made from the plan of
  * the current version (its roster may then differ from a Ф2 settlement's buildings - a rare case, logged by restore).
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §2.5, rules ПЖ-11, ПР-7, ПД-7, the coordinator's): a Substrate record with a dock (a Settlement,
+ * a City, «Первый причал») and no Dispatcher gets one appended at the end before its core's second does anything else -
+ * addDispatcher (the flights home, package R): his post across the street from P_GATE (dispatcherPost), NEVER, named afresh - an
+ * old world's settlements get him without a block rebuilt, a new one's the same way. An embassy (the Overworld) has its own two in its
+ * plan and never gets one here. Visitors: an embassy's dock is never «known» (the bridge lists only the Substrate's), and its Pass
+ * gives «Доверие» under ReputationSC.ceiling. A lost embassy record is made again from EmbassyLayoutSC's plan, not the Substrate's.
  */
 public final class RosterSC {
 
@@ -87,6 +94,11 @@ public final class RosterSC {
             r.markDirty();
             FMLLog.info("[Silicon Age] Si-14 settlements: settlement %d (record version %d) got the Ф3 roster - %d slots appended at the end",
                     s.id, from, added);
+        }
+        if (com.sc.dim.SubstrateSC.is(w) && dispatcherDue(s, com.sc.dim.SubstrateSC.dimId())) {   // Ф6: the flights home (ПЖ-11)
+            addDispatcher(s);
+            r.markDirty();
+            FMLLog.info("[Silicon Age] Si-14 settlements: settlement %d got a Dispatcher at its dock (slot %d)", s.id, s.slots.size() - 1);
         }
         if (st.ticks++ % CENSUS_EVERY == 0) {
             census(w, r, s, st, now);
@@ -294,6 +306,7 @@ public final class RosterSC {
 
     static void visitors(World w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
         Integer id = Integer.valueOf(s.id);
+        boolean known = s.hasDock && !SettlementSC.isEmbassy(s);   // Ф6: an embassy's Vokzal is never a «known dock» (ПР-7)
         for (Object o : w.playerEntities) {
             EntityPlayer p = (EntityPlayer) o;
             if (!SettlementProtectSC.real(p) || !p.isEntityAlive() || !s.inBelt(p.posX, p.posZ)) {
@@ -301,8 +314,9 @@ public final class RosterSC {
             }
             UUID u = p.getUniqueID();
             SettlementRegistrySC.PlayerRec pr = r.playerIfAny(u);
-            boolean newDock = s.hasDock && (pr == null || !pr.knownDocks.contains(id));
-            if (pr != null && pr.firstPass && !newDock) {
+            boolean newDock = known && (pr == null || !pr.knownDocks.contains(id));
+            boolean newEmbassy = !known && SettlementSC.isEmbassy(s) && (pr == null || !com.sc.embassy.EmbassyTicketSC.hasSeen(pr, s.id));
+            if (pr != null && pr.firstPass && !newDock && !newEmbassy) {
                 continue;
             }
             if (pr == null) {
@@ -317,13 +331,18 @@ public final class RosterSC {
                 SettlementProtectSC.say(p, SettlementProtectSC.colour(new ChatComponentTranslation("sc.settle.pass.dock",
                         SettlementSC.displayName(s)), EnumChatFormatting.DARK_AQUA), true);
             }
+            if (newEmbassy && com.sc.embassy.EmbassyTicketSC.see(pr, s.id)) {   // Ф6: an embassy seen - OTHER may fly here (ПЯ-9)
+                r.markDirty();
+                SettlementProtectSC.say(p, SettlementProtectSC.colour(new ChatComponentTranslation("sc.embassy.seen",
+                        SettlementSC.displayName(s)), EnumChatFormatting.DARK_AQUA), true);
+            }
         }
     }
 
     /** ПД-5: the Tuners' Pass - once a player, at the first settlement they come to. */
     static void pass(World w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, EntityPlayer p, SettlementRegistrySC.PlayerRec pr) {
         pr.firstPass = true;
-        int got = ReputationSC.give(pr, ReputationSC.PASS, ReputationSC.SRC_PASS, SettlementSC.day(w));
+        int got = ReputationSC.give(pr, ReputationSC.PASS, ReputationSC.SRC_PASS, SettlementSC.day(w), ReputationSC.ceiling(s));   // Ф6: ПД-7
         ItemStack chips = SettlementItemsSC.chips(ReputationSC.PASS_CHIPS);
         if (chips != null) {
             p.inventory.addItemStackToInventory(chips);         // what doesn't fit is left in the stack
@@ -371,8 +390,12 @@ public final class RosterSC {
         s.madeAt = now;
         s.version = SettlementRegistrySC.VERSION;
         boolean planned = false;
+        boolean embassy = !com.sc.dim.SubstrateSC.is(w);              // Ф6: a core in the Overworld is an embassy's
+        if (embassy) {
+            s.size = SettlementSizeSC.EMBASSY.ordinal();
+        }
         try {
-            planned = fromPlan(s, w.getSeed());
+            planned = embassy ? fromEmbassyPlan(s, w) : fromPlan(s, w.getSeed());
         } catch (RuntimeException ex) {
             FMLLog.warning("[Silicon Age] Si-14 settlements: the plan of settlement %d couldn't be made again (%s) - restored without its roster", id, ex);
             s.slots.clear();
@@ -403,6 +426,25 @@ public final class RosterSC {
                     + " version its creatures stand where the newer plan puts them", id, SettlementRegistrySC.VERSION);
         }
         return r.byId(id);
+    }
+
+    /**
+     * Ф6: fills `s` (an embassy's lost record) from its plan if the embassies' maths still puts one with this very core here
+     * (EmbassySiteSC.siteAtCore - the grid's or the guaranteed one), else if its built start is there (EmbassySiteSC.siteOfStart -
+     * the ground piece's core, dome and floor: the spawn, the section embassy's numbers or the land rules changed since). @return
+     * whether it did
+     */
+    private static boolean fromEmbassyPlan(SettlementRegistrySC.Settlement s, World w) {
+        com.sc.embassy.EmbassySiteSC.Site site = com.sc.embassy.EmbassySiteSC.siteAtCore(w, s.x, s.z);
+        if (site == null) {
+            site = com.sc.embassy.EmbassySiteSC.siteOfStart(w, s.x, s.z);
+        }
+        if (site == null) {
+            return false;
+        }
+        com.sc.embassy.EmbassyLayoutSC.Plan plan = com.sc.embassy.EmbassyLayoutSC.plan(w.getSeed(), site, s.floorY);
+        com.sc.embassy.EmbassyLayoutSC.fill(s, plan);
+        return true;
     }
 
     /** Fills `s` from the generator's plan if that plan's core is this core. @return whether it did */
@@ -542,6 +584,71 @@ public final class RosterSC {
         int ax = Integer.signum(pl[0] - sq[0]), az = Integer.signum(pl[2] - sq[2]);
         int da = SettlementLayoutSC.AT_ARMOURER[0][0] - SettlementLayoutSC.AT_SQUARE[0], dp = SettlementLayoutSC.AT_ARMOURER[0][1] - SettlementLayoutSC.AT_SQUARE[1];
         return new int[]{sq[0] + da * ax - dp * az, sq[1], sq[2] + da * az + dp * ax};
+    }
+
+    // ------------------------------------------------------------------ Ф6: a Dispatcher at every Substrate dock (ПЖ-11, ПР-7)
+
+    /** The record's extra "S" flag of the Ф6 Dispatcher appended (for the log and the world test; the slot itself is what counts). */
+    public static final String F6_DISPATCHER = "F6Disp";
+
+    /**
+     * Ф6: `s` - a Substrate record (its dim `substrateDim`) of the Substrate's own sizes with a dock, and no Dispatcher among its slots -
+     * gets one (addDispatcher). Pure: the self-test asks it of records by hand. An embassy's never (its plan has two).
+     */
+    public static boolean dispatcherDue(SettlementRegistrySC.Settlement s, int substrateDim) {
+        return s != null && s.dim == substrateDim && s.hasDock && s.sizeKind().substrate() && s.slotsOf(NpcKindSC.DISPATCHER).isEmpty();
+    }
+
+    /**
+     * Ф6 (ПЖ-11): appends the Dispatcher's slot at the END of `s` - no slot moves, no building changes: NEVER (the roster makes him),
+     * named afresh (none of the record's names twice, nor the settlement's own), his post and home dispatcherPost(s); extra "S"
+     * F6_DISPATCHER true. Pure (the record only). @return the new slot's index, -1 if `s` already has one
+     */
+    public static int addDispatcher(SettlementRegistrySC.Settlement s) {
+        if (s == null || !s.slotsOf(NpcKindSC.DISPATCHER).isEmpty()) {
+            return -1;
+        }
+        Set<Integer> used = new HashSet<Integer>();
+        used.add(Integer.valueOf(NpcNamesSC.code(s.nameElement, s.nameNumber)));
+        for (SettlementRegistrySC.Slot sl : s.slots) {
+            used.add(Integer.valueOf(sl.nameCode()));
+        }
+        Random rand = new Random(s.seed ^ 0xF6D15L ^ ((long) s.id << 20));
+        int code;
+        do {
+            code = NpcNamesSC.random(rand);
+        } while (!used.add(Integer.valueOf(code)));
+        int[] at = dispatcherPost(s);
+        SettlementRegistrySC.Slot sl = new SettlementRegistrySC.Slot();
+        sl.kind = NpcKindSC.DISPATCHER.ordinal();
+        sl.nameElement = NpcNamesSC.element(code);
+        sl.nameNumber = NpcNamesSC.number(code);
+        sl.postX = sl.homeX = at[0];
+        sl.postY = sl.homeY = at[1];
+        sl.postZ = sl.homeZ = at[2];
+        sl.state = SettlementRegistrySC.NEVER;
+        s.slots.add(sl);
+        NBTTagCompound c = s.extra.getCompoundTag(EXTRA_S);
+        c.setBoolean(F6_DISPATCHER, true);
+        s.extra.setTag(EXTRA_S, c);
+        return s.slots.size() - 1;
+    }
+
+    /**
+     * Ф6: the Dispatcher's post in a Substrate settlement - inside its gate, across the street from P_GATE (the Sentry's: the gate's
+     * axis is P_GATE's longer offset from the core, the street's side its shorter one - the other side is the Dispatcher's); P_GATE
+     * itself if it lies on the axis; the core's column without P_GATE. Pure.
+     */
+    public static int[] dispatcherPost(SettlementRegistrySC.Settlement s) {
+        int[] g = s.point(SettlementRegistrySC.P_GATE);
+        if (g == null || g.length != 3) {
+            return new int[]{s.x, s.floorY + 1, s.z};
+        }
+        int dx = g[0] - s.x, dz = g[2] - s.z;
+        if (Math.abs(dx) >= Math.abs(dz)) {
+            return new int[]{g[0], g[1], s.z - dz};
+        }
+        return new int[]{s.x - dx, g[1], g[2]};
     }
 
     /** The size a dome of `radius` is (the record lost it; the self-test asks it). */

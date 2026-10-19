@@ -135,11 +135,16 @@ public class ComponentSettlementSC extends StructureComponent {
 
     /**
      * Sets one block if (x, y, z) is inside the window - flag 2, no neighbour updates; a block that gives light
-     * (getLightValue by the world: a meta's light too) is lit by hand where setBlock gave up. @return placed
+     * (getLightValue by the world: a meta's light too) is lit by hand where setBlock gave up. The same block and meta
+     * already there (Ф6's «Достройка» runs the pieces again, a piece built over another's block): nothing set - Forge
+     * 1614's setBlock runs both light passes even for no change. @return placed (or already so)
      */
     public static boolean put(World w, StructureBoundingBox win, int x, int y, int z, Block b, int meta) {
         if (b == null || y < 1 || y > 255 || !win.isVecInside(x, y, z)) {
             return false;
+        }
+        if (w.getBlock(x, y, z) == b && w.getBlockMetadata(x, y, z) == meta) {
+            return true;
         }
         w.setBlock(x, y, z, b, meta, 2);
         int light = b.getLightValue(w, x, y, z);

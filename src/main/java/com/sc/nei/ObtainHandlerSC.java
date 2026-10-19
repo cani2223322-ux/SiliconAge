@@ -75,8 +75,9 @@ import net.minecraftforge.oredict.OreDictionary;
  * blocks (hidden: only in a Breakdown Epicentre), the Breakdown Key (its recipe; the Fragments - the Sentinels') and Matrix (the
  * Warden's), the Arena Coordinator (the Cartographer, an elite's 2%), the twelve journals by number (JournalSC), the two paint
  * schemes (the Warden's 25%, the Elder's), the Lithographers' Module (the Elder for a Matrix), the Navigation Record (its recipe),
- * the Burnt Coil (the bridge wrecks), the ПЭ-1М trophy (the Warden's 2%) and the boss's egg, and - in a pack that unifies metals
- * (UniDict) - the mod's ingots and dusts it swaps for another mod's.
+ * the Burnt Coil (the bridge wrecks), the ПЭ-1М trophy (the Warden's 2%) and the boss's egg, Ф6's (docs/plan-substrate-tech-f6.md
+ * §9.3) Great Ring core (hidden: only in an embassy), the Embassy Direction Finder (its recipe, what it shows) and the embassy-only
+ * showcase metas, and - in a pack that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
  */
 public class ObtainHandlerSC extends TemplateRecipeHandler {
 
@@ -159,6 +160,10 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         }
         if (item == ModItems.fluidDrop) {
             return fluidPage(s);
+        }
+        Page embassy = embassyPage(s);                    // Ф6: before the settlements' (the showcase metas 7..9 are an embassy's)
+        if (embassy != null) {
+            return embassy;
         }
         Page settle = settlementPage(s);
         if (settle != null) {
@@ -434,6 +439,41 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
             p.text(Lang.tr("sc.nei.obtain.navRecord"));
             p.text(Lang.tr(com.sc.dim.SubstrateConfigSC.requireSignal ? "sc.tooltip.navRecord.details.on" : "sc.tooltip.navRecord.details.off"));
             p.rel(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1));
+            return p;
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ Подложка Ф6 (docs/plan-substrate-tech-f6.md §9.3)
+
+    /**
+     * The Great Ring's core (hidden in NEI - only under an embassy's ring; R in cheat mode still asks), the Embassy Direction Finder
+     * (crafted - the shapeless recipe is NEI's own page; here what it does and how far it hears) and the showcase metas only an
+     * embassy has (BlockShowcase2SC 7..9: the ring's coils, the Vokzal's tanks, the Dispatchers' desk). Null: none of them.
+     */
+    private Page embassyPage(ItemStack s) {
+        Item item = s.getItem();
+        if (blockItem(item, com.sc.embassy.EmbassyBlocksSC.ring)) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.embassyRing"));
+            p.text(Lang.tr("sc.tooltip.embassyRing.details"));
+            p.rel(com.sc.embassy.EmbassyItemsSC.finder(1));
+            return p;
+        }
+        if (com.sc.embassy.EmbassyItemsSC.finder != null && item == com.sc.embassy.EmbassyItemsSC.finder) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.embassyFinder"));
+            p.text(Lang.tr("sc.tooltip.embassyFinder.details", com.sc.embassy.ItemEmbassyFinderSC.SEARCH));
+            p.rel(new ItemStack(Items.compass)).rel(ModItems.siliconMaterial.stackOf(SiliconMaterial.TRANSISTOR))
+                    .rel(ModItems.siliconMaterial.stackOf(SiliconMaterial.SI_WAFER));
+            return p;
+        }
+        int meta = s.getItemDamage();
+        if (blockItem(item, SettlementBlocksSC.showcase2) && meta >= com.sc.block.BlockShowcase2SC.GRAVITY_COIL
+                && meta <= com.sc.block.BlockShowcase2SC.DISPATCH_CONSOLE) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.embassy"));
+            p.rel(com.sc.embassy.EmbassyItemsSC.finder(1));
             return p;
         }
         return null;

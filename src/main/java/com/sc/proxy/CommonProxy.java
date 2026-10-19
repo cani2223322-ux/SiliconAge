@@ -77,6 +77,10 @@ public class CommonProxy {
     public void openJournal(int number) {
     }
 
+    /** Подложка Ф6: an embassy message from the server (EmbassyNetSC.ToClient - the beams, a flight's effect; client only, any thread). */
+    public void embassyMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+    }
+
     /** A client connected to another machine's server (not single player, not the LAN host) - ConfigSyncSC. */
     public boolean playsOnRemoteServer() {
         return false;

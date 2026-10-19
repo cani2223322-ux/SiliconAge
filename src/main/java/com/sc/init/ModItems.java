@@ -317,6 +317,7 @@ public final class ModItems {
         // Подложка Ф4: the camp's key, the Fragment of the Breakdown Key, the Sealed Crumb, the ruins' Pelengator (appended; package C)
         com.sc.ruin.RelicItemsSC.init();
         com.sc.finale.FinaleItemsSC.init();             // Подложка Ф5: the Arena Coordinator, the journals, the schemes, the Module, the Navigation Record
+        com.sc.embassy.EmbassyItemsSC.init();           // Подложка Ф6: the Embassy Direction Finder
     }
 
     public static com.sc.item.ItemConverterModuleSC converterModule;

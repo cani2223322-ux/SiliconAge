@@ -453,6 +453,38 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         }
     }
 
+    /**
+     * Ф6 (docs/plan-substrate-tech-f6.md §5.6, ПЕ-2): a player's field zone of dimension `dim` (a switched-on master in ZoneRegistry,
+     * loaded or not; a settlement's core is never in it - its owner is no player's) reaches within `reach` blocks (across) of (x, z):
+     * the box round its master and its anchors (zoneNodes) grown by its range - every shape lies in it - no further than `reach`. The
+     * guaranteed embassy is never chosen near one, a grid one's start is made empty (EmbassySiteSC.zoneNear). Server; false on a client.
+     */
+    public static boolean playerZoneNear(net.minecraft.world.World w, int dim, int x, int z, int reach) {
+        ZoneRegistry reg = w == null || w.isRemote ? null : ZoneRegistry.get(w);
+        if (reg == null) {
+            return false;
+        }
+        long r2 = (long) reach * reach;
+        for (Zone e : reg.zones) {
+            if (e.dim != dim || com.sc.settle.SettlementSC.isSettlementOwner(e.owner)) {
+                continue;
+            }
+            long minX = e.x, maxX = e.x, minZ = e.z, maxZ = e.z;
+            for (int[] n : e.nodes) {
+                minX = Math.min(minX, n[0]);
+                maxX = Math.max(maxX, n[0]);
+                minZ = Math.min(minZ, n[2]);
+                maxZ = Math.max(maxZ, n[2]);
+            }
+            long dx = Math.max(0L, Math.max(minX - e.range - x, x - (maxX + 1 + e.range)));
+            long dz = Math.max(0L, Math.max(minZ - e.range - z, z - (maxZ + 1 + e.range)));
+            if (dx * dx + dz * dz <= r2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** One switched-on master's zone as ZoneRegistry keeps it. */
     static final class Zone {
         final int dim, x, y, z, mode, range, height;

@@ -544,7 +544,7 @@ public final class SelfTestSettlementSC {
 
     private static void sizesAndKinds() {
         boolean table = size(SettlementSizeSC.OUTPOST, 24, 24, 3, 5, 2, 0, false) && size(SettlementSizeSC.SETTLEMENT, 40, 40, 8, 12, 3, 2, true)
-                && size(SettlementSizeSC.CITY, 56, 64, 15, 20, 4, 3, true) && SettlementSizeSC.values().length == 3
+                && size(SettlementSizeSC.CITY, 56, 64, 15, 20, 4, 3, true) && SettlementSizeSC.SUBSTRATE_SIZES == 3   // Ф6: + EMBASSY (SelfTestEmbassySC)
                 && SettlementSizeSC.of(-1) == SettlementSizeSC.OUTPOST && SettlementSizeSC.of(9) == SettlementSizeSC.OUTPOST
                 && SettlementSizeSC.CITY.guards() == 7 && "sc.settle.size.city".equals(SettlementSizeSC.CITY.langKey());
         Random rand = new Random(14L);
@@ -1131,7 +1131,8 @@ public final class SelfTestSettlementSC {
             if (!keys.add(c.key)) {
                 bad.append(" twice ").append(c.key);
             }
-            if (c.goal < ContractTableSC.KILL || c.goal > ContractTableSC.CARGO || c.target <= 0 || c.chips <= 0 || c.reputation < ReputationSC.CONTRACT_MIN
+            boolean ambassadors = c.key.startsWith("emb");            // Ф6 (ПО-27): the Ambassador's, its «Депеша» a goal of its own - SelfTestEmbassySC's
+            if (c.goal < ContractTableSC.KILL || c.goal > ContractTableSC.CARGO && !ambassadors || c.target <= 0 || c.chips <= 0 || c.reputation < ReputationSC.CONTRACT_MIN
                     || c.reputation > ReputationSC.CONTRACT_MAX || c.modulePct < 0 || c.modulePct > 100 || ContractTableSC.byKey(c.key) != c) {
                 bad.append(' ').append(c.key).append(" goal ").append(c.goal).append(" target ").append(c.target).append(" reward ").append(c.chips)
                         .append(" / +").append(c.reputation);
@@ -1244,8 +1245,10 @@ public final class SelfTestSettlementSC {
                 metas.append(' ').append(m);
             }
         }
-        boolean names = BlockSettlementDecorSC.NAMES.length == BlockSettlementDecorSC.METALS.length + 1
-                && "tokamakCoil".equals(BlockSettlementDecorSC.NAMES[BlockSettlementDecorSC.COIL]);
+        boolean names = BlockSettlementDecorSC.COIL == BlockSettlementDecorSC.METALS.length                  // Ф6's looks appended after it
+                && "tokamakCoil".equals(BlockSettlementDecorSC.NAMES[BlockSettlementDecorSC.COIL])
+                && BlockSettlementDecorSC.NAMES.length == BlockSettlementDecorSC.QUARTZ_PILLAR + 1
+                && d.getDrops(null, 0, 0, 0, BlockSettlementDecorSC.TRACE, 0).isEmpty() && d.getDrops(null, 0, 0, 0, BlockSettlementDecorSC.QUARTZ, 0).isEmpty();
         check(hard && drops && guarded && metas.length() == 0 && names, "the trim (§4.5, ПП-7): hardness -1 and blast-proof " + hard
                 + ", no drop and no pick-block (the core, showcases and dock give none either) " + drops + ", among the unbreakable - the real metal and"
                 + " lead glass not " + guarded + ", a meta per metal of the palette" + (metas.length() == 0 ? "" : " - NOT:" + metas) + ", the coil last " + names);
@@ -1507,7 +1510,7 @@ public final class SelfTestSettlementSC {
             }
         }
         int sizes = rowsOf("world.settlements", 0), levels = rowsOf("world.trust", 0), violations = rowsOf("world.trust", 1), ranks = rowsOf("world.wardens", 0);
-        boolean tables = sizes == SettlementSizeSC.values().length && levels == ReputationSC.LEVEL_KEYS.length && violations == ViolationRulesSC.KEYS.length
+        boolean tables = sizes == SettlementSizeSC.SUBSTRATE_SIZES && levels == ReputationSC.LEVEL_KEYS.length && violations == ViolationRulesSC.KEYS.length
                 && ranks == 4;                                             // Ф3: + the Captain and the Commandant
         int dealTables = 0;
         BookEntry tradeEntry = BookContent.byId("world.trade");

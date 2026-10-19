@@ -6,6 +6,10 @@ package com.sc.settle;
  * keep: append only, never renumber. Ф3 (docs/plan-substrate-tech-f3.md §6) appended the Power Engineer, the Armourer,
  * the Salvager (Tuners) and the Captain, the Commandant (guards: EntityWardenSC ranks, back from the Clone Capsule after
  * 20 minutes). Lang: sc.settle.kind.<key>. Shared core: only the coordinator edits this file.
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §2.4, rules ПЖ-11, ПЖ-12): the Dispatcher («Диспетчер прокола» - the Great Ring's flights in an
+ * embassy, the flights home at a Substrate dock) and the Quartermaster («Интендант» - an embassy's buyer of bread, wood, coal and
+ * iron) appended. An embassy's Elder is its Ambassador («Посол»): the same ELDER, another name - langKey(true).
  */
 public enum NpcKindSC {
 
@@ -33,7 +37,12 @@ public enum NpcKindSC {
     /** «Капитан купола» (ПГ-11) - Exo 4/4 with helium and the shield, the Exo Blade, a heavy «Пробой» blow; every City, 30% of Settlements. */
     CAPTAIN("captain", true, NpcKindSC.CHIEF_RESPAWN_TICKS),
     /** «Комендант города» (ПГ-12) - Singular armour, the Singular Blade, a ПЭ-1 Pulse against the Shells near the dome; Cities only. */
-    COMMANDANT("commandant", true, NpcKindSC.CHIEF_RESPAWN_TICKS);
+    COMMANDANT("commandant", true, NpcKindSC.CHIEF_RESPAWN_TICKS),
+    // ---- Ф6 (docs/plan-substrate-tech-f6.md §2.4, rules ПЖ-11, ПЖ-12)
+    /** «Диспетчер прокола» (ПЖ-11) - an embassy's Great Ring flights (two of them, at the Vokzal); one at every Substrate dock - the flights home. */
+    DISPATCHER("dispatcher", false),
+    /** «Интендант» (ПЖ-12) - an embassy's supply buyer: bread, wood, coal, iron for Credit Chips (two of them, at the supply depots). */
+    QUARTERMASTER("quartermaster", false);
 
     /** A dead Tuner comes back from the Clone Capsule one a game day per settlement (§5 «по одному в игровые сутки»). */
     public static final int TUNER_RESPAWN_TICKS = 24000;
@@ -78,5 +87,10 @@ public enum NpcKindSC {
     /** sc.settle.kind.<key>. */
     public String langKey() {
         return "sc.settle.kind." + key;
+    }
+
+    /** Ф6: the name in a settlement of this kind of world - an embassy's Elder is «Посол» (sc.settle.kind.ambassador). */
+    public String langKey(boolean embassy) {
+        return embassy && this == ELDER ? "sc.settle.kind.ambassador" : langKey();
     }
 }

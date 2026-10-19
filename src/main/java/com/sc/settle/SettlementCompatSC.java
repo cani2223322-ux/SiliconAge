@@ -32,6 +32,9 @@ import net.minecraft.item.ItemStack;
  * <p>
  * Ф5 (package A, docs/plan-substrate-tech-f5.md §4.7, rule ПУ-10): the Breakdown Epicentre's arenaSC too (every meta) - its
  * Console keeps no key (the record does), but a pit carried off would leave the arena's record without its Console and plating.
+ * <p>
+ * Ф6 (the coordinator's, docs/plan-substrate-tech-f6.md §2.2, rule ПК-29): the Great Ring's core embassyRingSC too (showcase2SC's
+ * Ф6 metas - the ring's coils, the tanks, the desk - go with its NAMES).
  */
 public final class SettlementCompatSC {
 
@@ -49,11 +52,13 @@ public final class SettlementCompatSC {
         int camp = blacklist(com.sc.ruin.CampBlocksSC.camp, com.sc.ruin.CampBlocksSC.CAMP_NAMES.length)   // Ф4 (ПЗ-7): the safe, the stolen field
                 + blacklist(com.sc.ruin.CampBlocksSC.stolenField, 1);
         int arena = blacklist(com.sc.arena.ArenaBlocksSC.arena, com.sc.arena.ArenaBlocksSC.NAMES.length);   // Ф5 (ПУ-10): the Epicentre whole
+        int embassy = blacklist(com.sc.embassy.EmbassyBlocksSC.ring, 1);    // Ф6 (ПК-29): the Great Ring's core (its showcases are showcase2SC's)
         if (Loader.isModLoaded(AE2)) {
             FMLLog.info("[Silicon Age] Si-14 settlements: %d stacks of the core, showcases, dock and trim sent to AE2's spatial IO blacklist (%s)",
                     sent, AE2_SPATIAL_BLACKLIST);
             FMLLog.info("[Silicon Age] Si-14 camps: %d stacks of the Renegades' safe, panels, pad and Stolen Field Generator sent to it too", camp);
             FMLLog.info("[Silicon Age] Si-14 arenas: %d stacks of the Breakdown Epicentre's blocks (the Console, pedestals, plating) sent to it too", arena);
+            FMLLog.info("[Silicon Age] Tuners' Embassies: %d stack of the Great Ring's core sent to it too", embassy);
         }
     }
 

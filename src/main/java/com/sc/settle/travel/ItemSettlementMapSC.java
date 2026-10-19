@@ -45,10 +45,17 @@ public class ItemSettlementMapSC extends Item {
         setTextureName(Reference.ASSETS + ":settlementMap");
     }
 
-    /** Package T's Cartographer deal: a map of the docks nearest to settlement `from` (server). Never null after init. */
+    /**
+     * Package T's Cartographer deal: a map of the docks nearest to settlement `from` (server). Never null after init. Ф6 (ПО-24): a
+     * map bought at an embassy (SettlementSC.isEmbassy - the Overworld) shows the docks round «Первый причал» - an embassy's own
+     * neighbours are other embassies, never the Substrate's docks.
+     */
     public static ItemStack make(SettlementRegistrySC reg, SettlementRegistrySC.Settlement from) {
         ItemStack st = new ItemStack(SettlementItemsSC.settlementMap);
         SettlementRegistrySC.Settlement at = from;
+        if (com.sc.settle.SettlementSC.isEmbassy(at)) {
+            at = null;                                       // Ф6: an embassy's Cartographer - as an ownerless one
+        }
         if (at == null && reg != null && SubstrateSC.active()) {
             at = reg.first(SubstrateSC.dimId());             // an ownerless Cartographer: round «Первый причал»
         }

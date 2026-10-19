@@ -234,6 +234,7 @@ public final class WorldTestArmourerSC {
         for (SettlementRegistrySC.Slot sl : rec.slots) {
             kinds.add(sl.kindOf());
         }
+        WorldTestSettlementSC.withoutF6Dispatcher(rec, kinds);        // Ф6: the dock's Dispatcher (appended at its core's first second)
         String why = SelfTestCombatSC.rosterV2Problem(site.size, site.seed, kinds);
         boolean roster = why == null && kinds.equals(SettlementLayoutSC.roster(site)) && rec.version == SettlementRegistrySC.VERSION && rec.version == 2
                 && !rec.extra.getCompoundTag("S").hasKey("F3From") && kinds.contains(NpcKindSC.CAPTAIN)
@@ -258,7 +259,7 @@ public final class WorldTestArmourerSC {
         boolean all = true;
         for (int m = 0; m < count.length; m++) {
             machines.append(' ').append(BlockShowcase2SC.NAMES[m]).append(' ').append(count[m]);
-            all &= count[m] > 0;
+            all &= count[m] > 0 || m >= BlockShowcase2SC.GRAVITY_COIL;     // Ф6's metas 7..9 stand in the embassies only
         }
         print(roster && all, "a new settlement (package S, §6.2, §6.3): the " + site.size + " at " + site.x + ", " + site.z + " - its record of version "
                 + rec.version + ", the roster of §6.2 " + (why == null ? "ok" : why) + " (" + kinds.size() + " slots, the Captain "

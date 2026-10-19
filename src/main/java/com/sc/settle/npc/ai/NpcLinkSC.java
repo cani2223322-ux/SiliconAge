@@ -2,7 +2,6 @@ package com.sc.settle.npc.ai;
 
 import java.util.UUID;
 
-import com.sc.dim.SubstrateSC;
 import com.sc.settle.ISettlementGuardSC;
 import com.sc.settle.ISettlementMemberSC;
 import com.sc.settle.RosterSC;
@@ -71,10 +70,22 @@ public final class NpcLinkSC {
      * the slot's creature lost (RosterSC.LOST_CENSUSES) and the Clone Capsule makes it again at home, so a copy taken
      * away never trades nor guards there. A stray (a spawn egg's) lives anywhere. Server, now and then from the
      * creature's living update. @return removed
+     * <p>
+     * Ф6 (docs/plan-substrate-tech-f6.md §0, ПП-14): «out of its world» is a world that has no settlements (SettlementSC.governs - the
+     * Substrate, the Overworld's embassies), or one other than its record's (an embassy's settler carried into the Substrate, a
+     * Substrate settler into the Overworld): the record's dimension decides when the record is there.
      */
     public static boolean exiled(EntityCreature mob) {
-        if (mob.worldObj == null || mob.worldObj.isRemote || ((ISettlementMemberSC) mob).settlementId() < 0 || SubstrateSC.is(mob.worldObj)) {
+        int id = ((ISettlementMemberSC) mob).settlementId();
+        if (mob.worldObj == null || mob.worldObj.isRemote || id < 0) {
             return false;
+        }
+        if (SettlementSC.governs(mob.worldObj)) {
+            SettlementRegistrySC r = SettlementRegistrySC.get(mob.worldObj);
+            SettlementRegistrySC.Settlement s = r == null ? null : r.byId(id);
+            if (s == null || s.dim == mob.worldObj.provider.dimensionId) {
+                return false;                                   // at home (or its record is lost: the core makes it again)
+            }
         }
         mob.setDead();
         return true;
@@ -93,10 +104,36 @@ public final class NpcLinkSC {
         return s == null || i < 0 || i >= s.slots.size() ? null : s.slots.get(i);
     }
 
-    /** The home area: a Tuner's - the dome less TUNER_HOME_INSET; a guard's - its leash (the core's column, from the floor). */
+    /**
+     * The home area: a Tuner's - the dome less TUNER_HOME_INSET; a guard's - its leash (the core's column, from the floor). Ф6
+     * (ПЖ-11): a Tuner whose post lies out past that (an embassy's Dispatchers at the Vokzal, outside the dome) - round its post,
+     * OUTPOST_HOME blocks, so the home's pull never drags it back into the dome.
+     */
     public static void setHome(EntityCreature mob, SettlementRegistrySC.Settlement s) {
-        int r = mob instanceof ISettlementGuardSC ? leash(s) : Math.max(4, s.radius - TUNER_HOME_INSET);
-        mob.setHomeArea(s.x, s.floorY + 1, s.z, r);
+        if (!(mob instanceof ISettlementGuardSC)) {
+            int[] post = postOf(mob, s);
+            int r = Math.max(4, s.radius - TUNER_HOME_INSET);
+            if (post != null && s.distSq(post[0] + 0.5D, post[2] + 0.5D) > (double) r * r) {
+                mob.setHomeArea(post[0], post[1], post[2], OUTPOST_HOME);
+                return;
+            }
+            mob.setHomeArea(s.x, s.floorY + 1, s.z, r);
+            return;
+        }
+        mob.setHomeArea(s.x, s.floorY + 1, s.z, leash(s));
+    }
+
+    /** Ф6: the home area's radius round a Tuner's post out past its dome (an embassy's Vokzal office). */
+    public static final int OUTPOST_HOME = 8;
+
+    /** The post {x, y, z} of the slot `mob` holds in `s`, or null. */
+    private static int[] postOf(EntityCreature mob, SettlementRegistrySC.Settlement s) {
+        int i = ((ISettlementMemberSC) mob).slot();
+        if (i < 0 || i >= s.slots.size()) {
+            return null;
+        }
+        SettlementRegistrySC.Slot sl = s.slots.get(i);
+        return new int[]{sl.postX, sl.postY, sl.postZ};
     }
 
     /**

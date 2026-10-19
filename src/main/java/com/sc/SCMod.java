@@ -116,6 +116,16 @@ public class SCMod {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.lore.SignalSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.settle.caravan.CaravanSC.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.caravan.CaravanSC.INSTANCE);
+        // Подложка Ф6, docs/plan-substrate-tech-f6.md: the embassies' generation (package G - Forge's ReplaceBiomeBlocks and world
+        // load on EVENT_BUS, the populate and decorate bans on TERRAIN_GEN_BUS), the flights' windows (package R - FML's ticks and
+        // logouts), the beams (package S - FML's logins, dimension changes, ticks), the first login's line (package T - FML's logins),
+        // a lost core's Heart put back (package G - FML's world ticks)
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.embassy.EmbassyWorldGenSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.TERRAIN_GEN_BUS.register(com.sc.embassy.EmbassyWorldGenSC.DECOR);
+        FMLCommonHandler.instance().bus().register(com.sc.embassy.FlightSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.embassy.EmbassyBeamSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.embassy.EmbassyHintSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.embassy.EmbassyRepairSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -147,6 +157,7 @@ public class SCMod {
         com.sc.dim.SubstrateRecipesSC.init();            // the Substrate's blocks (package W)
         com.sc.mob.MobRecipesSC.init();                  // the Substrate mobs' combat loot (package M)
         com.sc.finale.FinaleRecipesSC.init();            // Ф5: the Breakdown Key, the Navigation Record (the coordinator's)
+        com.sc.embassy.EmbassyRecipesSC.init();          // Ф6: the Embassy Direction Finder (the coordinator's)
     }
 
     @Mod.EventHandler
@@ -160,6 +171,9 @@ public class SCMod {
         com.sc.settle.SettlementSC.init();               // Ф2: the settlements' structure names (MapGenStructureIO), the IMC
         com.sc.ruin.RuinSC.init();                       // Ф3: the Dead Nodes' and the lithographs' structure names
         com.sc.arena.ArenaSC.init();                     // Ф5: the Breakdown Epicentres', the Lithographers' bridge wrecks' names
+        com.sc.embassy.EmbassySC.init();                 // Ф6: the Tuners' Embassies' structure names (MapGenStructureIO, "SCOwEmb*")
+        // Ф6: the embassies' pieces in the Overworld's populate - weight 1000, after every other mod's generator (package G)
+        GameRegistry.registerWorldGenerator(com.sc.embassy.EmbassyWorldGenSC.INSTANCE, com.sc.embassy.EmbassyWorldGenSC.WEIGHT);
         net.minecraftforge.common.ForgeChunkManager.setForcedChunkLoadingCallback(instance, new com.sc.energy.ChunkLoaderSC());
         registerRecipes();
         com.sc.item.ItemFluidBucketSC.registerContainers(ModItems.fluidBucket);
@@ -217,6 +231,7 @@ public class SCMod {
         com.sc.mob.WardenLootSC.clearAll();
         com.sc.lore.SignalSC.clearAll();
         com.sc.settle.caravan.CaravanSC.clearAll();
+        com.sc.embassy.EmbassySC.clearAll();             // Ф6: the sites' cache, the map generator, the windows, the beams, the hints
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
@@ -228,6 +243,7 @@ public class SCMod {
             com.sc.util.UpdateCheckSC.start();               // operators hear about a newer version as they log in
         }
         event.registerServerCommand(new com.sc.bridge.CommandBridgeSC());          // [Принять] / [Отклонить] of a bridge consent
+        event.registerServerCommand(new com.sc.embassy.CommandEmbassySC());        // Ф6: /scembassy list | where | repair (operators)
         if (Boolean.getBoolean("sc.worldtest")) {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWirelessSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestTokamakSC());
@@ -247,6 +263,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestHazardSC());   // Подложка Ф4 (package D)
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWildSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestFinaleSC());   // Подложка Ф5 (package D)
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassySC());  // Подложка Ф6 (package D)
         }
     }
 }

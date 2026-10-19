@@ -64,6 +64,7 @@ public final class SubstrateNetSC {
         com.sc.settle.SettleNetSC.register(CHANNEL);          // Ф2: the settlements' messages, discriminators 1 and 2
         com.sc.hazard.HazardNetSC.register(CHANNEL);          // Ф4: the EMP storm's state and pulses, discriminator 3
         com.sc.finale.FinaleNetSC.register(CHANNEL);          // Ф5: the Lithographers' Signal, the Warden's effects, discriminator 4
+        com.sc.embassy.EmbassyNetSC.register(CHANNEL);        // Ф6: the embassies' beams, the flights' effects, discriminator 5
         FMLCommonHandler.instance().bus().register(new Events());
     }
 

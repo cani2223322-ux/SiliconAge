@@ -209,7 +209,7 @@ final class SelfTestFinaleSC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        boolean rules = sent.size() == 14 && sent.contains("requireSignal") && sent.contains("caravans") && !sent.contains("customSky")
+        boolean rules = sent.size() == 20 && sent.contains("requireSignal") && sent.contains("caravans") && !sent.contains("customSky")   // Ф6: + 6
                 && !SubstrateConfigSC.requireSignal && SubstrateConfigSC.caravans;
         String sky;
         try {
@@ -218,7 +218,7 @@ final class SelfTestFinaleSC {
         } catch (NoSuchFieldException e) {
             sky = "missing";
         }
-        check(rules && "private".equals(sky) && !SubstrateConfigSC.customSky(), "config (§2.1, ПК-21): " + sent.size() + " rules the server sends (14),"
+        check(rules && "private".equals(sky) && !SubstrateConfigSC.customSky(), "config (§2.1, ПК-21): " + sent.size() + " rules the server sends (20),"
                 + " requireSignal " + SubstrateConfigSC.requireSignal + " (false) / caravans " + SubstrateConfigSC.caravans + " (true) " + rules + "; customSky "
                 + sky + ", off by default " + !SubstrateConfigSC.customSky() + ", not a rule" + (rules ? "" : " (the dimension section of the test config edited?)"));
     }
@@ -1251,7 +1251,8 @@ final class SelfTestFinaleSC {
                         .append(got == null ? "" : " -> " + got.id);
             }
         }
-        int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + BookWorldSC.F4_ARTICLES.length + ARTICLES.length;
+        int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + BookWorldSC.F4_ARTICLES.length + ARTICLES.length
+                + BookWorldSC.F6_ARTICLES.length;                                      // Ф6's six after them (SelfTestEmbassySC)
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {
@@ -1267,8 +1268,8 @@ final class SelfTestFinaleSC {
                 + " dimension each open a WORLD article with G" + (unmapped.length() == 0 ? "" : " - NOT:" + unmapped.substring(0, Math.min(400, unmapped.length()))));
     }
 
-    /** Every block (every meta) and item of the Substrate's phases Ф1..Ф5 - the cross-check's list (what isn't registered is skipped). */
-    private static List<ItemStack> dimensionStacks() {
+    /** Every block (every meta) and item of the Substrate's phases Ф1..Ф5 - the cross-check's list (what isn't registered is skipped; Ф6's adds to it). */
+    static List<ItemStack> dimensionStacks() {
         List<ItemStack> out = new ArrayList<ItemStack>();
         metas(out, com.sc.dim.SubstrateBlocksSC.rock, com.sc.dim.SubstrateBlocksSC.ROCK_METAS);
         metas(out, com.sc.dim.SubstrateBlocksSC.druse, 1);

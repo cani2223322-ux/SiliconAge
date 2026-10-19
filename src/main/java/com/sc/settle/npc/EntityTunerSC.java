@@ -10,6 +10,7 @@ import com.sc.settle.ISettlementNpcSC;
 import com.sc.settle.NpcKindSC;
 import com.sc.settle.ReputationSC;
 import com.sc.settle.SettlementRegistrySC;
+import com.sc.settle.SettlementSC;
 import com.sc.settle.npc.ai.EntityAIStrayWanderSC;
 import com.sc.settle.npc.ai.EntityAITunerDaySC;
 import com.sc.settle.npc.ai.EntityAITunerFleeSC;
@@ -65,6 +66,14 @@ import net.minecraftforge.common.util.FakePlayer;
  * kinds like the others (their posts the plan's - the Armourer's at the guard square's armour station; their looks
  * RenderTunerSC's - the coil on the pack, Nano pieces over the overall, the scrap bag); a spawn egg may make any of the
  * seven traders (TRADERS); their sneaking right-click adds a line of what they do for a player (HINTED).
+ * <p>
+ * Ф6, package T (docs/plan-substrate-tech-f6.md §8.6, rules ПЖ-11, ПЖ-12, ПЖ-14): the Dispatcher («Диспетчер прокола») keeps to his
+ * post the whole day and sleeps there (POSTED: no plaza at dusk, no house at night - an embassy's Dispatcher Office at the Vokzal, the
+ * Substrate dock's one inside its gate; his home area round the post is NpcLinkSC.setHome's); the Quartermaster («Интендант») works
+ * like any tradesman (his post at the supply depots, the plaza, a house). An embassy's Elder is called «Посол» (ПЖ-14) - in the
+ * sneaking line too (NpcKindSC.langKey(embassy): the record's size here; the clients' nameplate and WAILA ask the world -
+ * settle.client.SettlementClientSC.kind), and he tells the player of the embassy's ceiling of «Доверие» (sc.settle.tuner.hint.ambassador).
+ * Both new kinds are HINTED; neither comes from a spawn egg (TRADERS is the Substrate's seven: they belong to their posts).
  */
 public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNpcSC, ISubstrateNativeSC {
 
@@ -89,8 +98,14 @@ public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNp
     /** A spawn egg's Tuner: one of the trading professions (the Elder belongs to a settlement) - Ф3's three too. */
     public static final NpcKindSC[] TRADERS = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.CARTOGRAPHER,
             NpcKindSC.POWER_ENGINEER, NpcKindSC.ARMOURER, NpcKindSC.SALVAGER};
-    /** Ф3 (ПЖ-8): the professions whose sneaking right-click adds a second line - what they do for a player (sc.settle.tuner.hint.<key>). */
-    public static final NpcKindSC[] HINTED = {NpcKindSC.POWER_ENGINEER, NpcKindSC.ARMOURER, NpcKindSC.SALVAGER};
+    /**
+     * Ф3 (ПЖ-8): the professions whose sneaking right-click adds a second line - what they do for a player (sc.settle.tuner.hint.<key>);
+     * Ф6 (ПЖ-11, ПЖ-12): the Dispatcher and the Quartermaster appended.
+     */
+    public static final NpcKindSC[] HINTED = {NpcKindSC.POWER_ENGINEER, NpcKindSC.ARMOURER, NpcKindSC.SALVAGER, NpcKindSC.DISPATCHER,
+            NpcKindSC.QUARTERMASTER};
+    /** Ф6 (ПЖ-11): the kinds that keep to their post all day and night (no plaza, no house): the Dispatcher. */
+    public static final NpcKindSC[] POSTED = {NpcKindSC.DISPATCHER};
     /** The plaza at dusk: slot i stands PLAZA_SPREAD + i % 3 blocks off the point, at i x the golden angle round it. */
     public static final int PLAZA_SPREAD = 2;
 
@@ -240,7 +255,7 @@ public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNp
 
     /**
      * ПЖ-4: where it should be now - its machine by day, its place on the plaza at dusk, its home at night (missing
-     * points: the plaza, then the core); null for a stray.
+     * points: the plaza, then the core); null for a stray. Ф6 (ПЖ-11): a POSTED kind (the Dispatcher) - its post at every hour.
      */
     public int[] dayGoal() {
         SettlementRegistrySC.Settlement s = link.get();
@@ -249,11 +264,25 @@ public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNp
         }
         SettlementRegistrySC.Slot sl = link.slot();
         int ph = NpcLinkSC.phase(worldObj.getWorldTime());
+        int[] posted = posted(kind()) ? NpcLinkSC.post(sl) : null;
+        if (posted != null) {
+            return posted;                                      // the Dispatcher: his desk by day, by dusk and by night
+        }
         int[] p = ph == NpcLinkSC.PHASE_WORK ? NpcLinkSC.post(sl) : ph == NpcLinkSC.PHASE_HOME ? NpcLinkSC.home(sl) : null;
         if (p == null) {
             p = plazaSpot(s, slot);
         }
         return p != null ? p : NpcLinkSC.core(s);
+    }
+
+    /** Ф6 (ПЖ-11): kind `k` keeps to its post all day and night (POSTED). Pure. */
+    public static boolean posted(NpcKindSC k) {
+        for (NpcKindSC p : POSTED) {
+            if (p == k) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Slot `i`'s place on the plaza (P_PLAZA, else the guard square), round the point by the golden angle; null none. Pure. */
@@ -387,17 +416,23 @@ public class EntityTunerSC extends EntityCreature implements INpc, ISettlementNp
         SettlementRegistrySC.Settlement s = link.get();
         SettlementRegistrySC.LocalRec l = s == null ? null : s.localIfAny(p.getUniqueID());
         int level = ReputationSC.localLevel(rep, l != null && l.enemy(worldObj.getTotalWorldTime()));
+        boolean embassy = SettlementSC.isEmbassy(s);
         IChatComponent msg = new ChatComponentTranslation(s == null ? "sc.settle.tuner.info.stray" : "sc.settle.tuner.info",
-                NpcNamesSC.name(nameCode()), new ChatComponentTranslation(kind().langKey()), String.valueOf(rep),
+                NpcNamesSC.name(nameCode()), new ChatComponentTranslation(kind().langKey(embassy)), String.valueOf(rep),
                 new ChatComponentTranslation("sc.settle.rep." + ReputationSC.LEVEL_KEYS[level]));
         msg.getChatStyle().setColor(EnumChatFormatting.AQUA);
         p.addChatComponentMessage(msg);
-        for (NpcKindSC k : HINTED) {                            // Ф3: what the new professions do for a player
+        for (NpcKindSC k : HINTED) {                            // Ф3, Ф6: what the new professions do for a player
             if (kind() == k) {
                 IChatComponent hint = new ChatComponentTranslation("sc.settle.tuner.hint." + k.key);
                 hint.getChatStyle().setColor(EnumChatFormatting.GRAY);
                 p.addChatComponentMessage(hint);
             }
+        }
+        if (embassy && kind() == NpcKindSC.ELDER) {             // Ф6 (ПД-7): the Ambassador on the embassy's ceiling
+            IChatComponent hint = new ChatComponentTranslation("sc.settle.tuner.hint.ambassador", String.valueOf(ReputationSC.EMBASSY_CEILING));
+            hint.getChatStyle().setColor(EnumChatFormatting.GRAY);
+            p.addChatComponentMessage(hint);
         }
     }
 

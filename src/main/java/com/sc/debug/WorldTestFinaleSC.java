@@ -148,7 +148,8 @@ import net.minecraftforge.common.util.FakePlayerFactory;
  * Built on the core alone: the packages' own helpers (A's tick / counting, B's fight state, WardenLootSC's award, J's and K's
  * startNow) are asked for by name - a missing one fails its own lines. The test players are never spawned (listed in their chunk
  * where a search must find them); every ticket released, every block placed removed, the test's creatures and items removed. What the
- * world generated stays (the test world's arena, wreck, the EMPTY record of the held-off arena).
+ * world generated stays (the test world's arena, wreck, the EMPTY record of the held-off arena). Ф6: WorldTestEmbassySC waits for
+ * `finished` (set wherever this test is done - the SKIP, a missing world, the end).
  */
 public final class WorldTestFinaleSC {
 
@@ -163,6 +164,9 @@ public final class WorldTestFinaleSC {
             T_RESET_CHECK = T_RESET + 60, T_LOOT = T_RESET_CHECK + ArenaWorldSC.COUNTDOWN_TICKS + 40, T_END = T_LOOT + 40;
     private static final Object NONE = new Object();
     private static final String A_WORLD = "com.sc.arena.ArenaWorldSC", LOOT = "com.sc.mob.WardenLootSC", SIGNAL = "com.sc.lore.SignalSC";
+
+    /** Ф6: the test is over (or skipped) - WorldTestEmbassySC begins after it. */
+    static volatile boolean finished;
 
     private int ticks, startAt, next;
     private boolean done, started;
@@ -242,12 +246,14 @@ public final class WorldTestFinaleSC {
         if (!SubstrateSC.active()) {
             System.out.println("[SC-WORLDTEST] SKIP finale: the dimension is off (" + SubstrateSC.offReason() + ")");
             done = true;
+            finished = true;
             return;
         }
         w = MinecraftServer.getServer().worldServerForDimension(SubstrateSC.dimId());
         if (w == null) {
             print(false, "the Substrate's world not there");
             done = true;
+            finished = true;
             return;
         }
         seed = w.getSeed();
@@ -410,6 +416,7 @@ public final class WorldTestFinaleSC {
         listed.clear();
         w = null;
         System.out.println("[SC-WORLDTEST] DONE finale");
+        finished = true;
     }
 
     // ------------------------------------------------------------------ 1. registration (§2.2)

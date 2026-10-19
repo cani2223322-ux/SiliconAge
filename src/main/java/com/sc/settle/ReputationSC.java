@@ -8,6 +8,11 @@ import com.sc.util.ArmorSuit;
  * plus a local «Враг» status at one settlement (SettlementRegistrySC.LocalRec.enemyUntil). The proposal's numbers
  * (§5 «Репутация «Доверие»»); open ones TODO(balance). Written by the coordinator from the table; package C may tune
  * the numbers and add helpers, the signatures stay (the self-test and packages T, N, B call them).
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §2.6, rule ПД-7, the coordinator's): «Доверие» earned at an embassy in the Overworld - its deals,
+ * contracts, the Pass, the penance at the Ambassador - never lifts a player past EMBASSY_CEILING (599: the top of «Партнёр»); «Свой»
+ * and «Почётный» come from deeds in the Substrate only. give(..., ceiling) holds it; ceiling(s) says which a record has. A player
+ * already over it keeps what he has (a capped gain is 0, never a loss); penalties have no ceiling.
  */
 public final class ReputationSC {
 
@@ -50,6 +55,10 @@ public final class ReputationSC {
     public static final int SRC_RAID = 9;
     /** Ф5 (docs/plan-substrate-tech-f5.md §8, ПН-15, the coordinator's): a caravan's ambush beaten off (CaravanRulesSC.REWARD_REP, no day cap). */
     public static final int SRC_CARAVAN = 10;
+    /** Ф6 (ПД-7): what an embassy's «Доверие» can lift a player to at most - the top of «Партнёр» (OWN_FROM - 1). */
+    public static final int EMBASSY_CEILING = OWN_FROM - 1;
+    /** Ф6: no ceiling (a Substrate settlement's). */
+    public static final int NO_CEILING = Integer.MAX_VALUE;
 
     private ReputationSC() {
     }
@@ -138,6 +147,27 @@ public final class ReputationSC {
         int before = p.reputation;
         p.reputation = clamp(before + a);
         return p.reputation - before;
+    }
+
+    /**
+     * Ф6 (ПД-7): give() under a ceiling - a gain stops at `ceiling` (a player already at or over it gains 0, never loses), a loss is
+     * applied as it is. The day's caps hold as in give(). Pure but for `p`. @return what was applied
+     */
+    public static int give(SettlementRegistrySC.PlayerRec p, int amount, int source, long day, int ceiling) {
+        if (amount <= 0 || ceiling >= MAX) {
+            return give(p, amount, source, day);
+        }
+        int room = Math.max(0, ceiling - p.reputation);
+        if (room <= 0) {
+            p.rollDay(day);                                     // the day's counters still roll (nothing is counted: nothing given)
+            return 0;
+        }
+        return give(p, Math.min(amount, room), source, day);
+    }
+
+    /** Ф6 (ПД-7): the ceiling of «Доверие» earned at settlement `s` - an embassy's EMBASSY_CEILING, else NO_CEILING. */
+    public static int ceiling(SettlementRegistrySC.Settlement s) {
+        return SettlementSC.isEmbassy(s) ? EMBASSY_CEILING : NO_CEILING;
     }
 
     /** ПД-3: «Доверие» after killing a guard: -60, then -10% (rounded up) of what is left if it is still positive. */

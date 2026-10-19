@@ -3,6 +3,7 @@ package com.sc.compat;
 import java.util.List;
 
 import com.sc.dim.SubstrateConfigSC;
+import com.sc.dim.SubstrateSC;
 import com.sc.emp.IEmpReactiveSC;
 import com.sc.emp.IEmpTargetSC;
 import com.sc.emp.IEmpUselessSC;
@@ -20,7 +21,10 @@ import com.sc.mob.IDisguisedSC;
 import com.sc.mob.MobAnalysisSC;
 import com.sc.mob.MobArmorSC;
 import com.sc.mob.WardenRulesSC;
+import com.sc.settle.caravan.EntityCaravanMasterSC;
+import com.sc.settle.npc.EntityTunerSC;
 import com.sc.settle.npc.EntityWardenSC;
+import com.sc.settle.npc.NpcNamesSC;
 import com.sc.util.ArmorSuit;
 
 import mcp.mobius.waila.api.IWailaConfigHandler;
@@ -53,6 +57,10 @@ import net.minecraft.world.World;
  * phase and what it means now (the coils' shield: how many lit, the window's seconds, the glowing piece, overheated, the core reset's
  * seconds); a Containment Coil (registered here too) - its state and reserve, what a Point does to it (instead of WAILA's health,
  * which means nothing for a machine).
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §8.6, package T, ПЖ-14): a settlement's Tuner (registered for its body only) - one line, its name
+ * and its kind («Тантал-3 · Технолог»); an embassy's Elder is «Посол» (NpcKindSC.langKey(embassy): a Tuner outside the Substrate is an
+ * embassy's - the client knows the world by its provider). A caravan's master (a Tuner by class) has its own name and no such line.
  */
 public class WailaEntitySC implements IWailaEntityProvider {
 
@@ -67,6 +75,7 @@ public class WailaEntitySC implements IWailaEntityProvider {
             registrar.registerHeadProvider(p, c);
             registrar.registerBodyProvider(p, c);
         }
+        registrar.registerBodyProvider(p, EntityTunerSC.class);       // Ф6: the Tuner's kind line
     }
 
     @Override
@@ -100,6 +109,10 @@ public class WailaEntitySC implements IWailaEntityProvider {
             return tip;
         }
         EntityLivingBase e = (EntityLivingBase) entity;
+        if (e instanceof EntityTunerSC) {
+            tuner((EntityTunerSC) e, tip);                      // Ф6: a Tuner - who he is (an embassy's Elder: «Посол»)
+            return tip;
+        }
         if (e instanceof EntityContainmentCoilSC) {
             coil((EntityContainmentCoilSC) e, tip);             // Ф5: a machine - its own lines only
             return tip;
@@ -119,6 +132,16 @@ public class WailaEntitySC implements IWailaEntityProvider {
         }
         noise(e, tip);
         return tip;
+    }
+
+    /** Ф6 (ПЖ-14): «Тантал-3 · Посол» - the Tuner's name and kind from the DataWatcher, in the reader's language. */
+    private static void tuner(EntityTunerSC t, List<String> tip) {
+        if (t instanceof EntityCaravanMasterSC) {
+            return;
+        }
+        boolean embassy = t.worldObj != null && !SubstrateSC.is(t.worldObj);
+        String kind = Lang.tr(t.kind().langKey(embassy));
+        tip.add("§7" + (t.nameCode() != 0 ? NpcNamesSC.name(t.nameCode()).getUnformattedText() + " · " + kind : kind));
     }
 
     /** Ф5: the Warden's phase and its state now (the DataWatcher: DW_PHASE's flags, DW_COILS, DW_HIGHLIGHT, DW_TIMER). */

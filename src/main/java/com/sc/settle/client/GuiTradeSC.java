@@ -9,6 +9,8 @@ import org.lwjgl.opengl.GL12;
 
 import com.sc.Reference;
 import com.sc.block.BlockBridgeSC;
+import com.sc.embassy.EmbassyRulesSC;
+import com.sc.embassy.FlightTargetsSC;
 import com.sc.init.ModBlocks;
 import com.sc.init.ModItems;
 import com.sc.inventory.ContainerTradeSC;
@@ -29,6 +31,7 @@ import com.sc.settle.trade.TradeRulesSC;
 import com.sc.settle.trade.TradeServerSC;
 import com.sc.settle.trade.TradeServicesSC;
 import com.sc.settle.trade.TradeTableSC;
+import com.sc.tileentity.TileEntityEmbassyRingSC;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -63,6 +66,19 @@ import net.minecraft.util.ResourceLocation;
  * the client's inventory: the server finds the same) - with what it becomes on the right; nothing fits - its icon cycles
  * through what would, marked «*» («any matching»), and the details say what is wanted. The slot that will be taken is
  * framed in the inventory below. A matcher side of a plain deal (the Salvager's Nano trophy) cycles the same way.
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §7.2, rules ПЯ-1..ПЯ-14; package R - this file is R's in Ф6): the Dispatcher's «Рейсы» tab
+ * (his screen opens on it; the «Сделки» tab shows only if he has deals) - what TradeClientSC last heard of FLIGHT_STATE: a row a ride
+ * and target this Dispatcher sells (its icon, name, the price for this player - red when the inventory holds fewer chips; a closed
+ * one greyed with its reason: EmbassyRulesSC.refuseKey, a level lock), the chosen one's details (the target, one way / the round
+ * trip / for a friend, why not, the window's phase and its timer - counted down here, the server's FLIGHT_STATE corrects it at every
+ * change), «Купить», «Туда-обратно», «За друга» (the friend line cycles through the players near the Dispatcher with its screen
+ * open, a click; a guarantor's screen asks for the state every FRIENDS_POLL ticks - a friend who comes up is listed), «Лететь» (by
+ * the player's own talon of this place); a talon a guarantor paid turns «Купить» into «Отказаться» (FLIGHT_DO decline - the chips
+ * go back to him); the soft admission's warning (R_CONFIRM) turns the pressed button into «Лететь всё
+ * равно» for CONFIRM_TICKS. The status line: the last answer, the talon, the flights left today. The title says «Посол» for an
+ * embassy's Elder: NpcKindSC.langKey(SettlementClientSC.embassy(tuner)) - the client knows the world by its provider. At an embassy the
+ * contracts are taken from the state's "cLevel" and the anchor row is left out ("noAnchor"); the dispatch's icon is a paper.
  */
 @SideOnly(Side.CLIENT)
 public class GuiTradeSC extends GuiContainer {
@@ -109,11 +125,44 @@ public class GuiTradeSC extends GuiContainer {
     private final List<CRow> crows = new ArrayList<CRow>();
     private boolean has, enemy, contractsTab;
     private int rep, level = ReputationSC.STRANGER, chips, sname, taken, anchor;
+    /** Ф6: the level this Elder's contracts are taken from (the state's "cLevel": the Ambassador's «Чужак»; older states - «Знакомый»). */
+    private int cLevel = ReputationSC.ACQUAINTANCE;
     private long stateDay = -1;
     private int seenState = -1, seenResult = -1, waited, sel, csel, scroll, cscroll;
     private String resultText = "";
     private int resultColour, resultTicks;
     private GuiButton tradeBtn, contractBtn, dropBtn, dealsTab, contractsTabBtn;
+
+    // ------------------------------------------------------------------ Ф6: the Dispatcher's «Рейсы» (package R)
+
+    private static final int FL_BUY = 3, FL_ROUND = 4, FL_FRIEND = 5, FL_GO = 6, TAB_FLIGHTS = 12;
+    /** The flights' buttons: two rows, the upper one this far over BY. */
+    private static final int FLY = BY - BH - 2;
+    /** The status line's colours: a warning (the soft admission). */
+    private static final int TEXT_WARN = 0x9A5A00;
+    /** A guarantor's «Рейсы» tab asks for the state this often (ticks): the players near the Dispatcher change. */
+    private static final int FRIENDS_POLL = 40;
+
+    /** One ride and target as the server priced it for this player. */
+    private static final class FRow {
+        int ride, target, name, x, z, price, round, guar, code;
+        boolean embassy, xz;
+    }
+
+    private final List<FRow> frows = new ArrayList<FRow>();
+    /** The players near the Dispatcher: {name, UUID}; their levels here. */
+    private final List<String[]> friends = new ArrayList<String[]>();
+    private final List<Integer> friendLevels = new ArrayList<Integer>();
+    private boolean fhas, flightsTab = true, guarantor, talonHere, talonSoldAtEmbassy, talonGift;
+    private int fplace = FlightTargetsSC.PLACE_NONE, fleft, fmax = EmbassyRulesSC.FLIGHTS_PER_DAY, guarLeft, fphase, fticks, fpass;
+    private int seenFState = -1, seenFResult = -1, fwaited, fsel, fscroll, friend, myChips, refreshIn, fpoll;
+    private int talonRide = -1, talonSoldAt, backDays, backId = -1;
+    /** The soft admission: the button that was warned, ticks left to press it again, the request it sends then. */
+    private int confirmBtn = -1, confirmTicks, lastBtn = -1;
+    private NBTTagCompound lastReq, confirmReq;
+    /** Where the details' friend line was drawn (relative y; -1 none) - a click there picks the next friend. */
+    private int friendLineY = -1;
+    private GuiButton buyBtn, roundBtn, friendBtn, goBtn, flightsTabBtn;
 
     public GuiTradeSC(EntityPlayer player, EntityTunerSC tuner) {
         super(new ContainerTradeSC(player, tuner));
@@ -126,8 +175,28 @@ public class GuiTradeSC extends GuiContainer {
         return tuner.kind() == NpcKindSC.ELDER;
     }
 
+    /** Ф6: a Dispatcher - his screen is the «Рейсы» tab. */
+    private boolean dispatcher() {
+        return tuner.kind() == NpcKindSC.DISPATCHER;
+    }
+
+    /** Ф6: a Dispatcher with deals shows both tabs (none: the flights only). */
+    private boolean dispatcherTabs() {
+        return dispatcher() && !rows.isEmpty();
+    }
+
+    /** Ф6: the flights are on the screen. */
+    private boolean flights() {
+        return dispatcher() && (flightsTab || rows.isEmpty());
+    }
+
     private int detailsY() {
-        return elder() ? TAB_Y + TAB_H + 2 : TAB_Y;
+        return elder() || dispatcherTabs() ? TAB_Y + TAB_H + 2 : TAB_Y;
+    }
+
+    /** Where the details' screen ends (the flights have two rows of buttons). */
+    private int detailsBottom() {
+        return flights() ? FLY - 2 : BY - 2;
     }
 
     // ================================================================== state
@@ -152,7 +221,25 @@ public class GuiTradeSC extends GuiContainer {
             buttonList.add(dealsTab);
             buttonList.add(contractsTabBtn);
         }
+        if (dispatcher()) {                                     // Ф6: the flights' buttons and (with deals) the tabs
+            int half = RW / 2 - 1;
+            buyBtn = new TextFitSC.Button(FL_BUY, x, guiTop + FLY, half, BH, Lang.tr("sc.flight.buy"));
+            roundBtn = new TextFitSC.Button(FL_ROUND, x + RW / 2 + 1, guiTop + FLY, half, BH, Lang.tr("sc.flight.round"));
+            friendBtn = new TextFitSC.Button(FL_FRIEND, x, y, half, BH, Lang.tr("sc.flight.friend"));
+            goBtn = new TextFitSC.Button(FL_GO, x + RW / 2 + 1, y, half, BH, Lang.tr("sc.flight.go"));
+            buttonList.add(buyBtn);
+            buttonList.add(roundBtn);
+            buttonList.add(friendBtn);
+            buttonList.add(goBtn);
+            dealsTab = new TextFitSC.Tab(TAB_DEALS, x, guiTop + TAB_Y, half, TAB_H, SettlementItemsSC.chips(1),
+                    Lang.tr("sc.trade.tab.deals"), Lang.tr("sc.trade.tab.deals"));
+            flightsTabBtn = new TextFitSC.Tab(TAB_FLIGHTS, x + RW / 2 + 1, guiTop + TAB_Y, half, TAB_H, new ItemStack(Items.ender_pearl),
+                    Lang.tr("sc.flight.tab"), Lang.tr("sc.flight.tab"));
+            buttonList.add(dealsTab);
+            buttonList.add(flightsTabBtn);
+        }
         pickUp();
+        pickUpFlights();
         updateButtons();
     }
 
@@ -170,12 +257,171 @@ public class GuiTradeSC extends GuiContainer {
         if (has && mc.theWorld != null && SettlementSC.day(mc.theWorld) != stateDay) {
             stateDay = SettlementSC.day(mc.theWorld);                                     // dawn: the shops restock, a new board
             SettleNetSC.sendToServer(SettleNetSC.TRADE_REFRESH, new NBTTagCompound());
+            if (dispatcher()) {
+                SettleNetSC.sendToServer(SettleNetSC.FLIGHT_REFRESH, new NBTTagCompound());   // the talons, the day's flights
+            }
+        }
+        if (dispatcher()) {
+            flightTick();
         }
         countHave();
         if (resultTicks > 0) {
             resultTicks--;
         }
         updateButtons();
+    }
+
+    /** Ф6: the flights' state asked for if lost, the window's timer counted on, the soft admission's confirmation running out. */
+    private void flightTick() {
+        pickUpFlights();
+        if (!fhas && ++fwaited == ASK_AFTER) {
+            SettleNetSC.sendToServer(SettleNetSC.FLIGHT_REFRESH, new NBTTagCompound());
+        }
+        if (fticks > 0) {
+            fticks--;
+        } else if (fphase != EmbassyRulesSC.PHASE_IDLE) {
+            fphase = fphase == EmbassyRulesSC.PHASE_COOL ? EmbassyRulesSC.PHASE_IDLE : fphase + 1;    // on to the next; the server confirms
+            fticks = TileEntityEmbassyRingSC.length(fphase);
+            refreshIn = ASK_AFTER;
+        }
+        if (refreshIn > 0 && --refreshIn == 0) {
+            SettleNetSC.sendToServer(SettleNetSC.FLIGHT_REFRESH, new NBTTagCompound());
+        } else if (fhas && guarantor && flights() && ++fpoll >= FRIENDS_POLL) {
+            fpoll = 0;                                          // the friends near (who came, who left), their levels, the window's passengers
+            SettleNetSC.sendToServer(SettleNetSC.FLIGHT_REFRESH, new NBTTagCompound());
+        }
+        if (confirmTicks > 0 && --confirmTicks == 0) {
+            confirmBtn = -1;
+            confirmReq = null;
+        }
+        myChips = TradeOfferSC.Ingredient.chips(1).countIn(mc.thePlayer == null ? null : mc.thePlayer.inventory.mainInventory);
+    }
+
+    /** Ф6: the newest FLIGHT_STATE / FLIGHT_RESULT for this Dispatcher, if any came since the last look. */
+    private void pickUpFlights() {
+        if (!dispatcher()) {
+            return;
+        }
+        int seq = TradeClientSC.flightStateSeq();
+        if (seq != seenFState) {
+            seenFState = seq;
+            NBTTagCompound s = TradeClientSC.flightState();
+            if (s != null && s.getInteger("tuner") == tuner.getEntityId()) {
+                parseFlights(s);
+            }
+        }
+        seq = TradeClientSC.flightResultSeq();
+        if (seq != seenFResult) {
+            seenFResult = seq;
+            NBTTagCompound r = TradeClientSC.flightResult();
+            if (r != null && r.getInteger("tuner") == tuner.getEntityId()) {
+                answerFlight(r);
+            }
+        }
+    }
+
+    private void parseFlights(NBTTagCompound s) {
+        fplace = s.getByte("place");
+        fleft = s.getInteger("left");
+        fmax = s.hasKey("max") ? s.getInteger("max") : EmbassyRulesSC.FLIGHTS_PER_DAY;
+        guarantor = s.getBoolean("guarantor");
+        guarLeft = s.getInteger("guarLeft");
+        frows.clear();
+        NBTTagList l = s.getTagList("rides", 10);
+        for (int i = 0; i < l.tagCount(); i++) {
+            NBTTagCompound e = l.getCompoundTagAt(i);
+            FRow r = new FRow();
+            r.ride = e.getByte("r");
+            r.target = e.getInteger("t");
+            r.name = e.getInteger("n");
+            r.embassy = e.getBoolean("e");
+            r.xz = e.getBoolean("xz");
+            r.x = e.getInteger("x");
+            r.z = e.getInteger("z");
+            r.price = e.getInteger("p");
+            r.round = e.getInteger("o");
+            r.guar = e.getInteger("g");
+            r.code = e.getByte("c");
+            if (EmbassyRulesSC.valid(r.ride)) {
+                frows.add(r);
+            }
+        }
+        backId = -1;
+        if (s.hasKey("back", 10)) {
+            NBTTagCompound b = s.getCompoundTag("back");
+            backId = b.getInteger("e");
+            backDays = b.getInteger("d");
+        }
+        talonRide = -1;
+        talonGift = false;
+        if (s.hasKey("talon", 10)) {
+            NBTTagCompound t = s.getCompoundTag("talon");
+            talonRide = t.getInteger("r");
+            talonHere = t.getBoolean("here");
+            talonGift = t.getBoolean("g");
+            talonSoldAt = t.getInteger("sn");
+            talonSoldAtEmbassy = t.getBoolean("se");
+        }
+        fphase = s.getByte("phase");
+        fticks = s.getInteger("ticks");
+        fpass = s.getInteger("pass");
+        refreshIn = 0;
+        String picked = friend >= 0 && friend < friends.size() ? friends.get(friend)[1] : "";
+        friends.clear();
+        friendLevels.clear();
+        NBTTagList f = s.getTagList("friends", 10);
+        for (int i = 0; i < f.tagCount(); i++) {
+            NBTTagCompound e = f.getCompoundTagAt(i);
+            friends.add(new String[]{e.getString("n"), e.getString("u")});
+            friendLevels.add(Integer.valueOf(e.getByte("l")));
+            if (e.getString("u").equals(picked)) {
+                friend = i;                                     // the same friend stays picked
+            }
+        }
+        friend = friends.isEmpty() ? 0 : Math.max(0, Math.min(friends.size() - 1, friend));
+        fhas = true;
+        fsel = clamp(fsel, frows.size());
+        fscroll = Math.max(0, Math.min(fscroll, frows.size() - ROWS));
+    }
+
+    /** A FLIGHT_RESULT: the status line's text; the soft admission's warning arms the pressed button for the second click. */
+    private void answerFlight(NBTTagCompound r) {
+        int code = r.getInteger("code");
+        String text;
+        int colour;
+        if (code == EmbassyRulesSC.R_CONFIRM) {
+            boolean armour = r.getBoolean("noArmour"), capsule = r.getBoolean("noCapsule");
+            String what = Lang.tr(armour && capsule ? "sc.flight.warn.both" : armour ? "sc.flight.warn.armour" : "sc.flight.warn.capsule");
+            String friendName = r.getString("friend");
+            text = friendName.isEmpty() ? Lang.tr("sc.flight.warn", what) : Lang.tr("sc.flight.warn.friend", friendName, what);
+            colour = TEXT_WARN;
+            confirmBtn = lastBtn;
+            confirmReq = lastReq;
+            confirmTicks = Math.max(20, EmbassyRulesSC.CONFIRM_TICKS - 10);   // the server's 5 s, less the way there and back
+        } else if (code == EmbassyRulesSC.OK) {
+            boolean ring = r.getByte("place") == FlightTargetsSC.PLACE_EMBASSY;
+            String chips = String.valueOf(r.getInteger("chips"));
+            if (r.getBoolean("go")) {
+                text = Lang.tr(ring ? "sc.flight.boarding.ring" : "sc.flight.boarding.dock");
+            } else if (r.getBoolean("decline")) {
+                text = Lang.tr("sc.flight.declined");
+            } else if (!r.getString("friend").isEmpty()) {
+                text = Lang.tr("sc.flight.bought.friend", r.getString("friend"), chips);
+            } else {
+                text = Lang.tr(ring ? "sc.flight.bought.ring" : "sc.flight.bought.dock", Lang.tr(EmbassyRulesSC.rideKey(r.getInteger("ride"))), chips);
+            }
+            colour = 0x1E7A2E;
+            confirmTicks = 0;
+            confirmBtn = -1;
+        } else {
+            text = Lang.tr(EmbassyRulesSC.refuseKey(code));
+            colour = 0xA02018;
+            confirmTicks = 0;
+            confirmBtn = -1;
+        }
+        resultText = text;
+        resultColour = colour;
+        resultTicks = Math.max(RESULT_TICKS, confirmTicks);
     }
 
     /** The newest state / answer for this Tuner, if any came since the last look. */
@@ -240,11 +486,14 @@ public class GuiTradeSC extends GuiContainer {
             }
             taken = s.getInteger("taken");
             anchor = s.getByte("anchor");
-            CRow a = new CRow();
-            a.c = ContractTableSC.ANCHOR_CONTRACT;
-            a.anchor = true;
-            a.st = anchor;
-            crows.add(a);
+            cLevel = s.hasKey("cLevel") ? s.getByte("cLevel") : ReputationSC.ACQUAINTANCE;
+            if (!s.getBoolean("noAnchor")) {                     // Ф6: no anchor contract at an embassy
+                CRow a = new CRow();
+                a.c = ContractTableSC.ANCHOR_CONTRACT;
+                a.anchor = true;
+                a.st = anchor;
+                crows.add(a);
+            }
         }
         stateDay = mc.theWorld == null ? -1 : SettlementSC.day(mc.theWorld);
         has = true;
@@ -338,20 +587,59 @@ public class GuiTradeSC extends GuiContainer {
         if (tradeBtn == null) {
             return;
         }
-        boolean deals = !contractsTab;
+        boolean deals = !contractsTab && !flights();
+        flightButtons();
         tradeBtn.visible = deals;
         Row r = deals && sel >= 0 && sel < rows.size() ? rows.get(sel) : null;
         tradeBtn.enabled = r != null && canOnce(r);
-        contractBtn.visible = dropBtn.visible = !deals;
-        CRow c = !deals && csel >= 0 && csel < crows.size() ? crows.get(csel) : null;
+        contractBtn.visible = dropBtn.visible = contractsTab && !flights();
+        CRow c = contractsTab && csel >= 0 && csel < crows.size() ? crows.get(csel) : null;
         boolean take = c != null && !c.anchor && c.st == TradeServerSC.C_FREE;
         contractBtn.displayString = Lang.tr(take ? "sc.trade.btn.take" : "sc.trade.btn.turnIn");
-        contractBtn.enabled = c != null && (take ? taken < TradeRulesSC.CONTRACTS_PER_DAY && level >= ReputationSC.ACQUAINTANCE : canTurnIn(c));
+        contractBtn.enabled = c != null && (take ? taken < TradeRulesSC.CONTRACTS_PER_DAY && level >= cLevel : canTurnIn(c));
         dropBtn.enabled = c != null && !c.anchor && c.st == TradeServerSC.C_OPEN;
-        if (dealsTab != null) {
+        if (dealsTab != null && contractsTabBtn != null) {
             dealsTab.enabled = contractsTab;
             contractsTabBtn.enabled = !contractsTab;
         }
+    }
+
+    /** Ф6: the flights' buttons - shown on the «Рейсы» tab, lit when the server's numbers and the inventory allow it. */
+    private void flightButtons() {
+        if (buyBtn == null) {
+            return;
+        }
+        boolean fl = flights();
+        buyBtn.visible = roundBtn.visible = friendBtn.visible = goBtn.visible = fl;
+        if (dealsTab != null && flightsTabBtn != null) {
+            dealsTab.visible = flightsTabBtn.visible = dispatcherTabs();
+            dealsTab.enabled = fl;
+            flightsTabBtn.enabled = !fl;
+        }
+        FRow r = fsel >= 0 && fsel < frows.size() ? frows.get(fsel) : null;
+        boolean open = fhas && r != null && r.code == EmbassyRulesSC.OK;
+        boolean back = r != null && r.ride == EmbassyRulesSC.RIDE_BACK;
+        buyBtn.displayString = Lang.tr(declining() ? "sc.flight.decline" : back ? "sc.flight.useBack" : "sc.flight.buy");
+        buyBtn.enabled = declining() || open && (back || myChips >= r.price);
+        roundBtn.displayString = Lang.tr("sc.flight.round");
+        roundBtn.enabled = open && r.round > 0 && myChips >= r.round;
+        friendBtn.displayString = Lang.tr("sc.flight.friend");
+        friendBtn.enabled = fhas && r != null && EmbassyRulesSC.outbound(r.ride) && guarantor && guarLeft > 0 && !friends.isEmpty() && r.guar > 0
+                && myChips >= r.guar;
+        goBtn.displayString = Lang.tr("sc.flight.go");
+        goBtn.enabled = fhas && talonRide >= 0 && talonHere && fphase != EmbassyRulesSC.PHASE_COOL;
+        if (confirmTicks > 0 && confirmBtn >= 0) {             // ПЯ-14: the warned button, once more within the server's 5 s
+            GuiButton b = confirmBtn == FL_BUY ? buyBtn : confirmBtn == FL_ROUND ? roundBtn : confirmBtn == FL_FRIEND ? friendBtn : null;
+            if (b != null) {
+                b.displayString = Lang.tr("sc.flight.confirm");
+                b.enabled = true;
+            }
+        }
+    }
+
+    /** ПЯ-13: this place's talon was paid by a guarantor - «Купить» is «Отказаться» (no purchase while a talon waits anyway). */
+    private boolean declining() {
+        return fhas && talonRide >= 0 && talonHere && talonGift;
     }
 
     private static boolean canTurnIn(CRow c) {
@@ -372,8 +660,16 @@ public class GuiTradeSC extends GuiContainer {
         switch (b.id) {
             case TAB_DEALS:
             case TAB_CONTRACTS:
+            case TAB_FLIGHTS:
                 contractsTab = b.id == TAB_CONTRACTS;
+                flightsTab = b.id == TAB_FLIGHTS;
                 updateButtons();
+                return;
+            case FL_BUY:
+            case FL_ROUND:
+            case FL_FRIEND:
+            case FL_GO:
+                flightAction(b.id);
                 return;
             case BTN_TRADE:
                 if (sel >= 0 && sel < rows.size()) {
@@ -396,9 +692,52 @@ public class GuiTradeSC extends GuiContainer {
         }
     }
 
+    /** Ф6: a flights' button - FLIGHT_DO for the chosen row (the warned button once more: the same request, confirmed). */
+    private void flightAction(int id) {
+        if (id == confirmBtn && confirmTicks > 0 && confirmReq != null) {
+            NBTTagCompound d = (NBTTagCompound) confirmReq.copy();
+            d.setBoolean("confirm", true);
+            confirmTicks = 0;
+            confirmBtn = -1;
+            send(id, d);
+            return;
+        }
+        NBTTagCompound d = new NBTTagCompound();
+        if (id == FL_GO) {
+            d.setBoolean("go", true);
+            send(id, d);
+            return;
+        }
+        if (id == FL_BUY && declining()) {
+            d.setBoolean("decline", true);                      // the guarantor's talon back to him
+            send(id, d);
+            return;
+        }
+        FRow r = fsel >= 0 && fsel < frows.size() ? frows.get(fsel) : null;
+        if (r == null) {
+            return;
+        }
+        d.setInteger("ride", r.ride);
+        d.setInteger("target", r.target);
+        d.setBoolean("round", id == FL_ROUND);
+        d.setString("friend", id == FL_FRIEND && friend >= 0 && friend < friends.size() ? friends.get(friend)[1] : "");
+        d.setBoolean("confirm", false);
+        send(id, d);
+    }
+
+    private void send(int btn, NBTTagCompound d) {
+        lastBtn = btn;
+        lastReq = d;
+        SettleNetSC.sendToServer(SettleNetSC.FLIGHT_DO, d);
+    }
+
     @Override
     protected void mouseClicked(int mx, int my, int button) {
         super.mouseClicked(mx, my, button);
+        if (flights()) {
+            flightClick(mx, my, button);
+            return;
+        }
         int x = mx - guiLeft - LX, y = my - guiTop - LY - 2;
         if (button != 0 || x < 2 || x >= LW - 8 || y < 0 || y >= ROWS * ROW_H) {
             return;
@@ -415,11 +754,40 @@ public class GuiTradeSC extends GuiContainer {
         }
     }
 
+    /** Ф6: a click on the flights' list (a row) or on the details' friend line (the next friend). */
+    private void flightClick(int mx, int my, int button) {
+        if (button != 0) {
+            return;
+        }
+        int rx = mx - guiLeft, ry = my - guiTop;
+        if (friendLineY >= 0 && rx >= RX + 2 && rx < RX + RW - 2 && ry >= friendLineY - 1 && ry < friendLineY + 9 && friends.size() > 1) {
+            friend = (friend + 1) % friends.size();
+            confirmTicks = 0;
+            mc.getSoundHandler().playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0F));
+            updateButtons();
+            return;
+        }
+        int x = rx - LX, y = ry - LY - 2;
+        if (x < 2 || x >= LW - 8 || y < 0 || y >= ROWS * ROW_H) {
+            return;
+        }
+        int i = fscroll + y / ROW_H;
+        if (i < frows.size()) {
+            fsel = i;
+            confirmTicks = 0;                                   // another ride: the warning was for the last one
+            confirmBtn = -1;
+            mc.getSoundHandler().playSound(PositionedSoundRecord.func_147674_a(new ResourceLocation("gui.button.press"), 1.0F));
+            updateButtons();
+        }
+    }
+
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
-        if (wheel != 0) {
+        if (wheel != 0 && flights()) {
+            fscroll = Math.max(0, Math.min(Math.max(0, frows.size() - ROWS), fscroll + (wheel > 0 ? -1 : 1)));
+        } else if (wheel != 0) {
             if (contractsTab) {
                 cscroll = Math.max(0, Math.min(Math.max(0, crows.size() - ROWS), cscroll + (wheel > 0 ? -1 : 1)));
             } else {
@@ -443,21 +811,24 @@ public class GuiTradeSC extends GuiContainer {
         drawTexturedModalRect(guiLeft, guiTop, 0, 0, W, H);
         GuiHoloSC.screen(guiLeft + LX, guiTop + LY, LW, LH);
         int dy = detailsY();
-        GuiHoloSC.screen(guiLeft + RX, guiTop + dy, RW, BY - 2 - dy);
+        GuiHoloSC.screen(guiLeft + RX, guiTop + dy, RW, detailsBottom() - dy);
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
     /** Everything but the item icons (drawScreen draws those over it, as vanilla's merchant does). */
     @Override
     protected void drawGuiContainerForegroundLayer(int mx, int my) {
-        // the title: name · profession; level · «Доверие»
-        String name = NpcNamesSC.name(tuner.nameCode()).getUnformattedText() + " · " + Lang.tr(tuner.kind().langKey());
+        // the title: name · profession (Ф6: an embassy's Elder is its «Посол» - the client knows the world by its provider); level · «Доверие»
+        String name = NpcNamesSC.name(tuner.nameCode()).getUnformattedText() + " · " + Lang.tr(tuner.kind().langKey(SettlementClientSC.embassy(tuner)));
         String lv = has ? levelName(level) + " · " + rep : "…";
         int lvW = Math.min(90, fontRendererObj.getStringWidth(lv));
         TextFitSC.draw(fontRendererObj, name, 9, 6, W - 22 - lvW, 0xE6F0FA, guiLeft, guiTop);
         TextFitSC.draw(fontRendererObj, lv, W - 8 - lvW, 6, lvW, has ? LEVEL_COLOURS[Math.max(0, Math.min(6, level))] : 0x8898A8, guiLeft, guiTop);
         TextFitSC.hover(guiLeft + 4, guiTop + 4, W - 8, 11, titleTip());
-        if (!has) {
+        friendLineY = -1;
+        if (flights()) {
+            drawFlights(mx, my);
+        } else if (!has) {
             fontRendererObj.drawString(Lang.tr("sc.trade.wait"), LX + 6, LY + 6, GuiHoloSC.IDLE);
         } else if (contractsTab) {
             drawContracts(mx, my);
@@ -476,6 +847,8 @@ public class GuiTradeSC extends GuiContainer {
         if (resultTicks > 0) {
             left = resultText;
             colour = resultColour;
+        } else if (flights()) {
+            left = flightStatus();
         } else if (contractsTab) {
             left = Lang.tr("sc.contract.takenToday", taken, TradeRulesSC.CONTRACTS_PER_DAY);
         } else {
@@ -671,7 +1044,7 @@ public class GuiTradeSC extends GuiContainer {
 
     /** The selected service's slot framed in the inventory below (what will be taken - the hand's is framed too). */
     private void frameTaken() {
-        Row r = !contractsTab && sel >= 0 && sel < rows.size() ? rows.get(sel) : null;
+        Row r = !contractsTab && !flights() && sel >= 0 && sel < rows.size() ? rows.get(sel) : null;
         if (r == null || !r.offer.service() || r.slot < 0 || r.slot >= 36) {
             return;
         }
@@ -737,16 +1110,270 @@ public class GuiTradeSC extends GuiContainer {
         if (!c.anchor && c.st == TradeServerSC.C_OPEN) {
             tail.add(c.c.handIn() != null ? Lang.tr("sc.contract.handInLine", c.progress, c.c.target, c.have)
                     : Lang.tr("sc.contract.state.open", c.progress, c.c.target));
-        } else if (!c.anchor && c.st == TradeServerSC.C_FREE && level < ReputationSC.ACQUAINTANCE) {
-            tail.add(Lang.tr("sc.trade.need.level", levelName(ReputationSC.ACQUAINTANCE)));
+        } else if (!c.anchor && c.st == TradeServerSC.C_FREE && level < cLevel) {
+            tail.add(Lang.tr("sc.trade.need.level", levelName(cLevel)));
         }
         int descLines = Math.max(0, (bottom - y) / 9 - tail.size());
         y = wrapped(Lang.tr(c.c.langKey() + ".desc", c.c.target), x, y, w, GuiHoloSC.LABEL, descLines);
         for (int i = 0; i < tail.size(); i++) {
-            int col = i == 0 ? GuiHoloSC.OK : i == tail.size() - 1 && level < ReputationSC.ACQUAINTANCE && c.st == TradeServerSC.C_FREE ? GuiHoloSC.WARN : GuiHoloSC.VALUE;
+            int col = i == 0 ? GuiHoloSC.OK : i == tail.size() - 1 && level < cLevel && c.st == TradeServerSC.C_FREE ? GuiHoloSC.WARN : GuiHoloSC.VALUE;
             TextFitSC.draw(fontRendererObj, tail.get(i), x, y, w, col, guiLeft, guiTop);
             y += 9;
         }
+    }
+
+    // ================================================================== Ф6: the flights (package R)
+
+    /** The «Рейсы» list: a row a ride and target - its name and price, the target or why it is closed; the chosen one's details. */
+    private void drawFlights(int mx, int my) {
+        if (!fhas) {
+            fontRendererObj.drawString(Lang.tr("sc.trade.wait"), LX + 6, LY + 6, GuiHoloSC.IDLE);
+            return;
+        }
+        if (frows.isEmpty()) {
+            TextFitSC.draw(fontRendererObj, Lang.tr("sc.flight.none"), LX + 6, LY + 6, LW - 12, GuiHoloSC.IDLE, guiLeft, guiTop);
+        }
+        for (int i = 0; i < ROWS; i++) {
+            int idx = fscroll + i;
+            if (idx >= frows.size()) {
+                break;
+            }
+            FRow r = frows.get(idx);
+            int y = LY + 2 + i * ROW_H;
+            rowBack(idx == fsel, y, mx, my);
+            boolean open = r.code == EmbassyRulesSC.OK;
+            int tx = LX + 22, tw = LW - 8 - 22;
+            String price = r.ride == EmbassyRulesSC.RIDE_BACK ? Lang.tr("sc.flight.price.paid") : r.price > 0 ? Lang.tr("sc.flight.price", r.price) : "";
+            int pw = open && !price.isEmpty() ? fontRendererObj.getStringWidth(price) : 0;
+            TextFitSC.draw(fontRendererObj, Lang.tr(EmbassyRulesSC.rideKey(r.ride)), tx, y + 1, tw - (pw > 0 ? pw + 4 : 0), open ? GuiHoloSC.VALUE : GuiHoloSC.IDLE,
+                    guiLeft, guiTop);
+            if (pw > 0) {
+                boolean afford = r.ride == EmbassyRulesSC.RIDE_BACK || myChips >= r.price;
+                fontRendererObj.drawString(price, LX + LW - 10 - pw, y + 1, afford ? GuiHoloSC.OK : GuiHoloSC.BAD);
+            }
+            if (r.code == EmbassyRulesSC.R_LEVEL) {
+                bindTex();
+                drawTexturedModalRect(tx, y + 9, LOCK_U, SPR_V, 7, 9);
+                TextFitSC.draw(fontRendererObj, levelName(EmbassyRulesSC.levelOf(r.ride)), tx + 9, y + 10, tw - 9, GuiHoloSC.WARN, guiLeft, guiTop);
+                continue;
+            }
+            String sub = open ? targetText(r) : Lang.tr(EmbassyRulesSC.refuseKey(r.code));
+            if (!open && r.target >= 0 && (r.ride == EmbassyRulesSC.RIDE_DOCK || r.ride == EmbassyRulesSC.RIDE_OTHER)) {
+                sub = targetText(r) + " - " + sub;              // a row a target: which one is closed
+            }
+            TextFitSC.draw(fontRendererObj, sub, tx, y + 10, tw, open ? GuiHoloSC.LABEL : GuiHoloSC.IDLE, guiLeft, guiTop);
+        }
+        scrollbar(frows.size(), fscroll);
+        FRow r = fsel >= 0 && fsel < frows.size() ? frows.get(fsel) : null;
+        if (r != null) {
+            flightDetails(r);
+        } else {
+            phaseLine(RX + 4, detailsBottom() - 11, RW - 8);
+        }
+    }
+
+    /**
+     * The chosen ride: its name, its target (one line; the coordinates in the tooltip); open - its prices (one way, the round trip),
+     * closed - why; the friend line (the guarantee); the window at the bottom.
+     */
+    private void flightDetails(FRow r) {
+        int x = RX + 4, w = RW - 8, y = detailsY() + 4, bottom = detailsBottom() - 12;
+        y = wrapped(Lang.tr(EmbassyRulesSC.rideKey(r.ride)), x, y, w, GuiHoloSC.VALUE, 2);
+        y = line(targetText(r), x, y, w, GuiHoloSC.LABEL, bottom);
+        if (r.xz && r.target != FlightTargetsSC.NO_TARGET) {
+            TextFitSC.hover(guiLeft + x, guiTop + y - 9, w, 9, Lang.tr("sc.flight.target.at", r.x, r.z));
+        }
+        boolean friendLine = EmbassyRulesSC.outbound(r.ride) && guarantor && r.guar > 0;
+        if (r.code == EmbassyRulesSC.OK) {
+            if (r.ride == EmbassyRulesSC.RIDE_BACK) {
+                y = line(Lang.tr("sc.flight.price.paid"), x, y, w, GuiHoloSC.OK, bottom);
+            } else if (r.price > 0) {
+                y = line(Lang.tr("sc.flight.price.one", r.price), x, y, w, myChips >= r.price ? GuiHoloSC.OK : GuiHoloSC.BAD, bottom);
+            }
+            if (r.round > 0) {
+                int ry = y;
+                y = line(Lang.tr("sc.flight.price.round", r.round), x, y, w, myChips >= r.round ? GuiHoloSC.OK : GuiHoloSC.BAD, bottom);
+                if (y != ry) {
+                    TextFitSC.hover(guiLeft + x, guiTop + ry, w, 9, Lang.tr("sc.flight.round.tip", r.round, EmbassyRulesSC.BACK_TICKS / SettlementSC.DAY));
+                }
+            }
+        } else if (y + 8 <= bottom) {
+            String why = r.code == EmbassyRulesSC.R_LEVEL ? Lang.tr("sc.trade.need.level", levelName(EmbassyRulesSC.levelOf(r.ride)))
+                    : Lang.tr(EmbassyRulesSC.refuseKey(r.code));
+            int room = (bottom - y + 1) / 9 - (friendLine ? 1 : 0);
+            y = wrapped(why, x, y, w, GuiHoloSC.WARN, Math.max(1, room)) - 1;
+        }
+        if (friendLine) {
+            if (friends.isEmpty()) {
+                line(Lang.tr("sc.flight.friend.none"), x, y, w, GuiHoloSC.IDLE, bottom);
+            } else {
+                int f = Math.max(0, Math.min(friends.size() - 1, friend));
+                String who = Lang.tr("sc.flight.friend.pick", friends.get(f)[0], levelName(friendLevels.get(f).intValue()), r.guar);
+                if (line(who, x, y, w, guarLeft > 0 ? GuiHoloSC.VALUE : GuiHoloSC.IDLE, bottom) != y) {
+                    friendLineY = y;                                // drawn: a click on it picks the next friend
+                    List<String> tip = new ArrayList<String>();
+                    tip.add(Lang.tr("sc.flight.friend.tip", friends.get(f)[0], r.guar));
+                    if (friends.size() > 1) {
+                        tip.add(Lang.tr("sc.flight.friend.next"));
+                    }
+                    if (guarLeft <= 0) {
+                        tip.add(Lang.tr("sc.flight.friend.used"));
+                    }
+                    TextFitSC.hover(guiLeft + x, guiTop + y, w, 9, tip);
+                }
+            }
+        }
+        phaseLine(x, detailsBottom() - 11, w);
+    }
+
+    /** One line if there is room. @return the next y */
+    private int line(String text, int x, int y, int w, int colour, int bottom) {
+        if (y + 8 > bottom) {
+            return y;                                           // no room above the window's line
+        }
+        TextFitSC.draw(fontRendererObj, text, x, y, w, colour, guiLeft, guiTop);
+        return y + 9;
+    }
+
+    /** The window: its phase and timer (counted down here), the passengers and where to board in the tooltip. */
+    private void phaseLine(int x, int y, int w) {
+        String text;
+        int colour;
+        long secs = (fticks + 19) / 20;
+        String time = String.format("%d:%02d", secs / 60, secs % 60);
+        switch (fphase) {
+            case EmbassyRulesSC.PHASE_COUNTDOWN:
+                text = Lang.tr("sc.flight.phase.countdown", time);
+                colour = GuiHoloSC.WARN;
+                break;
+            case EmbassyRulesSC.PHASE_VORTEX:
+                text = Lang.tr("sc.flight.phase.vortex", time);
+                colour = GuiHoloSC.OK;
+                break;
+            case EmbassyRulesSC.PHASE_COOL:
+                text = Lang.tr("sc.flight.phase.cool", time);
+                colour = GuiHoloSC.IDLE;
+                break;
+            default:
+                text = Lang.tr("sc.flight.phase.idle");
+                colour = GuiHoloSC.LABEL;
+        }
+        TextFitSC.draw(fontRendererObj, text, x, y, w, colour, guiLeft, guiTop);
+        List<String> tip = new ArrayList<String>();
+        tip.add(Lang.tr(fplace == FlightTargetsSC.PLACE_EMBASSY ? "sc.flight.board.ring" : "sc.flight.board.dock"));
+        if (fphase != EmbassyRulesSC.PHASE_IDLE) {
+            tip.add(Lang.tr("sc.flight.phase.tip", fpass, EmbassyRulesSC.PASSENGERS));
+        }
+        TextFitSC.hover(guiLeft + x, guiTop + y, w, 9, tip);
+    }
+
+    /** The status line on the «Рейсы» tab: the talon waiting, else the flights left today. */
+    private String flightStatus() {
+        if (!fhas) {
+            return "";
+        }
+        if (talonRide >= 0) {
+            String ride = Lang.tr(EmbassyRulesSC.rideKey(talonRide));
+            if (talonHere) {
+                return Lang.tr("sc.flight.talon", ride);
+            }
+            String at = new ChatComponentTranslation(talonSoldAtEmbassy ? "sc.embassy.name" : "sc.settle.name", NpcNamesSC.name(talonSoldAt))
+                    .getUnformattedText();
+            return Lang.tr("sc.flight.talon.other", ride, at);
+        }
+        return Lang.tr("sc.flight.left", fleft, fmax);
+    }
+
+    /** A row's target in words: a dome, an embassy (the return half with its days), the death mark, none. */
+    private String targetText(FRow r) {
+        if (r.ride == EmbassyRulesSC.RIDE_RESCUE) {
+            return r.target == EmbassyRulesSC.TARGET_MARK && r.xz ? Lang.tr("sc.flight.target.mark", r.x, r.z) : Lang.tr("sc.flight.target.none");
+        }
+        if (r.target == FlightTargetsSC.NO_TARGET) {
+            return Lang.tr("sc.flight.target.none");
+        }
+        String name = new ChatComponentTranslation(r.embassy ? "sc.embassy.name" : "sc.settle.name", NpcNamesSC.name(r.name)).getUnformattedText();
+        if (r.ride == EmbassyRulesSC.RIDE_BACK && backId >= 0) {
+            return Lang.tr("sc.flight.back", name, backDays);
+        }
+        return name;
+    }
+
+    /** A ride's picture: the map (introductory), the pearl (to «Первый причал»), the Settlement Map (a known dock), a skull (the
+     * rescue), the compass (home), the paper ticket (the return half), the eye (another embassy). */
+    private static ItemStack rideIcon(int ride) {
+        switch (ride) {
+            case EmbassyRulesSC.RIDE_INTRO:
+                return new ItemStack(Items.map);
+            case EmbassyRulesSC.RIDE_FIRST:
+                return new ItemStack(Items.ender_pearl);
+            case EmbassyRulesSC.RIDE_DOCK:
+                return SettlementItemsSC.settlementMap == null ? new ItemStack(Items.ender_pearl) : new ItemStack(SettlementItemsSC.settlementMap);
+            case EmbassyRulesSC.RIDE_RESCUE:
+                return new ItemStack(Items.skull, 1, 0);
+            case EmbassyRulesSC.RIDE_HOME:
+                return new ItemStack(Items.compass);
+            case EmbassyRulesSC.RIDE_BACK:
+                return new ItemStack(Items.paper);
+            default:
+                return new ItemStack(Items.ender_eye);
+        }
+    }
+
+    /** The flights' row icons (absolute coordinates, over the foreground; no item tooltips - the row says it all). */
+    private void flightIcons() {
+        if (!fhas) {
+            return;
+        }
+        GL11.glPushMatrix();
+        RenderHelper.enableGUIStandardItemLighting();
+        GL11.glEnable(GL12.GL_RESCALE_NORMAL);
+        GL11.glEnable(GL11.GL_COLOR_MATERIAL);
+        GL11.glEnable(GL11.GL_LIGHTING);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        itemRender.zLevel = 100F;
+        for (int i = 0; i < ROWS && fscroll + i < frows.size(); i++) {
+            ItemStack s = rideIcon(frows.get(fscroll + i).ride);
+            if (s != null && s.getItem() != null) {
+                itemRender.renderItemAndEffectIntoGUI(fontRendererObj, mc.getTextureManager(), s, guiLeft + LX + 3, guiTop + LY + 2 + i * ROW_H + 1);
+            }
+        }
+        itemRender.zLevel = 0F;
+        RenderHelper.disableStandardItemLighting();
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        for (int i = 0; i < ROWS && fscroll + i < frows.size(); i++) {
+            if (frows.get(fscroll + i).code != EmbassyRulesSC.OK) {
+                int x = guiLeft + LX + 3, y = guiTop + LY + 2 + i * ROW_H + 1;
+                drawRect(x, y, x + 16, y + 16, 0x900A1420);      // dimmed: closed to this player
+            }
+        }
+        GL11.glPopMatrix();
+        GL11.glColor4f(1F, 1F, 1F, 1F);
+    }
+
+    /** The flights' buttons' tooltips: what each does now (the price, the friend), or why it is dark. */
+    private List<String> flightButtonTip(int mx, int my) {
+        FRow r = fsel >= 0 && fsel < frows.size() ? frows.get(fsel) : null;
+        List<String> l = new ArrayList<String>();
+        if (buyBtn != null && buyBtn.visible && inside(buyBtn, mx, my) && declining()) {
+            l.add(Lang.tr("sc.flight.decline.tip"));
+        } else if (buyBtn != null && buyBtn.visible && inside(buyBtn, mx, my) && r != null) {
+            l.add(r.ride == EmbassyRulesSC.RIDE_BACK ? Lang.tr("sc.flight.useBack.tip") : Lang.tr("sc.flight.buy.tip", r.price));
+        } else if (roundBtn != null && roundBtn.visible && inside(roundBtn, mx, my) && r != null) {
+            l.add(r.round > 0 ? Lang.tr("sc.flight.round.tip", r.round, EmbassyRulesSC.BACK_TICKS / SettlementSC.DAY) : Lang.tr("sc.flight.round.none"));
+        } else if (friendBtn != null && friendBtn.visible && inside(friendBtn, mx, my)) {
+            l.add(fplace != FlightTargetsSC.PLACE_EMBASSY ? Lang.tr("sc.flight.friend.embassy")
+                    : !guarantor ? Lang.tr("sc.flight.friend.level", levelName(EmbassyRulesSC.GUARANTOR_LEVEL))
+                    : friends.isEmpty() ? Lang.tr("sc.flight.friend.none") : guarLeft <= 0 ? Lang.tr("sc.flight.friend.used")
+                    : Lang.tr("sc.flight.friend.tip", friends.get(Math.max(0, Math.min(friends.size() - 1, friend)))[0], r == null ? 0 : r.guar));
+        } else if (goBtn != null && goBtn.visible && inside(goBtn, mx, my)) {
+            l.add(Lang.tr(talonRide < 0 ? "sc.flight.go.none" : !talonHere ? "sc.flight.go.elsewhere" : "sc.flight.go.tip"));
+        }
+        if (!l.isEmpty() && confirmTicks > 0) {
+            l.add(Lang.tr("sc.flight.confirm.tip"));
+        }
+        return l.isEmpty() ? null : l;
     }
 
     /** `text` wrapped to `w`, at most `max` lines (the last one cut with its full text as a tooltip). @return the next y */
@@ -817,8 +1444,11 @@ public class GuiTradeSC extends GuiContainer {
         RenderHelper.enableStandardItemLighting();
     }
 
-    /** «Обменять»: Shift - how many at most; a disabled contract button: why. */
+    /** «Обменять»: Shift - how many at most; a disabled contract button: why. Ф6: the flights' buttons. */
     private List<String> buttonTip(int mx, int my) {
+        if (flights()) {
+            return flightButtonTip(mx, my);
+        }
         if (tradeBtn != null && tradeBtn.visible && inside(tradeBtn, mx, my) && sel >= 0 && sel < rows.size()) {
             List<String> l = new ArrayList<String>();
             l.add(Lang.tr("sc.trade.btn.trade.tip", Math.max(1, maxTimes(rows.get(sel)))));
@@ -833,6 +1463,10 @@ public class GuiTradeSC extends GuiContainer {
 
     /** The item icons of the list (absolute coordinates, over the foreground). @return the stack under the mouse, or null */
     private ItemStack drawIcons(int mx, int my) {
+        if (flights()) {
+            flightIcons();
+            return null;
+        }
         if (!has) {
             return null;
         }
@@ -934,7 +1568,7 @@ public class GuiTradeSC extends GuiContainer {
         return s;
     }
 
-    /** A contract's picture: a sword (kill), the thing handed in (deliver, cargo), the ПЭ-1 (suppress), the anchor. */
+    /** A contract's picture: a sword (kill), the thing handed in (deliver, cargo), the ПЭ-1 (suppress), the anchor, a paper (Ф6: the dispatch). */
     private static ItemStack contractIcon(CRow c) {
         if (c.anchor) {
             return ModBlocks.bridge == null ? null : new ItemStack(ModBlocks.bridge, 1, BlockBridgeSC.ANCHOR);
@@ -944,6 +1578,8 @@ public class GuiTradeSC extends GuiContainer {
                 return new ItemStack(Items.iron_sword);
             case ContractTableSC.SUPPRESS_KILL:
                 return ModItems.empGun == null ? null : new ItemStack(ModItems.empGun);
+            case ContractTableSC.DISPATCH:
+                return new ItemStack(Items.paper);
             default:
                 TradeOfferSC.Ingredient in = c.c.handIn();
                 return in == null ? null : in.display();

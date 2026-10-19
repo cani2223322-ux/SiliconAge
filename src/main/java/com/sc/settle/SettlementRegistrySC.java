@@ -44,6 +44,11 @@ import net.minecraft.world.WorldSavedData;
  * </ul>
  * Server thread only. A client's world has no registry (get answers null). Shared core: only the coordinator edits this
  * file - a package needing a new shared field asks in its report, or keeps it in its `extra` key.
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §2.5): the Tuners' Embassies are records of this registry too (dim 0, size EMBASSY), indexed by
+ * the same key (the dimension is in it). A record's dock zone has its own radius now (Settlement.dockZone: SettlementSC.DOCK_ZONE 5
+ * for the Substrate's docks, EmbassyLayoutSC.DOCK_ZONE 13 for an embassy's Vokzal - saved only when it isn't 5): inDockZone and
+ * reach() read it. Embassies never join a player's knownDocks (RosterSC.visitors) and nearestDocks / first stay by dimension.
  */
 public class SettlementRegistrySC extends WorldSavedData {
 
@@ -294,6 +299,17 @@ public class SettlementRegistrySC extends WorldSavedData {
         return l.size() > n ? new ArrayList<Settlement>(l.subList(0, n)) : l;
     }
 
+    /** Ф6: every embassy record (SettlementSC.isEmbassy), in id order - a walk of the records (asked rarely: a command, a map, a flight list). */
+    public List<Settlement> embassies() {
+        List<Settlement> out = new ArrayList<Settlement>();
+        for (Settlement s : byId.values()) {
+            if (SettlementSC.isEmbassy(s)) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
     /** The «Первый причал» of `dim` (the guaranteed settlement near the spawn), null none. */
     public Settlement first(int dim) {
         for (Settlement s : byId.values()) {
@@ -432,6 +448,8 @@ public class SettlementRegistrySC extends WorldSavedData {
         public boolean hasDock;
         /** The dock's beacon block. */
         public int dockX, dockY, dockZ;
+        /** Ф6: the dock's protected zone across (radius) - SettlementSC.DOCK_ZONE, an embassy's Vokzal EmbassyLayoutSC.DOCK_ZONE. */
+        public int dockZone = SettlementSC.DOCK_ZONE;
         public int version = VERSION;
         /** The world time it was made (the start); 0 unknown. */
         public long madeAt;
@@ -463,13 +481,13 @@ public class SettlementRegistrySC extends WorldSavedData {
             return distSq(px, pz) <= r * r;
         }
 
-        /** ПР-1: inside the dock's protected zone (DOCK_ZONE across from the beacon, a little below it to well above). */
+        /** ПР-1: inside the dock's protected zone (dockZone across from the beacon, a little below it to well above). */
         public boolean inDockZone(double px, double py, double pz) {
             if (!hasDock || py < dockY - SettlementSC.DOCK_BELOW || py > dockY + SettlementSC.DOCK_ABOVE) {
                 return false;
             }
             double dx = px - (dockX + 0.5D), dz = pz - (dockZ + 0.5D);
-            return dx * dx + dz * dz <= (double) SettlementSC.DOCK_ZONE * SettlementSC.DOCK_ZONE;
+            return dx * dx + dz * dz <= (double) dockZone * dockZone;
         }
 
         /** The protected cylinder's box (ПП-8: players' fields). */
@@ -483,7 +501,7 @@ public class SettlementRegistrySC extends WorldSavedData {
             int r = radius + SettlementSC.BELT + 1;
             int[] b = {x - r, z - r, x + r, z + r};
             if (hasDock) {
-                int d = SettlementSC.DOCK_ZONE + 1;
+                int d = dockZone + 1;
                 b[0] = Math.min(b[0], dockX - d);
                 b[1] = Math.min(b[1], dockZ - d);
                 b[2] = Math.max(b[2], dockX + d);
@@ -538,6 +556,9 @@ public class SettlementRegistrySC extends WorldSavedData {
             t.setBoolean("First", first);
             if (hasDock) {
                 t.setIntArray("Dock", new int[]{dockX, dockY, dockZ});
+                if (dockZone != SettlementSC.DOCK_ZONE) {
+                    t.setInteger("DockZone", dockZone);        // Ф6: an embassy's Vokzal (a Ф2..Ф5 record has none: 5)
+                }
             }
             t.setInteger("Version", version);
             t.setLong("Made", madeAt);
@@ -589,6 +610,7 @@ public class SettlementRegistrySC extends WorldSavedData {
                 s.dockY = d[1];
                 s.dockZ = d[2];
             }
+            s.dockZone = t.hasKey("DockZone") ? Math.max(1, Math.min(64, t.getInteger("DockZone"))) : SettlementSC.DOCK_ZONE;
             s.version = t.getInteger("Version");
             s.madeAt = t.getLong("Made");
             NBTTagCompound pts = t.getCompoundTag("Points");

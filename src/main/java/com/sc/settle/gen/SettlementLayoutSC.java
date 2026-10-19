@@ -207,8 +207,11 @@ public final class SettlementLayoutSC {
         }
     }
 
-    /** A site's plan (pure): the core, the floor, the named points (SettlementRegistrySC.P_*), the dock, the roster's posts. */
-    public static final class Plan {
+    /**
+     * A site's plan (pure): the core, the floor, the named points (SettlementRegistrySC.P_*), the dock, the roster's posts. Ф6 (the
+     * coordinator's): not final - an embassy's plan is one of these with its Vokzal and ring (embassy.EmbassyLayoutSC.Plan).
+     */
+    public static class Plan {
         public final Site site;
         public int coreX, coreY, coreZ, floorY;
         public boolean dock;

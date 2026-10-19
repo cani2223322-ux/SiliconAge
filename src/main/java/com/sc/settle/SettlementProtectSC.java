@@ -7,7 +7,6 @@ import java.util.UUID;
 
 import com.sc.ShieldEventHandler;
 import com.sc.dim.SubstrateConfigSC;
-import com.sc.dim.SubstrateSC;
 import com.sc.settle.npc.NpcNamesSC;
 
 import cpw.mods.fml.common.eventhandler.Event;
@@ -361,11 +360,14 @@ public final class SettlementProtectSC {
         }
     }
 
-    /** ПП-7, ПР-1: an explosion breaks no block in a cylinder or a dock zone, nor a settlement's own block anywhere near. */
+    /**
+     * ПП-7, ПР-1: an explosion breaks no block in a cylinder or a dock zone, nor a settlement's own block anywhere near. Ф6 (ПП-14):
+     * in every world SettlementSC.governs - an embassy's cylinder and Vokzal too (a creeper, TNT, a Galacticraft meteor alike).
+     */
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onDetonate(ExplosionEvent.Detonate e) {
         World w = e.world;
-        if (w.isRemote || !SubstrateSC.is(w)) {
+        if (w.isRemote || !SettlementSC.governs(w)) {
             return;
         }
         SettlementRegistrySC r = SettlementRegistrySC.get(w);

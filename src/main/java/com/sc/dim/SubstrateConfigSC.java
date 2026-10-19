@@ -99,6 +99,27 @@ public final class SubstrateConfigSC {
      */
     public static boolean caravans = true;
 
+    // ------------------------------------------------------------------ Ф6: the Tuners' Embassies (section "embassy", rules too)
+
+    /**
+     * Ф6 (docs/plan-substrate-tech-f6.md §2.1, ПК-26): the Tuners' Embassies - rare big cities in the Overworld with the Great Ring
+     * and flights to the Substrate and back (section CATEGORY_EMBASSY of the same file). Off: no new embassy generates and those made
+     * stand without protection, flights or a roster (their records stay). They are rules - the server's, sent to a joining client
+     * with the others (its handbook shows the server's numbers).
+     */
+    public static boolean embassies = true;
+    /** ПЕ-1: one embassy at most to an embassyGrid x embassyGrid region (blocks); its point within a quarter of it of the middle. TODO(balance) */
+    public static int embassyGrid = 2048;
+    /** ПЕ-1: the chance, %, that a region has one (before the biomes and the vanilla structures). TODO(balance): /scembassy list on the user's seed */
+    public static int embassyChance = 45;
+    /** ПЕ-1: no embassy closer than this to the world's spawn (blocks). */
+    public static int embassySpawnMin = 1500;
+    /** ПЕ-2: the guaranteed first embassy stands this far from the spawn (blocks), between the two. */
+    public static int embassyRingMin = 1300, embassyRingMax = 2500;
+
+    /** The section of the embassies' rules. */
+    public static final String CATEGORY_EMBASSY = "embassy";
+
     private SubstrateConfigSC() {
     }
 
@@ -173,6 +194,38 @@ public final class SubstrateConfigSC {
                 "Every 2 game days a caravan - a trader and two guards - comes to a settlement a player is near; 40% are ambushed on the way;"
                 + " beating the ambush off gives reputation and a rare deal (off: no caravans) / Раз в 2 игровых дня к поселению, у которого есть"
                 + " игрок, идёт караван - торговец и два стража; 40% попадают в засаду; отбитая засада - „Доверие“ и редкая сделка (выкл.: караванов нет)");
+        loadEmbassies(c);
+    }
+
+    /** Ф6 (docs/plan-substrate-tech-f6.md §2.1): the section "embassy". The placement numbers matter only for land not generated yet. */
+    private static void loadEmbassies(Configuration c) {
+        String e = CATEGORY_EMBASSY;
+        c.setCategoryComment(e, "The Tuners' Embassies: rare big cities of the Tuners in the Overworld with the Great Ring - flights to the Substrate"
+                + " and back for Credit Chips. The placement numbers change only land not generated yet."
+                + " / Посольства Наладчиков: редкие большие города Наладчиков в Верхнем мире с Большим кольцом - рейсы в Подложку и обратно"
+                + " за Кредит-чипы. Числа размещения меняют только ещё не созданную землю.");
+        c.setCategoryRequiresWorldRestart(e, true);
+        embassies = c.getBoolean("embassies", e, true,
+                "Embassies generate in the Overworld (only in land not explored yet) and work: protection, settlers, flights (off: no new ones;"
+                + " those made stand empty) / Посольства появляются в Верхнем мире (только в ещё не открытой земле) и работают: защита, жители,"
+                + " рейсы (выкл.: новых нет; созданные стоят пустыми)");
+        embassyGrid = c.getInt("embassyGrid", e, 2048, 1024, 16384,
+                "One embassy at most to a region of this size, blocks (two embassies are at least half of it apart)"
+                + " / Не больше одного посольства на регион такого размера, блоки (два посольства - не ближе половины его)");
+        embassyChance = c.getInt("embassyChance", e, 45, 0, 100,
+                "The chance, %, that a region has an embassy (then the land must suit it: flat, dry and open - plains, savanna, desert)"
+                + " / Шанс посольства в регионе, % (затем земля должна подойти: ровная, сухая, открытая - равнины, саванна, пустыня)");
+        embassySpawnMin = c.getInt("embassySpawnMin", e, 1500, 0, 1000000,
+                "No embassy closer than this to the world's spawn, blocks (the guaranteed first one aside)"
+                + " / Посольства не ближе этого к точке появления мира, блоки (кроме гарантированного первого)");
+        embassyRingMin = c.getInt("embassyRingMin", e, 1300, 256, 1000000,
+                "The guaranteed first embassy stands at least this far from the world's spawn, blocks"
+                + " / Гарантированное первое посольство - не ближе этого к точке появления мира, блоки");
+        embassyRingMax = c.getInt("embassyRingMax", e, 2500, 512, 1000000,
+                "...and at most this far, blocks (at least embassyRingMin + 256) / ...и не дальше этого, блоки (не меньше embassyRingMin + 256)");
+        if (embassyRingMax < embassyRingMin + 256) {
+            embassyRingMax = embassyRingMin + 256;               // a ring too thin to hold a city: widened, never an error
+        }
     }
 
     /** As ConfigSC.num: Forge clamps by comparisons and NaN passes them - NaN / infinity in the file: the default. */

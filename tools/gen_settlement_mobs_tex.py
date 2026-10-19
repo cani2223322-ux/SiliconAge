@@ -10,7 +10,13 @@ Writes into src/main/resources/assets/siliconage/textures/entity:
                       Technologist's brass loupe, the Metallurgist's scorched leather apron, the Gas Technician's two
                       banded cylinders, the Cartographer's antenna;
   warden.png        - «Страж купола»: the dark slate undersuit under the mod's armour, the face under the helmet, and
-                      the armband in the dome's turquoise with a white stripe (it shows over the armour's sleeve).
+                      the armband in the dome's turquoise with a white stripe (it shows over the armour's sleeve);
+  Ф6 (docs/plan-substrate-tech-f6.md §8.6, package T):
+  tuner_dispatcher.png    - «Диспетчер прокола»: magenta diodes, a headset - a dark band over the head, two ear cups with a
+                            turquoise ring, a microphone boom to the respirator - and a flight tablet on the chest (its screen
+                            the renderer lights in the Tuners' turquoise; three keys under it);
+  tuner_quartermaster.png - «Интендант»: lime diodes, the same chest board as a clipboard - a grey board, a supply list
+                            clipped to it - and a leather pouch with a buckle on the belt.
 Layout: ModelBiped's 64 x 64 (RenderTunerSC.ModelTunerSC / RenderWardenSC.ModelWardenSC) drawn at 128 x 128 like
 the mod's other skins - vanilla's boxes in the upper half (the hat area left clear), the extra parts below; the box
 sizes and texture offsets here must match those models. A preview sheet goes next to this script.
@@ -87,6 +93,26 @@ KINDS = {
     'gasTech': ((176, 96, 255), (34, 32, 36)),
     'cartographer': ((255, 224, 64), (150, 120, 80)),
 }
+# the skins of phase 2 (main writes these; gen_settlement3_tex.py adds Ф3's to KINDS in its own run)
+PHASE2 = ('elder', 'technologist', 'metallurgist', 'gasTech', 'cartographer')
+# Ф6: the Dispatcher (magenta), the Quartermaster (lime) - RenderTunerSC.DIODES 12, 13
+KINDS['dispatcher'] = ((255, 80, 200), (40, 38, 44))
+KINDS['quartermaster'] = ((180, 255, 60), (96, 72, 52))
+# Ф6's palettes: the headset's rubber and steel, the Tuners' turquoise of the embassies' beam (RenderTunerSC.BEAM), the board
+HEADSET = (36, 38, 44)
+HEADSET_L = (70, 74, 82)
+HEADSET_D = (22, 24, 28)
+BEAM = (72, 240, 220)
+BEAM_D = (28, 120, 112)
+SCREEN = (16, 40, 40)
+BOARD = (84, 90, 84)
+BOARD_L = (118, 124, 116)
+BOARD_D = (56, 60, 56)
+PAPER = (228, 224, 206)
+PAPER_D = (196, 190, 170)
+INK = (90, 96, 110)
+TICK = (90, 170, 80)
+KEY_WHITE = (230, 236, 240)
 
 
 def clamp(v):
@@ -155,6 +181,12 @@ ANTENNA = faces(28, 52, 1, 9, 1)
 LOUPE = faces(40, 52, 3, 3, 2)
 # the guard's armband (RenderWardenSC.ModelWardenSC)
 ARMBANDBOX = faces(0, 32, 4, 2, 4)
+# Ф6: the Dispatcher's and the Quartermaster's parts (RenderTunerSC.ModelTunerSC: headBand, headCups, boom, slate, pouch)
+HEADBAND = faces(36, 47, 10, 1, 2)
+HEADCUPS = faces(32, 52, 1, 6, 2)
+BOOM_AREA = (54, 41, 8, 4)          # the boom (1 x 1 x 3) and the microphone (2 x 1 x 1) share this UV: painted whole
+SLATE = faces(20, 36, 4, 5, 1)
+POUCH = faces(28, 44, 3, 3, 1)
 
 
 def cloth(base, dark, light, seam):
@@ -384,17 +416,119 @@ def warden():
     return im
 
 
+# ------------------------------------------------------------------ Ф6: the Dispatcher, the Quartermaster
+
+def dispatcher():
+    im = tuner('dispatcher')
+    keys = {2: KINDS['dispatcher'][0], 4: BEAM, 6: KEY_WHITE}
+
+    # the headset's band: dark rubber, a lit top edge, steel ends
+    def band(name):
+        def fn(x, y, w, h):
+            if name in ('right', 'left'):
+                return HEADSET_L
+            if name == 'top' and y == 0:
+                return HEADSET_L
+            return HEADSET if (x + y) % 5 else HEADSET_D
+        return fn
+
+    paint_box(im, HEADBAND, band)
+
+    # the ear cups: dark rubber, the outer faces with a turquoise ring round a steel boss; the strap above
+    def cup(name):
+        def fn(x, y, w, h):
+            if name in ('right', 'left') and y >= 4:
+                cx, cy = (w - 1) / 2.0, 4 + (h - 5) / 2.0
+                d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                if d < 1.2:
+                    return HEADSET_L
+                if d < 2.3:
+                    return BEAM if (x + y) % 3 else BEAM_D
+            if y < 4:
+                return HEADSET_L if x == 0 else HEADSET
+            return HEADSET if (x * 3 + y) % 7 else HEADSET_D
+        return fn
+
+    paint_box(im, HEADCUPS, cup)
+    # the boom and the microphone: one dark rubber strip, a steel glint every few pixels
+    u, v, w, h = BOOM_AREA
+    for y in range(h * K):
+        for x in range(w * K):
+            px(im, u * K + x, v * K + y, ROD_L if (x + 2 * y) % 7 == 0 else HEADSET_D if y % 2 else HEADSET)
+
+    # the flight tablet: a steel frame, the dark screen (the renderer lights it), three keys under it
+    def tablet(name):
+        def fn(x, y, w, h):
+            if name != 'front':
+                return STEEL_D if (x + y) % 4 else STEEL
+            if x == 0 or y == 0 or x == w - 1 or y == h - 1:
+                return STEEL_L if x == 0 or y == 0 else STEEL_D
+            if y <= 6:
+                return SCREEN if (x + y) % 3 else mix(SCREEN, BEAM_D, 0.5)
+            if y == 8 and x in keys:
+                return keys[x]
+            return STEEL
+        return fn
+
+    paint_box(im, SLATE, tablet)
+    return im
+
+
+def quartermaster():
+    im = tuner('quartermaster')
+
+    # the clipboard: a grey board, a supply list on it (lines of ink, ticks against the first ones), the steel clip at the top
+    def clipboard(name):
+        def fn(x, y, w, h):
+            if name != 'front':
+                return BOARD_D if (x + y) % 3 else BOARD
+            if y <= 1 and 2 <= x <= w - 3:
+                return STEEL_L if y == 0 else STEEL_D
+            if x == 0 or x == w - 1 or y == h - 1:
+                return BOARD_L if x == 0 else BOARD_D
+            if 1 <= x <= w - 2 and 2 <= y <= h - 2:
+                if y % 2 == 1 and 2 <= x <= w - 3 and (x * 5 + y) % 6:
+                    return INK
+                if x == 1 and y % 2 == 1:
+                    return TICK if y < 6 else PAPER_D
+                return PAPER
+            return BOARD
+        return fn
+
+    paint_box(im, SLATE, clipboard)
+
+    # the pouch: leather, a darker flap over its top half, a brass buckle on the flap's edge
+    def pouch(name):
+        def fn(x, y, w, h):
+            if name == 'front':
+                if y == h // 2 - 1 and w // 2 - 1 <= x <= w // 2:
+                    return BRASS
+                if y < h // 2:
+                    return LEATHER_D if x == 0 or x == w - 1 or y == h // 2 - 1 else mix(LEATHER, LEATHER_D, 0.5)
+            if x == 0 or y == 0:
+                return mix(LEATHER, (255, 255, 255), 0.12)
+            return LEATHER if (x + 2 * y) % 7 else LEATHER_D
+        return fn
+
+    paint_box(im, POUCH, pouch)
+    return im
+
+
 def main():
     os.makedirs(TEX, exist_ok=True)
     out = []
-    for kind in KINDS:
+    for kind in PHASE2:
         im = tuner(kind)
         im.save(os.path.join(TEX, 'tuner_' + kind + '.png'))
         out.append(im)
     im = warden()
     im.save(os.path.join(TEX, 'warden.png'))
     out.append(im)
-    # the preview: the six skins in their UV layout x2, on grey
+    for name, fn in (('dispatcher', dispatcher), ('quartermaster', quartermaster)):     # Ф6
+        im = fn()
+        im.save(os.path.join(TEX, 'tuner_' + name + '.png'))
+        out.append(im)
+    # the preview: the eight skins in their UV layout x2, on grey
     z = 2
     size = W * K * z
     sheet = Image.new('RGBA', (len(out) * (size + 8) + 8, size + 16), (70, 72, 76, 255))

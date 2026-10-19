@@ -1,6 +1,8 @@
 package com.sc.settle.npc.ai;
 
+import com.sc.embassy.EmbassyQuartersSC;
 import com.sc.settle.SettlementRegistrySC;
+import com.sc.settle.SettlementSC;
 import com.sc.settle.npc.EntityWardenSC;
 
 import net.minecraft.entity.ai.EntityAIBase;
@@ -10,8 +12,9 @@ import net.minecraft.entity.ai.EntityAIBase;
  * gate, at its post (a Senior: a tower), at the Heart at night - it walks there and stands; on patrol - round the
  * dome from waypoint to waypoint, each STEP_ARC blocks on along the ring at a random distance from the dome's edge
  * to PATROL_OUT past it (Sentries of even slots clockwise, odd ones the other way), a short stop at each. A waypoint
- * whose column isn't loaded is skipped (never a chunk loaded for it). Movement only (mutex 1): the look tasks watch
- * players meanwhile.
+ * whose column isn't loaded is skipped (never a chunk loaded for it). Ф6 (ПГ-21): at an embassy the ring is its
+ * «обход» - the ring road inside the wall (EmbassyQuartersSC.roadCell), not outside it (every leg would pass a gate).
+ * Movement only (mutex 1): the look tasks watch players meanwhile.
  */
 public class EntityAIWardenPatrolSC extends EntityAIBase {
 
@@ -139,8 +142,10 @@ public class EntityAIWardenPatrolSC extends EntityAIBase {
             angle = Math.atan2(g.posZ - cz, g.posX - cx);
         }
         int dir = g.slot() % 2 == 0 ? 1 : -1;
+        boolean embassy = SettlementSC.isEmbassy(s);
         for (int i = 0; i < 3; i++) {
-            double r = s.radius + 2 + g.getRNG().nextInt(Math.max(1, EntityWardenSC.PATROL_OUT - 1));
+            double r = embassy ? EmbassyQuartersSC.innerFace(s.radius) - EmbassyQuartersSC.ROAD_GAP - 0.5D - g.getRNG().nextInt(EmbassyQuartersSC.ROAD_W)
+                    : s.radius + 2 + g.getRNG().nextInt(Math.max(1, EntityWardenSC.PATROL_OUT - 1));
             angle += dir * STEP_ARC / r;
             int x = (int) Math.floor(cx + Math.cos(angle) * r), z = (int) Math.floor(cz + Math.sin(angle) * r);
             int y = NpcNavSC.groundY(g.worldObj, x, z);

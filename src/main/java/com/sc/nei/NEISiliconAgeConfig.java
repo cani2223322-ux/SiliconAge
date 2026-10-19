@@ -49,6 +49,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         showRuinBlocks();
         hideWildBlocks();
         hideArenaBlocks();
+        hideEmbassyBlocks();
         // the Energy Converter and its modules: no other energy in this game (no RF API, Mekanism, Galacticraft) - no use, no recipe
         if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.energyConverter));
@@ -163,6 +164,18 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
     static void hideArenaBlocks() {
         for (net.minecraft.item.ItemStack s : arenaStacks()) {
             API.hideItem(s);
+        }
+    }
+
+    /**
+     * Ф6 (docs/plan-substrate-tech-f6.md §9.3): the Great Ring's core (embassyRingSC) stands only under an embassy's ring, unbreakable:
+     * hidden, with its «Как получить» page for R in cheat mode. The showcase metas 7..9 (the ring's coils, the cryo tanks, the
+     * Dispatchers' desk) are hidden with every other meta of showcase2SC (hideSettlementBlocks, by BlockShowcase2SC.NAMES). Shown: the
+     * Embassy Direction Finder - its shapeless recipe is NEI's own page, ObtainHandlerSC adds what it does.
+     */
+    static void hideEmbassyBlocks() {
+        if (com.sc.embassy.EmbassyBlocksSC.ring != null) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.embassy.EmbassyBlocksSC.ring));
         }
     }
 

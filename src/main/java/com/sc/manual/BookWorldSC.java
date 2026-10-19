@@ -161,6 +161,14 @@ import net.minecraftforge.oredict.OreDictionary;
  * beyond them by name; and extends «Подложка (Si-14)» (requireSignal, caravans, customSky), «Трофеи и добыча» (the ПЭ-1М, the
  * Warden's roll), «Терминал обмена» (the finale's deals), «Крупицы» (the Warden's beyond the cap, the Signal's cache), «Элита» (the
  * Arena Coordinator), «Хранилища» (the Journals, the Fragments into a Key) and «Восстановление трофеев» (the ПЭ-1М).
+ * <p>
+ * Ф6 «Посольства Наладчиков» (docs/plan-substrate-tech-f6.md §9.2) adds at the chapter's end the six articles of BookEmbassySC
+ * (F6_ARTICLES: «Посольства Наладчиков», «Город посольства», «Большое кольцо: рейсы», «Рейсы домой», «Лавка и Интендант», «Правила
+ * посольств») - every number from the core's EmbassySiteSC, EmbassyLayoutSC, EmbassyRulesSC; and extends «Подложка (Si-14)» (the
+ * section embassy), «Поселения» (the sizes table - the Substrate's three; the Dispatcher at the dock), «Наладчики» (the Dispatcher, the
+ * Quartermaster), «Терминал обмена» (the Quartermaster's deals are an embassy's; the Ambassador's contracts have their own article),
+ * «Доверие» (the embassies' ceiling 599) and «Причалы» (the Vokzal's zone 13, the Dispatcher). G on the Direction Finder, the Great
+ * Ring's core and the showcase metas 7..9 opens these pages.
  */
 public final class BookWorldSC {
 
@@ -263,6 +271,8 @@ public final class BookWorldSC {
         list.add(crumbs(c));
         // Ф5 «Финал» (docs/plan-substrate-tech-f5.md §11.4): at the chapter's end
         BookFinaleSC.add(list, c);
+        // Ф6 «Посольства Наладчиков» (docs/plan-substrate-tech-f6.md §9.2): at the chapter's end
+        BookEmbassySC.add(list, c);
     }
 
     /** Ф3: the eight new articles, in the chapter's order (the self-test counts and checks them). */
@@ -274,6 +284,9 @@ public final class BookWorldSC {
     /** Ф5: the thirteen new articles (§11.4), in the chapter's order (BookFinaleSC; SelfTestFinaleSC counts and checks them). */
     public static final String[] F5_ARTICLES = {"world.lithographers", "world.arena", "world.warden", "world.wardenLoot", "world.journals",
             "world.wrecks", "world.signal", "world.caravans", "world.cosmetics", "world.lithoModule", "world.navrecord", "world.progress", "world.sky"};
+    /** Ф6: the six new articles (§9.2), in the chapter's order (BookEmbassySC; SelfTestEmbassySC counts and checks them). */
+    public static final String[] F6_ARTICLES = {"world.embassies", "world.embassyCity", "world.flights", "world.flightsBack", "world.embassyTrade",
+            "world.embassyRules"};
 
     /** The chapter's tile: Crystallite while the Substrate's blocks exist, else a compass. */
     static ItemStack icon() {
@@ -337,6 +350,9 @@ public final class BookWorldSC {
         e.add(BookEl.item(null, Lang.tr("sc.manual.world.rule.caravans"),
                 Lang.tr(SubstrateConfigSC.caravans ? "sc.manual.world.rule.caravans.on" : "sc.manual.world.rule.caravans.off")));
         e.add(BookEl.dim(Lang.tr(SubstrateConfigSC.customSky() ? "sc.manual.world.rule.sky.on" : "sc.manual.world.rule.sky.off")));
+        // Ф6 (ПК-26): the section embassy - the Tuners' Embassies in the Overworld, the server's rule
+        e.add(BookEl.item(com.sc.embassy.EmbassyItemsSC.finder(1), Lang.tr("sc.manual.world.rule.embassies"),
+                Lang.tr(SubstrateConfigSC.embassies ? "sc.manual.world.rule.embassies.on" : "sc.manual.world.rule.embassies.off")));
         e.add(BookEl.link("world.terrain", Lang.tr("sc.manual.world.terrain.title")));
         e.add(BookEl.link("world.biomes4", Lang.tr("sc.manual.world.biomes4.title")));
         e.add(BookEl.link("world.storm", Lang.tr("sc.manual.world.storm.title")));
@@ -347,6 +363,7 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.lithographers", Lang.tr("sc.manual.world.lithographers.title")));
         e.add(BookEl.link("world.arena", Lang.tr("sc.manual.world.arena.title")));
         e.add(BookEl.link("world.navrecord", Lang.tr("sc.manual.world.navrecord.title")));
+        e.add(BookEl.link("world.embassies", Lang.tr("sc.manual.world.embassies.title")));
         e.add(BookEl.link("bridge", Lang.tr("sc.manual.bridge.title")));
         return e;
     }
@@ -628,7 +645,8 @@ public final class BookWorldSC {
         e.add(BookEl.head(Lang.tr("sc.manual.world.settle.sizeshead")));
         BookEl t = BookEl.table(Lang.tr("sc.manual.world.t.size"), Lang.tr("sc.manual.world.t.dome"), Lang.tr("sc.manual.world.t.tuners"),
                 Lang.tr("sc.manual.world.t.guards"), Lang.tr("sc.manual.world.t.dock"));
-        for (SettlementSizeSC s : SettlementSizeSC.values()) {
+        for (int i = 0; i < SettlementSizeSC.SUBSTRATE_SIZES; i++) {        // Ф6: the Substrate's three (EMBASSY - «Город посольства»)
+            SettlementSizeSC s = SettlementSizeSC.values()[i];
             t.row(null, Lang.tr(s.langKey()), span(s.radiusMin, s.radiusMax), span(s.tunersMin, s.tunersMax),
                     s.seniors > 0 ? Lang.tr("sc.manual.world.cell.guards", s.sentries, s.seniors) : String.valueOf(s.sentries),
                     Lang.tr(s.dock ? "sc.manual.world.cell.yes" : "sc.manual.world.cell.no"));
@@ -648,6 +666,7 @@ public final class BookWorldSC {
         part(e, null, "towers");
         part(e, showcase(BlockShowcaseSC.SHOWER), "gate");
         part(e, dock(BlockDockSC.BEACON), "dock");
+        part(e, showcase2(BlockShowcase2SC.DISPATCH_CONSOLE), "dispatcher");    // Ф6 (ПЖ-11): the flights home
 
         // the core (ПП-6, ПП-7)
         e.add(BookEl.head(Lang.tr("sc.manual.world.settle.corehead"), core));
@@ -670,6 +689,9 @@ public final class BookWorldSC {
         e.add(BookEl.link("world.trust", Lang.tr("sc.manual.world.trust.title")));
         e.add(BookEl.link("world.wardens", Lang.tr("sc.manual.world.wardens.title")));
         e.add(BookEl.link("world.docks", Lang.tr("sc.manual.world.docks.title")));
+        // Ф6: the Tuners' Embassies in the Overworld - the same core, protection and settlers, their own article
+        e.add(BookEl.dim(Lang.tr("sc.manual.world.settle.embassies")));
+        e.add(BookEl.link("world.embassies", Lang.tr("sc.manual.world.embassies.title")));
         e.about(core, rock(BRICK));
         if (SettlementBlocksSC.showcase != null) {
             e.about(new ItemStack(SettlementBlocksSC.showcase, 1, OreDictionary.WILDCARD_VALUE));
@@ -770,6 +792,9 @@ public final class BookWorldSC {
                 t.row(offerIcon(o), sides(o.in), outText(o), levelName(o.minLevel), limitText(o));
             }
             e.add(t);
+            if (k == NpcKindSC.QUARTERMASTER) {
+                e.add(BookEl.dim(Lang.tr("sc.manual.world.trade.embassyOnly")));     // Ф6 (ПО-25): an embassy's settler
+            }
         }
         if (!any) {
             e.add(BookEl.dim(Lang.tr("sc.manual.world.trade.none")));
@@ -798,6 +823,9 @@ public final class BookWorldSC {
         e.addAll(BookContent.paras("sc.manual.world.trade.contracts", new Object[]{ContractTableSC.BOARD, TradeRulesSC.CONTRACTS_PER_DAY}));
         BookEl ct = BookEl.table(Lang.tr("sc.manual.world.t.contract"), Lang.tr("sc.manual.world.t.goal"), Lang.tr("sc.manual.world.t.reward"));
         for (ContractTableSC.Contract k : ContractTableSC.pool()) {
+            if (k.key.startsWith(BookEmbassySC.EMB_PREFIX)) {
+                continue;                                   // Ф6 (ПО-27): the Ambassador's own - «Лавка и Интендант»
+            }
             ct.row(null, Lang.tr("sc.contract." + k.key), String.valueOf(k.target), reward(k.chips, k.reputation)
                     + (k.modulePct > 0 ? " " + Lang.tr("sc.manual.world.cell.module", k.modulePct) : ""));
         }
@@ -831,7 +859,7 @@ public final class BookWorldSC {
     }
 
     /** A deal's row icon: what comes out (the map, an item, the chips), else its first side. */
-    private static ItemStack offerIcon(TradeOfferSC o) {
+    static ItemStack offerIcon(TradeOfferSC o) {
         if (o.outKind == TradeOfferSC.OUT_MAP && SettlementItemsSC.settlementMap != null) {
             return new ItemStack(SettlementItemsSC.settlementMap);
         }
@@ -843,7 +871,7 @@ public final class BookWorldSC {
     }
 
     /** «16 × Кремниевая пластина + 6 КЧ». */
-    private static String sides(TradeOfferSC.Ingredient[] in) {
+    static String sides(TradeOfferSC.Ingredient[] in) {
         return sides(in, 0, false);
     }
 
@@ -871,7 +899,7 @@ public final class BookWorldSC {
         return Lang.tr("sc.manual.world.cell.count", i.count, s != null ? s.getDisplayName() : i.ore != null ? i.ore : "?");
     }
 
-    private static String outText(TradeOfferSC o) {
+    static String outText(TradeOfferSC o) {
         if (o.outKind == TradeOfferSC.OUT_REPUTATION) {
             return Lang.tr("sc.manual.world.cell.trust", o.outAmount);
         }
@@ -997,6 +1025,8 @@ public final class BookWorldSC {
         gain(e, chip, "pass", ReputationSC.PASS, ReputationSC.PASS_CHIPS);
         gain(e, SettlementItemsSC.chips(ReputationSC.PENANCE_CHIPS), "penance", ReputationSC.PENANCE_CHIPS, ReputationSC.PENANCE);
         gain(e, com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.ANCHOR, 1), "anchor", ReputationSC.ANCHOR, ReputationSC.ANCHOR_CHIPS);
+        // Ф6 (ПД-7): what an embassy's deeds give stops at the ceiling
+        gain(e, com.sc.embassy.EmbassyItemsSC.finder(1), "embassy", ReputationSC.EMBASSY_CEILING, levelName(ReputationSC.PARTNER));
 
         // what lowers it (ПД-3, ПП-10): ViolationRulesSC
         e.add(BookEl.head(Lang.tr("sc.manual.world.trust.downhead")));
@@ -1029,6 +1059,7 @@ public final class BookWorldSC {
                 : Lang.tr("sc.manual.world.trust.aggro.off")));
         e.add(BookEl.link("world.wardens", Lang.tr("sc.manual.world.wardens.title")));
         e.add(BookEl.link("world.trade", Lang.tr("sc.manual.world.trade.title")));
+        e.add(BookEl.link("world.embassyTrade", Lang.tr("sc.manual.world.embassyTrade.title")));
         return e;
     }
 
@@ -1203,7 +1234,8 @@ public final class BookWorldSC {
         BookEntry e = new BookEntry("world.docks", c, beacon != null ? beacon : com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1),
                 Lang.tr("sc.manual.world.docks.title"));
         StringBuilder withDock = new StringBuilder();
-        for (SettlementSizeSC s : SettlementSizeSC.values()) {
+        for (int i = 0; i < SettlementSizeSC.SUBSTRATE_SIZES; i++) {        // Ф6: the Substrate's (an embassy's dock is its Vokzal - below)
+            SettlementSizeSC s = SettlementSizeSC.values()[i];
             if (s.dock) {
                 withDock.append(withDock.length() == 0 ? "" : ", ").append(Lang.tr(s.langKey()));
             }
@@ -1212,6 +1244,11 @@ public final class BookWorldSC {
                 new Object[]{withDock.toString()}, new Object[]{SettlementSC.DOCK_ZONE, SettlementSC.DOCK_BELOW, SettlementSC.DOCK_ABOVE}));
         e.add(BookEl.item(dock(BlockDockSC.PLATE), dockName(BlockDockSC.PLATE), Lang.tr("sc.manual.world.docks.plate")));
         e.add(BookEl.item(beacon, dockName(BlockDockSC.BEACON), Lang.tr("sc.manual.world.docks.beacon", TravelRulesSC.DOCK_SNAP, BridgeMathSC.BEACON_DISCOUNT)));
+        // Ф6 (ПР-7, ПР-8, ПЖ-11): the Dispatcher inside the gate, an embassy's Vokzal and its zone
+        e.add(BookEl.item(showcase2(BlockShowcase2SC.DISPATCH_CONSOLE), Lang.tr(NpcKindSC.DISPATCHER.langKey()),
+                Lang.tr("sc.manual.world.docks.dispatcher", com.sc.embassy.EmbassyRulesSC.BOARD_DOCK)));
+        e.add(BookEl.item(BookEmbassySC.ring(), Lang.tr("sc.manual.world.docks.vokzal"), Lang.tr("sc.manual.world.docks.vokzal.desc",
+                com.sc.embassy.EmbassyLayoutSC.DOCK_ZONE, TravelRulesSC.DOCK_SNAP)));
 
         // the bridge (ПР-2, ПР-3)
         e.add(BookEl.head(Lang.tr("sc.manual.world.docks.bridgehead"), com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.CONTROLLER, 1)));
@@ -1231,6 +1268,7 @@ public final class BookWorldSC {
                 Lang.tr("sc.manual.world.docks.death.desc", TravelRulesSC.DEATH_SCATTER, TravelRulesSC.DEATH_CLEAR)));
         e.add(BookEl.link("bridge", Lang.tr("sc.manual.bridge.title")));
         e.add(BookEl.link("world.settlements", Lang.tr("sc.manual.world.settlements.title")));
+        e.add(BookEl.link("world.flightsBack", Lang.tr("sc.manual.world.flightsBack.title")));
         e.add(BookEl.link("world.substrate", Lang.tr("sc.manual.world.substrate.title")));
         if (SettlementBlocksSC.dock != null) {
             e.about(new ItemStack(SettlementBlocksSC.dock, 1, OreDictionary.WILDCARD_VALUE));
@@ -1870,7 +1908,8 @@ public final class BookWorldSC {
 
         // the waves (ПН-2): RaidRulesSC.wave by size - the third one's two kinds by a fixed roll
         e.add(BookEl.head(Lang.tr("sc.manual.world.raids.waveshead"), egg(MobEntitiesSC.ID_MARAUDER)));
-        SettlementSizeSC[] sizes = SettlementSizeSC.values();
+        SettlementSizeSC[] sizes = new SettlementSizeSC[SettlementSizeSC.SUBSTRATE_SIZES];  // Ф6: the Substrate's (an embassy isn't raided)
+        System.arraycopy(SettlementSizeSC.values(), 0, sizes, 0, sizes.length);
         String[] header = new String[sizes.length + 1];
         header[0] = Lang.tr("sc.manual.world.t.wave");
         for (int s = 0; s < sizes.length; s++) {
@@ -2487,7 +2526,7 @@ public final class BookWorldSC {
         return SettlementBlocksSC.showcase == null ? null : new ItemStack(SettlementBlocksSC.showcase, 1, meta);
     }
 
-    private static ItemStack dock(int meta) {
+    static ItemStack dock(int meta) {
         return SettlementBlocksSC.dock == null ? null : new ItemStack(SettlementBlocksSC.dock, 1, meta);
     }
 
@@ -2517,13 +2556,17 @@ public final class BookWorldSC {
                 return new ItemStack(ModItems.ARMOR.get(ArmorSuit.EXO)[1]);
             case COMMANDANT:
                 return new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[1]);
+            case DISPATCHER:                            // Ф6: the Dispatchers' desk, the Quartermasters' depot (BlockShowcase2SC 9, 4)
+                return showcase2(BlockShowcase2SC.DISPATCH_CONSOLE);
+            case QUARTERMASTER:
+                return showcase2(BlockShowcase2SC.CRATE);
             default:                                    // the guards, the Armourer: the guard square's armour station
                 return showcase(BlockShowcaseSC.ARMOUR_STATION);
         }
     }
 
     /** Ф3: a showcase machine of the second block (BlockShowcase2SC), null before it is registered. */
-    private static ItemStack showcase2(int meta) {
+    static ItemStack showcase2(int meta) {
         return SettlementBlocksSC.showcase2 == null ? null : new ItemStack(SettlementBlocksSC.showcase2, 1, meta);
     }
 

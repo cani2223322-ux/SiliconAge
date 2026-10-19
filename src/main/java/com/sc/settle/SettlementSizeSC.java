@@ -5,7 +5,11 @@ package com.sc.settle;
  * sizes. The ordinal is saved (SettlementRegistrySC.Settlement.size): append only. Numbers of the proposal. Ф3
  * (docs/plan-substrate-tech-f3.md §6.2): the City's Captain and Commandant, a Settlement's Captain at CAPTAIN_PCT (by its
  * seed) - a Ф2 record gets their slots appended (RosterSC, Settlement.version). Lang: sc.settle.size.<key>.
- * Shared core: only the coordinator edits this file.
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §2.4, rule ПЕ-5): EMBASSY, ordinal 3 - the Tuners' Embassy in the Overworld (dome 88..96,
+ * 18..22 Tuners, 6 Sentries + 4 Senior Wardens + the Captain + the Commandant, the Vokzal for its dock). The Substrate's generator
+ * never picks it (SettlementLayoutSC.SIZE_WEIGHTS holds three; RosterSC.sizeOf never answers it); tables of the Substrate's sizes
+ * (the raids', the caravans') stay three long - substrate() tells them apart. Shared core: only the coordinator edits this file.
  */
 public enum SettlementSizeSC {
 
@@ -14,7 +18,13 @@ public enum SettlementSizeSC {
     /** «Посёлок»: dome 40, 8..12 Tuners, 3 Sentries + 2 Senior Wardens (Ф3: a Captain at 30%), a dock at the gate. */
     SETTLEMENT("settlement", 40, 40, 8, 12, 3, 2, true, 30, false),
     /** «Город» (one to 3..4 Settlements): dome 56..64, 15..20 Tuners, 4 Sentries + 3 Senior Wardens (Ф3: + the Captain, the Commandant), a dock. */
-    CITY("city", 56, 64, 15, 20, 4, 3, true, 100, true);
+    CITY("city", 56, 64, 15, 20, 4, 3, true, 100, true),
+    // ---- Ф6 (appended)
+    /** «Посольство Наладчиков» (the Overworld): dome 88..96, 18..22 Tuners, 6 Sentries + 4 Senior Wardens + the Captain + the Commandant, the Vokzal. */
+    EMBASSY("embassy", 88, 96, 18, 22, 6, 4, true, 100, true);
+
+    /** The sizes the Substrate's generator makes (OUTPOST, SETTLEMENT, CITY) - the tables indexed by a Substrate size are this long. */
+    public static final int SUBSTRATE_SIZES = 3;
 
     public final String key;
     public final int radiusMin, radiusMax, tunersMin, tunersMax, sentries, seniors;
@@ -52,6 +62,11 @@ public enum SettlementSizeSC {
     /** The guards of this size, both ranks. */
     public int guards() {
         return sentries + seniors;
+    }
+
+    /** Ф6: one of the Substrate's own sizes (not the Overworld's EMBASSY). */
+    public boolean substrate() {
+        return ordinal() < SUBSTRATE_SIZES;
     }
 
     /** The size of an ordinal (an unknown one: OUTPOST). */

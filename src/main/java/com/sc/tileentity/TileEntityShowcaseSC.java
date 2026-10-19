@@ -24,6 +24,10 @@ import net.minecraftforge.common.util.ForgeDirection;
  * square's, the Clone Capsule's and the gate's always. Never an inventory, a recipe or energy; nothing on the server (but
  * the gate's shower, Ф4 - below); blockExists before a neighbour is read (the air over a machine).
  * <p>
+ * Ф6 (package S, docs/plan-substrate-tech-f6.md §6.3): the Tuners' Embassies' metas of the second block, day and night (the Vokzal
+ * never closes): the Great Ring's coils a turquoise mote now and then (a ring is 40 of them - sparse), the cryo tanks' cold
+ * vapour off the gauge and over the lid, the Dispatchers' desk's screens flickering turquoise with a quiet click.
+ * <p>
  * Ф3 (docs/plan-substrate-tech-f3.md §6.3): the tile of the second block too (BlockShowcase2SC - the same tile id
  * "SiliconAge.showcase", told apart by its block): the energy storage's and the transformer's sparks while the Power
  * Engineer works, the wind generator's gusts always, the scrap pile's sparks and clatter while the Salvager sorts it; the
@@ -41,6 +45,9 @@ public class TileEntityShowcaseSC extends TileEntity {
     public static final int WORK_END = 11500;
     /** A quiet sound in 1 of this many effect ticks (a workshop of five machines isn't a din). */
     public static final int SOUND_ONE_IN = 4;
+
+    /** Ф6: «Бирюза Наладчиков» (0x48F0DC) as reddust's colour (the ring's coils, the desk's screens). */
+    private static final double TURQ_R = 0.28D, TURQ_G = 0.94D, TURQ_B = 0.86D;
 
     /** ForgeDirection ordinal of the front (2..5), south by default. */
     private byte facing = 3;
@@ -79,8 +86,8 @@ public class TileEntityShowcaseSC extends TileEntity {
         int meta = getBlockMetadata();
         boolean evening = worldObj.getWorldTime() % 24000L >= WORK_END;
         if (getBlockType() instanceof BlockShowcase2SC) {
-            if (!evening || meta == BlockShowcase2SC.WIND_GENERATOR) {
-                effects2(meta, worldObj.rand);          // the wind blows in the evening too
+            if (!evening || meta == BlockShowcase2SC.WIND_GENERATOR || meta >= BlockShowcase2SC.GRAVITY_COIL) {
+                effects2(meta, worldObj.rand);          // the wind blows in the evening too, the Vokzal works all night
             }
             return;
         }
@@ -144,6 +151,29 @@ public class TileEntityShowcaseSC extends TileEntity {
                 sound = "random.anvil_land";
                 volume = 0.04F;
                 pitch = 1.8F;
+                break;
+            case BlockShowcase2SC.GRAVITY_COIL:                             // Ф6: a turquoise mote off the ring's windings
+                if (r.nextInt(3) == 0) {
+                    worldObj.spawnParticle("reddust", cx + (r.nextDouble() - 0.5D) * 1.1D, cy + (r.nextDouble() - 0.5D) * 1.1D,
+                            cz + (r.nextDouble() - 0.5D) * 1.1D, TURQ_R, TURQ_G, TURQ_B);
+                }
+                break;
+            case BlockShowcase2SC.CRYO_TANK:                                // the cold: vapour off the gauge, over the lid
+                if (r.nextInt(2) == 0) {
+                    front("snowshovel", 1, fx, cy - 0.2D, fz, f, r, 0.01D);
+                }
+                if (airOver && r.nextInt(3) == 0) {
+                    worldObj.spawnParticle("cloud", cx, top, cz, 0D, 0.01D, 0D);
+                }
+                break;
+            case BlockShowcase2SC.DISPATCH_CONSOLE:                         // the screens' flicker, a key's click
+                for (int i = 0; i < 2; i++) {
+                    worldObj.spawnParticle("reddust", fx + (r.nextDouble() - 0.5D) * Math.abs(f.offsetZ) * 0.7D, cy + 0.1D + r.nextDouble() * 0.3D,
+                            fz + (r.nextDouble() - 0.5D) * Math.abs(f.offsetX) * 0.7D, TURQ_R, TURQ_G, TURQ_B);
+                }
+                sound = "random.click";
+                volume = 0.05F;
+                pitch = 1.6F;
                 break;
             default:
                 break;

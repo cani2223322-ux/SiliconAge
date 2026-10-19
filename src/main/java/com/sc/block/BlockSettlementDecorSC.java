@@ -13,6 +13,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockGlass;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.Entity;
+import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.IIcon;
 import net.minecraft.util.MovingObjectPosition;
@@ -31,14 +32,19 @@ import net.minecraft.world.World;
  * pick-block gives nothing; AE2's Spatial IO blacklist has it (SettlementCompatSC). No tab, hidden in NEI. Metas fixed -
  * NAMES, append only. Lang tile.siliconage.settlementDecor.<name>.name / tile.siliconage.settlementGlass.name,
  * sc.tooltip.settlementDecor.
+ * <p>
+ * Ф6 (the review's, §12 п.7): the embassies' Copper Trace and its lit node (the Substrate's rock drops crushed copper ore) and
+ * vanilla's quartz block - plain, chiseled, a pillar - appended (TRACE..QUARTZ_PILLAR): their own icons, the node's light
+ * (BlockSubstrateRockSC.NODE_LIGHT); an embassy's pieces put them for the real ones (ComponentEmbassySC.trim), so the «Достройка»
+ * never puts back a block that yields something.
  */
 public class BlockSettlementDecorSC extends Block {
 
-    /** Metas: the metals of the plan's palette, then the Tokamak Coil. */
+    /** Metas: the metals of the plan's palette, then the Tokamak Coil; Ф6: the trace, its node, the quartz block's three looks. */
     public static final int STEEL = 0, TITANIUM = 1, ALUMINIUM = 2, NIOBIUM = 3, ZIRCONIUM = 4, TANTALUM = 5, HAFNIUM = 6, TUNGSTEN = 7,
-            COIL = 8;
+            COIL = 8, TRACE = 9, NODE = 10, QUARTZ = 11, QUARTZ_CHISELED = 12, QUARTZ_PILLAR = 13;
     public static final String[] NAMES = {"steel", "titanium", "aluminium", "niobium", "zirconium", "tantalum", "hafnium", "tungsten",
-            "tokamakCoil"};
+            "tokamakCoil", "copperTrace", "traceNode", "quartz", "quartzChiseled", "quartzPillar"};
     /** The metal whose block a meta wears (by meta, COIL past the end). */
     public static final Material[] METALS = {Material.STEEL, Material.TITANIUM, Material.ALUMINIUM, Material.NIOBIUM, Material.ZIRCONIUM,
             Material.TANTALUM, Material.HAFNIUM, Material.TUNGSTEN};
@@ -86,6 +92,16 @@ public class BlockSettlementDecorSC extends Block {
         return false;
     }
 
+    /** Ф6: the trace's node is lit as the Substrate's own. */
+    @Override
+    public int getLightValue(IBlockAccess world, int x, int y, int z) {
+        Block b = world.getBlock(x, y, z);
+        if (b != this) {
+            return b.getLightValue(world, x, y, z);
+        }
+        return world.getBlockMetadata(x, y, z) == NODE ? BlockSubstrateRockSC.NODE_LIGHT : 0;
+    }
+
     /** Creative's middle click: nothing - an unbreakable copy would stand wherever it was put. */
     @Override
     public ItemStack getPickBlock(MovingObjectPosition target, World world, int x, int y, int z) {
@@ -100,6 +116,11 @@ public class BlockSettlementDecorSC extends Block {
         IIcon i = null;
         if (meta == COIL) {
             i = ModBlocks.tokamakCoil == null ? null : ModBlocks.tokamakCoil.getIcon(side, 0);
+        } else if (meta == TRACE || meta == NODE) {
+            Block rock = com.sc.dim.SubstrateBlocksSC.rock;
+            i = rock == null ? null : rock.getIcon(side, meta == NODE ? com.sc.dim.SubstrateBlocksSC.TRACE_NODE : com.sc.dim.SubstrateBlocksSC.COPPER_TRACE);
+        } else if (meta >= QUARTZ && meta <= QUARTZ_PILLAR) {
+            i = Blocks.quartz_block.getIcon(side, meta - QUARTZ);     // 0 plain, 1 chiseled, 2 the upright pillar
         } else if (meta >= 0 && meta < METALS.length) {
             ItemStack s = ModBlocks.metalBlock == null ? null : BlockMetalSC.stackOf(METALS[meta], 1);
             Block b = s == null ? null : Block.getBlockFromItem(s.getItem());

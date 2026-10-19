@@ -24,6 +24,7 @@ import com.sc.util.Material;
 import com.sc.util.SiliconMaterial;
 
 import net.minecraft.block.Block;
+import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
@@ -68,6 +69,13 @@ import net.minecraft.item.ItemStack;
  * the Crumb and the Matrix are only a part of a price (boughtAndSold never counts a purchase's part); the Coordinator, the Module,
  * the scheme and the module only come out, none of them forbiddenOut (no armour, blade or ПЭ-1). A Crumb paid is never counted
  * towards the player's Crumbs a day (CrumbLimitSC counts what a player gets - the Elder's ELDER_CRUMB alone, TradeServerSC).
+ * <p>
+ * Ф6 (package T, docs/plan-substrate-tech-f6.md §8.2, rule ПО-25; the keys appended, the deals after every profession's - buildF6;
+ * TODO(balance)): the embassy's Quartermaster buys the expedition's supplies - 16 bread, 32 logs (logWood), 16 coal, 8 iron ingots
+ * (ingotIron) for 1, 1, 1, 2 chips, 4 / 4 / 4 / 3 a day at the embassy (at most 18 chips a day, within the 64), «Чужак» (minLevel
+ * VIOLATOR, as every «Чужак» sale), +1 «Доверие» a deal under the embassy's ceiling (TradeServerSC). They are the only vanilla
+ * things the Tuners take, and nobody sells them (ПО-7: boughtAndSold stays empty); only an embassy's Quartermaster makes them
+ * (embassy.EmbassyTradeSC.allowed - which also says what else of the table an embassy opens).
  */
 public final class TradeTableSC {
 
@@ -92,7 +100,9 @@ public final class TradeTableSC {
             SAL_INDUCTION = "salInductionThread", SAL_PLASMA = "salPlasmaCondensate", CART_FINDER = "cartRuinFinder",
             // ---- Ф5 (appended)
             CART_ARENA_COORDINATOR = "cartArenaCoordinator", ELDER_LITHO_MODULE = "elderLithoModule", ELDER_TUNER_SCHEME = "elderTunerScheme",
-            ARM_MOD_WIDE = "armModWide";
+            ARM_MOD_WIDE = "armModWide",
+            // ---- Ф6 (appended): the embassy's Quartermaster
+            QM_BREAD = "qmBread", QM_LOGS = "qmLogs", QM_COAL = "qmCoal", QM_IRON = "qmIron";
     /** The Power Engineer's three charges share one limit (4 a day for all of them, ПО-10): their counter. */
     public static final String PE_CHARGE_COUNTER = "peCharge";
     /** The charge service's chips by suit (Nano, Quantum, Exo; ПО-10). TODO(balance) */
@@ -185,6 +195,7 @@ public final class TradeTableSC {
                 ReputationSC.HONOURED, TradeRulesSC.CRUMBS_PER_WEEK, true, SettlementSC.WEEK_DAYS));
         buildF3(l, anyone, acq, partner, own);
         buildF5(l, acq, own);
+        buildF6(l, anyone);
         for (TradeOfferSC o : l) {
             if (!complete(o)) {
                 return Collections.emptyList();                 // an item missing (not registered yet): ask again later
@@ -265,6 +276,19 @@ public final class TradeTableSC {
         // ---- the Armourer: 24 chips + 2 Controllers -> «Широкий канал» (ПО-21) - only while the caravan's rare deal is open (TradeServerSC)
         l.add(purchase(ARM_MOD_WIDE, NpcKindSC.ARMOURER, new TradeOfferSC.Ingredient[]{TradeOfferSC.Ingredient.chips(24),
                 item(silicon(SiliconMaterial.CONTROLLER), 2)}, item(module(EmpModule.WIDE), 1), acq, 1));
+    }
+
+    /**
+     * Ф6 (ПО-25): the embassy's Quartermaster - the expedition's supplies for chips (the Substrate has no bread, wood or iron, ПМ-7).
+     * Plain sales («Чужак»: open to a «Нарушитель» too, ПД-1); coal is meta 0 only (charcoal would turn 16 logs into a chip). The
+     * day's limits are the embassy's (LocalRec.counts, as every ordinary deal).
+     */
+    private static void buildF6(List<TradeOfferSC> l, int anyone) {
+        NpcKindSC k = NpcKindSC.QUARTERMASTER;
+        l.add(sale(QM_BREAD, k, item(new ItemStack(Items.bread), 16), 1, anyone, 4));
+        l.add(sale(QM_LOGS, k, TradeOfferSC.Ingredient.ore("logWood", 32), 1, anyone, 4));
+        l.add(sale(QM_COAL, k, item(new ItemStack(Items.coal, 1, 0), 16), 1, anyone, 4));
+        l.add(sale(QM_IRON, k, TradeOfferSC.Ingredient.ore("ingotIron", 8), 2, anyone, 3));
     }
 
     /**

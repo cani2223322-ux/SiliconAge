@@ -42,6 +42,9 @@ public class ClientProxy extends CommonProxy {
         com.sc.mob.client.BossClientSC.register();
         com.sc.lore.client.SignalClientSC.register();
         com.sc.settle.client.CaravanClientSC.register();
+        // Подложка Ф6: the embassies' beams in the Overworld (package S), the Great Ring's vortex and the docks' channel (package R)
+        com.sc.embassy.client.EmbassyBeamClientSC.register();
+        com.sc.embassy.client.RingClientSC.register();
         // the Singular tools: the black hole's zone frame, the blade's effects, Shift + wheel (form / mode)
         MinecraftForge.EVENT_BUS.register(com.sc.client.DrillHoleRendererSC.INSTANCE);
         MinecraftForge.EVENT_BUS.register(com.sc.client.BladeFxSC.INSTANCE);
@@ -151,6 +154,11 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void openJournal(int number) {
         com.sc.lore.client.JournalClientSC.open(number);
+    }
+
+    @Override
+    public void embassyMessage(int kind, net.minecraft.nbt.NBTTagCompound data) {
+        com.sc.embassy.client.EmbassyClientSC.onMessage(kind, data);
     }
 
     @Override

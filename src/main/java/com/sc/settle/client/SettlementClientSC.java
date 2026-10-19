@@ -2,6 +2,7 @@ package com.sc.settle.client;
 
 import org.lwjgl.opengl.GL11;
 
+import com.sc.dim.SubstrateSC;
 import com.sc.manual.Lang;
 import com.sc.settle.ISettlementMemberSC;
 import com.sc.settle.npc.EntityTunerSC;
@@ -28,7 +29,10 @@ import net.minecraft.entity.Entity;
  * from ClientProxy.preInit. Textures: tools/gen_settlement_mobs_tex.py. Ф3 (docs/plan-substrate-tech-f3.md §6.1, package S):
  * the same two renderers draw the Power Engineer, the Armourer and the Salvager (RenderTunerSC: their parts and skins) and
  * the Captain and the Commandant (RenderWardenSC: their skins, cloaks, the wind-up) - nothing more to register; the new
- * kinds' names under the name are their lang keys (sc.settle.kind.<key>); tools/gen_settlement3_tex.py.
+ * kinds' names under the name are their lang keys (sc.settle.kind.<key>); tools/gen_settlement3_tex.py. Ф6 (docs/plan-substrate-tech-f6.md
+ * §8.6, package T, ПЖ-11, ПЖ-12, ПЖ-14): the Dispatcher and the Quartermaster are drawn by RenderTunerSC (their parts and skins -
+ * tools/gen_settlement_mobs_tex.py); an embassy's Elder is «Посол» under his name - kind() asks NpcKindSC.langKey(embassy), the world
+ * told by its provider (not the Substrate: an embassy of the Overworld), the same for WAILA's line (compat.WailaEntitySC).
  */
 @SideOnly(Side.CLIENT)
 public final class SettlementClientSC {
@@ -49,9 +53,14 @@ public final class SettlementClientSC {
         return NpcNamesSC.name(m.nameCode()).getUnformattedText();
     }
 
-    /** «Технолог», «Постовой». */
+    /** «Технолог», «Постовой»; Ф6: an embassy's Elder «Посол». */
     public static String kind(ISettlementMemberSC m) {
-        return Lang.tr(m.kind().langKey());
+        return Lang.tr(m.kind().langKey(embassy(m)));
+    }
+
+    /** Ф6 (ПЖ-14): `m` stands in an embassy - a creature of a settlement outside the Substrate (the client knows the world by its provider). */
+    public static boolean embassy(ISettlementMemberSC m) {
+        return m instanceof Entity && ((Entity) m).worldObj != null && !SubstrateSC.is(((Entity) m).worldObj);
     }
 
     /**

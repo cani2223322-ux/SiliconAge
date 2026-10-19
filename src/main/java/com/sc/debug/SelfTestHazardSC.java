@@ -195,8 +195,8 @@ final class SelfTestHazardSC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        // Ф5 appended requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1): 14 rules now (SelfTestFinaleSC checks the two)
-        boolean rules = sent.size() == 14 && sent.contains("empStorms") && sent.contains("raids") && SubstrateConfigSC.empStorms && SubstrateConfigSC.raids;
+        // Ф5 appended requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1), Ф6 the embassy section's six (-f6.md §2.1): 20 rules now
+        boolean rules = sent.size() == 20 && sent.contains("empStorms") && sent.contains("raids") && SubstrateConfigSC.empStorms && SubstrateConfigSC.raids;
         StringBuilder pub = new StringBuilder();
         for (String n : new String[]{"biomeIdRidges", "biomeIdOxide", "biomeIdRift"}) {
             try {
@@ -483,7 +483,7 @@ final class SelfTestHazardSC {
         boolean night = RaidRulesSC.night(13000) && !RaidRulesSC.night(12999) && RaidRulesSC.night(22999) && !RaidRulesSC.night(23000)
                 && RaidRulesSC.night(5 * 24000L + 18000L) && !RaidRulesSC.night(5 * 24000L + 6000L);
         boolean reach = RaidRulesSC.reach(0) == 64 && RaidRulesSC.reach(1) == 80 && RaidRulesSC.reach(2) == 96 && RaidRulesSC.reach(7) == 96 && RaidRulesSC.reach(-1) == 64
-                && SettlementSizeSC.values().length == RaidRulesSC.REACH.length;
+                && SettlementSizeSC.SUBSTRATE_SIZES == RaidRulesSC.REACH.length;     // Ф6: EMBASSY (the Overworld's) is never raided
         boolean may = RaidRulesSC.mayRoll(true, true, 20, 19, -1, true) && !RaidRulesSC.mayRoll(false, true, 20, 19, -1, true)
                 && !RaidRulesSC.mayRoll(true, false, 20, 19, -1, true) && !RaidRulesSC.mayRoll(true, true, 20, 20, -1, true)
                 && !RaidRulesSC.mayRoll(true, true, 20, 19, 16, true) && RaidRulesSC.mayRoll(true, true, 20, 19, 15, true)
@@ -503,7 +503,7 @@ final class SelfTestHazardSC {
         }
         float share = 100F * rolls / tries;
         // the waves by size: Nano, Quantum, then the elite (a fixed roll under 50%) or the Shells' column
-        for (int s = 0; s < SettlementSizeSC.values().length; s++) {
+        for (int s = 0; s < SettlementSizeSC.SUBSTRATE_SIZES; s++) {
             int[][] w0 = RaidRulesSC.wave(0, s, new Random(1L)), w1 = RaidRulesSC.wave(1, s, new Random(1L));
             int[][] elite = RaidRulesSC.wave(2, s, new FixedRoll(0F)), column = RaidRulesSC.wave(2, s, new FixedRoll(0.99F));
             if (count(w0, MobEntitiesSC.ID_MARAUDER) != 2 + s || count(w0, MobEntitiesSC.ID_LINEMAN) != 2 || count(w1, MobEntitiesSC.ID_TROOPER) != 1 + s
@@ -1185,7 +1185,7 @@ final class SelfTestHazardSC {
             raw(bad, id, e == null ? "" : e.searchText());
         }
         int radiation = rows("world.radiation", 0), waves = rows("world.raids", 0), rewards = rows("world.raids", 1);
-        boolean tables = radiation == BiomeSubstrateSC.KINDS && waves == RaidRulesSC.WAVES + 1 && rewards == SettlementSizeSC.values().length;
+        boolean tables = radiation == BiomeSubstrateSC.KINDS && waves == RaidRulesSC.WAVES + 1 && rewards == SettlementSizeSC.SUBSTRATE_SIZES;
         // G: the new blocks, items, eggs and loot open their pages
         List<ItemStack> stacks = new ArrayList<ItemStack>();
         List<String> ids = new ArrayList<String>();
@@ -1234,7 +1234,8 @@ final class SelfTestHazardSC {
                         .append(got == null ? "nothing" : got.id);
             }
         }
-        int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + ARTICLES.length + BookWorldSC.F5_ARTICLES.length;   // + Ф5's (SelfTestFinaleSC)
+        int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + ARTICLES.length + BookWorldSC.F5_ARTICLES.length   // + Ф5's (SelfTestFinaleSC)
+                + BookWorldSC.F6_ARTICLES.length;                                                                                       // + Ф6's (SelfTestEmbassySC)
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {

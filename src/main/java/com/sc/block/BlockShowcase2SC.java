@@ -33,20 +33,30 @@ import net.minecraft.world.World;
  * faces), the warehouse's own textures showcase2_* (tools/gen_settlement3_tex.py); the light by meta (LIGHT, lit by hand
  * by the structure as the first block's); the tile - the first block's TileEntityShowcaseSC (its facing, its particles
  * once in 20 ticks), none for the crate and the solar panel (no front, nothing moving).
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §2.2, package S's look): the Tuners' Embassies' metas appended - GRAVITY_COIL (the Great Ring's
+ * segment, «витрина-гравикатушка»: the bridge's Gravity Coil's look, lit), CRYO_TANK (the Vokzal's gas tanks, «витрина-бак»), and
+ * DISPATCH_CONSOLE (the Dispatchers' office desk). The same rules: unbreakable, no drop but scrap, hidden in NEI, AE2-blacklisted.
  */
 public class BlockShowcase2SC extends Block {
 
     /** Metas: the Power Engineer's workshop and roof, the Salvager's warehouse. */
     public static final int ENERGY_STORAGE = 0, TRANSFORMER = 1, WIND_GENERATOR = 2, SOLAR_PANEL = 3, CRATE = 4, SCRAP_PILE = 5, RACK = 6;
-    public static final String[] NAMES = {"energyStorage", "transformer", "windGenerator", "solarPanel", "crate", "scrapPile", "rack"};
-    /** The light by meta (the storage's terminal, the transformer's coils; the rest is dark). */
-    public static final int[] LIGHT = {5, 4, 0, 0, 0, 0, 0};
+    /** Ф6 (appended): the Great Ring's segment, the Vokzal's tank, the Dispatchers' desk. */
+    public static final int GRAVITY_COIL = 7, CRYO_TANK = 8, DISPATCH_CONSOLE = 9;
+    public static final String[] NAMES = {"energyStorage", "transformer", "windGenerator", "solarPanel", "crate", "scrapPile", "rack",
+            "gravityCoil", "cryoTank", "dispatchConsole"};
+    /** The light by meta (the storage's terminal, the transformer's coils; Ф6: the ring's coils, the tank's gauge, the desk's screens; the rest is dark). */
+    public static final int[] LIGHT = {5, 4, 0, 0, 0, 0, 0, 8, 3, 6};
     /** The real machines the metas wear: the energy storage's and the transformer's tier (their blocks' meta), the two generators. */
     public static final Tier STORAGE_TIER = Tier.HV, TRANSFORMER_TIER = Tier.MV;
     public static final GeneratorType WIND = GeneratorType.WIND_TURBINE, SOLAR = GeneratorType.SOLAR_GAAS;
 
     @SideOnly(Side.CLIENT)
     private IIcon crateSide, crateTop, scrapSide, scrapTop, rackSide, rackFront, rackTop;
+    /** Ф6 (package S): the ring's coil (its windings, their ends), the tank (side, gauge, lid), the desk (screens, side, top). */
+    @SideOnly(Side.CLIENT)
+    private IIcon coilSide, coilEnd, tankSide, tankFront, tankTop, consoleFront, consoleSide, consoleTop;
 
     public BlockShowcase2SC() {
         super(Material.iron);
@@ -111,6 +121,9 @@ public class BlockShowcase2SC extends Block {
     }
 
     // ------------------------------------------------------------------ the look: the real machines' icons, the warehouse's own
+    // Ф6 (package S, tools/gen_embassy_tex.py): the Great Ring's segment - the bridge's Gravity Coil lit in the Tuners' turquoise
+    // (showcase2_gravityCoil_side / _top), the Vokzal's cryo tank - frosted steel, its level gauge in front (showcase2_cryoTank_*), the
+    // Dispatchers' desk - the ring and the flights on its screens (showcase2_dispatchConsole_*).
 
     @Override
     @SideOnly(Side.CLIENT)
@@ -122,6 +135,14 @@ public class BlockShowcase2SC extends Block {
         rackSide = register.registerIcon(Reference.ASSETS + ":showcase2_rack_side");
         rackFront = register.registerIcon(Reference.ASSETS + ":showcase2_rack_front");
         rackTop = register.registerIcon(Reference.ASSETS + ":showcase2_rack_top");
+        coilSide = register.registerIcon(Reference.ASSETS + ":showcase2_gravityCoil_side");
+        coilEnd = register.registerIcon(Reference.ASSETS + ":showcase2_gravityCoil_top");
+        tankSide = register.registerIcon(Reference.ASSETS + ":showcase2_cryoTank_side");
+        tankFront = register.registerIcon(Reference.ASSETS + ":showcase2_cryoTank_front");
+        tankTop = register.registerIcon(Reference.ASSETS + ":showcase2_cryoTank_top");
+        consoleFront = register.registerIcon(Reference.ASSETS + ":showcase2_dispatchConsole_front");
+        consoleSide = register.registerIcon(Reference.ASSETS + ":showcase2_dispatchConsole_side");
+        consoleTop = register.registerIcon(Reference.ASSETS + ":showcase2_dispatchConsole_top");
         blockIcon = crateSide;
     }
 
@@ -160,6 +181,12 @@ public class BlockShowcase2SC extends Block {
                 return side == 1 ? scrapTop : scrapSide;
             case RACK:
                 return side < 2 ? rackTop : side == 3 ? rackFront : rackSide;
+            case GRAVITY_COIL:                                  // Ф6: the bridge's coil lit turquoise, the same all round
+                return side < 2 ? coilEnd : coilSide;
+            case CRYO_TANK:                                     // the gauge where the tile faces
+                return side < 2 ? tankTop : side == 3 ? tankFront : tankSide;
+            case DISPATCH_CONSOLE:                              // the screens face the Dispatcher
+                return side == 1 ? consoleTop : side == 3 ? consoleFront : consoleSide;
             default:
                 return null;
         }

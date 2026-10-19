@@ -21,6 +21,11 @@ import net.minecraft.world.World;
  * N - settle.npc, T - settle.trade, B - settle.travel). Server-side questions answer «no» on a client and outside the
  * Substrate (the world is recognised by its provider: SubstrateSC.is). Shared core: only the coordinator edits this
  * file.
+ * <p>
+ * Ф6 (docs/plan-substrate-tech-f6.md §0, rule ПП-14): the Tuners' Embassies are settlements of the same registry in the Overworld
+ * (SettlementSizeSC.EMBASSY, record.dim 0). Everything that guarded «the Substrate only» for a settlement's protection, its core's
+ * roster, its creatures' exile now asks governs(w): the Substrate, or the Overworld while dimension's embassy.embassies is on. The
+ * Substrate's own events stay the Substrate's (raids, caravans, the EMP storm, the economy's kills, the capsule, the death mark).
  */
 public final class SettlementSC {
 
@@ -56,6 +61,35 @@ public final class SettlementSC {
         return SubstrateSC.active() && SubstrateConfigSC.villages;
     }
 
+    // ------------------------------------------------------------------ Ф6: which worlds have settlements (ПП-14)
+
+    /** The Overworld's id - the only world an embassy stands in (ПЕ-1). */
+    public static final int EMBASSY_DIM = 0;
+
+    /**
+     * ПП-14: world `w` holds settlements whose protection, core roster and creatures work - the Substrate, or the Overworld while
+     * embassy.embassies is on (its embassies). Both sides answer the same (a client's world is told by its provider and dimension
+     * id); the server-side questions below still answer «no» on a client.
+     */
+    public static boolean governs(World w) {
+        return w != null && w.provider != null && (SubstrateSC.is(w) || w.provider.dimensionId == EMBASSY_DIM && SubstrateConfigSC.embassies);
+    }
+
+    /** ПЕ-1: new embassies generate - the Substrate on (the flights go there) and embassy.embassies (those made stay either way). */
+    public static boolean embassiesGenerate() {
+        return SubstrateSC.active() && SubstrateConfigSC.embassies;
+    }
+
+    /** Record `s` is a Tuners' Embassy (SettlementSizeSC.EMBASSY in the Overworld), not a Substrate settlement. Pure. */
+    public static boolean isEmbassy(SettlementRegistrySC.Settlement s) {
+        return s != null && s.size == SettlementSizeSC.EMBASSY.ordinal();
+    }
+
+    /** Record `s` stands in the Substrate (the bridge's targets, the known docks, the raids and caravans go by this). */
+    public static boolean inSubstrate(SettlementRegistrySC.Settlement s) {
+        return s != null && SubstrateSC.active() && SubstrateSC.isDim(s.dim);
+    }
+
     // ------------------------------------------------------------------ names
 
     public static String ownerName(int id) {
@@ -67,9 +101,10 @@ public final class SettlementSC {
         return owner != null && owner.startsWith(OWNER_PREFIX) && owner.endsWith(OWNER_SUFFIX);
     }
 
-    /** «Купол «Ниобий-4»» - translated by each client (sc.settle.name). */
+    /** «Купол «Ниобий-4»» - translated by each client (sc.settle.name); Ф6: an embassy «Посольство „Тантал-1“» (sc.embassy.name). */
     public static IChatComponent displayName(SettlementRegistrySC.Settlement s) {
-        return new ChatComponentTranslation("sc.settle.name", NpcNamesSC.name(NpcNamesSC.code(s.nameElement, s.nameNumber)));
+        return new ChatComponentTranslation(isEmbassy(s) ? "sc.embassy.name" : "sc.settle.name",
+                NpcNamesSC.name(NpcNamesSC.code(s.nameElement, s.nameNumber)));
     }
 
     // ------------------------------------------------------------------ time
@@ -95,21 +130,21 @@ public final class SettlementSC {
         return SettlementRegistrySC.get(w);
     }
 
-    /** ПП-7: the settlement protecting the point (server, the Substrate only), or null. */
+    /** ПП-7: the settlement protecting the point (server; the Substrate, Ф6 the Overworld's embassies - governs), or null. */
     public static SettlementRegistrySC.Settlement protecting(World w, double x, double y, double z) {
-        SettlementRegistrySC r = substrate(w);
+        SettlementRegistrySC r = governed(w);
         return r == null ? null : r.protecting(w.provider.dimensionId, x, y, z);
     }
 
-    /** ПЖ-2: the settlement whose dome or belt holds the column (server, the Substrate only), or null. */
+    /** ПЖ-2: the settlement whose dome or belt holds the column (server, a world it governs), or null. */
     public static SettlementRegistrySC.Settlement beltAt(World w, double x, double z) {
-        SettlementRegistrySC r = substrate(w);
+        SettlementRegistrySC r = governed(w);
         return r == null ? null : r.inBelt(w.provider.dimensionId, x, z);
     }
 
-    /** ПР-1: the settlement whose dock zone holds the point (server, the Substrate only), or null. */
+    /** ПР-1: the settlement whose dock zone holds the point (server, a world it governs; Ф6: an embassy's Vokzal - its own zone), or null. */
     public static SettlementRegistrySC.Settlement dockZoneAt(World w, double x, double y, double z) {
-        SettlementRegistrySC r = substrate(w);
+        SettlementRegistrySC r = governed(w);
         return r == null ? null : r.dockZoneAt(w.provider.dimensionId, x, y, z);
     }
 
@@ -121,17 +156,18 @@ public final class SettlementSC {
         if (zone == null || self instanceof com.sc.tileentity.TileEntitySettlementCoreSC) {
             return null;
         }
-        SettlementRegistrySC r = substrate(w);
+        SettlementRegistrySC r = governed(w);
         SettlementRegistrySC.Settlement s = r == null ? null : r.overlapping(w.provider.dimensionId, zone);
         return s == null ? null : s.owner();
     }
 
     /**
      * ПР-2 (the bridge's foreignField / plan / enter): an end may not open at (x, y, z) - inside a settlement's protected
-     * cylinder, and not in its dock's zone (the dock is where the bridge lands). Silent; the Substrate only.
+     * cylinder, and not in its dock's zone (the dock is where the bridge lands). Silent; a world it governs (Ф6: an embassy's
+     * cylinder too - its Vokzal outside the dome takes a bridge's end, exactly on its beacon: TravelRulesSC.DOCK_SNAP).
      */
     public static boolean refusesBridgeEnd(World w, int x, int y, int z) {
-        SettlementRegistrySC r = substrate(w);
+        SettlementRegistrySC r = governed(w);
         if (r == null) {
             return false;
         }
@@ -139,8 +175,9 @@ public final class SettlementSC {
         return r.protecting(d, x + 0.5D, y + 0.5D, z + 0.5D) != null && r.dockZoneAt(d, x + 0.5D, y + 0.5D, z + 0.5D) == null;
     }
 
-    private static SettlementRegistrySC substrate(World w) {
-        return w == null || w.isRemote || !SubstrateSC.is(w) ? null : SettlementRegistrySC.get(w);
+    /** The registry for a server world whose settlements work (governs: the Substrate, the Overworld with embassies on), else null. */
+    private static SettlementRegistrySC governed(World w) {
+        return w == null || w.isRemote || !governs(w) ? null : SettlementRegistrySC.get(w);
     }
 
     // ------------------------------------------------------------------ who

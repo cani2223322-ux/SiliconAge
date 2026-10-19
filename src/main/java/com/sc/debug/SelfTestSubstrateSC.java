@@ -51,10 +51,12 @@ final class SelfTestSubstrateSC {
 
     /**
      * The rules of Ф1..Ф3, the public fields SubstrateNetSC sends a joining client (docs/plan-substrate.md §8,
-     * docs/plan-substrate-tech-f2.md §2.1, docs/plan-substrate-tech-f3.md §2.1).
+     * docs/plan-substrate-tech-f2.md §2.1, docs/plan-substrate-tech-f3.md §2.1); Ф6's six of the embassy section
+     * (docs/plan-substrate-tech-f6.md §2.1 - the coordinator's correction: the section's makeup).
      */
     private static final String[] RULES = {"strictEntry", "respawnDimension", "bridgeCostMultiplier", "nativesCrossBridge", "empMobTargets",
-            "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations", "mobsUseEmp", "empStorms", "raids", "requireSignal", "caravans"};
+            "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations", "mobsUseEmp", "empStorms", "raids", "requireSignal", "caravans",
+            "embassies", "embassyGrid", "embassyChance", "embassySpawnMin", "embassyRingMin", "embassyRingMax"};
     /**
      * The ids: private behind getters, never synced (ПК-4); Ф4's three biomes (docs/plan-substrate-tech-f4.md §2.1); Ф5's customSky -
      * not an id, but each client's own look: private as they are, never the server's (docs/plan-substrate-tech-f5.md §2.1).
@@ -596,9 +598,10 @@ final class SelfTestSubstrateSC {
         int articles = ARTICLES.length + SelfTestSettlementSC.ARTICLES.length          // Ф2 appends its six (SelfTestSettlementSC checks them)
                 + SelfTestCombatSC.ARTICLES.length                                      // Ф3 its eight (SelfTestCombatSC)
                 + SelfTestHazardSC.ARTICLES.length                                      // Ф4 its fifteen (SelfTestHazardSC)
-                + SelfTestFinaleSC.ARTICLES.length;                                     // Ф5 its thirteen (SelfTestFinaleSC)
+                + SelfTestFinaleSC.ARTICLES.length                                      // Ф5 its thirteen (SelfTestFinaleSC)
+                + SelfTestEmbassySC.ARTICLES.length;                                    // Ф6 its six (SelfTestEmbassySC)
         check(bad.length() == 0 && chapter == articles && table && noG.length() == 0 && iconOk, "handbook: the chapter \"" + BookChapter.WORLD.title()
-                + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys, Ф2's, Ф3's, Ф4's and Ф5's), the armour table by suit " + table
+                + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys, Ф2's, Ф3's, Ф4's, Ф5's and Ф6's), the armour table by suit " + table
                 + ", G on the rock / ore / druse"
                 + " / trophy / loot / eggs" + (noG.length() == 0 ? "" : " - NOT:" + noG) + ", the tile's icon " + iconOk + (bad.length() == 0 ? "" : " -" + bad));
     }

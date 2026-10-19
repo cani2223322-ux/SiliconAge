@@ -174,9 +174,9 @@ final class SelfTestCombatSC {
             rule |= "mobsUseEmp".equals(f.getName()) && f.getType() == boolean.class;
         }
         // Ф4 appended empStorms and raids (docs/plan-substrate-tech-f4.md §2.1), Ф5 requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1):
-        // 14 rules now (SelfTestHazardSC / SelfTestFinaleSC check the new ones)
-        check(rule && rules.size() == 14, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
-                + ", true by default) " + rule + ", " + rules.size() + " rules (14 with Ф4's and Ф5's)");
+        // 14 rules then; Ф6 appended the embassy section's six (docs/plan-substrate-tech-f6.md §2.1): 20 now (SelfTestEmbassySC checks them)
+        check(rule && rules.size() == 20, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
+                + ", true by default) " + rule + ", " + rules.size() + " rules (20 with Ф4's, Ф5's and Ф6's)");
     }
 
     // ------------------------------------------------------------------ 2. «Пробой» (ПБ-15, ПБ-16)
@@ -564,8 +564,8 @@ final class SelfTestCombatSC {
     private static void kindsAndSizes() {
         Map<String, String> en = SelfTestSC.langMap("en_US"), ru = SelfTestSC.langMap("ru_RU");
         String[] keys = {"elder", "technologist", "metallurgist", "gasTech", "cartographer", "sentry", "seniorWarden", "powerEngineer", "armourer",
-                "salvager", "captain", "commandant"};
-        boolean[] guard = {false, false, false, false, false, true, true, false, false, false, true, true};
+                "salvager", "captain", "commandant", "dispatcher", "quartermaster"};          // Ф6 appended the last two
+        boolean[] guard = {false, false, false, false, false, true, true, false, false, false, true, true, false, false};
         NpcKindSC[] kinds = NpcKindSC.values();
         boolean order = kinds.length == keys.length;
         StringBuilder noLang = new StringBuilder();
@@ -578,7 +578,8 @@ final class SelfTestCombatSC {
         boolean chiefs = NpcKindSC.CAPTAIN.respawnTicks() == 24000 && NpcKindSC.COMMANDANT.respawnTicks() == 24000 && NpcKindSC.CHIEF_RESPAWN_TICKS == 24000
                 && NpcKindSC.CAPTAIN.chief() && NpcKindSC.COMMANDANT.chief() && !NpcKindSC.SENIOR_WARDEN.chief() && !NpcKindSC.ARMOURER.chief()
                 && NpcKindSC.SENTRY.respawnTicks() == NpcKindSC.GUARD_RESPAWN_TICKS && NpcKindSC.ARMOURER.respawnTicks() == NpcKindSC.TUNER_RESPAWN_TICKS
-                && NpcKindSC.of(11) == NpcKindSC.COMMANDANT && NpcKindSC.of(12) == NpcKindSC.ELDER;
+                && NpcKindSC.of(11) == NpcKindSC.COMMANDANT && NpcKindSC.of(13) == NpcKindSC.QUARTERMASTER   // Ф6: 12 and 13 are its two
+                && NpcKindSC.of(NpcKindSC.values().length) == NpcKindSC.ELDER;
         Random r = new Random(77L);
         int settlement = 0, n = 10000;
         boolean always = true, never = true;
@@ -592,7 +593,8 @@ final class SelfTestCombatSC {
         boolean sizes = SettlementSizeSC.OUTPOST.captainPct == 0 && SettlementSizeSC.SETTLEMENT.captainPct == 30 && SettlementSizeSC.CITY.captainPct == 100
                 && SettlementSizeSC.CITY.commandant && !SettlementSizeSC.SETTLEMENT.commandant && !SettlementSizeSC.OUTPOST.commandant;
         check(order && noLang.length() == 0 && chiefs && always && never && share > 0.25F && share < 0.35F && sizes, "kinds and sizes (NpcKindSC, ПЖ-8,"
-                + " ПГ-11, ПГ-12): 12 kinds, Ф2's order kept, the Power Engineer / Armourer / Salvager settlers, the Captain / Commandant guards " + order
+                + " ПГ-11, ПГ-12): " + kinds.length + " kinds (14 with Ф6's Dispatcher and Quartermaster, settlers), Ф2's order kept, the Power Engineer / Armourer /"
+                + " Salvager settlers, the Captain / Commandant guards " + order
                 + (noLang.length() == 0 ? "" : " - NO LANG:" + noLang) + "; the chiefs back after 20 min, chief() theirs alone " + chiefs + "; a Captain in"
                 + " every City " + always + ", no Outpost " + never + ", " + Math.round(share * 1000F) / 10F + "% of Settlements (30); the Commandant the"
                 + " City's only " + sizes);
@@ -707,7 +709,8 @@ final class SelfTestCombatSC {
         Method upgrade = Class.forName("com.sc.settle.RosterSC").getMethod("upgrade", SettlementRegistrySC.Settlement.class);
         StringBuilder bad = new StringBuilder();
         int added = 0;
-        for (SettlementSizeSC size : SettlementSizeSC.values()) {
+        for (int z = 0; z < SettlementSizeSC.SUBSTRATE_SIZES; z++) {   // Ф6: the Substrate's (an embassy's record is made at version 2)
+            SettlementSizeSC size = SettlementSizeSC.values()[z];
             for (long seed : new long[]{3L, 1L << 23, 77777777L, -5L}) {
                 SettlementRegistrySC.Settlement s = v1Record(size, seed);
                 List<String> before = slotsText(s);
@@ -1124,7 +1127,8 @@ final class SelfTestCombatSC {
             System.out.println("[SC-TEST] INFO combat: the handbook still prints the plan's numbers for (public static constants of these names in packages"
                     + " A / M / X / S / T, or direct references in BookWorldSC): " + unresolved);
         }
-        int want = 20 + BookWorldSC.F4_ARTICLES.length + BookWorldSC.F5_ARTICLES.length;   // Ф1..Ф3's 20, Ф4's and Ф5's (SelfTestHazardSC / SelfTestFinaleSC)
+        int want = 20 + BookWorldSC.F4_ARTICLES.length + BookWorldSC.F5_ARTICLES.length    // Ф1..Ф3's 20, Ф4's and Ф5's (SelfTestHazardSC / SelfTestFinaleSC)
+                + BookWorldSC.F6_ARTICLES.length;                                            // and Ф6's (SelfTestEmbassySC)
         check(bad.length() == 0 && tables && noG.length() == 0 && chapter == want, "handbook (§10.2): the " + ARTICLES.length + " new WORLD articles (the"
                 + " chapter " + chapter + " of " + want + ") build with no raw keys, the extended ones too" + (bad.length() == 0 ? "" : " -" + bad) + "; tables: the"
                 + " elites " + elites + ", the ranks " + wardens + " (4), the restoring " + restore + ", the trophies " + trophies + " (SHOWN) " + tables

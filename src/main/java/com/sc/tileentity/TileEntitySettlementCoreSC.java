@@ -1,6 +1,5 @@
 package com.sc.tileentity;
 
-import com.sc.dim.SubstrateSC;
 import com.sc.energy.FieldMode;
 import com.sc.settle.RosterSC;
 import com.sc.settle.SettlementRegistrySC;
@@ -230,9 +229,13 @@ public class TileEntitySettlementCoreSC extends TileEntityFieldGeneratorSC {
      * Package C: the roster, the Clone Capsule, the first pass, the known docks (RosterSC). Server, the Substrate. A
      * record the registry lost is made again from this tile (RosterSC.restore); a record of this id standing elsewhere
      * (another core's - a registry rebuilt by hand) leaves this core its field only.
+     * <p>
+     * Ф6 (docs/plan-substrate-tech-f6.md §0, ПП-14): any world the settlements work in (SettlementSC.governs - the Substrate, the
+     * Overworld's embassies while embassy.embassies is on); an embassy's core also runs its «Достройка» (EmbassyRepairSC.tick:
+     * a window of the cylinder or the Vokzal at most once a second, package G).
      */
     protected void settlementTick() {
-        if (!SubstrateSC.is(worldObj)) {
+        if (!SettlementSC.governs(worldObj)) {
             return;
         }
         SettlementRegistrySC r = SettlementSC.registry(worldObj);
@@ -248,6 +251,9 @@ public class TileEntitySettlementCoreSC extends TileEntityFieldGeneratorSC {
             return;
         }
         RosterSC.tick(worldObj, r, s, roster, now);
+        if (SettlementSC.isEmbassy(s)) {
+            com.sc.embassy.EmbassyRepairSC.tick(worldObj, r, s, now);
+        }
     }
 
     /** The world test (§11.2 п.7): the settlement's second now, not at its turn. Server; does nothing for a core of no settlement. */

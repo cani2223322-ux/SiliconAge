@@ -31,6 +31,13 @@ import net.minecraft.util.ResourceLocation;
  * chest plate below the strap's pip, shoulder plates); the Salvager - a bag of scrap over the pack, a rod and a plate
  * sticking out of it. Their parts' UV lie in the head's unused hat area and beside the Elder's cloak - each profession's
  * skin paints only its own (tools/gen_settlement3_tex.py: tuner_powerEngineer, tuner_armourer, tuner_salvager).
+ * <p>
+ * Ф6, package T (docs/plan-substrate-tech-f6.md §8.6, rules ПЖ-11, ПЖ-12): the Dispatcher - a headset (a band over the head, two ear
+ * cups, a microphone boom to the respirator) and a flight tablet on the chest whose screen glows the Tuners' turquoise (full-bright,
+ * BEAM - the embassies' beam colour - with a slow scan flicker); magenta diodes. The Quartermaster - the same chest board as a
+ * clipboard with his supply lists, a leather pouch on the belt; lime diodes. Their UV lie in the free strips under the respirator,
+ * beside the collar, under the Elder's cloak and by the antenna (tools/gen_settlement_mobs_tex.py: tuner_dispatcher,
+ * tuner_quartermaster - each paints only its own).
  */
 @SideOnly(Side.CLIENT)
 public class RenderTunerSC extends RenderBiped {
@@ -40,11 +47,15 @@ public class RenderTunerSC extends RenderBiped {
     /**
      * The diode eyes by NpcKindSC ordinal (ModelArmorGlowSC.COLORS): the Elder the dome's turquoise, the Technologist
      * blue, the Metallurgist orange, the Gas Technician violet, the Cartographer yellow; (the guards' two unused); Ф3 - the
-     * Power Engineer white, the Armourer red, the Salvager green.
+     * Power Engineer white, the Armourer red, the Salvager green; (the Captain's and the Commandant's unused); Ф6 - the Dispatcher
+     * magenta, the Quartermaster lime.
      */
-    public static final int[] DIODES = {0x40E0FF, 0x4A7CFF, 0xFF9A30, 0xB060FF, 0xFFE040, 0x40E0FF, 0x40E0FF, 0xFFFFFF, 0xFF4040, 0x50FF70};
+    public static final int[] DIODES = {0x40E0FF, 0x4A7CFF, 0xFF9A30, 0xB060FF, 0xFFE040, 0x40E0FF, 0x40E0FF, 0xFFFFFF, 0xFF4040, 0x50FF70,
+            0x40E0FF, 0x40E0FF, 0xFF50C8, 0xB4FF3C};
     /** Ф3: the Power Engineer's coil core - white-blue, pulsing. */
     public static final int COIL = 0xB4F0FF;
+    /** Ф6: the Dispatcher's tablet screen - the Tuners' turquoise of the embassies' beam (EmbassyBeamClientSC's 0x48F0DC). */
+    public static final int BEAM = 0x48F0DC;
     /** The mood lamp: calm, alarm, an enemy near. */
     public static final int[] MOOD = {0x50FF70, 0xFFE040, 0xFF4040};
 
@@ -103,6 +114,10 @@ public class RenderTunerSC extends RenderBiped {
             float c = 0.55F + 0.35F * (float) Math.abs(Math.sin((t.ticksExisted + partial) * 0.15D)) + ((t.ticksExisted / 3) % 7 == 0 ? 0.1F : 0F);
             SettlementClientSC.lamp(model.coilCore, COIL, c);
         }
+        if (k == NpcKindSC.DISPATCHER) {                        // Ф6: the flight tablet's screen - steady, a dip as a scan passes
+            float c = 0.8F + 0.15F * (float) Math.sin((t.ticksExisted + partial) * 0.07D) - ((t.ticksExisted + t.getEntityId()) % 50 < 3 ? 0.25F : 0F);
+            SettlementClientSC.lamp(model.slateScreen, BEAM, c);
+        }
         GL11.glPopMatrix();
     }
 
@@ -134,6 +149,13 @@ public class RenderTunerSC extends RenderBiped {
         final ModelRenderer eyes, lamp, antennaTip;
         /** Ф3, full-bright: the coil's core (body). */
         final ModelRenderer coilCore;
+        /**
+         * Ф6, by profession: the Dispatcher's headset (band, cups, the microphone's boom - head) and the chest board (his tablet, the
+         * Quartermaster's clipboard - body), the Quartermaster's belt pouch (body).
+         */
+        final ModelRenderer headBand, headCups, boom, slate, pouch;
+        /** Ф6, full-bright: the tablet's screen (body). */
+        final ModelRenderer slateScreen;
 
         public ModelTunerSC() {
             super(0F, 0F, 64, 64);
@@ -165,6 +187,16 @@ public class RenderTunerSC extends RenderBiped {
             sack = part(bipedBody, 36, 32, -3F, 3F, 5F, 6, 6, 4);
             scrapRod = part(bipedBody, 56, 32, 1F, 0F, 6F, 1, 4, 1);
             scrapPlate = part(bipedBody, 56, 37, -2.5F, 1F, 7F, 3, 3, 1);
+            // Ф6 - the UV in the strips no other part uses: under the respirator (20, 36), beside the collar (28, 44), under the
+            // Elder's cloak (36, 47), by the antenna (32, 52), under the scrap plate (54, 41)
+            headBand = part(bipedHead, 36, 47, -5F, -9F, -1F, 10, 1, 2);
+            headCups = part(bipedHead, 32, 52, -5F, -8F, -1F, 1, 6, 2);
+            headCups.addBox(4F, -8F, -1F, 1, 6, 2);
+            boom = part(bipedHead, 54, 41, -5.5F, -3F, -4F, 1, 1, 3);
+            boom.addBox(-4.5F, -3F, -5F, 2, 1, 1);              // the microphone at the respirator's edge (the same dark UV)
+            slate = part(bipedBody, 20, 36, -3.5F, 3F, -3F, 4, 5, 1);
+            slateScreen = loose(-3F, 3.5F, -3.1F, 3, 3, 1);
+            pouch = part(bipedBody, 28, 44, -4F, 9F, -3F, 3, 3, 1);
         }
 
         private ModelRenderer part(ModelRenderer parent, int u, int v, float x, float y, float z, int w, int h, int d) {
@@ -191,6 +223,9 @@ public class RenderTunerSC extends RenderBiped {
             coil.showModel = k == NpcKindSC.POWER_ENGINEER;
             plate.showModel = pauldron.showModel = pauldronLeft.showModel = k == NpcKindSC.ARMOURER;
             sack.showModel = scrapRod.showModel = scrapPlate.showModel = k == NpcKindSC.SALVAGER;
+            headBand.showModel = headCups.showModel = boom.showModel = k == NpcKindSC.DISPATCHER;
+            slate.showModel = k == NpcKindSC.DISPATCHER || k == NpcKindSC.QUARTERMASTER;
+            pouch.showModel = k == NpcKindSC.QUARTERMASTER;
         }
     }
 }

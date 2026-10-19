@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.sc.SCMod;
+import com.sc.embassy.EmbassyTradeSC;
 import com.sc.emp.EmpModule;
 import com.sc.handler.GuiHandlerSC;
 import com.sc.init.ModItems;
@@ -68,21 +69,33 @@ import net.minecraftforge.common.util.FakePlayer;
  * not used yet; a FakePlayer never has one), and the deal made uses it up (CaravanSC.useDeal) - one, whatever its daily limit says.
  * The Crumbs a Ф5 deal takes as a part of its price (the Coordinator, the «Наладчик» scheme) are never counted towards the day's
  * Crumbs: CrumbLimitSC counts only the Elder's ELDER_CRUMB, the one deal that gives a Crumb out.
+ * <p>
+ * Ф6 (package T, docs/plan-substrate-tech-f6.md §8.1-§8.3, rules ПО-23..ПО-27, ПД-7): at an embassy (SettlementSC.isEmbassy) only
+ * what embassy.EmbassyTradeSC.allowed opens is shown and made - the rest is refused with R_NOT_HERE (the state leaves it out); the
+ * Quartermaster's supply deals are an embassy's alone. Every «Доверие» given here - a deal's +1, the penance, a contract - goes
+ * through ReputationSC.give(..., ceiling(s)): an embassy's stops at 599. The Ambassador's board is ContractTableSC.embassyBoard (taken
+ * from «Чужак» - takeLevel); a contract is handed in where it belongs (the Ambassador's at an embassy, the Substrate's at a Substrate
+ * Elder - else R_ELSEWHERE); «Депеша домой» (ContractTableSC.DISPATCH) is handed in by the button at the Elder of any Substrate
+ * settlement - the state shows it done there (and not done at an embassy) - within ContractTableSC.DISPATCH_DAYS, later it is lost
+ * (R_DISPATCH_LATE); in the Substrate its +30 has no ceiling. No anchor contract at an embassy (the state's "noAnchor"). The state also
+ * tells the screen "emb" (an embassy's Tuner) and "cLevel" (the level a contract is taken from here). For package R's flights:
+ * chipsHeld, takeChips, giveChips (a flight's price is not a deal: no «Доверие», not within the day's 64).
  */
 public final class TradeServerSC {
 
     /** execute's results and TRADE_RESULT's "code": OK, or why not (lang sc.trade.result.<RESULT_KEYS[code]>). */
     public static final int OK = 0, R_UNKNOWN = 1, R_ENEMY = 2, R_LEVEL = 3, R_LIMIT = 4, R_CHIPS_CAP = 5, R_MISSING = 6,
             R_NO_SETTLEMENT = 7, R_NOT_HERE = 8, R_CONTRACTS_CAP = 9, R_TAKEN = 10, R_NOT_ON_BOARD = 11, R_NOT_DONE = 12,
-            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16, R_RAID = 17, R_CRUMBS = 18, R_CARAVAN_DEAL = 19;
+            R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16, R_RAID = 17, R_CRUMBS = 18, R_CARAVAN_DEAL = 19,
+            R_DISPATCH_LATE = 20, R_ELSEWHERE = 21;
     /**
      * Appended only (Ф3: "noItem" - a service found nothing of the player's to work on; Ф4: "raid" - the settlement's trade closed
      * after a lost raid, "crumbs" - the player's Crumbs for today are taken; Ф5: "caravanDeal" - the caravan's rare deal isn't open
-     * to the player).
+     * to the player; Ф6: "dispatchLate" - «Депеша домой» came too late, "elsewhere" - this contract is handed in at another Elder).
      */
     public static final String[] RESULT_KEYS = {"ok", "unknown", "enemy", "level", "limit", "chipsCap", "missing", "noSettlement",
             "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem", "raid", "crumbs",
-            "caravanDeal"};
+            "caravanDeal", "dispatchLate", "elsewhere"};
     /** TRADE_STATE "anchor": nobody placed the first anchor yet / it is the viewer's, unpaid / paid to the viewer / someone else's. */
     public static final int ANCHOR_OPEN = 0, ANCHOR_YOURS = 1, ANCHOR_PAID = 2, ANCHOR_OTHER = 3;
     /** TRADE_STATE board "st": on the board, not taken / taken and open / handed in today. */
@@ -115,6 +128,9 @@ public final class TradeServerSC {
         p.openGui(SCMod.instance, GuiHandlerSC.TRADE_GUI_ID, p.worldObj, t.getEntityId(), 0, 0);
         if (p.openContainer instanceof ContainerTradeSC && ((ContainerTradeSC) p.openContainer).getTuner() == t) {
             SettleNetSC.send(p, SettleNetSC.TRADE_STATE, state(c));
+            if (t.kind() == NpcKindSC.DISPATCHER) {
+                com.sc.embassy.FlightServerSC.sendState(p, t);    // Ф6 (the coordinator's hook): the Dispatcher's «Рейсы» tab, package R
+            }
         }
     }
 
@@ -208,6 +224,41 @@ public final class TradeServerSC {
     public static void clearAll() {
     }
 
+    // ================================================================== Credit Chips for a price that is not a deal (Ф6: package R's flights)
+
+    /** The Credit Chips in `p`'s main inventory (both sides). */
+    public static int chipsHeld(EntityPlayer p) {
+        TradeOfferSC.Ingredient chips = TradeOfferSC.Ingredient.chips(1);
+        return p == null || chips.stack == null ? 0 : chips.countIn(p.inventory.mainInventory);
+    }
+
+    /**
+     * Server: takes `n` Credit Chips out of `p`'s main inventory if he holds as many (nothing taken otherwise). Not a deal: no
+     * «Доверие», no limit counted. @return true if they were taken
+     */
+    public static boolean takeChips(EntityPlayer p, int n) {
+        if (p == null || n < 0 || chipsHeld(p) < n) {
+            return false;
+        }
+        if (n > 0) {
+            TradeOfferSC.Ingredient.chips(1).takeFrom(p.inventory.mainInventory, n);
+            p.inventory.markDirty();
+        }
+        return true;
+    }
+
+    /** Server: `n` Credit Chips back to `p` (a refund) - into the inventory, what doesn't fit at his feet; never counted towards the day's 64. */
+    public static void giveChips(EntityPlayer p, int n) {
+        for (int left = n; p != null && left > 0; ) {
+            int part = Math.min(64, left);
+            give(p, SettlementItemsSC.chips(part));
+            left -= part;
+        }
+        if (p != null && n > 0) {
+            p.inventory.markDirty();
+        }
+    }
+
     // ================================================================== the deal
 
     /** The player's open trade screen's Tuner, if it is still a valid one (alive, same world, within REACH), else null. */
@@ -250,6 +301,9 @@ public final class TradeServerSC {
     static int refusal(Ctx c, TradeOfferSC o) {
         if (o == null || o.kind != c.t.kind()) {
             return R_UNKNOWN;
+        }
+        if (!EmbassyTradeSC.allowed(o, c.s)) {
+            return R_NOT_HERE;                                  // Ф6 (ПО-23): closed at an embassy (the screen never shows it)
         }
         if (c.enemy) {
             return R_ENEMY;
@@ -320,14 +374,14 @@ public final class TradeServerSC {
             give(c.p, ItemSettlementMapSC.make(c.reg, c.s));
         } else {
             boolean penance = TradeTableSC.ELDER_PENANCE.equals(o.key);
-            ReputationSC.give(c.rec, o.outAmount, penance ? ReputationSC.SRC_PENANCE : ReputationSC.SRC_CARGO, c.day);
+            ReputationSC.give(c.rec, o.outAmount, penance ? ReputationSC.SRC_PENANCE : ReputationSC.SRC_CARGO, c.day, c.ceiling());
             if (penance) {
                 c.rec.penanceDay = c.day;
             }
         }
         count(c, o);
         if (o.outKind != TradeOfferSC.OUT_REPUTATION) {
-            ReputationSC.give(c.rec, ReputationSC.TRADE, ReputationSC.SRC_TRADE, c.day);
+            ReputationSC.give(c.rec, ReputationSC.TRADE, ReputationSC.SRC_TRADE, c.day, c.ceiling());   // Ф6 (ПД-7): 599 at an embassy
         }
         c.refreshLevel();
     }
@@ -407,11 +461,19 @@ public final class TradeServerSC {
         if (k == null || k.goal == ContractTableSC.ANCHOR) {
             return R_UNKNOWN;
         }
-        if (c.level < ReputationSC.ACQUAINTANCE) {
-            return R_LEVEL;
+        if (c.level < ContractTableSC.takeLevel(c.embassy())) {
+            return R_LEVEL;                                     // Ф6: the Ambassador's from «Чужак», the Substrate's from «Знакомый»
         }
-        if (!ContractTableSC.board(c.id, c.day).contains(key)) {
+        if (!ContractTableSC.board(c.id, c.day, c.embassy()).contains(key)) {
             return R_NOT_ON_BOARD;
+        }
+        if (ContractTableSC.EMB_DISPATCH.equals(key)) {
+            for (Iterator<SettlementRegistrySC.ContractRec> it = c.rec.contracts.iterator(); it.hasNext(); ) {
+                SettlementRegistrySC.ContractRec old = it.next();
+                if (!old.done && old.key.equals(key) && ContractTableSC.dispatchLate(old.takenDay, c.day)) {
+                    it.remove();                                // Ф6: a dispatch past its days is lost - a new one may be taken
+                }
+            }
         }
         for (SettlementRegistrySC.ContractRec r : c.rec.contracts) {
             if (r.key.equals(key) && (!r.done || r.takenDay == c.day)) {
@@ -446,9 +508,20 @@ public final class TradeServerSC {
         if (k == null) {
             return new int[]{R_NO_CONTRACT, 0};
         }
+        if (!handsInHere(c, r)) {
+            return new int[]{R_ELSEWHERE, 0};                   // Ф6: the Ambassador's at an embassy, the rest at a Substrate Elder
+        }
+        boolean dispatch = k.goal == ContractTableSC.DISPATCH;
+        if (dispatch && ContractTableSC.dispatchLate(r.takenDay, c.day)) {
+            c.rec.contracts.remove(r);                          // Ф6 (ПО-27): too late - the dispatch is lost (nothing paid back)
+            c.reg.markDirty();
+            return new int[]{R_DISPATCH_LATE, 0};
+        }
         int handed = 0;
         TradeOfferSC.Ingredient in = k.handIn();
-        if (in != null) {
+        if (dispatch) {
+            r.progress = r.target;                              // nothing to carry: brought to a Substrate Elder in time is done
+        } else if (in != null) {
             int need = Math.max(0, r.target - r.progress);
             handed = Math.min(need, in.countIn(c.p.inventory.mainInventory));
             if (handed <= 0 && need > 0) {
@@ -473,6 +546,10 @@ public final class TradeServerSC {
         }
         r.done = true;
         reward(c, k);
+        if (dispatch) {
+            c.p.addChatComponentMessage(new ChatComponentTranslation("sc.contract.dispatch.turnIn")
+                    .setChatStyle(new ChatStyle().setColor(EnumChatFormatting.AQUA)));
+        }
         c.rec.pruneContracts(c.day, KEEP_DONE_DAYS);
         c.p.inventory.markDirty();
         c.reg.markDirty();
@@ -481,6 +558,9 @@ public final class TradeServerSC {
 
     /** The one-time anchor contract (§7): the world's first anchor in the Substrate was the viewer's and isn't paid yet. */
     private static int anchor(Ctx c) {
+        if (c.embassy()) {
+            return R_ELSEWHERE;                                 // Ф6: the anchor is the Substrate's - its Elders pay it
+        }
         String by = c.reg.anchorBy == null ? "" : c.reg.anchorBy;
         if (by.isEmpty()) {
             return R_NOT_DONE;
@@ -495,7 +575,7 @@ public final class TradeServerSC {
         c.reg.anchorPaid = true;
         give(c.p, SettlementItemsSC.chips(k.chips));
         c.rec.chips += k.chips;
-        ReputationSC.give(c.rec, k.reputation, ReputationSC.SRC_ANCHOR, c.day);
+        ReputationSC.give(c.rec, k.reputation, ReputationSC.SRC_ANCHOR, c.day, c.ceiling());
         c.p.inventory.markDirty();
         c.reg.markDirty();
         return OK;
@@ -534,13 +614,43 @@ public final class TradeServerSC {
         return null;
     }
 
+    /**
+     * Ф6 (ПО-27): contract `r` belongs to an embassy - handed in to an Ambassador: the supplies, or one taken at an embassy (the
+     * tantalum capacitors are on both boards). «Депеша домой» never: it is carried to the Substrate.
+     */
+    static boolean embassyContract(SettlementRegistrySC reg, SettlementRegistrySC.ContractRec r) {
+        if (ContractTableSC.EMB_DISPATCH.equals(r.key)) {
+            return false;
+        }
+        if (ContractTableSC.embassyOnly(r.key)) {
+            return true;
+        }
+        return r.settlement >= 0 && SettlementSC.isEmbassy(reg.byId(r.settlement));
+    }
+
+    /** Ф6: `r` is handed in at this Elder - an embassy's at an embassy, the rest (the dispatch too) at an Elder of the Substrate. */
+    private static boolean handsInHere(Ctx c, SettlementRegistrySC.ContractRec r) {
+        return c.embassy() ? embassyContract(c.reg, r) : c.s != null && !embassyContract(c.reg, r);
+    }
+
+    /**
+     * The progress the screen shows of open contract `r` here: its own; «Депеша домой» (nothing to count) - done at a Substrate Elder
+     * (the hand-in button lights: late or not, the server says), not done at an embassy (it can't be handed in there).
+     */
+    private static int shownProgress(Ctx c, SettlementRegistrySC.ContractRec r) {
+        if (!ContractTableSC.EMB_DISPATCH.equals(r.key)) {
+            return r.progress;
+        }
+        return handsInHere(c, r) ? r.target : 0;
+    }
+
     /** A finished contract's pay: the chips (counted into the day's), «Доверие», maybe a ПЭ-1 module. */
     private static void reward(Ctx c, ContractTableSC.Contract k) {
         if (k.chips > 0) {
             give(c.p, SettlementItemsSC.chips(k.chips));
             c.rec.chips += k.chips;
         }
-        ReputationSC.give(c.rec, k.reputation, ReputationSC.SRC_CONTRACT, c.day);
+        ReputationSC.give(c.rec, k.reputation, ReputationSC.SRC_CONTRACT, c.day, c.ceiling());    // Ф6 (ПД-7): the dispatch - in the Substrate, none
         if (k.modulePct > 0 && ModItems.empModule != null && c.p.worldObj.rand.nextInt(100) < k.modulePct) {
             EmpModule[] all = EmpModule.values();
             give(c.p, ModItems.empModule.stackOf(all[c.p.worldObj.rand.nextInt(all.length)]));
@@ -566,8 +676,12 @@ public final class TradeServerSC {
         n.setByte("level", (byte) c.level);
         n.setBoolean("enemy", c.enemy);
         n.setInteger("chips", c.rec.chips);
+        n.setBoolean("emb", c.embassy());                       // Ф6: an embassy's Tuner (its Elder the Ambassador)
         NBTTagList offers = new NBTTagList();
         for (TradeOfferSC o : TradeTableSC.offers(c.t.kind())) {
+            if (!EmbassyTradeSC.allowed(o, c.s)) {
+                continue;                                       // Ф6 (ПО-23): not shown at an embassy at all
+            }
             NBTTagCompound e = new NBTTagCompound();
             e.setString("k", o.key);
             e.setIntArray("n", TradeRulesSC.playerCounts(o, c.level, c.pct(o)));
@@ -579,7 +693,7 @@ public final class TradeServerSC {
         n.setTag("offers", offers);
         if (c.t.kind() == NpcKindSC.ELDER) {
             NBTTagList board = new NBTTagList();
-            List<String> keys = ContractTableSC.board(c.id, c.day);
+            List<String> keys = ContractTableSC.board(c.id, c.day, c.embassy());
             for (String key : keys) {
                 NBTTagCompound e = new NBTTagCompound();
                 e.setString("k", key);
@@ -587,7 +701,7 @@ public final class TradeServerSC {
                 for (SettlementRegistrySC.ContractRec r : c.rec.contracts) {
                     if (r.key.equals(key) && !r.done) {
                         st = C_OPEN;
-                        progress = r.progress;
+                        progress = shownProgress(c, r);
                     } else if (r.key.equals(key) && r.takenDay == c.day && st == C_FREE) {
                         st = C_DONE;
                         progress = r.target;
@@ -604,12 +718,14 @@ public final class TradeServerSC {
                     NBTTagCompound e = new NBTTagCompound();
                     e.setString("k", r.key);
                     e.setByte("st", (byte) C_OPEN);
-                    e.setInteger("p", r.progress);
+                    e.setInteger("p", shownProgress(c, r));
                     open.appendTag(e);
                 }
             }
             n.setTag("open", open);
             n.setInteger("taken", c.rec.contractsTaken);
+            n.setByte("cLevel", (byte) ContractTableSC.takeLevel(c.embassy()));     // Ф6: the Ambassador's from «Чужак»
+            n.setBoolean("noAnchor", c.embassy());              // Ф6: the anchor contract - the Substrate Elders pay it
             EconomyEventsSC.anchorTaken(c.p.worldObj, c.reg, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE);   // a 0.2.1 world's anchor
             String by = c.reg.anchorBy == null ? "" : c.reg.anchorBy;
             int anchor = by.isEmpty() ? ANCHOR_OPEN : !by.equals(c.id.toString()) ? ANCHOR_OTHER : c.reg.anchorPaid ? ANCHOR_PAID : ANCHOR_YOURS;
@@ -664,6 +780,16 @@ public final class TradeServerSC {
         /** The settlement's spread for `o` (0 for an unbound Tuner). */
         int pct(TradeOfferSC o) {
             return s == null ? 0 : TradeRulesSC.seedPct(s.seed, o.key);
+        }
+
+        /** Ф6: the Tuner is an embassy's (its Elder the Ambassador). */
+        boolean embassy() {
+            return SettlementSC.isEmbassy(s);
+        }
+
+        /** Ф6 (ПД-7): the ceiling of «Доверие» given here - an embassy's 599, else none. */
+        int ceiling() {
+            return ReputationSC.ceiling(s);
         }
     }
 }

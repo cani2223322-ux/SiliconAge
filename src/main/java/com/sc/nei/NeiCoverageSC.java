@@ -24,7 +24,9 @@ import net.minecraft.item.crafting.IRecipe;
  * getSubBlocks for a null tab, every meta - each shown one has its «Как получить» page. Ф5's arena blocks (no tab, every meta
  * taken) are hidden on purpose, with pages all the same; its items (the relics 3..4, the Coordinator, the journals, the schemes, the
  * Module, the Record), the Burnt Coil, the ПЭ-1М trophy and the boss's egg each have a page (ObtainHandlerSC.finalePage and the
- * older branches) or a recipe - none is a gap. Client only, NEI loaded.
+ * older branches) or a recipe - none is a gap. Ф6's Great Ring core (embassyRingSC, no tab: its one stack comes through
+ * getSubBlocks) is hidden on purpose with its page, the showcase metas 7..9 with the rest of showcase2SC; the Embassy Direction
+ * Finder has its recipe and a page (ObtainHandlerSC.embassyPage) - none is a gap. Client only, NEI loaded.
  */
 public final class NeiCoverageSC {
 

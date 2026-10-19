@@ -320,6 +320,7 @@ public final class WorldTestSettlementSC {
         for (SettlementRegistrySC.Slot sl : rec == null ? new ArrayList<SettlementRegistrySC.Slot>() : rec.slots) {
             kinds.add(sl.kindOf());
         }
+        withoutF6Dispatcher(rec, kinds);                // Ф6: the Dispatcher a dock's core appends at its first second is not the plan's
         // Ф3: a record made by an earlier run of Ф2 had its Ф3 slots appended (RosterSC.upgrade - WorldTestArmourerSC checks that): its roster
         // is the Ф2 one with the new kinds after the guards, not the plan's of version 2. One still of version 1 - its core's first second
         // (the upgrade) is yet to come: this test has just loaded its chunk - holds the Ф2 roster, which no plan of version 2 makes
@@ -1164,6 +1165,17 @@ public final class WorldTestSettlementSC {
                 + " cancelled " + coreOff + "; " + all + " showcase machines (" + count[com.sc.block.BlockShowcaseSC.SHOWER] + " showers, "
                 + count[com.sc.block.BlockShowcaseSC.CHARGE_PAD] + " charge pads, " + count[com.sc.block.BlockShowcaseSC.CLONE_CAPSULE] + " Clone Capsules), "
                 + noTile + " without their tile; every workshop of the roster has its machines" + (missing.length() == 0 ? " true" : " - MISSING:" + missing));
+    }
+
+    /**
+     * Ф6 (docs/plan-substrate-tech-f6.md §2.5, ПЖ-11): a Substrate record's last slot is the Dispatcher RosterSC.addDispatcher appended
+     * at its core's first second (extra "S" F6Disp) - not a slot of the plan's roster: left out of `kinds` before they are compared.
+     */
+    static void withoutF6Dispatcher(SettlementRegistrySC.Settlement rec, List<NpcKindSC> kinds) {
+        if (rec != null && !kinds.isEmpty() && kinds.get(kinds.size() - 1) == NpcKindSC.DISPATCHER
+                && rec.extra.getCompoundTag(com.sc.settle.RosterSC.EXTRA_S).getBoolean(com.sc.settle.RosterSC.F6_DISPATCHER)) {
+            kinds.remove(kinds.size() - 1);
+        }
     }
 
     /** Ф3: SettlementLayoutSC.SHOWCASE2 (package S) - a workshopMachines code from it on is a BlockShowcase2SC meta; 16 until S has it. */

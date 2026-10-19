@@ -215,6 +215,7 @@ public final class ModBlocks {
         com.sc.dim.SubstrateWildBlocksSC.init();
         com.sc.ruin.CampBlocksSC.init();
         com.sc.arena.ArenaBlocksSC.init();              // Подложка Ф5: the Breakdown Epicentre's blocks and its Console
+        com.sc.embassy.EmbassyBlocksSC.init();          // Подложка Ф6: the Great Ring's core (its tile)
 
         registerOreDict();
     }
