@@ -110,8 +110,8 @@ public final class SubstrateConfigSC {
     public static boolean embassies = true;
     /** ПЕ-1: one embassy at most to an embassyGrid x embassyGrid region (blocks); its point within a quarter of it of the middle. TODO(balance) */
     public static int embassyGrid = 2048;
-    /** ПЕ-1: the chance, %, that a region has one (before the biomes and the vanilla structures). TODO(balance): /scembassy list on the user's seed */
-    public static int embassyChance = 45;
+    /** ПЕ-1: the chance, %, that a region has one (before the biomes and the vanilla structures). 100 by default: the land rules already leave about one region in seven (2026-10-20, the user's choice A) */
+    public static int embassyChance = 100;
     /** ПЕ-1: no embassy closer than this to the world's spawn (blocks). */
     public static int embassySpawnMin = 1500;
     /** ПЕ-2: the guaranteed first embassy stands this far from the spawn (blocks), between the two. */
@@ -212,7 +212,7 @@ public final class SubstrateConfigSC {
         embassyGrid = c.getInt("embassyGrid", e, 2048, 1024, 16384,
                 "One embassy at most to a region of this size, blocks (two embassies are at least half of it apart)"
                 + " / Не больше одного посольства на регион такого размера, блоки (два посольства - не ближе половины его)");
-        embassyChance = c.getInt("embassyChance", e, 45, 0, 100,
+        embassyChance = c.getInt("embassyChance", e, 100, 0, 100,
                 "The chance, %, that a region has an embassy (then the land must suit it: flat, dry and open - plains, savanna, desert)"
                 + " / Шанс посольства в регионе, % (затем земля должна подойти: ровная, сухая, открытая - равнины, саванна, пустыня)");
         embassySpawnMin = c.getInt("embassySpawnMin", e, 1500, 0, 1000000,

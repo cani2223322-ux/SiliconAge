@@ -82,7 +82,7 @@ final class SelfTestEmbassySC {
     private static final long[] SEEDS = {1234567L, -77L, 0x5C14L};
     /** The six rules of the section embassy and their defaults (docs/plan-substrate-tech-f6.md §2.1). */
     private static final String[] RULES = {"embassies", "embassyGrid", "embassyChance", "embassySpawnMin", "embassyRingMin", "embassyRingMax"};
-    private static final Object[] DEFAULTS = {Boolean.TRUE, 2048, 45, 1500, 1300, 2500};
+    private static final Object[] DEFAULTS = {Boolean.TRUE, 2048, 100, 1500, 1300, 2500};
     /** A test dimension id for the Substrate's records (the pure questions take it as an argument). */
     private static final int SUB_DIM = -1414;
     private static final UUID P1 = UUID.fromString("5c0e7a1e-0000-4000-8000-0000000000f6"), P2 = UUID.fromString("5c0e7a1e-0000-4000-8000-0000000000f7");
@@ -223,7 +223,7 @@ final class SelfTestEmbassySC {
                 SubstrateConfigSC.class.getField(RULES[k]).set(null, was[k]);
             }
         }
-        boolean live = SubstrateConfigSC.embassies && SubstrateConfigSC.embassyGrid == 2048 && SubstrateConfigSC.embassyChance == 45
+        boolean live = SubstrateConfigSC.embassies && SubstrateConfigSC.embassyGrid == 2048 && SubstrateConfigSC.embassyChance == 100
                 && SubstrateConfigSC.embassySpawnMin == 1500 && SubstrateConfigSC.embassyRingMin == 1300 && SubstrateConfigSC.embassyRingMax == 2500;
         if (!live) {
             info("the test config's section embassy isn't the defaults (" + SubstrateConfigSC.embassies + ", " + SubstrateConfigSC.embassyGrid + ", "
@@ -232,7 +232,7 @@ final class SelfTestEmbassySC {
         }
         boolean grid = EmbassySiteSC.grid() == Math.max(1024, SubstrateConfigSC.embassyGrid) && "embassy".equals(SubstrateConfigSC.CATEGORY_EMBASSY);
         check(rules && "ok".equals(defaults) && "ok".equals(widened) && restart && grid, "config (§2.1, ПК-26): " + sent.size() + " rules the server sends"
-                + " (20), the six of the section embassy among them " + rules + "; an empty file reads true / 2048 / 45 / 1500 / 1300 / 2500 " + defaults
+                + " (20), the six of the section embassy among them " + rules + "; an empty file reads true / 2048 / 100 / 1500 / 1300 / 2500 " + defaults
                 + "; a ring 2000..2100 is widened to 2000..2256 " + widened + "; the section asks a world restart " + restart + "; grid() "
                 + EmbassySiteSC.grid() + " (at least 1024) " + grid);
     }
