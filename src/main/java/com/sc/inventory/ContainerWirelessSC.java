@@ -20,11 +20,13 @@ public class ContainerWirelessSC extends Container {
             BTN_PAUSE = 22, BTN_ROLE = 23;
 
     private final TileEntityWirelessSC te;
+    private final EntityPlayer viewer;
     private final int tileSlots;
     private final IntSyncSC sync = new IntSyncSC(12);
 
     public ContainerWirelessSC(InventoryPlayer playerInv, final TileEntityWirelessSC te) {
         this.te = te;
+        this.viewer = playerInv.player;
         if (te.getKind() == TileEntityWirelessSC.QUANTUM) {
             addSlotToContainer(new Slot(te, TileEntityWirelessSC.SLOT_CRYSTAL, CRYSTAL_X, CRYSTAL_Y) {
                 @Override
@@ -108,8 +110,9 @@ public class ContainerWirelessSC extends Container {
     public void detectAndSendChanges() {
         super.detectAndSendChanges();
         int[] p = te.partnerPos();
+        boolean see = te.allowed(viewer);                  // where the other end is: only for those with access (as WAILA)
         sync.send(this, crafters, new int[]{te.getEnergyStored(), te.getStatus(), te.getFlow(), te.getLossPct(), te.getDistance(),
-                p[0], p[1], p[2], p[3], p[4], te.screenBits(), te.powerFlags()});
+                see ? p[0] : 0, see ? p[1] : 0, see ? p[2] : 0, see ? p[3] : 0, p[4], te.screenBits(), te.powerFlags()});
     }
 
     @Override

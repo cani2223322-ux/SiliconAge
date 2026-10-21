@@ -94,8 +94,8 @@ public class BlockEnergyConverterSC extends Block {
         if (stack.hasTagCompound()) {
             c.readFromItem(stack.getTagCompound());
         }
-        if (placer instanceof EntityPlayer) {
-            c.setOwner(((EntityPlayer) placer).getCommandSenderName());   // БП-3: the placer owns it
+        if (placer instanceof EntityPlayer && !(placer instanceof net.minecraftforge.common.util.FakePlayer)) {
+            c.setOwner(((EntityPlayer) placer).getCommandSenderName());   // БП-3: the placer owns it (automation - a FakePlayer - leaves it ownerless)
         }
         world.markBlockForUpdate(x, y, z);
     }

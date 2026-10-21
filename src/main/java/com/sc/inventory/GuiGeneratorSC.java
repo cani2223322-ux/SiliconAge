@@ -1962,7 +1962,7 @@ public class GuiGeneratorSC extends GuiContainer {
             }
             if (GuiGaugeSC.isOver(14, FU_STEP_Y, 160, 11, mouseX, mouseY)) {
                 lines.add(Lang.tr("sc.gui.fus.steps"));
-                lines.add(Lang.tr("sc.gui.fus.steps.hint"));
+                lines.add(Lang.tr("sc.gui.fus.steps.hint", String.valueOf(type.ignitionThreshold() / 1000000)));   // 1 / 10 million
                 return lines;
             }
         }

@@ -63,8 +63,8 @@ public class EntityAISentinelPressSC extends EntityAIBase {
         if (mob.mobAction() == IMobActionSC.ACT_PRESS) {
             mob.setMobAction(IMobActionSC.ACT_NONE);
         }
-        if (running && !mob.pressing()) {
-            mob.setPressStage(EntitySentinelSC.STAGE_NONE);         // broken off before the press
+        if (mob.pressStage() == EntitySentinelSC.STAGE_HUM) {
+            mob.setPressStage(EntitySentinelSC.STAGE_NONE);         // broken off before the press (suppressed too)
         }
         running = false;
     }

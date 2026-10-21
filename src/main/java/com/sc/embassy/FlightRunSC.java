@@ -387,6 +387,9 @@ public final class FlightRunSC {
         if (code != EmbassyRulesSC.OK) {
             return res(code, 0);
         }
+        if (round && FlightTargetsSC.backTarget(c.reg, w.rec, c.now) >= 0) {
+            return res(EmbassyRulesSC.R_HAS_BACK, 0);            // ПЯ-12: one return half a player - a new one would wipe the paid one
+        }
         if (!FlightSC.joinable(c.s.id, w.id)) {
             return res(EmbassyRulesSC.R_BUSY, 0);                // the ring cools, or the window is full: nothing taken
         }

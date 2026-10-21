@@ -33,8 +33,9 @@ import net.minecraftforge.common.DimensionManager;
  * player and the LAN host share the fields with their server - nothing changes there);</li>
  * <li><b>ids</b> - never applied, only compared. A client whose own dimension id differs, and that doesn't know the
  * server's id at all, registers the server's id with its own provider type (what Forge's DimensionMessageHandler
- * does) so entering doesn't crash - for that session only: leaving the server unregisters it again
- * (forgetSessionDim); any difference is one line in the log and one in the chat
+ * does) so entering doesn't crash; a client with no Substrate at all (off in its config, or refused) registers our
+ * provider class under the server's provider type number too - for that session only: leaving the server unregisters
+ * both again (forgetSessionDim); any difference is one line in the log and one in the chat
  * (client/SubstrateIdsClientSC): the biomes can't be fixed that way - the configs must match (README).</li>
  * </ul>
  * Only the coordinator edits this file.
@@ -55,6 +56,12 @@ public final class SubstrateNetSC {
      * second «Substrate» under that id, and a third server's dimension of that id would get our provider.
      */
     private static Integer sessionDim;
+    /**
+     * Client: the provider type compareIds registered here for the session (null: none) - a client with no Substrate of its
+     * own (dimension.enabled off, or refused in SubstrateSC.init) has none; Forge 1.7.10 sends no dimension list, so
+     * without it the server's id crashes the client on entering («No WorldProvider bound»). Leaving the server drops it.
+     */
+    private static Integer sessionProvider;
 
     private SubstrateNetSC() {
     }
@@ -149,7 +156,29 @@ public final class SubstrateNetSC {
         boolean mine = SubstrateSC.active();
         StringBuilder diff = new StringBuilder();
         if (!mine) {
-            diff.append("off here (").append(SubstrateSC.offReason()).append(")");
+            diff.append("off here (").append(SubstrateSC.offReason()).append("); ");
+            if (!DimensionManager.isDimensionRegistered(msg.dim)) {
+                // ПК-4: no provider of ours here - the server's provider type number with our class, for this session only
+                synchronized (SubstrateNetSC.class) {
+                    if (sessionProvider == null && DimensionManager.registerProviderType(msg.provider, WorldProviderSubstrateSC.class, false)) {
+                        sessionProvider = Integer.valueOf(msg.provider);
+                    }
+                    if (sessionProvider == null) {
+                        diff.append("provider type ").append(msg.provider).append(" is another mod's here - the server's dimension ")
+                                .append(msg.dim).append(" couldn't be registered; ");
+                    } else {
+                        try {
+                            DimensionManager.registerDimension(msg.dim, sessionProvider.intValue());
+                            sessionDim = Integer.valueOf(msg.dim);
+                            diff.append("the server's dimension ").append(msg.dim).append(" registered here for this session; ");
+                        } catch (Exception ex) {
+                            DimensionManager.unregisterProviderType(sessionProvider.intValue());
+                            sessionProvider = null;
+                            diff.append("the server's dimension ").append(msg.dim).append(" couldn't be registered here; ");
+                        }
+                    }
+                }
+            }
         } else {
             if (SubstrateSC.dimId() != msg.dim) {
                 diff.append("dimensionId ").append(SubstrateSC.dimId()).append(" / server ").append(msg.dim).append("; ");
@@ -178,19 +207,28 @@ public final class SubstrateNetSC {
         return diff.toString();
     }
 
-    /** Client: left the server - the dimension compareIds registered for it goes (only while it is still ours). */
+    /** Client: left the server - the dimension compareIds registered for it goes (only while it is still ours), and the session's provider type. */
     public static synchronized void forgetSessionDim() {
-        if (sessionDim == null) {
-            return;
-        }
-        int d = sessionDim.intValue();
-        sessionDim = null;
-        try {
-            if (d != SubstrateSC.dimId() && DimensionManager.isDimensionRegistered(d) && DimensionManager.getProviderType(d) == SubstrateSC.providerId()) {
-                DimensionManager.unregisterDimension(d);
+        Integer p = sessionProvider;
+        sessionProvider = null;
+        if (sessionDim != null) {
+            int d = sessionDim.intValue();
+            sessionDim = null;
+            int ours = p != null ? p.intValue() : SubstrateSC.providerId();
+            try {
+                if (d != SubstrateSC.dimId() && DimensionManager.isDimensionRegistered(d) && DimensionManager.getProviderType(d) == ours) {
+                    DimensionManager.unregisterDimension(d);
+                }
+            } catch (RuntimeException ex) {
+                FMLLog.warning("[Silicon Age] Si-14 Substrate: the server's dimension %d couldn't be unregistered here (%s)", d, ex);
             }
-        } catch (RuntimeException ex) {
-            FMLLog.warning("[Silicon Age] Si-14 Substrate: the server's dimension %d couldn't be unregistered here (%s)", d, ex);
+        }
+        if (p != null) {
+            try {
+                DimensionManager.unregisterProviderType(p.intValue());
+            } catch (RuntimeException ex) {
+                FMLLog.warning("[Silicon Age] Si-14 Substrate: the session's provider type %d couldn't be unregistered here (%s)", p, ex);
+            }
         }
     }
 

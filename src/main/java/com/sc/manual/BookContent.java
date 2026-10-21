@@ -762,6 +762,11 @@ public final class BookContent {
     }
 
     static String fuel(GeneratorType type) {
+        if (type == GeneratorType.TOKAMAK_XV) {                // its big mode: port tanks, cells BIG_CELL_MUL times faster (a table cell: short)
+            return Lang.tr("sc.manual.machines.xvinfo", String.valueOf(type.ignitionThreshold()), number((float) TileEntityGeneratorSC.BIG_D_PER_TICK),
+                    TileEntityGeneratorSC.CELL_BURN_TICKS / TileEntityGeneratorSC.BIG_CELL_MUL / 20,
+                    number((float) TileEntityGeneratorSC.BIG_HE_PER_TICK));
+        }
         switch (type.kind) {
             case PASSIVE: return Lang.tr("sc.manual.machines.passive");
             case FUSION: return Lang.tr("sc.manual.machines.fusioninfo", String.valueOf(type.ignitionThreshold()), TileEntityGeneratorSC.CELL_BURN_TICKS / 1200);
@@ -1494,7 +1499,9 @@ public final class BookContent {
         e = new BookEntry("singulararmor.fn", c, new ItemStack(pieces[2]), Lang.tr("sc.book.singfn.title"));
         e.add(BookEl.title(Lang.tr("sc.book.singfn.title")));
         // its own functions (stage 2a on): each with its piece and the level it opens at
-        e.add(BookEl.head(Lang.tr("sc.manual.singular.fnhead"))).addAll(paras("sc.manual.singular.fn"));
+        e.add(BookEl.head(Lang.tr("sc.manual.singular.fnhead"))).addAll(paras("sc.manual.singular.fn",   // the thresholds with the config's multiplier
+                new Object[]{num(com.sc.util.SingularLevel.threshold(1)), num(com.sc.util.SingularLevel.threshold(2)),
+                        num(com.sc.util.SingularLevel.threshold(3)), num(com.sc.util.SingularLevel.threshold(4))}));
         for (com.sc.util.ArmorFeature f : com.sc.util.ArmorFeature.values()) {
             if (f.minSuit != s) {
                 continue;
@@ -1779,7 +1786,7 @@ public final class BookContent {
      * A rate for the text: whole numbers as they are, fractions with the language's decimal mark
      * ("sc.num.decimal": a comma in Russian "0,2", a dot in English "0.2"; a dot when the key is missing).
      */
-    static String number(float v) {
+    public static String number(float v) {
         if (v == (int) v) {
             return String.valueOf((int) v);
         }

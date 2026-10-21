@@ -107,6 +107,7 @@ public final class SelfTestSC {
             bridge3();
             bridgeRecipes();
             bridgeVortexLook();
+            fullAudit20261020();                         // the fixes after the full audit (2026-10-20)
             SelfTestConverterSC.run();
             SelfTestEmpSC.run();
             SelfTestSubstrateSC.run();
@@ -5179,6 +5180,174 @@ public final class SelfTestSC {
 
     private static boolean made(ItemStack got, net.minecraft.item.Item item, int meta, int count) {
         return got != null && got.getItem() == item && got.getItemDamage() == meta && got.stackSize == count;
+    }
+
+    /**
+     * The fixes after the full audit (2026-10-20): the wireless block's description packet carries no partner place and
+     * a packet without it keeps the screen's numbers, a storage's charge capped on placement; the texts that now take
+     * arguments format in both languages; the quarry's fortune only on ores the crusher takes; which upgrades a
+     * generator takes; the ПЭ-1 in the charge slot; the Singular Station's «Зарядка: нет» and its free first tool
+     * branch; the ore dimensions in the config sync (and an older server's message without them).
+     */
+    private static void fullAudit20261020() {
+        // ЭН-1: the partner's place isn't in the description packet; one without it leaves the client's numbers be
+        com.sc.tileentity.TileEntityWirelessSC tx = new com.sc.tileentity.TileEntityWirelessSC();
+        tx.setup(com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER, com.sc.energy.Tier.HV);
+        tx.setScreenClient(0, 0, 0, 0, 120, 64, -340, 7, 2, 1);
+        net.minecraft.nbt.NBTTagCompound desc = null;
+        try {
+            net.minecraft.network.PacketBuffer buf = new net.minecraft.network.PacketBuffer(io.netty.buffer.Unpooled.buffer());
+            ((net.minecraft.network.play.server.S35PacketUpdateTileEntity) tx.getDescriptionPacket()).writePacketData(buf);
+            buf.readInt();                                  // x, y, z, the action (S35PacketUpdateTileEntity.writePacketData)
+            buf.readShort();
+            buf.readInt();
+            buf.readUnsignedByte();
+            desc = buf.readNBTTagCompoundFromBuffer();
+        } catch (java.io.IOException e) {
+            desc = null;
+        }
+        boolean hidden = desc != null && !desc.hasKey("PX") && !desc.hasKey("PY") && !desc.hasKey("PZ") && !desc.hasKey("PDim")
+                && desc.hasKey("WId") && desc.hasKey("Partner") && desc.getInteger("PTier") == 2;
+        if (desc != null) {
+            tx.readFromNBT(desc);
+        }
+        int[] kept = tx.partnerPos();
+        net.minecraft.nbt.NBTTagCompound full = new net.minecraft.nbt.NBTTagCompound();
+        tx.writeToNBT(full);
+        com.sc.tileentity.TileEntityWirelessSC loaded = new com.sc.tileentity.TileEntityWirelessSC();
+        loaded.readFromNBT(full);
+        int[] fromSave = loaded.partnerPos();
+        check(hidden && kept[0] == 120 && kept[1] == 64 && kept[2] == -340 && kept[3] == 7 && fromSave[0] == 120 && fromSave[2] == -340
+                        && fromSave[3] == 7,
+                "wireless (ЭН-1): the description packet has no PX / PY / PZ / PDim (WId, Partner, PTier kept), a packet without them keeps "
+                        + "the screen's x " + kept[0] + " z " + kept[2] + " dim " + kept[3] + ", the save still has them");
+        // ЭН-4: a storage block's charge, capped by the wireless block's own buffer on placement
+        com.sc.tileentity.TileEntityWirelessSC placed = new com.sc.tileentity.TileEntityWirelessSC();
+        placed.setup(com.sc.tileentity.TileEntityWirelessSC.TRANSMITTER, com.sc.energy.Tier.HV);
+        net.minecraft.nbt.NBTTagCompound item = new net.minecraft.nbt.NBTTagCompound();
+        item.setInteger("EnergySC", Integer.MAX_VALUE / 2);
+        placed.readFromItem(item);
+        check(placed.getMaxEnergyStored() > 0 && placed.getEnergyStored() == placed.getMaxEnergyStored(),
+                "wireless (ЭН-4): an item's charge over the buffer is capped on placement (" + placed.getEnergyStored() + " / "
+                        + placed.getMaxEnergyStored() + ")");
+        // the texts that now take arguments: they format in both languages, the ones shown raw have no %%
+        StringBuilder bad = new StringBuilder();
+        Object[][] fmt = {
+                {"sc.gui.boil.rate", Long.valueOf(80)},
+                {"sc.gui.boil.turbine", Double.valueOf(2.0)},
+                {"sc.gui.boil.hint", Long.valueOf(80), Integer.valueOf(40), Double.valueOf(2.0)},
+                {"sc.gui.fus.steps.hint", "10"},
+                {"sc.nei.gen.xv1", "10000000", Integer.valueOf(50), Long.valueOf(7)},
+                {"sc.nei.gen.xv2", "1", "2", "3", "25"},
+                {"sc.manual.machines.xvinfo", "10000000", "1", Integer.valueOf(25), "2"},
+                {"sc.manual.singular.fn.1", "2 000", "8 000", "25 000", "60 000"}};
+        String[] raw = {"sc.bridge.gui.stab.base", "sc.singStation.mul.set", "sc.wl.coords.hidden", "sc.tooltip.chip.suits.gas",
+                "sc.flight.refuse.hasBack"};
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Map<String, String> m = langMap(lang);
+            for (Object[] f : fmt) {
+                String v = m.get((String) f[0]);
+                Object[] args = new Object[f.length - 1];
+                System.arraycopy(f, 1, args, 0, args.length);
+                try {
+                    String out = v == null ? null : String.format(v, args);
+                    if (out == null || out.contains("%s") || out.contains("%d") || f[0].equals("sc.gui.fus.steps.hint") && !out.contains("10%")
+                            || f[0].equals("sc.manual.singular.fn.1") && !out.contains("60 000")) {
+                        bad.append(' ').append(lang).append(':').append(f[0]);
+                    }
+                } catch (RuntimeException e) {
+                    bad.append(' ').append(lang).append(':').append(f[0]).append(" (").append(e.getClass().getSimpleName()).append(')');
+                }
+            }
+            for (String k : raw) {
+                String v = m.get(k);
+                if (v == null || v.contains("%%") || v.startsWith("(")) {
+                    bad.append(' ').append(lang).append(':').append(k);
+                }
+            }
+        }
+        check(bad.length() == 0, "texts after the audit: the boiler's, the reactor stages', the Tokamak XV's and the Singular thresholds' "
+                + fmt.length + " keys format in en_US and ru_RU, " + raw.length + " plain keys there with no %%" + bad);
+        // КР-1: fortune with crushing multiplies only an ore the crusher has a recipe for (halite has none)
+        ItemStack halite = new ItemStack(com.sc.init.ModBlocks.oreSC, 1, com.sc.util.OreEntry.HALITE.meta());
+        ItemStack copper = new ItemStack(com.sc.init.ModBlocks.oreSC, 1, com.sc.util.OreEntry.CHALCOPYRITE.meta());
+        check(RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{halite}, null, null) == null
+                        && RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{copper}, null, null) != null,
+                "quarry: fortune with crushing - halite has no crusher recipe (one block), chalcopyrite has one (multiplied)");
+        // the generators' upgrades: Overdrive / Economizer only where fuel burns, a Transformer only below an XV output
+        com.sc.energy.GeneratorType[][] no = {{com.sc.energy.GeneratorType.SOLAR_SI}, {com.sc.energy.GeneratorType.WIND_TURBINE},
+                {com.sc.energy.GeneratorType.RTG}};
+        boolean ups = true;
+        for (com.sc.energy.GeneratorType[] t : no) {
+            ups &= !com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(t[0], com.sc.machine.UpgradeType.OVERDRIVE)
+                    && !com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(t[0], com.sc.machine.UpgradeType.ECONOMIZER);
+        }
+        com.sc.energy.GeneratorType[] xv = {com.sc.energy.GeneratorType.SOLAR_EXO, com.sc.energy.GeneratorType.EXO_REACTOR,
+                com.sc.energy.GeneratorType.TOKAMAK_XV};
+        for (com.sc.energy.GeneratorType t : xv) {
+            ups &= !com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(t, com.sc.machine.UpgradeType.TRANSFORMER);
+        }
+        ups &= com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(com.sc.energy.GeneratorType.COMBUSTION, com.sc.machine.UpgradeType.OVERDRIVE)
+                && com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(com.sc.energy.GeneratorType.COMBUSTION, com.sc.machine.UpgradeType.ECONOMIZER)
+                && com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(com.sc.energy.GeneratorType.COMBUSTION, com.sc.machine.UpgradeType.TRANSFORMER)
+                && com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(com.sc.energy.GeneratorType.FUSION_REACTOR, com.sc.machine.UpgradeType.OVERDRIVE)
+                && com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(com.sc.energy.GeneratorType.SOLAR_QUANTUM, com.sc.machine.UpgradeType.TRANSFORMER);
+        for (com.sc.energy.GeneratorType t : com.sc.energy.GeneratorType.values()) {
+            if (com.sc.tileentity.TileEntityGeneratorSC.hasUpgradeSlots(t)) {
+                ups &= com.sc.tileentity.TileEntityGeneratorSC.acceptsUpgrade(t, com.sc.machine.UpgradeType.ENERGY_STORAGE);
+            }
+        }
+        check(ups, "generator upgrades: Overdrive / Economizer only in fuel-burning ones, no Transformer where the output is XV, "
+                + "Energy Storage everywhere with slots");
+        // ПЭ-1 in the charge slot of a storage / pad
+        check(com.sc.tileentity.TileEntityEnergyStorageSC.isChargeable(new ItemStack(ModItems.empGun)),
+                "energy storage: the ПЭ-1 counts as chargeable (its charge slot)");
+        // the Singular Station's «Зарядка: нет»: an undercharged piece is done for hoppers; the tool's first branch is free
+        com.sc.tileentity.TileEntitySingularStationSC st = new com.sc.tileentity.TileEntitySingularStationSC();
+        st.toggleFillGases();
+        ItemStack chest = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[1]);
+        boolean held = !st.pieceReady(chest);
+        st.toggleCharge();
+        boolean freed = st.pieceReady(chest);
+        check(held && freed, "Singular station: an undercharged piece stays while it charges, «Зарядка: нет» lets hoppers take it");
+        com.sc.tileentity.TileEntitySingularStationSC tb = new com.sc.tileentity.TileEntitySingularStationSC();
+        ItemStack blade = new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.SINGULAR));
+        com.sc.util.ToolLevelSC.setLevel(blade, 3);
+        tb.setInventorySlotContents(com.sc.tileentity.TileEntitySingularStationSC.TOOL_SLOT, blade);
+        tb.fillTank(com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER, 50, true);
+        boolean none = com.sc.util.ToolLevelSC.branchOf(blade) == com.sc.util.ToolLevelSC.BRANCH_NONE;
+        String first = tb.changeToolBranch(com.sc.util.ToolLevelSC.BLADE_DUELIST);
+        String second = tb.changeToolBranch(com.sc.util.ToolLevelSC.BLADE_GUARDIAN);
+        check(none && first == null && com.sc.util.ToolLevelSC.branchOf(blade) == com.sc.util.ToolLevelSC.BLADE_DUELIST
+                        && "sc.singStation.err.nosm".equals(second) && tb.tankAmount(com.sc.util.ArmorGasSC.Gas.SINGULAR_MATTER) == 50,
+                "Singular station: the tool's first branch is free (50 mB SM kept), a re-choice still wants "
+                        + com.sc.util.SingularStationMath.branchSm() + " mB (" + first + " / " + second + ")");
+        // the ore dimensions go with the config sync; an older server's message (none) leaves the client's own
+        boolean sync = false;
+        String why = "";
+        int[] was = com.sc.util.ConfigSC.oreDimensions;
+        try {
+            com.sc.util.ConfigSC.oreDimensions = new int[]{0, -1, 7};
+            Method of = com.sc.handler.ConfigSyncSC.Message.class.getDeclaredMethod("ofServer");
+            of.setAccessible(true);
+            com.sc.handler.ConfigSyncSC.Message out = (com.sc.handler.ConfigSyncSC.Message) of.invoke(null);
+            java.lang.reflect.Field dims = com.sc.handler.ConfigSyncSC.Message.class.getDeclaredField("oreDims");
+            dims.setAccessible(true);
+            io.netty.buffer.ByteBuf b = io.netty.buffer.Unpooled.buffer();
+            out.toBytes(b);
+            int total = b.readableBytes();
+            com.sc.handler.ConfigSyncSC.Message back = new com.sc.handler.ConfigSyncSC.Message();
+            back.fromBytes(b.copy());
+            com.sc.handler.ConfigSyncSC.Message old = new com.sc.handler.ConfigSyncSC.Message();
+            old.fromBytes(b.copy(0, total - (1 + 2 + 4 * 3)));   // cut before the ore dimensions: as an older server sends it
+            sync = java.util.Arrays.equals((int[]) dims.get(back), new int[]{0, -1, 7}) && dims.get(old) == null;
+            why = java.util.Arrays.toString((int[]) dims.get(back)) + " / old " + dims.get(old);
+        } catch (Exception e) {
+            why = String.valueOf(e);
+        } finally {
+            com.sc.util.ConfigSC.oreDimensions = was;
+        }
+        check(sync, "config sync: the server's ore dimensions travel (" + why + "), an older server's message without them is read");
     }
 
     /** The bridge's crafts (approved): each part and item, charge carried, the coordinator copy, the second gravity-coil recipe, the book. */

@@ -674,6 +674,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                 running = false;
                 setStatus(Status.DONE);
                 markDirty();
+                worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);   // the renderer: the plane and the running look go
                 return;
             }
             int[] c = cell(a, cursor);
@@ -1412,7 +1413,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
         int f = fortune();
         for (ItemStack d : drops) {
-            if (f > 0 && d != null && isOre(d) && active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)) {
+            if (f > 0 && d != null && isOre(d) && active(ItemQuarryModuleSC.Kind.CRUSH, F_CRUSH)
+                    && RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{single(d)}, null, null) != null) {
+                // only an ore the crusher takes: one it has no recipe for (halite, another mod's ore) would come out as more ore blocks
                 d.stackSize *= 1 + worldObj.rand.nextInt(f + 1);   // the ore block itself (iron, gold, mod ores): fortune multiplies what crushing gives, as the rig's
             }
             for (ItemStack out : process(d)) {
@@ -2804,7 +2807,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     @Override
     public void onDataPacket(net.minecraft.network.NetworkManager manager, net.minecraft.network.play.server.S35PacketUpdateTileEntity pkt) {
         NBTTagCompound nbt = pkt.func_148857_g();
+        int oldFacing = facing;
         readSettings(nbt);
+        if (facing != oldFacing && worldObj != null) {
+            // turned with a wrench: the same block and meta don't redraw the chunk, the front comes from here
+            worldObj.markBlockRangeForRenderUpdate(xCoord, yCoord, zCoord, xCoord, yCoord, zCoord);
+        }
         setTier(Tier.values()[Math.max(0, Math.min(Tier.values().length - 1, nbt.getInteger("TierSC")))]);
         running = nbt.getBoolean("Running");
         done = nbt.getBoolean("Done");

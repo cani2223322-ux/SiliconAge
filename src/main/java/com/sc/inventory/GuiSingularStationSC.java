@@ -761,7 +761,7 @@ public class GuiSingularStationSC extends GuiContainer {
             boolean current = com.sc.util.ToolLevelSC.branchOf(tool) == b;
             t.selected = current;
             t.enabled = tn > 0 && com.sc.util.ToolLevelSC.levelOf(tool) >= com.sc.util.ToolLevelSC.BRANCH_LEVEL && !current
-                    && !te.isLocked(TileEntitySingularStationSC.TOOL_SLOT) && te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.branchSm();
+                    && !te.isLocked(TileEntitySingularStationSC.TOOL_SLOT) && (com.sc.util.ToolLevelSC.branchOf(tool) == com.sc.util.ToolLevelSC.BRANCH_NONE || te.tankAmount(Gas.SINGULAR_MATTER) >= SingularStationMath.branchSm());
         }
         boolean danger = !te.isPowerOn() && te.lineTooStrong();
         powerBtn.displayString = Lang.tr("sc.singStation.btn.power", Lang.tr(te.isPowerOn() ? "sc.singStation.on" : "sc.singStation.off"));
@@ -1547,7 +1547,8 @@ public class GuiSingularStationSC extends GuiContainer {
                 tip.add("§7" + Lang.tr("sc.singStation.toolbranch." + (com.sc.util.ToolLevelSC.isBlade(te.getTool()) ? "blade" : "drill")
                         + "." + (k + 1) + ".hint"));
                 tip.add(toolBranch[k].selected ? "§a" + Lang.tr("sc.singStation.branches.current")
-                        : Lang.tr("sc.singStation.branches.pick", SingularStationMath.branchSm()));
+                        : com.sc.util.ToolLevelSC.branchOf(te.getTool()) == com.sc.util.ToolLevelSC.BRANCH_NONE
+                        ? Lang.tr("sc.singStation.branches.pickfree") : Lang.tr("sc.singStation.branches.pick", SingularStationMath.branchSm()));
                 if (com.sc.util.ToolLevelSC.levelOf(te.getTool()) < com.sc.util.ToolLevelSC.BRANCH_LEVEL) {
                     tip.add("§c" + Lang.tr("sc.singStation.err.branchlevel"));
                 }

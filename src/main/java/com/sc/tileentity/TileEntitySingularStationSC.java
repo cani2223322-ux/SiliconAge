@@ -207,6 +207,12 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return chargeOn ? super.chargePiece(s, max) : 0;
     }
 
+    /** «Зарядка: нет»: an undercharged piece is finished for hoppers and tubes, and no charge is wanted (status). */
+    @Override
+    protected boolean chargesArmour() {
+        return chargeOn;
+    }
+
     @Override
     public String getInventoryName() {
         return "tile.siliconage.singularStation.name";
@@ -1221,7 +1227,7 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         return null;
     }
 
-    /** The tool's branch re-choice (or a first choice): `choice` (ToolLevelSC branch) for BRANCH_SM mB of singular matter, as the chestplate's. */
+    /** The tool's branch re-choice: `choice` (ToolLevelSC branch) for BRANCH_SM mB of singular matter (the first choice: free), as the chestplate's. */
     public String changeToolBranch(int choice) {
         ItemStack t = getTool();
         if (!com.sc.util.ToolLevelSC.isSingularTool(t) || !com.sc.util.ToolLevelSC.validBranch(com.sc.util.ToolLevelSC.isBlade(t), choice)) {
@@ -1236,10 +1242,13 @@ public class TileEntitySingularStationSC extends TileEntityArmorStationSC {
         if (com.sc.util.ToolLevelSC.branchOf(t) == choice) {
             return "sc.singStation.err.samebranch";
         }
-        if (tankAmount(Gas.SINGULAR_MATTER) < SingularStationMath.branchSm()) {
+        boolean free = com.sc.util.ToolLevelSC.branchOf(t) == com.sc.util.ToolLevelSC.BRANCH_NONE;   // СБ-7: the first choice is free, as in the K menu
+        if (!free && tankAmount(Gas.SINGULAR_MATTER) < SingularStationMath.branchSm()) {
             return "sc.singStation.err.nosm";
         }
-        getTank(Gas.SINGULAR_MATTER).drain(SingularStationMath.branchSm(), true);
+        if (!free) {
+            getTank(Gas.SINGULAR_MATTER).drain(SingularStationMath.branchSm(), true);
+        }
         com.sc.util.ToolLevelSC.setBranch(t, choice);
         markDirty();
         return null;

@@ -276,8 +276,8 @@ public final class ArmorKeyBindsSC {
     private static void fireArmor(Minecraft mc, ArmorFeature f) {
         String name = Lang.tr("sc.armorfn." + f.name().toLowerCase(java.util.Locale.ROOT));
         if (f == ArmorFeature.DASH) {
-            if (ArmorLogicSC.active(mc.thePlayer, f)) {
-                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DASH, 0));
+            if (mc.thePlayer.ridingEntity == null && ArmorLogicSC.active(mc.thePlayer, f)) {
+                ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DASH, 0));   // riding: no dash (ArmorLogicSC.dash)
             }
             return;
         }

@@ -90,8 +90,10 @@ public class ItemArmorChipSC extends Item {
         }
         list.add(com.sc.manual.Lang.tr("sc.tooltip.chip.eu", tier * com.sc.util.ArmorSuit.CHIP_EU_PER_TIER_SECOND));
         list.add(com.sc.manual.Lang.tr("sc.tooltip.chip.heat", tier));
+        // the oxygen chip switches off as the effect chips; the other gas chips work always (ArmorGasSC reads them directly)
         com.sc.util.TooltipSC.more(list,
-                com.sc.manual.Lang.tr(type == ChipType.OXYGEN_REGEN ? "sc.tooltip.chip.suits.exo" : "sc.tooltip.chip.suits.all"),
+                com.sc.manual.Lang.tr(type == ChipType.OXYGEN_REGEN ? "sc.tooltip.chip.suits.exo"
+                        : type.isGasChip() ? "sc.tooltip.chip.suits.gas" : "sc.tooltip.chip.suits.all"),
                 com.sc.manual.Lang.tr("sc.tooltip.chip.howto"));
     }
 

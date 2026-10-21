@@ -1219,7 +1219,7 @@ public class GuiArmorSC extends GuiScreen {
                 tip.add("§7" + GasUiSC.name(com.sc.util.SingularStationMath.GAS[r]) + ": " + cost[r] + " " + Lang.tr("sc.levelgui.mb"));
             }
         }
-        tip.add("§7" + Lang.tr(n >= 4 ? "sc.singStation.mul.set" : "sc.singStation.mul.noset", n));
+        tip.add("§7" + (n >= 4 ? Lang.tr("sc.singStation.mul.set") : Lang.tr("sc.singStation.mul.noset", n)));
         if (com.sc.util.SingularStationMath.needsCatalyst(levels)) {
             tip.add("§d" + Lang.tr("sc.singStation.catalyst.hint"));
         }

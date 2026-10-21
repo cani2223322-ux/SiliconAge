@@ -574,7 +574,15 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         return s != null && s.getItem() instanceof ItemArmorSC;
     }
 
+    /** Whether the station charges the pieces at all (the Singular Station's «Зарядка: нет» - no). */
+    protected boolean chargesArmour() {
+        return true;
+    }
+
     private boolean anyNeedsCharge(List<EntityPlayer> on) {
+        if (!chargesArmour()) {
+            return false;
+        }
         for (ItemStack s : slots) {
             if (tierAllows(s) && ItemArmorSC.chargeOf(s) < ItemArmorSC.capacityOf(s)) {
                 return true;
@@ -854,15 +862,15 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     private final boolean[] noGas = new boolean[Gas.values().length];
 
     /**
-     * БР-6: hoppers and tubes take only a finished piece - fully charged, and full of every gas the
-     * station fills (switched on, not switched off for it) that the piece has a tank for. A gas the
-     * station has none of (its tank dry after pulling) doesn't hold the piece.
+     * БР-6: hoppers and tubes take only a finished piece - fully charged (if the station charges at
+     * all), and full of every gas the station fills (switched on, not switched off for it) that the
+     * piece has a tank for. A gas the station has none of (its tank dry after pulling) doesn't hold the piece.
      */
     public boolean pieceReady(ItemStack s) {
         if (s == null) {
             return false;
         }
-        if (tierAllows(s) && ItemArmorSC.chargeOf(s) < ItemArmorSC.capacityOf(s)) {
+        if (chargesArmour() && tierAllows(s) && ItemArmorSC.chargeOf(s) < ItemArmorSC.capacityOf(s)) {
             return false;
         }
         if (fillGases) {

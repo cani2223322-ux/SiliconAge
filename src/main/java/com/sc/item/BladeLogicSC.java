@@ -286,7 +286,8 @@ public final class BladeLogicSC {
 
     /** The held slot sent again as it is: the client may have guessed a switch the server refused. */
     static void resendHeld(EntityPlayer p) {
-        if (p instanceof net.minecraft.entity.player.EntityPlayerMP) {
+        if (p instanceof net.minecraft.entity.player.EntityPlayerMP && !(p instanceof net.minecraftforge.common.util.FakePlayer)
+                && ((net.minecraft.entity.player.EntityPlayerMP) p).playerNetServerHandler != null) {   // a FakePlayer has no connection
             ((net.minecraft.entity.player.EntityPlayerMP) p).playerNetServerHandler.sendPacket(
                     new net.minecraft.network.play.server.S2FPacketSetSlot(0, 36 + p.inventory.currentItem, p.inventory.getCurrentItem()));
         }
@@ -673,7 +674,7 @@ public final class BladeLogicSC {
     }
 
     /** Ends the block on the server - and on the client, which only lets go when its held stack is replaced. */
-    static void stopBlock(EntityPlayer p) {
+    public static void stopBlock(EntityPlayer p) {
         p.stopUsingItem();
         resendHeld(p);
     }

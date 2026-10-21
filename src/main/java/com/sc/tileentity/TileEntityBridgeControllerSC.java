@@ -85,6 +85,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     private boolean open;
     private long openId;
     private int openKind, lifeLeft, lifeTotal, stability = 100, shortTicks = -1;
+    /** A gas ran short at the last once-a-second check (and which) - holds between the checks, so the grace counts every tick. */
+    private boolean gasShort;
+    private String gasWhat = "";
     private int aAxis, aSize;
     private int bDim, bx, by, bz, bAxis, bW;
     private boolean coilsLit;
@@ -1277,8 +1280,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             r = BridgeSpaceSC.probe(cells, x, AUTO_Y, z, e.w, e.axis, near);
             at = r.free ? new int[]{r.x, r.y, r.z} : r.hasNearest ? new int[]{r.nx, r.ny, r.nz} : null;
         }
-        if (at == null || ShieldEventHandlerPrivate.foreignField(ws, p, at[0], at[1], at[2])) {
-            return null;
+        if (at == null || ShieldEventHandlerPrivate.foreignField(ws, p, at[0], at[1], at[2], false)) {
+            return null;                                     // the end stays where it was planned: no chat line
         }
         if (bridgeKind() == BridgeMathSC.GROUND && e.dim == ownDim()) {
             int[] c = ringCentre();
@@ -1814,8 +1817,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 e.y = r.free ? r.y : r.ny;
                 e.z = r.free ? r.z : r.nz;
             }
-            if (ShieldEventHandlerPrivate.foreignField(ws, p, e.x, e.y, e.z)) {
-                // someone's field, or ПР-2 a settlement's dome - with the nearest dock to aim at instead
+            if (ShieldEventHandlerPrivate.foreignField(ws, p, e.x, e.y, e.z, !preview)) {
+                // someone's field, or ПР-2 a settlement's dome - with the nearest dock to aim at instead (the preview says
+                // so on its screen, without a chat line every time it is asked again)
                 pl.refuse = new BridgeMsgSC("sc.bridge.refuse.place", e.x, e.y, e.z).part(ShieldEventHandlerPrivate.reason(ws, e.x, e.y, e.z));
                 return pl;
             }
@@ -2096,6 +2100,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         openDist = farthest;
         openOtherDim = pl.a.dim != ownDim() || pl.b.dim != ownDim();
         shortTicks = -1;
+        gasShort = false;
         shortWhat = "";
         aAxis = s.axis;
         aSize = s.size;
@@ -2366,6 +2371,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         open = false;
         turbulent = false;
         shortTicks = -1;
+        gasShort = false;
         sendHud();
         // С2: the opening wore the ring 1-3% (far, heavy, hot)
         wear = Math.min(BridgeMathSC.MAX_WEAR, wear + BridgeMathSC.wearPerOpen(openDist, openOtherDim, massTotal, peakHeat / 10));
@@ -2388,13 +2394,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     // ------------------------------------------------------------------ while open
 
     private void holdTick() {
-        boolean shortNow = false;
-        String what = "";
-        if (!drawAny(hold.holdEu)) {
-            shortNow = true;
-            what = "eu";
-        }
+        boolean euShort = !drawAny(hold.holdEu);
         if (tick % 20 == 0) {
+            gasShort = false;
             boolean arShort = false, heShort = false;
             int[] per = new int[tanks.length];
             per[BridgeMathSC.HE] = hold.heSec;
@@ -2408,8 +2410,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     tanks[i] -= per[i];
                 } else {
                     tanks[i] = 0;
-                    shortNow = true;
-                    what = "gas." + BridgeMathSC.GASES[i].key();
+                    gasShort = true;
+                    gasWhat = "gas." + BridgeMathSC.GASES[i].key();
                     if (i == BridgeMathSC.AR) {
                         arShort = true;
                     }
@@ -2458,6 +2460,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (tick % 10 == 0) {
             sendHud();
         }
+        // the EU is drawn every tick, the gases once a second - a gas short holds till the next check, so the
+        // SHORT_GRACE_S grace counts down every tick for both (it was once a second for a gas: 60 s, not 3)
+        boolean shortNow = euShort || gasShort;
+        String what = euShort ? "eu" : gasWhat;
         if (shortNow) {
             if (shortTicks < 0) {
                 shortTicks = BridgeMathSC.SHORT_GRACE_S * 20;
@@ -2578,8 +2584,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         boolean shaken = false;
         if (stability < BridgeMathSC.TURBULENCE) {
             int[] spot = turbulentSpot(dim, x, y, z);
-            if (spot != null && dest != null && ShieldEventHandlerPrivate.foreignField(dest, rights, spot[0], spot[1], spot[2])) {
-                spot = null;                                 // lands as planned instead
+            if (spot != null && dest != null && ShieldEventHandlerPrivate.foreignField(dest, rights, spot[0], spot[1], spot[2], false)) {
+                spot = null;                                 // lands as planned instead (quietly: he does go through)
             }
             if (spot != null) {
                 x = spot[0] + 0.5;
@@ -3777,7 +3783,16 @@ public class TileEntityBridgeControllerSC extends TileEntity {
      */
     static final class ShieldEventHandlerPrivate {
         static boolean foreignField(World w, EntityPlayer p, int x, int y, int z) {
-            return com.sc.settle.SettlementSC.refusesBridgeEnd(w, x, y, z) || p != null && com.sc.ShieldEventHandler.privateFor(w, p, x, y, z);
+            return foreignField(w, p, x, y, z, true);
+        }
+
+        /**
+         * `tell`: someone's field says so in chat (privateFor); false - the quiet check (privateFieldAgainst) for the
+         * preview the remote / armour asks every second or so, and for the places a refusal only moves (scatter, a shift).
+         */
+        static boolean foreignField(World w, EntityPlayer p, int x, int y, int z, boolean tell) {
+            return com.sc.settle.SettlementSC.refusesBridgeEnd(w, x, y, z) || p != null && (tell ? com.sc.ShieldEventHandler.privateFor(w, p, x, y, z)
+                    : com.sc.ShieldEventHandler.privateFieldAgainst(w, p, x, y, z) != null);
         }
 
         /**

@@ -373,7 +373,7 @@ public class WailaSC implements IWailaDataProvider {
             tag.setInteger("scTicks", m.getCurrentRecipeTicks());
             tag.setInteger("scUsage", m.effectiveEuPerTick());
             int upgrades = 0;
-            for (int i = TileEntityMachineSC.FIRST_UPGRADE_SLOT; i < m.getSizeInventory(); i++) {
+            for (int i = TileEntityMachineSC.FIRST_UPGRADE_SLOT; i < TileEntityMachineSC.FIRST_UPGRADE_SLOT + TileEntityMachineSC.UPGRADE_SLOTS; i++) {
                 ItemStack s = m.getStackInSlot(i);
                 upgrades += s == null ? 0 : s.stackSize;
             }

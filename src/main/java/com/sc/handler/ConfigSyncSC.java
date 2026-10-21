@@ -35,7 +35,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
  * screens, tooltips, NEI and handbook show the server's numbers, not its own .cfg. Every public
  * static non-final primitive field of ConfigSC goes by name (reflection - a new option travels
  * with no change here), except the client's own preferences - fields marked {@link ClientOnly} (sounds, update
- * check; a new HUD / sound / effect option must carry it too); the ore settings too. The
+ * check; a new HUD / sound / effect option must carry it too); the ore settings and dimensions too. The
  * client keeps its own values aside and puts them back when it leaves the server. Single player
  * (and the host of a LAN game) shares the fields with its own server: nothing is changed there.
  */
@@ -60,6 +60,9 @@ public final class ConfigSyncSC {
     /** Client: its own values while it plays on a server (null: none taken). */
     private static Map<String, Object> localValues;
     private static Map<OreEntry, ConfigSC.OreGenSettings> localOres;
+    /** Client: its own ConfigSC.oreDimensions while it plays on a server (kept: taken aside, may itself be null). */
+    private static int[] localOreDims;
+    private static boolean localOreDimsKept;
 
     private ConfigSyncSC() {
     }
@@ -138,6 +141,11 @@ public final class ConfigSyncSC {
             }
             localOres = null;
         }
+        if (localOreDimsKept) {
+            ConfigSC.oreDimensions = localOreDims;
+            localOreDims = null;
+            localOreDimsKept = false;
+        }
     }
 
     static synchronized void apply(Message msg) {
@@ -155,6 +163,8 @@ public final class ConfigSyncSC {
                 localOres = new EnumMap<OreEntry, ConfigSC.OreGenSettings>(OreEntry.class);
                 localOres.putAll(map);
             }
+            localOreDims = ConfigSC.oreDimensions;
+            localOreDimsKept = true;
         }
         for (Map.Entry<String, Object> e : msg.values.entrySet()) {
             if (clientOnly(e.getKey())) {
@@ -184,6 +194,9 @@ public final class ConfigSyncSC {
                 }
             }
         }
+        if (msg.oreDims != null) {
+            ConfigSC.oreDimensions = msg.oreDims;           // a new array, swapped whole: a tooltip reading it meanwhile is safe
+        }
     }
 
     public static class Message implements IMessage {
@@ -191,6 +204,8 @@ public final class ConfigSyncSC {
         final Map<String, Byte> types = new HashMap<String, Byte>();
         /** OreEntry ordinal -> minY, maxY, veinSize, veinsPerChunk. */
         final Map<Integer, int[]> ores = new HashMap<Integer, int[]>();
+        /** ConfigSC.oreDimensions - for the ore / limestone tooltips and NEI (null: an older server sent none). */
+        int[] oreDims;
 
         public Message() {
         }
@@ -210,6 +225,7 @@ public final class ConfigSyncSC {
                 ConfigSC.OreGenSettings s = ConfigSC.settingsFor(ore);
                 msg.ores.put(ore.ordinal(), new int[]{s.minY, s.maxY, s.veinSize, s.veinsPerChunk});
             }
+            msg.oreDims = ConfigSC.oreDimensions == null ? new int[] {0} : ConfigSC.oreDimensions.clone();   // no list = Overworld (OreGenSC)
             return msg;
         }
 
@@ -236,6 +252,15 @@ public final class ConfigSyncSC {
                 int ordinal = buf.readUnsignedShort();
                 ores.put(ordinal, new int[]{buf.readInt(), buf.readInt(), buf.readInt(), buf.readInt()});
             }
+            if (buf.readableBytes() >= 3 && buf.readBoolean()) {   // an older server ends here: the client keeps its own list
+                int len = buf.readUnsignedShort();
+                if (len <= 256 && buf.readableBytes() >= 4 * len) {
+                    oreDims = new int[len];
+                    for (int i = 0; i < len; i++) {
+                        oreDims[i] = buf.readInt();
+                    }
+                }
+            }
         }
 
         @Override
@@ -260,6 +285,12 @@ public final class ConfigSyncSC {
                 for (int k = 0; k < 4; k++) {
                     buf.writeInt(e.getValue()[k]);
                 }
+            }
+            int len = oreDims == null ? 0 : Math.min(oreDims.length, 256);   // last: an older client stops reading before it
+            buf.writeBoolean(oreDims != null);
+            buf.writeShort(len);
+            for (int i = 0; i < len; i++) {
+                buf.writeInt(oreDims[i]);
             }
         }
     }

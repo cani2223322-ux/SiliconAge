@@ -59,7 +59,7 @@ public final class ConfigSC {
      */
     public static float converterRfPerEu = 4F, converterJPerEu = 10F, converterGjPerEu = 0F;
     public static int converterLoss = 5;
-    /** Dimensions the mod's ores and limestone generate in (worldgen is server-side: not synced). */
+    /** Dimensions the mod's ores and limestone generate in (worldgen is server-side; sent to clients (ConfigSyncSC) for tooltips and NEI). */
     public static int[] oreDimensions = {0};
     /** «Есть обновление»: ask the site for the latest version (UpdateCheckSC); which releases to tell about; where. */
     @com.sc.handler.ConfigSyncSC.ClientOnly

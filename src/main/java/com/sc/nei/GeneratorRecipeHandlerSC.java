@@ -221,6 +221,18 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                 case PASSIVE:
                     return new String[]{Lang.tr("sc.nei.gen.solar")};
                 case FUSION:
+                    if (type == GeneratorType.TOKAMAK_XV) {
+                        // its big mode: the port tanks first, cells BIG_CELL_MUL times faster, the blanket BIG_BLANKET_WEAR times
+                        // (two lines: a third would run into NEI's page number under the second recipe of a page)
+                        int t = TileEntityGeneratorSC.CELL_BURN_TICKS / TileEntityGeneratorSC.BIG_CELL_MUL;
+                        return new String[]{
+                                Lang.tr("sc.nei.gen.xv1", String.valueOf(type.ignitionThreshold()), TileEntityGeneratorSC.BIG_H2_START,
+                                        Math.round(TileEntityGeneratorSC.MODULE_LIFE_TICKS / (double) TileEntityGeneratorSC.BIG_BLANKET_WEAR / 72000)),
+                                Lang.tr("sc.nei.gen.xv2", com.sc.manual.BookContent.number((float) TileEntityGeneratorSC.BIG_D_PER_TICK),
+                                        com.sc.manual.BookContent.number((float) TileEntityGeneratorSC.BIG_HE_PER_TICK),
+                                        com.sc.manual.BookContent.number((float) TileEntityGeneratorSC.BIG_H2_PER_TICK),
+                                        com.sc.manual.BookContent.number(t / 20F))};
+                    }
                     long cellEu = (long) TileEntityGeneratorSC.CELL_BURN_TICKS * type.euPerTick;
                     return new String[]{
                             Lang.tr("sc.nei.gen.fusion1", String.valueOf(type.ignitionThreshold()),

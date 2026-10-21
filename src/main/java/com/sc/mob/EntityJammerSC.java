@@ -149,6 +149,9 @@ public class EntityJammerSC extends EntityArmoredMobSC implements IFactionLootSC
     public void readEntityFromNBT(NBTTagCompound tag) {
         super.readEntityFromNBT(tag);
         if (!worldObj.isRemote) {
+            if (MobCombatSC.holdsPe1(this) && !EmpMobGunSC.allowed()) {
+                setCurrentItemOrArmor(0, MobCombatSC.gunStack(WeaponType.ION_CUTTER));   // mobsUseEmp off since its spawn: no ПЭ-1 kept
+            }
             armEmp();
         }
     }

@@ -382,6 +382,9 @@ public class EntitySentinelSC extends EntityArmoredMobSC implements IFactionLoot
         super.readEntityFromNBT(tag);
         MobCombatSC.restoreHome(this, LEASH);
         if (!worldObj.isRemote) {
+            if (MobCombatSC.holdsPe1(this) && !EmpMobGunSC.allowed()) {
+                setCurrentItemOrArmor(0, MobCombatSC.gunStack(WeaponType.ION_CUTTER));   // mobsUseEmp off since its spawn: no ПЭ-1 kept
+            }
             armEmp();
         }
     }

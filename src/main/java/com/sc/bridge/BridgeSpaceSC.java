@@ -3,6 +3,7 @@ package com.sc.bridge;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.world.World;
+import net.minecraft.world.chunk.Chunk;
 
 /**
  * «Проверить место» (docs/plan-ground-bridge.md §7а, §7б): is there room for a vortex end at a point - a free
@@ -403,9 +404,28 @@ public final class BridgeSpaceSC {
                 return PASS;                               // grass, flowers, snow, torches: one walks through them, the vortex breaks them
             }
 
+            /**
+             * The first air cell over the column's top block, read from the blocks - not World.getHeightValue: that is
+             * 0 in a chunk not loaded yet («Y авто» then saw only y = 1) and the Nether never builds its height map.
+             * Loads the chunk (cell() would anyway). Under a roof (no sky: the Nether) the top is the floor under it.
+             */
             @Override
             public int top(int x, int z) {
-                return w.getHeightValue(x, z);
+                Chunk ch = w.getChunkFromBlockCoords(x, z);
+                int lx = x & 15, lz = z & 15;
+                int y;
+                if (w.provider.hasNoSky) {
+                    y = Math.min(w.getHeight(), w.provider.getActualHeight()) - 1;
+                    while (y > 0 && !ch.getBlock(lx, y, lz).isAir(w, x, y, z)) {
+                        y--;                                   // down through the roof
+                    }
+                } else {
+                    y = Math.min(w.getHeight() - 1, ch.getTopFilledSegment() + 15);
+                }
+                while (y > 0 && ch.getBlock(lx, y, lz).isAir(w, x, y, z)) {
+                    y--;
+                }
+                return y + 1;
             }
 
             @Override

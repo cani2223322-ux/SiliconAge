@@ -391,10 +391,10 @@ public class GuiQuarrySC extends GuiContainer {
         }
     }
 
-    /** Switches the rig has no use for: silk touch, the pump, the magnet, the area, chests. */
+    /** Switches the rig has no use for: silk touch, the pump, the magnet, the area, chests, the head and done warnings. */
     private static boolean notForRig(int flag) {
         return flag == 2 || flag == 5 || flag == 6 || flag == 7 || flag == 8 || flag == 9 || flag == 13
-                || flag >= 20 && flag <= 24;
+                || flag == 15 || flag == 17 || flag >= 20 && flag <= 24;
     }
 
     /** Switches only the drilling rig has. */

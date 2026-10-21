@@ -527,8 +527,9 @@ public final class ArmorLogicSC {
         boolean was = data.getBoolean("scJumpHeld");
         data.setBoolean("scJumpHeld", now);
         if (!now || was || p.onGround || p.capabilities.isFlying || p.isInWater() || p.isOnLadder()
-                || data.getBoolean(AIR_JUMPED) || p.fallDistance <= 0.1F && p.motionY > 0.1) {
-            return;                                   // still rising from the ground jump: not yet
+                || data.getBoolean(AIR_JUMPED) || p.fallDistance <= 0.1F && p.motionY > 0.1
+                || p.ridingEntity != null) {
+            return;                                   // still rising from the ground jump: not yet (riding: the mount jumps)
         }
         if (!airJumpReady(p)) {
             return;
@@ -557,9 +558,9 @@ public final class ArmorLogicSC {
     public static void airJump(EntityPlayerMP p) {
         NBTTagCompound data = p.getEntityData();
         long now = p.worldObj.getTotalWorldTime();
-        if (p.onGround || p.capabilities.isFlying || data.getBoolean(AIR_JUMPED)
+        if (p.onGround || p.capabilities.isFlying || data.getBoolean(AIR_JUMPED) || p.ridingEntity != null
                 || (data.hasKey(AIR_JUMP_AT) && now - data.getLong(AIR_JUMP_AT) < 10 && now >= data.getLong(AIR_JUMP_AT))) {
-            return;
+            return;                                        // riding: the mount zeroes the motion each tick - nothing paid for nothing
         }
         if (antigravJumpReady(p)) {                      // Б3: the Singular boots' own jump (plain numbers, no K10 discount)
             ItemStack[] worn = ArmorGasSC.wornSet(p);
@@ -1508,7 +1509,7 @@ public final class ArmorLogicSC {
             return false;                                  // radiation is the radiation shield's job, not the energy shield's
         }
         if (com.sc.mob.BreakdownDamageSC.is(src)) {
-            return false;                                  // Подложка Ф3, ПБ-16: «Пробой» passes the energy shield - the one documented exception
+            return false;                                  // Подложка Ф3, ПБ-16: «Пробой» passes the energy shield - a documented exception (with the void, radiation and wither)
         }
         if (src.isExplosion() && active(p, ArmorFeature.EXPLOSION_PROOF)
                 && pay(p, ArmorFeature.EXPLOSION_PROOF, ArmorFeature.EXPLOSION_PROOF_COST)) {
@@ -1571,6 +1572,9 @@ public final class ArmorLogicSC {
 
     /** Exo leggings: a burst forward. */
     public static void dash(EntityPlayerMP p) {
+        if (p.ridingEntity != null) {
+            return;                                        // riding: the mount zeroes the motion each tick - nothing paid for nothing
+        }
         NBTTagCompound data = p.getEntityData();
         long now = p.worldObj.getTotalWorldTime();
         if (now - data.getLong("scDashAt") < DASH_COOLDOWN && data.hasKey("scDashAt")) {

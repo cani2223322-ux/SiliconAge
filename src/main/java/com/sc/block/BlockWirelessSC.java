@@ -108,8 +108,8 @@ public class BlockWirelessSC extends Block {
         int quarter = MathHelper.floor_double(placer.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;
         ForgeDirection[] faces = {ForgeDirection.NORTH, ForgeDirection.EAST, ForgeDirection.SOUTH, ForgeDirection.WEST};
         w.setFacing(faces[quarter]);
-        if (placer instanceof EntityPlayer) {
-            w.setOwner(((EntityPlayer) placer).getCommandSenderName());
+        if (placer instanceof EntityPlayer && !(placer instanceof net.minecraftforge.common.util.FakePlayer)) {
+            w.setOwner(((EntityPlayer) placer).getCommandSenderName());   // automation (a FakePlayer) leaves it ownerless
         }
         if (stack.hasTagCompound()) {
             w.readFromItem(stack.getTagCompound());

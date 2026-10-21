@@ -14,6 +14,54 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
   - *Обмен и «Доверие»:* в посольстве открыты все продажи Наладчикам и зарядка у Энергетика, из покупок — только Капсула возврата и Карта поселений (от «Первого причала»), искупление — у Посла; тантала, гафния, дейтерия, гелия, модулей ПЭ-1, чипов, Крупицы и вещей «Своего» / «Почётного» здесь нет. Интендант (только в посольстве) скупает 16 хлеба, 32 бревна, 16 угля — по 1 КЧ (4 раза в сутки) и 8 железных слитков — за 2 КЧ (3 раза). Контракты Посла — с «Чужака»: «Снабжение экспедиции» (64 хлеба / 48 брёвен / 24 железа — 6 КЧ, +15), Танталовые конденсаторы и «Депеша домой» (Старейшине любого поселения Подложки за 3 суток — 10 КЧ, +30 сверх потолка); якорного контракта здесь нет. «Доверие» за дела в посольстве — не выше 599 (дальше — только делами в Подложке), «Враг» — свой у каждого посольства.
   - Шесть новых статей главы «Подложка» (посольства, город, рейсы туда и назад, лавка, правила раздела `embassy` — все числа из кода), дополнены статьи о поселениях, «Доверии», причалах и первая статья главы; страницы NEI «Как получить», подсказки у новых блоков и предметов, самотест и мировой тест Ф6. Новый раздел конфига `embassy`: `embassies`, `embassyGrid`, `embassyChance`, `embassySpawnMin`, `embassyRingMin` / `embassyRingMax` (правила сервера; меняют только ещё не созданную землю).
 
+**Исправлено после полной проверки (2026-10-20)**
+- Беспроводные блоки: экран больше не показывает чужим игрокам координаты и измерение второго конца (как и WAILA), и они больше не рассылаются всем клиентам рядом.
+- Беспроводной блок, собранный из заряженного накопителя, при установке получает не больше своего буфера.
+- Котёл: экран и подсказка показывают настоящий выход пара (котёл MV — 80 мБ/т, с ускорителями больше) и сколько паровых турбин он тянет.
+- Справочник, NEI и подсказки больше не пишут, что вторая жидкость выходит сверху: обе выходные жидкости забираются с любой грани.
+- Вместо заготовок вернулись полные тексты подсказок модулей «Утилизатор» и «Удержание чанков» и справки вкладок «Модули» и «Линзы».
+- Справочник карьера: верные уровни модулей (центрифуга от EV, жила и ремонт головки от HV, энергоэкономия и удержание чанков от MV) и 7 вкладок, включая «Баки жидкостей».
+- Буровая установка: подпись теперь говорит, что фильтр на вкладке «Добыча», а не «Линзы».
+- Подсказка чипов Криоконтур, Криобак и Рекуператор больше не обещает отключения без заряда, при перегреве и в аварийном режиме: они действуют всегда.
+- Описание энергощита Экзо и справочник: щит пропускает не только падение в пустоту и «Пробой», но и радиацию и иссушение.
+- Справочник сингулярной брони: пороги очков берутся из кода (с множителем из конфига), у уровней 3 и 5 по четыре задания.
+- Генератор поля: описание «Защиты от радиации» и справочник уточняют, что защищены только владелец и список доступа.
+- Посольства: нельзя купить новый билет «туда-обратно», пока действует оплаченная обратная половина; раньше новый билет молча её стирал.
+- Экран контроллера моста: в подсказке стабильности теперь «Основа 100%», а не «100%%».
+- Карьер: удача с дроблением больше не размножает блоки руд, которые дробилка не перерабатывает (галит, руды других модов), — такие руды выходят по одному блоку.
+- Карьер: поворот ключом сразу виден у всех игроков, не нужно ждать перерисовки чанка.
+- Карьер: когда область выкопана, плоскость слоя исчезает и карьер выглядит остановленным и у тех, кто не открывал меню.
+- Буровая установка: переключатели «Чат: головка» и «Чат: готово» неактивны (ей они не нужны) и не входят в счётчик «Вкл.».
+- Подложка: клиент с выключенным у себя измерением (`dimension.enabled=false`) больше не вылетает, когда переходит в Подложку сервера, — измерение регистрируется на время сеанса.
+- Часовой больше не остаётся откинутым назад в тёмных искрах после того, как гул сорван Точкой ПЭ-1.
+- Рывок Экзо и прыжок в воздухе верхом или в транспорте больше не тратят EU, водород и нагрев впустую.
+- NEI и справочник показывают для Токамака XV его настоящие числа: баки, ячейку на 25 с, бланкет ~7 ч, розжиг вдвое меньше с водородом.
+- Подсказка «Этапы реактора» на экране Токамака показывает заряд 10 млн EU вместо 1 млн.
+- Беспроводной блок и преобразователь энергии, поставленные автоматикой, теперь общие, а не принадлежат FakePlayer.
+- Сингулярная станция с «Зарядка: нет»: воронки и трубы забирают недозаряженную броню, статус больше не пишет «нет энергии».
+- Сингулярная станция: первый выбор ветки инструмента бесплатный, как в меню K.
+- Энергосеть при выключенных взрывах: перегруженная машина только дымит и не забирает энергию у остальных потребителей.
+- Клинок: блок снимается при смене измерения, призрачная защита на сервере больше не остаётся.
+- Глушители и Часовые с ПЭ-1 из старых сохранений получают ионный резак, если правило `mobsUseEmp` выключено.
+- ПЭ-1 больше не залипает после смены измерения во время набора или потока; клавиша отмены и смена режима всегда снимают зависшее использование.
+- Сифон ПЭ-1 теперь останавливается и в редком рассинхроне с сервером, когда игра уже сбросила зажатую ПКМ.
+- WAILA больше не считает аккумулятор в слоте под шкалой энергии за улучшение.
+- «Чутьё охотника» Сингулярного клинка без 2 мБ криптона больше не подсвечивает мобов бесплатно.
+- Подсказка стоимости модернизации в меню K при полном комплекте показывает «-20%» вместо «Format error».
+- Крафт реактора из генераторов теперь возвращает в инвентарь модули улучшений генераторов-ингредиентов, а не уничтожает их.
+- Мост: посторонние больше не могут сливать баки чужого моста вёдрами и ячейками через газовый порт; заливать полным ведром или ячейкой по-прежнему может кто угодно.
+- На сервере подсказки руды и известняка и NEI «Как получить» показывают измерения генерации из настроек сервера, а не клиента.
+- Сингулярный бур: при выключенной «Связи с сундуком» добыча больше не уходит в хранилище, даже если включена «Связь через измерения».
+- Сингулярный бур: выключение чёрной дыры колесом мыши теперь запоминает размер зоны, и клавиша включает её с тем же размером.
+- Мост: при нехватке гелия, аргона или D₂O вихрь теперь схлопывается через обещанные 3 с, а не держится около минуты (раньше успевал перегреться с блокировкой на 2 мин).
+- Мост: открытый экран «Мост» на пульте или в броне больше не пишет в чат «приватное поле» каждые пару секунд, отказ виден на экране.
+- Генераторы: форсаж и экономайзер ставятся только в генераторы на топливе, трансформер — только туда, где выход ещё не XV; список «Подходят» теперь честный.
+- Мост: «Y авто» больше не отказывает («нет пола») в ещё не загруженном чанке и работает в Аду (первая пещера под потолком).
+- Зарядная плита и режимы аккумулятора заряжают аккумуляторы мода и предметы IC2 на полной скорости, а не в 5–10 раз медленнее.
+- Импульсную пушку ПЭ-1 можно положить в слот зарядки накопителя и зарядной плиты, рукой или воронкой.
+- Подсказка генератора показывает настоящий максимум: Сингулярный реактор — до 196608 EU/t, ветряк — до 128 EU/t; у Токамака XV уровень «XV / SV».
+- Пеленгатор руин больше не указывает на литографии и Хранилища на земле, разведанной до их появления (там их не будет).
+
 ### English
 - Quotes in the mod's texts are now “…” (in Russian „…“), so font resource packs that redraw extended ASCII (e.g. the Russian fix for Thermal Expansion) no longer turn «» into letters. The tool page buttons read "Level →" / "← Functions".
 - **The Substrate (Si-14), phase 6 "The Tuners' Embassies"** (design - `docs/idea-embassy-substrate.md`, rules - `docs/plan-substrate.md` §54-§63, tech plan - `docs/plan-substrate-tech-f6.md`). Rare big cities of the Tuners stand in the Overworld - the Lithographers' outer stations cut off by the Breakdown: a dome of radius 88-96 on levelled ground, a wall 8 high with four towers, the Heart with the core and the Ambassador's hall, the guard square, a ring of workshops, supply depots, a greenhouse (the only green - not one log in the buildings), living cells; outside the main gate the Puncture Vokzal, 25 x 25, with the dock's beacon, the Dispatchers' office, cryo tanks and the Great Ring, 13 across.
@@ -22,6 +70,54 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
   - *Flights:* the Dispatcher's "Flights" tab sells the introductory flight to the First Dock (once, from Acquaintance), to the First Dock and to a known dock (from Partner), the rescue to the death mark (from Acquaintance, outside the limit, within 2 days of the death); base prices 12 / 24 / 32 / 20 chips x the Trust level (x1.25 for an Acquaintance ... x0.85 for the Honoured) and ±10% at each embassy. A window - a 10 s countdown, 20 s of the vortex, 60 s of cooling, up to 4 passengers (LAN friends together), boarding by a step into the ring's vortex; a soft admission: without the mod's armour or a Return Capsule - a warning and a second press; a round trip 10% off (its return half lasts 3 days), a guarantee for a friend at the Dispatcher (from Partner, x1.5; only for one with this Dispatcher's screen open; the friend may refuse - the chips and the guarantee come back; the friend becomes the embassy's Enemy - the guarantor loses 30). Back - the docks of the Substrate's Settlements, Cities and the First Dock now have a Dispatcher: "Home" to the departure embassy's Vokzal (20), a ticket's return half, from a City - to another embassy you have been to (Own, 40, once a day). 2 flights a day there and back together; a flight is not a deal (no Trust, not counted in the 64 chips); an unused talon is refunded the next day (to a player on the death screen - after the respawn); a failed carry gives back both the chips and the day's flight.
   - *Trade and Trust:* an embassy takes every sale to the Tuners and charges at the Power Engineer, its only purchases are the Return Capsule and the Settlement Map (from the First Dock), the penance is the Ambassador's; no tantalum, hafnium, deuterium, helium, PE-1 modules, chips, Crumbs or Own / Honoured goods there. The Quartermaster (at an embassy only) buys 16 bread, 32 logs, 16 coal for 1 chip each (4 times a day) and 8 iron ingots for 2 (3 times). The Ambassador's contracts from Stranger: "Expedition supplies" (64 bread / 48 logs / 24 iron - 6 chips, +15), the Tantalum Capacitors and "A dispatch home" (to the Elder of any Substrate settlement within 3 days - 10 chips, +30 past the ceiling); no anchor contract there. Trust from an embassy's deeds goes no higher than 599 (past it only by deeds in the Substrate), each embassy keeps its own Enemies.
   - Six new articles of the Substrate chapter (the embassies, the city, the flights there and back, the shop, the rules of the section `embassy` - every number from the code), the articles on the settlements, Trust, the docks and the chapter's first one extended; NEI "How to get" pages, tooltips on the new blocks and items, the phase 6 self-test and world test. A new config section `embassy`: `embassies`, `embassyGrid`, `embassyChance`, `embassySpawnMin`, `embassyRingMin` / `embassyRingMax` (the server's rules; they change only land not generated yet).
+
+**Fixed after the full audit (2026-10-20)**
+- Wireless blocks: the screen no longer shows strangers the other end's coordinates and dimension (as WAILA does), and they are no longer sent to every nearby client.
+- A wireless block crafted from a charged storage block gets no more charge than its buffer when placed.
+- Boiler: the screen and tooltip show the real steam output (the MV boiler makes 80 mB/t, more with overclockers) and how many steam turbines it runs.
+- The handbook, NEI and tooltips no longer say the second fluid leaves from the top: both output fluids come out of any face.
+- The full texts of the Trash Disposal and Chunk Keeping module tooltips and of the Modules and Lenses tabs' help are back in place of placeholders.
+- Quarry handbook: the right module tiers (centrifuge EV+, vein miner and head repair HV+, energy saver and chunk keeping MV+) and seven tabs, Fluid Tanks included.
+- Drilling rig: the caption now says the filter is on the Output tab, not Lenses.
+- The Cryo Loop, Cryo Tank and Recuperator chips' tooltip no longer says they switch off without charge, when overheated or in emergency mode: they always work.
+- Exo energy shield description and handbook: besides the void and Breakdown, radiation and wither also get through the shield.
+- Singular armour handbook: the point thresholds come from the code (with the config multiplier), and levels 3 and 5 have four tasks.
+- Field generator: the Radiation shield description and the handbook now say only the owner and the access list are shielded.
+- Embassies: a new round-trip ticket can't be bought while a paid return half is still valid; the new ticket used to wipe it silently.
+- Bridge controller screen: the stability tooltip now reads "Base 100%" instead of "100%%".
+- Quarry: Fortune with crushing no longer multiplies ore blocks the crusher can't process (halite, other mods' ores) - those now come out one block at a time.
+- Quarry: turning it with a wrench now shows up for every player right away, without waiting for the chunk to redraw.
+- Quarry: when the area is fully dug, the layer plane disappears and the quarry shows as stopped for everyone, not only for players with its menu open.
+- Drilling rig: the "Chat: head" and "Chat: done" switches are now greyed out (the rig doesn't use them) and are no longer counted in "On".
+- Substrate: a client with the dimension turned off in its own config (`dimension.enabled=false`) no longer crashes when entering the server's Substrate - the dimension is registered for that session.
+- The Sentinel no longer stays leaning back in dark motes after a PE-1 Point breaks off its hum.
+- The Exo dash and the air jump no longer waste EU, hydrogen and heat while riding.
+- NEI and the handbook show the Tokamak XV's own numbers: port tanks, a cell per 25 s, a ~7 h blanket, half the ignition with hydrogen.
+- The Tokamak screen's "Reactor stages" tip shows the 10 M EU charge instead of 1 M.
+- Wireless blocks and Energy Converters placed by automation are now shared instead of owned by a FakePlayer.
+- Singular Station with charging off: hoppers and tubes now take undercharged armour, and the status no longer says "no energy".
+- Singular Station: the tool's first branch choice is free, as in the K menu.
+- Energy net with explosions off: an overloaded machine only smokes and no longer takes energy away from the other consumers.
+- Blade: blocking ends on a dimension change, so no phantom block remains on the server.
+- Jammers and Sentinels holding a PE-1 from old saves get an Ion Cutter when the `mobsUseEmp` rule is off.
+- The PE-1 no longer gets stuck after a dimension change mid charge-up or stream; the cancel key and a mode change always end a stuck use.
+- The PE-1 Siphon now stops even in a rare desync with the server, after the game has already dropped the held right-click.
+- WAILA no longer counts the battery in the slot under the energy gauge as an upgrade.
+- The Singular blade's Hunter Sense no longer outlines mobs for free when less than 2 mB of krypton is left.
+- The modernisation cost tooltip in the K menu shows "-20%" instead of "Format error" for a full set.
+- Crafting a reactor from generators now gives the ingredient generators' upgrades back to your inventory instead of destroying them.
+- Bridge: strangers can no longer drain someone else's bridge tanks with buckets or cells through the gas port; anyone can still pour in with a full bucket or cell.
+- On a server, ore and limestone tooltips and NEI "How to get" now show the server's ore dimensions, not the client's config.
+- Singular drill: with the Chest link off, drops no longer go to the linked storage even if the Cross-dimensional link is on.
+- Singular drill: switching the black hole off with the mouse wheel now remembers the zone size, so the key turns it back on at that size.
+- Bridge: when helium, argon or D₂O runs out the vortex now collapses after the promised 3 s instead of holding for about a minute (it used to overheat and lock for 2 min).
+- Bridge: an open "Bridge" screen on the remote or armour no longer posts "private field" to chat every couple of seconds; the refusal is shown on the screen.
+- Generators: Overdrive and Economizer fit only fuel-burning generators, the Transformer only where the output isn't XV yet; the "Fits" list is now accurate.
+- Bridge: "Auto Y" no longer refuses ("no floor") in a chunk that isn't loaded yet, and works in the Nether (the first cave under the roof).
+- The charge pad and battery modes charge the mod's batteries and IC2 items at full speed, no longer 5-10 times slower.
+- The PE-1 pulse gun now fits the charge slot of energy storages and charge pads, by hand or by hopper.
+- Generator tooltips show the real maximum: Singular reactor up to 196608 EU/t, wind turbine up to 128 EU/t; Tokamak XV shows tier "XV / SV".
+- The ruin finder no longer points to lithographs or Vaults on ground explored before they existed (none will appear there).
 
 ## 0.2.2-beta — 2026-10-18
 

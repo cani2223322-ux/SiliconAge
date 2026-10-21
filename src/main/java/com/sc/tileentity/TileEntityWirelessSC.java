@@ -824,10 +824,12 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         kind = nbt.getInteger("Kind");
         id = nbt.getLong("WId");
         partnerId = nbt.getLong("Partner");
-        partnerX = nbt.getInteger("PX");
-        partnerY = nbt.getInteger("PY");
-        partnerZ = nbt.getInteger("PZ");
-        partnerDim = nbt.getInteger("PDim");
+        if (nbt.hasKey("PX")) {                           // the description packet leaves them out: the screen's container sends them
+            partnerX = nbt.getInteger("PX");
+            partnerY = nbt.getInteger("PY");
+            partnerZ = nbt.getInteger("PZ");
+            partnerDim = nbt.getInteger("PDim");
+        }
         partnerTier = nbt.hasKey("PTier") ? nbt.getInteger("PTier") : -1;
         owner = nbt.getString("Owner");
         facing = ForgeDirection.getOrientation(nbt.getInteger("Facing"));
@@ -885,7 +887,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
 
     public void readFromItem(NBTTagCompound nbt) {
         if (nbt.hasKey("EnergySC")) {
-            restoreEnergy(nbt.getInteger("EnergySC"));
+            restoreEnergy(Math.min(nbt.getInteger("EnergySC"), getMaxEnergyStored()));   // a storage block's charge, capped on placement
         }
         if (worldObj != null && !worldObj.isRemote && nbt.hasKey("WId") && !LOADED.containsKey(nbt.getLong("WId"))) {
             unregister();
@@ -907,6 +909,10 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
     public Packet getDescriptionPacket() {
         NBTTagCompound nbt = new NBTTagCompound();
         writeToNBT(nbt);
+        nbt.removeTag("PX");                              // where the other end is: not for every client near,
+        nbt.removeTag("PY");                              // the screen gets it through the container (only those with access)
+        nbt.removeTag("PZ");
+        nbt.removeTag("PDim");
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, nbt);
     }
 

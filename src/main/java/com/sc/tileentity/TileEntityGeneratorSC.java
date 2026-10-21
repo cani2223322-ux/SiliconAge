@@ -2566,7 +2566,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /**
      * An upgrade this generator's slots take (the screen lists them too): the lead casing only where
-     * there's radiation, a Tank Extension only where there are fuel tanks (the XV's are its ports).
+     * there's radiation, a Tank Extension only where there are fuel tanks (the XV's are its ports), Overdrive /
+     * Economizer only where fuel burns (burnsFuel), a Transformer only where the output can still go a tier up (not XV).
+     * Ones already in (an old world, a dismantled generator's item) stay where they are.
      */
     public static boolean acceptsUpgrade(GeneratorType type, UpgradeType up) {
         if (!hasUpgradeSlots(type) || up == null || !up.forGenerators()) {
@@ -2578,6 +2580,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (up == UpgradeType.TANK_EXTENSION) {
             return type.kind == GeneratorType.Kind.FLUID_FUEL || type.kind == GeneratorType.Kind.DUAL_FLUID
                     || type.kind == GeneratorType.Kind.EXO;
+        }
+        if (up == UpgradeType.OVERDRIVE || up == UpgradeType.ECONOMIZER) {
+            return type.burnsFuel();
+        }
+        if (up == UpgradeType.TRANSFORMER) {
+            return type.tier.raisedOutput(1) != type.tier;
         }
         return true;
     }

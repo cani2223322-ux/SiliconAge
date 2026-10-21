@@ -35,7 +35,11 @@ public class ItemBlockGeneratorSC extends ItemBlock {
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         GeneratorType type = ((BlockGeneratorSC) field_150939_a).typeFor(stack.getItemDamage());
-        list.add("§7" + Lang.tr("sc.generator.tooltip.info", type.tier.name(), type.euPerTick));
+        // the most it gives: the Singular reactor at its best mass, the wind turbine in a storm (an MV packet); the Tokamak XV outputs SV too
+        int max = type == GeneratorType.SINGULAR_REACTOR ? com.sc.tileentity.SingularReactorSC.MAX_OUTPUT
+                : type == GeneratorType.WIND_TURBINE ? com.sc.energy.Tier.MV.getVoltage() : type.euPerTick;
+        String tier = type == GeneratorType.TOKAMAK_XV ? type.tier.name() + " / " + com.sc.energy.Tier.SV.name() : type.tier.name();
+        list.add("§7" + Lang.tr("sc.generator.tooltip.info", tier, max));
         contents(stack, type, list);
         PickaxeOnlySC.tooltip(list);
         com.sc.util.TooltipSC.more(list, Lang.trOr("sc.manual.generator." + type.name().toLowerCase(java.util.Locale.ROOT), null),

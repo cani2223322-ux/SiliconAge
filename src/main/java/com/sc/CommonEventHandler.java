@@ -73,12 +73,16 @@ public class CommonEventHandler {
     /**
      * A portal resets the client's abilities: the Exo flight has to be sent again. The searchlight's
      * light left in the old world goes out (there is no event before the move; clearLight finds the
-     * old world by the dimension stored with the light).
+     * old world by the dimension stored with the light). A blade block ends: the client's new player
+     * entity holds nothing in use, so it would never send the release.
      */
     @SubscribeEvent
     public void onDimensionChange(PlayerEvent.PlayerChangedDimensionEvent event) {
         com.sc.item.ArmorLogicSC.clearLight(event.player);
         com.sc.item.ArmorLogicSC.resendFlight(event.player);
+        if (!event.player.worldObj.isRemote && event.player.isUsingItem() && com.sc.item.BladeLogicSC.held(event.player) != null) {
+            com.sc.item.BladeLogicSC.stopBlock(event.player);   // the client lost its block with the old player entity
+        }
     }
 
     /** Logging out: the searchlight's light goes out with the player. */

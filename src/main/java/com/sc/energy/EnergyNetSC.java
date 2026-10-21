@@ -692,7 +692,14 @@ public final class EnergyNetSC {
             int[] demand = new int[to.size()];
             int[] loss = new int[to.size()];
             for (int i = 0; i < demand.length; i++) {
-                demand[i] = Math.max(0, to.get(i).tile.demandedEnergy());
+                TileEntityEnergyBase t = to.get(i).tile;
+                int want = Math.max(0, t.demandedEnergy());
+                if (want > 0 && !com.sc.util.ConfigSC.explosions && !t.acceptsAnyVoltage() && t.inputTier().excessTiersOf(voltage) > 0) {
+                    // explosions off: an overloaded receiver only smokes (the probe) and refuses - its share goes to the rest
+                    t.receiveEnergy(to.get(i).inFace(), voltage.getVoltage(), 1, false);
+                    continue;
+                }
+                demand[i] = want;
                 loss[i] = type.lossPerBlock * (fromBuffers ? to.get(i).bufferDistance : to.get(i).distance);
             }
             int[] give = EnergySplitSC.split(budget, demand, loss);

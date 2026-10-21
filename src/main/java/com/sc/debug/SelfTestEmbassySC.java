@@ -648,7 +648,7 @@ final class SelfTestEmbassySC {
                 && EmbassyRulesSC.BACK_TICKS == 3L * SettlementSC.DAY && EmbassyRulesSC.RESCUE_TICKS == 2L * SettlementSC.DAY && EmbassyRulesSC.CONFIRM_TICKS == 100
                 && EmbassyRulesSC.GUARANTEE_PCT == 150 && EmbassyRulesSC.GUARANTEE_PENALTY == -30 && EmbassyRulesSC.NEAR_DISPATCHER == 8
                 && EmbassyRulesSC.RIDE_KEYS.length == 7 && EmbassyRulesSC.RIDE_BASE.length == 7 && EmbassyRulesSC.RIDE_LEVEL.length == 7
-                && EmbassyRulesSC.REFUSE_KEYS.length == 18 && EmbassyRulesSC.TARGET_FIRST_PURE == -2 && EmbassyRulesSC.TARGET_MARK == -3;
+                && EmbassyRulesSC.REFUSE_KEYS.length == 19 && EmbassyRulesSC.R_HAS_BACK == 18 && EmbassyRulesSC.TARGET_FIRST_PURE == -2 && EmbassyRulesSC.TARGET_MARK == -3;
         boolean phases = EmbassyRulesSC.phaseAt(-1) == EmbassyRulesSC.PHASE_IDLE && EmbassyRulesSC.phaseAt(0) == EmbassyRulesSC.PHASE_COUNTDOWN
                 && EmbassyRulesSC.phaseAt(199) == EmbassyRulesSC.PHASE_COUNTDOWN && EmbassyRulesSC.phaseAt(200) == EmbassyRulesSC.PHASE_VORTEX
                 && EmbassyRulesSC.phaseAt(599) == EmbassyRulesSC.PHASE_VORTEX && EmbassyRulesSC.phaseAt(600) == EmbassyRulesSC.PHASE_COOL
@@ -693,7 +693,8 @@ final class SelfTestEmbassySC {
                 && !EmbassyRulesSC.counted(EmbassyRulesSC.RIDE_RESCUE) && EmbassyRulesSC.counted(EmbassyRulesSC.RIDE_BACK) && !EmbassyRulesSC.counted(-1)
                 && EmbassyRulesSC.roundTrip(EmbassyRulesSC.RIDE_INTRO) && !EmbassyRulesSC.roundTrip(EmbassyRulesSC.RIDE_OTHER)
                 && EmbassyRulesSC.levelOf(-1) == ReputationSC.HONOURED + 1 && "sc.flight.ride.none".equals(EmbassyRulesSC.rideKey(7))
-                && "sc.flight.refuse.notHere".equals(EmbassyRulesSC.refuseKey(-1)) && "sc.flight.refuse.channel".equals(EmbassyRulesSC.refuseKey(EmbassyRulesSC.R_CHANNEL));
+                && "sc.flight.refuse.notHere".equals(EmbassyRulesSC.refuseKey(-1)) && "sc.flight.refuse.channel".equals(EmbassyRulesSC.refuseKey(EmbassyRulesSC.R_CHANNEL))
+                && "sc.flight.refuse.hasBack".equals(EmbassyRulesSC.refuseKey(EmbassyRulesSC.R_HAS_BACK));
         String matrix = refusals();
         long day = SettlementSC.DAY;
         boolean rescue = EmbassyRulesSC.rescuable(true, 1000L, 1000L + 2 * day, -1L) && !EmbassyRulesSC.rescuable(true, 1000L, 1001L + 2 * day, -1L)

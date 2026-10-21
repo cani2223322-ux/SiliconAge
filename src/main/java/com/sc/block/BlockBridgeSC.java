@@ -146,7 +146,17 @@ public class BlockBridgeSC extends Block {
         ItemStack held = player.getCurrentEquippedItem();
         if (meta == GAS_PORT && te instanceof TileEntityBridgeGasPortSC && com.sc.util.FluidHandSC.isContainer(held)) {
             if (!world.isRemote) {
-                com.sc.util.FluidHandSC.use(world, x, y, z, player, (TileEntityBridgeGasPortSC) te, held);
+                int[] cp = ((TileEntityBridgeGasPortSC) te).controllerPos();
+                TileEntity ct = cp == null || !world.blockExists(cp[0], cp[1], cp[2]) ? null : world.getTileEntity(cp[0], cp[1], cp[2]);
+                if (ct instanceof TileEntityBridgeControllerSC && !((TileEntityBridgeControllerSC) ct).ownerless()
+                        && !((TileEntityBridgeControllerSC) ct).trusted(player)
+                        && !net.minecraftforge.fluids.FluidContainerRegistry.isFilledContainer(held)) {
+                    // МС-2: strangers only pour in (a full bucket / cell) - an empty or tank-like container would drain the tanks
+                    player.addChatComponentMessage(new com.sc.bridge.BridgeMsgSC("sc.bridge.refuse.access",
+                            ((TileEntityBridgeControllerSC) ct).getOwner()).chat());
+                } else {
+                    com.sc.util.FluidHandSC.use(world, x, y, z, player, (TileEntityBridgeGasPortSC) te, held);
+                }
             }
             return true;
         }

@@ -616,9 +616,9 @@ public final class DrillLogicSC {
             }
         }
 
-        /** Drops to the linked chest (link / cross link), the inventory (magnet) or the ground at the clicked block; XP to the player. */
+        /** Drops to the linked chest (link; cross link: from another dimension too), the inventory (magnet) or the ground at the clicked block; XP to the player. */
         void deliver(double x, double y, double z) {
-            LinkTarget link = ItemDrillSC.isEnabled(drill, DrillFeature.LINK) || on(p, drill, DrillFeature.CROSS_LINK) ? linked(p, drill) : null;
+            LinkTarget link = ItemDrillSC.isEnabled(drill, DrillFeature.LINK) ? linked(p, drill) : null;   // LINK is the switch; CROSS_LINK only widens it (linked)
             IInventory chest = link == null ? null : link.inv;
             int smMb = DrillFeature.CROSS_LINK.gasMb();
             boolean warned = false;
@@ -1127,7 +1127,11 @@ public final class DrillLogicSC {
         }
         int[] next = DrillZoneSC.nextMode(ItemDrillSC.blackHoleSize(drill), ItemDrillSC.tunnelDepth(drill), delta,
                 ToolLevelSC.effectiveLevel(p, drill));
-        ItemDrillSC.setBlackHoleSize(drill, next[0]);
+        if (next[0] == 0) {
+            ItemDrillSC.setEnabled(drill, DrillFeature.BLACK_HOLE, false);   // ИН-1: remembers the zone for the key
+        } else {
+            ItemDrillSC.setBlackHoleSize(drill, next[0]);
+        }
         ItemDrillSC.setTunnelDepth(drill, next[1]);
         p.worldObj.playSoundAtEntity(p, "random.click", 0.3F, next[0] > 0 ? 0.6F + next[0] * 0.05F : 0.5F);
         p.inventoryContainer.detectAndSendChanges();

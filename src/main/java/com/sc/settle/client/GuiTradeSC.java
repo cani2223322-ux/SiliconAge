@@ -622,7 +622,7 @@ public class GuiTradeSC extends GuiContainer {
         buyBtn.displayString = Lang.tr(declining() ? "sc.flight.decline" : back ? "sc.flight.useBack" : "sc.flight.buy");
         buyBtn.enabled = declining() || open && (back || myChips >= r.price);
         roundBtn.displayString = Lang.tr("sc.flight.round");
-        roundBtn.enabled = open && r.round > 0 && myChips >= r.round;
+        roundBtn.enabled = open && r.round > 0 && myChips >= r.round && backId < 0;   // ПЯ-12: one return half at a time
         friendBtn.displayString = Lang.tr("sc.flight.friend");
         friendBtn.enabled = fhas && r != null && EmbassyRulesSC.outbound(r.ride) && guarantor && guarLeft > 0 && !friends.isEmpty() && r.guar > 0
                 && myChips >= r.guar;
@@ -1361,7 +1361,8 @@ public class GuiTradeSC extends GuiContainer {
         } else if (buyBtn != null && buyBtn.visible && inside(buyBtn, mx, my) && r != null) {
             l.add(r.ride == EmbassyRulesSC.RIDE_BACK ? Lang.tr("sc.flight.useBack.tip") : Lang.tr("sc.flight.buy.tip", r.price));
         } else if (roundBtn != null && roundBtn.visible && inside(roundBtn, mx, my) && r != null) {
-            l.add(r.round > 0 ? Lang.tr("sc.flight.round.tip", r.round, EmbassyRulesSC.BACK_TICKS / SettlementSC.DAY) : Lang.tr("sc.flight.round.none"));
+            l.add(backId >= 0 ? Lang.tr(EmbassyRulesSC.refuseKey(EmbassyRulesSC.R_HAS_BACK))
+                    : r.round > 0 ? Lang.tr("sc.flight.round.tip", r.round, EmbassyRulesSC.BACK_TICKS / SettlementSC.DAY) : Lang.tr("sc.flight.round.none"));
         } else if (friendBtn != null && friendBtn.visible && inside(friendBtn, mx, my)) {
             l.add(fplace != FlightTargetsSC.PLACE_EMBASSY ? Lang.tr("sc.flight.friend.embassy")
                     : !guarantor ? Lang.tr("sc.flight.friend.level", levelName(EmbassyRulesSC.GUARANTOR_LEVEL))

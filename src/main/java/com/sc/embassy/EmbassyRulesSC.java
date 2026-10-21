@@ -84,9 +84,10 @@ public final class EmbassyRulesSC {
 
     /** Why a ride is refused (lang sc.flight.refuse.<REFUSE_KEYS[code]>); OK none. Append only. */
     public static final int OK = 0, R_OFF = 1, R_ENEMY = 2, R_VIOLATOR = 3, R_LEVEL = 4, R_LIMIT = 5, R_USED = 6, R_NO_MARK = 7, R_NO_TARGET = 8,
-            R_SIGNAL = 9, R_CHIPS = 10, R_BUSY = 11, R_NOT_HERE = 12, R_NO_BACK = 13, R_FRIEND = 14, R_PENDING = 15, R_CONFIRM = 16, R_CHANNEL = 17;
+            R_SIGNAL = 9, R_CHIPS = 10, R_BUSY = 11, R_NOT_HERE = 12, R_NO_BACK = 13, R_FRIEND = 14, R_PENDING = 15, R_CONFIRM = 16, R_CHANNEL = 17,
+            R_HAS_BACK = 18;
     public static final String[] REFUSE_KEYS = {"ok", "off", "enemy", "violator", "level", "limit", "used", "noMark", "noTarget", "signal", "chips",
-            "busy", "notHere", "noBack", "friend", "pending", "confirm", "channel"};
+            "busy", "notHere", "noBack", "friend", "pending", "confirm", "channel", "hasBack"};
 
     private EmbassyRulesSC() {
     }

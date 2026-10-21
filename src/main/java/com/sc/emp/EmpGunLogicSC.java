@@ -95,6 +95,14 @@ public final class EmpGunLogicSC {
     /** ItemEmpGunSC.onItemRightClick: start the charge-up / the stream (player.setItemInUse), or refuse. */
     public static ItemStack rightClick(ItemStack stack, World world, EntityPlayer player) {
         long now = world.getTotalWorldTime();
+        if (!world.isRemote && player instanceof EntityPlayerMP) {
+            Use cur = USES.get(player);
+            if (cur != null && cur.mode == EmpMode.SIPHON && inUse(player, cur.gun)) {
+                // the client never right-clicks while it still uses the gun: its use was dropped - end the stream on both sides
+                EmpSiphonSC.stop((EntityPlayerMP) player, cur, "sc.emp.siphon.stop.released");
+                return stack;
+            }
+        }
         Map<EntityPlayer, Long> act = activity(world);
         Long last = act.get(player);
         act.put(player, now);
@@ -219,6 +227,9 @@ public final class EmpGunLogicSC {
     public static void cancelCharge(EntityPlayerMP p, ItemStack gun, boolean told) {
         Use u = USES.get(p);
         if (u == null) {
+            if (inUse(p, gun)) {
+                endUse(p, gun);                                 // a use the server lost track of: the cancel key always ends it
+            }
             return;
         }
         if (u.mode == EmpMode.SIPHON) {
@@ -270,7 +281,7 @@ public final class EmpGunLogicSC {
         say(p, "sc.emp.module.removed", moduleName(m));
     }
 
-    /** Server: forget a player's stream / charge-up state (logout, death, server stop: null = everyone). */
+    /** Server: forget a player's stream / charge-up state and end the use (logout, respawn, dimension change; server stop: null = everyone). */
     public static void forget(EntityPlayer p) {
         if (p == null) {
             USES.clear();
@@ -284,6 +295,10 @@ public final class EmpGunLogicSC {
         if (u != null && u.mode == EmpMode.SIPHON) {
             EmpSiphonSC.flush(p, u, EmpSC.now(p));              // the stream's EU / heat still reach the gun (saved after the logout event)
             EmpSiphonSC.fxOff(p, u);
+        }
+        ItemStack g = ItemEmpGunSC.held(p);
+        if (p instanceof EntityPlayerMP && inUse(p, g)) {
+            endUse((EntityPlayerMP) p, g);                      // a dimension change / logout: the server's use goes too
         }
         ACTIVITY_SERVER.remove(p);
         SAID.remove(p);

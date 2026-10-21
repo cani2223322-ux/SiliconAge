@@ -152,7 +152,8 @@ public class ArmorClientSC {
             mc.displayGuiScreen(new GuiArmorSC());
         }
         bridgeKeys(mc);
-        if (KEY_DASH.isPressed() && mc.currentScreen == null && ArmorLogicSC.active(mc.thePlayer, ArmorFeature.DASH)) {
+        if (KEY_DASH.isPressed() && mc.currentScreen == null && mc.thePlayer.ridingEntity == null
+                && ArmorLogicSC.active(mc.thePlayer, ArmorFeature.DASH)) {
             ArmorNetSC.CHANNEL.sendToServer(new ArmorNetSC.Message(ArmorNetSC.DASH, 0));
         }
         if (KEY_PROFILE != null && KEY_PROFILE.isPressed() && mc.currentScreen == null) {

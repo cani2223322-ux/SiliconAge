@@ -32,8 +32,9 @@ import net.minecraftforge.common.util.FakePlayer;
  * <p>
  * It looks at the pure layout - the lithographs of the plateau cells within LITHO_CELLS of the player's (SEARCH_BLOCKS x 4) and
  * the Vaults of the 4 x 4 blocks of crossings within SEARCH_BLOCKS of his - and passes over a site whose structure was made
- * empty (ground explored before Ф3 / Ф4: no ruin there). A reading costs a use; «nothing near» costs none. The direction is
- * from the player's feet, north = -Z (n, ne, e, se, s, sw, w, nw - lang sc.finder.dir.*).
+ * empty or whose ground was explored before (Ф3 / Ф4: no ruin there - its start, made later, will be empty; gone). A reading
+ * costs a use; «nothing near» costs none. The direction is from the player's feet, north = -Z (n, ne, e, se, s, sw, w, nw -
+ * lang sc.finder.dir.*).
  */
 public class ItemRuinFinderSC extends Item {
 
@@ -103,14 +104,17 @@ public class ItemRuinFinderSC extends Item {
         for (int cx = cx0 - LITHO_CELLS; cx <= cx0 + LITHO_CELLS; cx++) {
             for (int cz = cz0 - LITHO_CELLS; cz <= cz0 + LITHO_CELLS; cz++) {
                 RuinLayoutSC.LithoSite s = RuinLayoutSC.lithoSite(seed, cx, cz);
-                if (s == null || gen != null && empty(gen.lithographs().startAt(s.x >> 4, s.z >> 4))) {
+                if (s == null) {
                     continue;
                 }
                 double d = dist2(px, pz, s.x, s.z);
-                if (d < lithoD) {
-                    lithoD = d;
-                    litho = new int[]{s.x, s.z};
+                int r = RuinLayoutSC.HALL_HALF;                 // MapGenLithographSC.getStructureStart's box
+                if (d >= lithoD || gen != null
+                        && gone(world, gen.lithographs().startAt(s.x >> 4, s.z >> 4), s.x - r, s.z - r, s.x + r, s.z + r)) {
+                    continue;
                 }
+                lithoD = d;
+                litho = new int[]{s.x, s.z};
             }
         }
         // the nearest Vault
@@ -124,15 +128,13 @@ public class ItemRuinFinderSC extends Item {
                 if (v == null) {
                     continue;
                 }
-                int x = v[0] * SubstrateTerrainSC.GRID, z = v[1] * SubstrateTerrainSC.GRID;
-                if (gen != null && empty(gen.vaults().startAt(x >> 4, z >> 4))) {
-                    continue;
-                }
+                int x = v[0] * SubstrateTerrainSC.GRID, z = v[1] * SubstrateTerrainSC.GRID, r = RuinLayoutSC.NODE_HALF;
                 double d = dist2(px, pz, x, z);
-                if (d < vaultD) {
-                    vaultD = d;
-                    vault = new int[]{x, z};
+                if (d >= vaultD || gen != null && gone(world, gen.vaults().startAt(x >> 4, z >> 4), x - r, z - r, x + r, z + r)) {
+                    continue;                                   // the box: MapGenVaultSC.getStructureStart's
                 }
+                vaultD = d;
+                vault = new int[]{x, z};
             }
         }
         if (litho == null && vault == null) {
@@ -157,9 +159,16 @@ public class ItemRuinFinderSC extends Item {
         return dx * dx + dz * dz;
     }
 
-    /** A start made empty (explored ground): no ruin there. Not made yet - the pure site stands. */
-    private static boolean empty(StructureRuinStartSC st) {
-        return st != null && !st.isSizeableStructure();
+    /**
+     * No ruin at the site: its start was made empty (explored ground), or - not made yet - a chunk of its box [x0..x1] x [z0..z1]
+     * is on disk or loaded already (old land: getStructureStart will make it empty when the player comes). exploredNoCreate:
+     * never makes an empty region file for land far off. Server.
+     */
+    private static boolean gone(World w, StructureRuinStartSC st, int x0, int z0, int x1, int z1) {
+        if (st != null) {
+            return !st.isSizeableStructure();
+        }
+        return StructureRuinStartSC.exploredNoCreate(w, x0, z0, x1, z1);
     }
 
     /** The Substrate's own generator behind a server world (null if another mod wrapped it). */

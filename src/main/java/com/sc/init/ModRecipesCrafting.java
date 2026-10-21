@@ -932,7 +932,8 @@ public final class ModRecipesCrafting {
      *    storage's EU (capped on placement); its upgrades have no place there and go back to the crafter
      *    (CarryReturns);
      *  - GENERATOR: a reactor round generators - their EU summed, their fuel into the new one's tank for
-     *    that fluid (a fuel it can't burn has nowhere to go); the ignition starts over;
+     *    that fluid (a fuel it can't burn has nowhere to go); the ignition starts over; their upgrades go
+     *    back to the crafter (CarryReturns);
      *  - EMPTY: a part that keeps no fluid round a tank (a quarry module, an upgrade, the gas port) - only
      *    an empty tank fits: a fluid could not come back as an item.
      * Generic materials go by their ore names as in OreRecipes.shaped; the carried blocks stay exact stacks.
@@ -1069,10 +1070,10 @@ public final class ModRecipesCrafting {
             return type.kind == GeneratorType.Kind.DUAL_FLUID && fluid.equals(type.fuel2FluidName);
         }
 
-        /** ENERGY: the upgrades of the storages in `grid` - they have no place in the result. */
+        /** ENERGY / GENERATOR: the upgrades of the storages / generators in `grid` - they have no place in the result. */
         java.util.List<ItemStack> leftovers(net.minecraft.inventory.IInventory grid) {
             java.util.List<ItemStack> out = new java.util.ArrayList<ItemStack>();
-            if (mode != ENERGY) {
+            if (mode != ENERGY && mode != GENERATOR) {
                 return out;
             }
             for (int i = 0; i < grid.getSizeInventory(); i++) {
@@ -1093,7 +1094,7 @@ public final class ModRecipesCrafting {
     }
 
     /**
-     * Gives the crafter back what a CarryRecipe's result has no place for (a storage's upgrades). The
+     * Gives the crafter back what a CarryRecipe's result has no place for (a storage's / generator's upgrades). The
      * grid is still whole when the event fires (SlotCrafting fires it before using the ingredients up).
      */
     public static final class CarryReturns {
@@ -1105,7 +1106,8 @@ public final class ModRecipesCrafting {
             }
             net.minecraft.inventory.InventoryCrafting grid = (net.minecraft.inventory.InventoryCrafting) e.craftMatrix;
             for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
-                if (o instanceof CarryRecipe && ((CarryRecipe) o).mode == CarryRecipe.ENERGY && ((CarryRecipe) o).matches(grid, e.player.worldObj)) {
+                if (o instanceof CarryRecipe && (((CarryRecipe) o).mode == CarryRecipe.ENERGY || ((CarryRecipe) o).mode == CarryRecipe.GENERATOR)
+                        && ((CarryRecipe) o).matches(grid, e.player.worldObj)) {
                     for (ItemStack u : ((CarryRecipe) o).leftovers(grid)) {
                         if (!e.player.inventory.addItemStackToInventory(u) && u.stackSize > 0) {
                             e.player.dropPlayerItemWithRandomChoice(u, false);

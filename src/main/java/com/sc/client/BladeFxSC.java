@@ -3,7 +3,6 @@ package com.sc.client;
 import org.lwjgl.opengl.GL11;
 
 import com.sc.item.BladeLogicSC;
-import com.sc.util.ArmorGasSC;
 import com.sc.util.BladeFeature;
 import com.sc.util.ToolGasSC;
 import com.sc.util.ToolLevelSC;
@@ -32,7 +31,7 @@ public class BladeFxSC {
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayer p = mc.thePlayer;
         if (p == null || mc.theWorld == null || !ToolLevelSC.isBlade(BladeLogicSC.held(p))
-                || !BladeLogicSC.active(p, BladeFeature.HUNTER_SENSE) || !ToolGasSC.has(p, ArmorGasSC.Gas.KRYPTON, 1)) {
+                || !BladeLogicSC.active(p, BladeFeature.HUNTER_SENSE) || !ToolGasSC.has(p, BladeFeature.HUNTER_SENSE.gas(), BladeFeature.HUNTER_SENSE.gasMb())) {
             return;
         }
         float pt = event.partialTicks;

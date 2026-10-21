@@ -179,12 +179,24 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
         }
     }
 
-    /** One item charged from this battery's budget - never a battery (nor itself). */
+    /**
+     * One item charged from this battery's budget - never a battery (nor itself). Up to EVERY calls
+     * (one a tick it waited): an IC2 item takes at most its transfer limit a call; a suit takes all
+     * it wants with the first, and the next gives nothing.
+     */
     private static int give(ItemStack target, int max, ItemStack self) {
         if (target == null || target == self || max <= 0 || isBattery(target) || ItemChargeSC.isBattery(target)) {
             return 0;
         }
-        return Math.max(0, Math.min(max, ItemChargeSC.charge(target, max, tierOf(self))));
+        int used = 0;
+        for (int k = 0; k < EVERY && used < max; k++) {
+            int t = Math.max(0, Math.min(max - used, ItemChargeSC.charge(target, max - used, tierOf(self))));
+            if (t <= 0) {
+                break;
+            }
+            used += t;
+        }
+        return used;
     }
 
     // ------------------------------------------------------------------ look

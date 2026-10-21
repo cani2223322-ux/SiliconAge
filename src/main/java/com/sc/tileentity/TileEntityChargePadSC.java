@@ -120,23 +120,51 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
     private int chargePlayer(EntityPlayer p, int budget) {
         int start = budget;
         for (int i = 3; i >= 0 && budget > 0; i--) {                  // helmet first, like the HUD
-            budget -= chargeItem(p.inventory.armorInventory[i], budget);
+            budget -= chargeWhole(p.inventory.armorInventory[i], budget);
         }
         ItemStack held = p.getCurrentEquippedItem();
         // a blocking blade keeps its block (getItemInUse() is client-only - isUsingItem() works on
         // a dedicated server, and the item in use is always the held one)
         if (!p.isUsingItem()) {
-            budget -= chargeItem(held, budget);
+            budget -= chargeWhole(held, budget);
         }
         for (ItemStack s : p.inventory.mainInventory) {
             if (budget <= 0) {
                 break;
             }
             if (s != held) {
-                budget -= chargeItem(s, budget);
+                budget -= chargeWhole(s, budget);
             }
         }
         return start - budget;
+    }
+
+    /** The slots' items from one round's budget, each charged as for the whole round (chargeWhole). @return EU taken */
+    @Override
+    protected int chargeSlotItem(int max) {
+        int start = max;
+        for (int k = 0; k < chargeSlots() && max > 0; k++) {
+            max -= chargeWhole(getStackInSlot(chargeSlotIndex(k)), max);
+        }
+        return start - max;
+    }
+
+    /**
+     * One item charged for a whole round: up to EVERY calls of chargeItem (one a tick the round
+     * stands for) - a battery takes at most its rate a call, an IC2 item its transfer limit, so
+     * one call every EVERY ticks would charge them at a fifth of the speed. An item that takes all
+     * it wants at once (a suit) stops after the first: the next call gives nothing. @return EU taken
+     */
+    private int chargeWhole(ItemStack s, int budget) {
+        int used = 0;
+        for (int k = 0; k < EVERY && used < budget; k++) {
+            int t = chargeItem(s, budget - used);
+            if (t <= 0) {
+                break;
+            }
+            used += t;
+        }
+        return used;
     }
 
     // ---- NBT: the lit top and the charge mode go to the client with the block ----

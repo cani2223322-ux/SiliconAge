@@ -1254,6 +1254,22 @@ public class GuiMachineSC extends GuiContainer {
         return RecipeRegistry.findMatch(machine.getMachineType(), in, machine.getTank(0).getFluid(), machine.getTank(1).getFluid());
     }
 
+    /**
+     * Steam the Boiler makes, mB a tick, with its overclockers and the config's speed: the MV boiler twice the LV's.
+     * Nothing in yet - its first recipe (all of a boiler's give the same steam in the same time); none at all - 0.
+     */
+    private double boilRate() {
+        com.sc.machine.MachineRecipe r = boilRecipe();
+        if (r == null) {
+            List<com.sc.machine.MachineRecipe> all = RecipeRegistry.recipesFor(machine.getMachineType());
+            r = all.isEmpty() ? null : all.get(0);
+        }
+        if (r == null || r.fluidOutputA == null) {
+            return 0;
+        }
+        return r.fluidOutputA.amount / (double) machine.effectiveTicks(r);
+    }
+
     /** What the Boiler burns: 0 coal, 1 diesel, -1 neither in. */
     private int boilFuel() {
         com.sc.machine.MachineRecipe r = boilRecipe();
@@ -1287,8 +1303,10 @@ public class GuiMachineSC extends GuiContainer {
             TextFitSC.drawCentered(fontRendererObj, chemLabel(ownTanks[k], want[k]), ownTankX[k], TANK_LABEL_Y, GuiTankGaugeSC.WIDTH - 7,
                     GuiHoloSC.LABEL, false, guiLeft, guiTop);
         }
-        smallFit(Lang.tr("sc.gui.boil.rate"), BOIL_X + 17, BOIL_Y + BOIL_H + 3, WATER_X - BOIL_X - 18, 0xE6F0FA);
-        smallFit(Lang.tr("sc.gui.boil.turbine"), BOIL_X + 17, BOIL_Y + BOIL_H + 10, WATER_X - BOIL_X - 18, 0x6AA8C8);
+        double rate = boilRate();
+        int tr = com.sc.energy.GeneratorType.STEAM_TURBINE.fuelRatePerTick;
+        smallFit(Lang.tr("sc.gui.boil.rate", Math.round(rate)), BOIL_X + 17, BOIL_Y + BOIL_H + 3, WATER_X - BOIL_X - 18, 0xE6F0FA);
+        smallFit(Lang.tr("sc.gui.boil.turbine", rate / tr), BOIL_X + 17, BOIL_Y + BOIL_H + 10, WATER_X - BOIL_X - 18, 0x6AA8C8);
     }
 
     /** Whether the Refinery's shown recipe is the catalysed one (platinum in: photoresist and plastics). */
@@ -2118,7 +2136,9 @@ public class GuiMachineSC extends GuiContainer {
                 lines.add(Lang.tr("sc.gui.boil.run", r.fluidInputA == null ? 0 : r.fluidInputA.amount, fuel,
                         r.fluidOutputA == null ? 0 : r.fluidOutputA.amount, machine.effectiveTicks(r) / 20F));
             }
-            lines.add(Lang.tr("sc.gui.boil.hint"));
+            double rate = boilRate();
+            int tr = com.sc.energy.GeneratorType.STEAM_TURBINE.fuelRatePerTick;
+            lines.add(Lang.tr("sc.gui.boil.hint", Math.round(rate), tr, rate / tr));
             return lines;
         }
         if (refi && (GuiGaugeSC.isOver(CHEM_X, CAPTION_Y - 2, 5 * (REFI_BADGE_W + 2), 11, mouseX, mouseY)

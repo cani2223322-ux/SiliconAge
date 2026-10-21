@@ -184,7 +184,7 @@ public class GuiWirelessSC extends GuiContainer {
     /** Two worlds side by side, a node in each; entangled particles over the divide while the pair is up. */
     private void quantumScene(int x, int y, float t) {
         int[] here = dimColors(mc.theWorld == null ? 0 : mc.theWorld.provider.dimensionId);
-        int[] there = dimColors(te.partnerPos()[3]);
+        int[] there = te.allowed(mc.thePlayer) ? dimColors(te.partnerPos()[3]) : here;   // a stranger isn't told the other world
         rect(x + 1, y + 1, 49, SCENE_H - 2, here[0]);
         rect(x + 51, y + 1, 50, SCENE_H - 2, there[0]);
         rect(x + 1, y + SCENE_H - 7, 49, 6, here[1]);
@@ -300,7 +300,7 @@ public class GuiWirelessSC extends GuiContainer {
             small(Lang.tr(tx ? "sc.wl.nolink.tx" : "sc.wl.nolink.rx"), 14, 89, 190, GuiHoloSC.IDLE);
             return;
         }
-        small(Lang.tr("sc.wl.coords", p[0], p[1], p[2]), 14, 54, 86, dim);
+        small(te.allowed(mc.thePlayer) ? Lang.tr("sc.wl.coords", p[0], p[1], p[2]) : Lang.tr("sc.wl.coords.hidden"), 14, 54, 86, dim);
         int range = TileEntityWirelessSC.range(linkTier());
         small(range == Integer.MAX_VALUE ? Lang.tr("sc.wl.distinf", te.getDistance())
                 : Lang.tr("sc.wl.dist", te.getDistance(), range), 14, 62, 86, c);
@@ -333,8 +333,11 @@ public class GuiWirelessSC extends GuiContainer {
             small(Lang.tr("sc.wl.missing.1"), 14, 54, 86, GuiHoloSC.WARN);
             small(Lang.tr("sc.wl.missing.2"), 14, 60, 86, GuiHoloSC.WARN);
         } else {
-            small(Lang.tr("sc.wl.other", dimName(p[3])), 14, 54, 86, dim);
-            small(Lang.tr("sc.wl.coords", p[0], p[1], p[2]), 14, 60, 86, dim);
+            boolean see = te.allowed(mc.thePlayer);         // the other half's world and place: only for those with access
+            small(see ? Lang.tr("sc.wl.other", dimName(p[3])) : Lang.tr("sc.wl.coords.hidden"), 14, 54, 86, dim);
+            if (see) {
+                small(Lang.tr("sc.wl.coords", p[0], p[1], p[2]), 14, 60, 86, dim);
+            }
             small(Lang.tr(te.isGiving() ? "sc.wl.gives" : "sc.wl.takes", te.getFlow()), 14, 68, 86, GuiHoloSC.OK);
         }
         small(Lang.tr("sc.wl.noloss"), 14, 76, 86, dim);

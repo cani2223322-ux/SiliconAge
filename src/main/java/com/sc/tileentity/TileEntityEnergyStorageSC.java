@@ -1132,12 +1132,12 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         return chargeItem(stack.copy(), probe) <= 0;
     }
 
-    /** Weapons and armor pieces go in the charge slot (isItemValidForSlot adds the tier rule). */
+    /** Weapons (the ПЭ-1 too) and armor pieces go in the charge slot (isItemValidForSlot adds the tier rule). */
     public static boolean isChargeable(ItemStack stack) {
         return stack != null && (stack.getItem() instanceof ItemWeaponSC || stack.getItem() instanceof com.sc.item.ItemArmorSC
                 || stack.getItem() instanceof com.sc.item.ItemBladeSC || stack.getItem() instanceof com.sc.item.ItemDrillSC
                 || com.sc.item.ItemWrenchSC.isElectric(stack) || com.sc.item.ItemBatterySC.isBattery(stack)
-                || com.sc.item.ItemBridgeRemoteSC.isRemote(stack));
+                || com.sc.item.ItemBridgeRemoteSC.isRemote(stack) || com.sc.emp.ItemEmpGunSC.isGun(stack));
     }
 
     // ---- NBT ----
