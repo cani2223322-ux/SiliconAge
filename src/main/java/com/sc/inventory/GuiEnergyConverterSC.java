@@ -659,7 +659,7 @@ public class GuiEnergyConverterSC extends GuiContainer {
                 sb.append(sb.length() == 0 ? "" : "/").append(names[i]);
             }
         }
-        return new Nb(mod + " · " + sb, kindColour(kinds));
+        return new Nb(mod + " • " + sb, kindColour(kinds));
     }
 
     /** The energies a tile class speaks, by its interfaces' names (no other mod's class is loaded for it). */

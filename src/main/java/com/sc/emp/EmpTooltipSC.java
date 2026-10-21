@@ -154,7 +154,7 @@ public final class EmpTooltipSC {
     public static String siphonRates(boolean wide) {
         StringBuilder sb = new StringBuilder();
         for (ArmorSuit suit : ArmorSuit.values()) {
-            sb.append(sb.length() > 0 ? " · " : "").append(Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)))
+            sb.append(sb.length() > 0 ? " • " : "").append(Lang.tr("sc.suit." + suit.name().toLowerCase(Locale.ROOT)))
                     .append(' ').append(siphonPct(suit, wide)).append('%');
         }
         return sb.toString();

@@ -811,7 +811,7 @@ public final class BookWorldSC {
                 Lang.tr("sc.manual.world.t.can"));
         for (int lv = ReputationSC.VIOLATOR; lv <= ReputationSC.HONOURED; lv++) {
             float m = ReputationSC.priceMultiplier(lv);
-            p.row(null, levelName(lv), "×" + multiplier(m), String.valueOf(Math.max(1, (int) Math.ceil(PRICE_EXAMPLE * (double) m - 1e-6))),
+            p.row(null, levelName(lv), "x" + multiplier(m), String.valueOf(Math.max(1, (int) Math.ceil(PRICE_EXAMPLE * (double) m - 1e-6))),
                     Lang.tr(ReputationSC.buys(lv) ? "sc.manual.world.cell.buysells" : "sc.manual.world.cell.sells"));
         }
         e.add(p);
@@ -1009,7 +1009,7 @@ public final class BookWorldSC {
                 Lang.tr("sc.manual.world.t.prices"));
         for (int lv = ReputationSC.ENEMY; lv <= ReputationSC.HONOURED; lv++) {
             t.row(null, levelName(lv), levelRange(lv), Lang.tr("sc.manual.world.trust.opens." + ReputationSC.LEVEL_KEYS[lv]),
-                    lv == ReputationSC.ENEMY ? "-" : "×" + multiplier(ReputationSC.priceMultiplier(lv)));
+                    lv == ReputationSC.ENEMY ? "-" : "x" + multiplier(ReputationSC.priceMultiplier(lv)));
         }
         e.add(t);
 

@@ -43,6 +43,7 @@ public final class SelfTestSC {
             bookBuilds();
             bookTexts();
             langQuotes();
+            langFontTable();
             fieldShapes();
             fluidDrops();
             energyStorage();
@@ -519,6 +520,53 @@ public final class SelfTestSC {
         }
         check(bad.length() == 0 && quotedRu > 400 && quotedEn > 40, "lang quotes: no « » in any value of en_US / ru_RU (ascii.png glyphs), "
                 + quotedRu + " Russian values quoted „…“, " + quotedEn + " English “…”, all pairs closed, the bridge's named title " + named + bad);
+    }
+
+    /**
+     * Vanilla FontRenderer's own 256-character table (net.minecraft.client.gui.FontRenderer, 1.7.10): what it draws from
+     * ascii.png. Font packs that redraw the sheet's non-ASCII cells as Cyrillic (shrift-0-standart, the Thermal Expansion
+     * fix) turn each of those into a letter (× into „Ю“, ± into „ё“); a character outside the table comes from the
+     * unicode pages and keeps its look.
+     */
+    static final String FONT_TABLE = "ÀÁÂÈÊËÍÓÔÕÚßãõğİıŒœŞşŴŵžȇ\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
+            + " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u0000"
+            + "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐"
+            + "└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞∅∈∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u0000";
+
+    /** True for a character the vanilla font takes from ascii.png's non-ASCII cells (see FONT_TABLE). */
+    static boolean fontPackUnsafe(char c) {
+        return c >= 128 && FONT_TABLE.indexOf(c) >= 0;
+    }
+
+    /**
+     * No value of en_US / ru_RU uses a non-ASCII character of FONT_TABLE: multipliers and sizes are "x2" / "3x3", a spread
+     * "+/-", separators "•", degrees "˚" - all of them ASCII or from the unicode pages.
+     */
+    private static void langFontTable() {
+        StringBuilder bad = new StringBuilder();
+        int values = 0, bullets = 0, spreads = 0;
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            for (java.util.Map.Entry<String, String> e : langMap(lang).entrySet()) {
+                String v = e.getValue();
+                values++;
+                for (int i = 0; i < v.length(); i++) {
+                    if (fontPackUnsafe(v.charAt(i))) {
+                        bad.append(' ').append(lang).append(':').append(e.getKey()).append(" U+").append(String.format("%04X", (int) v.charAt(i)));
+                        break;
+                    }
+                }
+                bullets += v.indexOf('•') >= 0 ? 1 : 0;
+                spreads += v.contains("+/-") ? 1 : 0;
+            }
+        }
+        boolean table = FONT_TABLE.length() == 256 && FONT_TABLE.charAt(158) == '×' && FONT_TABLE.charAt(241) == '±'
+                && FONT_TABLE.charAt(250) == '·' && FONT_TABLE.charAt(248) == '°' && FONT_TABLE.charAt(65) == 'A';
+        for (char c : "•˚„“”…→".toCharArray()) {
+            table &= !fontPackUnsafe(c);
+        }
+        check(bad.length() == 0 && table && values > 16000 && bullets >= 75 && spreads >= 15, "lang font table: no character of"
+                + " ascii.png's non-ASCII cells (× ± · ° …) in " + values + " values of en_US / ru_RU; " + bullets + " with \"•\", "
+                + spreads + " with \"+/-\"; the table (256, × at 158, ± at 241) " + table + bad);
     }
 
     /** A .lang file of the jar as key -> value (the first one wins, as in the game). */

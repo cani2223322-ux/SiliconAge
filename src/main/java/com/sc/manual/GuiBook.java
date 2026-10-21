@@ -1315,9 +1315,9 @@ public class GuiBook extends GuiScreen {
             small(BookContent.percent(r.byproductChances[i]) + "%", cx + 1, y + 20, 0x8A5A1A);
             cx += 18;
         }
-        String meta = r.type.localizedName() + " · " + String.format(Locale.ROOT, "%.1f", r.ticks / 20F) + " s · " + r.type.euPerTick + " EU/t";
+        String meta = r.type.localizedName() + " • " + String.format(Locale.ROOT, "%.1f", r.ticks / 20F) + " s • " + r.type.euPerTick + " EU/t";
         if (r.defectChance > 0) {
-            meta += " · " + Lang.tr("sc.manual.recipes.defect", BookContent.percent(r.defectChance));
+            meta += " • " + Lang.tr("sc.manual.recipes.defect", BookContent.percent(r.defectChance));
         }
         small(meta, x + 2, y + 25, INK_DIM);
     }

@@ -1025,7 +1025,7 @@ final class SelfTestCombatSC {
         boolean death = positional(en.get("death.attack.scBreakdown")) == 2 && positional(ru.get("death.attack.scBreakdown")) == 2
                 && positional(en.get("death.attack.scBreakdownWorld")) == 1 && positional(ru.get("death.attack.scBreakdownWorld")) == 1
                 && positional(en.get("death.attack.scBreakdownWorld.player")) == 2 && positional(ru.get("death.attack.scBreakdownWorld.player")) == 2
-                && "%s · %s".equals(en.get("sc.elite.name")) && "%s · %s".equals(ru.get("sc.elite.name"));
+                && "%s • %s".equals(en.get("sc.elite.name")) && "%s • %s".equals(ru.get("sc.elite.name"));
         StringBuilder diff = new StringBuilder();
         int all = 0;
         for (Map<String, String> from : new Map[]{en, ru}) {
@@ -1046,7 +1046,7 @@ final class SelfTestCombatSC {
         }
         check(missing.length() == 0 && diff.length() == 0 && death, "texts (§10.1): " + keys.size() + " keys - the creatures, the kinds, the loot, the ruin"
                 + " blocks and their tooltips, the showcases, the elites, «Пробой» - in en_US and ru_RU" + missing + "; " + all + " Ф3 keys with the same"
-                + " arguments in both, no Cyrillic in English" + diff + "; the death messages 2 / 1 / 2 arguments, the elite's name «%s · %s» " + death);
+                + " arguments in both, no Cyrillic in English" + diff + "; the death messages 2 / 1 / 2 arguments, the elite's name «%s • %s» " + death);
     }
 
     private static boolean ours(String k) {

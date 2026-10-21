@@ -100,7 +100,7 @@ public class BridgeHudSC {
         String n = BridgeHudDataSC.name.length() == 0 ? Lang.tr("sc.bridge.res.noname") : BridgeHudDataSC.name;
         String line = Lang.tr("sc.bridge.hud.line", n, (BridgeHudDataSC.left + 19) / 20, BridgeHudDataSC.stability);
         if (BridgeHudDataSC.heat >= 40) {
-            line += " · " + Lang.tr("sc.bridge.hud.heat", BridgeHudDataSC.heat);
+            line += " • " + Lang.tr("sc.bridge.hud.heat", BridgeHudDataSC.heat);
         }
         int w = mc.fontRenderer.getStringWidth(line), x = (r.getScaledWidth() - w) / 2, y = 4;
         boolean space = BridgeHudDataSC.kind == BridgeMathSC.SPACE;

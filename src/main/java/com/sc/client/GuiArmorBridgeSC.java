@@ -255,7 +255,7 @@ public class GuiArmorBridgeSC extends GuiBridgeFarSC {
                 c = BLUE;
             } else if (e.getBoolean("ready")) {
                 long d = e.getLong("dist");
-                s = Lang.tr("sc.bridge.far.st.ready") + (d >= 0 ? " · " + Lang.tr("sc.bridge.far.blocks", g(d)) : " · " + Lang.tr("sc.bridge.far.otherdim"));
+                s = Lang.tr("sc.bridge.far.st.ready") + (d >= 0 ? " • " + Lang.tr("sc.bridge.far.blocks", g(d)) : " • " + Lang.tr("sc.bridge.far.otherdim"));
                 c = OK;
             } else if (e.getInteger("cool") > 0) {
                 s = Lang.tr("sc.bridge.gui.cool.left", (e.getInteger("cool") + 19) / 20);
@@ -348,7 +348,7 @@ public class GuiArmorBridgeSC extends GuiBridgeFarSC {
             small(Lang.tr(space() ? "sc.bridge.gui.hold.space" : "sc.bridge.gui.hold.ground", g(c[4]), c[5], c[6], c[7], c[8] / 20), x, y + 2, w, DIM);
             String fam = famLine();
             if (b.getInteger("pct") > 0) {
-                small(Lang.tr("sc.bridge.armour.discount", b.getInteger("pct")) + (fam.length() > 0 ? " · " + fam : ""), x, y + 11, w, OK);
+                small(Lang.tr("sc.bridge.armour.discount", b.getInteger("pct")) + (fam.length() > 0 ? " • " + fam : ""), x, y + 11, w, OK);
             } else if (fam.length() > 0) {
                 small(fam, x, y + 11, w, famColor());
             }
@@ -371,7 +371,7 @@ public class GuiArmorBridgeSC extends GuiBridgeFarSC {
         row(x, 143, w, Lang.tr("sc.bridge.res.gas.krypton"), g(tk[BridgeMathSC.KR]) + " " + Lang.tr("sc.bridge.unit.mb"), TEXT);
         String ring = b.getBoolean("open") ? Lang.tr("sc.bridge.gui.cool.open") : t[2] > 0 ? Lang.tr("sc.bridge.gui.cool.left", (t[2] + 19) / 20)
                 : Lang.tr("sc.bridge.far.ringready");
-        row(x, 152, w, Lang.tr("sc.bridge.gui.ring"), ring + " · " + Lang.tr("sc.bridge.armour.wear", b.getInteger("wear")), t[2] > 0 ? WARN : OK);
+        row(x, 152, w, Lang.tr("sc.bridge.gui.ring"), ring + " • " + Lang.tr("sc.bridge.armour.wear", b.getInteger("wear")), t[2] > 0 ? WARN : OK);
         int stab = b.getBoolean("open") ? t[4] : b.getInteger("baseStab");
         row(x, 161, w, Lang.tr("sc.bridge.gui.stability"), stab + "%", stab >= 70 ? OK : stab >= 30 ? WARN : BAD);
         NBTTagList bm = bookmarks();

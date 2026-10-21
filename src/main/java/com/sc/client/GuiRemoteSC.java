@@ -295,7 +295,7 @@ public class GuiRemoteSC extends GuiBridgeFarSC {
             NBTTagCompound c = it.getCompoundTag("coord");
             if (it.hasKey("coord")) {
                 int[] p = c.getIntArray("p");
-                t.add("§b" + (p.length == 4 ? (c.getString("n").length() > 0 ? c.getString("n") + " · " : "") + p[0] + " " + p[1] + " " + p[2]
+                t.add("§b" + (p.length == 4 ? (c.getString("n").length() > 0 ? c.getString("n") + " • " : "") + p[0] + " " + p[1] + " " + p[2]
                         : Lang.tr("sc.coordinator.empty")));
             }
             t.add("§7" + Lang.tr("sc.bridge.far.coordslot.hint"));

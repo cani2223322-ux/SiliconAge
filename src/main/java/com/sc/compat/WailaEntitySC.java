@@ -141,7 +141,7 @@ public class WailaEntitySC implements IWailaEntityProvider {
         }
         boolean embassy = t.worldObj != null && !SubstrateSC.is(t.worldObj);
         String kind = Lang.tr(t.kind().langKey(embassy));
-        tip.add("§7" + (t.nameCode() != 0 ? NpcNamesSC.name(t.nameCode()).getUnformattedText() + " · " + kind : kind));
+        tip.add("§7" + (t.nameCode() != 0 ? NpcNamesSC.name(t.nameCode()).getUnformattedText() + " • " + kind : kind));
     }
 
     /** Ф5: the Warden's phase and its state now (the DataWatcher: DW_PHASE's flags, DW_COILS, DW_HIGHLIGHT, DW_TIMER). */

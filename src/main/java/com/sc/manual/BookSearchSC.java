@@ -19,7 +19,7 @@ public final class BookSearchSC {
 
     public static final int MIN_QUERY = 2, MAX_RESULTS = 50, MAX_MARKS = 64;
     /** Between an article's elements in its searchable body. */
-    static final String SEP = " · ";
+    static final String SEP = " • ";
 
     private BookSearchSC() {
     }

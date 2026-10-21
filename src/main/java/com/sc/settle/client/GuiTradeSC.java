@@ -844,8 +844,8 @@ public class GuiTradeSC extends GuiContainer {
     @Override
     protected void drawGuiContainerForegroundLayer(int mx, int my) {
         // the title: name · profession (Ф6: an embassy's Elder is its «Посол» - the client knows the world by its provider); level · «Доверие»
-        String name = NpcNamesSC.name(tuner.nameCode()).getUnformattedText() + " · " + Lang.tr(tuner.kind().langKey(SettlementClientSC.embassy(tuner)));
-        String lv = has ? levelName(level) + " · " + rep : "…";
+        String name = NpcNamesSC.name(tuner.nameCode()).getUnformattedText() + " • " + Lang.tr(tuner.kind().langKey(SettlementClientSC.embassy(tuner)));
+        String lv = has ? levelName(level) + " • " + rep : "…";
         int lvW = Math.min(90, fontRendererObj.getStringWidth(lv));
         TextFitSC.draw(fontRendererObj, name, 9, 6, W - 22 - lvW, 0xE6F0FA, guiLeft, guiTop);
         TextFitSC.draw(fontRendererObj, lv, W - 8 - lvW, 6, lvW, has ? LEVEL_COLOURS[Math.max(0, Math.min(6, level))] : 0x8898A8, guiLeft, guiTop);

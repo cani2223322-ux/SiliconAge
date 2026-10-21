@@ -481,7 +481,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         String s = BridgeMathSC.group(p[0]) + " " + (p[1] == TileEntityBridgeControllerSC.AUTO_Y ? Lang.tr("sc.bridge.gui.auto") : p[1]) + " "
                 + BridgeMathSC.group(p[2]);
         if (p.length == 4 && mc.thePlayer != null && p[3] != mc.thePlayer.dimension) {
-            s += " · " + dimName(p[3]);
+            s += " • " + dimName(p[3]);
         }
         return s;
     }
@@ -519,7 +519,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
             if (t == T_FINDS && mc.thePlayer != null) {
                 int[] p = e.getIntArray("p");
                 if (p.length == 4 && p[3] == mc.thePlayer.dimension) {
-                    pos += " · " + Lang.tr("sc.bridge.far.blocks", BridgeMathSC.group(BridgeMathSC.distance(p[0], p[1], p[2],
+                    pos += " • " + Lang.tr("sc.bridge.far.blocks", BridgeMathSC.group(BridgeMathSC.distance(p[0], p[1], p[2],
                             (int) mc.thePlayer.posX, (int) mc.thePlayer.posY, (int) mc.thePlayer.posZ)));
                 }
             }
@@ -601,7 +601,7 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         NBTTagCompound b = bridge();
         String bn = b == null ? "?" : b.getString("name").length() == 0 ? Lang.tr("sc.bridge.res.noname") : b.getString("name");
         int[] p = point();
-        String pt = p == null ? Lang.tr("sc.bridge.far.nopoint") : (targetName.length() > 0 ? targetName + " · " : "")
+        String pt = p == null ? Lang.tr("sc.bridge.far.nopoint") : (targetName.length() > 0 ? targetName + " • " : "")
                 + BridgeMathSC.group(p[0]) + " " + (p[1] == TileEntityBridgeControllerSC.AUTO_Y ? Lang.tr("sc.bridge.gui.auto") : p[1]) + " "
                 + BridgeMathSC.group(p[2]);
         switch (mode) {
@@ -666,10 +666,10 @@ public abstract class GuiBridgeFarSC extends GuiScreen {
         String ring = b.getBoolean("open") ? Lang.tr("sc.bridge.gui.cool.open") : t[2] > 0 ? Lang.tr("sc.bridge.gui.cool.left", (t[2] + 19) / 20)
                 : Lang.tr("sc.bridge.far.ringready");
         int stab = b.getBoolean("open") ? t[4] : b.getInteger("baseStab");
-        String l2 = Lang.tr(low == 0 ? "sc.bridge.far.tanksok" : "sc.bridge.far.tankslow", low) + " · " + ring + " · "
-                + Lang.tr("sc.bridge.far.stab", stab) + " · " + Lang.tr("sc.bridge.armour.wear", b.getInteger("wear"));
+        String l2 = Lang.tr(low == 0 ? "sc.bridge.far.tanksok" : "sc.bridge.far.tankslow", low) + " • " + ring + " • "
+                + Lang.tr("sc.bridge.far.stab", stab) + " • " + Lang.tr("sc.bridge.armour.wear", b.getInteger("wear"));
         if (b.getBoolean("overheat")) {
-            l2 = Lang.tr(low == 0 ? "sc.bridge.far.tanksok" : "sc.bridge.far.tankslow", low) + " · "
+            l2 = Lang.tr(low == 0 ? "sc.bridge.far.tanksok" : "sc.bridge.far.tankslow", low) + " • "
                     + Lang.tr("sc.bridge.gui.overheat", t.length > 2 ? (t[2] + 19) / 20 : 0);
         }
         return new String[]{l1, l2};

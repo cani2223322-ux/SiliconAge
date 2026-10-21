@@ -291,7 +291,7 @@ public class SingularHudSC {
         }
         StringBuilder sb = new StringBuilder();
         for (String part : parts) {
-            sb.append(sb.length() > 0 ? "§7 · " : "").append(part);
+            sb.append(sb.length() > 0 ? "§7 • " : "").append(part);
         }
         String line = sb.toString();
         fr.drawStringWithShadow(line, (w - fr.getStringWidth(line)) / 2, h - rows - 22, PURPLE);

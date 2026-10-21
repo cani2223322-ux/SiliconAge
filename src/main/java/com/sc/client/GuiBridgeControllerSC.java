@@ -940,7 +940,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
             if (p.length == 4) {
                 String pos = p[0] + " " + (p[1] == TileEntityBridgeControllerSC.AUTO_Y ? Lang.tr("sc.bridge.gui.auto") : String.valueOf(p[1])) + " " + p[2];
                 if (space() && p[3] != st.getInteger("dimHere")) {
-                    pos += " · " + dimName(p[3]);
+                    pos += " • " + dimName(p[3]);
                 }
                 smallRight(pos, 299, y + 2, LABEL);
             }
@@ -1025,10 +1025,10 @@ public class GuiBridgeControllerSC extends GuiScreen {
             e.append(Lang.tr("sc.bridge.gui.env.res", BridgeMathSC.RESONANCE_PCT));
         }
         if (env[1] != 0) {
-            e.append(e.length() > 0 ? " · " : "").append(Lang.tr("sc.bridge.gui.env.storm", BridgeMathSC.STORM_STAB));
+            e.append(e.length() > 0 ? " • " : "").append(Lang.tr("sc.bridge.gui.env.storm", BridgeMathSC.STORM_STAB));
         }
         if (env[0] != 0) {
-            e.append(e.length() > 0 ? " · " : "").append(Lang.tr("sc.bridge.gui.env.interf", BridgeMathSC.INTERFERENCE_STAB));
+            e.append(e.length() > 0 ? " • " : "").append(Lang.tr("sc.bridge.gui.env.interf", BridgeMathSC.INTERFERENCE_STAB));
         }
         small(e.length() == 0 ? Lang.tr("sc.bridge.gui.env.none") : e.toString(), 312, 209, 100, env[0] != 0 || env[1] != 0 ? WARN : env[2] != 0 ? OK : DIM);
         if (open) {
@@ -1076,7 +1076,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
         }
         for (int i = 0; i < fr.tagCount(); i++) {
             String n = fr.getStringTagAt(i);
-            int w = (int) Math.ceil(fontRendererObj.getStringWidth(n + " ×") * 0.75F) + 4;
+            int w = (int) Math.ceil(fontRendererObj.getStringWidth(n + " x") * 0.75F) + 4;
             if (cx2 + w > 412) {
                 cx2 = 206;
                 cy2 += 9;
@@ -1087,7 +1087,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
             }
             boolean armed = armedFriend == i && System.currentTimeMillis() - armedFriendAt < 2000;
             rect(cx2, cy2, w, 8, armed ? 0xFF6A2A2A : 0xFF22302A);
-            small(n + " ×", cx2 + 2, cy2 + 1, w - 2, armed ? BAD : TEXT);
+            small(n + " x", cx2 + 2, cy2 + 1, w - 2, armed ? BAD : TEXT);
             chips.add(new int[]{cx2, cy2, w, i});
             cx2 += w + 2;
         }
@@ -1101,8 +1101,8 @@ public class GuiBridgeControllerSC extends GuiScreen {
         if (f == null || f.length < 4 || f[0] < 0) {
             return "";
         }
-        String at = f.length < 5 ? "" : f[4] == com.sc.settle.travel.TravelRulesSC.AT_DOCK ? Lang.tr("sc.bridge.target.atDock") + " · "
-                : f[4] == com.sc.settle.travel.TravelRulesSC.AT_MARK ? Lang.tr("sc.bridge.target.atMark") + " · " : "";
+        String at = f.length < 5 ? "" : f[4] == com.sc.settle.travel.TravelRulesSC.AT_DOCK ? Lang.tr("sc.bridge.target.atDock") + " • "
+                : f[4] == com.sc.settle.travel.TravelRulesSC.AT_MARK ? Lang.tr("sc.bridge.target.atMark") + " • " : "";
         if (f[3] != 0) {
             return at + Lang.tr("sc.bridge.fam.scout", f[2]);
         }

@@ -1215,7 +1215,7 @@ public class GuiArmorSC extends GuiScreen {
         StringBuilder gases = new StringBuilder();
         for (int r = 1; r < com.sc.util.SingularStationMath.RESOURCES; r++) {
             if (cost[r] > 0) {
-                gases.append(gases.length() > 0 ? " · " : "").append(GasUiSC.shortName(com.sc.util.SingularStationMath.GAS[r])).append(' ').append(cost[r]);
+                gases.append(gases.length() > 0 ? " • " : "").append(GasUiSC.shortName(com.sc.util.SingularStationMath.GAS[r])).append(' ').append(cost[r]);
                 tip.add("§7" + GasUiSC.name(com.sc.util.SingularStationMath.GAS[r]) + ": " + cost[r] + " " + Lang.tr("sc.levelgui.mb"));
             }
         }
@@ -1433,7 +1433,7 @@ public class GuiArmorSC extends GuiScreen {
         tip.add(0, nameOf(f));
         int lock = lockedLevel(f), br = branchOfFeature(f);
         if (lock > 0) {
-            tip.add("§c" + Lang.tr("sc.armorgui.tip.locked", lock) + (br != 0 ? " · " + Lang.tr(ToolLevelSC.branchLangKey(t, br)) : ""));
+            tip.add("§c" + Lang.tr("sc.armorgui.tip.locked", lock) + (br != 0 ? " • " + Lang.tr(ToolLevelSC.branchLangKey(t, br)) : ""));
         } else if (branchLocked(f)) {
             tip.add("§c" + Lang.tr("sc.toolgui.tip.branch", Lang.tr(ToolLevelSC.branchLangKey(t, br))));
         } else if (singLevelOf(f) > 1) {
@@ -1610,7 +1610,7 @@ public class GuiArmorSC extends GuiScreen {
         int x = contentX, cw = contentW, bottom = footY - 1;
         int lvl = ToolLevelSC.levelOf(t), chosen = ToolLevelSC.branchOf(t);
         String title = Lang.tr("sc.toolgui.title", t.getDisplayName(), lvl)
-                + (chosen != 0 ? " · " + Lang.tr("sc.toolgui.branch.of", Lang.tr(ToolLevelSC.branchLangKey(t, chosen))) : "");
+                + (chosen != 0 ? " • " + Lang.tr("sc.toolgui.branch.of", Lang.tr(ToolLevelSC.branchLangKey(t, chosen))) : "");
         fit(title, x, tlTitleY, cw, 0xC080FF);
         // the level and its points
         boolean top = lvl >= ToolLevelSC.MAX;
@@ -1705,7 +1705,7 @@ public class GuiArmorSC extends GuiScreen {
                     tip.add("§c" + Lang.tr("sc.toolgui.tip.branch", Lang.tr(ToolLevelSC.branchLangKey(t, f.branch))));
                 } else {
                     tip.add("§c" + Lang.tr("sc.armorgui.tip.locked", f.level)
-                            + (f.branch != 0 ? " · " + Lang.tr(ToolLevelSC.branchLangKey(t, f.branch)) : ""));
+                            + (f.branch != 0 ? " • " + Lang.tr(ToolLevelSC.branchLangKey(t, f.branch)) : ""));
                 }
                 tip.add("§7" + Lang.tr("sc.toolgui.form.tip.wheel"));
             } else if (b.id >= TL_BRANCH && b.id < TL_BRANCH + 3) {

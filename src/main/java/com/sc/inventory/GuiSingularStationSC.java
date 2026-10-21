@@ -1254,11 +1254,11 @@ public class GuiSingularStationSC extends GuiContainer {
         int barColor = TEXT;
         if (proc != null) {
             int pct = (int) Math.round(proc.progress * 100);
-            bar = (tabOf(proc) != tab ? Lang.tr("sc.singStation.proc." + proc.kind, pct) : pct + "%") + " · "
+            bar = (tabOf(proc) != tab ? Lang.tr("sc.singStation.proc." + proc.kind, pct) : pct + "%") + " • "
                     + Lang.tr("sc.singStation.bar.left", time(te.ticksLeft()));
             String why = te.isPausedOff() ? Lang.tr("sc.singStation.pause.off") : te.getShortMask() != 0 ? Lang.tr("sc.singStation.pause.res", shortNames()) : null;
             if (why != null) {
-                bar += " · " + why;
+                bar += " • " + why;
                 barColor = YELLOW;
             }
         } else {
@@ -1312,7 +1312,7 @@ public class GuiSingularStationSC extends GuiContainer {
         int k = p.process ? Integer.bitCount(proc.mask & 15) : p.ready > 0 ? p.ready : p.candidates;
         String set = p.setDiscount ? Lang.tr("sc.singStation.mul.setshort", 100 - SingularStationMath.SET_PERCENT)
                 : Lang.tr("sc.singStation.mul.partsshort", k);
-        return set + " · " + rest;
+        return set + " • " + rest;
     }
 
     private void drawBranches() {
@@ -2082,7 +2082,7 @@ public class GuiSingularStationSC extends GuiContainer {
         StringBuilder b = new StringBuilder();
         for (int r = 0; r < R; r++) {
             if (cost[r] > 0) {
-                b.append(b.length() > 0 ? " · " : "").append(resName(r)).append(' ').append(amount(cost[r]));
+                b.append(b.length() > 0 ? " • " : "").append(resName(r)).append(' ').append(amount(cost[r]));
             }
         }
         tip.add(Lang.tr("sc.singStation.tip.cost", b.toString()));

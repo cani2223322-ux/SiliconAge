@@ -294,15 +294,15 @@ public final class GuiEmpTabSC {
             heat = live.heat;                                    // the stream's heat isn't written until it ends (rule 0.4.1)
             hot = live.throttled;
         }
-        String line = Lang.tr("sc.empgui.charge", eu(charge), eu(cap)) + " · " + Lang.tr("sc.empgui.heat", heat)
-                + (streaming && live.throttled ? " · " + Lang.tr("sc.emp.hud.throttled")
-                : heat > 0 && !streaming ? " · " + Lang.tr("sc.empgui.cool", EmpMathSC.coolFullSeconds(heat)) : "");
+        String line = Lang.tr("sc.empgui.charge", eu(charge), eu(cap)) + " • " + Lang.tr("sc.empgui.heat", heat)
+                + (streaming && live.throttled ? " • " + Lang.tr("sc.emp.hud.throttled")
+                : heat > 0 && !streaming ? " • " + Lang.tr("sc.empgui.cool", EmpMathSC.coolFullSeconds(heat)) : "");
         fit(font, line, rx, y, rw, hot ? RED : heat > 80 ? ORANGE : TEXT);
         y += LINE;
         EmpMode mode = ItemEmpGunSC.modeOf(gun);
         int cd = ItemEmpGunSC.pulseCooldown(gun, p.worldObj.getTotalWorldTime());
-        line = Lang.tr("sc.empgui.mode", Lang.tr("sc.emp.mode." + mode.key())) + " · " + Lang.tr("sc.empgui.price", eu(EmpMathSC.euCost(mode)))
-                + (mode == EmpMode.PULSE && cd > 0 ? " · " + Lang.tr("sc.emp.cooldown", secs(cd)) : "");
+        line = Lang.tr("sc.empgui.mode", Lang.tr("sc.emp.mode." + mode.key())) + " • " + Lang.tr("sc.empgui.price", eu(EmpMathSC.euCost(mode)))
+                + (mode == EmpMode.PULSE && cd > 0 ? " • " + Lang.tr("sc.emp.cooldown", secs(cd)) : "");
         fit(font, line, rx, y, rw, 0xFF000000 | mode.rgb());
         y += LINE;
         EmpNetSC.AimMessage aim = freshAim();
@@ -349,7 +349,7 @@ public final class GuiEmpTabSC {
         ArmorSuit[] suits = ArmorSuit.values();
         String suit = aim.suit >= 0 && aim.suit < suits.length ? Lang.tr("sc.suit." + suits[aim.suit].name().toLowerCase(Locale.ROOT))
                 : Lang.tr("sc.empgui.target.nosuit");
-        lines.add(e.getCommandSenderName() + " · " + Lang.tr("sc.empgui.target.suit", suit));
+        lines.add(e.getCommandSenderName() + " • " + Lang.tr("sc.empgui.target.suit", suit));
         colors.add(TEXT);
         if (aim.reason != EmpNetSC.OK) {
             lines.add(Lang.tr("sc.emp.refuse." + aim.reason));
@@ -363,8 +363,8 @@ public final class GuiEmpTabSC {
         }
         String charge = aim.chargePct >= 0 ? Lang.tr("sc.empgui.target.charge", aim.chargePct) : "";
         if (aim.streaming) {
-            charge += (charge.isEmpty() ? "" : " · ") + Lang.tr("sc.empgui.target.stream", eu(aim.received))
-                    + (aim.vented > 0 ? " · " + Lang.tr("sc.emp.hud.vented", eu(aim.vented)) : "");
+            charge += (charge.isEmpty() ? "" : " • ") + Lang.tr("sc.empgui.target.stream", eu(aim.received))
+                    + (aim.vented > 0 ? " • " + Lang.tr("sc.emp.hud.vented", eu(aim.vented)) : "");
         }
         if (!charge.isEmpty()) {
             lines.add(charge);

@@ -159,7 +159,7 @@ public class SingularConvertHandlerSC extends TemplateRecipeHandler {
                 Lang.tr("sc.singStation.unit.b")) + " EU");
         for (int i = 1; i < SingularStationMath.RESOURCES; i++) {
             if (c[i] > 0) {
-                b.append(" · ").append(com.sc.client.GasUiSC.shortName(SingularStationMath.GAS[i])).append(' ').append(c[i]);
+                b.append(" • ").append(com.sc.client.GasUiSC.shortName(SingularStationMath.GAS[i])).append(' ').append(c[i]);
             }
         }
         drawFit(b.toString(), 4, 30, 158, com.sc.inventory.GuiHoloSC.VALUE);
