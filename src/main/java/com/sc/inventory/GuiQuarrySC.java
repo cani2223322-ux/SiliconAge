@@ -975,8 +975,9 @@ public class GuiQuarrySC extends GuiContainer {
         cardText(2, Lang.tr("sc.quarrygui.card.cost"), quarry.getLastCost() + " EU");
         cardText(3, Lang.tr("sc.quarrygui.card.speed"), Lang.tr("sc.quarrygui.card.speedv", String.format(java.util.Locale.ROOT, "%.1f", bps)));
         if (a != null) {
-            long sec = bps <= 0 ? 0 : (long) (left / bps);
-            small(Lang.tr("sc.quarrygui.left2", String.valueOf(left), sec / 3600, sec / 60 % 60), 14, 96, 88, C);
+            long est = Math.round(left * (double) quarry.getDigShare());   // КР-6: only the share of the cells really dug
+            long sec = bps <= 0 ? 0 : (long) (est / bps);
+            small(Lang.tr("sc.quarrygui.left2", String.valueOf(est), sec / 3600, sec / 60 % 60), 14, 96, 88, C);
             small(Lang.tr("sc.quarrygui.area2", a[2] - a[0] + 1, a[3] - a[1] + 1, quarry.maxSize(), a[4] - a[5] + 1), 14, 104, 88, DIM);
         }
         small(Lang.tr("sc.quarrygui.mined", String.valueOf(quarry.getMined())), 14, 112, 88, DIM);
@@ -1028,6 +1029,10 @@ public class GuiQuarrySC extends GuiContainer {
 
     /** The chunk-keeping module at work: how many chunks it holds. */
     private void chunksLine(int y) {
+        if (!com.sc.util.ConfigSC.quarryChunkLoading && quarry.moduleCount(ItemQuarryModuleSC.Kind.CHUNK_LOADER) > 0) {
+            small(Lang.tr("sc.quarry.chunks.off"), 14, y, 88, GuiHoloSC.WARN);   // КР-8: off on this server
+            return;
+        }
         if (quarry.getChunksHeld() > 0) {
             small(Lang.tr("sc.quarrygui.chunks", quarry.getChunksHeld()), 14, y, 88, GuiHoloSC.OK);
         }
@@ -1358,6 +1363,15 @@ public class GuiQuarrySC extends GuiContainer {
     /** Tooltips, (mx, my) from the window's corner. */
     private List<String> tooltipAt(int mx, int my) {
         List<String> lines = new ArrayList<String>();
+        for (Object o : buttonList) {                        // КР-5 (audit 2026-10-20): what each "Leave" mode does, the current one yellow
+            GuiButton b = (GuiButton) o;
+            if (b.id == B_REPLACE && b.visible && over(b, mx, my)) {
+                for (int i = 0; i < 4; i++) {
+                    lines.add((i == quarry.getReplace() ? "§e" : "§7") + Lang.tr("sc.quarrygui.replace.tip." + i));
+                }
+                return lines;
+            }
+        }
         if (GuiGaugeSC.isOver(ENERGY_X, ENERGY_Y, ENERGY_W, ENERGY_H, mx, my)) {
             lines.add(Lang.tr("sc.gui.energy"));
             lines.add(quarry.getEnergyStored() + " / " + quarry.getMaxEnergyStored() + " EU");
@@ -1390,7 +1404,7 @@ public class GuiQuarrySC extends GuiContainer {
                     return lines;
                 }
                 if (b.id >= B_FVEIN && b.id <= B_FVEIN_FLOWING && over(b, mx, my)) {
-                    lines.add(Lang.tr("sc.quarrygui.fvein.help", TileEntityQuarrySC.FLUID_VEIN_COST,
+                    lines.add(Lang.tr("sc.quarrygui.fvein.help", TileEntityQuarrySC.energyScaled(TileEntityQuarrySC.FLUID_VEIN_COST),
                             TileEntityQuarrySC.FLUID_VEIN_RANGE[Math.min(3, quarry.getTier().ordinal())]));
                     if (quarry.moduleCount(ItemQuarryModuleSC.Kind.FLUID_VEIN) == 0) {
                         lines.add("§c" + Lang.tr("sc.quarrygui.fvein.nomodule"));
@@ -1422,7 +1436,8 @@ public class GuiQuarrySC extends GuiContainer {
                     boolean on = (quarry.getFlags() & (1 << i)) != 0;
                     lines.add(Lang.tr("sc.quarrygui.flag." + i) + ": " + onOff(on));
                     lines.add(i == 24
-                            ? Lang.tr("sc.quarrygui.flag.24.hint", TileEntityQuarrySC.REPAIR_PER_TICK, TileEntityQuarrySC.REPAIR_COST)
+                            ? Lang.tr("sc.quarrygui.flag.24.hint", TileEntityQuarrySC.REPAIR_PER_TICK,
+                            TileEntityQuarrySC.energyScaled(TileEntityQuarrySC.REPAIR_COST))
                             : Lang.tr("sc.quarrygui.flag." + i + ".hint"));
                     if ((1 << i) == TileEntityQuarrySC.F_SKIP_TILES) {
                         lines.add("§e" + Lang.tr("sc.quarrygui.flag.13.warn"));   // off: other mods' blocks may lose what they hold

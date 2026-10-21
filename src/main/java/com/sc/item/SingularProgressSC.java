@@ -24,6 +24,10 @@ public final class SingularProgressSC {
 
     /** Store keys of the accumulated parts below a whole point; the kill cap's minute and its points. */
     private static final String GAS_ACC = "gasAcc", FLY_ACC = "flyAcc", ABS_ACC = "absAcc", KILL_MIN = "killMin", KILL_PTS = "killPts";
+    /** БР-3: the ОЧ3 cap's minute and its points; ОР-7: the boss window's start (world tick) and the bosses paid in it. */
+    private static final String ABS_MIN = "absMin", ABS_PTS = "absPts", BOSS_WIN = "bossWin", BOSS_N = "bossN";
+    /** БР-3: entity data (not persisted) - the tick of the blow last landed and how much of its damage may still turn into ОЧ3. */
+    private static final String HIT_AT = "scLvHitAt", HIT_LEFT = "scLvHitLeft";
     /** Entity data (not persisted): damage absorbed since the last second; the last position while in gravity flight. */
     private static final String ABS_PENDING = "scLvAbs", FLY_X = "scLvFx", FLY_Y = "scLvFy", FLY_Z = "scLvFz", FLY_DIM = "scLvFdim";
     /** A jump longer than this in one second is a teleport, not flight. */
@@ -96,7 +100,15 @@ public final class SingularProgressSC {
         if (abs > 0) {
             float acc = s.getFloat(ABS_ACC) + abs;
             int whole = SingularLevel.wholePoints(acc, 1);
-            pts += whole;
+            // БР-3 (audit 2026-10-20): at most ABSORB_CAP a minute - what the cap cuts off isn't kept for later
+            long minute = p.worldObj.getTotalWorldTime() / 1200L;
+            if (s.getLong(ABS_MIN) != minute) {
+                s.setLong(ABS_MIN, minute);
+                s.setInteger(ABS_PTS, 0);
+            }
+            int given = SingularLevel.absorbPoints(whole, s.getInteger(ABS_PTS));
+            s.setInteger(ABS_PTS, s.getInteger(ABS_PTS) + given);
+            pts += given;
             s.setFloat(ABS_ACC, acc - whole);
         }
         // Р5 "10 min in the Nether with the heat under 50%": the Singular chestplate's heat
@@ -167,12 +179,40 @@ public final class SingularProgressSC {
 
     // ------------------------------------------------------------------ events
 
-    /** ОЧ3: points of damage a worn Singular piece absorbed (ItemArmorSC.damageArmor). */
+    /**
+     * ОЧ3: points of damage a worn Singular piece absorbed (ItemArmorSC.damageArmor). БР-3 (audit 2026-10-20): within the blow just
+     * landed (noteHit) all the pieces together credit no more than its damage; an unnoted blow - as before.
+     */
     public static void absorbed(EntityPlayer p, float points) {
         if (p != null && !p.worldObj.isRemote && points > 0) {
             NBTTagCompound data = p.getEntityData();
-            data.setFloat(ABS_PENDING, data.getFloat(ABS_PENDING) + points);
+            float credit = points;
+            if (data.hasKey(HIT_AT) && data.getLong(HIT_AT) == p.worldObj.getTotalWorldTime()) {
+                float left = data.getFloat(HIT_LEFT);
+                credit = credit(left, points);
+                data.setFloat(HIT_LEFT, left - credit);
+            }
+            if (credit > 0) {
+                data.setFloat(ABS_PENDING, data.getFloat(ABS_PENDING) + credit);
+            }
         }
+    }
+
+    /** БР-3, pure: what of `points` a blow with `left` damage still uncredited gives (never below 0). */
+    public static float credit(float left, float points) {
+        return Math.max(0F, Math.min(points, left));
+    }
+
+    /** БР-3: a blow of `amount` damage lands on the player now (ShieldEventHandler, LivingHurtEvent at LOWEST, server). */
+    public static void noteHit(EntityPlayer p, float amount) {
+        if (p == null || p.worldObj == null || p.worldObj.isRemote) {
+            return;
+        }
+        NBTTagCompound data = p.getEntityData();
+        long now = p.worldObj.getTotalWorldTime();
+        float left = data.hasKey(HIT_AT) && data.getLong(HIT_AT) == now ? data.getFloat(HIT_LEFT) : 0F;
+        data.setLong(HIT_AT, now);
+        data.setFloat(HIT_LEFT, left + Math.max(0F, amount));   // two blows in one tick: both count
     }
 
     /** Н2 took `taken` of a hit: ОЧ3 and Р5 "absorb 300 damage with Н2". */
@@ -234,13 +274,22 @@ public final class SingularProgressSC {
         } else if (victim instanceof net.minecraft.entity.boss.EntityDragon) {
             s.setInteger(SingularLevel.C_DRAGON, satAdd(s.getInteger(SingularLevel.C_DRAGON), 1));
         }
-        long minute = p.worldObj.getTotalWorldTime() / 1200L;
+        long now = p.worldObj.getTotalWorldTime(), minute = now / 1200L;
         if (s.getLong(KILL_MIN) != minute) {
             s.setLong(KILL_MIN, minute);
             s.setInteger(KILL_PTS, 0);
         }
-        int pts = SingularLevel.killPoints(boss, s.getInteger(KILL_PTS));
-        if (!boss) {
+        // ОР-7 (audit 2026-10-20): BOSS_CAP bosses in BOSS_WINDOW_TICKS; past them a boss counts as a mob
+        if (!s.hasKey(BOSS_WIN) || now - s.getLong(BOSS_WIN) >= SingularLevel.BOSS_WINDOW_TICKS || now < s.getLong(BOSS_WIN)) {
+            s.setLong(BOSS_WIN, now);
+            s.setInteger(BOSS_N, 0);
+        }
+        int bossN = s.getInteger(BOSS_N);
+        boolean paidBoss = boss && bossN < SingularLevel.BOSS_CAP;
+        int pts = SingularLevel.killPoints(boss, s.getInteger(KILL_PTS), bossN);
+        if (paidBoss) {
+            s.setInteger(BOSS_N, bossN + 1);
+        } else {
             s.setInteger(KILL_PTS, s.getInteger(KILL_PTS) + pts);
         }
         award(p, pts);

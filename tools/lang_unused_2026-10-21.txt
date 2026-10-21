@@ -1,0 +1,122 @@
+# СТ-4 (docs/audit-2026-10-20-nedorabotki.md): lang keys the code no longer asks for - tools/check_lang_unused.py,
+# each group checked by hand on 2026-10-21 (no literal, no prefix, no suffix, no helper builds them; the add-on
+# SiliconAgeVehicles doesn't ask them either). Remove with:
+#     python -I tools/check_lang_unused.py --apply tools/lang_unused_2026-10-21.txt
+# (backs up both lang files to ../backups/<date>_before-lang-unused/ first; a key the code asks again is kept).
+# 86 keys (+8 added on 2026-10-22, below).
+
+# sc.armorStation (1): old line of the station's upgrades card (now sc.armorStation.modules.line2)
+sc.armorStation.modules.line
+
+# sc.fieldgui (16): old field screen: colour / redstone selectors, the redstone status, the charge 'items' line (now the shared power buttons and sc.fieldgui.charge.*)
+sc.fieldgui.color
+sc.fieldgui.color.0
+sc.fieldgui.color.1
+sc.fieldgui.color.2
+sc.fieldgui.color.3
+sc.fieldgui.color.4
+sc.fieldgui.redstone
+sc.fieldgui.redstone.0
+sc.fieldgui.redstone.1
+sc.fieldgui.redstone.2
+sc.fieldgui.redstone.desc
+sc.fieldgui.status.redstone
+sc.fieldgui.charge.items
+sc.fieldgui.redstone.short.0
+sc.fieldgui.redstone.short.1
+sc.fieldgui.redstone.short.2
+
+# sc.gui (28): old generator / field / big reactor / XV screens (sc.gui.field.* - before GuiFieldGeneratorSC; sc.gui.big.* and sc.gui.xv.* - lines replaced by st.* / c.* / tip.*)
+sc.gui.tank.unused
+sc.gui.fuel.rate
+sc.gui.field.title
+sc.gui.field.mode
+sc.gui.field.nodes
+sc.gui.field.cycle
+sc.gui.field.range
+sc.gui.field.modebtn
+sc.gui.gen.needs
+sc.gui.gen.upgrades.hint
+sc.gui.big.stability
+sc.gui.big.he
+sc.gui.big.h2
+sc.gui.big.ar
+sc.gui.big.d
+sc.gui.big.coils
+sc.gui.big.walls
+sc.gui.big.caps.ok
+sc.gui.big.caps
+sc.gui.big.tanks
+sc.gui.big.stores
+sc.gui.big.st.ready
+sc.gui.big.st.needcoils
+sc.gui.big.charge
+sc.gui.xv.cells
+sc.gui.xv.cells.spare
+sc.gui.xv.cells.used
+sc.gui.xv.store
+
+# sc.lifegui (2): old life support tab caption and amount (the tab is sc.lifegui.tab.short now)
+sc.lifegui.tab
+sc.lifegui.amount
+
+# sc.netview (1): old net view line (now sc.netview.hud.hidden)
+sc.netview.hidden
+
+# sc.quarrygui (14): old quarry screen lines (the tabs sc.quarrygui.tab.* / tabshort.* / exo.tab* are asked - GuiQuarrySC builds them)
+sc.quarrygui.ores
+sc.quarrygui.needmodule
+sc.quarrygui.layer
+sc.quarrygui.cost
+sc.quarrygui.left
+sc.quarrygui.size
+sc.quarrygui.pump
+sc.quarrygui.modules
+sc.quarrygui.exo.rate
+sc.quarrygui.exo.use
+sc.quarrygui.exo.mined
+sc.quarrygui.exo.lenses
+sc.quarrygui.pump2
+sc.quarrygui.fvein.count
+
+# sc.singStation (13): old singular station lines (now line.pieces, line.task.todo/done, mul.*.head/hint)
+sc.singStation.btn.back
+sc.singStation.energy
+sc.singStation.line.progress
+sc.singStation.line.nopieces
+sc.singStation.line.task.none
+sc.singStation.line.points
+sc.singStation.mul.other
+sc.singStation.mul.res
+sc.singStation.mul.nores
+sc.singStation.mul.stab
+sc.singStation.line.mat.ok
+sc.singStation.line.mat.short
+sc.singStation.mul.res.speed
+
+# sc.storage (6): old storage screen lines (now sc.storage.gui.c.*, of, outputs)
+sc.storage.gui.stored
+sc.storage.gui.capacity
+sc.storage.gui.flow
+sc.storage.gui.output
+sc.storage.gui.output.n
+sc.storage.gui.lbl.charge
+
+# sc.wrench (5): old wrench tooltip lines (now sc.wrench.fn.* and sc.tooltip.wrench.*)
+sc.wrench.tip.rotate
+sc.wrench.tip.switch
+sc.wrench.tip.dismantle
+sc.wrench.tip.remote
+sc.wrench.tip.copy
+
+# Added by the integrator 2026-10-22 - left unused by this audit's own changes (8 keys):
+# sc.coordinator (1): the record message «безопасно» - МС-4 writes sc.coordinator.recorded.check (both bridges) instead
+sc.coordinator.recorded.safe
+# sc.gui (7): the Combustion Generator's fixed fuel table - ГН-6 builds it from the config's combustionFuels and the fluids' own names
+sc.gui.comb.fuel.0
+sc.gui.comb.fuel.1
+sc.gui.comb.fuel.2
+sc.gui.comb.fuel.3
+sc.gui.comb.fuel.4
+sc.gui.comb.fuel.5
+sc.gui.comb.fuel.6

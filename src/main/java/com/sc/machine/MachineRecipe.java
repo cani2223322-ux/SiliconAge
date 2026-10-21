@@ -65,8 +65,76 @@ public class MachineRecipe {
         this.byproductChances = byproductChances;
     }
 
+    /**
+     * МШ-8 (audit 2026-10-20): the inputs' shared material names (OreRecipes.sharedName), worked out on the first comparison and
+     * kept - findMatch walks every recipe every tick a machine waits. forgetNames() (a server start: MineTweaker's /mt reload and
+     * the like may change the dictionary) makes them be worked out again. One holder, swapped whole: a client's NEI and the
+     * integrated server's thread may both ask.
+     */
+    private volatile Names names;
+    private static volatile int GEN;
+
+    private static final class Names {
+        final int gen;
+        final String[] of;
+
+        Names(int gen, String[] of) {
+            this.gen = gen;
+            this.of = of;
+        }
+    }
+
+    /** МШ-8: the cached input names are worked out afresh on their next use (SCMod.serverStarting). */
+    public static void forgetNames() {
+        GEN++;
+    }
+
+    /** МШ-8: input `i`'s shared material name, null - none (cached, see forgetNames). */
+    String inputName(int i) {
+        int g = GEN;
+        Names n = names;
+        if (n == null || n.gen != g) {
+            String[] of = new String[inputs.length];
+            for (int k = 0; k < inputs.length; k++) {
+                of[k] = com.sc.init.OreRecipes.sharedName(inputs[k]);
+            }
+            n = new Names(g, of);
+            names = n;
+        }
+        return n.of[i];
+    }
+
+    /**
+     * МШ-8: the input slots' shared names for one findMatch - each slot's looked up at most once, and only when a recipe gets as
+     * far as asking (its item didn't match by itself).
+     */
+    public static final class SlotNames {
+        private final ItemStack[] stacks;
+        private final String[] names;
+        private final boolean[] done;
+
+        public SlotNames(ItemStack[] stacks) {
+            this.stacks = stacks;
+            this.names = new String[stacks.length];
+            this.done = new boolean[stacks.length];
+        }
+
+        String name(int i) {
+            if (!done[i]) {
+                names[i] = com.sc.init.OreRecipes.sharedName(stacks[i]);
+                done[i] = true;
+            }
+            return names[i];
+        }
+    }
+
     /** @param providedInputs the machine's input slots (may contain nulls/other items) */
     public boolean matches(ItemStack[] providedInputs, FluidStack providedFluidA, FluidStack providedFluidB) {
+        return matches(providedInputs, providedFluidA, providedFluidB, new SlotNames(providedInputs));
+    }
+
+    /** МШ-8: matches() with the slots' names shared between the recipes of one search (RecipeRegistry.findMatch). */
+    public boolean matches(ItemStack[] providedInputs, FluidStack providedFluidA, FluidStack providedFluidB, SlotNames slotNames) {
         // Either tank may hold either fluid: TileEntityMachineSC.fill() puts a new fluid into the
         // first free input tank, so which tank it lands in depends only on what the player piped
         // in first. Positional matching made a CVD Chamber fed hydrogen before SiHCl3 (or a Boiler
@@ -77,8 +145,8 @@ public class MachineRecipe {
             return false;
         }
         boolean[] used = new boolean[providedInputs.length];
-        for (ItemStack required : inputs) {
-            if (!consumeOneMatch(providedInputs, used, required)) {
+        for (int r = 0; r < inputs.length; r++) {
+            if (!consumeOneMatch(providedInputs, used, r, slotNames)) {
                 return false;
             }
         }
@@ -92,17 +160,33 @@ public class MachineRecipe {
         return provided != null && provided.isFluidEqual(required) && provided.amount >= required.amount;
     }
 
-    private boolean consumeOneMatch(ItemStack[] providedInputs, boolean[] used, ItemStack required) {
+    private boolean consumeOneMatch(ItemStack[] providedInputs, boolean[] used, int r, SlotNames slotNames) {
+        ItemStack required = inputs[r];
         for (int i = 0; i < providedInputs.length; i++) {
             if (used[i]) {
                 continue;
             }
-            if (ingredientMatches(providedInputs[i], required)) {
+            ItemStack provided = providedInputs[i];
+            if (provided == null || provided.stackSize < required.stackSize) {
+                continue;
+            }
+            if (sameItem(provided, required) || inputName(r) != null && inputName(r).equals(slotNames.name(i))) {
                 used[i] = true;
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * МШ-8: ingredientMatches() for this recipe's input `r`, with its cached name - TileEntityMachineSC.consumeInputs picks the
+     * slot to spend with it, so it compares exactly as matches() does.
+     */
+    public boolean inputMatches(int r, ItemStack provided) {
+        ItemStack required = inputs[r];
+        return provided != null && provided.stackSize >= required.stackSize
+                && isSameIngredient(provided, sameItem(provided, required) ? null : com.sc.init.OreRecipes.sharedName(provided), required,
+                inputName(r));
     }
 
     /**
@@ -129,13 +213,33 @@ public class MachineRecipe {
         if (provided == null) {
             return false;
         }
-        if (provided.getItem() == required.getItem()
-                && (provided.getItem().isDamageable() || provided.getItemDamage() == required.getItemDamage())) {
+        if (sameItem(provided, required)) {
             return true;
         }
         // Another mod's copper ingot, crushed ore or rubber is the same ingredient as ours when
         // both are registered under the same generic material name - see OreRecipes.
         String requiredName = com.sc.init.OreRecipes.sharedName(required);
-        return requiredName != null && requiredName.equals(com.sc.init.OreRecipes.sharedName(provided));
+        return requiredName != null && isSameIngredient(provided, com.sc.init.OreRecipes.sharedName(provided), required, requiredName);
+    }
+
+    /**
+     * МШ-8: isSameIngredient with the shared names already looked up (null - none): the item and its damage, else the same
+     * generic material name.
+     */
+    public static boolean isSameIngredient(ItemStack provided, String providedName, ItemStack required, String requiredName) {
+        if (provided == null) {
+            return false;
+        }
+        return sameItem(provided, required) || requiredName != null && requiredName.equals(providedName);
+    }
+
+    /**
+     * The same item: the damage counts for a non-damageable item only (the subtype); МШ-7: a required damage of
+     * OreDictionary.WILDCARD_VALUE (another mod's ore registered for every meta) matches any.
+     */
+    private static boolean sameItem(ItemStack provided, ItemStack required) {
+        return provided.getItem() == required.getItem() && (provided.getItem().isDamageable()
+                || required.getItemDamage() == net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE
+                || provided.getItemDamage() == required.getItemDamage());
     }
 }

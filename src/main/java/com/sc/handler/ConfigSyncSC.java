@@ -35,7 +35,9 @@ import net.minecraft.entity.player.EntityPlayerMP;
  * screens, tooltips, NEI and handbook show the server's numbers, not its own .cfg. Every public
  * static non-final primitive field of ConfigSC goes by name (reflection - a new option travels
  * with no change here), except the client's own preferences - fields marked {@link ClientOnly} (sounds, update
- * check; a new HUD / sound / effect option must carry it too); the ore settings and dimensions too. The
+ * check; a new HUD / sound / effect option must carry it too); the ore settings and dimensions too; and (ГН-6,
+ * audit 2026-10-20) every public static non-final String[] field (combustionFuels), last on the wire - an older
+ * client stops reading before them, an older server's message has none (the client keeps its own). The
  * client keeps its own values aside and puts them back when it leaves the server. Single player
  * (and the host of a LAN game) shares the fields with its own server: nothing is changed there.
  */
@@ -63,6 +65,8 @@ public final class ConfigSyncSC {
     /** Client: its own ConfigSC.oreDimensions while it plays on a server (kept: taken aside, may itself be null). */
     private static int[] localOreDims;
     private static boolean localOreDimsKept;
+    /** Client: its own String[] options (combustionFuels) while it plays on a server (null: none taken). */
+    private static Map<String, String[]> localStrings;
 
     private ConfigSyncSC() {
     }
@@ -81,6 +85,18 @@ public final class ConfigSyncSC {
                 continue;
             }
             if (!clientOnly(f)) {
+                out.add(f);
+            }
+        }
+        return out;
+    }
+
+    /** ГН-6: the String[] options that travel (public static non-final String[] fields of ConfigSC, not ClientOnly). */
+    static List<Field> syncedStringFields() {
+        List<Field> out = new ArrayList<Field>();
+        for (Field f : ConfigSC.class.getDeclaredFields()) {
+            int m = f.getModifiers();
+            if (Modifier.isPublic(m) && Modifier.isStatic(m) && !Modifier.isFinal(m) && f.getType() == String[].class && !clientOnly(f)) {
                 out.add(f);
             }
         }
@@ -146,6 +162,18 @@ public final class ConfigSyncSC {
             localOreDims = null;
             localOreDimsKept = false;
         }
+        if (localStrings != null) {
+            for (Field f : syncedStringFields()) {
+                if (localStrings.containsKey(f.getName())) {
+                    try {
+                        f.set(null, localStrings.get(f.getName()));   // the array swapped whole: a reader meanwhile is safe
+                    } catch (Exception ignored) {
+                        // left as the server had it
+                    }
+                }
+            }
+            localStrings = null;
+        }
     }
 
     static synchronized void apply(Message msg) {
@@ -165,6 +193,14 @@ public final class ConfigSyncSC {
             }
             localOreDims = ConfigSC.oreDimensions;
             localOreDimsKept = true;
+            localStrings = new HashMap<String, String[]>();
+            for (Field f : syncedStringFields()) {
+                try {
+                    localStrings.put(f.getName(), (String[]) f.get(null));
+                } catch (Exception ignored) {
+                    // not kept: not restored either
+                }
+            }
         }
         for (Map.Entry<String, Object> e : msg.values.entrySet()) {
             if (clientOnly(e.getKey())) {
@@ -197,6 +233,17 @@ public final class ConfigSyncSC {
         if (msg.oreDims != null) {
             ConfigSC.oreDimensions = msg.oreDims;           // a new array, swapped whole: a tooltip reading it meanwhile is safe
         }
+        for (Map.Entry<String, String[]> e : msg.strings.entrySet()) {
+            try {
+                Field f = ConfigSC.class.getField(e.getKey());
+                int m = f.getModifiers();
+                if (Modifier.isStatic(m) && !Modifier.isFinal(m) && f.getType() == String[].class && !clientOnly(f) && e.getValue() != null) {
+                    f.set(null, e.getValue().clone());      // a new array, swapped whole
+                }
+            } catch (Exception ignored) {
+                // an option this client's version doesn't have: skipped
+            }
+        }
     }
 
     public static class Message implements IMessage {
@@ -206,6 +253,8 @@ public final class ConfigSyncSC {
         final Map<Integer, int[]> ores = new HashMap<Integer, int[]>();
         /** ConfigSC.oreDimensions - for the ore / limestone tooltips and NEI (null: an older server sent none). */
         int[] oreDims;
+        /** ГН-6: the String[] options by name (empty: an older server sent none). */
+        final Map<String, String[]> strings = new HashMap<String, String[]>();
 
         public Message() {
         }
@@ -226,6 +275,16 @@ public final class ConfigSyncSC {
                 msg.ores.put(ore.ordinal(), new int[]{s.minY, s.maxY, s.veinSize, s.veinsPerChunk});
             }
             msg.oreDims = ConfigSC.oreDimensions == null ? new int[] {0} : ConfigSC.oreDimensions.clone();   // no list = Overworld (OreGenSC)
+            for (Field f : syncedStringFields()) {
+                try {
+                    String[] v = (String[]) f.get(null);
+                    if (v != null) {
+                        msg.strings.put(f.getName(), v.clone());
+                    }
+                } catch (Exception ignored) {
+                    // not sent: the client keeps its own
+                }
+            }
             return msg;
         }
 
@@ -252,13 +311,58 @@ public final class ConfigSyncSC {
                 int ordinal = buf.readUnsignedShort();
                 ores.put(ordinal, new int[]{buf.readInt(), buf.readInt(), buf.readInt(), buf.readInt()});
             }
-            if (buf.readableBytes() >= 3 && buf.readBoolean()) {   // an older server ends here: the client keeps its own list
-                int len = buf.readUnsignedShort();
-                if (len <= 256 && buf.readableBytes() >= 4 * len) {
-                    oreDims = new int[len];
-                    for (int i = 0; i < len; i++) {
-                        oreDims[i] = buf.readInt();
+            if (buf.readableBytes() < 3) {
+                return;                                        // an older server ends here: the client keeps its own list
+            }
+            boolean dims = buf.readBoolean();
+            int len = buf.readUnsignedShort();                 // written either way (toBytes)
+            if (dims) {
+                if (len > 256 || buf.readableBytes() < 4 * len) {
+                    return;                                    // not ours to trust: the rest stays unread
+                }
+                oreDims = new int[len];
+                for (int i = 0; i < len; i++) {
+                    oreDims[i] = buf.readInt();
+                }
+            }
+            readStrings(buf);
+        }
+
+        /** ГН-6: the String[] options, after the ore dimensions (a server of 0.2.2 or older ends before them). */
+        private void readStrings(ByteBuf buf) {
+            if (buf.readableBytes() < 3 || !buf.readBoolean()) {
+                return;
+            }
+            try {
+                int n = buf.readUnsignedShort();
+                for (int i = 0; i < n; i++) {
+                    String name = ByteBufUtils.readUTF8String(buf);
+                    int len = buf.readUnsignedShort();
+                    if (len > 1024) {
+                        return;
                     }
+                    String[] v = new String[len];
+                    for (int k = 0; k < len; k++) {
+                        v[k] = ByteBufUtils.readUTF8String(buf);
+                    }
+                    strings.put(name, v);
+                }
+            } catch (RuntimeException e) {
+                // a cut message: what was read whole is kept
+            }
+        }
+
+        /** ГН-6: the String[] options, last on the wire (the self-test measures this part by reflection). */
+        private void writeStrings(ByteBuf buf) {
+            buf.writeBoolean(true);
+            buf.writeShort(strings.size());
+            for (Map.Entry<String, String[]> e : strings.entrySet()) {
+                ByteBufUtils.writeUTF8String(buf, e.getKey());
+                String[] v = e.getValue();
+                int len = Math.min(v.length, 1024);
+                buf.writeShort(len);
+                for (int k = 0; k < len; k++) {
+                    ByteBufUtils.writeUTF8String(buf, v[k] == null ? "" : v[k]);
                 }
             }
         }
@@ -292,6 +396,7 @@ public final class ConfigSyncSC {
             for (int i = 0; i < len; i++) {
                 buf.writeInt(oreDims[i]);
             }
+            writeStrings(buf);                                 // after the dimensions: an older client stops reading before them
         }
     }
 

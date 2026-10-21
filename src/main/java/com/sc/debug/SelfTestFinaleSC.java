@@ -209,7 +209,7 @@ final class SelfTestFinaleSC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        boolean rules = sent.size() == 20 && sent.contains("requireSignal") && sent.contains("caravans") && !sent.contains("customSky")   // Ф6: + 6
+        boolean rules = sent.size() == 28 && sent.contains("requireSignal") && sent.contains("caravans") && !sent.contains("customSky")   // Ф6: + 6, audit 2026-10-20: + 8
                 && !SubstrateConfigSC.requireSignal && SubstrateConfigSC.caravans;
         String sky;
         try {
@@ -218,7 +218,7 @@ final class SelfTestFinaleSC {
         } catch (NoSuchFieldException e) {
             sky = "missing";
         }
-        check(rules && "private".equals(sky) && !SubstrateConfigSC.customSky(), "config (§2.1, ПК-21): " + sent.size() + " rules the server sends (20),"
+        check(rules && "private".equals(sky) && !SubstrateConfigSC.customSky(), "config (§2.1, ПК-21): " + sent.size() + " rules the server sends (28),"
                 + " requireSignal " + SubstrateConfigSC.requireSignal + " (false) / caravans " + SubstrateConfigSC.caravans + " (true) " + rules + "; customSky "
                 + sky + ", off by default " + !SubstrateConfigSC.customSky() + ", not a rule" + (rules ? "" : " (the dimension section of the test config edited?)"));
     }

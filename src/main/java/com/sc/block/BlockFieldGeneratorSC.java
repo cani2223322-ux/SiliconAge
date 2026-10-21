@@ -125,7 +125,7 @@ public class BlockFieldGeneratorSC extends Block {
             field.readFromItem(stack.getTagCompound());
         }
         if (placer instanceof EntityPlayer) {
-            field.setPlacer(placer.getCommandSenderName());
+            field.setPlacer((EntityPlayer) placer);           // ЭН-3: name and UUID
         }
         // placed switched off, as a machine: nothing can overvolt it (or flood the line) before it is checked and switched on
         field.setPowerOn(false);
@@ -205,7 +205,7 @@ public class BlockFieldGeneratorSC extends Block {
      * Plain right-click on the master opens the status GUI (energy bar + mode/node/active info,
      * see GuiFieldGeneratorSC). Sneak+right-click keeps the old quick-cycle-via-chat shortcut so
      * changing mode doesn't require opening a screen - with an EMPTY hand only: vanilla never calls
-     * onBlockActivated for a sneaking player holding an item (sc.gui.field.cycle / the manual say
+     * onBlockActivated for a sneaking player holding an item (the manual says
      * so). A linked (non-master) node has no state of
      * its own worth a screen for, so it just points the player at the master, same as before.
      */
@@ -232,7 +232,7 @@ public class BlockFieldGeneratorSC extends Block {
         }
 
         if (!world.isRemote && field.getOwner().isEmpty()) {
-            field.setOwner(player.getCommandSenderName());       // a generator from before owners: the first to use it
+            field.setOwner(player);                              // a generator from before owners: the first to use it (ЭН-3: and his UUID)
             player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.becameowner"));
         }
         if (player.isSneaking()) {

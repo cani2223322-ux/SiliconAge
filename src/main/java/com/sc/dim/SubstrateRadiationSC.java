@@ -33,8 +33,23 @@ public final class SubstrateRadiationSC {
     }
 
     /** ПА-1 (pure): the background of a column of BiomeSubstrateSC kind `kind`. */
+    /** ПМ-6 (audit 2026-10-20): dimension.backgroundRadiationMultiplier - the biomes', the pillar's and the cracked RTGs' levels. */
+    static float mul() {
+        return Math.max(0F, SubstrateConfigSC.backgroundRadiationMultiplier);
+    }
+
+    /** ПМ-6: a cracked RTG's level with the multiplier (TileEntitySubstrateVentSC reports it; the handbook and the tooltip say it). */
+    public static float rtgLevel() {
+        return RTG_LEVEL * mul();
+    }
+
+    /** ПМ-6: the puncture pillar's level at its axis with the multiplier. */
+    public static float pillarLevel() {
+        return PILLAR_LEVEL * mul();
+    }
+
     public static float backgroundLevel(int kind) {
-        return kind == BiomeSubstrateSC.OXIDE ? OXIDE : kind == BiomeSubstrateSC.RIFT ? RIFT : 0F;
+        return (kind == BiomeSubstrateSC.OXIDE ? OXIDE : kind == BiomeSubstrateSC.RIFT ? RIFT : 0F) * mul();   // ПМ-6
     }
 
     /**
@@ -46,7 +61,7 @@ public final class SubstrateRadiationSC {
         int cx = (MathHelper.floor_double(x) >> 8) * SubstrateCellsSC.CELL + SubstrateCellsSC.CELL / 2;
         int cz = (MathHelper.floor_double(z) >> 8) * SubstrateCellsSC.CELL + SubstrateCellsSC.CELL / 2;
         double dx = x - (cx + 0.5D), dz = z - (cz + 0.5D), dy = Math.max(0D, y - SubstrateWildTerrainSC.PILLAR_TOP);
-        return com.sc.radiation.RadiationSC.atDistance(PILLAR_LEVEL, PILLAR_RADIUS, Math.sqrt(dx * dx + dy * dy + dz * dz));
+        return com.sc.radiation.RadiationSC.atDistance(pillarLevel(), PILLAR_RADIUS, Math.sqrt(dx * dx + dy * dy + dz * dz));
     }
 
     /** RadiationSC.levelAt's hook: the background where the player stands (0 outside the Substrate, on a client). */

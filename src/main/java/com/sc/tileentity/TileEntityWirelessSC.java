@@ -51,7 +51,8 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
     private int kind;
     private long id, partnerId;
     private int partnerX, partnerY, partnerZ, partnerDim, partnerTier = -1;
-    private String owner = "";
+    /** ЭН-3 (audit 2026-10-20): the owner by name and UUID (an old block - by the name until its owner's first action). */
+    private final com.sc.util.OwnerSC owner = new com.sc.util.OwnerSC();
     private ForgeDirection facing = ForgeDirection.SOUTH;
     private boolean beam = true, paused, giving = true;
     /** Client: the server's chunk ticket is held (bit 16), chunk loading is on in the config (bit 32). */
@@ -613,15 +614,39 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
     }
 
     public String getOwner() {
-        return owner;
+        return owner.name();
     }
 
     public void setOwner(String name) {
-        owner = name == null ? "" : name;
+        owner.set(name, worldObj);
+    }
+
+    /** ЭН-3: owned by the placer (his name and UUID); a FakePlayer or null leaves it ownerless. */
+    public void setOwner(EntityPlayer p) {
+        owner.set(p);
     }
 
     public boolean allowed(EntityPlayer p) {
-        return owner.isEmpty() || owner.equals(p.getCommandSenderName()) || p.capabilities.isCreativeMode;
+        return owner.isEmpty() || owner.matches(p, this) || p.capabilities.isCreativeMode;
+    }
+
+    /**
+     * ЭН-4 (audit 2026-10-20): sneak-click charging of armour / a weapon takes from the owner's block only (an ownerless one -
+     * automation's - and creative as allowed() has it); a stranger is told whose it is.
+     */
+    @Override
+    public boolean canItemCharge(EntityPlayer p) {
+        if (!allowed(p)) {
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.chat.wl.notmine", getOwner()));
+            return false;
+        }
+        return super.canItemCharge(p);
+    }
+
+    /** ЭН-4: switched off, it gives nothing to sneak-click charging either (as an energy storage). */
+    @Override
+    public int extractForItemCharging(int max) {
+        return switchedOn() ? super.extractForItemCharging(max) : 0;
     }
 
     public boolean isBeam() {
@@ -831,7 +856,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
             partnerDim = nbt.getInteger("PDim");
         }
         partnerTier = nbt.hasKey("PTier") ? nbt.getInteger("PTier") : -1;
-        owner = nbt.getString("Owner");
+        owner.read(nbt, "Owner", "OwnerId");
         facing = ForgeDirection.getOrientation(nbt.getInteger("Facing"));
         if (facing == ForgeDirection.UNKNOWN) {
             facing = ForgeDirection.SOUTH;
@@ -855,7 +880,7 @@ public class TileEntityWirelessSC extends TileEntityEnergyBase implements net.mi
         nbt.setInteger("PZ", partnerZ);
         nbt.setInteger("PDim", partnerDim);
         nbt.setInteger("PTier", partnerTier);
-        nbt.setString("Owner", owner);
+        owner.write(nbt, "Owner", "OwnerId");
         nbt.setInteger("Facing", facing.ordinal());
         nbt.setBoolean("NoBeam", !beam);
         nbt.setBoolean("Paused", paused);

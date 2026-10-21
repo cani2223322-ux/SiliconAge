@@ -385,12 +385,35 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return Math.min(n, cap);
     }
 
+    /**
+     * ГН-2 (audit 2026-10-20): an Economizer's fuel x0.85 (it was x0.7) and output x0.9 each - with 4 of them a Fuel Cell burning
+     * electrolysis gases gives back about 62 900 EU of the 72 000 the electrolysis took (the fuel x0.522, the output x0.656), so
+     * no loop makes energy out of water.
+     */
+    public static final double ECONOMIZER_FUEL = 0.85, ECONOMIZER_OUTPUT = 0.9;
+
+    /** ГН-2: the fuel multiplier of `n` Economizers. */
+    public static double economizerFuel(int n) {
+        return Math.pow(ECONOMIZER_FUEL, n);
+    }
+
+    /**
+     * ГН-6 (audit 2026-10-20): `eu` a tick times the server's generators.generatorOutput, at least 1 while there is any (0 stays 0).
+     * Every generator's output goes through it (the creative one doesn't).
+     */
+    public static int scaledOutput(double eu) {
+        if (eu <= 0) {
+            return 0;
+        }
+        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, Math.round(eu * com.sc.util.ConfigSC.generatorOutput)));
+    }
+
     /** Output multiplier from Overdrive / Economizer (fuel-burning generators only). */
     public double outputMultiplier() {
         if (!generatorType.burnsFuel()) {
             return 1;
         }
-        return Math.pow(1.5, effectiveOverdrive()) * Math.pow(0.9, upgradeCount(UpgradeType.ECONOMIZER));
+        return Math.pow(1.5, effectiveOverdrive()) * Math.pow(ECONOMIZER_OUTPUT, upgradeCount(UpgradeType.ECONOMIZER));
     }
 
     /**
@@ -416,7 +439,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** Rated output with `overdrive` Overdrive upgrades (the rest as they are). */
     private long outputWith(int overdrive) {
-        return Math.round(generatorType.euPerTick * Math.pow(1.5, overdrive) * Math.pow(0.9, upgradeCount(UpgradeType.ECONOMIZER))
+        return scaledOutput(generatorType.euPerTick * Math.pow(1.5, overdrive) * Math.pow(ECONOMIZER_OUTPUT, upgradeCount(UpgradeType.ECONOMIZER))
                 * shieldingMultiplier() * bigOutputMultiplier());
     }
 
@@ -425,19 +448,20 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return effectiveOverdrive() < upgradeCount(UpgradeType.OVERDRIVE);
     }
 
+    /** Fuel burnt per rated tick: Overdrive x1.75, Economizer x0.85 (ГН-2) each, ГН-6: times generators.generatorFuel. */
     public double fuelMultiplier() {
         if (!generatorType.burnsFuel()) {
             return 1;
         }
-        return Math.pow(1.75, effectiveOverdrive()) * Math.pow(0.7, upgradeCount(UpgradeType.ECONOMIZER));
+        return Math.pow(1.75, effectiveOverdrive()) * economizerFuel(upgradeCount(UpgradeType.ECONOMIZER)) * com.sc.util.ConfigSC.generatorFuel;
     }
 
-    /** Rated output with the upgrades - what a fuel generator makes each tick while it runs. */
+    /** Rated output with the upgrades - what a fuel generator makes each tick while it runs (ГН-6: with generatorOutput). */
     public int ratedOutput() {
         if (singular()) {
-            return getSingular().hasHole() ? Math.max(1, getSingular().outputNow()) : generatorType.euPerTick;
+            return getSingular().hasHole() ? Math.max(1, getSingular().outputNow()) : scaledOutput(generatorType.euPerTick);
         }
-        return (int) Math.round(generatorType.euPerTick * outputMultiplier() * shieldingMultiplier() * bigOutputMultiplier());
+        return scaledOutput(generatorType.euPerTick * outputMultiplier() * shieldingMultiplier() * bigOutputMultiplier());
     }
 
     // ---- the Tokamak XV: a tokamak inside its 7x7x3 build ----
@@ -589,6 +613,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private boolean scannedOnce, bigFrozen;
     /** The last scan found a port held by another Tokamak XV (the screen says so). */
     private boolean portTaken;
+    /** ГН-4 (audit 2026-10-20): the last scan found a 5th tank / a 3rd storage in the wall - a gap the screen names (not saved). */
+    private boolean extraPort;
     /** The port cells this tokamak holds in PORT_OWNERS (position keys, its dimension). */
     private final java.util.Set<Long> heldPorts = new java.util.HashSet<Long>();
     /**
@@ -712,6 +738,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return portTaken;
     }
 
+    /** ГН-4: a tank or storage past PORT_TANKS_MAX / PORT_STORES_MAX stands in the wall (a gap: the build isn't ready). */
+    public boolean isExtraPort() {
+        return extraPort;
+    }
+
     public int getPortFluid(int i) {
         return portFluid[i];
     }
@@ -759,7 +790,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (portTaken ? 4 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
                 | bigEvent << 5 | (svOut ? 128 : 0);
         return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
-                capMissing | Math.round(stability * 10) << 8 | (nearBuild ? 1 << 30 : 0), portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
+                capMissing | Math.round(stability * 10) << 8 | (extraPort ? 1 << 29 : 0) | (nearBuild ? 1 << 30 : 0),
+                portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
     }
 
     public void setBigClient(int[] v) {
@@ -782,7 +814,8 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         portStores = v[2] >>> 27 & 3;
         weakStores = v[2] >>> 29 & 3;
         capMissing = v[3] & 0xFF;
-        stability = (v[3] >>> 8 & 0x3FFFFF) / 10F;
+        stability = (v[3] >>> 8 & 0x1FFFFF) / 10F;               // bits 8-28 (bit 29 - ГН-4's extra port)
+        extraPort = (v[3] & 1 << 29) != 0;
         nearBuild = (v[3] & 1 << 30) != 0;
         for (int i = 0; i < 4; i++) {
             portFluid[i] = v[4 + i];
@@ -928,7 +961,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int coils = 0, walls = 0, ports = 0, caps = 0, tanks = 0, stores = 0, weak = 0, ci = 0;
         int[] labels = new int[24], caps4 = new int[4], counts = new int[4];
         int free = 0;
-        boolean taken = false;
+        boolean taken = false, extra = false;
         long top = 0, bottomMask = 0;
         tankPorts.clear();
         storePorts.clear();
@@ -994,6 +1027,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                         weak++;
                     }
                     storePorts.add(new int[]{x, y0, z});
+                } else if (te instanceof TileEntityTankSC || te instanceof TileEntityEnergyStorageSC && !(te instanceof TileEntityChargePadSC)) {
+                    extra = true;                                   // ГН-4: one port too many - still a gap, but said as such
+                    portMem[w] = null;
                 } else {
                     portMem[w] = null;
                 }
@@ -1037,6 +1073,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         portStores = stores;
         weakStores = weak;
         portTaken = taken;
+        extraPort = extra;
         holdPorts();
         nearBuild = !ignited && otherBuildNear(worldObj, x0, y0, z0, 1, this);   // checked for the lighting only
         bigReady = coils == 0xFFFFFF && walls == 0xFFFFFF && caps == 0 && stores > 0 && weak == 0;
@@ -1815,7 +1852,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (eu <= 0) {
             status = none;
         } else if (!bufferFull()) {
-            addEnergy(eu);
+            addEnergy(scaledOutput(eu));                     // ГН-6: the server's generatorOutput
             status = GeneratorStatus.GENERATING;
         }
     }
@@ -1975,6 +2012,28 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      * the 5x5x5 round it takes 4%; rain x1.25, a storm x1.5; gusts of +-10%. Worked out once a
      * second. The rotor wears one step a second while it turns.
      */
+    /** ГН-5: windStill's answers - wind, a world without a sky (the Nether, the End), a world without air (Galacticraft's Moon). */
+    public static final int WIND_OK = 0, WIND_NO_SKY = 1, WIND_AIRLESS = 2;
+
+    /** ГН-5: whether a wind turbine in `w` can have wind at all (works on the client - the screen's hint). */
+    public static int windStill(net.minecraft.world.World w) {
+        if (w == null || w.provider == null) {
+            return WIND_OK;
+        }
+        if (w.provider.hasNoSky) {
+            return WIND_NO_SKY;
+        }
+        if (cpw.mods.fml.common.Loader.isModLoaded("GalacticraftCore") && com.sc.compat.GcWorldSC.airless(w.provider)) {
+            return WIND_AIRLESS;
+        }
+        return WIND_OK;
+    }
+
+    /** ГН-5: pure - the wind's share by the height over the world's ground level (full at 96) and the blocks round the rotor. */
+    public static double windFactor(int height, int blocked) {
+        return Math.max(0, Math.min(1, height / 96.0)) * Math.max(0, 1 - blocked * 0.04);
+    }
+
     private void updateWind() {
         ItemStack rotor = slots[SLOT_FUEL];
         if (rotor == null || rotor.getItem() != com.sc.init.ModItems.windRotor) {
@@ -1984,7 +2043,10 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if ((!outputWorkedOut || worldObj.getTotalWorldTime() % 20 == 0)
                 && worldObj.checkChunksExist(xCoord - 2, yCoord - 2, zCoord - 2, xCoord + 2, yCoord + 2, zCoord + 2)) {
             outputWorkedOut = true;                          // the first tick after loading too, not a second later
-            int height = yCoord - 64;
+            // ГН-5 (audit 2026-10-20): the height above this world's own ground level (a superflat map's 4, not 64); none at all
+            // in a world without a sky or without air
+            int still = windStill(worldObj);
+            int height = yCoord - worldObj.provider.getAverageGroundLevel();
             int blocked = 0;
             for (int dx = -2; dx <= 2; dx++) {
                 for (int dy = -2; dy <= 2; dy++) {
@@ -1995,15 +2057,19 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                     }
                 }
             }
-            double f = Math.max(0, Math.min(1, height / 96.0)) * Math.max(0, 1 - blocked * 0.04);
-            if (worldObj.isThundering()) {
+            double f = still != WIND_OK ? 0 : windFactor(height, blocked);
+            // ГН-5: the rain and the storm over the turbine itself (a desert or a snowy biome has none), as the solar panel sees it
+            boolean rainHere = worldObj.canLightningStrikeAt(xCoord, yCoord + 1, zCoord);
+            if (worldObj.isThundering() && rainHere) {
                 f *= 1.5;
-            } else if (worldObj.isRaining()) {
+            } else if (rainHere) {
                 f *= 1.25;
             }
             f *= 0.9 + worldObj.rand.nextDouble() * 0.2;
-            cachedOutput = Math.min(Tier.MV.getVoltage(), (int) Math.round(generatorType.euPerTick * f));
-            infoA = Math.max(0, height);
+            // ГН-6: with generatorOutput (the MV cap grows with it, so a multiplier over 1 still works at the top)
+            cachedOutput = Math.min((int) Math.round(Tier.MV.getVoltage() * Math.max(1F, com.sc.util.ConfigSC.generatorOutput)),
+                    scaledOutput(generatorType.euPerTick * f));
+            infoA = still != WIND_OK ? 0 : Math.max(0, height);
             infoB = Math.max(0, 100 - blocked * 4);
         }
         if (cachedOutput <= 0) {
@@ -2228,6 +2294,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         ramp = RAMP_FULL / 10;
         status = GeneratorStatus.GENERATING;
         markDirty();
+        com.sc.energy.CableWarningSC.ignitionCheck(this);   // ГН-3: a cable weaker than the output burns now - those near are told
         refreshEnergyNet();      // sink -> source: IC2 caches that on load
         return true;
     }

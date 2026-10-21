@@ -113,7 +113,7 @@ public final class WardenLootSC {
         long last = wr.getLong(WardenRulesSC.LAST_DAY);
         if (!WardenRulesSC.lootDue(had, last, day)) {
             if (p != null) {
-                long left = Math.max(1L, WardenRulesSC.LOOT_COOLDOWN_DAYS - (day - last));
+                long left = Math.max(1L, WardenRulesSC.lootCooldownDays() - (day - last));   // ПМ-6: as the server sets it
                 p.addChatComponentMessage(new ChatComponentTranslation("sc.warden.loot.cooldown", Long.valueOf(left)));
             }
             return false;

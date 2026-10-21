@@ -125,7 +125,8 @@ public class ItemEntangledCrystalSC extends Item {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         long pair = pairOf(stack);
         if (pair == 0) {
-            com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.crystal.tooltip.whole") + " " + Lang.tr("sc.crystal.tooltip.whole2"));
+            com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.crystal.tooltip.whole") + " " + Lang.tr("sc.crystal.tooltip.whole2")
+                    + "\n" + Lang.tr("sc.crystal.tooltip.craft"));          // ЭН-8: the quantum cell in the recipe must be empty
             return;
         }
         list.add("§d" + Lang.tr("sc.crystal.tooltip.pair", pairName(pair), halfOf(stack)));

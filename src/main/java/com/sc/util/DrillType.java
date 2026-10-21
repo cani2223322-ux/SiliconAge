@@ -15,8 +15,11 @@ public enum DrillType {
     NANO(ArmorSuit.NANO, Tier.MV, 10000, 12F, 50, 3, 0),
     QUANTUM(ArmorSuit.QUANTUM, Tier.HV, 40000, 24F, 150, 4, 3),
     EXO(ArmorSuit.EXO, Tier.EV, 100000, 48F, 300, 5, 5),
-    /** docs/plan-singular-tools.md (appended - ordinals and registry names are saved): only made from an Exo drill in the Singular station. */
-    SINGULAR(ArmorSuit.SINGULAR, Tier.SV, 1000000, 64F, 400, 5, 5);
+    /**
+     * docs/plan-singular-tools.md (appended - ordinals and registry names are saved): only made from an Exo drill in the Singular
+     * station. ОР-6 (audit 2026-10-20): 240 EU a block - the Exo drill's 300 x0.8 («Наследие Экзо» -20%), it was 400.
+     */
+    SINGULAR(ArmorSuit.SINGULAR, Tier.SV, 1000000, 64F, 240, 5, 5);
 
     /** The suit it belongs to (its set bonus). */
     public final ArmorSuit suit;

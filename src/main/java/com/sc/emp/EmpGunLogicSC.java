@@ -442,21 +442,25 @@ public final class EmpGunLogicSC {
         heatUp(p, gun, ItemEmpGunSC.heatOf(gun), EmpMathSC.gunHeat(mode, ItemEmpGunSC.hasModule(gun, EmpModule.COOLING)), now);
     }
 
-    /** Writes `from + add` as the gun's heat (not while it is in use); the warning 2 s before and the overheat. */
+    /** Writes `from + add` as the gun's heat (not while it is in use); the warning (heatNews) and the overheat. */
     static void heatUp(EntityPlayer p, ItemStack gun, int from, int add, long now) {
         ItemEmpGunSC.setHeat(gun, from + add, now);
         heatNews(p, gun, from, from + add);
     }
 
-    /** The overheat / its warning, once the heat went from `before` to `after` (written or still pending). */
+    /**
+     * The overheat / its warning, once the heat went from `before` to `after` (written or still pending). ОР-3 (2026-10-21): the
+     * warning by the gun's mode (EmpMathSC.overheatWarn) - the Siphon 2 s ahead, the Point / Pulse when the next shot would overheat it.
+     */
     static void heatNews(EntityPlayer p, ItemStack gun, int before, int after) {
         boolean cooling = ItemEmpGunSC.hasModule(gun, EmpModule.COOLING);
+        EmpMode mode = ItemEmpGunSC.modeOf(gun);
         if (after >= EmpMathSC.GUN_HEAT_MAX && before < EmpMathSC.GUN_HEAT_MAX) {
             SoundsSC.play(p.worldObj, p.posX, p.posY, p.posZ, EmpSC.SND_OVERHEAT, 0.8F, 1F);
             say(p, "sc.emp.overheat", EmpMathSC.coolSeconds(EmpMathSC.GUN_HEAT_MAX));
-        } else if (ItemEmpGunSC.warnOn(gun) && EmpMathSC.overheatWarn(after, cooling) && !EmpMathSC.overheatWarn(before, cooling)) {
+        } else if (ItemEmpGunSC.warnOn(gun) && EmpMathSC.overheatWarn(after, cooling, mode) && !EmpMathSC.overheatWarn(before, cooling, mode)) {
             SoundsSC.play(p.worldObj, p.posX, p.posY, p.posZ, EmpSC.SND_OVERHEAT, 0.4F, 1.4F);
-            say(p, "sc.emp.overheat.warn");
+            say(p, mode == EmpMode.SIPHON ? "sc.emp.overheat.warn" : "sc.emp.overheat.next");
         }
     }
 
@@ -476,6 +480,8 @@ public final class EmpGunLogicSC {
         if (r.anySuppressed()) {
             suppressedFx(p, target);
             say(p, "sc.emp.hit", target.getCommandSenderName(), new ChatComponentTranslation(pieceKey(pieces)), EmpShotSC.seconds(ticks));
+        } else if (r.anyAlready()) {
+            say(p, "sc.emp.already", EmpShotSC.seconds(r.maxAlready()));   // ОР-1: still suppressed - not extended
         } else {
             say(p, "sc.emp.immune", EmpShotSC.seconds(immune));
         }
@@ -504,6 +510,8 @@ public final class EmpGunLogicSC {
             if (shieldWas && !EmpMobSC.shieldUp(target)) {
                 say(p, "sc.emp.hit.mob.shield", EmpShotSC.seconds(r.ticks[1]));     // «Сердце комплекта»
             }
+        } else if (r.anyAlready()) {
+            say(p, "sc.emp.already", EmpShotSC.seconds(r.maxAlready()));   // ОР-1: still suppressed - not extended
         } else {
             say(p, "sc.emp.immune", EmpShotSC.seconds(immune));
         }

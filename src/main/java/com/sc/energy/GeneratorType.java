@@ -138,14 +138,9 @@ public enum GeneratorType {
             return 0;
         }
         if (this == COMBUSTION) {
-            if (fluid.equals("diesel")) return 16;
-            if (fluid.equals("fuel")) return 24;            // BuildCraft
-            if (fluid.equals("biodiesel")) return 20;
-            if (fluid.equals("ethanol") || fluid.equals("bioethanol")) return 12;
-            if (fluid.equals("biofuel")) return 10;
-            if (fluid.equals("crudeoil") || fluid.equals("oil")) return 5;
-            if (fluid.equals("ic2biogas")) return 4;
-            return 0;
+            // ГН-6 (audit 2026-10-20): the server's generators.combustionFuels ("fluid=EU/mB"; by default the old ones - diesel 16,
+            // BuildCraft's fuel 24, biodiesel 20, ethanol 12... - and EnderIO's, Thermal's, Forestry's)
+            return com.sc.util.ConfigSC.combustionEuPerMb(fluid);
         }
         if (kind == Kind.FLUID_FUEL && fluid.equals(fuelFluidName)) {
             return (double) euPerTick / fuelRatePerTick;
@@ -153,6 +148,10 @@ public enum GeneratorType {
         return 0;
     }
 
-    /** The Combustion Generator's other fuels, for the handbook and NEI. */
+    /**
+     * The Combustion Generator's fuels before ГН-6 (audit 2026-10-20). Use com.sc.util.ConfigSC.combustionFuelNames() - the
+     * server's generators.combustionFuels.
+     */
+    @Deprecated
     public static final String[] COMBUSTION_FUELS = {"diesel", "fuel", "biodiesel", "ethanol", "bioethanol", "biofuel", "crudeoil", "oil", "ic2biogas"};
 }

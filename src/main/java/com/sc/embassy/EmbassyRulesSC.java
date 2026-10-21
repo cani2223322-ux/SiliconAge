@@ -164,7 +164,23 @@ public final class EmbassyRulesSC {
         if (!valid(ride) || RIDE_BASE[ride] <= 0 || level <= ReputationSC.ENEMY) {
             return 0;
         }
-        return TradeRulesSC.playerSide(RIDE_BASE[ride], level, seed, priceKey(ride));
+        return TradeRulesSC.playerSide(base(ride), level, seed, priceKey(ride));
+    }
+
+    /**
+     * ПС-8 (audit 2026-10-20): a ride's base price - RIDE_BASE x the server's embassy.flightPriceMultiplier, rounded up, at least 1
+     * (0 stays 0: BACK is paid with its ticket).
+     */
+    public static int base(int ride) {
+        if (!valid(ride) || RIDE_BASE[ride] <= 0) {
+            return 0;
+        }
+        return (int) Math.max(1L, (long) Math.ceil(RIDE_BASE[ride] * (double) com.sc.dim.SubstrateConfigSC.flightPriceMultiplier - 1e-4));
+    }
+
+    /** ПС-8: flights a day there and back together - the server's embassy.flightsPerDay (FLIGHTS_PER_DAY by default). */
+    public static int flightsPerDay() {
+        return Math.max(1, com.sc.dim.SubstrateConfigSC.flightsPerDay);
     }
 
     /** ПЯ-12: a round trip of `ride` (out) and HOME (back, the same settlement's spread), x ROUND_TRIP_PCT, rounded up. 0: none. */
@@ -216,7 +232,7 @@ public final class EmbassyRulesSC {
         if (ride == RIDE_INTRO && introUsed) {
             return R_USED;
         }
-        if (counted(ride) && ridesToday >= FLIGHTS_PER_DAY || ride == RIDE_OTHER && otherToday >= OTHER_PER_DAY) {
+        if (counted(ride) && ridesToday >= flightsPerDay() || ride == RIDE_OTHER && otherToday >= OTHER_PER_DAY) {   // ПС-8
             return R_LIMIT;
         }
         if (!target) {

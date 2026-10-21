@@ -127,6 +127,11 @@ public enum ArmorFeature {
     public static final double MAGNET_RADIUS = 8.0;
     /** Н7: an item the wearer threw is left alone this many ticks (so things can be dropped). */
     public static final int MAGNET_THROWN_GRACE = 20;
+    /**
+     * БР-1 (audit 2026-10-20): Н7 leaves someone else's death drop alone this long (60 s - the dead one picks his own things up at
+     * once), and what another player threw - this long (4 s: a trade, a gift on the ground).
+     */
+    public static final int MAGNET_DEATH_GRACE = 1200, MAGNET_OTHERS_GRACE = 80;
     /** П3 heavy water per push stopped; П7 argon a second while slowed; Б3 hydrogen a second while falling slowly. */
     public static final float SING_D2O_ANCHOR = 1F, SING_AR_STABILIZER_PER_SECOND = 0.5F, SING_H2_SLOWFALL_PER_SECOND = 0.5F;
     /** Б3: the fastest fall (motionY) while it holds the wearer; its air jump - hydrogen and EU. */

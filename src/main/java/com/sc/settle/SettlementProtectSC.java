@@ -399,7 +399,8 @@ public final class SettlementProtectSC {
         if (e.world.isRemote || !(e.entityLiving instanceof IMob)) {
             return;
         }
-        if (SettlementSC.protecting(e.world, e.x, e.y, e.z) != null || SettlementSC.dockZoneAt(e.world, e.x, e.y, e.z) != null) {
+        if (SettlementSC.protecting(e.world, e.x, e.y, e.z) != null || SettlementSC.dockZoneAt(e.world, e.x, e.y, e.z) != null
+                || SettlementSC.embassyGroundAt(e.world, e.x, e.z) != null) {   // ПС-1: an embassy's whole level ground, the Vokzal in it
             e.setResult(Event.Result.DENY);
         }
     }

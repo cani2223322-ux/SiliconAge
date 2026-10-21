@@ -102,6 +102,11 @@ public final class SpawnDirectorSC {
     private static final double DRONE_Y = 2.2D;
     /** The census flags of an entry. */
     private static final int F_QUANTUM = 1, F_ELITE = 2;
+    /**
+     * МБ-3 (audit 2026-10-20): a standing structure's resident (a camp's or a Vault's dweller with its home, a Sentinel, a Warlord -
+     * the rare ones' records) - counted near a player as ever, never in the dimension's cap.
+     */
+    private static final int F_RESIDENT = 4;
 
     /** Ticks since each player's last try (by UUID; a new one starts at a random point - the players don't all fire at once). */
     private static final Map<UUID, Integer> COUNTERS = new HashMap<UUID, Integer>();
@@ -109,6 +114,17 @@ public final class SpawnDirectorSC {
     private static final Map<UUID, Integer> PEACEFUL_COUNTERS = new HashMap<UUID, Integer>();
     /** Ф4: a rare one looks at its record this often (ticks, ПС-30); «Затмение» unseen this long is looked for by the world tick. */
     public static final int RARE_SEEN_TICKS = 100, ECLIPSE_WATCH_TICKS = 20, ECLIPSE_UNSEEN_TICKS = 140;
+    /**
+     * МБ-2 (audit 2026-10-20): an «Затмение» recorded ALIVE but not seen for this long (3 game days - stuck in a chunk nobody loads)
+     * counts as dead, dated its last sighting: the Rift may make a new one. A stale copy loaded later leaves the world when the new
+     * one lives (rareSeen), or lives again when there is none.
+     */
+    public static final long ECLIPSE_STALE_TICKS = 72000L;
+
+    /** МБ-2, pure: an ALIVE record last seen at `seenAt` is stale at `now`. */
+    public static boolean stale(long seenAt, long now) {
+        return now - seenAt >= ECLIPSE_STALE_TICKS;
+    }
     /** Ф4: the record's place must be loaded this far round (blocks) before a look without it counts as a miss. */
     private static final int ECLIPSE_WATCH_RADIUS = 48;
     /** Ф4: «Затмение» never comes lower than this in the Rift (its floor is the glass bottom of the void). */
@@ -118,6 +134,8 @@ public final class SpawnDirectorSC {
     private static long censusTime = Long.MIN_VALUE;
     private static double[] census = new double[4 * 64];
     private static int censusN;
+    /** МБ-3: of censusN the ones the dimension's cap counts (not F_RESIDENT); the players in the census's world (no FakePlayers). */
+    private static int censusWorld, censusPlayers;
     /** Ф4: the peaceful natives of the same tick (x, y, z) - the Wafer Crabs, their own caps. */
     private static double[] peace = new double[3 * 16];
     private static int peaceN;
@@ -226,7 +244,7 @@ public final class SpawnDirectorSC {
         }
         takeCensus(w);
         int near = near(p.posX, p.posY, p.posZ, SpawnRulesSC.NEAR_RADIUS, 0);
-        if (!SpawnRulesSC.maySpawn(near, censusN, 1, false)) {
+        if (!SpawnRulesSC.maySpawn(near, censusWorld, 1, false, worldCap())) {   // МБ-3: the residents aside, by the players
             return 0;
         }
         int nearQuantum = near(p.posX, p.posY, p.posZ, SpawnRulesSC.NEAR_RADIUS, F_QUANTUM);
@@ -263,7 +281,7 @@ public final class SpawnDirectorSC {
         }
         boolean quantum = SpawnRulesSC.quantumKind(kind);
         int places = kind == MobEntitiesSC.ID_JAMMER && rand.nextFloat() < SpawnRulesSC.JAMMER_ESCORT_CHANCE ? want + 1 : want;
-        int group = SpawnRulesSC.fitGroup(near, nearQuantum, censusN, places, 1, quantum, false);
+        int group = SpawnRulesSC.fitGroup(near, nearQuantum, censusWorld, places, 1, quantum, false, worldCap());
         Group g = new Group(w, kind, spot, node, fromSpawn, elitesNear, place == SpawnRulesSC.PLACE_RIFT);
         for (int m = 0; m < group; m++) {
             int[] at = m == 0 ? spot : null;
@@ -483,7 +501,7 @@ public final class SpawnDirectorSC {
      */
     private static int eclipse(WorldServer w, int[] spot, int near, int nearQuantum, int elitesNear, Random rand) {
         RareRegistrySC reg = RareRegistrySC.get(w);
-        if (reg == null || spot[1] < ECLIPSE_MIN_Y || !SpawnRulesSC.maySpawn(near, nearQuantum, censusN, 1, true, false)) {
+        if (reg == null || spot[1] < ECLIPSE_MIN_Y || !SpawnRulesSC.maySpawn(near, nearQuantum, censusWorld, 1, true, false, worldCap())) {
             return 0;
         }
         RareRegistrySC.Rec r = reg.recIfAny(RareRegistrySC.ECLIPSE);
@@ -515,6 +533,10 @@ public final class SpawnDirectorSC {
             return;
         }
         long now = rareNow(w);
+        if (stale(r.seenAt, now)) {
+            reg.died(RareRegistrySC.ECLIPSE, r.seenAt);          // МБ-2: unseen 3 days - dead since its last sighting
+            return;
+        }
         if (now - r.seenAt < ECLIPSE_UNSEEN_TICKS || r.dim != w.provider.dimensionId) {
             return;
         }
@@ -543,8 +565,10 @@ public final class SpawnDirectorSC {
 
     /**
      * Ф4, ПС-30, server - a rare creature's own slow tick (every RARE_SEEN_TICKS): its record seen now. An ALIVE record of another
-     * UUID - this is a stale copy (an old chunk, a restored backup): it leaves the world, nothing dropped; a record not ALIVE (it
-     * was counted lost meanwhile) - it is the record's live one again. A creature without a key (an egg's) - nothing.
+     * UUID - this is a stale copy (an old chunk, a restored backup): it leaves the world, nothing dropped; so does it under a DEAD
+     * record of another UUID (★, МБ-2: a newer one came and died since - an Eclipse left unloaded for 3 days, then the one after
+     * it killed, would else be killed twice); a record DEAD with its own UUID (it was counted lost meanwhile) or none - it is the
+     * record's live one again. A creature without a key (an egg's) - nothing.
      * @return it stays in the world
      */
     public static boolean rareSeen(EntityLiving e) {
@@ -558,12 +582,21 @@ public final class SpawnDirectorSC {
             return true;
         }
         RareRegistrySC.Rec r = reg.recIfAny(key);
-        if (r != null && r.state == RareRegistrySC.ALIVE) {
-            e.setDead();                                           // the other one is the live one: never two
+        if (!mayRevive(r == null ? RareRegistrySC.NONE : r.state, r == null || r.uuid().equals(e.getUniqueID()))) {
+            e.setDead();                                           // the other one is the live one, or came after it: never two
             return false;
         }
         reg.alive(key, e, now);
         return true;
+    }
+
+    /**
+     * ★ (МБ-2): pure - may a loaded rare creature not matching its ALIVE record become the record's live one: the record's `state`,
+     * `ownId` - the record has its UUID (or there is no record). ALIVE (another one) - no; DEAD with another UUID - no (a newer
+     * one came and died); DEAD with its own (counted lost), NONE - yes.
+     */
+    public static boolean mayRevive(int state, boolean ownId) {
+        return state == RareRegistrySC.NONE || state == RareRegistrySC.DEAD && ownId;
     }
 
     /** Ф4, ПС-30, server - from a rare creature's onDeath (vanilla's `dead` set: the death went through): its record DEAD now. */
@@ -689,7 +722,7 @@ public final class SpawnDirectorSC {
 
     /** A nanite swarm at the spot (package X's factory): one census place for all its particles. @return particles made */
     private static int swarm(WorldServer w, int[] spot, int near, int count, Random rand) {
-        if (!SpawnRulesSC.maySpawn(near, censusN, 1, false)) {
+        if (!SpawnRulesSC.maySpawn(near, censusWorld, 1, false, worldCap())) {
             return 0;
         }
         int made = EntityNaniteSC.spawnSwarm(w, spot[0] + 0.5D, spot[1] + 1.0D, spot[2] + 0.5D, count, rand);
@@ -709,7 +742,14 @@ public final class SpawnDirectorSC {
         censusDim = w.provider.dimensionId;
         censusTime = now;
         censusN = 0;
+        censusWorld = 0;
         peaceN = 0;
+        censusPlayers = 0;
+        for (Object o : w.playerEntities) {
+            if (o instanceof EntityPlayer && !(o instanceof net.minecraftforge.common.util.FakePlayer)) {
+                censusPlayers++;
+            }
+        }
         for (Object o : w.loadedEntityList) {
             Entity e = (Entity) o;
             if (!e.isDead && (MobCombatSC.hostileNative(e) || e instanceof EntityWaferCrabSC)) {
@@ -760,7 +800,15 @@ public final class SpawnDirectorSC {
             }
             flags = (c.censusTier() >= ICensusSC.TIER_QUANTUM ? F_QUANTUM : 0) | (c.censusElite() ? F_ELITE : 0);
         }
+        if (e.getEntityData().hasKey(MobCombatSC.HOME_NBT) || RareRegistrySC.keyOf(e) != null) {
+            flags |= F_RESIDENT;                                // МБ-3: a structure's resident - not in the dimension's cap
+        }
         addPoint(e.posX, e.posY, e.posZ, flags);
+    }
+
+    /** МБ-3: this census's dimension cap - SpawnRulesSC.worldMax by its players. */
+    private static int worldCap() {
+        return SpawnRulesSC.worldMax(censusPlayers);
     }
 
     private static void addPoint(double x, double y, double z, int flags) {
@@ -774,6 +822,9 @@ public final class SpawnDirectorSC {
         census[4 * censusN + 2] = z;
         census[4 * censusN + 3] = flags;
         censusN++;
+        if ((flags & F_RESIDENT) == 0) {
+            censusWorld++;
+        }
     }
 
     /** Natives in the box `r` round a point (this tick's census) having all of `flags` (0 - every one). */

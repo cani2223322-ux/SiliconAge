@@ -84,6 +84,22 @@ public enum Tier {
         return this != SV || SV_CONTENT_READY;
     }
 
+    /**
+     * ЭН-1 (audit 2026-10-20): the lowest tier whose voltage holds `eu` (a cable's rated packet): 32 - LV, 128 - MV, ...; above
+     * SV - SV; nothing (<= 0) - null.
+     */
+    public static Tier ofCapacity(double eu) {
+        if (!(eu > 0)) {
+            return null;
+        }
+        for (Tier t : VALUES) {
+            if (t.getVoltage() >= eu) {
+                return t;
+            }
+        }
+        return max();
+    }
+
     /** Maps an IC2 sink/source tier integer (1=LV, 2=MV, 3=HV, 4=EV, 5=IV, 6=XV, 7+=SV) to our Tier. */
     public static Tier fromIc2Tier(int ic2Tier) {
         switch (ic2Tier) {

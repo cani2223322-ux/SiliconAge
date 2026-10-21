@@ -21,8 +21,11 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
     private static final int EVERY = 5;
 
     private boolean active;
-    /** Who placed it ("" for a pad from before owners) and whether it charges only them and their team (ЭН-7). */
-    private String owner = "";
+    /**
+     * Who placed it (nobody for a pad from before owners) and whether it charges only them and their team (ЭН-7). ЭН-3 (audit
+     * 2026-10-20): by name and UUID - an old pad's owner by the name until his first charge writes the UUID down.
+     */
+    private final com.sc.util.OwnerSC owner = new com.sc.util.OwnerSC();
     private boolean ownerOnly;
 
     public boolean isActive() {
@@ -30,13 +33,23 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
     }
 
     public String getOwner() {
-        return owner;
+        return owner.name();
     }
 
-    /** BlockChargePadSC.onBlockPlacedBy - the placer. */
     public void setOwner(String name) {
-        owner = name == null ? "" : name;
+        owner.set(name, worldObj);
         markDirty();
+    }
+
+    /** BlockChargePadSC.onBlockPlacedBy - the placer (ЭН-3: his name and UUID; a FakePlayer - nobody). */
+    public void setOwner(EntityPlayer p) {
+        owner.set(p);
+        markDirty();
+    }
+
+    /** ЭН-3: the pad's owner (by the UUID; an old pad by the name - the first match writes the UUID down). */
+    public boolean isOwner(EntityPlayer p) {
+        return owner.matches(p, this);
     }
 
     public boolean isOwnerOnly() {
@@ -61,10 +74,10 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
         if (com.sc.ShieldEventHandler.privateFieldAgainst(worldObj, p, xCoord, yCoord, zCoord) != null) {
             return false;
         }
-        if (!ownerOnly || owner.isEmpty() || owner.equalsIgnoreCase(p.getCommandSenderName())) {
+        if (!ownerOnly || owner.isEmpty() || owner.matches(p, this)) {
             return true;
         }
-        net.minecraft.scoreboard.Team mine = worldObj.getScoreboard().getPlayersTeam(owner);
+        net.minecraft.scoreboard.Team mine = worldObj.getScoreboard().getPlayersTeam(owner.name());
         return mine != null && mine.isSameTeam(p.getTeam());
     }
 
@@ -173,7 +186,7 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
         active = nbt.getBoolean("PadActive");
-        owner = nbt.getString("PadOwner");
+        owner.read(nbt, "PadOwner", "PadOwnerId");
         ownerOnly = nbt.getBoolean("PadOwnerOnly");
     }
 
@@ -181,7 +194,7 @@ public class TileEntityChargePadSC extends TileEntityEnergyStorageSC {
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
         nbt.setBoolean("PadActive", active);
-        nbt.setString("PadOwner", owner);
+        owner.write(nbt, "PadOwner", "PadOwnerId");
         nbt.setBoolean("PadOwnerOnly", ownerOnly);
     }
 }

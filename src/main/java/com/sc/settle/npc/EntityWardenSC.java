@@ -961,7 +961,7 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         if (r.anyArmour && !worldObj.isRemote) {
             boolean allImmune = true;
             for (int i = 0; i < 4; i++) {
-                allImmune &= r.ticks[i] <= 0;
+                allImmune &= r.ticks[i] <= 0 && r.already[i] <= 0;   // ОР-1: a piece still suppressed heats in full, as a player's
             }
             r.heat = suit.empHeat(mode, allImmune);
         }

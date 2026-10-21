@@ -90,6 +90,11 @@ public final class WardenFightSC {
     public static final int LOST_MARGIN = 14;
     /** The shells' mouths: this far from the middle along the four lines, spread across the canyon; their patrol id. */
     public static final int MOUTH_R = ArenaLayoutSC.PIT_R - 2, MOUTH_SPREAD = 2;
+    /**
+     * ПМ-1: a wave's Shell carries this flag in its entity data (Forge's, saved with the mob) - MobDropsSC rolls no trophy for it
+     * (and keeps the killer's bad luck as it was); the firmware, the helium and the experience stay.
+     */
+    public static final String WAVE_TAG = "scWardenWave";
     /** «sc.warden.shielded» to a shooter at most once in this many ticks (3 s); the spark's sound at most every SPARK_SOUND. */
     public static final int SHIELD_TELL_TICKS = 60, SPARK_SOUND = 6;
     /** The press's stages (EntityBreakdownWardenSC.DW_PRESS). */
@@ -597,6 +602,7 @@ public final class WardenFightSC {
             }
             made++;
             EntityHollowShellSC shell = (EntityHollowShellSC) e;
+            shell.getEntityData().setBoolean(WAVE_TAG, true);        // ПМ-1: no trophy off a wave's Shell
             shell.setPatrol(patrol, (int) Math.floor(cx), floorY + 1, (int) Math.floor(cz));
             huntPlayersOnly(shell);
             EntityPlayer near = ws.getClosestPlayerToEntity(shell, WardenRulesSC.SCALE_RADIUS);

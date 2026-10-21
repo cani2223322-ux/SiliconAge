@@ -220,10 +220,12 @@ public final class ModBlocks {
         registerOreDict();
     }
 
-    // Step 3 (§11): OreDict entries for the raw ore blocks themselves ("oreCopper" etc.),
-    // independent of whether that ore also has a generic crushedOre/dust/ingot chain -
-    // Halite/Magnesite/Quartzite are chain-exceptions (§11.2) but are still ores, so they're
-    // registered here too.
+    // Step 3 (§11): OreDict entries for the raw ore blocks themselves - under their minerals' names
+    // ("oreChalcopyrite", "oreCassiterite"...), not "oreCopper": a copper ore of the mod is chalcopyrite,
+    // with its own by-products. Other mods' "oreCopper", "oreTin"... are crushed by
+    // ModRecipesOreProcessing.registerForeignOres (МШ-7, audit 2026-10-20). Independent of whether that
+    // ore also has a generic crushedOre/dust/ingot chain - Halite/Magnesite/Quartzite are chain-exceptions
+    // (§11.2) but are still ores, so they're registered here too.
     // Step 4 (§12.5): wireX/pipeX/tubeItemPneumatic OreDict entries for cables and pipes.
     private static void registerOreDict() {
         for (OreEntry ore : OreEntry.values()) {

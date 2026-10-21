@@ -22,7 +22,7 @@ import net.minecraftforge.event.world.BlockEvent;
 
 /**
  * The Singular drill's world events (common side; registered on MinecraftForge.EVENT_BUS and the FML bus):
- * the record of player-placed blocks (PlacedBlocksSC) that the black hole's singularity crumbs ignore.
+ * the record of player-placed blocks (СТ-2: PlacedChunksSC - in the chunks' data) that the black hole's singularity crumbs ignore.
  * Last in line and only for events nobody cancelled.
  */
 public final class DrillEventsSC {
@@ -42,12 +42,12 @@ public final class DrillEventsSC {
             for (Object o : ((BlockEvent.MultiPlaceEvent) e).getReplacedBlockSnapshots()) {
                 BlockSnapshot s = (BlockSnapshot) o;
                 unpend(e.world, s.x, s.y, s.z);
-                PlacedBlocksSC.mark(e.world, s.x, s.y, s.z);
+                PlacedChunksSC.mark(e.world, s.x, s.y, s.z);
             }
             return;
         }
         unpend(e.world, e.x, e.y, e.z);
-        PlacedBlocksSC.mark(e.world, e.x, e.y, e.z);
+        PlacedChunksSC.mark(e.world, e.x, e.y, e.z);
     }
 
     /** A placement after a break in the same tick wins: the queued forget would drop the new mark. */
@@ -73,7 +73,7 @@ public final class DrillEventsSC {
         EntityPlayer p = e.getPlayer();
         if (p != null && com.sc.util.ToolLevelSC.isDrill(p.getCurrentEquippedItem())) {
             NBTTagCompound data = p.getEntityData();
-            if (PlacedBlocksSC.placed(e.world, e.x, e.y, e.z)) {
+            if (PlacedChunksSC.placed(e.world, e.x, e.y, e.z)) {
                 data.setIntArray(BROKE_PLACED, new int[]{e.world.provider.dimensionId, e.x, e.y, e.z});
                 data.setLong(BROKE_PLACED_AT, e.world.getTotalWorldTime());
             } else {
@@ -129,7 +129,7 @@ public final class DrillEventsSC {
         }
         for (Pending q : pending) {
             if (q.w.blockExists(q.x, q.y, q.z) && q.w.getBlock(q.x, q.y, q.z) != q.block) {
-                PlacedBlocksSC.forget(q.w, q.x, q.y, q.z);
+                PlacedChunksSC.forget(q.w, q.x, q.y, q.z);
             }
         }
         pending.clear();
@@ -139,7 +139,7 @@ public final class DrillEventsSC {
                 it.remove();
                 int x = MathHelper.floor_double(f.posX), y = MathHelper.floor_double(f.posY), z = MathHelper.floor_double(f.posZ);
                 if (f.worldObj.blockExists(x, y, z) && !f.worldObj.isAirBlock(x, y, z)) {
-                    PlacedBlocksSC.mark(f.worldObj, x, y, z);
+                    PlacedChunksSC.mark(f.worldObj, x, y, z);
                 }
             } else if (DimensionManager.getWorld(f.worldObj.provider.dimensionId) != f.worldObj
                     || f.worldObj.getEntityByID(f.getEntityId()) != f) {
@@ -153,7 +153,7 @@ public final class DrillEventsSC {
             for (Object o : w.loadedTileEntityList) {
                 if (o instanceof TileEntityPiston) {
                     TileEntityPiston te = (TileEntityPiston) o;
-                    PlacedBlocksSC.mark(w, te.xCoord, te.yCoord, te.zCoord);
+                    PlacedChunksSC.mark(w, te.xCoord, te.yCoord, te.zCoord);
                 }
             }
         }
@@ -170,7 +170,7 @@ public final class DrillEventsSC {
 
     /** The block at x, y, z, whose BreakEvent this player fired this tick, was a player-placed one (or still is). */
     static boolean wasPlaced(EntityPlayer p, int x, int y, int z) {
-        if (PlacedBlocksSC.placed(p.worldObj, x, y, z)) {
+        if (PlacedChunksSC.placed(p.worldObj, x, y, z)) {
             return true;
         }
         NBTTagCompound data = p.getEntityData();

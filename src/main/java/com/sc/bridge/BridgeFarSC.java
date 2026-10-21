@@ -385,19 +385,18 @@ public final class BridgeFarSC {
             return;
         }
         int y = v[1];
-        boolean safe = false;
+        boolean safe = false, safe5 = false;
         World w = DimensionManager.getWorld(v[3]);
         if (w != null && !w.checkChunksExist(v[0] - 2, 0, v[2] - 2, v[0] + 2, 255, v[2] + 2)) {
             w = null;                                    // a point far off isn't checked: a packet never loads / generates chunks for free
         }
-        if (w != null && y != TileEntityBridgeControllerSC.AUTO_Y) {
-            safe = BridgeSpaceSC.check(BridgeSpaceSC.of(w), v[0], y, v[2], BridgeMathSC.vortexSize(BridgeMathSC.GROUND), 0).free;
-        } else if (w != null) {
-            int ay = BridgeSpaceSC.autoY(BridgeSpaceSC.of(w), v[0], v[2], BridgeMathSC.vortexSize(BridgeMathSC.GROUND), 0, BridgeSpaceSC.AUTO_DEPTH);
-            safe = ay >= 0;
-            y = ay >= 0 ? ay : y;
+        if (w != null) {                                 // МС-4: both bridges' vortices (an auto Y - the 3x3's place, the 5x5 there)
+            int[] both = BridgeSpaceSC.checkBoth(BridgeSpaceSC.of(w), v[0], y, v[2], 0, y == TileEntityBridgeControllerSC.AUTO_Y);
+            y = both[0];
+            safe = both[1] != 0;
+            safe5 = both[2] != 0;
         }
-        BridgeItemDataSC.setPoint(target, v[0], y, v[2], v[3], safe);
+        BridgeItemDataSC.setPoint(target, v[0], y, v[2], v[3], safe, safe5);
         String n = text == null ? "" : text.contains("\n") ? text.substring(text.indexOf('\n') + 1) : text;
         if (n.trim().length() > 0) {
             BridgeItemDataSC.setPointName(target, n);

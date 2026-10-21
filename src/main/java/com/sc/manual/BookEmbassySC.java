@@ -212,7 +212,7 @@ final class BookEmbassySC {
         ItemStack ring = ring(), coil = showcase2(BlockShowcase2SC.GRAVITY_COIL), console = showcase2(BlockShowcase2SC.DISPATCH_CONSOLE);
         BookEntry e = new BookEntry("world.flights", c, ring != null ? ring : coil != null ? coil : BookWorldSC.icon(), Lang.tr("sc.manual.world.flights.title"));
         e.add(BookEl.title(Lang.tr("sc.manual.world.flights.title"))).addAll(BookContent.paras("sc.manual.world.flights", null,
-                new Object[]{EmbassyRulesSC.FLIGHTS_PER_DAY}));
+                new Object[]{EmbassyRulesSC.flightsPerDay()}));
         if (!channelOpen()) {
             e.add(BookEl.warn(Lang.tr("sc.manual.world.flights.off")));
         }
@@ -270,10 +270,10 @@ final class BookEmbassySC {
 
     /** The table price of `ride` at `level` - without a settlement's spread (TradeRulesSC.playerSide with 0%); 0: closed at that level. */
     static int table(int ride, int level) {
-        if (!EmbassyRulesSC.valid(ride) || EmbassyRulesSC.RIDE_BASE[ride] <= 0 || level < EmbassyRulesSC.levelOf(ride) || level <= ReputationSC.ENEMY) {
+        if (!EmbassyRulesSC.valid(ride) || EmbassyRulesSC.base(ride) <= 0 || level < EmbassyRulesSC.levelOf(ride) || level <= ReputationSC.ENEMY) {
             return 0;
         }
-        return TradeRulesSC.playerSide(EmbassyRulesSC.RIDE_BASE[ride], level, 0);
+        return TradeRulesSC.playerSide(EmbassyRulesSC.base(ride), level, 0);   // ПС-8: with flightPriceMultiplier
     }
 
     /** The rides' prices by level (Знакомый .. Почётный), «-» where the level is too low, and their limits. */
@@ -306,7 +306,7 @@ final class BookEmbassySC {
             case EmbassyRulesSC.RIDE_OTHER:
                 return Lang.tr("sc.manual.world.cell.day", EmbassyRulesSC.OTHER_PER_DAY);
             default:
-                return Lang.tr("sc.manual.world.cell.shared", EmbassyRulesSC.FLIGHTS_PER_DAY);
+                return Lang.tr("sc.manual.world.cell.shared", EmbassyRulesSC.flightsPerDay());
         }
     }
 
@@ -330,7 +330,7 @@ final class BookEmbassySC {
         e.add(prices(new int[]{EmbassyRulesSC.RIDE_HOME, EmbassyRulesSC.RIDE_BACK, EmbassyRulesSC.RIDE_OTHER}));
         e.add(BookEl.dim(Lang.tr("sc.manual.world.flights.prices.note", TradeRulesSC.SEED_SPREAD_PCT)));
         e.add(BookEl.item(null, Lang.tr(EmbassyRulesSC.rideKey(EmbassyRulesSC.RIDE_HOME)), Lang.tr("sc.manual.world.flightsBack.ride.home",
-                EmbassyRulesSC.FLIGHTS_PER_DAY)));
+                EmbassyRulesSC.flightsPerDay())));
         e.add(BookEl.item(null, Lang.tr(EmbassyRulesSC.rideKey(EmbassyRulesSC.RIDE_BACK)), Lang.tr("sc.manual.world.flightsBack.ride.back",
                 BookWorldSC.days(EmbassyRulesSC.BACK_TICKS), BookWorldSC.levelName(ReputationSC.VIOLATOR))));
         e.add(BookEl.item(null, Lang.tr(EmbassyRulesSC.rideKey(EmbassyRulesSC.RIDE_OTHER)), Lang.tr("sc.manual.world.flightsBack.ride.other",

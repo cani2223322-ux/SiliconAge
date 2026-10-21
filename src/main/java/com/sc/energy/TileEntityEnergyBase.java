@@ -244,7 +244,8 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
     /**
      * The strongest voltage a neighbour can bring in on a face that takes energy: a cable whose side
      * here gives energy into the block, or (only on IC2's net - ours never overvolts on direct
-     * contact) an energy source whose output face touches it; null when there's none. Works on the
+     * contact) an energy source whose output face touches it; with IC2 also its own sources (their
+     * output tier) and cables (their rated tier) - ЭН-1; null when there's none. Works on the
      * client too (for the screens).
      */
     public Tier lineTier() {
@@ -271,6 +272,9 @@ public abstract class TileEntityEnergyBase extends TileEntity implements IEnergy
             } else if (te instanceof TileEntityEnergyBase && Loader.isModLoaded(Reference.IC2_MODID)
                     && ((TileEntityEnergyBase) te).isEnergySource() && ((TileEntityEnergyBase) te).isOutputFace(dir.getOpposite())) {
                 t = ((TileEntityEnergyBase) te).outputTier();
+            } else if (te != null && Loader.isModLoaded(Reference.IC2_MODID) && !(te instanceof TileEntityEnergyBase)
+                    && !(te instanceof com.sc.tileentity.TileEntityConduitBundleSC)) {
+                t = Ic2LineSC.tierTowards(te, this, dir.getOpposite());   // ЭН-1: IC2's own sources and cables (MFSU, generators, glass fibre)
             }
             if (t != null && (best == null || t.ordinal() > best.ordinal())) {
                 best = t;

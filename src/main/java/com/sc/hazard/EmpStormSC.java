@@ -37,7 +37,8 @@ import net.minecraftforge.event.world.WorldEvent;
  * its core, heard within 64), the Tuners go home (EntityAITunerHomeSC), the sky turns violet; STORM 3..5 min;</li>
  * <li>a pulse every 20..40 s (pulse): players (not creative) and armoured mobs (IEmpTargetSC, empArmoured) under the open sky
  * within StormRulesSC.REACH of a player - one random worn piece of the mod's suppressed 3..4 s (EmpSC.stormHit /
- * MobArmorSC.stormHit: immunity respected), the helium boiling; the settlements' Tuners and guards, the pets - never; a Hollow
+ * MobArmorSC.stormHit: immunity respected, a piece still suppressed not extended - ОР-1), the helium boiling; the settlements'
+ * Tuners and guards, the pets - never; a Hollow
  * Shell reboots (EntityHollowShellSC.reboot); cover - coveredFrom (StormPulseSC);</li>
  * <li>the clients: HazardNetSC.STORM_STATE on every phase change and to a player arriving / joining / respawning in the
  * Substrate, STORM_PULSE on a pulse;</li>

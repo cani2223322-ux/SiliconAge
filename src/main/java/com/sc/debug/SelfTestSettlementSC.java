@@ -135,6 +135,45 @@ public final class SelfTestSettlementSC {
                 t.printStackTrace();
             }
         }
+        try {
+            takePlan();
+        } catch (Throwable t) {
+            check(false, "take plan (ПС-4) - exception " + t);
+            t.printStackTrace();
+        }
+    }
+
+    /** ПС-4 (audit 2026-10-20): an ore-dictionary side takes vanilla's items first (oak and birch before another mod's wood). */
+    private static void takePlan() {
+        com.sc.settle.trade.TradeOfferSC.Ingredient logs = com.sc.settle.trade.TradeOfferSC.Ingredient.ore("logWood", 32);
+        net.minecraft.item.ItemStack[] plain = new net.minecraft.item.ItemStack[36];
+        plain[2] = new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.log, 10, 2);     // birch
+        plain[4] = new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.log, 30, 0);     // oak
+        int[] p1 = logs.takePlan(plain, 32, -1);
+        boolean vanillaOrder = p1.length == 2 && p1[0] == 2 && p1[1] == 4;
+        net.minecraft.item.ItemStack foreign = null;
+        for (net.minecraft.item.ItemStack o : net.minecraftforge.oredict.OreDictionary.getOres("logWood")) {
+            cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier id = cpw.mods.fml.common.registry.GameRegistry.findUniqueIdentifierFor(o.getItem());
+            if (id != null && !"minecraft".equals(id.modId)) {
+                foreign = o.copy();
+                if (foreign.getItemDamage() == net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE) {
+                    foreign.setItemDamage(0);
+                }
+                break;
+            }
+        }
+        if (foreign == null) {
+            check(vanillaOrder, "take plan (ПС-4): one kind of vanilla logs - in slot order (2, 4); no other mod's logWood loaded - its order not checked");
+            return;
+        }
+        net.minecraft.item.ItemStack[] mixed = new net.minecraft.item.ItemStack[36];
+        foreign.stackSize = 64;
+        mixed[0] = foreign;
+        mixed[3] = new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.log, 16, 0);
+        mixed[5] = new net.minecraft.item.ItemStack(net.minecraft.init.Blocks.log, 32, 2);
+        int[] p2 = logs.takePlan(mixed, 32, -1);
+        check(vanillaOrder && p2.length == 2 && p2[0] == 3 && p2[1] == 5, "take plan (ПС-4): 32 logs - the oak (slot 3) and the birch (5) before "
+                + foreign.getUnlocalizedName() + " in slot 0; one kind - in slot order");
     }
 
     private static void section(int i) {

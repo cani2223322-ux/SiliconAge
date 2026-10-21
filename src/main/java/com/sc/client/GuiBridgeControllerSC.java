@@ -53,6 +53,8 @@ public class GuiBridgeControllerSC extends GuiScreen {
     private static final int B_FRIEND_ADD = 41, B_REMOTE = 42, B_BIND = 43, B_RENAME = 44, B_FROM_COORD = 45, B_TO_COORD = 46;
     /** Stage 3: «Ремонт» (С2). */
     private static final int B_REPAIR = 47;
+    /** МС-1 (audit 2026-10-20): «Выдавать газы через порты». */
+    private static final int B_GAS_OUT = 48;
     private static final int MODES = 6;
     private static final int BM_ROWS = 4, BM_Y = 131, BM_ROW_H = 9;
     /** ПР-3: the Substrate's targets after the bookmarks - a dock (the dome's turquoise), the death mark. */
@@ -157,8 +159,9 @@ public class GuiBridgeControllerSC extends GuiScreen {
         }
         btns.add(new Btn(B_FRIEND_ADD, 300, 256, 12, 11, ""));
         btns.add(new Btn(B_ACCESS, 316, 256, 96, 11, ""));
-        btns.add(new Btn(B_REMOTE, 206, 286, 102, 11, ""));
-        btns.add(new Btn(B_BIND, 312, 286, 100, 11, "sc.bridge.gui.bindhelmet"));
+        btns.add(new Btn(B_REMOTE, 206, 286, 66, 11, ""));
+        btns.add(new Btn(B_GAS_OUT, 274, 286, 66, 11, ""));     // МС-1
+        btns.add(new Btn(B_BIND, 342, 286, 70, 11, "sc.bridge.gui.bindhelmet"));
         btns.add(new Btn(B_RENAME, 270, 4, 12, 10, ""));
         request();
     }
@@ -380,6 +383,7 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 return;
             case B_ACCESS: act(TileEntityBridgeControllerSC.A_ACCESS, null, null); return;
             case B_REMOTE: act(TileEntityBridgeControllerSC.A_REMOTE_MODE, null, null); return;
+            case B_GAS_OUT: act(TileEntityBridgeControllerSC.A_GAS_OUT, null, null); return;
             case B_BIND: act(TileEntityBridgeControllerSC.A_BIND_HELMET, null, null); return;
             case B_RENAME:
                 renamingBridge = true;
@@ -696,7 +700,8 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 b.enabled = a && selBm >= 0 && selBm < bookmarks().tagCount();
                 b.label = b.id == B_BM_REN ? "✎" : "✕";
             } else if (b.id == B_BM_ADD) {
-                b.enabled = a && bookmarks().tagCount() < (has() ? st.getInteger("bmMax") : 8) && target() != null;
+                b.visible = has() && st.getBoolean("trusted");     // МС-5: strangers keep no bookmarks here
+                b.enabled = a && b.visible && bookmarks().tagCount() < (has() ? st.getInteger("bmMax") : 8) && target() != null;
                 b.label = "+";
             } else if (b.id == B_OPEN) {
                 b.enabled = a && !open && target() != null;
@@ -721,6 +726,11 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 b.enabled = has() && st.getBoolean("trusted");
                 b.label = Lang.tr(on ? "sc.bridge.gui.remote.on" : "sc.bridge.gui.remote.off");
                 b.color = on ? BLUE : TEXT;
+            } else if (b.id == B_GAS_OUT) {
+                boolean on = !has() || !st.hasKey("gasOut") || st.getBoolean("gasOut");
+                b.enabled = has() && st.getBoolean("trusted");     // grey for strangers
+                b.label = Lang.tr(on ? "sc.bridge.gasout.on" : "sc.bridge.gasout.off");
+                b.color = on ? TEXT : WARN;
             } else if (b.id == B_BIND) {
                 b.enabled = has() && st.getBoolean("trusted");
             } else if (b.id == B_RENAME) {
@@ -1146,6 +1156,10 @@ public class GuiBridgeControllerSC extends GuiScreen {
                 } else if (b.id == B_REMOTE) {
                     t.add(Lang.tr("sc.bridge.gui.remote.hint"));
                     t.add("§7" + Lang.tr("sc.bridge.gui.remote.hint2", g(BridgeMathSC.REMOTE_MODE_EU)));
+                } else if (b.id == B_GAS_OUT) {
+                    boolean on = !has() || !st.hasKey("gasOut") || st.getBoolean("gasOut");
+                    t.add(Lang.tr(on ? "sc.bridge.gasout.on" : "sc.bridge.gasout.off"));
+                    t.add("§7" + Lang.tr("sc.bridge.gasout.tip"));
                 } else if (b.id == B_BIND) {
                     t.add(Lang.tr("sc.bridge.gui.bindhelmet.hint", BridgeMathSC.MAX_LINKS));
                     t.add("§7" + Lang.tr("sc.bridge.gui.bindremote.hint"));

@@ -238,7 +238,20 @@ public class ContainerGeneratorSC extends Container {
             values[id] = currentValue(id);
         }
         sync.send(this, crafters, values);
+        // ГН-3 (audit 2026-10-20): a Transformer upgrade went in - a cable at an output face now weaker is named to those watching
+        com.sc.energy.Tier out = generator.outputTier();
+        if (lastOutput != null && out.ordinal() > lastOutput.ordinal()) {
+            for (Object o : crafters) {
+                if (o instanceof EntityPlayer) {
+                    com.sc.energy.CableWarningSC.outputRaised(generator, (EntityPlayer) o);
+                }
+            }
+        }
+        lastOutput = out;
     }
+
+    /** ГН-3: the output tier last seen (server side), as ContainerEnergyStorageSC has it. */
+    private com.sc.energy.Tier lastOutput;
 
     @Override
     public void updateProgressBar(int property, int half) {

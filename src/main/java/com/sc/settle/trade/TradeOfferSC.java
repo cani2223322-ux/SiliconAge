@@ -165,13 +165,55 @@ public final class TradeOfferSC {
          */
         public int takeFrom(ItemStack[] inv, int n, int first) {
             int left = n;
-            if (first >= 0 && first < inv.length) {
-                left -= takeAt(inv, first, left);
-            }
-            for (int i = 0; i < inv.length && left > 0; i++) {
+            for (int i : takePlan(inv, n, first)) {           // ПС-4: in takePlan's order
                 left -= takeAt(inv, i, left);
             }
             return n - left;
+        }
+
+        /**
+         * ПС-4 (audit 2026-10-20), pure: the slots takeFrom would take `n` from, in its order - slot `first` (if it matches), then,
+         * for an ore-dictionary side, vanilla's items before other mods' (oak and birch logs before another mod's precious wood),
+         * else in order; as many slots as cover `n`. The screen frames them.
+         */
+        public int[] takePlan(ItemStack[] inv, int n, int first) {
+            List<Integer> plan = new java.util.ArrayList<Integer>();
+            int left = n;
+            if (inv == null) {
+                return new int[0];
+            }
+            if (first >= 0 && first < inv.length && usable(inv[first]) && left > 0) {
+                plan.add(Integer.valueOf(first));
+                left -= inv[first].stackSize;
+            }
+            for (int pass = ore != null ? 0 : 1; pass < 2 && left > 0; pass++) {
+                for (int i = 0; i < inv.length && left > 0; i++) {
+                    if (i == first || !usable(inv[i]) || ore != null && (pass == 0) != vanilla(inv[i])) {
+                        continue;
+                    }
+                    plan.add(Integer.valueOf(i));
+                    left -= inv[i].stackSize;
+                }
+            }
+            int[] out = new int[plan.size()];
+            for (int i = 0; i < out.length; i++) {
+                out[i] = plan.get(i).intValue();
+            }
+            return out;
+        }
+
+        private boolean usable(ItemStack s) {
+            return s != null && s.stackSize > 0 && matches(s);
+        }
+
+        /** ПС-4: a vanilla item (its registry name's mod "minecraft"). */
+        private static boolean vanilla(ItemStack s) {
+            try {
+                cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier id = cpw.mods.fml.common.registry.GameRegistry.findUniqueIdentifierFor(s.getItem());
+                return id != null && "minecraft".equals(id.modId);
+            } catch (RuntimeException e) {
+                return false;
+            }
         }
 
         private int takeAt(ItemStack[] inv, int i, int want) {

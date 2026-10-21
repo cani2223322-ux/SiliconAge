@@ -47,6 +47,42 @@ public final class ItemChargeSC {
         return 0;
     }
 
+    /**
+     * ЭН-9 (audit 2026-10-20): the lowest source tier that charges `s` - what charge() checks: a suit's / blade's / drill's
+     * charge tier, a weapon's tier, the ПЭ-1's, a wrench's, a bridge remote's; with IC2 its electric item's tier. Null - not
+     * something charge() knows.
+     */
+    public static Tier requiredTier(ItemStack s) {
+        if (s == null || s.getItem() == null) {
+            return null;
+        }
+        if (s.getItem() instanceof ItemArmorSC) {
+            return ((ItemArmorSC) s.getItem()).getSuit().chargeTier;
+        }
+        if (s.getItem() instanceof ItemBladeSC) {
+            return ItemBladeSC.typeOf(s).chargeTier;
+        }
+        if (s.getItem() instanceof ItemDrillSC) {
+            return ItemDrillSC.typeOf(s).chargeTier;
+        }
+        if (s.getItem() instanceof ItemWeaponSC) {
+            return ((ItemWeaponSC) s.getItem()).getType().tier;
+        }
+        if (com.sc.emp.ItemEmpGunSC.isGun(s)) {
+            return com.sc.emp.EmpMathSC.CHARGE_TIER;
+        }
+        if (ItemWrenchSC.isElectric(s)) {
+            return ItemWrenchSC.tierOf(s).chargeTier;
+        }
+        if (ItemBridgeRemoteSC.isRemote(s)) {
+            return ItemBridgeRemoteSC.tierOf(s);
+        }
+        if (cpw.mods.fml.common.Loader.isModLoaded(com.sc.Reference.IC2_MODID)) {
+            return Ic2.tier(s);
+        }
+        return null;
+    }
+
     /** Something that gives energy away: our battery, or (with IC2) its batteries and crystals. */
     public static boolean isBattery(ItemStack s) {
         if (ItemBatterySC.isBattery(s)) {
@@ -62,6 +98,17 @@ public final class ItemChargeSC {
                 return 0;
             }
             return (int) ic2.api.item.ElectricItem.manager.charge(s, max, tier, false, false);
+        }
+
+        static Tier tier(ItemStack s) {
+            if (!(s.getItem() instanceof ic2.api.item.IElectricItem)) {
+                return null;
+            }
+            try {
+                return Tier.fromIc2Tier(((ic2.api.item.IElectricItem) s.getItem()).getTier(s));
+            } catch (RuntimeException e) {
+                return null;                                // a foreign item misbehaving
+            }
         }
 
         static boolean isBattery(ItemStack s) {

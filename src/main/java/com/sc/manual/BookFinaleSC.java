@@ -201,7 +201,7 @@ final class BookFinaleSC {
                 column = ArenaBlocksSC.stack(ArenaBlocksSC.COLUMN, 1);
         BookEntry e = new BookEntry("world.warden", c, egg != null ? egg : chest, name);
         e.add(BookEl.title(name)).addAll(BookContent.paras("sc.manual.world.warden", new Object[]{name, n(WardenRulesSC.HEIGHT)},
-                new Object[]{n((float) WardenRulesSC.BASE_HP), BookWorldSC.pct((float) WardenRulesSC.PER_PLAYER), WardenRulesSC.SCALE_RADIUS}));
+                new Object[]{n(WardenRulesSC.maxHealth(1)), BookWorldSC.pct((float) WardenRulesSC.PER_PLAYER), WardenRulesSC.SCALE_RADIUS}));   // ПМ-6: with the multiplier
 
         // the health by the players counted (ПС-50): WardenRulesSC.maxHealth
         BookEl t = BookEl.table(Lang.tr("sc.manual.world.t.players"), Lang.tr("sc.manual.world.t.hp"));
@@ -269,7 +269,7 @@ final class BookFinaleSC {
         String name = BookWorldSC.mobName(EntityBreakdownWardenSC.NAME);
         BookEntry e = new BookEntry("world.wardenLoot", c, matrix != null ? matrix : new ItemStack(ModItems.singularCrumb), Lang.tr("sc.manual.world.wardenLoot.title"));
         e.add(BookEl.title(Lang.tr("sc.manual.world.wardenLoot.title"))).addAll(BookContent.paras("sc.manual.world.wardenLoot",
-                new Object[]{name, BookWorldSC.pct(WardenRulesSC.LOOT_SHARE), WardenRulesSC.LOOT_COOLDOWN_DAYS}, null));
+                new Object[]{name, BookWorldSC.pct(WardenRulesSC.LOOT_SHARE), WardenRulesSC.lootCooldownDays()}, null));   // ПМ-6
 
         // everybody's own (ПТ-22, ПТ-23)
         e.add(BookEl.head(Lang.tr("sc.manual.world.wardenLoot.eachhead")));
@@ -366,7 +366,7 @@ final class BookFinaleSC {
     private static BookEntry signal(BookChapter c) {
         BookEntry e = new BookEntry("world.signal", c, new ItemStack(Blocks.beacon), Lang.tr("sc.manual.world.signal.title"));
         e.add(BookEl.title(Lang.tr("sc.manual.world.signal.title"))).addAll(BookContent.paras("sc.manual.world.signal",
-                new Object[]{SignalRulesSC.CHANCE_PCT, BookWorldSC.clock(SignalRulesSC.START_MIN), BookWorldSC.clock(SignalRulesSC.START_MAX),
+                new Object[]{SignalRulesSC.chancePct(), BookWorldSC.clock(SignalRulesSC.START_MIN), BookWorldSC.clock(SignalRulesSC.START_MAX),
                         BookWorldSC.minutes(SignalRulesSC.DURATION_TICKS)},
                 new Object[]{SignalRulesSC.DIST_MIN, SignalRulesSC.DIST_MAX, SignalRulesSC.BEAM_TOP, SignalRulesSC.BEAM_VIEW},
                 new Object[]{SignalSC.END_TELL}));

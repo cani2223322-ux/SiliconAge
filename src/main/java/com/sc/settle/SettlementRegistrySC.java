@@ -333,6 +333,21 @@ public class SettlementRegistrySC extends WorldSavedData {
         }
     }
 
+    /**
+     * ПС-7 (audit 2026-10-20): a slot as never filled - NEVER, no UUID, no death time: its creature was taken away by the rule (an
+     * embassy's dweller with embassy.embassies off), not killed - once the rule is back the roster makes it at once (no Clone
+     * Capsule, no day's wait).
+     */
+    public void slotNever(int id, int slot) {
+        Slot sl = slot(id, slot);
+        if (sl != null) {
+            sl.state = NEVER;
+            sl.uuidMost = sl.uuidLeast = 0L;
+            sl.diedAt = 0L;
+            markDirty();
+        }
+    }
+
     /** A slot's creature is in the world (spawned by the core, package C): its UUID kept. */
     public void slotAlive(int id, int slot, UUID uuid, long now) {
         Slot sl = slot(id, slot);

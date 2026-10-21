@@ -37,6 +37,12 @@ public final class BridgeSpaceSC {
         int top(int x, int z);
 
         int height();
+
+        /**
+         * МС-3 (audit 2026-10-20): a world without a sky (the Nether, the End) - its height() is the real ceiling, and a place over
+         * it is "above the world's ceiling".
+         */
+        boolean noSky();
     }
 
     public static final class Result {
@@ -71,7 +77,7 @@ public final class BridgeSpaceSC {
             return no(r, "sc.bridge.place.low");
         }
         if (y + w > c.height()) {
-            return no(r, "sc.bridge.place.high");
+            return no(r, c.noSky() ? "sc.bridge.place.ceiling" : "sc.bridge.place.high");   // МС-3
         }
         boolean lava = false, water = false, ring = false;
         int blocked = 0, rows = w;
@@ -184,6 +190,26 @@ public final class BridgeSpaceSC {
     }
 
     /** «Y авто»: the topmost free place standing on a floor in this column (within depth blocks under the surface), or -1. */
+    /**
+     * МС-4 (audit 2026-10-20): a point checked for both bridges - the Ground Bridge's 3x3 vortex and the Space Bridge's 5x5 one, at
+     * y; with `auto` y is the free place autoY finds for the 3x3 (the 5x5 checked at that y). @return {y (unchanged when nothing
+     * was found), ground fits 1 / 0, space fits 1 / 0}
+     */
+    public static int[] checkBoth(Cells c, int x, int y, int z, int axis, boolean auto) {
+        int g = BridgeMathSC.vortexSize(BridgeMathSC.GROUND), s = BridgeMathSC.vortexSize(BridgeMathSC.SPACE);
+        int at = y;
+        boolean ground;
+        if (auto) {
+            int ay = autoY(c, x, z, g, axis, AUTO_DEPTH);
+            ground = ay >= 0;
+            at = ay >= 0 ? ay : y;
+        } else {
+            ground = check(c, x, y, z, g, axis).free;
+        }
+        boolean space = (!auto || ground) && check(c, x, at, z, s, axis).free;
+        return new int[]{at, ground ? 1 : 0, space ? 1 : 0};
+    }
+
     public static int autoY(Cells c, int x, int z, int w, int axis, int depth) {
         int top = Math.min(c.height() - w, c.top(x, z) + 1);
         for (int y = top; y >= Math.max(1, top - depth); y--) {
@@ -368,6 +394,11 @@ public final class BridgeSpaceSC {
             public int height() {
                 return c.height();
             }
+
+            @Override
+            public boolean noSky() {
+                return c.noSky();
+            }
         };
     }
 
@@ -378,7 +409,7 @@ public final class BridgeSpaceSC {
         return new Cells() {
             @Override
             public int cell(int x, int y, int z) {
-                if (y < 0 || y >= w.getHeight()) {
+                if (y < 0 || y >= height()) {                   // МС-3: under a world's roof its real height
                     return y < 0 ? OTHER : AIR;
                 }
                 Block b = w.getBlock(x, y, z);
@@ -428,9 +459,15 @@ public final class BridgeSpaceSC {
                 return y + 1;
             }
 
+            /** МС-3: no higher than the real height in a world without a sky (the Nether's 128 - not over its bedrock ceiling). */
             @Override
             public int height() {
-                return w.getHeight();
+                return w.provider.hasNoSky ? Math.min(w.getHeight(), w.provider.getActualHeight()) : w.getHeight();
+            }
+
+            @Override
+            public boolean noSky() {
+                return w.provider.hasNoSky;
             }
         };
     }

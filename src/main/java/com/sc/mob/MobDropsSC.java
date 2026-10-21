@@ -131,7 +131,7 @@ public final class MobDropsSC {
             if (mob instanceof IFactionLootSC) {
                 ((IFactionLootSC) mob).factionLoot(out, mob.getRNG());
             }
-            if (mob instanceof EntityArmoredMobSC) {                 // ПТ-15: the trophy roll is the armoured ones' only
+            if (mob instanceof EntityArmoredMobSC && !waveShell(mob)) {   // ПТ-15: the trophy roll is the armoured ones' only
                 trophy = rollTrophy((EntityArmoredMobSC) mob, killer, mob.getRNG());
                 if (((EntityArmoredMobSC) mob).executeImmune() && mob.getRNG().nextFloat() < ARENA_COORDINATOR_CHANCE) {
                     out.add(com.sc.finale.FinaleItemsSC.arenaCoordinator(1));   // Ф5, ПС-23: an elite's 2%
@@ -149,6 +149,14 @@ public final class MobDropsSC {
             MobEventsSC.lockTrophy(e, mob.worldObj.getTotalWorldTime() + OWNER_TICKS);
             event.drops.add(e);
         }
+    }
+
+    /**
+     * ПМ-1: a Hollow Shell of the Breakdown Warden's waves («Удержание», WardenFightSC.WAVE_TAG) - no trophy roll at all (no trophy,
+     * the bad-luck counter untouched), so the arena is no trophy farm; its faction drops and experience as usual.
+     */
+    public static boolean waveShell(Entity mob) {
+        return mob != null && mob.getEntityData().getBoolean(WardenFightSC.WAVE_TAG);
     }
 
     /** ПТ-1: born in Si-14, dying in the Substrate, the trophy player a real one. */

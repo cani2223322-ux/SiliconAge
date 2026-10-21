@@ -409,6 +409,59 @@ public final class ModRecipesOreProcessing {
                 300, 0.02f));
     }
 
+    /**
+     * МШ-7 (audit 2026-10-20): other mods' ores from the ore dictionary - "ore" + the material's name (oreCopper, oreTin, oreLead,
+     * oreZinc, oreTitanium, oreTungsten, orePlatinum, oreLithium...; for aluminium also oreAluminum and oreBauxite) of every
+     * material the mod has crushed ore for - crush into 2 crushed ores, no by-products. This mod's own ores (named after their
+     * minerals) and stacks the crusher already knows (vanilla iron / gold, a name registered twice) are left alone. From
+     * SCMod.postInit: every mod has registered its ores by then.
+     * @return how many recipes were added
+     */
+    public static int registerForeignOres() {
+        int added = 0;
+        for (Material m : Material.values()) {
+            if (!m.hasCrushedOre) {
+                continue;
+            }
+            java.util.List<String> names = new java.util.ArrayList<String>();
+            names.add("ore" + m.oreDictName);
+            if (m == Material.ALUMINIUM) {
+                names.add("oreAluminum");
+                names.add("oreBauxite");
+            }
+            for (String name : names) {
+                for (ItemStack ore : net.minecraftforge.oredict.OreDictionary.getOres(name)) {
+                    if (ore == null || ore.getItem() == null || isOwn(ore)) {
+                        continue;
+                    }
+                    ItemStack one = ore.copy();
+                    one.stackSize = 1;
+                    if (RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{one}, null, null) != null) {
+                        continue;                       // vanilla iron / gold, or the same block under a second name
+                    }
+                    RecipeRegistry.register(new MachineRecipe(MachineType.CRUSHER, new ItemStack[]{one}, null, null,
+                            new ItemStack[]{stack(ModItems.crushedOre, m, 2)}, null, null, CRUSHER_TICKS, 0f));
+                    added++;
+                }
+            }
+        }
+        return added;
+    }
+
+    /** МШ-7: a block or item of this mod (its ores have their own recipes). */
+    private static boolean isOwn(ItemStack s) {
+        if (net.minecraft.block.Block.getBlockFromItem(s.getItem()) == ModBlocks.oreSC) {
+            return true;
+        }
+        cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier id;
+        try {
+            id = GameRegistry.findUniqueIdentifierFor(s.getItem());
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return id != null && com.sc.Reference.MODID.equals(id.modId);
+    }
+
     private static ItemStack stack(com.sc.item.ItemMaterialSC item, Material material, int count) {
         ItemStack stack = item.stackOf(material);
         stack.stackSize = count;

@@ -33,9 +33,9 @@ import net.minecraftforge.event.world.ExplosionEvent;
  * <ul>
  * <li>«Командир»: while it fights (an attack target), an order every ORDER_EVERY_TICKS - the telegraph ACT_ORDER for
  * ORDER_TICKS, a line «<Командир · Штурмовик> Сомкнуть строй!» to the players within COMMANDER_RADIUS (each in its own
- * language), a horn; when the order's lead time is over, every armoured native within COMMANDER_RADIUS (and it) hits
- * x(1 + COMMANDER_BONUS) for ORDER_BUFF_TICKS (MobArmorSC.commandUntil) and, once in its life, gets COMMANDER_BONUS more
- * reserve (MobArmorSC.commandBoost);</li>
+ * language; МБ-1: in a player's chat at most once in ORDER_CHAT_TICKS), a horn; when the order's lead time is over, every
+ * armoured native within COMMANDER_RADIUS (and it) hits x(1 + COMMANDER_BONUS) for ORDER_BUFF_TICKS (MobArmorSC.commandUntil)
+ * and, once in its life, gets COMMANDER_BONUS more reserve (MobArmorSC.commandBoost);</li>
  * <li>«Заряженный», «Экранированный», «Ветеран» - once, in apply (the reserve, the personal screen - its recovery is
  * MobArmorSC's -, helium in the loop);</li>
  * <li>«Ремонтник»: REPAIR_UNITS into the reserve of every other armoured native within REPAIR_RADIUS every
@@ -221,7 +221,16 @@ public final class EliteSC {
 
     // ------------------------------------------------------------------ the Commander, the Repairer
 
-    /** The order is given: the telegraph (if the mob isn't winding up something else), the horn, the line to the players near. */
+    /** МБ-1: the player's tick of the last order line in chat (not PERSISTED - after a relog the first order is "first" again). */
+    private static final String ORDER_CHAT_KEY = "scOrderChatAt";
+
+    /** МБ-1: an order's line may go to a player's chat - none for ORDER_CHAT_TICKS since `last` (a clock gone back counts as due). */
+    public static boolean orderChatDue(long last, long now) {
+        return now < last || now - last >= EliteModSC.ORDER_CHAT_TICKS;
+    }
+
+    /** The order is given: the telegraph (if the mob isn't winding up something else), the horn, the line to the players near
+     * (МБ-1: in a player's chat at most once in ORDER_CHAT_TICKS - the horn and the telegraph tell the rest). */
     private static void order(EntityArmoredMobSC mob, long now) {
         MobArmorSC a = mob.mobArmor();
         a.orderAt = now;
@@ -239,7 +248,11 @@ public final class EliteSC {
             EntityPlayer p = (EntityPlayer) o;
             if (p instanceof EntityPlayerMP && !(p instanceof net.minecraftforge.common.util.FakePlayer)
                     && p.getDistanceSqToEntity(mob) <= r2) {
-                p.addChatComponentMessage(line);
+                net.minecraft.nbt.NBTTagCompound d = p.getEntityData();
+                if (!d.hasKey(ORDER_CHAT_KEY) || orderChatDue(d.getLong(ORDER_CHAT_KEY), now)) {
+                    d.setLong(ORDER_CHAT_KEY, now);
+                    p.addChatComponentMessage(line);
+                }
             }
         }
     }

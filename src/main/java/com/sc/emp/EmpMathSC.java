@@ -125,6 +125,18 @@ public final class EmpMathSC {
         return heatTenths < max && max - heatTenths <= OVERHEAT_WARN_SECONDS * siphonHeatTenths(cooling);
     }
 
+    /**
+     * ОР-3 (2026-10-21): the overheat warning for the gun's mode - one rule for the chat (EmpGunLogicSC.heatNews) and the HUD.
+     * The Siphon (or no mode): overheatWarn(heat, cooling), OVERHEAT_WARN_SECONDS of stream ahead; the Point / Pulse: not
+     * overheated yet, and one more shot of that mode (gunHeat, the Cooling module counted) would reach GUN_HEAT_MAX.
+     */
+    public static boolean overheatWarn(int heat, boolean cooling, EmpMode mode) {
+        if (mode == null || mode == EmpMode.SIPHON) {
+            return overheatWarn(heat, cooling);
+        }
+        return heat < GUN_HEAT_MAX && heat + gunHeat(mode, cooling) >= GUN_HEAT_MAX;
+    }
+
     /** Seconds until an overheated gun may shoot again (heat below GUN_HEAT_RECOVER); 0 when it already may. */
     public static int coolSeconds(int heat) {
         int over = heat - (GUN_HEAT_RECOVER - 1);

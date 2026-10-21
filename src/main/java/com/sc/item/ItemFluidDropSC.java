@@ -65,7 +65,7 @@ public class ItemFluidDropSC extends Item {
                     }
                 }
             }
-            for (String f : GeneratorType.COMBUSTION_FUELS) {
+            for (String f : com.sc.util.ConfigSC.combustionFuelNames()) {   // ГН-6: the config's fuels
                 if (net.minecraftforge.fluids.FluidRegistry.getFluid(f) != null) {
                     set.add(f);
                 }

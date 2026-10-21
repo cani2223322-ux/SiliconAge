@@ -221,8 +221,8 @@ public final class FlightRunSC {
         n.setByte("place", (byte) c.place);
         n.setInteger("sid", c.s == null ? -1 : c.s.id);
         n.setByte("level", (byte) c.me.level);
-        n.setInteger("left", Math.max(0, EmbassyRulesSC.FLIGHTS_PER_DAY - ridesToday(c.me.rec, c.day)));
-        n.setInteger("max", EmbassyRulesSC.FLIGHTS_PER_DAY);
+        n.setInteger("left", Math.max(0, EmbassyRulesSC.flightsPerDay() - ridesToday(c.me.rec, c.day)));   // ПС-8: the server's
+        n.setInteger("max", EmbassyRulesSC.flightsPerDay());
         boolean guarantor = c.place == FlightTargetsSC.PLACE_EMBASSY && c.me.level >= EmbassyRulesSC.GUARANTOR_LEVEL;
         n.setBoolean("guarantor", guarantor);
         n.setInteger("guarLeft", Math.max(0, EmbassyRulesSC.GUARANTEE_PER_DAY - guaranteesToday(c.me.rec, c.day)));
@@ -526,6 +526,9 @@ public final class FlightRunSC {
      */
     public static int[] decline(Ctx c) {
         EmbassyTicketSC.Talon k = EmbassyTicketSC.talon(c.me.rec);
+        if (k != null && (k.payer.length() == 0 || k.payer.equals(c.me.id.toString()))) {
+            return giveBack(c);                             // ПС-3: his own talon - «Сдать талон» comes this way (FLIGHT_DO decline)
+        }
         if (k == null || c.s == null || k.settlement != c.s.id || k.payer.length() == 0 || k.payer.equals(c.me.id.toString())) {
             return res(EmbassyRulesSC.R_NOT_HERE, 0);
         }
@@ -535,6 +538,22 @@ public final class FlightRunSC {
         if (payer != null) {
             tell(payer, EnumChatFormatting.GOLD, "sc.flight.guarantee.declined", c.p.getCommandSenderName());
         }
+        c.p.inventory.markDirty();
+        return res(EmbassyRulesSC.OK, k.chips);
+    }
+
+    /**
+     * ПС-3 (audit 2026-10-20): «Сдать талон» - the player's own unused talon, at the Dispatcher that sold it: back as at dawn
+     * (refund - the chips, the day's flight, an introductory one open again, a round trip's return half gone). Elsewhere, or a
+     * guarantor's talon (that one is declined) - R_NOT_HERE. @return {code, chips}
+     */
+    public static int[] giveBack(Ctx c) {
+        EmbassyTicketSC.Talon k = EmbassyTicketSC.talon(c.me.rec);
+        if (k == null || c.s == null || k.settlement != c.s.id || k.payer.length() > 0 && !k.payer.equals(c.me.id.toString())) {
+            return res(EmbassyRulesSC.R_NOT_HERE, 0);
+        }
+        FlightSC.unbook(c.me.id);
+        refund(c.reg, c.me.id, c.me.rec, k, c.p, null);
         c.p.inventory.markDirty();
         return res(EmbassyRulesSC.OK, k.chips);
     }

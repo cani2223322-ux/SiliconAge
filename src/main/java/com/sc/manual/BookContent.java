@@ -635,8 +635,11 @@ public final class BookContent {
             e.about(st).add(BookEl.head(type.localizedName(), st));
             BookEl stats = BookEl.table(Lang.tr("sc.book.t.param"), Lang.tr("sc.book.t.value"));
             stats.row(null, Lang.tr("sc.book.t.tier"), type == GeneratorType.TOKAMAK_XV ? type.tier.name() + " / " + Tier.SV.name() : type.tier.name());
+            // ГН-6 (audit 2026-10-20): the numbers with the server's generators.generatorOutput / generatorFuel
             stats.row(null, Lang.tr("sc.book.t.output"), type == GeneratorType.SINGULAR_REACTOR
-                    ? Lang.tr("sc.manual.generator.sing.output", type.euPerTick, com.sc.tileentity.SingularReactorSC.MAX_OUTPUT) : type.euPerTick + " EU/t");
+                    ? Lang.tr("sc.manual.generator.sing.output", TileEntityGeneratorSC.scaledOutput(type.euPerTick),
+                    TileEntityGeneratorSC.scaledOutput(com.sc.tileentity.SingularReactorSC.MAX_OUTPUT))
+                    : TileEntityGeneratorSC.scaledOutput(type.euPerTick) + " EU/t");
             stats.row(null, Lang.tr("sc.book.t.fuel"), fuel(type));
             float rad = TileEntityGeneratorSC.radiationBase(type);
             if (rad > 0) {
@@ -645,6 +648,9 @@ public final class BookContent {
             }
             e.add(stats).add(BookEl.para(Lang.tr("sc.manual.generator." + type.name().toLowerCase(Locale.ROOT))))
                     .addAll(paras("sc.manual.generator." + type.name().toLowerCase(Locale.ROOT) + ".note"));  // Г-4: notes .note.1, .2...
+            if (type == GeneratorType.COMBUSTION) {
+                e.add(combustionFuels());                       // ГН-6: the server's combustionFuels, as burnt here
+            }
             if (type == GeneratorType.TOKAMAK) {
                 e.add(BookEl.head(Lang.tr("sc.book.build"))).add(tokamakRing());
             }
@@ -708,7 +714,7 @@ public final class BookContent {
         double[] at = {0.10, 0.30, 0.55, 0.85};
         String[] range = {"< 20%", "20-40%", "40-70%", "> 70%"};
         for (int i = 0; i < 4; i++) {
-            t.row(null, range[i], com.sc.tileentity.SingularReactorSC.outputFor(at[i]) + " EU/t",
+            t.row(null, range[i], TileEntityGeneratorSC.scaledOutput(com.sc.tileentity.SingularReactorSC.outputFor(at[i])) + " EU/t",
                     com.sc.radiation.RadiationSC.fmt(com.sc.tileentity.SingularReactorSC.radiationLevelFor(at[i])) + " / "
                             + com.sc.tileentity.SingularReactorSC.radiationRadiusFor(at[i]) + " " + Lang.tr("sc.book.blocks"),
                     Lang.tr("sc.manual.generator.sing.t.risk." + i));
@@ -761,6 +767,29 @@ public final class BookContent {
         return BookEl.layers(singularLayers(), names);
     }
 
+    /**
+     * ГН-6 (audit 2026-10-20): the Combustion Generator's fuels - the server's generators.combustionFuels that are fluids here -
+     * and what a mB gives with its generatorOutput / generatorFuel.
+     */
+    private static BookEl combustionFuels() {
+        BookEl t = BookEl.table(Lang.tr("sc.book.t.fuel"), "EU/" + mb());
+        double k = ConfigSC.generatorOutput / Math.max(0.01, ConfigSC.generatorFuel);
+        for (String n : ConfigSC.combustionFuelNames()) {
+            if (FluidRegistry.getFluid(n) == null) {
+                continue;
+            }
+            double v = Math.round(GeneratorType.COMBUSTION.euPerMb(n) * k * 10) / 10.0;
+            t.row(null, fluidName(n), v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v));
+        }
+        return t;
+    }
+
+    /** ГН-6: a fuel rate a tick with the server's generatorFuel ("2", "1.5"). */
+    private static String rate(int perTick) {
+        double v = perTick * (double) ConfigSC.generatorFuel;
+        return v == Math.rint(v) ? String.valueOf((long) v) : number((float) v);
+    }
+
     static String fuel(GeneratorType type) {
         if (type == GeneratorType.TOKAMAK_XV) {                // its big mode: port tanks, cells BIG_CELL_MUL times faster (a table cell: short)
             return Lang.tr("sc.manual.machines.xvinfo", String.valueOf(type.ignitionThreshold()), number((float) TileEntityGeneratorSC.BIG_D_PER_TICK),
@@ -770,10 +799,10 @@ public final class BookContent {
         switch (type.kind) {
             case PASSIVE: return Lang.tr("sc.manual.machines.passive");
             case FUSION: return Lang.tr("sc.manual.machines.fusioninfo", String.valueOf(type.ignitionThreshold()), TileEntityGeneratorSC.CELL_BURN_TICKS / 1200);
-            case DUAL_FLUID: return type.fuelRatePerTick + " " + mb() + "/t " + fluidName(type.fuelFluidName) + " + " + type.fuel2RatePerTick + " " + mb() + "/t "
-                    + fluidName(type.fuel2FluidName);
+            case DUAL_FLUID: return rate(type.fuelRatePerTick) + " " + mb() + "/t " + fluidName(type.fuelFluidName) + " + " + rate(type.fuel2RatePerTick)
+                    + " " + mb() + "/t " + fluidName(type.fuel2FluidName);
             case FLUID_FUEL:
-            case EXO: return type.fuelRatePerTick + " " + mb() + "/t " + fluidName(type.fuelFluidName);
+            case EXO: return rate(type.fuelRatePerTick) + " " + mb() + "/t " + fluidName(type.fuelFluidName);
             default: return Lang.tr("sc.manual.gen.kind." + type.kind.name().toLowerCase(Locale.ROOT));
         }
     }
@@ -942,7 +971,11 @@ public final class BookContent {
             bat.add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.manual.energy.batteryline", com.sc.item.ItemBatterySC.TIERS[t].name(),
                     String.valueOf(com.sc.item.ItemBatterySC.capacity(t)), com.sc.item.ItemBatterySC.RATE[t])));
         }
-        bat.addAll(paras("sc.manual.energy.battery")).add(BookEl.head(Lang.tr("sc.manual.energy.slothead"))).addAll(paras("sc.manual.energy.slot"))
+        bat.addAll(paras("sc.manual.energy.battery"))
+                // ЭН-9 (audit 2026-10-20): which suit wants which battery - the tiers straight from the suits
+                .add(BookEl.para(Lang.tr("sc.manual.energy.batterytier", ArmorSuit.NANO.chargeTier.name(), ArmorSuit.QUANTUM.chargeTier.name(),
+                        ArmorSuit.EXO.chargeTier.name(), ArmorSuit.SINGULAR.chargeTier.name())))
+                .add(BookEl.head(Lang.tr("sc.manual.energy.slothead"))).addAll(paras("sc.manual.energy.slot"))
                 .about(new ItemStack(ModItems.battery, 1, OreDictionary.WILDCARD_VALUE));
         list.add(bat);
         List<ItemStack> buckets = new ArrayList<ItemStack>();
@@ -1041,10 +1074,10 @@ public final class BookContent {
                 .add(BookEl.para(Lang.tr("sc.manual.energy.svlead", sv.getVoltage(), Tier.XV.getVoltage(), sv.toIc2Tier())))
                 .addAll(paras("sc.manual.energy.svtext"))
                 .add(BookEl.head(Lang.tr("sc.manual.energy.svgethead")))
-                .add(BookEl.item(tokamak, tokamak.getDisplayName(), Lang.tr("sc.manual.energy.svget.tokamak", GeneratorType.TOKAMAK_XV.euPerTick)))
+                .add(BookEl.item(tokamak, tokamak.getDisplayName(), Lang.tr("sc.manual.energy.svget.tokamak", TileEntityGeneratorSC.scaledOutput(GeneratorType.TOKAMAK_XV.euPerTick))))
                 .add(BookEl.item(ModBlocks.generatorStack(GeneratorType.SINGULAR_REACTOR, 1), GeneratorType.SINGULAR_REACTOR.localizedName(),
-                        Lang.tr("sc.manual.energy.svget.singular", GeneratorType.SINGULAR_REACTOR.euPerTick,
-                                com.sc.tileentity.SingularReactorSC.MAX_OUTPUT)))
+                        Lang.tr("sc.manual.energy.svget.singular", TileEntityGeneratorSC.scaledOutput(GeneratorType.SINGULAR_REACTOR.euPerTick),
+                                TileEntityGeneratorSC.scaledOutput(com.sc.tileentity.SingularReactorSC.MAX_OUTPUT))))
                 .add(BookEl.item(trans, trans.getDisplayName(), Lang.tr("sc.manual.energy.svget.transformer")))
                 .add(BookEl.item(adaptive, adaptive.getDisplayName(), Lang.tr("sc.manual.energy.svget.adaptive")))
                 .add(BookEl.head(Lang.tr("sc.manual.energy.svblockshead")))
@@ -1117,7 +1150,7 @@ public final class BookContent {
         for (WeaponType type : WeaponType.values()) {
             ItemStack s = new ItemStack(ModItems.WEAPONS.get(type));
             weapons.add(BookEl.item(s, s.getDisplayName(), Lang.tr("sc.manual.armor.weaponline", type.damagePerHit, type.shotsPerUse, type.euPerShot,
-                    type.range, type.tier.getBuffer()))).about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
+                    type.range, type.tier.getBuffer(), com.sc.item.ItemWeaponSC.reloadSeconds(type)))).about(new ItemStack(s.getItem(), 1, OreDictionary.WILDCARD_VALUE));
         }
         weapons.addAll(paras("sc.manual.armor.charge"));
         list.add(weapons);
@@ -1619,25 +1652,40 @@ public final class BookContent {
         }
         list.add(new BookEntry("corrosive", c, new ItemStack(ModBlocks.pipeSC, 1, 0), Lang.tr("sc.manual.safety.corrosivehead"))
                 .add(BookEl.title(Lang.tr("sc.manual.safety.corrosivehead"))).add(BookEl.para(corrosive.toString())).addAll(paras("sc.manual.safety.corrosive")));
-        list.add(simple("explosions", c, new ItemStack(Blocks.tnt), "sc.manual.safety.explosionshead")
-                .addAll(paras("sc.manual.safety.explosions", new Object[]{(int) com.sc.energy.ExplosionLogic.EXPLOSION_BASE_POWER})));
+        // СТ-3 (audit 2026-10-20): the numbers as this server has them - its radiation multiplier, explosion power, lead suit
+        float radMul = ConfigSC.radiationMultiplier;
+        BookEntry blasts = simple("explosions", c, new ItemStack(Blocks.tnt), "sc.manual.safety.explosionshead");
+        if (!ConfigSC.explosions) {
+            blasts.add(offNote("sc.manual.safety.explosions.off"));
+        }
+        list.add(blasts.addAll(paras("sc.manual.safety.explosions",
+                new Object[]{n1(com.sc.energy.ExplosionLogic.EXPLOSION_BASE_POWER * ConfigSC.explosionPower)})));
         list.add(simple("hazmat", c, new ItemStack(ModItems.leadSuit[1]), "sc.manual.safety.suithead", "sc.manual.safety.suit"));
         BookEntry rad = new BookEntry("radiation", c, new ItemStack(ModItems.dosimeter), Lang.tr("sc.manual.safety.radiationhead"));
-        rad.add(BookEl.title(Lang.tr("sc.manual.safety.radiationhead"))).add(BookEl.image("radiation", 256, 112)).addAll(paras("sc.manual.safety.radiation"))
+        rad.add(BookEl.title(Lang.tr("sc.manual.safety.radiationhead")));
+        if (!ConfigSC.radiation) {
+            rad.add(offNote("sc.manual.safety.radiation.off"));
+        }
+        rad.add(BookEl.image("radiation", 256, 112)).addAll(paras("sc.manual.safety.radiation"))
                 .add(BookEl.head(Lang.tr("sc.manual.safety.radsources")));
         for (GeneratorType type : GeneratorType.values()) {
             float base = TileEntityGeneratorSC.radiationBase(type);
             if (base > 0) {
                 ItemStack s = ModBlocks.generatorStack(type, 1);
                 rad.add(BookEl.item(s, type.localizedName(), Lang.tr(type == GeneratorType.RTG ? "sc.manual.safety.radline.rtg" : "sc.manual.safety.radline",
-                        com.sc.radiation.RadiationSC.fmt(base), TileEntityGeneratorSC.radiationRadius(type))));
+                        com.sc.radiation.RadiationSC.fmt(base * radMul), TileEntityGeneratorSC.radiationRadius(type))));
             }
         }
         rad.add(BookEl.item(new ItemStack(ModItems.isotopeCapsule), Lang.tr("sc.book.carried"), Lang.tr("sc.manual.safety.radline.carried",
-                com.sc.radiation.RadiationSC.fmt(com.sc.radiation.RadiationSC.CAPSULE_LEVEL), com.sc.radiation.RadiationSC.fmt(com.sc.radiation.RadiationSC.MONAZITE_STACK_LEVEL))));
+                com.sc.radiation.RadiationSC.fmt(com.sc.radiation.RadiationSC.CAPSULE_LEVEL * radMul),
+                com.sc.radiation.RadiationSC.fmt(com.sc.radiation.RadiationSC.MONAZITE_STACK_LEVEL * radMul))));
         rad.about(new ItemStack(ModItems.dosimeter));
         list.add(rad);
-        list.add(simple("dose", c, new ItemStack(Items.rotten_flesh), "sc.manual.safety.dosehead", "sc.manual.safety.dose"));
+        // the dose in 10 s next to an RTG / at an exo reactor (DOSE_PER_LEVEL a second a level)
+        float tenSec = com.sc.radiation.RadiationSC.DOSE_PER_LEVEL * 10F;
+        list.add(simple("dose", c, new ItemStack(Items.rotten_flesh), "sc.manual.safety.dosehead")
+                .addAll(paras("sc.manual.safety.dose", new Object[]{n1(TileEntityGeneratorSC.radiationBase(GeneratorType.RTG) * radMul * tenSec),
+                        n1(TileEntityGeneratorSC.radiationBase(GeneratorType.EXO_REACTOR) * radMul * tenSec)})));
         List<ItemStack> prot = new ArrayList<ItemStack>();
         prot.add(new ItemStack(ModBlocks.leadBlock));
         prot.add(new ItemStack(ModBlocks.leadGlass));
@@ -1646,7 +1694,17 @@ public final class BookContent {
         }
         prot.add(new ItemStack(ModItems.dosimeter));
         prot.add(ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.RAD_SHIELDING));
-        BookEntry protect = simple("radprotect", c, new ItemStack(ModBlocks.leadBlock), "sc.manual.safety.radprothead", "sc.manual.safety.radprot");
+        // СТ-3: the casing's output loss, the lead suit (as ItemLeadSuitSC's tooltip), the armour shield at an exo reactor's level
+        int part = ConfigSC.leadSuitPartProtection, full = 4 * Math.max(0, Math.min(25, part));
+        float exoLevel = TileEntityGeneratorSC.radiationBase(GeneratorType.EXO_REACTOR) * radMul;
+        float qAbs = exoLevel * com.sc.util.ArmorFeature.RAD_QUANTUM_PCT / 100F, eAbs = exoLevel * com.sc.util.ArmorFeature.RAD_EXO_PCT / 100F;
+        BookEntry protect = simple("radprotect", c, new ItemStack(ModBlocks.leadBlock), "sc.manual.safety.radprothead")
+                .addAll(paras("sc.manual.safety.radprot",
+                        new Object[]{Math.round((1 - TileEntityGeneratorSC.SHIELDED_OUTPUT) * 100)},
+                        new Object[]{part, full},
+                        new Object[]{com.sc.util.ArmorFeature.RAD_QUANTUM_PCT, com.sc.util.ArmorFeature.RAD_EXO_PCT, com.sc.radiation.RadiationSC.fmt(exoLevel),
+                                (int) Math.ceil(qAbs * com.sc.util.ArmorFeature.RAD_QUANTUM_EU), n1(qAbs * com.sc.util.ArmorFeature.RAD_HEAT_PER_LEVEL),
+                                (int) Math.ceil(eAbs * com.sc.util.ArmorFeature.RAD_EXO_EU), n1(eAbs * com.sc.util.ArmorFeature.RAD_HEAT_PER_LEVEL)}));
         protect.add(BookEl.items(prot));
         for (com.sc.item.ItemLeadSuitSC p : ModItems.leadSuit) {
             protect.about(new ItemStack(p, 1, OreDictionary.WILDCARD_VALUE));
@@ -1786,6 +1844,11 @@ public final class BookContent {
      * A rate for the text: whole numbers as they are, fractions with the language's decimal mark
      * ("sc.num.decimal": a comma in Russian "0,2", a dot in English "0.2"; a dot when the key is missing).
      */
+    /** СТ-3: a number to one decimal ("3", "0,5") - the float noise of a product cut off. */
+    static String n1(float v) {
+        return number(Math.round(v * 10F) / 10F);
+    }
+
     public static String number(float v) {
         if (v == (int) v) {
             return String.valueOf((int) v);
@@ -1824,6 +1887,13 @@ public final class BookContent {
             out.add(BookEl.para(i <= args.length && args[i - 1] != null ? Lang.tr(key, args[i - 1]) : text));
         }
         return out;
+    }
+
+    /** СТ-3: "off on this server" - a paragraph in the warning red (BookEl.warn's colour; the book's texts carry no §-codes). */
+    private static BookEl offNote(String key) {
+        BookEl e = BookEl.para(Lang.tr(key));
+        e.color = 0xA01818;
+        return e;
     }
 
     /** Л-1: the millibucket unit in the language ("мБ" / "mB"). */

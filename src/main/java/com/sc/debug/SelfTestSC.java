@@ -108,6 +108,7 @@ public final class SelfTestSC {
             bridgeRecipes();
             bridgeVortexLook();
             fullAudit20261020();                         // the fixes after the full audit (2026-10-20)
+            auditStar20261021();                         // the shortcomings of 2026-10-20, ★ variants (docs/plan-audit-2026-10-20-star.md)
             SelfTestConverterSC.run();
             SelfTestEmpSC.run();
             SelfTestSubstrateSC.run();
@@ -4056,7 +4057,8 @@ public final class SelfTestSC {
                 names.add(com.sc.util.SoundsSC.of(t).name);
             }
         }
-        java.util.Collections.addAll(names, "quarry.drill", "quarry.beam", "power.on", "power.off", "field.zap", "battery.mode", "rad.click");
+        java.util.Collections.addAll(names, "quarry.drill", "quarry.beam", "power.on", "power.off", "field.zap", "battery.mode", "rad.click",
+                "weapon.shot");                          // ОР-5
         String missing = "";
         for (String n : names) {
             if (!json.contains("\"" + n + "\"")) {
@@ -4191,6 +4193,12 @@ public final class SelfTestSC {
                 && com.sc.item.ItemChargeSC.charge(quantum, 500, com.sc.energy.Tier.LV) == 0
                 && com.sc.item.ItemChargeSC.isBattery(hv) && !com.sc.item.ItemChargeSC.isBattery(nano);
         check(ok, "batteries: charge worn suits up to their own tier; a battery counts as a battery");
+        // ЭН-9: the tier each item wants from a battery (what charge() checks)
+        ItemStack exo = new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.EXO)[1]);
+        check(com.sc.item.ItemChargeSC.requiredTier(quantum) == com.sc.energy.Tier.HV && com.sc.item.ItemChargeSC.requiredTier(exo) == com.sc.energy.Tier.EV
+                        && com.sc.item.ItemChargeSC.requiredTier(new ItemStack(ModItems.empGun)) == com.sc.emp.EmpMathSC.CHARGE_TIER
+                        && com.sc.item.ItemChargeSC.requiredTier(new ItemStack(net.minecraft.init.Blocks.cobblestone)) == null,
+                "batteries (ЭН-9): requiredTier - Quantum chest HV, Exo chest EV, the ПЭ-1 its CHARGE_TIER, cobblestone none");
     }
 
     /** SV content: the Singular cable (last CableType, SV) and the Singular core battery (meta 6). */
@@ -4947,9 +4955,18 @@ public final class SelfTestSC {
             return t == null ? ground - 1 : Math.max(ground - 1, t);
         }
 
+        /** МС-3: the world's height and whether it has no sky (a fake Nether: 128, true). */
+        int h = 256;
+        boolean noSky;
+
         @Override
         public int height() {
-            return 256;
+            return h;
+        }
+
+        @Override
+        public boolean noSky() {
+            return noSky;
         }
     }
 
@@ -5338,16 +5355,31 @@ public final class SelfTestSC {
             int total = b.readableBytes();
             com.sc.handler.ConfigSyncSC.Message back = new com.sc.handler.ConfigSyncSC.Message();
             back.fromBytes(b.copy());
+            // ГН-6 (audit 2026-10-20): the String[] options (combustionFuels) come last - measured, then cut off too
+            Method ws = com.sc.handler.ConfigSyncSC.Message.class.getDeclaredMethod("writeStrings", io.netty.buffer.ByteBuf.class);
+            ws.setAccessible(true);
+            io.netty.buffer.ByteBuf tailBuf = io.netty.buffer.Unpooled.buffer();
+            ws.invoke(out, tailBuf);
+            int tail = tailBuf.readableBytes();
+            java.lang.reflect.Field strs = com.sc.handler.ConfigSyncSC.Message.class.getDeclaredField("strings");
+            strs.setAccessible(true);
             com.sc.handler.ConfigSyncSC.Message old = new com.sc.handler.ConfigSyncSC.Message();
-            old.fromBytes(b.copy(0, total - (1 + 2 + 4 * 3)));   // cut before the ore dimensions: as an older server sends it
-            sync = java.util.Arrays.equals((int[]) dims.get(back), new int[]{0, -1, 7}) && dims.get(old) == null;
-            why = java.util.Arrays.toString((int[]) dims.get(back)) + " / old " + dims.get(old);
+            old.fromBytes(b.copy(0, total - tail - (1 + 2 + 4 * 3)));   // cut before the ore dimensions: as an older server sends it
+            com.sc.handler.ConfigSyncSC.Message noStrings = new com.sc.handler.ConfigSyncSC.Message();
+            noStrings.fromBytes(b.copy(0, total - tail));                 // a 0.2.2 server: the dimensions, no String[] options
+            String[] fuels = (String[]) ((java.util.Map<?, ?>) strs.get(back)).get("combustionFuels");
+            boolean strings = java.util.Arrays.equals(fuels, com.sc.util.ConfigSC.combustionFuels)
+                    && ((java.util.Map<?, ?>) strs.get(old)).isEmpty() && ((java.util.Map<?, ?>) strs.get(noStrings)).isEmpty()
+                    && java.util.Arrays.equals((int[]) dims.get(noStrings), new int[]{0, -1, 7});
+            sync = java.util.Arrays.equals((int[]) dims.get(back), new int[]{0, -1, 7}) && dims.get(old) == null && strings;
+            why = java.util.Arrays.toString((int[]) dims.get(back)) + " / old " + dims.get(old) + ", combustionFuels "
+                    + (fuels == null ? "none" : fuels.length + " entries") + " " + strings;
         } catch (Exception e) {
             why = String.valueOf(e);
         } finally {
             com.sc.util.ConfigSC.oreDimensions = was;
         }
-        check(sync, "config sync: the server's ore dimensions travel (" + why + "), an older server's message without them is read");
+        check(sync, "config sync: the server's ore dimensions and String[] options travel (" + why + "), an older server's message without them is read");
     }
 
     /** The bridge's crafts (approved): each part and item, charge carried, the coordinator copy, the second gravity-coil recipe, the book. */
@@ -6271,13 +6303,13 @@ public final class SelfTestSC {
             check(com.sc.item.ItemDrillSC.crumbProgress(sdDrill) == 23 && com.sc.item.ItemDrillSC.digCounter(sdDrill) == 9,
                     "drill NBT: crumb progress and dig counter");
 
-            // costs: EU x0.5 a block (400 -> 200), SM 1 mB per 25 blocks, heat 1.5 a block
-            check(com.sc.util.DrillZoneSC.holeEu(com.sc.util.DrillType.SINGULAR.euPerBlock, com.sc.util.DrillFeature.HOLE_EU_MUL) == 200
+            // costs: EU x0.5 a block (240 -> 120, ОР-6), SM 1 mB per 25 blocks, heat 1.5 a block
+            check(com.sc.util.DrillZoneSC.holeEu(com.sc.util.DrillType.SINGULAR.euPerBlock, com.sc.util.DrillFeature.HOLE_EU_MUL) == 120
                             && Math.abs(com.sc.util.DrillZoneSC.holeGas(432, com.sc.util.DrillFeature.HOLE_BLOCKS_PER_MB) - 17.28F) < 1e-3
                             && com.sc.util.DrillZoneSC.holeGas(0, 25) == 0F
                             && com.sc.util.DrillZoneSC.holeHeat(25, com.sc.util.DrillFeature.HOLE_HEAT_PER_BLOCK) == 38
                             && com.sc.util.DrillZoneSC.holeHeat(432, 1.5F) == 648 && com.sc.util.ToolGasSC.split(0.72F, 0.48F)[0] == 1F,
-                    "black hole costs: 200 EU a block, 17.28 mB SM for 432 blocks (fraction carried), heat 1.5 a block");
+                    "black hole costs: 120 EU a block, 17.28 mB SM for 432 blocks (fraction carried), heat 1.5 a block");
             check(com.sc.util.DrillZoneSC.funnelRadius(1, false) == 0 && com.sc.util.DrillZoneSC.funnelRadius(2, false) == 3
                             && com.sc.util.DrillZoneSC.funnelRadius(4, false) == 4 && com.sc.util.DrillZoneSC.funnelRadius(5, true) == 5,
                     "gravitational funnel: 7x7 at lv 2, 9x9 at lv 4, 11x11 for the Miner at lv 5");
@@ -6931,5 +6963,514 @@ public final class SelfTestSC {
                             && "3.2M".equals(com.sc.util.NetViewScanSC.compact(3200000)) && "12.0M".equals(com.sc.util.NetViewScanSC.compact(12000000)),
                     "netview: compact EU numbers");
         }
+    }
+
+    /** The shortcomings of the audit 2026-10-20 (docs/plan-audit-2026-10-20-star.md), the ★ variants: the pure parts. */
+    private static void auditStar20261021() {
+        // ЭН-1: a cable's rated packet -> its tier (IC2 gives the rating + 1; the caller takes 1 off)
+        com.sc.energy.Tier T = null;
+        check(com.sc.energy.Tier.ofCapacity(32) == com.sc.energy.Tier.LV && com.sc.energy.Tier.ofCapacity(128) == com.sc.energy.Tier.MV
+                        && com.sc.energy.Tier.ofCapacity(512) == com.sc.energy.Tier.HV && com.sc.energy.Tier.ofCapacity(2048) == com.sc.energy.Tier.EV
+                        && com.sc.energy.Tier.ofCapacity(8192) == com.sc.energy.Tier.IV && com.sc.energy.Tier.ofCapacity(16384) == com.sc.energy.Tier.QV
+                        && com.sc.energy.Tier.ofCapacity(32768) == com.sc.energy.Tier.XV && com.sc.energy.Tier.ofCapacity(1e6) == com.sc.energy.Tier.SV
+                        && com.sc.energy.Tier.ofCapacity(0) == T && com.sc.energy.Tier.ofCapacity(33 - 1) == com.sc.energy.Tier.LV
+                        && com.sc.energy.Tier.ofCapacity(8193 - 1) == com.sc.energy.Tier.IV,
+                "line check (ЭН-1): Tier.ofCapacity - 32 LV, 128 MV, 512 HV, 2048 EV, 8192 IV, 16384 QV, 32768 XV, 1e6 SV, 0 none");
+        // ЭН-3: the owner by name and UUID - an old block's name alone, the UUID only written when known
+        net.minecraft.nbt.NBTTagCompound oldTag = new net.minecraft.nbt.NBTTagCompound();
+        oldTag.setString("Owner", "Alex");
+        com.sc.util.OwnerSC own = new com.sc.util.OwnerSC();
+        own.read(oldTag, "Owner", "OwnerId");
+        net.minecraft.nbt.NBTTagCompound back = new net.minecraft.nbt.NBTTagCompound();
+        own.write(back, "Owner", "OwnerId");
+        boolean oldOk = "Alex".equals(own.name()) && "".equals(own.id()) && "Alex".equals(back.getString("Owner")) && !back.hasKey("OwnerId");
+        net.minecraft.nbt.NBTTagCompound newTag = new net.minecraft.nbt.NBTTagCompound();
+        newTag.setString("Owner", "Alex");
+        newTag.setString("OwnerId", "0e1d2c3b-4a59-6877-8695-a4b3c2d1e0f9");
+        com.sc.util.OwnerSC own2 = new com.sc.util.OwnerSC();
+        own2.read(newTag, "Owner", "OwnerId");
+        net.minecraft.nbt.NBTTagCompound back2 = new net.minecraft.nbt.NBTTagCompound();
+        own2.write(back2, "Owner", "OwnerId");
+        com.sc.util.OwnerSC bob = new com.sc.util.OwnerSC();
+        bob.set("Bob", null);
+        com.sc.util.OwnerSC none = new com.sc.util.OwnerSC();
+        none.set((net.minecraft.entity.player.EntityPlayer) null);
+        check(oldOk && "0e1d2c3b-4a59-6877-8695-a4b3c2d1e0f9".equals(own2.id())
+                        && "0e1d2c3b-4a59-6877-8695-a4b3c2d1e0f9".equals(back2.getString("OwnerId")) && bob.nameIs("bob") && !bob.nameIs("alex")
+                        && none.isEmpty() && !none.matches(null, null) && !bob.matches(null, null),
+                "owners (ЭН-3): an old block's name without a UUID (none written back), a saved UUID kept, nameIs any case, "
+                        + "a null placer - nobody, matches(null) false");
+        // ЭН-3 ★: the claim profile - the saved UUID; a name never seen - its offline UUID, made once (no profile cache, no web lookup)
+        com.mojang.authlib.GameProfile bobP = bob.profile(null);
+        java.util.UUID bobOff = net.minecraft.entity.player.EntityPlayer.func_146094_a(new com.mojang.authlib.GameProfile(null, "Bob"));
+        check(bobP != null && "Bob".equals(bobP.getName()) && (bobOff.equals(bobP.getId()) || net.minecraftforge.common.UsernameCache.getMap().containsValue("Bob"))
+                        && bob.profile(null) == bobP && "".equals(bob.id()) && none.profile(null) == null
+                        && "0e1d2c3b-4a59-6877-8695-a4b3c2d1e0f9".equals(own2.profile(null).getId().toString()),
+                "owner profile (ЭН-3 ★): an unseen name - its offline UUID, kept and not saved; a saved UUID used; nobody - null");
+        // ЭН-5: a capacity upgrade that would only hit the int ceiling doesn't go in (default storageCapacity only)
+        if (com.sc.util.ConfigSC.storageCapacity == 1F) {
+            com.sc.tileentity.TileEntityEnergyStorageSC capXv = new com.sc.tileentity.TileEntityEnergyStorageSC();
+            capXv.setStorageTier(com.sc.energy.Tier.XV);
+            ItemStack capUp = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ENERGY_STORAGE);
+            boolean emptyTakes = capXv.acceptsUpgradeHere(capUp)
+                    && capXv.capacityUpgradeRoom(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT) == 1;
+            capXv.setInventorySlotContents(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT, capUp.copy());
+            boolean fullRefuses = !capXv.acceptsUpgradeHere(capUp)
+                    && capXv.capacityUpgradeRoom(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + 1) == 0
+                    && capXv.capacityUpgradeRoom(com.sc.tileentity.TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT) == 1;
+            check(com.sc.tileentity.TileEntityEnergyStorageSC.maxCapacityUpgrades(com.sc.energy.Tier.XV) == 1
+                            && com.sc.tileentity.TileEntityEnergyStorageSC.maxCapacityUpgrades(com.sc.energy.Tier.QV) == 5
+                            && com.sc.tileentity.TileEntityEnergyStorageSC.maxCapacityUpgrades(com.sc.energy.Tier.IV) == 16
+                            && com.sc.tileentity.TileEntityEnergyStorageSC.maxCapacityUpgrades(com.sc.energy.Tier.SV) == 0
+                            && emptyTakes && fullRefuses,
+                    "storage capacity upgrades (ЭН-5): at most XV 1, QV 5, IV 16, SV 0; an empty XV takes one, with it in - no more");
+        } else {
+            System.out.println("[SC-TEST] INFO storage capacity upgrades (ЭН-5): storageCapacity " + com.sc.util.ConfigSC.storageCapacity
+                    + " - the default-only numbers skipped");
+        }
+        // ЭН-8: the entangled crystal's recipe takes an empty quantum cell only
+        ItemStack emptyCell = new ItemStack(ModItems.battery, 1, 4);
+        ItemStack fullCell = new ItemStack(ModItems.battery, 1, 4);
+        com.sc.item.ItemBatterySC.setCharge(fullCell, 1);
+        boolean crystalRecipe = false;
+        for (Object r : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+            if (r instanceof net.minecraft.item.crafting.IRecipe && ((net.minecraft.item.crafting.IRecipe) r).getRecipeOutput() != null
+                    && ((net.minecraft.item.crafting.IRecipe) r).getRecipeOutput().getItem() == ModItems.entangledCrystal) {
+                crystalRecipe = r instanceof com.sc.init.ModRecipesCrafting.EmptyBatteryRecipe;
+            }
+        }
+        check(com.sc.init.ModRecipesCrafting.EmptyBatteryRecipe.allEmpty(new ItemStack[]{emptyCell, new ItemStack(net.minecraft.init.Items.ender_pearl), null})
+                        && !com.sc.init.ModRecipesCrafting.EmptyBatteryRecipe.allEmpty(new ItemStack[]{fullCell}) && crystalRecipe,
+                "entangled crystal (ЭН-8): an empty quantum cell fits, one with 1 EU doesn't; the recipe is an EmptyBatteryRecipe");
+        // МШ-1: the compressor never takes what doesn't stack, nor the mod's own things but its raw materials
+        ItemStack[] noMass = {new ItemStack(ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[0]),
+                new ItemStack(ModItems.BLADES.get(com.sc.util.BladeType.EXO)), new ItemStack(ModItems.DRILLS.values().iterator().next()),
+                new ItemStack(ModItems.empGun), new ItemStack(net.minecraft.init.Items.iron_sword),
+                ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.CONTROLLER), new ItemStack(ModItems.component("fusionCore")),
+                com.sc.dim.SubstrateBlocksSC.rockStack(com.sc.dim.SubstrateBlocksSC.MONOCRYSTAL, 1)};
+        ItemStack[] someMass = {ModItems.ingot.stackOf(Material.COPPER), ModItems.dust.stackOf(Material.IRON),
+                new ItemStack(com.sc.init.ModBlocks.oreSC, 1, com.sc.util.OreEntry.CHALCOPYRITE.meta()),
+                new ItemStack(net.minecraft.init.Blocks.cobblestone), new ItemStack(net.minecraft.init.Items.iron_ingot),
+                com.sc.dim.SubstrateBlocksSC.rockStack(com.sc.dim.SubstrateBlocksSC.CRYSTALLITE, 1),
+                com.sc.dim.SubstrateBlocksSC.rockStack(com.sc.dim.SubstrateBlocksSC.OXIDE_BLUE, 1), new ItemStack(ModItems.coke)};
+        StringBuilder massBad = new StringBuilder();
+        for (ItemStack s : noMass) {
+            if (TileEntityMachineSC.matterMass(s) != 0) {
+                massBad.append(" taken:").append(s.getUnlocalizedName());
+            }
+        }
+        for (ItemStack s : someMass) {
+            if (TileEntityMachineSC.matterMass(s) <= 0) {
+                massBad.append(" refused:").append(s.getUnlocalizedName());
+            }
+        }
+        check(massBad.length() == 0, "matter compressor (МШ-1): a Nano helmet, an Exo blade, a drill, the ПЭ-1, an iron sword, a controller, "
+                + "a fusion core, the Monocrystal refused; the mod's copper ingot and dust, its ore, cobblestone, an iron ingot, "
+                + "Crystallite and an oxide rock (★), coke taken" + massBad);
+        // МШ-5: the defect chance the screen shows is the one rolled - x0.5 a Quality upgrade, x2 once the run overheated
+        MachineRecipe defR = new MachineRecipe(MachineType.CRUSHER, new ItemStack[]{new ItemStack(net.minecraft.init.Blocks.cobblestone)}, null, null,
+                new ItemStack[]{new ItemStack(net.minecraft.init.Blocks.gravel)}, null, null, 100, 0.12F);
+        TileEntityMachineSC defM = new TileEntityMachineSC();
+        defM.setMachineType(MachineType.CRUSHER);
+        float plain = defM.effectiveDefect(defR);
+        ItemStack quality = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.QUALITY);
+        quality.stackSize = 2;
+        defM.setInventorySlotContents(TileEntityMachineSC.FIRST_UPGRADE_SLOT, quality);
+        float two = defM.effectiveDefect(defR);
+        defM.setOverheatedClient(true);
+        float hot = defM.effectiveDefect(defR);
+        int ord = com.sc.machine.MachineStatus.values()[com.sc.machine.MachineStatus.values().length - 1].ordinal();
+        check(Math.abs(plain - 0.12F) < 1e-4F && Math.abs(two - 0.03F) < 1e-4F && Math.abs(hot - 0.06F) < 1e-4F && defM.isOverheatedThisRun()
+                        && ((ord | 256) & 0xFF) == ord && ((ord | 256) & 256) != 0,
+                "machine defects (МШ-5): 12% plain, 2 Quality upgrades 3%, overheated 6% (" + plain + " / " + two + " / " + hot
+                        + "); the overheat bit rides above the status");
+        // МШ-6: the induction furnace evens its two inputs out
+        TileEntityMachineSC ind = new TileEntityMachineSC();
+        ind.setMachineType(MachineType.INDUCTION_FURNACE);
+        ind.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Blocks.iron_ore, 10));
+        boolean split = ind.balanceSmelterInputs() && ind.getStackInSlot(0) != null && ind.getStackInSlot(0).stackSize == 5
+                && ind.getStackInSlot(1) != null && ind.getStackInSlot(1).stackSize == 5 && !ind.balanceSmelterInputs();
+        TileEntityMachineSC ind1 = new TileEntityMachineSC();
+        ind1.setMachineType(MachineType.INDUCTION_FURNACE);
+        ind1.setInventorySlotContents(1, new ItemStack(net.minecraft.init.Blocks.iron_ore, 1));
+        TileEntityMachineSC indX = new TileEntityMachineSC();
+        indX.setMachineType(MachineType.INDUCTION_FURNACE);
+        indX.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Blocks.dirt, 10));
+        check(split && !ind1.balanceSmelterInputs() && ind1.getStackInSlot(0) == null && !indX.balanceSmelterInputs() && indX.getStackInSlot(1) == null,
+                "induction furnace (МШ-6): 10 iron ore in one input -> 5 and 5; a single ore and an unsmeltable stack stay put");
+        // МШ-7: other mods' ores crush (2 crushed ores); a wildcard ingredient matches any damage
+        int foreignAdded = com.sc.init.ModRecipesOreProcessing.registerForeignOres();
+        ItemStack ownCopper = new ItemStack(com.sc.init.ModBlocks.oreSC, 1, com.sc.util.OreEntry.CHALCOPYRITE.meta());
+        int ownCopperRecipes = 0;
+        for (MachineRecipe r : RecipeRegistry.recipesFor(MachineType.CRUSHER)) {
+            if (r.inputs.length == 1 && MachineRecipe.isSameIngredient(ownCopper, r.inputs[0])) {
+                ownCopperRecipes++;
+            }
+        }
+        MachineRecipe vanillaIron = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{new ItemStack(net.minecraft.init.Blocks.iron_ore)}, null, null);
+        boolean wild = MachineRecipe.isSameIngredient(new ItemStack(net.minecraft.init.Blocks.wool, 1, 3),
+                new ItemStack(net.minecraft.init.Blocks.wool, 1, net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE))
+                && !MachineRecipe.isSameIngredient(new ItemStack(net.minecraft.init.Blocks.wool, 1, 3), new ItemStack(net.minecraft.init.Blocks.wool, 1, 4));
+        check(ownCopperRecipes == 1 && vanillaIron != null && vanillaIron.outputs[0].getItem() == ModItems.crushedOre && wild,
+                "crusher (МШ-7): our chalcopyrite keeps its one recipe, vanilla iron ore its own; a wildcard ingredient matches meta 3 ("
+                        + foreignAdded + " foreign ore recipes added now)");
+        ItemStack foreignCopper = null;
+        for (ItemStack o : net.minecraftforge.oredict.OreDictionary.getOres("oreCopper")) {
+            if (net.minecraft.block.Block.getBlockFromItem(o.getItem()) != com.sc.init.ModBlocks.oreSC) {
+                foreignCopper = o.copy();
+                foreignCopper.stackSize = 1;
+                if (foreignCopper.getItemDamage() == net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE) {
+                    foreignCopper.setItemDamage(0);
+                }
+                break;
+            }
+        }
+        if (foreignCopper != null) {
+            MachineRecipe fr = RecipeRegistry.findMatch(MachineType.CRUSHER, new ItemStack[]{foreignCopper}, null, null);
+            check(fr != null && fr.outputs.length == 1 && fr.outputs[0].getItem() == ModItems.crushedOre && fr.outputs[0].stackSize == 2
+                            && ModItems.crushedOre.materialAt(fr.outputs[0].getItemDamage()) == Material.COPPER && fr.byproducts.length == 0,
+                    "crusher (МШ-7): another mod's oreCopper (" + foreignCopper.getUnlocalizedName() + ") -> 2 crushed copper, no by-products");
+        } else {
+            System.out.println("[SC-TEST] INFO crusher (МШ-7): no other mod's oreCopper loaded - the foreign ore recipe not checked");
+        }
+        // МШ-8: the cached names give the same answers as before; the 4-argument isSameIngredient agrees with the old one
+        ItemStack[][] probes = {{ModItems.ingot.stackOf(Material.COPPER)}, {new ItemStack(net.minecraft.init.Blocks.cobblestone)},
+                {null}, {ModItems.dust.stackOf(Material.IRON)}, {ModItems.crushedOre.stackOf(Material.COPPER)}};
+        java.util.List<MachineRecipe> before = new java.util.ArrayList<MachineRecipe>();
+        for (MachineType t : MachineType.values()) {
+            for (ItemStack[] in : probes) {
+                before.add(RecipeRegistry.findMatch(t, in, null, null));
+            }
+        }
+        MachineRecipe.forgetNames();
+        boolean same = true;
+        int k = 0;
+        for (MachineType t : MachineType.values()) {
+            for (ItemStack[] in : probes) {
+                same &= RecipeRegistry.findMatch(t, in, null, null) == before.get(k++);
+            }
+        }
+        ItemStack[] pair = {ModItems.ingot.stackOf(Material.COPPER), ModItems.dust.stackOf(Material.COPPER), new ItemStack(net.minecraft.init.Blocks.stone),
+                ModItems.crushedOre.stackOf(Material.TIN)};
+        for (ItemStack a : pair) {
+            for (ItemStack b : pair) {
+                same &= MachineRecipe.isSameIngredient(a, b) == MachineRecipe.isSameIngredient(a, com.sc.init.OreRecipes.sharedName(a), b,
+                        com.sc.init.OreRecipes.sharedName(b));
+            }
+        }
+        check(same, "machine recipes (МШ-8): findMatch over every machine gives the same recipes before and after forgetNames(); "
+                + "isSameIngredient with names agrees with the plain one");
+        // ГН-2: an Economizer's fuel x0.85 - water electrolysis and a fuel cell never make energy out of water
+        com.sc.tileentity.TileEntityGeneratorSC cell = new com.sc.tileentity.TileEntityGeneratorSC();
+        cell.setGeneratorType(com.sc.energy.GeneratorType.FUEL_CELL);
+        ItemStack eco = ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.ECONOMIZER);
+        eco.stackSize = 4;
+        cell.setInventorySlotContents(com.sc.tileentity.TileEntityGeneratorSC.FIRST_UPGRADE_SLOT, eco);
+        double e4 = com.sc.tileentity.TileEntityGeneratorSC.economizerFuel(4);
+        check(Math.abs(e4 - 0.522) < 0.001 && Math.pow(0.9 / 0.85, 4) < 72000.0 / 50000.0
+                        && (com.sc.util.ConfigSC.generatorFuel != 1F || Math.abs(cell.fuelMultiplier() - e4) < 0.001),
+                "economizer (ГН-2): fuel x0.85 each - 4 of them x" + e4 + ", the gain (0.9/0.85)^4 under 72 000 / 50 000; a fuel cell with 4: "
+                        + cell.fuelMultiplier());
+        // ГН-6: the Combustion Generator's fuels from the config
+        java.util.Map<String, Double> fuels = com.sc.util.ConfigSC.parseFuels(new String[]{"a=5", " b = 2.5 ", "c", "=3", "d=0", "e=abc", "a=9"});
+        boolean defaults = java.util.Arrays.equals(com.sc.util.ConfigSC.combustionFuels, com.sc.util.ConfigSC.defaultCombustionFuels());
+        check(fuels.size() == 2 && fuels.get("a") == 5.0 && fuels.get("b") == 2.5
+                        && (!defaults || com.sc.util.ConfigSC.combustionEuPerMb("diesel") == 16 && com.sc.util.ConfigSC.combustionEuPerMb("hootch") == 10)
+                        && com.sc.energy.GeneratorType.COMBUSTION.euPerMb("rocket_fuel") > 0 == com.sc.util.ConfigSC.combustionEuPerMb("rocket_fuel") > 0
+                        && (!defaults || com.sc.energy.GeneratorType.COMBUSTION.euPerMb("rocket_fuel") > 0)
+                        && com.sc.tileentity.TileEntityGeneratorSC.scaledOutput(0) == 0,
+                "combustion fuels (ГН-6): parseFuels keeps a=5 and b=2.5 only; diesel 16, hootch 10, rocket_fuel burns (defaults " + defaults + ")");
+        // ГН-5: the wind's share by the height over the world's ground level and the blocks round the rotor
+        check(com.sc.tileentity.TileEntityGeneratorSC.windFactor(96, 0) == 1 && com.sc.tileentity.TileEntityGeneratorSC.windFactor(48, 0) == 0.5
+                        && com.sc.tileentity.TileEntityGeneratorSC.windFactor(0, 0) == 0 && com.sc.tileentity.TileEntityGeneratorSC.windFactor(96, 25) == 0
+                        && com.sc.tileentity.TileEntityGeneratorSC.windStill(null) == com.sc.tileentity.TileEntityGeneratorSC.WIND_OK,
+                "wind turbine (ГН-5): windFactor - 96 up 1, 48 up 0.5, at ground level 0, 25 blocks round it 0");
+        // КР-2: the chunks of the quarry's four neighbours, when they lie in another chunk
+        java.util.List<net.minecraft.world.ChunkCoordIntPair> edge = com.sc.tileentity.TileEntityQuarrySC.neighbourChunks(15, 5);
+        check(edge.size() == 1 && edge.get(0).chunkXPos == 1 && edge.get(0).chunkZPos == 0
+                        && com.sc.tileentity.TileEntityQuarrySC.neighbourChunks(15, 15).size() == 2
+                        && com.sc.tileentity.TileEntityQuarrySC.neighbourChunks(5, 5).isEmpty()
+                        && com.sc.tileentity.TileEntityQuarrySC.neighbourChunks(-1, 5).size() == 1
+                        && com.sc.tileentity.TileEntityQuarrySC.neighbourChunks(-1, 0).size() == 2,
+                "quarry chunks (КР-2): at x 15 one neighbour chunk (1, 0), in a corner two, inside none; at x -1 one, at (-1, 0) - a corner - two");
+        // КР-5: "as it was" - the commonest of the six neighbours, the first on a tie, none - -1
+        net.minecraft.block.Block nr = net.minecraft.init.Blocks.netherrack;
+        net.minecraft.block.Block[] six = {net.minecraft.init.Blocks.iron_ore, nr, nr, null, nr, nr};
+        net.minecraft.block.Block[] tie = {net.minecraft.init.Blocks.stone, nr, null, null, nr, net.minecraft.init.Blocks.stone};
+        check(com.sc.tileentity.TileEntityQuarrySC.pickFill(six, new int[6]) == 1
+                        && com.sc.tileentity.TileEntityQuarrySC.pickFill(new net.minecraft.block.Block[6], new int[6]) == -1
+                        && com.sc.tileentity.TileEntityQuarrySC.pickFill(tie, new int[6]) == 0
+                        && com.sc.tileentity.TileEntityQuarrySC.pickFill(new net.minecraft.block.Block[]{nr, nr}, new int[]{0, 1}) == 0,
+                "quarry «as it was» (КР-5): four netherrack beat an ore, nothing - stone (-1), a tie - the first, metas told apart");
+        // КР-5 ★: only natural rock is copied - never a storage block (a dupe), nor the Substrate's traces or Monocrystal
+        net.minecraft.block.Block sRock = com.sc.dim.SubstrateBlocksSC.rock;
+        check(com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.stone, 0, null, 0, 0, 0)
+                        && com.sc.tileentity.TileEntityQuarrySC.naturalRock(nr, 0, null, 0, 0, 0)
+                        && com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.end_stone, 0, null, 0, 0, 0)
+                        && com.sc.tileentity.TileEntityQuarrySC.naturalRock(sRock, com.sc.dim.SubstrateBlocksSC.CRYSTALLITE, null, 0, 0, 0)
+                        && com.sc.tileentity.TileEntityQuarrySC.naturalRock(sRock, com.sc.dim.SubstrateBlocksSC.OXIDE_GREEN, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(sRock, com.sc.dim.SubstrateBlocksSC.MONOCRYSTAL, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(sRock, com.sc.dim.SubstrateBlocksSC.COPPER_TRACE, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(sRock, com.sc.dim.SubstrateBlocksSC.SETTLEMENT_BRICK, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.diamond_block, 0, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.emerald_block, 0, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.gold_block, 0, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.coal_block, 0, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.quartz_block, 0, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(net.minecraft.init.Blocks.obsidian, 0, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(com.sc.init.ModBlocks.metalBlock, 0, null, 0, 0, 0)
+                        && !com.sc.tileentity.TileEntityQuarrySC.naturalRock(com.sc.init.ModBlocks.leadBlock, 0, null, 0, 0, 0),
+                "quarry «as it was» (КР-5 ★): stone, netherrack, end stone, Crystallite and the oxides are copied; diamond, emerald, gold, "
+                        + "coal, quartz, obsidian, metal and lead blocks, the Monocrystal, the copper trace, the Settlement Brick are not");
+        // КР-6: the share of the cells really dug - a moving average
+        check(Math.abs(com.sc.tileentity.TileEntityQuarrySC.ema(1F, 100, 10) - 0.73F) < 1e-4F
+                        && com.sc.tileentity.TileEntityQuarrySC.ema(0.5F, 0, 0) == 0.5F,
+                "quarry forecast (КР-6): ema(1, 100 seen, 10 dug) = 0.73, nothing seen - unchanged");
+        // КР-7: the Quantum Wrench's copy - not the owner or the facing, the size down to the target's maximum
+        com.sc.tileentity.TileEntityQuarrySC qFrom = new com.sc.tileentity.TileEntityQuarrySC();
+        qFrom.setQuarryTier(com.sc.energy.Tier.EV);
+        qFrom.setOwner("Alex");
+        qFrom.setFacing(3);
+        net.minecraft.nbt.NBTTagCompound qData = new net.minecraft.nbt.NBTTagCompound();
+        qFrom.exportSettings(qData);
+        int[] qs = qData.getIntArray("Settings");
+        qs[0] = 999;
+        qs[6] = com.sc.tileentity.TileEntityQuarrySC.REPLACE_ASWAS;
+        qData.setIntArray("Settings", qs);
+        com.sc.tileentity.TileEntityQuarrySC qTo = new com.sc.tileentity.TileEntityQuarrySC();
+        qTo.setQuarryTier(com.sc.energy.Tier.LV);
+        qTo.setOwner("Bob");
+        qTo.setFacing(4);
+        qTo.importSettings(qData);
+        check(!qData.hasKey("Owner") && !qData.hasKey("Facing") && "Bob".equals(qTo.getOwner()) && qTo.getFacing() == 4
+                        && qTo.getSizeX() == qTo.maxSize() && qTo.getReplace() == com.sc.tileentity.TileEntityQuarrySC.REPLACE_ASWAS,
+                "quarry settings (КР-7): the copy has no owner / facing, pasted the target keeps its own, size " + qTo.getSizeX()
+                        + " = its maximum " + qTo.maxSize() + ", «Leave» carried over");
+        // КР-8: balance.quarryEnergy multiplies the EU a block
+        com.sc.tileentity.TileEntityQuarrySC qe8 = new com.sc.tileentity.TileEntityQuarrySC();
+        qe8.setQuarryTier(com.sc.energy.Tier.HV);
+        float qeWas = com.sc.util.ConfigSC.quarryEnergy;
+        int c1 = -1, c2 = -1;
+        try {
+            com.sc.util.ConfigSC.quarryEnergy = 1F;
+            c1 = qe8.costFor(1.5F);
+            com.sc.util.ConfigSC.quarryEnergy = 2F;
+            c2 = qe8.costFor(1.5F);
+        } finally {
+            com.sc.util.ConfigSC.quarryEnergy = qeWas;
+        }
+        check(c1 == 53 && c2 == 105, "quarry energy (КР-8): a hardness-1.5 block 53 EU, at quarryEnergy 2 - " + c2 + " (105)");
+        // КР-3: the Exo rig from an EV quarry - not with fluid in its pump compartments; its washing water cut to WATER_BASE
+        com.sc.init.ModRecipesCrafting.CarryRecipe exoR = null;
+        for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+            if (o instanceof com.sc.init.ModRecipesCrafting.CarryRecipe && ((com.sc.init.ModRecipesCrafting.CarryRecipe) o).getRecipeOutput() != null
+                    && ((com.sc.init.ModRecipesCrafting.CarryRecipe) o).getRecipeOutput().getItem() == net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.quarrySC)
+                    && ((com.sc.init.ModRecipesCrafting.CarryRecipe) o).getRecipeOutput().getItemDamage() == 4) {
+                exoR = (com.sc.init.ModRecipesCrafting.CarryRecipe) o;
+            }
+        }
+        boolean wetRefused = false, dryWater = false;
+        String exoWhy = exoR == null ? "no recipe" : "";
+        if (exoR != null) {
+            net.minecraft.inventory.InventoryCrafting grid = new net.minecraft.inventory.InventoryCrafting(new net.minecraft.inventory.Container() {
+                @Override
+                public boolean canInteractWith(net.minecraft.entity.player.EntityPlayer p) {
+                    return true;
+                }
+            }, 3, 3);
+            Object[] in = exoR.getInput();
+            int quarrySlot = -1;
+            for (int i = 0; i < in.length && i < 9; i++) {
+                ItemStack s = in[i] instanceof ItemStack ? ((ItemStack) in[i]).copy()
+                        : in[i] instanceof java.util.List && !((java.util.List<?>) in[i]).isEmpty() ? ((ItemStack) ((java.util.List<?>) in[i]).get(0)).copy() : null;
+                if (s != null && s.getItemDamage() == net.minecraftforge.oredict.OreDictionary.WILDCARD_VALUE) {
+                    s.setItemDamage(0);
+                }
+                if (s != null && s.getItem() == net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.quarrySC)) {
+                    quarrySlot = i;
+                }
+                grid.setInventorySlotContents(i, s);
+            }
+            if (quarrySlot >= 0) {
+                ItemStack wet = new ItemStack(com.sc.init.ModBlocks.quarrySC, 1, 3);
+                net.minecraft.nbt.NBTTagCompound wt = new net.minecraft.nbt.NBTTagCompound();
+                net.minecraft.nbt.NBTTagList tl = new net.minecraft.nbt.NBTTagList();
+                net.minecraft.nbt.NBTTagCompound t0 = new FluidStack(FluidRegistry.WATER, 1000).writeToNBT(new net.minecraft.nbt.NBTTagCompound());
+                t0.setByte("Tank", (byte) 0);
+                tl.appendTag(t0);
+                wt.setTag("Tanks", tl);
+                wet.setTagCompound(wt);
+                grid.setInventorySlotContents(quarrySlot, wet);
+                wetRefused = !exoR.matches(grid, null);
+                ItemStack dry = new ItemStack(com.sc.init.ModBlocks.quarrySC, 1, 3);
+                net.minecraft.nbt.NBTTagCompound dt = new net.minecraft.nbt.NBTTagCompound();
+                dt.setTag("Tanks", new net.minecraft.nbt.NBTTagList());
+                dt.setTag("Water", new FluidStack(FluidRegistry.WATER, 160000).writeToNBT(new net.minecraft.nbt.NBTTagCompound()));
+                dry.setTagCompound(dt);
+                grid.setInventorySlotContents(quarrySlot, dry);
+                ItemStack rig = exoR.matches(grid, null) ? exoR.getCraftingResult(grid) : null;
+                dryWater = rig != null && rig.hasTagCompound() && rig.getTagCompound().getCompoundTag("Water").getInteger("Amount")
+                        == com.sc.tileentity.TileEntityQuarrySC.WATER_BASE && !rig.getTagCompound().hasKey("Tanks");
+                exoWhy = "wet refused " + wetRefused + ", dry " + (rig == null ? "no match" : rig.getTagCompound());
+            } else {
+                exoWhy = "no quarry in the pattern";
+            }
+        }
+        check(wetRefused && dryWater, "Exo rig craft (КР-3): an EV quarry with 1000 mB in a pump tank doesn't form it, a dry one with "
+                + "160 000 mB of washing water gives a rig with " + com.sc.tileentity.TileEntityQuarrySC.WATER_BASE + " (" + exoWhy + ")");
+        // МС-3: under a world's roof a place over its real height is "above the world's ceiling"
+        FakeCells nether = new FakeCells();
+        nether.h = 128;
+        nether.noSky = true;
+        com.sc.bridge.BridgeSpaceSC.Result ceil = com.sc.bridge.BridgeSpaceSC.check(nether, 0, 130, 0, 3, 0);
+        FakeCells overworld = new FakeCells();
+        overworld.h = 128;
+        com.sc.bridge.BridgeSpaceSC.Result high = com.sc.bridge.BridgeSpaceSC.check(overworld, 0, 130, 0, 3, 0);
+        check(!ceil.free && "sc.bridge.place.ceiling".equals(ceil.reason) && !high.free && "sc.bridge.place.high".equals(high.reason),
+                "bridge place (МС-3): y 130 in a 128-high world without a sky - " + ceil.reason + ", with a sky - " + high.reason);
+        // МС-4: the coordinator keeps both checks - the Ground Bridge's 3x3, the Space Bridge's 5x5
+        ItemStack co1 = new ItemStack(ModItems.coordinator), co2 = new ItemStack(ModItems.coordinator), co3 = new ItemStack(ModItems.coordinator);
+        com.sc.bridge.BridgeItemDataSC.setPoint(co1, 1, 70, 2, 0, true, false);
+        com.sc.bridge.BridgeItemDataSC.copyPoint(co1, co2);
+        com.sc.bridge.BridgeItemDataSC.setPoint(co3, 1, 70, 2, 0, true);
+        check(com.sc.bridge.BridgeItemDataSC.safe(co1) && !com.sc.bridge.BridgeItemDataSC.safe5(co1) && com.sc.bridge.BridgeItemDataSC.checked5(co1)
+                        && com.sc.bridge.BridgeItemDataSC.checked5(co2) && com.sc.bridge.BridgeItemDataSC.safe(co2) && !com.sc.bridge.BridgeItemDataSC.safe5(co2)
+                        && !com.sc.bridge.BridgeItemDataSC.checked5(co3) && com.sc.bridge.BridgeItemDataSC.safe(co3),
+                "coordinator (МС-4): Safe (3x3) and Safe5 (5x5) kept apart and copied; the one-check setPoint writes no Safe5");
+        // БР-1: the magnet - someone else's death drop a minute, others' throws 4 s, one's own death drop at once
+        check(!com.sc.item.ArmorLogicSC.magnetPulls("a", "", "b", 100) && com.sc.item.ArmorLogicSC.magnetPulls("a", "", "b", 1200)
+                        && com.sc.item.ArmorLogicSC.magnetPulls("a", "", "a", 0) && !com.sc.item.ArmorLogicSC.magnetPulls("a", "b", "", 79)
+                        && com.sc.item.ArmorLogicSC.magnetPulls("a", "b", "", 80) && !com.sc.item.ArmorLogicSC.magnetPulls("a", "a", "", 19)
+                        && com.sc.item.ArmorLogicSC.magnetPulls("a", "a", "", 20) && com.sc.item.ArmorLogicSC.magnetPulls("a", "", "", 0),
+                "magnet (БР-1): another's death drop waits " + com.sc.util.ArmorFeature.MAGNET_DEATH_GRACE + " ticks, another's throw "
+                        + com.sc.util.ArmorFeature.MAGNET_OTHERS_GRACE + ", one's own throw " + com.sc.util.ArmorFeature.MAGNET_THROWN_GRACE
+                        + ", one's own death drop - none");
+        // БР-2: the shield's failure reason rides in the radiation flags' bits 4-6
+        int failFlags = com.sc.radiation.RadiationSC.F_ARMOR_FAIL | 1 << com.sc.radiation.RadiationSC.F_REASON_SHIFT;
+        int worst = com.sc.radiation.RadiationSC.F_FIELD | com.sc.radiation.RadiationSC.F_LEAD | com.sc.radiation.RadiationSC.F_ARMOR
+                | com.sc.radiation.RadiationSC.F_ARMOR_FAIL | com.sc.radiation.RadiationSC.F_REASON_MASK << com.sc.radiation.RadiationSC.F_REASON_SHIFT;
+        check(com.sc.radiation.RadiationSC.reasonOf(failFlags) == 1
+                        && com.sc.radiation.RadiationSC.reasonOf(com.sc.radiation.RadiationSC.F_FIELD | 5 << com.sc.radiation.RadiationSC.F_REASON_SHIFT) == 5
+                        && com.sc.radiation.RadiationSC.reasonOf(com.sc.radiation.RadiationSC.F_ARMOR) == 0 && worst < 128,
+                "radiation HUD (БР-2): the reason 1 / 5 read back, none with plain flags; all of them fit the packet's byte (" + worst + ")");
+        // БР-3: ОЧ3 - at most 200 points a minute, a blow credits no more than its damage
+        float sum = 0F, left = 4F;
+        for (int i = 0; i < 4; i++) {
+            float c = com.sc.item.SingularProgressSC.credit(left, 1F);
+            left -= c;
+            sum += c;
+        }
+        float fifth = com.sc.item.SingularProgressSC.credit(left, 1F);
+        check(com.sc.util.SingularLevel.absorbPoints(5, 198) == 2 && com.sc.util.SingularLevel.absorbPoints(5, 200) == 0
+                        && com.sc.util.SingularLevel.absorbPoints(3, 0) == 3 && sum == 4F && fifth == 0F,
+                "absorbed damage (БР-3): 5 points with 198 given - 2, with 200 - 0; four pieces of a 4-damage blow credit 4, a fifth 0");
+        // ОР-7: at most 3 bosses in 10 minutes give 500, past them a boss counts as a mob
+        check(com.sc.util.SingularLevel.killPoints(true, 0, 0) == 500 && com.sc.util.SingularLevel.killPoints(true, 0, 2) == 500
+                        && com.sc.util.SingularLevel.killPoints(true, 0, 3) == 5 && com.sc.util.SingularLevel.killPoints(true, 200, 3) == 0
+                        && com.sc.util.SingularLevel.killPoints(false, 198, 0) == 2 && com.sc.util.SingularLevel.killPoints(true, 200) == 500,
+                "boss points (ОР-7): the 1st-3rd boss 500, the 4th as a mob (5, 0 past the minute's cap); the 2-argument rule as before");
+        // ОР-5: the hand weapons' reload
+        check(com.sc.util.WeaponType.ION_CUTTER.cooldownTicks() == 10 && com.sc.util.WeaponType.PULSE_EMITTER.cooldownTicks() == 20
+                        && com.sc.util.WeaponType.PLASMA_RIFLE.cooldownTicks() == 30 && com.sc.item.ItemWeaponSC.coolingDown(100, 105, 10)
+                        && !com.sc.item.ItemWeaponSC.coolingDown(100, 110, 10) && !com.sc.item.ItemWeaponSC.coolingDown(100, 50, 10),
+                "hand weapons (ОР-5): reload 10 / 20 / 30 ticks; a shot at 100 still reloads at 105, not at 110 (nor at a turned-back 50)");
+        // ОР-6: the Singular drill's block costs Exo x0.8, the black hole half that - 120 EU
+        check(com.sc.util.DrillType.SINGULAR.euPerBlock == com.sc.util.DrillType.EXO.euPerBlock * 4 / 5 && (240 + 1) / 2 == 120 && 120 < 150,
+                "Singular drill (ОР-6): " + com.sc.util.DrillType.SINGULAR.euPerBlock + " EU a block = Exo " + com.sc.util.DrillType.EXO.euPerBlock
+                        + " x0.8; with the set (240+1)/2 = 120 < Exo's 150");
+        // СТ-1: the tooltips' texts - every silicon material, production tool and cable has its line in both languages
+        StringBuilder tipMissing = new StringBuilder();
+        java.util.List<String> tipKeys = new java.util.ArrayList<String>();
+        for (com.sc.util.SiliconMaterial m : com.sc.util.SiliconMaterial.values()) {
+            tipKeys.add("sc.si.tooltip." + m.name().toLowerCase(java.util.Locale.ROOT));
+        }
+        for (com.sc.util.SCToolType t : com.sc.util.SCToolType.values()) {
+            tipKeys.add("sc.tool.tooltip." + t.name().toLowerCase(java.util.Locale.ROOT));
+        }
+        for (com.sc.energy.CableType c : com.sc.energy.CableType.values()) {
+            tipKeys.add("sc.cable.tooltip." + c.name().toLowerCase(java.util.Locale.ROOT));
+        }
+        java.util.Collections.addAll(tipKeys, "sc.pipe.tooltip.rate", "sc.pipe.tooltip.corrosive", "sc.pipe.tooltip.ptfe", "sc.pipe.tooltip.howto",
+                "sc.tube.tooltip", "sc.tube.tooltip.details", "sc.tube.tooltip.howto", "sc.tool.tooltip.worksin", "sc.tool.tooltip.wear",
+                "sc.tooltip.madein", "sc.manual.tooltip");
+        for (String lang : new String[]{"en_US", "ru_RU"}) {
+            java.util.Map<String, String> m = langMap(lang);
+            for (String tk : tipKeys) {
+                if (!m.containsKey(tk)) {
+                    tipMissing.append(' ').append(lang).append(':').append(tk);
+                }
+            }
+        }
+        boolean ptfe = true;
+        for (com.sc.util.PipeType p : com.sc.util.PipeType.values()) {
+            ptfe &= p.chemicallyResistant == (p == com.sc.util.PipeType.PTFE);
+        }
+        check(tipMissing.length() == 0 && ptfe, "tooltips (СТ-1): " + tipKeys.size() + " keys of the silicon materials, the tools, the cables, the pipes,"
+                + " the tube and the handbook in en_US and ru_RU; only PTFE resists corrosive fluids" + tipMissing);
+        // СТ-2: the chunk's set of placed blocks - add / contains / remove, growth, the NBT array there and back, the key packing
+        com.sc.util.PlacedChunkSetSC pcs = new com.sc.util.PlacedChunkSetSC();
+        int k1 = com.sc.util.PlacedChunkSetSC.key(15, 255, 15), k0 = com.sc.util.PlacedChunkSetSC.key(0, 0, 0);
+        boolean basic = k1 == (15 | 15 << 4 | 255 << 8) && k0 == 0 && com.sc.util.PlacedChunkSetSC.key(-1, 5, -17) == (15 | 15 << 4 | 5 << 8)
+                && com.sc.util.PlacedChunkSetSC.key(0, 4096, 0) == -1 && pcs.add(k1) && !pcs.add(k1) && pcs.contains(k1) && pcs.add(k0)
+                && pcs.size() == 2 && pcs.remove(k1) && !pcs.remove(k1) && !pcs.contains(k1) && pcs.contains(k0);
+        boolean grown = true;
+        for (int i = 0; i < 10000; i++) {
+            grown &= pcs.add(i * 7 + 1 & 0xFFFFF) || pcs.contains(i * 7 + 1 & 0xFFFFF);
+        }
+        int want = pcs.size();
+        for (int i = 0; i < 10000; i += 3) {
+            pcs.remove(i * 7 + 1 & 0xFFFFF);
+        }
+        boolean afterRemove = true;
+        for (int i = 0; i < 10000; i++) {
+            afterRemove &= pcs.contains(i * 7 + 1 & 0xFFFFF) == (i % 3 != 0);
+        }
+        com.sc.util.PlacedChunkSetSC pcsBack = com.sc.util.PlacedChunkSetSC.fromArray(pcs.toArray());
+        boolean round = pcsBack.size() == pcs.size() && pcsBack.contains(k0) && pcsBack.contains(2 * 7 + 1) && !pcsBack.contains(3 * 7 + 1);
+        check(basic && grown && want >= 10000 && afterRemove && round, "placed marks (СТ-2): the chunk-local key, a repeated add / remove changes nothing, "
+                + want + " keys grown, a third removed with the rest found, the NBT array round trip");
+        // КР-4: a bucket on a quarry - water goes into the washing tank, lava doesn't; an empty bucket fills only from a compartment
+        com.sc.tileentity.TileEntityQuarrySC fq = new com.sc.tileentity.TileEntityQuarrySC();
+        ItemStack waterB = new ItemStack(net.minecraft.init.Items.water_bucket), lavaB = new ItemStack(net.minecraft.init.Items.lava_bucket),
+                emptyB = new ItemStack(net.minecraft.init.Items.bucket);
+        boolean dryQuarry = com.sc.util.FluidHandSC.canExchange(fq, waterB) && !com.sc.util.FluidHandSC.canExchange(fq, lavaB)
+                && !com.sc.util.FluidHandSC.canExchange(fq, emptyB) && !com.sc.util.FluidHandSC.canExchange(null, waterB)
+                && !com.sc.util.FluidHandSC.canExchange(fq, null);
+        fq.getTank(0).fill(new net.minecraftforge.fluids.FluidStack(net.minecraftforge.fluids.FluidRegistry.LAVA, 1000), true);
+        boolean lavaQuarry = com.sc.util.FluidHandSC.canExchange(fq, emptyB) && !com.sc.util.FluidHandSC.canExchange(fq, lavaB);
+        check(dryQuarry && lavaQuarry, "quarry by hand (КР-4): a water bucket pours into the washing tank, a lava bucket and an empty one"
+                + " don't (" + dryQuarry + "); with lava pumped an empty bucket fills, a lava one doesn't (" + lavaQuarry + ")");
+        // ПМ-1: the Hold's wave Shells are marked in their entity data (saved with the mob) - no trophy for them
+        net.minecraft.entity.Entity waveMob = new net.minecraft.entity.item.EntityItem((net.minecraft.world.World) null);
+        boolean unmarked = !com.sc.mob.MobDropsSC.waveShell(waveMob) && !com.sc.mob.MobDropsSC.waveShell(null);
+        waveMob.getEntityData().setBoolean(com.sc.mob.WardenFightSC.WAVE_TAG, true);
+        check(unmarked && com.sc.mob.MobDropsSC.waveShell(waveMob) && "scWardenWave".equals(com.sc.mob.WardenFightSC.WAVE_TAG),
+                "arena waves (ПМ-1): a mob without the " + com.sc.mob.WardenFightSC.WAVE_TAG + " mark (and null) is no wave Shell, a marked one is");
+        // БР-4: the gas chips' own icons - none borrows an old chip's picture, and each is in the jar
+        StringBuilder chipTex = new StringBuilder();
+        java.util.Set<String> oldChips = new java.util.HashSet<String>(java.util.Arrays.asList("chipSensor", "chipPower", "chipDefense",
+                "chipMobility", "chipUtility"));
+        int gasChips = 0;
+        for (com.sc.util.ChipType t : com.sc.util.ChipType.values()) {
+            if (!t.isGasChip()) {
+                continue;
+            }
+            gasChips++;
+            if (oldChips.contains(t.textureName)) {
+                chipTex.append(' ').append(t.name()).append(" borrows ").append(t.textureName);
+            }
+            java.io.InputStream png = com.sc.util.ChipType.class.getResourceAsStream("/assets/siliconage/textures/items/" + t.textureName + ".png");
+            if (png == null) {
+                chipTex.append(' ').append(t.name()).append(" no ").append(t.textureName).append(".png");
+            } else {
+                try {
+                    png.close();
+                } catch (java.io.IOException ignored) {
+                    // read-only check
+                }
+            }
+        }
+        check(gasChips == 4 && chipTex.length() == 0, "gas chip icons (БР-4): " + gasChips + " gas chips, each with its own texture in the jar"
+                + chipTex);
     }
 }

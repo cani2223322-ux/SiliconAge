@@ -87,7 +87,7 @@ public final class TradeServerSC {
     public static final int OK = 0, R_UNKNOWN = 1, R_ENEMY = 2, R_LEVEL = 3, R_LIMIT = 4, R_CHIPS_CAP = 5, R_MISSING = 6,
             R_NO_SETTLEMENT = 7, R_NOT_HERE = 8, R_CONTRACTS_CAP = 9, R_TAKEN = 10, R_NOT_ON_BOARD = 11, R_NOT_DONE = 12,
             R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16, R_RAID = 17, R_CRUMBS = 18, R_CARAVAN_DEAL = 19,
-            R_DISPATCH_LATE = 20, R_ELSEWHERE = 21;
+            R_DISPATCH_LATE = 20, R_ELSEWHERE = 21, R_CEILING = 22;
     /**
      * Appended only (Ф3: "noItem" - a service found nothing of the player's to work on; Ф4: "raid" - the settlement's trade closed
      * after a lost raid, "crumbs" - the player's Crumbs for today are taken; Ф5: "caravanDeal" - the caravan's rare deal isn't open
@@ -95,7 +95,7 @@ public final class TradeServerSC {
      */
     public static final String[] RESULT_KEYS = {"ok", "unknown", "enemy", "level", "limit", "chipsCap", "missing", "noSettlement",
             "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem", "raid", "crumbs",
-            "caravanDeal", "dispatchLate", "elsewhere"};
+            "caravanDeal", "dispatchLate", "elsewhere", "ceiling"};       // ПС-5: the penance that would give nothing (appended)
     /** TRADE_STATE "anchor": nobody placed the first anchor yet / it is the viewer's, unpaid / paid to the viewer / someone else's. */
     public static final int ANCHOR_OPEN = 0, ANCHOR_YOURS = 1, ANCHOR_PAID = 2, ANCHOR_OTHER = 3;
     /** TRADE_STATE board "st": on the board, not taken / taken and open / handed in today. */
@@ -323,6 +323,9 @@ public final class TradeServerSC {
         }
         if (TradeTableSC.ELDER_CRUMB.equals(o.key) && com.sc.settle.CrumbLimitSC.left(c.p) <= 0) {
             return R_CRUMBS;                                    // Ф4 (ПТ-17): today's three Crumbs are taken
+        }
+        if (TradeTableSC.ELDER_PENANCE.equals(o.key) && c.ceiling() < ReputationSC.MAX && c.rec.reputation >= c.ceiling()) {
+            return R_CEILING;                                   // ПС-5 (audit 2026-10-20): at the embassy's ceiling - no chips for nothing
         }
         int out = o.sell() ? TradeRulesSC.outCount(o, c.level, c.pct(o)) : 0;
         if (o.sell() && TradeRulesSC.chipsAllowed(c.rec.chips, out) < out) {

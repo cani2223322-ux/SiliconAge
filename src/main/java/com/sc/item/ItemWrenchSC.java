@@ -404,11 +404,13 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         // КР-6, БП-3, ПЛ-3: an owned quarry / wireless block / field generator - only its owner (and ops)
         if (com.sc.block.BlockQuarrySC.refusesBreak(world, player, x, y, z)
                 || com.sc.block.BlockWirelessSC.refusesBreak(world, player, x, y, z)
-                || com.sc.block.BlockEnergyConverterSC.refusesBreak(world, player, x, y, z)) {
+                || com.sc.block.BlockEnergyConverterSC.refusesBreak(world, player, x, y, z)
+                || com.sc.block.BlockBridgeSC.refusesBreak(world, player, x, y, z)) {   // МС-1: a bridge's controller and its parts
             TileEntity owned = world.getTileEntity(x, y, z);
             String owner = owned instanceof com.sc.tileentity.TileEntityQuarrySC ? ((com.sc.tileentity.TileEntityQuarrySC) owned).getOwner()
                     : owned instanceof com.sc.tileentity.TileEntityEnergyConverterSC ? ((com.sc.tileentity.TileEntityEnergyConverterSC) owned).getOwner()
-                    : ((com.sc.tileentity.TileEntityWirelessSC) owned).getOwner();
+                    : owned instanceof com.sc.tileentity.TileEntityWirelessSC ? ((com.sc.tileentity.TileEntityWirelessSC) owned).getOwner()
+                    : com.sc.block.BlockBridgeSC.ownerFor(world, x, y, z);
             player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.break.owneronly", owner));
             return;
         }
@@ -493,6 +495,15 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
             for (UpgradeType type : UpgradeType.values()) {
                 data.setInteger(type.name(), m.upgradeCount(type));
             }
+        } else if (te instanceof com.sc.tileentity.TileEntityQuarrySC) {
+            // КР-7 (audit 2026-10-20): a quarry's / the rig's settings - its owner (and ops) only
+            com.sc.tileentity.TileEntityQuarrySC q = (com.sc.tileentity.TileEntityQuarrySC) te;
+            if (!q.allowed(player)) {
+                player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.break.owneronly", q.getOwner()));
+                return true;
+            }
+            data.setString("Kind", q.isExo() ? "exo" : "quarry");
+            q.exportSettings(data);
         } else {
             return false;
         }
@@ -507,7 +518,8 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
 
     private boolean paste(ItemStack stack, EntityPlayer player, World world, int x, int y, int z) {
         TileEntity te = world.getTileEntity(x, y, z);
-        if (!(te instanceof TileEntityFieldGeneratorSC || te instanceof TileEntityTransformerSC || te instanceof TileEntityMachineSC)) {
+        if (!(te instanceof TileEntityFieldGeneratorSC || te instanceof TileEntityTransformerSC || te instanceof TileEntityMachineSC
+                || te instanceof com.sc.tileentity.TileEntityQuarrySC)) {
             return false;
         }
         NBTTagCompound data = stack.hasTagCompound() ? stack.getTagCompound().getCompoundTag(COPY) : null;
@@ -518,7 +530,9 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         String kind = data.getString("Kind");
         boolean fits = "field".equals(kind) && te instanceof TileEntityFieldGeneratorSC && ((TileEntityFieldGeneratorSC) te).isMaster()
                 || "transformer".equals(kind) && te instanceof TileEntityTransformerSC
-                || "machine".equals(kind) && te instanceof TileEntityMachineSC;
+                || "machine".equals(kind) && te instanceof TileEntityMachineSC
+                || "quarry".equals(kind) && te instanceof com.sc.tileentity.TileEntityQuarrySC && !((com.sc.tileentity.TileEntityQuarrySC) te).isExo()
+                || "exo".equals(kind) && te instanceof com.sc.tileentity.TileEntityQuarrySC && ((com.sc.tileentity.TileEntityQuarrySC) te).isExo();
         if (!fits) {
             player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.mismatch",
                     new ChatComponentTranslation("sc.wrench.kind." + kind)));
@@ -527,6 +541,10 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         if (te instanceof TileEntityFieldGeneratorSC && !((TileEntityFieldGeneratorSC) te).allowed(player)) {
             player.addChatComponentMessage(new ChatComponentTranslation("sc.field.noaccess", ((TileEntityFieldGeneratorSC) te).getOwner()));
             return true;
+        }
+        if (te instanceof com.sc.tileentity.TileEntityQuarrySC && !((com.sc.tileentity.TileEntityQuarrySC) te).allowed(player)) {
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.break.owneronly", ((com.sc.tileentity.TileEntityQuarrySC) te).getOwner()));
+            return true;                                   // КР-7: someone else's quarry - nothing spent
         }
         if (!spend(player, stack, tier.dismantleCost / 5)) {
             return true;
@@ -540,6 +558,8 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
                 player.addChatComponentMessage(new ChatComponentTranslation("sc.wrench.paste.refused"));
                 return true;
             }
+        } else if (te instanceof com.sc.tileentity.TileEntityQuarrySC) {
+            ((com.sc.tileentity.TileEntityQuarrySC) te).importSettings(data);   // КР-7: the modules aren't carried over
         } else if (te instanceof TileEntityTransformerSC) {
             ((TileEntityTransformerSC) te).setStepUp(data.getBoolean("StepUp"));
             te.markDirty();

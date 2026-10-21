@@ -41,6 +41,7 @@ public class ItemBlockWirelessSC extends ItemBlock {
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         if (kind() == TileEntityWirelessSC.QUANTUM) {
             list.add("§7" + Lang.tr("sc.wl.tooltip.quantum", TileEntityWirelessSC.QUANTUM_RATE, TileEntityWirelessSC.quantumUpkeep()));
+            addCharge(stack, list);
             PickaxeOnlySC.tooltip(list);
             com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.wl.tooltip.quantum2"));
             return;
@@ -53,7 +54,30 @@ public class ItemBlockWirelessSC extends ItemBlock {
         if (stack.hasTagCompound() && stack.getTagCompound().hasKey("Partner")) {
             list.add("§b" + Lang.tr("sc.wl.tooltip.linked"));
         }
+        addCharge(stack, list);
         PickaxeOnlySC.tooltip(list);
         com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.wl.tooltip.card"));
+    }
+
+    /** The charge kept in the item (TileEntityWirelessSC.writeToItem), like a storage block's. */
+    @SuppressWarnings("unchecked")
+    private static void addCharge(ItemStack stack, List list) {
+        int e = stack.hasTagCompound() ? stack.getTagCompound().getInteger("EnergySC") : 0;
+        if (e > 0) {
+            list.add("§7" + Lang.tr("sc.wl.tooltip.charge", fmt(e)));
+        }
+    }
+
+    /** 1 234 567 with spaces (as ItemBatterySC.fmt). */
+    private static String fmt(long v) {
+        String s = Long.toString(v);
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            if (i > 0 && (s.length() - i) % 3 == 0) {
+                b.append(' ');
+            }
+            b.append(s.charAt(i));
+        }
+        return b.toString();
     }
 }

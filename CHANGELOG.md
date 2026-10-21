@@ -62,6 +62,82 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - Подсказка генератора показывает настоящий максимум: Сингулярный реактор — до 196608 EU/t, ветряк — до 128 EU/t; у Токамака XV уровень «XV / SV».
 - Пеленгатор руин больше не указывает на литографии и Хранилища на земле, разведанной до их появления (там их не будет).
 
+**Сделано по проверке 2026-10-20**
+- **ЭН-1** Красная кнопка питания теперь видит и блоки IC2: MFSU, генераторы, трансформаторы и кабели IC2 выше входа машины.
+- **ЭН-2** Справочник: строка о генераторе вплотную к машине теперь говорит, что с IC2 машина при перенапряжении взрывается, как от кабеля.
+- **ЭН-3** Беспроводные блоки, преобразователь, зарядная плита, контроллер моста и генератор поля узнают владельца по UUID, а не по нику; старые блоки дописывают UUID при первом действии владельца; для чужих приватов UUID владельца не в сети берётся из кэша входов Forge, без запросов к Mojang.
+- **ЭН-4** Shift + ПКМ бронёй или оружием больше не забирает энергию из чужого или выключенного беспроводного блока и преобразователя.
+- **ЭН-5** Накопитель не принимает модуль ёмкости, который упёрся бы в предел ~2,1 млрд EU (по умолчанию XV — 1, QV — 5, SV — ни одного); в подсказке слотов — предел этого накопителя.
+- **ЭН-6** Подсказки модулей «Трансформатор» и «Модуль энергонакопителя» по Shift описывают действие в каждом блоке, а «Куда ставится» называет и преобразователь энергии.
+- **ЭН-7** Подсказка снятого трансформатора показывает повышающий режим, а беспроводного передатчика, приёмника и квантового транслятора — сохранённый заряд.
+- **ЭН-8** Рецепт запутанного кристалла больше не сжигает заряд: квантовая ячейка в нём должна быть разряжена.
+- **ЭН-9** Аккумулятор пишет в подсказке, до какого уровня заряжает предметы, а при включении режима говорит в чат, если в цели (для режима «в руке» — на панели быстрого доступа) нет ни одного подходящего по уровню предмета.
+- **МШ-1** Компрессор материи не принимает то, что не складывается в стопку (броня, инструменты, оружие любого мода), и предметы мода, кроме сырья и природных блоков (порода Подложки, известняк, кокс).
+- **МШ-2** Shift + ПКМ пустой рукой по машине с пустыми баками открывает её экран вместо сообщения «Входные баки очищены (0 мБ)».
+- **МШ-3** Кнопки «×» над баками машин, генераторов и станций выливают бак только со второго щелчка.
+- **МШ-4** Выталкиватель больше не кладёт продукцию в соседний компрессор материи.
+- **МШ-5** Экран машины показывает фактический шанс брака с модулями качества и удвоением после перегрева.
+- **МШ-6** Индукционная печь сама делит вход на два потока.
+- **МШ-7** Дробилка берёт руды других модов из словаря руд: 2 дроблёные руды без побочных продуктов.
+- **МШ-8** Машины быстрее ищут рецепт.
+- **МШ-9** Подсказки электролизёра и нефтезавода, статьи станций модернизации HV и EV и подсказка машин перечисляют все нынешние рецепты и действия: палладий, церий и лантан, ПЭ-1М, клинки и буры, слив баков вторым нажатием.
+- **ГН-1** Порты в стене работающего Сингулярного реактора и Токамака XV экранируют излучение, как свинцовое стекло.
+- **ГН-2** Экономайзер: расход топлива x0,85 вместо x0,7 — электролиз воды и топливный элемент больше не дают энергию из воды.
+- **ГН-3** Генераторы и реакторы предупреждают о слабом кабеле на выходе: при установке трансформатора, при розжиге и в чек-листе реактора.
+- **ГН-4** Лишний бак или хранилище в стене Токамака XV и Сингулярного реактора экран называет прямо.
+- **ГН-5** Ветрогенератор считает высоту от уровня земли мира, в мирах без неба и без атмосферы не работает, дождь учитывает только над собой.
+- **ГН-6** Раздел конфига generators: множители выработки и расхода топлива и список топлива генератора внутреннего сгорания (с топливами EnderIO, Thermal, Forestry).
+- **КР-1** Карьер с владельцем больше не разрушается взрывами, иссушителем и драконом; прежде его можно было подорвать, подобрать целиком и стать владельцем.
+- **КР-2** «Удержание чанков» держит и соседний чанк с сундуком выдачи или трубой.
+- **КР-3** Экзо-установку из EV-карьера можно скрафтить только со слитыми баками насоса; вода промывки — не больше 32 000 мБ.
+- **КР-4** Ведро или капсула по карьеру: вода заливается в бак промывки, пустая тара наполняется из первого непустого отсека (владелец и операторы); иначе открывается меню.
+- **КР-5** «Оставлять: как было» ставит на место руды самую частую природную породу вокруг (блоки хранения, слитки, самоцветы и монокристалл не копируются); у кнопки появилась подсказка.
+- **КР-6** Прогноз карьера считает только реально копаемые клетки.
+- **КР-7** Квантовый ключ копирует и вставляет настройки карьера и Экзо-установки.
+- **КР-8** Настройки сервера balance.quarryEnergy и balance.quarryChunkLoading.
+- **КР-9** Насос карьера спрашивает приваты других модов один раз на чанк.
+- **БР-1** Магнит Н7 не тянет из чужого приватного поля, чужой посмертный дроп — минуту, брошенное другими — 4 с.
+- **БР-2** HUD радиации называет причину, по которой щит брони не работает.
+- **БР-3** Очки ОЧ3: не больше урона удара и не больше 200 в минуту.
+- **БР-4** Чипы криоконтура, криобака, регенератора кислорода и рекуператора получили собственные иконки вместо картинок старых чипов.
+- **ОР-1** ПЭ-1 и ЭМИ-буря больше не продлевают подавление ещё подавленной части (у игроков, мобов и стражей поселений): невосприимчивость наступает вовремя, стрелок видит «уже подавлена: ещё N с».
+- **ОР-2** Исправлены тексты: отражение ПЭ-1 куполом, «Добивание», исключения Добивания, фактический откат «Последнего шанса».
+- **ОР-3** В Точке и Импульсе предупреждение о перегреве приходит, когда следующий выстрел перегреет ПЭ-1; в Сифоне — как раньше, за 2 с.
+- **ОР-4** ПЭ-1: во время набора или потока кнопки настроек и модулей в меню K серые, с подсказкой «Нельзя во время набора или потока»; раньше изменения молча откатывались.
+- **ОР-5** Резак, эмиттер и винтовка стреляют со звуком и лучом, с перезарядкой 0,5 / 1 / 1,5 с (видна в подсказке и справочнике).
+- **ОР-6** Сингулярный бур: 240 EU за блок, чёрная дыра — 120.
+- **ОР-7** Боссы дают по 500 очков не больше 3 раз за 10 минут.
+- **МС-1** Детали моста с содержимым ломают только владелец, друзья, творческий режим и оператор; переключатель «Выдача газов».
+- **МС-2** Загрузка связки в другом мире больше не сбрасывает маршруты труб и пневмотруб.
+- **МС-3** Мост не открывает конец над потолком Ада.
+- **МС-4** Координатор проверяет место для обоих мостов.
+- **МС-5** На публичном мосту закладки добавляют только владелец и друзья.
+- **ПМ-1** Пустые оболочки из волн «Удержания» на арене больше не дают трофеев Экзо и не сбивают счётчик невезения (прошивка, гелий и опыт — как раньше).
+- **ПМ-2** С requireSignal SubstrateEntrySC.allowsArrival требует записи Сигнала.
+- **ПМ-3** Пеленгатор руин пропускает руину ближе 48 блоков и называет X и Z.
+- **ПМ-4** Сообщения бури, мглы и Выброса с числами; строка «Мгла: М:СС» в HUD.
+- **ПМ-5** Подложка: при новом решении о виде клетки на диск пишется только файл клеток, а не все данные измерения — меньше рывков на новой земле.
+- **ПМ-6** Множители погоды, Сигнала, Смотрителя и фона радиации в разделе dimension.
+- **МБ-1** Командир пишет приказ в чат в начале боя, а дальше не чаще раза в 30 с; остальные приказы слышны по рогу и видны по телеграфу.
+- **МБ-2** Затмение, не виденное 3 игровых дня, считается погибшим; его старая копия, загрузившись после гибели следующего, исчезает.
+- **МБ-3** Лимит мобов Подложки растёт с числом игроков, жители построек в него не входят.
+- **МБ-4** Справочник: патрули Оболочек по 2.
+- **МБ-5** Справочник уточняет: трофей ×2 выпадает только у элиты с модификатором, у элит своего вида (Экзо-палач, Вожак лагеря, Сингулярный часовой, Затмение) свои шансы.
+- **МБ-6** Справочник уточняет, что лимит элит действует только на бродячих мобов.
+- **ПС-1** У посольства мобы не появляются на всём ровном круге; Диспетчер не бежит с поста.
+- **ПС-2** Капсула возврата, Карта поселений и Кредит-чип: описания учитывают посольства и рейсы Диспетчеров.
+- **ПС-3** Свой неиспользованный талон можно сдать.
+- **ПС-4** Брёвна сначала ванильные; окно обмена обводит слоты, которые уйдут.
+- **ПС-5** В посольстве видна прибавка «Доверия» с потолком 599, бесполезное искупление закрыто.
+- **ПС-6** «Достройка» посольства больше не стирает блоки игрока на углах Вокзала и на улице за куполом вне зоны причала.
+- **ПС-7** После выключения и включения embassy.embassies жители возвращаются сразу.
+- **ПС-8** Настройки embassy.flightPriceMultiplier и flightsPerDay.
+- **СТ-1** Подсказки у кремниевой цепочки, инструментов, труб, пневмотрубы, кабелей и справочника.
+- **СТ-2** Метки поставленных блоков для бура хранятся в данных чанков.
+- **СТ-3** Справочник показывает радиацию, свинцовый костюм и взрывы с настройками сервера.
+- **СТ-4** Из файлов перевода убраны 94 неиспользуемые строки старых экранов (проверка — tools/check_lang_unused.py).
+- **СТ-5** Все комментарии в файле настроек — на английском и русском, устаревший совет в разделе balance заменён; файл пересохраняется при запуске, чтобы новые комментарии появились и в старом файле.
+
 ### English
 - Quotes in the mod's texts are now “…” (in Russian „…“), so font resource packs that redraw extended ASCII (e.g. the Russian fix for Thermal Expansion) no longer turn «» into letters. The tool page buttons read "Level →" / "← Functions".
 - **The Substrate (Si-14), phase 6 "The Tuners' Embassies"** (design - `docs/idea-embassy-substrate.md`, rules - `docs/plan-substrate.md` §54-§63, tech plan - `docs/plan-substrate-tech-f6.md`). Rare big cities of the Tuners stand in the Overworld - the Lithographers' outer stations cut off by the Breakdown: a dome of radius 88-96 on levelled ground, a wall 8 high with four towers, the Heart with the core and the Ambassador's hall, the guard square, a ring of workshops, supply depots, a greenhouse (the only green - not one log in the buildings), living cells; outside the main gate the Puncture Vokzal, 25 x 25, with the dock's beacon, the Dispatchers' office, cryo tanks and the Great Ring, 13 across.
@@ -118,6 +194,82 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - The PE-1 pulse gun now fits the charge slot of energy storages and charge pads, by hand or by hopper.
 - Generator tooltips show the real maximum: Singular reactor up to 196608 EU/t, wind turbine up to 128 EU/t; Tokamak XV shows tier "XV / SV".
 - The ruin finder no longer points to lithographs or Vaults on ground explored before they existed (none will appear there).
+
+**Done after the 2026-10-20 audit**
+- **ЭН-1** The red power switch now sees IC2's blocks too: an MFSU, generators, transformers and IC2 cables above a machine's input.
+- **ЭН-2** Handbook: the line on a generator placed against a machine now says that with IC2 an over-voltage machine blows up, as from a cable.
+- **ЭН-3** Wireless blocks, the converter, the charge pad, the bridge controller and the field generator know their owner by UUID, not by name; old blocks write it down at the owner's first action; for other mods' claims an offline owner's UUID comes from Forge's login cache, never asking Mojang.
+- **ЭН-4** Sneak + right-click with armour or a weapon no longer drains a stranger's or a switched-off wireless block or converter.
+- **ЭН-5** A storage no longer takes a capacity upgrade that would only hit the ~2.1 billion EU ceiling (by default XV 1, QV 5, SV none); the slots' tooltip names this storage's limit.
+- **ЭН-6** The Transformer and Energy Storage upgrade tooltips now explain on Shift what they do in each block, and "Fits into" lists the Energy Converter too.
+- **ЭН-7** A dismantled transformer's tooltip shows its step-up mode, and a wireless transmitter's, receiver's and quantum translator's shows the charge it keeps.
+- **ЭН-8** The entangled crystal's recipe no longer burns a charge: its quantum cell must be empty.
+- **ЭН-9** A battery's tooltip names the item tier it charges up to, and switching a mode on tells the chat when nothing in the target (for "in the hand" - on the hotbar) is of a tier it can charge.
+- **МШ-1** The Matter Compressor refuses anything that doesn't stack (armour, tools, weapons of any mod) and the mod's own items but raw materials and natural blocks (Substrate rock, limestone, coke).
+- **МШ-2** Sneak + right-click with an empty hand on a machine with empty tanks opens its screen instead of "Input tanks vented (0 mB)".
+- **МШ-3** The tanks' "x" buttons of machines, generators and stations pour out only on a second click.
+- **МШ-4** The Ejector upgrade no longer pushes products into a neighbouring Matter Compressor.
+- **МШ-5** A machine's screen shows the real defect chance with Quality upgrades and the doubling after overheating.
+- **МШ-6** The Induction Furnace evens its input out over both streams by itself.
+- **МШ-7** The Crusher takes other mods' ores from the ore dictionary: 2 crushed ores, no by-products.
+- **МШ-8** Machines look their recipes up faster.
+- **МШ-9** The Electrolyser and Refinery hints, the HV and EV Upgrade Station articles and the machine tooltip now list every current recipe and action: palladium, cerium and lanthanum, the PE-1M, blades and drills, venting on the second click.
+- **ГН-1** The ports in the wall of a running Singular reactor and Tokamak XV shield radiation as lead glass does.
+- **ГН-2** Economizer: fuel x0.85 instead of x0.7 - water electrolysis and a fuel cell no longer make energy out of water.
+- **ГН-3** Generators and reactors warn about a weak cable at an output: on a Transformer upgrade, on lighting and in the reactor's checklist.
+- **ГН-4** An extra tank or storage in the wall of the Tokamak XV and the Singular reactor is named on the screen.
+- **ГН-5** The wind turbine counts height from the world's ground level, gives nothing in worlds without a sky or air, and feels rain only over itself.
+- **ГН-6** A "generators" config section: output and fuel multipliers and the Combustion Generator's fuel list (with EnderIO, Thermal, Forestry fuels).
+- **КР-1** A quarry with an owner is no longer destroyed by explosions, the Wither or the dragon; before, it could be blown up, picked up whole and claimed.
+- **КР-2** The Chunk Loader module also keeps the next chunk with the output chest or pipe.
+- **КР-3** The Exo Drilling Rig is crafted from an EV quarry only with its pump tanks drained; the washing water at most 32,000 mB.
+- **КР-4** A bucket or capsule on a quarry: water goes into the washing tank, an empty container fills from the first non-empty compartment (owner and ops); otherwise the menu opens.
+- **КР-5** "Leave: as it was" fills the dug ore with the commonest natural rock around (storage blocks, ingots, gems and the Monocrystal are never copied); the button has a tooltip.
+- **КР-6** The quarry's forecast counts only the cells really dug.
+- **КР-7** The Quantum Wrench copies and pastes quarry and Exo rig settings.
+- **КР-8** Server settings balance.quarryEnergy and balance.quarryChunkLoading.
+- **КР-9** The quarry's pump asks other mods' claims once a chunk.
+- **БР-1** The Н7 magnet pulls nothing out of a stranger's private field, leaves another's death drop a minute and others' throws 4 s.
+- **БР-2** The radiation HUD names why the armour shield is off.
+- **БР-3** ОЧ3 points: no more than the blow dealt and at most 200 a minute.
+- **БР-4** The Cryo Loop, Cryo Tank, Oxygen Regenerator and Recuperator chips have icons of their own instead of the old chips' pictures.
+- **ОР-1** The PE-1 and EMP storms no longer extend a piece that is still suppressed (players, mobs and settlement guards alike): immunity comes on time, and the shooter sees "suppressed already: N s left".
+- **ОР-2** Texts fixed: the PE-1 reflected by the dome, "Execute", its exceptions, the real "Last chance" cooldown.
+- **ОР-3** In the Point and the Pulse the overheat warning now comes when the next shot would overheat the PE-1; in the Siphon it is still 2 s ahead.
+- **ОР-4** PE-1: while charging up or streaming, the settings and module buttons in the K menu are greyed out with a "Not while charging up or streaming" hint instead of silently reverting.
+- **ОР-5** The Ion Cutter, Pulse Emitter and Plasma Rifle fire with a sound and a beam, reloading 0.5 / 1 / 1.5 s (shown in the tooltip and the handbook).
+- **ОР-6** The Singular drill: 240 EU a block, the black hole 120.
+- **ОР-7** Bosses give 500 points at most 3 times in 10 minutes.
+- **МС-1** A bridge's parts with contents are broken only by the owner, friends, creative and ops; a "Gas out" switch.
+- **МС-2** Loading a bundle in another world no longer resets pipe and tube routes.
+- **МС-3** A bridge no longer opens an end above the Nether's ceiling.
+- **МС-4** The Coordinator checks the place for both bridges.
+- **МС-5** On a public bridge only the owner and friends add bookmarks.
+- **ПМ-1** The Hollow Shells of the arena's Hold waves no longer drop Exo trophies or touch the bad-luck counter (firmware, helium and experience as before).
+- **ПМ-2** With requireSignal, SubstrateEntrySC.allowsArrival wants the Signal's record.
+- **ПМ-3** The Ruin Finder skips a ruin nearer than 48 blocks and names X and Z.
+- **ПМ-4** Storm, haze and Emission messages with numbers; a "Haze: M:SS" HUD line.
+- **ПМ-5** Substrate: a new cell-kind decision writes only the cells file, not all the dimension's data - fewer stutters over new land.
+- **ПМ-6** Weather, Signal, Warden and background radiation multipliers in the dimension section.
+- **МБ-1** The Commander's order reaches the chat at the start of a fight and then at most once in 30 s; the rest are told by the horn and the telegraph.
+- **МБ-2** An Eclipse unseen for 3 game days counts as dead; its old copy, loaded after the next one died, vanishes.
+- **МБ-3** The Substrate's mob cap grows with players; residents don't count.
+- **МБ-4** The handbook: Shell patrols of 2.
+- **МБ-5** The handbook now says the x2 trophy chance is only for elites with a modifier; elites of their own kind (Exo Executioner, Camp Warlord, Singular Sentinel, Eclipse) have their own chances.
+- **МБ-6** The handbook now says the elite cap applies to wandering mobs only.
+- **ПС-1** No hostile spawns on an embassy's whole level ground; the Dispatcher keeps to his post.
+- **ПС-2** Return Capsule, Settlement Map and Credit Chip: their texts now cover the embassies and the Dispatchers' flights.
+- **ПС-3** One's own unused talon can be handed back.
+- **ПС-4** Vanilla logs are taken first; the trade screen frames the slots taken.
+- **ПС-5** At an embassy the Trust gain under 599 is shown; a useless penance is closed.
+- **ПС-6** Embassy repair no longer wipes a player's blocks on the Vokzal corners or the street outside the dome beyond the dock zone.
+- **ПС-7** After toggling embassy.embassies the dwellers come back at once.
+- **ПС-8** Settings embassy.flightPriceMultiplier and flightsPerDay.
+- **СТ-1** Tooltips for the silicon chain, tools, pipes, the tube, cables and the handbook.
+- **СТ-2** The drill's placed-block marks live in the chunks' own data.
+- **СТ-3** The handbook shows radiation, the lead suit and explosions as the server sets them.
+- **СТ-4** 94 unused strings of old screens removed from the lang files (the check - tools/check_lang_unused.py).
+- **СТ-5** Every comment in the config file is now in English and Russian; the outdated advice in the balance section is replaced; the file is saved again on start so an old one gets the new comments too.
 
 ## 0.2.2-beta — 2026-10-18
 

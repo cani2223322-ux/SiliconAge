@@ -160,7 +160,8 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     private int chargeMode = CHARGE_ARMOR_FIRST, chargeReserve, chargeBelow = 100;
     /** Last second's charging: EU given out and players served (the screen shows them). */
     private int chargedLastSecond, playersLastSecond;
-    private String owner = "";
+    /** ЭН-3 (audit 2026-10-20): the owner by name and UUID (an old field - by the name until its owner's first action). */
+    private final com.sc.util.OwnerSC owner = new com.sc.util.OwnerSC();
     private final List<String> access = new ArrayList<String>();
     /** Switched off by its redstone setting right now (shown on the screen). */
     private boolean redstoneOff;
@@ -377,7 +378,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return null;
         }
         for (TileEntityFieldGeneratorSC f : activeFieldsIn(worldObj)) {
-            if (f == this || f == ignore || f.owner.isEmpty() || f.allowedName(owner)) {
+            if (f == this || f == ignore || f.owner.isEmpty() || f.allowedName(owner.name())) {
                 continue;
             }
             if (FieldShapeSC.overlaps(mode, zoneNodes(), range, height, f.mode, f.zoneNodes(), f.range, f.height)) {
@@ -422,13 +423,13 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
                     reg.remove(dim, z.x, z.y, z.z);
                     continue;
                 }
-                if (f == this || f == ignore || !f.powerOn || f.owner.isEmpty() || f.allowedName(owner)) {
+                if (f == this || f == ignore || !f.powerOn || f.owner.isEmpty() || f.allowedName(owner.name())) {
                     continue;
                 }
                 if (FieldShapeSC.overlaps(mode, zoneNodes(), range, height, f.mode, f.zoneNodes(), f.range, f.height)) {
                     return f.getOwner();
                 }
-            } else if (!z.allows(owner) && FieldShapeSC.overlaps(mode, zoneNodes(), range, height,
+            } else if (!z.allows(owner.name()) && FieldShapeSC.overlaps(mode, zoneNodes(), range, height,
                     FieldMode.values()[Math.max(0, Math.min(FieldMode.values().length - 1, z.mode))], z.nodes, z.range, z.height)) {
                 return z.owner;
             }
@@ -449,7 +450,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         if (!master || !powerOn || owner.isEmpty() || isInvalid()) {
             reg.remove(dim, xCoord, yCoord, zCoord);
         } else {
-            reg.put(new Zone(dim, xCoord, yCoord, zCoord, owner, access, mode.ordinal(), range, height, zoneNodes()));
+            reg.put(new Zone(dim, xCoord, yCoord, zCoord, owner.name(), access, mode.ordinal(), range, height, zoneNodes()));
         }
     }
 
@@ -644,28 +645,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** Grid step of the claim check (corners always in), and the most points checked (the step grows past it). */
     public static final int CLAIM_STEP = 4, CLAIM_MAX_POINTS = 1024;
 
-    /** The owner as a player for other mods' protection checks (the online player's profile, else the offline UUID). */
+    /**
+     * The owner as a player for other mods' protection checks. ЭН-3: OwnerSC.profile - the saved UUID, else the online player's
+     * profile, else the UUID the server last saw the name log in with (Forge's UsernameCache, no web lookup), else the offline UUID.
+     */
     private com.mojang.authlib.GameProfile ownerProfile() {
-        net.minecraft.server.MinecraftServer srv = net.minecraft.server.MinecraftServer.getServer();
-        net.minecraft.entity.player.EntityPlayerMP p = srv == null ? null : srv.getConfigurationManager().func_152612_a(owner);
-        if (p != null && p.getGameProfile() != null && p.getGameProfile().getId() != null) {
-            return p.getGameProfile();
-        }
-        if (srv != null && srv.isServerInOnlineMode()) {
-            // offline: the real profile from the server's cache (claim mods compare UUIDs) - a cached name only, no web lookup
-            // (an offline-mode server's players have the offline UUID below; its expired entry would ask Mojang)
-            net.minecraft.server.management.PlayerProfileCache cache = srv.func_152358_ax();
-            for (String n : cache.func_152654_a()) {
-                if (n.equalsIgnoreCase(owner)) {
-                    com.mojang.authlib.GameProfile g = cache.func_152655_a(owner);
-                    if (g != null && g.getId() != null) {
-                        return g;
-                    }
-                    break;
-                }
-            }
-        }
-        return new com.mojang.authlib.GameProfile(EntityPlayer.func_146094_a(new com.mojang.authlib.GameProfile(null, owner)), owner);
+        return owner.profile(this);
     }
 
     /** min..max every `step`, max always in. */
@@ -1084,11 +1069,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     }
 
     public String getOwner() {
-        return owner;
+        return owner.name();
     }
 
     public void setOwner(String name) {
-        owner = name == null ? "" : name;
+        owner.set(name, worldObj);
+        changed();
+    }
+
+    /** ЭН-3: owned by `p` (his name and UUID; a FakePlayer or null - nobody). */
+    public void setOwner(EntityPlayer p) {
+        owner.set(p);
         changed();
     }
 
@@ -1096,8 +1087,20 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         return access;
     }
 
+    /**
+     * ЭН-3 (audit 2026-10-20): by the UUID (an old field by the name - the owner's first action writes the UUID down). A renamed
+     * owner's new name is taken on the way: the zone's entry (ZoneRegistry, by names) follows it.
+     */
     public boolean isOwner(EntityPlayer p) {
-        return !owner.isEmpty() && owner.equalsIgnoreCase(p.getCommandSenderName());
+        if (p == null || owner.isEmpty()) {
+            return false;
+        }
+        String was = owner.name();
+        boolean is = owner.matches(p, this);
+        if (is && !was.equals(owner.name())) {
+            changed();
+        }
+        return is;
     }
 
     @Override
@@ -1128,12 +1131,12 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     /** allowed() by name - for a quarry working in the field on its owner's behalf. */
     public boolean allowedName(String name) {
         String n = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
-        return owner.isEmpty() || owner.equalsIgnoreCase(n) || access.contains(n);
+        return owner.isEmpty() || owner.nameIs(n) || access.contains(n);
     }
 
     public boolean addAccess(String name) {
         String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
-        if (n.isEmpty() || n.length() > 16 || access.contains(n) || access.size() >= MAX_ACCESS || n.equalsIgnoreCase(owner)) {
+        if (n.isEmpty() || n.length() > 16 || access.contains(n) || access.size() >= MAX_ACCESS || owner.nameIs(n)) {
             return false;
         }
         access.add(n);
@@ -1209,7 +1212,9 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         chargeMode = from.chargeMode;
         chargeReserve = from.chargeReserve;
         chargeBelow = from.chargeBelow;
-        owner = from.owner;
+        NBTTagCompound o = new NBTTagCompound();       // ЭН-3: the name and the UUID
+        from.owner.write(o, "Owner", "OwnerId");
+        owner.read(o, "Owner", "OwnerId");
         access.clear();
         access.addAll(from.access);
         powerOn = from.powerOn;                     // a switched-off field stays off
@@ -1391,6 +1396,17 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
     public void setPlacer(String name) {
         setOwner(name);
         access.remove(name == null ? "" : name.toLowerCase(java.util.Locale.ROOT));
+        changed();
+    }
+
+    /** ЭН-3: the placer by name and UUID; automation (a FakePlayer) by its name, as before. */
+    public void setPlacer(EntityPlayer p) {
+        if (p == null || p instanceof net.minecraftforge.common.util.FakePlayer) {
+            setPlacer(p == null ? null : p.getCommandSenderName());
+            return;
+        }
+        owner.set(p);
+        access.remove(p.getCommandSenderName().toLowerCase(java.util.Locale.ROOT));
         changed();
     }
 
@@ -2021,7 +2037,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
             return;
         }
         net.minecraft.server.MinecraftServer server = net.minecraft.server.MinecraftServer.getServer();
-        EntityPlayer p = server == null ? null : server.getConfigurationManager().func_152612_a(owner);
+        EntityPlayer p = server == null ? null : server.getConfigurationManager().func_152612_a(owner.name());
         if (p != null) {
             p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key,
                     String.valueOf(xCoord), String.valueOf(yCoord), String.valueOf(zCoord)));
@@ -2876,7 +2892,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         redstone = nbt.hasKey("Redstone") ? Math.max(0, Math.min(2, nbt.getInteger("Redstone"))) : REDSTONE_OFF;
         filter = loadFilter(nbt.getInteger("Filter"));
         readZone(nbt);
-        owner = nbt.getString("Owner");
+        owner.read(nbt, "Owner", "OwnerId");
         redstoneOff = nbt.getBoolean("RedstoneOff");
         rainShield = nbt.getBoolean("RainShield");
         foreignNear = nbt.getBoolean("ForeignNear");
@@ -2926,7 +2942,7 @@ public class TileEntityFieldGeneratorSC extends TileEntityEnergyBase implements 
         nbt.setInteger("Redstone", redstone);
         nbt.setInteger("Filter", filter);
         writeZone(nbt);
-        nbt.setString("Owner", owner);
+        owner.write(nbt, "Owner", "OwnerId");
         nbt.setBoolean("RedstoneOff", redstoneOff);
         nbt.setBoolean("RainShield", rainShield);
         nbt.setBoolean("ForeignNear", foreignNear);

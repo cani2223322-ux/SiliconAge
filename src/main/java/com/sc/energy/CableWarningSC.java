@@ -90,6 +90,65 @@ public final class CableWarningSC {
         }
     }
 
+    /**
+     * ГН-3 (audit 2026-10-20): the weakest cable at an output face of `src` (the mod's bundle, its side open, or an old cable
+     * block) that carries less than `out`, or null - none would burn. A reactor gives on every face lit or not, so this is asked
+     * before lighting too. Works on the client (the screens' checklists).
+     */
+    public static Tier weakestCableAt(TileEntityEnergyBase src, Tier out) {
+        World world = src == null ? null : src.getWorldObj();
+        if (world == null || out == null) {
+            return null;
+        }
+        Tier weakest = null;
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+            int x = src.xCoord + d.offsetX, y = src.yCoord + d.offsetY, z = src.zCoord + d.offsetZ;
+            if (!src.isOutputFace(d) || !world.blockExists(x, y, z)) {
+                continue;
+            }
+            TileEntity n = world.getTileEntity(x, y, z);
+            Tier t = null;
+            if (n instanceof TileEntityConduitBundleSC) {
+                TileEntityConduitBundleSC b = (TileEntityConduitBundleSC) n;
+                if (b.getCable() != null && b.cableOpen(d.getOpposite())) {
+                    t = b.getCable().tier;
+                }
+            } else if (n instanceof com.sc.tileentity.TileEntityCableSC && ((com.sc.tileentity.TileEntityCableSC) n).getCableType() != null) {
+                t = ((com.sc.tileentity.TileEntityCableSC) n).getCableType().tier;
+            }
+            if (t != null && t.excessTiersOf(out) > 0 && (weakest == null || t.ordinal() < weakest.ordinal())) {
+                weakest = t;
+            }
+        }
+        return weakest;
+    }
+
+    /** ГН-3: the players this near hear a lit reactor's weak cable. */
+    public static final int IGNITION_WARN_RANGE = 16;
+
+    /**
+     * ГН-3: a reactor was just lit (server) - a cable at an output face weaker than its output will burn out as the energy goes
+     * out: the players within IGNITION_WARN_RANGE are told (a warning only; FakePlayers never).
+     */
+    public static void ignitionCheck(TileEntityEnergyBase src) {
+        World world = src == null ? null : src.getWorldObj();
+        if (world == null || world.isRemote) {
+            return;
+        }
+        Tier out = src.outputTier();
+        Tier weak = weakestCableAt(src, out);
+        if (weak == null) {
+            return;
+        }
+        double r2 = IGNITION_WARN_RANGE * IGNITION_WARN_RANGE;
+        for (Object o : world.playerEntities) {
+            if (o instanceof EntityPlayer && !(o instanceof net.minecraftforge.common.util.FakePlayer)
+                    && ((EntityPlayer) o).getDistanceSq(src.xCoord + 0.5, src.yCoord + 0.5, src.zCoord + 0.5) <= r2) {
+                ((EntityPlayer) o).addChatComponentMessage(new ChatComponentTranslation("sc.chat.gen.cableweak", out.name(), weak.name(), out.name()));
+            }
+        }
+    }
+
     private static void warn(EntityPlayer p, Tier source, Tier cable) {
         p.addChatComponentMessage(new ChatComponentTranslation("sc.cable.warn",
                 source.name(), source.getVoltage(), cable.name(), cable.getVoltage()));

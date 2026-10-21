@@ -790,8 +790,15 @@ public class GuiTokamakXVSC extends GuiContainer {
             if (gen.isPortTaken()) {
                 add(k, l, 2, Lang.tr("sc.gui.xv.st.porttaken"));
             }
+            if (gen.isExtraPort()) {                          // ГН-4: a 5th tank / a 3rd storage in the wall
+                add(k, l, 2, Lang.tr("sc.gui.big.st.extraport", TileEntityGeneratorSC.PORT_TANKS_MAX, TileEntityGeneratorSC.PORT_STORES_MAX));
+            }
             if (gen.isNearBuild()) {
                 add(k, l, 2, Lang.tr("sc.gui.big.st.nearbuild"));
+            }
+            com.sc.energy.Tier weak = com.sc.energy.CableWarningSC.weakestCableAt(gen, gen.outputTier());
+            if (weak != null) {                               // ГН-3: lighting would burn it out
+                add(k, l, 2, Lang.tr("sc.gui.gen.st.cableweak", weak.name(), gen.outputTier().name()));
             }
             if (walls() < 24 || sc[3] > 0) {
                 add(k, l, 2, Lang.tr("sc.gui.big.st.needshell", 24 - walls() + sc[3]));
@@ -825,6 +832,9 @@ public class GuiTokamakXVSC extends GuiContainer {
         }
         if (gen.isPortTaken()) {
             add(k, l, 2, Lang.tr("sc.gui.xv.st.porttaken"));
+        }
+        if (gen.isExtraPort()) {                              // ГН-4
+            add(k, l, 2, Lang.tr("sc.gui.big.st.extraport", TileEntityGeneratorSC.PORT_TANKS_MAX, TileEntityGeneratorSC.PORT_STORES_MAX));
         }
         if (gen.isHeliumShort()) {
             add(k, l, 2, Lang.tr("sc.gui.big.st.nohe"));

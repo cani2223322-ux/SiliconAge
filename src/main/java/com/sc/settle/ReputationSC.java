@@ -165,6 +165,14 @@ public final class ReputationSC {
         return give(p, Math.min(amount, room), source, day);
     }
 
+    /**
+     * ПС-5 (audit 2026-10-20), pure: what of a gain `amount` give(..., ceiling) would apply to a player at `current` - all of it
+     * with no ceiling or for a loss, else at most up to the ceiling (0 at or over it). The embassy's screen shows it.
+     */
+    public static int gainUnder(int current, int amount, int ceiling) {
+        return amount <= 0 || ceiling >= MAX ? amount : Math.max(0, Math.min(amount, ceiling - current));
+    }
+
     /** Ф6 (ПД-7): the ceiling of «Доверие» earned at settlement `s` - an embassy's EMBASSY_CEILING, else NO_CEILING. */
     public static int ceiling(SettlementRegistrySC.Settlement s) {
         return SettlementSC.isEmbassy(s) ? EMBASSY_CEILING : NO_CEILING;

@@ -370,7 +370,8 @@ public final class DrillLogicSC {
     private static int extraCost(EntityPlayer p, ItemStack drill) {
         DrillType t = ItemDrillSC.typeOf(drill);
         int eu = t.exoClass() && fullSetOf(p, t) ? (t.euPerBlock + 1) / 2 : t.euPerBlock;
-        return legacy(drill, eu);
+        // ОР-6 (audit 2026-10-20): the Singular drill's -20% is in its own price already (240 = Exo 300 x0.8) - not a second time
+        return t == DrillType.SINGULAR ? eu : legacy(drill, eu);
     }
 
     /** EU of an Exo-era function on this drill: ToolLevelSC.LEGACY_MUL of it on the Singular drill. */
@@ -525,7 +526,7 @@ public final class DrillLogicSC {
             }
             // placed by a player? asked before this block's BreakEvent forgets it (the clicked one's: DrillEventsSC kept it)
             boolean placed = ToolLevelSC.isDrill(drill)
-                    && (first ? DrillEventsSC.wasPlaced(p, x, y, z) : PlacedBlocksSC.placed(w, x, y, z));
+                    && (first ? DrillEventsSC.wasPlaced(p, x, y, z) : PlacedChunksSC.placed(w, x, y, z));
             if (!first) {                                         // the clicked block's event vanilla has fired already
                 // paid for and not spawn-protected first: the event already tells the client the block is gone,
                 // and a block then left standing stayed a ghost (air) on the client
@@ -827,7 +828,7 @@ public final class DrillLogicSC {
         boolean firstPlaced = DrillEventsSC.wasPlaced(p, x, y, z);
         if (ToolLevelSC.cooldownLeft(drill, f.key(), w) > 0) {
             if (firstPlaced) {
-                PlacedBlocksSC.mark(w, x, y, z);                  // it stays: so does its mark
+                PlacedChunksSC.mark(w, x, y, z);                  // it stays: so does its mark
             }
             return Boolean.TRUE;                                  // the block is sent back to the client
         }
@@ -863,7 +864,7 @@ public final class DrillLogicSC {
                     }
                     boolean liquid = b.getMaterial().isLiquid();
                     boolean first = bx == x && by == y && bz == z;                       // its event vanilla has fired
-                    boolean nat = !liquid && !(first ? firstPlaced : PlacedBlocksSC.placed(w, bx, by, bz));   // before the event forgets it
+                    boolean nat = !liquid && !(first ? firstPlaced : PlacedChunksSC.placed(w, bx, by, bz));   // before the event forgets it
                     if (!p.capabilities.isCreativeMode && !canPay(p, drill, eu)) {
                         empty = true;                             // before its event: a block left standing was never "broken"
                         break;

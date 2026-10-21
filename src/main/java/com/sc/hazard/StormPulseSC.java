@@ -124,7 +124,7 @@ final class StormPulseSC {
         }
         int slot = worn.get(RAND.nextInt(worn.size())).intValue();
         if (EmpSC.stormHit(p, slot, StormRulesSC.suppressTicks(RAND), StormRulesSC.BOIL_MUL, StormRulesSC.BOIL_TICKS) <= 0) {
-            return false;                                   // that piece is immune
+            return false;                                   // that piece is immune or still suppressed (ОР-1)
         }
         hitFx(p, 1F);
         return true;

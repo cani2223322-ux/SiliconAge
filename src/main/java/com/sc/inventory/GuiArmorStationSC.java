@@ -87,6 +87,9 @@ public class GuiArmorStationSC extends GuiContainer {
 
     @Override
     protected void actionPerformed(GuiButton button) {
+        if (button instanceof GuiBigSC.ClearButton && !((GuiBigSC.ClearButton) button).fire()) {
+            return;                                        // МШ-3: the first click on an «x» only arms it
+        }
         if (power.allowClick(button)) {
             mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
         }
@@ -306,7 +309,7 @@ public class GuiArmorStationSC extends GuiContainer {
                 break;
             }
             if (clear[g.ordinal()].over(mouseX, mouseY)) {
-                tip = GuiBigSC.clearTip(te.tankAmount(g), te.clearCost(g), te.getEnergyStored());
+                tip = GuiBigSC.clearTip(te.tankAmount(g), te.clearCost(g), te.getEnergyStored(), clear[g.ordinal()].armed());
             } else if (GuiGaugeSC.isOver(tankX(g) + 7, CHECK_Y, CHECK, CHECK, mx, my)) {
                 tip = new ArrayList<String>();
                 tip.add(gasName(g));

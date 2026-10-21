@@ -25,4 +25,22 @@ public enum WeaponType {
         this.shotsPerUse = shotsPerUse;
         this.range = range;
     }
+
+    /** ОР-5 (audit 2026-10-20): ticks between two shots - the cutter 0.5 s, the emitter 1 s, the rifle 1.5 s. */
+    public int cooldownTicks() {
+        switch (this) {
+            case ION_CUTTER: return 10;
+            case PULSE_EMITTER: return 20;
+            default: return 30;
+        }
+    }
+
+    /** ОР-5: the beam's colour 0xRRGGBB - the cutter's ion blue (the mobs' cutter beam), the emitter violet, the rifle orange. */
+    public int beamColor() {
+        switch (this) {
+            case ION_CUTTER: return 0x59D9FF;
+            case PULSE_EMITTER: return 0xB46AFF;
+            default: return 0xFF8A2A;
+        }
+    }
 }

@@ -323,7 +323,12 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (active(ItemQuarryModuleSC.Kind.ECONOMY, F_ECONOMY)) {
             eu *= 0.75;
         }
-        return (int) Math.ceil(eu);
+        return energyScaled(eu);                        // КР-8: times balance.quarryEnergy
+    }
+
+    /** КР-8 (audit 2026-10-20): EU times the server's balance.quarryEnergy, rounded up, at least 1. */
+    public static int energyScaled(double eu) {
+        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, (long) Math.ceil(eu * com.sc.util.ConfigSC.quarryEnergy)));
     }
 
     // ------------------------------------------------------------------ the area
@@ -387,10 +392,51 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     /** A whole water body / lake was pumped this tick - one a tick (hundreds of block changes each). */
     private boolean bodyPumped;
 
+    /**
+     * КР-6 (audit 2026-10-20): the share of the cells walked that were really dug or pumped (EU spent) - a moving average over the
+     * last layers (or every SHARE_WINDOW cells): the screen's "left" and its time take only that part of the cells left. Saved
+     * ("DigShare"; none - 1); a new area starts at 1.
+     */
+    private float digShare = 1F;
+    private int shareSeen, shareDug;
+    public static final int SHARE_WINDOW = 4096;
+
+    /** КР-6: pure - the moving average after `seen` cells of which `dug` were dug (none seen - as it was). */
+    public static float ema(float share, int seen, int dug) {
+        return seen <= 0 ? share : 0.7F * share + 0.3F * (Math.min(dug, seen) / (float) seen);
+    }
+
+    public float getDigShare() {
+        return digShare;
+    }
+
+    /** КР-6: the screen's copy (ContainerQuarrySC, x1000). */
+    public void setDigShareClient(float v) {
+        digShare = Math.max(0F, Math.min(1F, v));
+    }
+
+    /** КР-6: a cell walked (dug or not), then the cursor on; a layer's end or a full window - the average takes it in. */
+    private void step(int[] a, boolean dug) {
+        shareSeen++;
+        if (dug) {
+            shareDug++;
+        }
+        int layerWas = layerY;
+        advance(a);
+        if (layerY != layerWas || shareSeen >= SHARE_WINDOW) {
+            digShare = ema(digShare, shareSeen, shareDug);
+            shareSeen = 0;
+            shareDug = 0;
+        }
+    }
+
     private void resetCursor() {
         int[] a = area();
         layerY = a == null ? -1 : a[4];
         cursor = 0;
+        digShare = 1F;                                  // КР-6: a new area - its own share
+        shareSeen = 0;
+        shareDug = 0;
         done = false;
         progress = 0;
         clearScan();
@@ -517,9 +563,19 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Another player's private field zone, or another mod's protection, forbids breaking there. */
     private boolean forbidden(int x, int y, int z) {
-        if (TileEntityFieldGeneratorSC.privateRefusingName(worldObj, owner, x + 0.5, y + 0.5, z + 0.5) != null) {
-            return true;
-        }
+        return fieldForbidden(x, y, z) || claimForbidden(x, y, z);
+    }
+
+    /** КР-9 (audit 2026-10-20): a private field of the mod refuses the cell - a cheap lookup, asked for every block. */
+    private boolean fieldForbidden(int x, int y, int z) {
+        return TileEntityFieldGeneratorSC.privateRefusingName(worldObj, owner, x + 0.5, y + 0.5, z + 0.5) != null;
+    }
+
+    /**
+     * КР-9: other mods' claims (and spawn protection) refuse the cell - a BreakEvent by a FakePlayer with the owner's profile; the
+     * pump asks it once a chunk of a body (claimCached).
+     */
+    private boolean claimForbidden(int x, int y, int z) {
         if (worldObj instanceof WorldServer) {
             com.mojang.authlib.GameProfile op = ownerProfile();
             net.minecraftforge.common.util.FakePlayer fake = op == null
@@ -680,7 +736,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             int[] c = cell(a, cursor);
             checks++;
             if (c == null) {
-                advance(a);
+                step(a, false);                              // КР-6: a corner out of the circle - walked, not dug
                 continue;
             }
             int x = c[0], z = c[1], y = layerY;
@@ -690,13 +746,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
             int verdict = judge(x, y, z);
             if (verdict == 1) {
-                advance(a);
+                step(a, false);                              // air, filtered out, left by the rules
                 continue;
             }
             if (forbidden(x, y, z)) {
                 skippedPrivate++;
                 blocked = true;
-                advance(a);
+                step(a, false);
                 continue;
             }
             Block block = worldObj.getBlock(x, y, z);
@@ -712,7 +768,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                     return;
                 }
                 if (r == PUMP_SKIP) {
-                    advance(a);
+                    step(a, false);
                     continue;
                 }
                 removeEnergy(cost);
@@ -723,7 +779,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             lastCost = cost;
             progress -= 1;
             dug++;
-            advance(a);
+            step(a, true);                                   // КР-6: really dug / pumped
             if (headKind() == null) {
                 setStatus(Status.NO_HEAD);
                 return;
@@ -759,7 +815,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (active(ItemQuarryModuleSC.Kind.WASH, F_WASH)) {
             eu *= 1.25;
         }
-        return (int) Math.min(Integer.MAX_VALUE, Math.ceil(eu));
+        return energyScaled(eu);                        // КР-8: times balance.quarryEnergy
     }
 
     /** Lenses of that mod ore in the lens slots. */
@@ -888,12 +944,13 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             return false;
         }
         int points = Math.min(REPAIR_PER_TICK, head.getItemDamage());
-        points = Math.min(points, getEnergyStored() / REPAIR_COST);
+        int perPoint = energyScaled(REPAIR_COST);              // КР-8
+        points = Math.min(points, getEnergyStored() / perPoint);
         if (points <= 0) {
             setStatus(Status.NO_POWER);
             return true;
         }
-        removeEnergy(points * REPAIR_COST);
+        removeEnergy(points * perPoint);
         head.setItemDamage(head.getItemDamage() - points);
         setStatus(Status.REPAIRING);
         markDirty();
@@ -909,8 +966,125 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     }
 
     private void replaceAfter(int x, int y, int z) {
-        Block with = replace == REPLACE_STONE || replace == REPLACE_ASWAS ? Blocks.stone : replace == REPLACE_DIRT ? Blocks.dirt : Blocks.air;
+        if (replace == REPLACE_ASWAS) {
+            // КР-5 (audit 2026-10-20): "as it was" - the commonest natural rock of the six neighbours (netherrack in the Nether, the
+            // biome's own filler elsewhere; never a storage block - ★), stone if there is none
+            Block[] around = new Block[6];
+            int[] metas = new int[6];
+            for (int i = 0; i < 6; i++) {
+                ForgeDirection d = ForgeDirection.VALID_DIRECTIONS[i];      // DOWN, UP, NORTH, SOUTH, WEST, EAST
+                int nx = x + d.offsetX, ny = y + d.offsetY, nz = z + d.offsetZ;
+                if (ny < 0 || ny >= worldObj.getHeight() || !worldObj.blockExists(nx, ny, nz)) {
+                    continue;
+                }
+                Block b = worldObj.getBlock(nx, ny, nz);
+                int m = worldObj.getBlockMetadata(nx, ny, nz);
+                if (fillsAsRock(b, m, nx, ny, nz)) {
+                    around[i] = b;
+                    metas[i] = m;
+                }
+            }
+            int k = pickFill(around, metas);
+            if (k >= 0) {
+                worldObj.setBlock(x, y, z, around[k], metas[k], 3);
+            } else {
+                worldObj.setBlock(x, y, z, Blocks.stone, 0, 3);
+            }
+            return;
+        }
+        Block with = replace == REPLACE_STONE ? Blocks.stone : replace == REPLACE_DIRT ? Blocks.dirt : Blocks.air;
         worldObj.setBlock(x, y, z, with, 0, 3);
+    }
+
+    /**
+     * КР-5: a neighbour "as it was" may copy - a solid, opaque, breakable, still block, not an ore, a fluid, a tile or the quarry,
+     * and natural rock (★, audit 2026-10-20: a storage block next to the ore was copied into the hole - a dupe).
+     */
+    private boolean fillsAsRock(Block b, int meta, int x, int y, int z) {
+        if (b == null || !b.isOpaqueCube() || isOre(b, meta) || b.hasTileEntity(meta) || b instanceof net.minecraft.block.BlockFalling
+                || b instanceof com.sc.block.BlockQuarrySC || b.getMaterial().isLiquid() || b instanceof net.minecraftforge.fluids.IFluidBlock) {
+            return false;
+        }
+        return b.getBlockHardness(worldObj, x, y, z) >= 0              // bedrock and other unbreakable blocks - no
+                && naturalRock(b, meta, worldObj, x, y, z);
+    }
+
+    /** КР-5 ★: ore-dictionary prefixes of what is never natural rock - storage blocks, gems, ingots, dust, nuggets, ores. */
+    private static final String[] NOT_ROCK_PREFIXES = {"block", "gem", "ingot", "dust", "nugget", "ore", "crystal"};
+
+    /**
+     * КР-5 ★: `b` / `meta` is natural rock "as it was" may copy - stone, netherrack, end stone, dirt, sandstone, clay, hardened
+     * clay, limestone, the Substrate's wild rock (Crystallite, the oxides, the turf: not the traces, the Monocrystal or the
+     * Settlement Brick), the biome's filler, another mod's stone (it stands in for stone / netherrack / end stone in ore
+     * generation, or its ore-dictionary name is stone*, cobblestone, netherrack, sandstone, endstone). Never a block under a
+     * block* / gem* / ingot* / dust* / nugget* / ore* / crystal* name. `w` may be null (the self-test): the biome and the ore
+     * generation are not asked then.
+     */
+    public static boolean naturalRock(Block b, int meta, net.minecraft.world.World w, int x, int y, int z) {
+        if (b == null) {
+            return false;
+        }
+        if (b == com.sc.dim.SubstrateBlocksSC.rock) {
+            return meta == com.sc.dim.SubstrateBlocksSC.CRYSTALLITE || meta == com.sc.dim.SubstrateBlocksSC.OXIDE_VIOLET
+                    || meta == com.sc.dim.SubstrateBlocksSC.OXIDE_BLUE || meta == com.sc.dim.SubstrateBlocksSC.OXIDE_GOLD
+                    || meta == com.sc.dim.SubstrateBlocksSC.OXIDE_GREEN || meta == com.sc.dim.SubstrateBlocksSC.QUARTZ_TURF;
+        }
+        List<String> names = new ArrayList<String>();
+        Item item = Item.getItemFromBlock(b);
+        if (item != null) {
+            for (int id : OreDictionary.getOreIDs(new ItemStack(item, 1, meta))) {
+                names.add(OreDictionary.getOreName(id));
+            }
+        }
+        for (String n : names) {
+            for (String p : NOT_ROCK_PREFIXES) {
+                if (n.startsWith(p)) {
+                    return false;
+                }
+            }
+        }
+        if (b == Blocks.stone || b == Blocks.netherrack || b == Blocks.end_stone || b == Blocks.dirt || b == Blocks.sandstone
+                || b == Blocks.clay || b == Blocks.hardened_clay || b == Blocks.stained_hardened_clay || b == com.sc.init.ModBlocks.limestoneSC) {
+            return true;
+        }
+        for (String n : names) {
+            if (n.startsWith("stone") || n.equals("cobblestone") || n.equals("netherrack") || n.equals("sandstone") || n.equals("endstone")) {
+                return true;
+            }
+        }
+        if (w == null) {
+            return false;
+        }
+        net.minecraft.world.biome.BiomeGenBase bio = w.getBiomeGenForCoords(x, z);
+        if (bio != null && bio.fillerBlock != null && b == bio.fillerBlock) {
+            return true;
+        }
+        return b.isReplaceableOreGen(w, x, y, z, Blocks.stone) || b.isReplaceableOreGen(w, x, y, z, Blocks.netherrack)
+                || b.isReplaceableOreGen(w, x, y, z, Blocks.end_stone);
+    }
+
+    /**
+     * КР-5: pure - the index of the commonest (block, meta) among `blocks` (nulls - not candidates), the first of it in the given
+     * order on a tie; -1 when there is none.
+     */
+    public static int pickFill(Block[] blocks, int[] metas) {
+        int best = -1, bestN = 0;
+        for (int i = 0; i < blocks.length; i++) {
+            if (blocks[i] == null) {
+                continue;
+            }
+            int n = 0;
+            for (int j = 0; j < blocks.length; j++) {
+                if (blocks[j] == blocks[i] && metas[j] == metas[i]) {
+                    n++;
+                }
+            }
+            if (n > bestN) {
+                bestN = n;
+                best = i;
+            }
+        }
+        return best;
     }
 
     /** @return PUMP_OK (taken or removed), PUMP_SKIP (left, go on), PUMP_WAIT (a full tank pauses the quarry) */
@@ -979,6 +1153,20 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         return PUMP_OK;
     }
 
+    /**
+     * КР-9: claimForbidden by the chunk - the first cell asked of a chunk answers for all of it within one pump step (a claim mod
+     * of 1.7.10 protects whole chunks; one protecting single blocks may lose a cell of a lake to the pump - accepted).
+     */
+    private boolean claimCached(java.util.Map<Long, Boolean> claims, int x, int y, int z) {
+        Long key = Long.valueOf((long) (x >> 4) << 32 | (z >> 4) & 0xFFFFFFFFL);
+        Boolean v = claims.get(key);
+        if (v == null) {
+            v = Boolean.valueOf(claimForbidden(x, y, z));
+            claims.put(key, v);
+        }
+        return v.booleanValue();
+    }
+
     /** Water taken a pump step at most, and EU per block past the first; the fluid vein: EU a block outside the area. */
     public static final int WATER_BODY_MAX = 256, WATER_BODY_COST = 2, FLUID_VEIN_COST = 5;
     /** The fluid vein's reach past the area, by tier (LV .. EV). */
@@ -1026,16 +1214,18 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         open.add(new int[]{x0, y0, z0});
         seen.add(posKey(x0, y0, z0));
         int taken = 0, visits = 0;
+        // КР-9: other mods' claims are asked once a chunk in this step (hundreds of BreakEvents a tick otherwise)
+        java.util.Map<Long, Boolean> claims = new java.util.HashMap<Long, Boolean>();
         while (!open.isEmpty() && taken < WATER_BODY_MAX && visits < WATER_BODY_MAX * 8) {
             int[] c = open.poll();
             visits++;
             int x = c[0], y = c[1], z = c[2];
             Block b = worldObj.getBlock(x, y, z);
-            if (fluidOf(b) != fluid || forbidden(x, y, z)) {
+            if (fluidOf(b) != fluid || fieldForbidden(x, y, z) || claimCached(claims, x, y, z)) {
                 continue;
             }
             boolean inside = a != null && x >= a[0] && x <= a[2] && z >= a[1] && z <= a[3] && y <= a[4] && y >= a[5];
-            int cost = taken == 0 ? 0 : inside ? WATER_BODY_COST : FLUID_VEIN_COST;
+            int cost = taken == 0 ? 0 : energyScaled(inside ? WATER_BODY_COST : FLUID_VEIN_COST);   // КР-8: quarryEnergy
             if (getEnergyStored() < cost) {
                 break;
             }
@@ -1770,6 +1960,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** Held while it works: running, switched on, the module in, and digging (or waiting for the chunk it digs in). */
     private boolean wantChunks() {
+        if (!com.sc.util.ConfigSC.quarryChunkLoading) {
+            return false;                               // КР-8: off on this server - holdChunks lets the ticket go
+        }
         if (!running || !powerOn || moduleCount(ItemQuarryModuleSC.Kind.CHUNK_LOADER) <= 0) {
             return false;
         }
@@ -1800,8 +1993,8 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         if (wantChunks()) {
             chunksWantedAt = now;
         } else {
-            boolean waiting = running && powerOn && moduleCount(ItemQuarryModuleSC.Kind.CHUNK_LOADER) > 0
-                    && now >= chunksWantedAt && now - chunksWantedAt < CHUNK_GRACE;
+            boolean waiting = com.sc.util.ConfigSC.quarryChunkLoading && running && powerOn
+                    && moduleCount(ItemQuarryModuleSC.Kind.CHUNK_LOADER) > 0 && now >= chunksWantedAt && now - chunksWantedAt < CHUNK_GRACE;
             if (!waiting) {
                 releaseChunks();
             }
@@ -1825,9 +2018,17 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             heldDig = null;
         }
         ChunkCoordIntPair own = new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4);
+        // КР-2 (audit 2026-10-20): the chunks of the four blocks beside it too, when they lie in another chunk (the output chest
+        // or the pipe at a chunk's edge) - none mostly, one at an edge, two in a corner
+        List<ChunkCoordIntPair> near = neighbourChunks(xCoord, zCoord);
+        for (ChunkCoordIntPair n : near) {
+            if (!ticket.getChunkList().contains(n) && ticket.getChunkList().size() < ticket.getMaxChunkListDepth()) {
+                ForgeChunkManager.forceChunk(ticket, n);
+            }
+        }
         ChunkCoordIntPair dig = cursorChunk();
         if (dig == null ? heldDig != null : !dig.equals(heldDig)) {
-            if (heldDig != null && !heldDig.equals(own)) {
+            if (heldDig != null && !heldDig.equals(own) && !near.contains(heldDig)) {
                 ForgeChunkManager.unforceChunk(ticket, heldDig);
             }
             heldDig = dig;
@@ -1837,6 +2038,20 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             }
         }
         chunksHeld = ticket.getChunkList().size();
+    }
+
+    /** КР-2: pure - the chunks of the blocks beside (x, z) (x +- 1, z +- 1) other than its own, no repeats. */
+    public static List<ChunkCoordIntPair> neighbourChunks(int x, int z) {
+        List<ChunkCoordIntPair> out = new ArrayList<ChunkCoordIntPair>(2);
+        ChunkCoordIntPair own = new ChunkCoordIntPair(x >> 4, z >> 4);
+        int[][] d = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] o : d) {
+            ChunkCoordIntPair c = new ChunkCoordIntPair(x + o[0] >> 4, z + o[1] >> 4);
+            if (!c.equals(own) && !out.contains(c)) {
+                out.add(c);
+            }
+        }
+        return out;
     }
 
     private void releaseChunks() {
@@ -2605,6 +2820,58 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
     /** The modules may not be read yet when the tanks are: sizes are set on the first tick. */
     private boolean applyTankCapacityLater;
 
+    /**
+     * КР-7 (audit 2026-10-20): the Quantum Wrench's copy - every setting of the screens (the area, the shape, "Leave", the
+     * functions, the filters, the pump's and the looks), not the owner, the facing or the counters; the modules stay where they are.
+     */
+    public void exportSettings(NBTTagCompound out) {
+        writeSettings(out);
+        out.removeTag("Owner");
+        out.removeTag("OwnerId");
+        out.removeTag("Facing");
+        out.removeTag("FluidVeinTotal");
+    }
+
+    /**
+     * КР-7: pastes exportSettings' copy - owner, facing and counters stay this quarry's, the sizes come down to its own maximum
+     * (its tier and radius modules), the rest within the screen's own ranges; the cursor starts the new area over.
+     */
+    public void importSettings(NBTTagCompound in) {
+        String keepOwner = owner;
+        int keepFacing = facing, keepVein = fluidVeinTotal;
+        NBTTagCompound c = (NBTTagCompound) in.copy();
+        c.removeTag("Owner");
+        c.removeTag("OwnerId");
+        c.removeTag("Facing");
+        c.removeTag("FluidVeinTotal");
+        readSettings(c);
+        owner = keepOwner;
+        facing = keepFacing;
+        fluidVeinTotal = keepVein;
+        sizeX = clamp(sizeX, 1, maxSize());               // as the screen's buttons clamp them (A_SIZE_X ... A_BOTTOM)
+        sizeZ = clamp(sizeZ, 1, maxSize());
+        offX = clamp(offX, -64, 64);
+        offZ = clamp(offZ, -64, 64);
+        bottomY = clamp(bottomY, 1, Math.max(1, yCoord));
+        shape = clamp(shape, 0, 2);
+        replace = clamp(replace, 0, 3);
+        powerMode = clamp(powerMode, 0, 2);
+        redstone = clamp(redstone, 0, 2);
+        outSide = clamp(outSide, -1, 5);
+        filterMode = clamp(filterMode, 0, 3);
+        if (isExo() && filterMode == FILTER_ORE) {
+            filterMode = FILTER_ONLY;
+        }
+        show = clamp(show, 0, 3);
+        brightness = clamp(brightness, 1, 4);
+        fortuneLevel = clamp(fortuneLevel, 1, 5);
+        resetCursor();
+        markDirty();
+        if (worldObj != null) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
+    }
+
     private void readSettings(NBTTagCompound nbt) {
         int[] s = nbt.getIntArray("Settings");
         if (s.length >= 18) {
@@ -2667,6 +2934,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         done = nbt.getBoolean("Done");
         layerY = nbt.getInteger("LayerY");
         cursor = nbt.getInteger("Cursor");
+        digShare = nbt.hasKey("DigShare") ? Math.max(0F, Math.min(1F, nbt.getFloat("DigShare"))) : 1F;   // КР-6
         int[] seen = nbt.getIntArray("AreaSeen");
         areaSeen = seen.length == 6 ? seen : null;
         mined = nbt.getLong("Mined");
@@ -2717,6 +2985,7 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         nbt.setBoolean("Done", done);
         nbt.setInteger("LayerY", layerY);
         nbt.setInteger("Cursor", cursor);
+        nbt.setFloat("DigShare", digShare);                  // КР-6
         if (areaSeen != null) {
             nbt.setIntArray("AreaSeen", areaSeen);           // a load still sees an area changed while stopped
         }

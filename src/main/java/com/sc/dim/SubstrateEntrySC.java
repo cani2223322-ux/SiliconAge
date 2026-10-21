@@ -116,13 +116,18 @@ public final class SubstrateEntrySC {
 
     /**
      * May `p` arrive in the Substrate by `via` (VIA_BRIDGE, VIA_JUMP, another mod's name)? The add-on's hook: asked
-     * before a Jump; true also when strictEntry is off or the Substrate is absent.
+     * before a Jump; true also when strictEntry is off or the Substrate is absent. ПМ-2 (audit 2026-10-20): with requireSignal
+     * the player must have used his Navigation Record too (creative and ops pass, as before) - the Jump closes once the add-on
+     * asks this before it (the bridge and the flights check the record themselves).
      */
     public static boolean allowsArrival(EntityPlayer p, String via) {
         if (!SubstrateSC.active()) {
             return true;
         }
         boolean creative = p != null && p.capabilities.isCreativeMode;
+        if (SubstrateConfigSC.requireSignal && p != null && !creative && !BlockQuarrySC.isOp(p) && !SubstrateSignalSC.knows(p)) {
+            return false;
+        }
         return EntryRulesSC.lawful(SubstrateConfigSC.strictEntry, EntryRulesSC.knownWay(via), creative, BlockQuarrySC.isOp(p));
     }
 

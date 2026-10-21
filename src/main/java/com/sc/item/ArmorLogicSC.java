@@ -213,6 +213,32 @@ public final class ArmorLogicSC {
         return has ? null : g;
     }
 
+    /** БР-2 (audit 2026-10-20): why the switched-on radiation shield didn't work - for the HUD. */
+    public static final int RAD_FAIL_NO_D2O = 1, RAD_FAIL_HEAT = 2, RAD_FAIL_EMERGENCY = 3, RAD_FAIL_EMP = 4, RAD_FAIL_CHARGE = 5;
+
+    /**
+     * БР-2, server: the reason the radiation shield (on, worn) failed this second, in the order of its check - no heavy water in
+     * the worn set (its gas), overheated, emergency mode (no helium), suppressed by a ПЭ-1; else its charge (too low / not paid).
+     */
+    public static int radShieldFailure(EntityPlayer p) {
+        ItemStack[] worn = ArmorGasSC.wornSet(p);
+        ArmorFeature f = ArmorFeature.RAD_SHIELD;
+        if (f.gas() == Gas.HEAVY_WATER && missingGas(worn, f) == Gas.HEAVY_WATER) {
+            return RAD_FAIL_NO_D2O;
+        }
+        if (overheated(p)) {
+            return RAD_FAIL_HEAT;
+        }
+        ItemStack s = worn[f.piece];
+        if (s != null && pieceEmergency(worn, suitOf(s))) {
+            return RAD_FAIL_EMERGENCY;
+        }
+        if (com.sc.emp.EmpArmorSC.featureSuppressed(p, f)) {
+            return RAD_FAIL_EMP;
+        }
+        return RAD_FAIL_CHARGE;
+    }
+
     /** The gases let the function work: the HUD always; Quantum / Exo not in emergency mode and with its gas. */
     public static boolean gasAllows(ItemStack[] worn, ArmorFeature f) {
         if (f == ArmorFeature.HUD) {
@@ -1627,6 +1653,8 @@ public final class ArmorLogicSC {
             SAFE_PREFIX = "scSafe", PHASE_AT = "scPhaseAt";
     /** Item entity data: who threw it (UUID) - the magnet leaves it alone a moment (ItemTossEvent, ShieldEventHandler). */
     public static final String TOSSED_BY = "scTossedBy";
+    /** БР-1: item entity data - whose death dropped it (UUID; PlayerDropsEvent, ShieldEventHandler). */
+    public static final String DIED_BY = "scDiedBy";
     private static java.lang.reflect.Field inWebField;
 
     /** С3 (no phase dash cooldown while time is slowed): whether the wearer's time slowing (Н4) is running (server). */
@@ -1668,9 +1696,14 @@ public final class ArmorLogicSC {
             }
             if (e instanceof net.minecraft.entity.item.EntityItem) {
                 net.minecraft.entity.item.EntityItem item = (net.minecraft.entity.item.EntityItem) e;
-                if (!magnetPulls(me, item.getEntityData().getString(TOSSED_BY), item.age)) {
-                    continue;
+                if (!magnetPulls(me, item.getEntityData().getString(TOSSED_BY), item.getEntityData().getString(DIED_BY), item.age)) {
+                    continue;                              // БР-1: someone else's death drop / throw is left a while
                 }
+            }
+            // БР-1 (audit 2026-10-20): nothing out of a private field that refuses the wearer (as Н3 and the quarry's magnet)
+            if (com.sc.ShieldEventHandler.privateFieldAgainst(p.worldObj, p, MathHelper.floor_double(e.posX), MathHelper.floor_double(e.posY),
+                    MathHelper.floor_double(e.posZ)) != null) {
+                continue;
             }
             double dx = p.posX - e.posX, dy = p.posY + 0.5 - e.posY, dz = p.posZ - e.posZ;
             double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -1685,9 +1718,24 @@ public final class ArmorLogicSC {
         }
     }
 
-    /** Pure: the magnet pulls an item thrown by `thrower` (UUID, "" none) at age `age` for the player `me`. */
+    /** Pure, the rule before БР-1: the wearer's own throw only is left MAGNET_THROWN_GRACE ticks (the magnet asks the 4-argument one). */
     public static boolean magnetPulls(String me, String thrower, int age) {
         return !(me.equals(thrower) && age < ArmorFeature.MAGNET_THROWN_GRACE);
+    }
+
+    /**
+     * БР-1 (audit 2026-10-20), pure: does the magnet pull an item for the player `me` (UUIDs; "" - none) - dropped by `dead`'s death
+     * (someone else's: after MAGNET_DEATH_GRACE; one's own: at once), else thrown by `thrower` (oneself: after MAGNET_THROWN_GRACE,
+     * someone else: after MAGNET_OTHERS_GRACE), else at once.
+     */
+    public static boolean magnetPulls(String me, String thrower, String dead, int age) {
+        if (dead != null && dead.length() > 0) {
+            return dead.equals(me) || age >= ArmorFeature.MAGNET_DEATH_GRACE;
+        }
+        if (thrower == null || thrower.length() == 0) {
+            return true;
+        }
+        return age >= (thrower.equals(me) ? ArmorFeature.MAGNET_THROWN_GRACE : ArmorFeature.MAGNET_OTHERS_GRACE);
     }
 
     // ------------------------------------------------------------------ П3 gravitational anchor

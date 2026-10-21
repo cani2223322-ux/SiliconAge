@@ -12,6 +12,8 @@ import com.sc.emp.ItemEmpGunSC;
 import com.sc.init.ModItems;
 import com.sc.item.ArmorLogicSC;
 import com.sc.item.ItemArmorSC;
+import com.sc.mob.EntityLinemanSC;
+import com.sc.mob.MobArmorSC;
 import com.sc.util.ArmorFeature;
 import com.sc.util.ArmorGasSC;
 import com.sc.util.ArmorSuit;
@@ -41,6 +43,10 @@ import net.minecraftforge.common.util.FakePlayerFactory;
  * (package A, изменено 2026-10-11), three streams of 3 s on a Quantum target: (1) it loses 5% of its full charge a
  * second, the shooter's suit gets it less 25%; (2) the shooter's suit nearly full - the target still loses the full
  * amount, the suit is filled and the rest vented; (3) an overheated gun - the stream runs at 25% speed.
+ * ОР-1 (2026-10-21): a Point at a fake player's helmet and at an (unspawned) Lineman's Nano chestplate, a second one
+ * AGAIN_AFTER ticks later - nothing extended (the ends and the immunity as after the first, HitResult.already = the ticks
+ * left, the player's suit still heated), an EMP storm's pulse on them nothing either; once each suppression is over - immune
+ * until exactly its end + the immunity, a third Point blocked.
  */
 public final class WorldTestEmpSC {
 
@@ -60,10 +66,17 @@ public final class WorldTestEmpSC {
     private ItemStack gun;
     private long targetBefore, shooterBefore;
     private Chunk chunk;
+    /** ОР-1: the second Point this many ticks after the first (at most half the shorter suppression). */
+    private static final int AGAIN_AFTER = 100;
+    private FakePlayer again;
+    private EntityLinemanSC againMob;
+    /** ОР-1: world times - the second Point, the player's / the mob's end check (0: none pending); the first hit's ends. */
+    private long againAt, againEndAt, mobEndAt;
+    private long againFirstAt, againUntil, againImmune, mobUntil, mobImmune;
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || done) {
+        if (event.phase != TickEvent.Phase.END || done && !againPending()) {
             return;
         }
         ticks++;
@@ -79,7 +92,13 @@ public final class WorldTestEmpSC {
                     return;
                 }
                 start(w);
-            } else if (pulseEndAt > 0 && w.getTotalWorldTime() >= pulseEndAt) {
+                return;
+            }
+            againStep(w.getTotalWorldTime());                       // ОР-1: on its own clock, alongside the rest
+            if (done) {
+                return;
+            }
+            if (pulseEndAt > 0 && w.getTotalWorldTime() >= pulseEndAt) {
                 pulseEndAt = 0;
                 checkImmunity();
                 startSiphon(w);
@@ -89,7 +108,11 @@ public final class WorldTestEmpSC {
         } catch (Throwable t) {
             System.out.println("[SC-WORLDTEST] FAIL pe1: exception " + t);
             t.printStackTrace();
-            clean();
+            boolean wasDone = done;
+            cleanAgain();                                           // says DONE when the rest was over already
+            if (!wasDone) {
+                clean();
+            }
         }
     }
 
@@ -104,6 +127,7 @@ public final class WorldTestEmpSC {
         checkPoint();
         checkReboot();
         checkPulse();
+        startAgain(w);
     }
 
     private void checkPoint() {
@@ -196,6 +220,121 @@ public final class WorldTestEmpSC {
         System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 immunity after " + pulseTicks + " ticks of Pulse: immune " + immune
                 + " (" + left + " ticks left), a second Pulse suppresses nothing " + blocked + ", heat +" + r.heat + " (want " + wantHeat
                 + ", repeat + immune), boil " + boil + " mB/s (want " + wantBoil + ", half)");
+    }
+
+    // ------------------------------------------------------------------ ОР-1: a hit on a piece still suppressed
+
+    private boolean againPending() {
+        return againAt > 0 || againEndAt > 0 || mobEndAt > 0;
+    }
+
+    /** The first Point at the player's helmet and at the mob's chestplate; the second one is due AGAIN_AFTER ticks later. */
+    private void startAgain(WorldServer w) {
+        again = fake(w, "EmpAgain", x + 12, z);
+        wear(again, ArmorSuit.QUANTUM, 100);
+        EmpSC.HitResult r = EmpSC.applyHit(again, EmpMode.POINT, false, new int[]{0});
+        EmpStateSC s = EmpSC.state(again);
+        againUntil = s.until[0];
+        againImmune = s.immuneUntil[0];
+        againMob = new EntityLinemanSC(w);                          // never spawned: only its MobArmorSC is asked
+        againMob.setLocationAndAngles(x + 15.5, Y, z + 0.5, 0F, 0F);
+        againMob.setCurrentItemOrArmor(4 - 1, new ItemStack(ModItems.ARMOR.get(ArmorSuit.NANO)[1]));
+        EmpSC.HitResult m = againMob.empHit(again, EmpMode.POINT, false, new int[]{1});
+        MobArmorSC a = againMob.mobArmor();
+        mobUntil = a.suppressedUntil[1];
+        mobImmune = a.immuneUntil[1];
+        againFirstAt = w.getTotalWorldTime();
+        long shortest = Math.min(againUntil, mobUntil) - againFirstAt;
+        if (r.ticks[0] <= 0 || m.ticks[1] <= 0 || shortest < 2) {
+            System.out.println("[SC-WORLDTEST] FAIL pe1 a Point on a piece still suppressed (ОР-1): the first Point suppressed the player's helmet "
+                    + r.ticks[0] + " ticks, the mob's chestplate " + m.ticks[1] + " (both want > 1)");
+            cleanAgain();
+            return;
+        }
+        againAt = againFirstAt + Math.min(AGAIN_AFTER, shortest / 2);
+    }
+
+    /** The due checks of the repeat (world time `now`). */
+    private void againStep(long now) {
+        if (againAt > 0 && now >= againAt) {
+            againAt = 0;
+            checkAgain(now);
+        }
+        if (againEndAt > 0 && now >= againEndAt) {
+            againEndAt = 0;
+            checkAgainEndPlayer(now);
+        }
+        if (mobEndAt > 0 && now >= mobEndAt) {
+            mobEndAt = 0;
+            checkAgainEndMob(now);
+        }
+        if (!againPending() && again != null) {
+            cleanAgain();
+        }
+    }
+
+    /** The second Point (and a storm's pulse) while both pieces are still suppressed: nothing extended, the heat still comes. */
+    private void checkAgain(long now) {
+        int immunity = EmpMathSC.immunityTicks(ConfigSC.empImmunitySeconds);
+        EmpSC.HitResult r = EmpSC.applyHit(again, EmpMode.POINT, false, new int[]{0});
+        EmpStateSC s = EmpSC.state(again);
+        int wantHeat = EmpMathSC.heat(ArmorSuit.QUANTUM.heatCapacity, EmpMode.POINT, now - againFirstAt < EmpMathSC.DIMINISH_WINDOW, false, false, 0,
+                ConfigSC.empHeatMultiplier);
+        boolean player = r.ticks[0] == 0 && !r.immune[0] && !r.anySuppressed() && r.anyAlready() && r.already[0] == (int) (againUntil - now)
+                && s.until[0] == againUntil && s.immuneUntil[0] == againImmune && againImmune == againUntil + immunity && r.heat == wantHeat;
+        boolean storm = EmpSC.stormHit(again, 0, 80, 2, 40) == 0 && s.until[0] == againUntil && s.immuneUntil[0] == againImmune;
+        EmpSC.HitResult m = againMob.empHit(again, EmpMode.POINT, false, new int[]{1});
+        MobArmorSC a = againMob.mobArmor();
+        boolean mob = m.ticks[1] == 0 && !m.immune[1] && m.already[1] == (int) (mobUntil - now) && a.suppressedUntil[1] == mobUntil
+                && a.immuneUntil[1] == mobImmune && mobImmune == mobUntil + immunity;
+        boolean mobStorm = !a.stormHit(1, 80) && a.suppressedUntil[1] == mobUntil && a.immuneUntil[1] == mobImmune;
+        System.out.println("[SC-WORLDTEST] " + (player && storm && mob && mobStorm ? "PASS" : "FAIL") + " pe1 a second Point "
+                + (now - againFirstAt) + " ticks later on a piece still suppressed (ОР-1): the player's helmet not extended " + player + " ("
+                + r.already[0] + " ticks left, want " + (againUntil - now) + "; immune until its end + " + immunity + "; heat +" + r.heat
+                + ", want " + wantHeat + "), a storm's pulse nothing " + storm + "; the Lineman's chestplate not extended " + mob + " ("
+                + m.already[1] + " ticks left, want " + (mobUntil - now) + "), a storm's pulse nothing " + mobStorm);
+        againEndAt = againUntil + 1;
+        mobEndAt = mobUntil + 1;
+    }
+
+    /** The player's helmet after its (first) suppression: immune exactly until its end + the immunity, a third Point blocked. */
+    private void checkAgainEndPlayer(long now) {
+        int immune = EmpSC.immuneTicks(again, 0);
+        boolean free = !EmpSC.isSuppressed(again, 0);
+        EmpSC.HitResult r = EmpSC.applyHit(again, EmpMode.POINT, false, new int[]{0});
+        boolean ok = againImmune > now ? free && immune == (int) (againImmune - now) && r.immune[0] && r.ticks[0] == 0 && r.already[0] == 0
+                && EmpSC.state(again).immuneUntil[0] == againImmune : free;
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 after the not extended suppression (ОР-1): the player's helmet "
+                + "free " + free + ", immune " + immune + " ticks (want " + Math.max(0L, againImmune - now) + " = the first hit's end + the immunity), "
+                + "a third Point blocked " + r.immune[0]);
+    }
+
+    /** The same for the mob's chestplate. */
+    private void checkAgainEndMob(long now) {
+        MobArmorSC a = againMob.mobArmor();
+        boolean free = !a.suppressed(1), immune = a.immune(1);
+        EmpSC.HitResult m = againMob.empHit(again, EmpMode.POINT, false, new int[]{1});
+        boolean ok = mobImmune > now ? free && immune && m.immune[1] && m.ticks[1] == 0 && m.already[1] == 0 && a.immuneUntil[1] == mobImmune : free;
+        System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " pe1 after the not extended suppression (ОР-1): the Lineman's chestplate "
+                + "free " + free + ", immune " + immune + " until " + a.immuneUntil[1] + " (want " + mobImmune
+                + " = the first hit's end + the immunity), a third Point blocked " + m.immune[1]);
+    }
+
+    private void cleanAgain() {
+        againAt = 0;
+        againEndAt = 0;
+        mobEndAt = 0;
+        if (again != null) {
+            reset(again);
+            for (int t = 0; t < 4; t++) {
+                again.inventory.armorInventory[t] = null;
+            }
+            again = null;
+        }
+        againMob = null;
+        if (done) {
+            System.out.println("[SC-WORLDTEST] DONE pe1");
+        }
     }
 
     // ------------------------------------------------------------------ Siphon (package A)
@@ -392,6 +531,8 @@ public final class WorldTestEmpSC {
             }
             p.inventory.mainInventory[0] = null;
         }
-        System.out.println("[SC-WORLDTEST] DONE pe1");
+        if (!againPending()) {
+            System.out.println("[SC-WORLDTEST] DONE pe1");          // else cleanAgain says it, once the ОР-1 checks are over
+        }
     }
 }

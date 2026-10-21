@@ -98,6 +98,16 @@ public final class SubstrateConfigSC {
      * ambushed on the way. Off: no caravans.
      */
     public static boolean caravans = true;
+    /**
+     * ПМ-6 (audit 2026-10-20, ★ A - as СБ-11: the tables stay in code, scaled where they are used): the EMP storm's chance a game
+     * day (StormRulesSC.CHANCE_PCT, 20%) and the Silica Haze's (HAZE_CHANCE_PCT, 25%), times these (at most 100%); the Signal's
+     * chance a day (SignalRulesSC.CHANCE_PCT, 15%); the Breakdown Warden's health (WardenRulesSC.BASE_HP 600 and +60% a player);
+     * the days between two of its loot (WardenRulesSC.LOOT_COOLDOWN_DAYS, 3); the Substrate's background radiation
+     * (SubstrateRadiationSC: the Oxide Fields 1, the Rift 2, the cracked RTGs and the pillar). 1 / 3 = as designed.
+     */
+    public static float stormChanceMultiplier = 1F, hazeChanceMultiplier = 1F, signalChanceMultiplier = 1F, wardenHealthMultiplier = 1F;
+    public static int wardenLootCooldownDays = 3;
+    public static float backgroundRadiationMultiplier = 1F;
 
     // ------------------------------------------------------------------ Ф6: the Tuners' Embassies (section "embassy", rules too)
 
@@ -116,6 +126,13 @@ public final class SubstrateConfigSC {
     public static int embassySpawnMin = 1500;
     /** ПЕ-2: the guaranteed first embassy stands this far from the spawn (blocks), between the two. */
     public static int embassyRingMin = 1300, embassyRingMax = 2500;
+    /**
+     * ПС-8 (audit 2026-10-20, ★ Б - as СБ-11: the tables stay in code): every flight's price in Credit Chips
+     * (EmbassyRulesSC.RIDE_BASE before the level and the spread), times this; the flights a day there and back together
+     * (EmbassyRulesSC.FLIGHTS_PER_DAY, 2 - the rescue never counts).
+     */
+    public static float flightPriceMultiplier = 1F;
+    public static int flightsPerDay = 2;
 
     /** The section of the embassies' rules. */
     public static final String CATEGORY_EMBASSY = "embassy";
@@ -194,6 +211,24 @@ public final class SubstrateConfigSC {
                 "Every 2 game days a caravan - a trader and two guards - comes to a settlement a player is near; 40% are ambushed on the way;"
                 + " beating the ambush off gives reputation and a rare deal (off: no caravans) / Раз в 2 игровых дня к поселению, у которого есть"
                 + " игрок, идёт караван - торговец и два стража; 40% попадают в засаду; отбитая засада - „Доверие“ и редкая сделка (выкл.: караванов нет)");
+        stormChanceMultiplier = num(c, "stormChanceMultiplier", d, 1F, 0F, 5F,
+                "The EMP storm's chance a game day (20%), times this, at most 100% (0: no storms, as empStorms off)"
+                + " / Множитель шанса ЭМИ-бури за игровые сутки (20%), не больше 100% (0 - бурь нет, как empStorms выкл.)");
+        hazeChanceMultiplier = num(c, "hazeChanceMultiplier", d, 1F, 0F, 4F,
+                "The Silica Haze's chance a game day (25%), times this, at most 100% (0: no haze)"
+                + " / Множитель шанса Кремнезёмной мглы за игровые сутки (25%), не больше 100% (0 - мглы нет)");
+        signalChanceMultiplier = num(c, "signalChanceMultiplier", d, 1F, 0F, 6F,
+                "The Signal's chance a game day (15%), times this, at most 100% (0: no Signal)"
+                + " / Множитель шанса Сигнала за игровые сутки (15%), не больше 100% (0 - Сигнала нет)");
+        wardenHealthMultiplier = num(c, "wardenHealthMultiplier", d, 1F, 0.1F, 10F,
+                "The Breakdown Warden's health (600, +60% a player in the arena), times this"
+                + " / Множитель здоровья Смотрителя Пробоя (600, +60% за каждого игрока на арене)");
+        wardenLootCooldownDays = c.getInt("wardenLootCooldownDays", d, 3, 0, 30,
+                "Game days before the Warden gives a player its loot again (0: every win)"
+                + " / Игровых суток до того, как Смотритель снова даёт игроку добычу (0 - за каждую победу)");
+        backgroundRadiationMultiplier = num(c, "backgroundRadiationMultiplier", d, 1F, 0F, 10F,
+                "The Substrate's own radiation (the Oxide Fields, the Rift, the cracked RTGs, the pillar), times this (on top of radiation.multiplier; 0: none)"
+                + " / Множитель собственной радиации Подложки (Окисные поля, Разлом, треснувшие РИТЭГи, столп; поверх radiation.multiplier; 0 - нет)");
         loadEmbassies(c);
     }
 
@@ -226,6 +261,12 @@ public final class SubstrateConfigSC {
         if (embassyRingMax < embassyRingMin + 256) {
             embassyRingMax = embassyRingMin + 256;               // a ring too thin to hold a city: widened, never an error
         }
+        flightPriceMultiplier = num(c, "flightPriceMultiplier", e, 1F, 0.1F, 10F,
+                "Every flight's price in Credit Chips, times this (rounded up; the return half stays paid with its ticket)"
+                + " / Множитель цены каждого рейса в Кредит-чипах (с округлением вверх; обратная половина по-прежнему оплачена билетом)");
+        flightsPerDay = c.getInt("flightsPerDay", e, 2, 1, 20,
+                "Flights a game day a player may take, there and back together, over every embassy and dock (the rescue flight never counts)"
+                + " / Рейсов за игровые сутки на игрока - туда и обратно вместе, по всем посольствам и причалам (Спасательный не считается)");
     }
 
     /** As ConfigSC.num: Forge clamps by comparisons and NaN passes them - NaN / infinity in the file: the default. */

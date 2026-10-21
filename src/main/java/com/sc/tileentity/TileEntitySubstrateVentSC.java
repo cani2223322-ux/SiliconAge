@@ -79,7 +79,7 @@ public class TileEntitySubstrateVentSC extends TileEntity {
         if (meta == SubstrateWildBlocksSC.FUMAROLE) {
             fumarole();
         } else if (meta == SubstrateWildBlocksSC.CRACKED_RTG) {
-            RadiationSC.report(worldObj, xCoord, yCoord, zCoord, SubstrateRadiationSC.RTG_LEVEL, SubstrateRadiationSC.RTG_RADIUS);
+            RadiationSC.report(worldObj, xCoord, yCoord, zCoord, SubstrateRadiationSC.rtgLevel(), SubstrateRadiationSC.RTG_RADIUS);   // ПМ-6: with the multiplier
         }
     }
 

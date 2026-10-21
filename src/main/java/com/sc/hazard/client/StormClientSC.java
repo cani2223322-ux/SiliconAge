@@ -67,7 +67,8 @@ public final class StormClientSC {
     private static final String SND_CRACKLE = Reference.ASSETS + ":storm.crackle";
     private static final int STATIC_ONE_IN = 90;
     /** The HUD's colours: the warning (blinking), the storm, the emission. */
-    private static final int COL_WARN = 0xFFD040, COL_WARN_BLINK = 0xFF8A30, COL_STORM = 0xC890FF, COL_EMISSION = 0xFF6464;
+    private static final int COL_WARN = 0xFFD040, COL_WARN_BLINK = 0xFF8A30, COL_STORM = 0xC890FF, COL_EMISSION = 0xFF6464,
+            COL_HAZE = 0xC8C8B4;                          // ПМ-4: the silica haze's pale grey
 
     /** The messages not applied yet (written by the network thread). */
     private static final ConcurrentLinkedQueue<Pending> PENDING = new ConcurrentLinkedQueue<Pending>();
@@ -259,6 +260,10 @@ public final class StormClientSC {
             y = centred(fr, Lang.tr("sc.storm.hud.warn", String.valueOf((left + 19) / 20)), cx, y, blink ? COL_WARN : COL_WARN_BLINK);
         } else if (phase == StormStateSC.STORM) {
             y = centred(fr, Lang.tr("sc.storm.hud", clock(left)), cx, y, COL_STORM);
+        }
+        int haze = StormStateSC.clientHazeLeft(now);
+        if (haze > 0) {                                  // ПМ-4 (audit 2026-10-20): the haze's line - "Haze: 2:31"
+            y = centred(fr, Lang.tr("sc.haze.hud", clock(haze)), cx, y, COL_HAZE);
         }
         if (StormStateSC.clientEmission() && inRift(w, mc.thePlayer)) {
             centred(fr, Lang.tr("sc.emission.hud", clock(StormStateSC.clientEmissionLeft(now))), cx, y, COL_EMISSION);

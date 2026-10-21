@@ -80,6 +80,13 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                 list.add(new GenEntry(type, null));
             }
             if (type == GeneratorType.COMBUSTION) {
+                // ГН-6 (audit 2026-10-20): every fuel of the server's combustionFuels there is a fluid for, after diesel
+                for (String name : com.sc.util.ConfigSC.combustionFuelNames()) {
+                    ItemStack drop = name.equals(type.fuelFluidName) ? null : ItemFluidDropSC.stackOf(FluidRegistry.getFluid(name));
+                    if (drop != null) {
+                        list.add(new GenEntry(type, drop));
+                    }
+                }
                 list.add(new GenEntry(type, solidFuel != null ? solidFuel : new ItemStack(Items.coal)));
             }
         }
@@ -112,8 +119,9 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
         for (GenEntry e : allEntries(furnaceFuel ? oneOf(ingredient) : null)) {
             if (isGenerator && NEIServerUtils.areStacksSameTypeCrafting(e.generatorStack(), ingredient)) {
                 arecipes.add(e);
-            } else if (fluid != null && e.fuel != null && !e.isSolidFuel()
-                    && (fluid.getFluid().getName().equals(e.type.fuelFluidName) || fluid.getFluid().getName().equals(e.type.fuel2FluidName))) {
+            } else if (fluid != null && e.fuel != null && !e.isSolidFuel() && (e.type == GeneratorType.COMBUSTION
+                    ? fluid.getFluid().getName().equals(e.fluidName())
+                    : fluid.getFluid().getName().equals(e.type.fuelFluidName) || fluid.getFluid().getName().equals(e.type.fuel2FluidName))) {
                 arecipes.add(e);
             } else if (e.type.kind == GeneratorType.Kind.FUSION && (sameItem(ingredient, ModItems.deuteriumCell)
                     || sameItem(ingredient, ModItems.component("liBlanketModule")))) {
@@ -165,7 +173,7 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                 24, 17, (cycleticks % 40) / 40F);
         // the Tokamak XV: XV, or SV when what is beside it takes SV (TileEntityGeneratorSC.tokamakOutputFor)
         String tier = e.type == GeneratorType.TOKAMAK_XV ? e.type.tier.name() + "/" + com.sc.energy.Tier.SV.name() : e.type.tier.name();
-        GuiDraw.drawString(Lang.tr("sc.nei.gen.output", e.type.euPerTick, tier), 4, 40, 0x404040, false);
+        GuiDraw.drawString(Lang.tr("sc.nei.gen.output", e.output(), tier), 4, 40, 0x404040, false);   // ГН-6: with generatorOutput
         String[] lines = e.details();
         for (int i = 0; i < lines.length; i++) {
             GuiDraw.drawString(lines[i], 4, 50 + i * 9, 0x606060, false);
@@ -212,6 +220,17 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
             return solidFuel != null;
         }
 
+        /** The shown fluid fuel's name, or null. */
+        String fluidName() {
+            FluidStack f = fuel == null ? null : ItemFluidDropSC.fluidOf(fuel);
+            return f == null || f.getFluid() == null ? null : f.getFluid().getName();
+        }
+
+        /** ГН-6: EU/t with the server's generatorOutput (the creative one as it is). */
+        int output() {
+            return type == GeneratorType.CREATIVE ? type.euPerTick : TileEntityGeneratorSC.scaledOutput(type.euPerTick);
+        }
+
         ItemStack generatorStack() {
             return ModBlocks.generatorStack(type, 1);
         }
@@ -240,8 +259,9 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                             Lang.tr("sc.nei.gen.fusion2", TileEntityGeneratorSC.CELL_BURN_TICKS / 1200, String.valueOf(cellEu))};
                 case SOLID:
                     if (solidFuel != null) {
-                        int t = Math.max(1, TileEntityFurnace.getItemBurnTime(solidFuel) / TileEntityGeneratorSC.SOLID_GEN_DIVISOR);
-                        return new String[]{Lang.tr("sc.nei.gen.solid", seconds(t), String.valueOf((long) t * type.euPerTick))};
+                        int t = Math.max(1, (int) (TileEntityFurnace.getItemBurnTime(solidFuel) / TileEntityGeneratorSC.SOLID_GEN_DIVISOR
+                                / Math.max(0.01F, com.sc.util.ConfigSC.generatorFuel)));
+                        return new String[]{Lang.tr("sc.nei.gen.solid", seconds(t), String.valueOf((long) t * output()))};
                     }
                     return new String[]{Lang.tr("sc.manual.gen.kind.solid")};
                 case SINGULAR:
@@ -259,12 +279,16 @@ public class GeneratorRecipeHandlerSC extends TemplateRecipeHandler {
                     return new String[]{Lang.tr("sc.manual.gen.kind." + type.kind.name().toLowerCase(java.util.Locale.ROOT))};
                 default:
                     if (solidFuel != null) {
-                        int ticks = Math.max(1, TileEntityFurnace.getItemBurnTime(solidFuel) / TileEntityGeneratorSC.SOLID_FUEL_DIVISOR);
-                        return new String[]{Lang.tr("sc.nei.gen.solid", seconds(ticks), String.valueOf((long) ticks * type.euPerTick))};
+                        int ticks = Math.max(1, (int) (TileEntityFurnace.getItemBurnTime(solidFuel) / TileEntityGeneratorSC.SOLID_FUEL_DIVISOR
+                                / Math.max(0.01F, com.sc.util.ConfigSC.generatorFuel)));
+                        return new String[]{Lang.tr("sc.nei.gen.solid", seconds(ticks), String.valueOf((long) ticks * output()))};
                     }
-                    int ticks = 1000 / Math.max(1, type.fuelRatePerTick);
-                    return new String[]{Lang.tr("sc.nei.gen.fluid", type.fuelRatePerTick, seconds(ticks),
-                            String.valueOf((long) ticks * type.euPerTick))};
+                    // ГН-6: the fuel a tick by the fluid's EU/mB (the Combustion Generator's fuels differ) and generatorFuel
+                    double perMb = type.euPerMb(fluidName() != null ? fluidName() : type.fuelFluidName);
+                    double rate = (perMb > 0 ? type.euPerTick / perMb : type.fuelRatePerTick) * com.sc.util.ConfigSC.generatorFuel;
+                    int ticks = (int) Math.max(1, Math.round(1000 / Math.max(0.001, rate)));
+                    return new String[]{Lang.tr("sc.nei.gen.fluid", (int) Math.max(1, Math.round(rate)), seconds(ticks),
+                            String.valueOf((long) ticks * output()))};
             }
         }
 

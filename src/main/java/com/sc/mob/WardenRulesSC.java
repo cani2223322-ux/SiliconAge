@@ -80,9 +80,14 @@ public final class WardenRulesSC {
     private WardenRulesSC() {
     }
 
-    /** ПС-50 (pure): the health for `players` players (at least one). */
+    /** ПС-50 (pure): the health for `players` players (at least one); ПМ-6: times dimension.wardenHealthMultiplier. */
     public static float maxHealth(int players) {
-        return (float) (BASE_HP * (1D + PER_PLAYER * (Math.max(1, players) - 1)));
+        return (float) (BASE_HP * (1D + PER_PLAYER * (Math.max(1, players) - 1)) * com.sc.dim.SubstrateConfigSC.wardenHealthMultiplier);
+    }
+
+    /** ПМ-6 (audit 2026-10-20): the game days between two of a player's loot - dimension.wardenLootCooldownDays (LOOT_COOLDOWN_DAYS). */
+    public static int lootCooldownDays() {
+        return Math.max(0, com.sc.dim.SubstrateConfigSC.wardenLootCooldownDays);
     }
 
     /** ПС-50 (pure): the health after the scale grew from `oldMax` to `newMax` - the same share of it. */
@@ -131,9 +136,9 @@ public final class WardenRulesSC {
         return share + 1.0E-4F >= LOOT_SHARE;
     }
 
-    /** ПТ-21 (pure): the loot is due on `day` (none before, or LOOT_COOLDOWN_DAYS since the last one). */
+    /** ПТ-21 (pure): the loot is due on `day` (none before, or lootCooldownDays() since the last one - ПМ-6). */
     public static boolean lootDue(boolean hadLoot, long lastDay, long day) {
-        return !hadLoot || day - lastDay >= LOOT_COOLDOWN_DAYS;
+        return !hadLoot || day - lastDay >= lootCooldownDays();
     }
 
     /**

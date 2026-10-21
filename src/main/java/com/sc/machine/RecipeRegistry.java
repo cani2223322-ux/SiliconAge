@@ -49,8 +49,9 @@ public final class RecipeRegistry {
         }
         MachineRecipe best = null;
         int bestSpecificity = -1;
+        MachineRecipe.SlotNames names = new MachineRecipe.SlotNames(providedInputs);   // МШ-8: each slot's name looked up once
         for (MachineRecipe recipe : list) {
-            if (recipe.matches(providedInputs, providedFluidA, providedFluidB)) {
+            if (recipe.matches(providedInputs, providedFluidA, providedFluidB, names)) {
                 // More distinct ingredients wins first, then the bigger total: with rubber + 64
                 // alumina in a Kiln, "rubber + 1 dust" (heat-resistant rubber) has to beat
                 // "4 dust" (ceramic package) - on total count alone it never ran again once

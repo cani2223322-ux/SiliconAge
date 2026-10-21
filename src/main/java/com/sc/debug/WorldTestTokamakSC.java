@@ -73,6 +73,16 @@ public class WorldTestTokamakSC {
             System.out.println("[SC-WORLDTEST] " + (ok ? "PASS" : "FAIL") + " big tokamak: running " + a.isBigRunning() + ", rated "
                     + a.ratedOutput() + ", made " + a.getLastOutput() + " EU/t, storage " + s.getEnergyStored() + ", He left " + he
                     + ", H2 left " + h2 + ", stability " + a.getStability() + ", status " + a.getStatus());
+            // ГН-1 (audit 2026-10-20): a port of the lit build shields as lead glass; a lone tank (no build) passes as before
+            float port = com.sc.radiation.RadiationSC.through(w, AX - 2 + 0.5, Y + 0.5, Z + 0.5, AX - 5 + 0.5, Y + 0.5, Z + 0.5, AX - 2, Y, Z);
+            w.setBlock(CX, Y, Z, ModBlocks.tankSC, 0, 3);
+            float lone = com.sc.radiation.RadiationSC.through(w, CX + 1 + 0.5, Y + 0.5, Z + 0.5, CX - 2 + 0.5, Y + 0.5, Z + 0.5, CX + 1, Y, Z);
+            float loneWas = com.sc.radiation.RadiationSC.blockPasses(w.getBlock(CX, Y, Z), w.getBlockMetadata(CX, Y, Z));
+            w.setBlockToAir(CX, Y, Z);
+            boolean shield = a.isIgnited() && Math.abs(port - com.sc.radiation.RadiationSC.THROUGH_LEAD_GLASS) < 0.001F
+                    && Math.abs(lone - loneWas) < 0.001F;
+            System.out.println("[SC-WORLDTEST] " + (shield ? "PASS" : "FAIL") + " tokamak XV port shields (ГН-1): through the lit build's He port "
+                    + port + " (lead glass " + com.sc.radiation.RadiationSC.THROUGH_LEAD_GLASS + "), a lone tank " + lone + " (as before " + loneWas + ")");
             w.setBlockToAir(AX + 2, Y, Z + 2);                       // a coil taken while it runs
             a.setStabilityForTest(5F);
             w.setBlockToAir(BX + 2, Y, Z + 2);

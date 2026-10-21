@@ -265,6 +265,7 @@ public class GuiEnergyStorageSC extends GuiContainer {
             lines.add(Lang.tr("sc.gui.upgrades"));
             lines.add(Lang.tr("sc.storage.upgrades.hint.1"));
             lines.add(Lang.tr("sc.storage.upgrades.hint.2"));
+            lines.add(Lang.tr("sc.storage.upgrades.hint.cap", storage.maxCapacityUpgrades()));   // ЭН-5: this storage's limit
             lines.add(Lang.tr("sc.storage.upgrades.hint.3"));
             lines.add(Lang.tr("sc.storage.upgrades.hint.4"));      // Output Splitter
             lines.add(Lang.tr("sc.storage.upgrades.hint.5"));      // Adaptive Transformer

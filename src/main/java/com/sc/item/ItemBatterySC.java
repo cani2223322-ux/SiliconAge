@@ -41,6 +41,8 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
     public static final int[] RATE = {32, 128, 512, 2048, 8192, 32768, 131072};
     /** Modes (sneak + right-click): off, the armour, the held item, everything carried. */
     public static final int MODE_OFF = 0, MODE_ARMOR = 1, MODE_HELD = 2, MODE_ALL = 3, MODES = 4;
+    /** ЭН-9 ★: the hotbar's slots (the first of mainInventory) - what "in the hand" warns about. */
+    private static final int HOTBAR = 9;
     private static final String CHARGE = "ChargeSC", MODE = "BatteryMode";
     /** It charges others every this many ticks, its rate times this many at a time. */
     private static final int EVERY = 10;
@@ -137,9 +139,66 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
                         mode == MODE_OFF ? 0.8F : 1.2F);
                 player.addChatComponentMessage(new ChatComponentTranslation("sc.battery.modeset",
                         new ChatComponentTranslation("sc.battery.mode." + mode)));
+                if (mode != MODE_OFF) {
+                    tellTooHigh(player, stack, mode);           // ЭН-9: nothing in the target this battery's tier can charge
+                }
             }
         }
         return stack;
+    }
+
+    /**
+     * ЭН-9 (audit 2026-10-20): mode `mode` just switched on - if the target (as onUpdate takes it, batteries left out) has
+     * chargeable items but none of a tier this battery charges, the chat says which tier the easiest of them needs. ★: "in the
+     * hand" - the hotbar (the battery itself is in the hand at the switch; what it will charge is taken into it from there).
+     */
+    private static void tellTooHigh(EntityPlayer p, ItemStack self, int mode) {
+        java.util.List<ItemStack> target = new java.util.ArrayList<ItemStack>();
+        if (mode == MODE_ARMOR || mode == MODE_ALL) {
+            for (ItemStack a : p.inventory.armorInventory) {
+                target.add(a);
+            }
+        }
+        if (mode == MODE_HELD || mode == MODE_ALL) {
+            target.add(p.getCurrentEquippedItem());
+        }
+        if (mode == MODE_HELD) {
+            for (int i = 0; i < HOTBAR && i < p.inventory.mainInventory.length; i++) {
+                if (p.inventory.mainInventory[i] != p.getCurrentEquippedItem()) {
+                    target.add(p.inventory.mainInventory[i]);
+                }
+            }
+        }
+        if (mode == MODE_ALL) {
+            for (ItemStack s : p.inventory.mainInventory) {
+                if (s != p.getCurrentEquippedItem()) {
+                    target.add(s);
+                }
+            }
+        }
+        Tier mine = tierOf(self);
+        ItemStack easiest = null;
+        Tier need = null;
+        for (ItemStack s : target) {
+            if (s == null || s == self || isBattery(s) || ItemChargeSC.isBattery(s)) {
+                continue;
+            }
+            Tier t = ItemChargeSC.requiredTier(s);
+            if (t == null) {
+                continue;
+            }
+            if (t.ordinal() <= mine.ordinal()) {
+                return;                                     // something it charges: all is well
+            }
+            if (need == null || t.ordinal() < need.ordinal()) {
+                need = t;
+                easiest = s;
+            }
+        }
+        if (easiest != null) {
+            p.addChatComponentMessage(new ChatComponentTranslation("sc.battery.toohigh", mine.name(),
+                    new ChatComponentTranslation(easiest.getItem().getUnlocalizedName(easiest) + ".name"), need.name()));
+        }
     }
 
     /** In a player's inventory with a mode on: every EVERY ticks, what the mode says gets up to rate x EVERY EU. */
@@ -289,6 +348,7 @@ public class ItemBatterySC extends Item implements ic2.api.item.ISpecialElectric
         long c = chargeOf(stack), cap = capacityOf(stack);
         list.add(Lang.tr("sc.battery.charge", fmt(c), fmt(cap), cap == 0 ? 0 : (int) (c * 100 / cap)));
         list.add("§7" + Lang.tr("sc.battery.tier", tierOf(stack).name(), RATE[tierIndex(stack)]));
+        list.add("§7" + Lang.tr("sc.battery.chargesupto", tierOf(stack).name()));   // ЭН-9: its modes charge up to its tier
         int mode = modeOf(stack);
         list.add((mode == MODE_OFF ? "§7" : "§a") + Lang.tr("sc.battery.mode", Lang.tr("sc.battery.mode." + mode)));
         // Shift details only where the lang has them (sc.battery.tooltip.<key>, e.g. the SV core)

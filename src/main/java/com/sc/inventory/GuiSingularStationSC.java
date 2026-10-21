@@ -711,6 +711,9 @@ public class GuiSingularStationSC extends GuiContainer {
             }
             return;
         }
+        if (button instanceof GuiBigSC.ClearButton && !((GuiBigSC.ClearButton) button).fire()) {
+            return;                                        // МШ-3: the first click on an «x» only arms it
+        }
         if (power.allowClick(button)) {
             mc.playerController.sendEnchantPacket(win, button.id);
         }
@@ -1567,7 +1570,7 @@ public class GuiSingularStationSC extends GuiContainer {
         for (Gas g : Gas.values()) {
             int gx = L.rx + g.ordinal() * GAUGE_STEP;
             if (clear[g.ordinal()].over(mouseX, mouseY)) {
-                return GuiBigSC.clearTip(te.tankAmount(g), te.clearCost(g), te.getEnergyStored());
+                return GuiBigSC.clearTip(te.tankAmount(g), te.clearCost(g), te.getEnergyStored(), clear[g.ordinal()].armed());
             }
             if (over(gx, L.gaugeY, GAUGE_W, L.gaugeH, mx, my)) {
                 return tankTip(g);

@@ -37,9 +37,16 @@ public class EntityAITunerFleeSC extends EntityAIBase {
         return goal != null;
     }
 
-    /** The core (bound) - null when it is already there; else a spot away from the mob. */
+    /**
+     * The core (bound) - null when it is already there; else a spot away from the mob. ПС-1 (audit 2026-10-20): a POSTED kind (the
+     * Dispatcher at the Vokzal, out of the dome) keeps to its post - its refuge: at it, it doesn't run (the flights' screen stays).
+     */
     private int[] goal(EntityLivingBase d) {
         SettlementRegistrySC.Settlement s = t.link().get();
+        int[] post = s != null && EntityTunerSC.posted(t.kind()) ? NpcLinkSC.post(t.link().slot()) : null;
+        if (post != null) {
+            return NpcLinkSC.near(t, post, EntityTunerSC.CORE_SAFE) ? null : post;
+        }
         if (s != null) {
             int[] c = NpcLinkSC.core(s);
             return NpcLinkSC.near(t, c, EntityTunerSC.CORE_SAFE) ? null : c;

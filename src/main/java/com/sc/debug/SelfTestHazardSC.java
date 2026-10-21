@@ -132,12 +132,14 @@ final class SelfTestHazardSC {
      * The messages' arguments the packages pass (docs/plan-substrate-tech-f4.md §10.1; S, C, N format them so): the HUD's time, a
      * raid's settlement name and wave, the Pelengator's direction and distance, the Crumbs' count and cap, the field's charge.
      */
-    private static final String[][] MESSAGE_ARGS = {{"sc.storm.warning", "0"}, {"sc.storm.start", "0"}, {"sc.storm.end", "0"}, {"sc.storm.hud.warn", "1"},
-            {"sc.storm.hud", "1"}, {"sc.haze.start", "0"}, {"sc.haze.end", "0"}, {"sc.emission.start", "0"}, {"sc.emission.end", "0"},
+    // ПМ-3 / ПМ-4 (audit 2026-10-20): the finder's X and Z; the storm's, the haze's and the Emission's numbers; the haze's HUD line
+    private static final String[][] MESSAGE_ARGS = {{"sc.storm.warning", "2"}, {"sc.storm.start", "2"}, {"sc.storm.end", "0"}, {"sc.storm.hud.warn", "1"},
+            {"sc.storm.hud", "1"}, {"sc.haze.start", "1"}, {"sc.haze.end", "0"}, {"sc.emission.start", "2"}, {"sc.emission.end", "0"},
+            {"sc.haze.hud", "1"},
             {"sc.emission.hud", "1"}, {"sc.raid.start", "1"}, {"sc.raid.wave", "2"}, {"sc.raid.won", "0"}, {"sc.raid.lost", "0"}, {"sc.echo.squad", "0"},
             {"sc.echo.swarm", "0"}, {"sc.camp.field.info", "4"}, {"sc.camp.field.up", "0"}, {"sc.camp.field.down", "0"}, {"sc.camp.safe.empty", "0"},
             {"sc.camp.safe.locked", "0"}, {"sc.camp.safe.powered", "0"},
-            {"sc.camp.safe.opened", "0"}, {"sc.crumb.opened", "2"}, {"sc.crumb.limit", "1"}, {"sc.finder.litho", "2"}, {"sc.finder.vault", "2"},
+            {"sc.camp.safe.opened", "0"}, {"sc.crumb.opened", "2"}, {"sc.crumb.limit", "1"}, {"sc.finder.litho", "4"}, {"sc.finder.vault", "4"},
             {"sc.finder.none", "0"}, {"sc.finder.offworld", "0"}, {"sc.trade.result.raid", "0"}, {"sc.trade.result.crumbs", "0"},
             {"sc.trade.refuse.raid", "0"}, {"sc.trade.refuse.crumbs", "0"}, {"sc.emp.hit.useless", "0"}, {"sc.scrapper.took", "0"},
             {"sc.waila.mob.useless", "0"}, {"sc.analyzer.mob.useless", "0"}, {"sc.tooltip.ruinFinder.howto", "1"}};
@@ -162,6 +164,49 @@ final class SelfTestHazardSC {
                 t.printStackTrace();
             }
         }
+        try {
+            auditStar();
+        } catch (Throwable t) {
+            check(false, "the audit 2026-10-20 (★) - exception " + t);
+            t.printStackTrace();
+        }
+    }
+
+    /** The shortcomings of 2026-10-20, ★ (docs/plan-audit-2026-10-20-star.md): ПМ-6's multipliers, МБ-2's stale Eclipse. */
+    private static void auditStar() {
+        // ПМ-6: the weather's, the Signal's and the Warden's numbers through the dimension's multipliers (1 - as they were)
+        float sWas = com.sc.dim.SubstrateConfigSC.stormChanceMultiplier, hWas = com.sc.dim.SubstrateConfigSC.hazeChanceMultiplier,
+                gWas = com.sc.dim.SubstrateConfigSC.signalChanceMultiplier, wWas = com.sc.dim.SubstrateConfigSC.wardenHealthMultiplier;
+        int lWas = com.sc.dim.SubstrateConfigSC.wardenLootCooldownDays;
+        boolean plain, raised;
+        try {
+            com.sc.dim.SubstrateConfigSC.stormChanceMultiplier = 1F;
+            com.sc.dim.SubstrateConfigSC.hazeChanceMultiplier = 1F;
+            com.sc.dim.SubstrateConfigSC.signalChanceMultiplier = 1F;
+            com.sc.dim.SubstrateConfigSC.wardenHealthMultiplier = 1F;
+            com.sc.dim.SubstrateConfigSC.wardenLootCooldownDays = com.sc.mob.WardenRulesSC.LOOT_COOLDOWN_DAYS;
+            plain = StormRulesSC.chancePct() == 20 && StormRulesSC.hazeChancePct() == 25 && com.sc.lore.SignalRulesSC.chancePct() == 15
+                    && Math.abs(com.sc.mob.WardenRulesSC.maxHealth(1) - 600F) < 1e-3F && com.sc.mob.WardenRulesSC.lootCooldownDays() == 3;
+            com.sc.dim.SubstrateConfigSC.stormChanceMultiplier = 10F;
+            com.sc.dim.SubstrateConfigSC.wardenHealthMultiplier = 2F;
+            raised = StormRulesSC.chancePct() == 100 && Math.abs(com.sc.mob.WardenRulesSC.maxHealth(1) - 1200F) < 1e-3F;
+        } finally {
+            com.sc.dim.SubstrateConfigSC.stormChanceMultiplier = sWas;
+            com.sc.dim.SubstrateConfigSC.hazeChanceMultiplier = hWas;
+            com.sc.dim.SubstrateConfigSC.signalChanceMultiplier = gWas;
+            com.sc.dim.SubstrateConfigSC.wardenHealthMultiplier = wWas;
+            com.sc.dim.SubstrateConfigSC.wardenLootCooldownDays = lWas;
+        }
+        check(plain && raised, "dimension multipliers (ПМ-6): at 1 the storm 20%, the haze 25%, the Signal 15%, the Warden 600 HP, its loot every"
+                + " 3 days; the storm x10 - 100% at most, the Warden x2 - 1200");
+        // МБ-2: an ALIVE «Затмение» unseen 3 game days counts as dead since its last sighting - a new one may come at once
+        check(com.sc.mob.SpawnDirectorSC.stale(0L, 72000L) && !com.sc.mob.SpawnDirectorSC.stale(0L, 71999L)
+                        && com.sc.mob.SpawnRulesSC.eclipseChancePct(RareRegistrySC.DEAD, 1000L, 1000L + 72000L, false, true) > 0,
+                "Eclipse (МБ-2): stale after 72 000 ticks unseen, not a tick before; dead since its sighting - the chance back 3 days on");
+        // МБ-2 ★: a stale copy loaded back is the live one again only under its own DEAD record (or none) - not after a newer one
+        check(com.sc.mob.SpawnDirectorSC.mayRevive(RareRegistrySC.DEAD, true) && !com.sc.mob.SpawnDirectorSC.mayRevive(RareRegistrySC.DEAD, false)
+                        && !com.sc.mob.SpawnDirectorSC.mayRevive(RareRegistrySC.ALIVE, false) && com.sc.mob.SpawnDirectorSC.mayRevive(RareRegistrySC.NONE, false),
+                "Eclipse (МБ-2 ★): an old copy revives under its own DEAD record or none; under another's DEAD (a newer one died) or ALIVE it leaves");
     }
 
     private static void section(int i) throws Exception {
@@ -195,8 +240,10 @@ final class SelfTestHazardSC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        // Ф5 appended requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1), Ф6 the embassy section's six (-f6.md §2.1): 20 rules now
-        boolean rules = sent.size() == 20 && sent.contains("empStorms") && sent.contains("raids") && SubstrateConfigSC.empStorms && SubstrateConfigSC.raids;
+        // Ф5 appended requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1), Ф6 the embassy section's six (-f6.md §2.1), the audit of
+        // 2026-10-20 six more of dimension (ПМ-6) and two of embassy (ПС-8): 28 rules now
+        boolean rules = sent.size() == 28 && sent.contains("empStorms") && sent.contains("raids") && sent.contains("stormChanceMultiplier")
+                && SubstrateConfigSC.empStorms && SubstrateConfigSC.raids;
         StringBuilder pub = new StringBuilder();
         for (String n : new String[]{"biomeIdRidges", "biomeIdOxide", "biomeIdRift"}) {
             try {

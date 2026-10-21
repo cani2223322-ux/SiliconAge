@@ -60,6 +60,8 @@ public final class BladeSingularSC {
     private static final UUID SHEATH_ID = UUID.fromString("5c1e9a7d-2f4b-4d8e-9b3a-6e0f1c2d3b47");
     /** Player entity data: the minute of the kill cap and the mob points earned in it. */
     private static final String KILL_MIN = "scBladeKillMin", KILL_PTS = "scBladeKillPts", LAST_CHANCE_AT = "scBladeLastChance";
+    /** ОР-7 (audit 2026-10-20): the blade's boss window (its start, world tick) and the bosses paid in it - persisted, as KILL_MIN. */
+    private static final String BOSS_WIN = "scBladeBossWin", BOSS_N = "scBladeBossN";
 
     /** К-5/К-6: player data that outlives a death (a respawn copies only this compound). */
     private static NBTTagCompound persisted(EntityPlayer p) {
@@ -881,13 +883,21 @@ public final class BladeSingularSC {
         }
         boolean boss = victim instanceof IBossDisplayData;
         NBTTagCompound data = persisted(p);             // К-5: the minute's cap survives a death
-        long minute = p.worldObj.getTotalWorldTime() / 1200L;
+        long now = p.worldObj.getTotalWorldTime(), minute = now / 1200L;
         if (data.getLong(KILL_MIN) != minute) {
             data.setLong(KILL_MIN, minute);
             data.setInteger(KILL_PTS, 0);
         }
-        int pts = SingularLevel.killPoints(boss, data.getInteger(KILL_PTS));
-        if (!boss) {
+        // ОР-7: at most SingularLevel.BOSS_CAP bosses in its window; past them a boss counts as a mob
+        if (!data.hasKey(BOSS_WIN) || now - data.getLong(BOSS_WIN) >= SingularLevel.BOSS_WINDOW_TICKS || now < data.getLong(BOSS_WIN)) {
+            data.setLong(BOSS_WIN, now);
+            data.setInteger(BOSS_N, 0);
+        }
+        int bossN = data.getInteger(BOSS_N);
+        int pts = SingularLevel.killPoints(boss, data.getInteger(KILL_PTS), bossN);
+        if (boss && bossN < SingularLevel.BOSS_CAP) {
+            data.setInteger(BOSS_N, bossN + 1);
+        } else {
             data.setInteger(KILL_PTS, data.getInteger(KILL_PTS) + pts);
         }
         if (pts <= 0) {
@@ -936,11 +946,19 @@ public final class BladeSingularSC {
         p.hurtResistantTime = p.maxHurtResistantTime;
         ToolLevelSC.setCooldown(blade, BladeFeature.LAST_CHANCE_KEY, p.worldObj, ToolLevelSC.cooldownTicks(p, BladeFeature.LAST_CHANCE_COOLDOWN));
         data.setLong(LAST_CHANCE_AT, now);
-        p.addChatComponentMessage(new ChatComponentTranslation("sc.blade.lastchance"));
+        // ОР-2 (audit 2026-10-20): the real cooldown in the message ("3:45"), the Singular set's shorter one too
+        p.addChatComponentMessage(new ChatComponentTranslation("sc.blade.lastchance",
+                mmss(ToolLevelSC.cooldownTicks(p, BladeFeature.LAST_CHANCE_COOLDOWN))));
         p.worldObj.playSoundAtEntity(p, "mob.zombie.unfect", 1F, 1.6F);
         spark(p.worldObj, "witchMagic", p.posX, p.posY + 1, p.posZ, 60, 0.6, 0.3);
         spark(p.worldObj, "portal", p.posX, p.posY + 1, p.posZ, 60, 0.6, 1.0);
         return true;
+    }
+
+    /** ОР-2: ticks as "M:SS" ("3:45"). */
+    static String mmss(int ticks) {
+        int s = Math.max(0, (ticks + 19) / 20);
+        return s / 60 + ":" + (s % 60 < 10 ? "0" : "") + s % 60;
     }
 
     // ================================================================== key functions

@@ -883,6 +883,13 @@ public class GuiSingularSC extends GuiContainer {
             if (sing.isPortTaken()) {
                 add(k, l, 2, Lang.tr("sc.gui.xv.st.porttaken"));
             }
+            if (sing.isExtraPort()) {                         // ГН-4: a tank / storage past the wall's limit
+                add(k, l, 2, Lang.tr("sc.gui.big.st.extraport", SingularReactorSC.TANKS_MAX, SingularReactorSC.STORES_MAX));
+            }
+            Tier weak = com.sc.energy.CableWarningSC.weakestCableAt(gen, Tier.SV);
+            if (weak != null) {                               // ГН-3: its SV output would burn the cable out
+                add(k, l, 2, Lang.tr("sc.gui.gen.st.cableweak", weak.name(), Tier.SV.name()));
+            }
             if (sing.isNearBuild()) {
                 add(k, l, 2, Lang.tr("sc.gui.big.st.nearbuild"));
             }
@@ -1044,7 +1051,8 @@ public class GuiSingularSC extends GuiContainer {
         }
         if (sing.hasHole() && GuiGaugeSC.isOver(C1, ROW_Y, SCENE_W, 32, mx, my)) {
             double m = mass();
-            t.add(Lang.tr("sc.gui.sing.tip.mass", pct(m), num(SingularReactorSC.powerFactor(m), 1), SingularReactorSC.outputFor(m)));
+            t.add(Lang.tr("sc.gui.sing.tip.mass", pct(m), num(SingularReactorSC.powerFactor(m), 1),
+                    TileEntityGeneratorSC.scaledOutput(SingularReactorSC.outputFor(m))));   // ГН-6: generatorOutput
             t.add(Lang.tr("sc.gui.sing.tip.cont", Math.round(sing.getContainment())));
             t.add("§7" + Lang.tr("sc.gui.sing.tip.cont.1"));
             t.add("§7" + Lang.tr("sc.gui.sing.tip.hawking"));

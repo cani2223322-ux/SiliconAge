@@ -532,21 +532,49 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         }
     }
 
-    /** БП-3: who placed it ("" for a converter from before owners - shared, as before). Not kept in the item. */
-    private String owner = "";
+    /**
+     * БП-3: who placed it (nobody for a converter from before owners - shared, as before). Not kept in the item. ЭН-3 (audit
+     * 2026-10-20): by name and UUID - an old one's owner by the name until his first action writes the UUID down.
+     */
+    private final com.sc.util.OwnerSC owner = new com.sc.util.OwnerSC();
 
     public String getOwner() {
-        return owner;
+        return owner.name();
     }
 
     public void setOwner(String name) {
-        owner = name == null ? "" : name;
+        owner.set(name, worldObj);
+        markDirty();
+    }
+
+    /** ЭН-3: owned by the placer (his name and UUID); a FakePlayer or null leaves it ownerless. */
+    public void setOwner(EntityPlayer p) {
+        owner.set(p);
         markDirty();
     }
 
     /** May this player change the settings, the slots, turn or break it: the owner, anyone in creative, anyone if ownerless. */
     public boolean allowed(EntityPlayer p) {
-        return owner.isEmpty() || owner.equals(p.getCommandSenderName()) || p.capabilities.isCreativeMode;
+        return owner.isEmpty() || owner.matches(p, this) || p.capabilities.isCreativeMode;
+    }
+
+    /**
+     * ЭН-4 (audit 2026-10-20): sneak-click charging of armour / a weapon takes from the owner's converter only (an ownerless one
+     * and creative as allowed() has it); a stranger is told whose it is.
+     */
+    @Override
+    public boolean canItemCharge(EntityPlayer p) {
+        if (!allowed(p)) {
+            p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.conv.msg.owneronly", getOwner()));
+            return false;
+        }
+        return super.canItemCharge(p);
+    }
+
+    /** ЭН-4: switched off (or held by redstone), it gives nothing to sneak-click charging either, as an energy storage. */
+    @Override
+    public int extractForItemCharging(int max) {
+        return switchedOn() ? super.extractForItemCharging(max) : 0;
     }
 
     /** EU come in through this face (Вход, the buffer EU or Авто, the filter lets EU through). */
@@ -1727,7 +1755,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         readSettings(nbt);
         ForgeDirection f = ForgeDirection.getOrientation(nbt.getInteger("Facing"));
         facing = f == ForgeDirection.UNKNOWN ? ForgeDirection.NORTH : f;
-        owner = nbt.getString("ConvOwner");
+        owner.read(nbt, "ConvOwner", "ConvOwnerId");
         if (nbt.hasKey("ConvOutKinds")) {                         // the client: what the faces send (the screen's and the texture's)
             int ok = nbt.getInteger("ConvOutKinds");
             for (int s = 0; s < 6; s++) {
@@ -1750,7 +1778,7 @@ public class TileEntityEnergyConverterSC extends TileEntityEnergyBase implements
         writeSettings(nbt);
         nbt.setInteger("Facing", facing.ordinal());
         if (!owner.isEmpty()) {
-            nbt.setString("ConvOwner", owner);
+            owner.write(nbt, "ConvOwner", "ConvOwnerId");
         }
         int ok = 0;
         for (int s = 0; s < 6; s++) {

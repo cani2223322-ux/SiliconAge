@@ -174,9 +174,10 @@ final class SelfTestCombatSC {
             rule |= "mobsUseEmp".equals(f.getName()) && f.getType() == boolean.class;
         }
         // Ф4 appended empStorms and raids (docs/plan-substrate-tech-f4.md §2.1), Ф5 requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1):
-        // 14 rules then; Ф6 appended the embassy section's six (docs/plan-substrate-tech-f6.md §2.1): 20 now (SelfTestEmbassySC checks them)
-        check(rule && rules.size() == 20, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
-                + ", true by default) " + rule + ", " + rules.size() + " rules (20 with Ф4's, Ф5's and Ф6's)");
+        // 14 rules then; Ф6 appended the embassy section's six (docs/plan-substrate-tech-f6.md §2.1): 20; the audit of 2026-10-20 (ПМ-6, ПС-8)
+        // six of the section dimension and two of embassy: 28 now (SelfTestEmbassySC checks them)
+        check(rule && rules.size() == 28, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
+                + ", true by default) " + rule + ", " + rules.size() + " rules (28 with Ф4's, Ф5's, Ф6's and the audit's)");
     }
 
     // ------------------------------------------------------------------ 2. «Пробой» (ПБ-15, ПБ-16)
@@ -262,6 +263,17 @@ final class SelfTestCombatSC {
                 + " world " + caps + ", the Quantum+ 2 in 64 and 1 elite in 128 by name" + (bad.length() == 0 ? "" : " - BAD:" + bad) + "; Ф1's maySpawn /"
                 + " fitGroup unchanged " + old + "; every place's weights sum > 0 " + sums + "; the Executioner (pool " + ex + ") only in the canyons "
                 + executioner + "; the census overloads" + (overloads.length() == 0 ? " - NONE YET" : overloads));
+        // МБ-3 (audit 2026-10-20): the dimension's cap grows with the players - max(40, 8 a player); the old 40 stays the default
+        check(SpawnRulesSC.worldMax(1) == 40 && SpawnRulesSC.worldMax(5) == 40 && SpawnRulesSC.worldMax(6) == 48
+                        && SpawnRulesSC.maySpawn(0, 45, 1, false, 48) && !SpawnRulesSC.maySpawn(0, 48, 1, false, 48)
+                        && SpawnRulesSC.fitGroup(0, 46, 4, 1, false, 48) == 2 && SpawnRulesSC.maySpawn(0, 0, 45, 1, false, false, 48)
+                        && !SpawnRulesSC.maySpawn(0, 0, 40, 1, false, false),
+                "spawn rules (МБ-3): worldMax 1 / 5 / 6 players - 40 / 40 / 48; with the cap 48 45 in the world - room, 48 - none");
+        // МБ-1 (audit 2026-10-20): the Commander's order reaches the chat at most once in 30 s a player (a turned-back clock - at once)
+        check(com.sc.mob.EliteModSC.ORDER_CHAT_TICKS == 600 && com.sc.mob.EliteSC.orderChatDue(0L, 600L)
+                        && !com.sc.mob.EliteSC.orderChatDue(100L, 500L) && !com.sc.mob.EliteSC.orderChatDue(0L, 599L)
+                        && com.sc.mob.EliteSC.orderChatDue(500L, 100L),
+                "Commander's orders (МБ-1): in the chat at most once in 600 ticks - due at 600, not at 400 / 599, at once after a clock turned back");
     }
 
     // ------------------------------------------------------------------ 5. the mobs (packages M, X; §4.2..§4.8, ПС-10)

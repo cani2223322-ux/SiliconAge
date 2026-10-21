@@ -29,10 +29,14 @@ public class ItemBlockTransformerSC extends ItemBlock {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         Tier low = BlockTransformerSC.lowTierFor(stack.getItemDamage());
         Tier high = BlockTransformerSC.highTierFor(stack.getItemDamage());
         list.add(Lang.tr("sc.transformer.tooltip.faces", high.name(), high.getVoltage(), low.name(), low.getVoltage()));
+        if (stack.hasTagCompound() && stack.getTagCompound().getBoolean("StepUp")) {   // ЭН-7: BlockTransformerSC.getDrops (the wrench's dismantle too)
+            list.add(Lang.tr("sc.transformer.tooltip.stepup"));
+        }
         com.sc.util.TooltipSC.more(list, null, Lang.tr("sc.transformer.tooltip.use"));
     }
 }

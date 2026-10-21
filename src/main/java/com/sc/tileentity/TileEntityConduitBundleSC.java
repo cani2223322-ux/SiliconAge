@@ -59,13 +59,16 @@ import net.minecraftforge.fluids.IFluidHandler;
 public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandler, IEnergyConductor, com.sc.energy.Ic2LoadQueueSC.Deferred {
 
     // TODO(design doc §12.3): 200 ticks was a TODO-filled default, not confirmed.
-    private static final int CORROSION_TICKS = 200;
+    public static final int CORROSION_TICKS = 200;    // СТ-1: public - the pipes' tooltip says it
     private static final int ITEMS_PER_TICK = 4;
     private static final int MAX_TUBE_NODES = 1024;
 
-    /** Bumped whenever any tube / pipe network may have changed shape; each rebuilds its route list then. */
-    private static int tubeVersion;
-    private static int pipeVersion;
+    /**
+     * Bumped whenever a tube / pipe network may have changed shape; each rebuilds its route list then. МС-2 (audit 2026-10-20): one
+     * pair {tube, pipe} per dimension - a bundle loaded or changed in the Nether no longer rebuilds the Overworld's routes (and
+     * resets its pauses); the numbers only grow, the entries are never dropped.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<Integer, int[]> VERSIONS = new java.util.concurrent.ConcurrentHashMap<Integer, int[]>();
 
     private CableType cable;
     private PipeType pipe;
@@ -266,12 +269,47 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         sync();
     }
 
-    /** A tube / pipe network may look different now (server only; the counters are shared statics). */
-    private static void shapeChanged(ConduitKind kind) {
+    /** A tube / pipe network may look different now (server only; МС-2: this world's counters only). */
+    private void shapeChanged(ConduitKind kind) {
         if (kind == ConduitKind.TUBE) {
-            tubeVersion++;
+            bumpTube();
         } else if (kind == ConduitKind.PIPE) {
-            pipeVersion++;
+            bumpPipe();
+        }
+    }
+
+    /** МС-2: the {tube, pipe} versions of `w`'s dimension (made on first use). */
+    private static int[] versions(net.minecraft.world.World w) {
+        Integer dim = Integer.valueOf(w == null || w.provider == null ? Integer.MIN_VALUE : w.provider.dimensionId);
+        int[] v = VERSIONS.get(dim);
+        if (v == null) {
+            int[] made = new int[2];
+            v = VERSIONS.putIfAbsent(dim, made);
+            if (v == null) {
+                v = made;
+            }
+        }
+        return v;
+    }
+
+    private int tubeVersion() {
+        return versions(worldObj)[0];
+    }
+
+    private int pipeVersion() {
+        return versions(worldObj)[1];
+    }
+
+    /** МС-2: this world's tube networks may have changed (server only - the server's thread bumps them). */
+    private void bumpTube() {
+        if (worldObj != null && !worldObj.isRemote) {
+            versions(worldObj)[0]++;
+        }
+    }
+
+    private void bumpPipe() {
+        if (worldObj != null && !worldObj.isRemote) {
+            versions(worldObj)[1]++;
         }
     }
 
@@ -534,10 +572,10 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         // redstone wire next to the bundle has no tile and connects to nothing
         if (neighboursChanged()) {
             if (tube) {
-                tubeVersion++;
+                bumpTube();                              // МС-2: this world's only
             }
             if (pipe != null) {
-                pipeVersion++;
+                bumpPipe();
             }
             if (cable != null && !Loader.isModLoaded(Reference.IC2_MODID)) {
                 EnergyNetSC.instance().invalidate(worldObj);
@@ -633,8 +671,8 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
     /** Extract connectors pull from their tank, up to the pipe's rating per tick. */
     private void extractFluid() {
         long now = worldObj.getTotalWorldTime();
-        if (idlePipeVersion != pipeVersion) {
-            idlePipeVersion = pipeVersion;
+        if (idlePipeVersion != pipeVersion()) {
+            idlePipeVersion = pipeVersion();
             clearIdle(6);
         }
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
@@ -768,7 +806,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
 
     /** Every tank on a normal connector of this pipe network (same pipe type), nearest first. */
     private List<Route> fluidRoutes() {
-        if (fluidRoutes != null && fluidRoutesVersion == pipeVersion) {
+        if (fluidRoutes != null && fluidRoutesVersion == pipeVersion()) {
             return fluidRoutes;
         }
         List<Route> out = new ArrayList<Route>();
@@ -792,7 +830,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         }
         sortByPriority(out);
         fluidRoutes = out;
-        fluidRoutesVersion = pipeVersion;
+        fluidRoutesVersion = pipeVersion();
         return out;
     }
 
@@ -934,8 +972,8 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
      */
     private void moveItems() {
         long now = worldObj.getTotalWorldTime();
-        if (idleTubeVersion != tubeVersion) {
-            idleTubeVersion = tubeVersion;
+        if (idleTubeVersion != tubeVersion()) {
+            idleTubeVersion = tubeVersion();
             clearIdle(0);
         }
         ForgeDirection[] dirs = ForgeDirection.VALID_DIRECTIONS;
@@ -1033,7 +1071,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
 
     /** Every inventory the tube network delivers into, nearest first (breadth-first over linked tubes). */
     private List<Route> routes() {
-        if (routes != null && routesVersion == tubeVersion) {
+        if (routes != null && routesVersion == tubeVersion()) {
             return routes;
         }
         List<Route> out = new ArrayList<Route>();
@@ -1060,7 +1098,7 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         }
         sortByPriority(out);
         routes = out;
-        routesVersion = tubeVersion;
+        routesVersion = tubeVersion();
         return out;
     }
 
@@ -1239,10 +1277,13 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
         super.onChunkUnload();
     }
 
+    /** МС-2 (audit 2026-10-20): only a bundle with a tube / a pipe moves those networks, and in its own world only. */
     private void networksMoved() {
-        if (worldObj == null || !worldObj.isRemote) {
-            tubeVersion++;
-            pipeVersion++;
+        if (tube) {
+            bumpTube();
+        }
+        if (pipe != null) {
+            bumpPipe();
         }
     }
 

@@ -532,7 +532,10 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         }
         Page p = new Page(s);
         p.text(Lang.tr("sc.nei.obtain.fluid", f.getFluid().getLocalizedName(f)));
-        double eu = GeneratorType.COMBUSTION.euPerMb(f.getFluid().getName());
+        // ГН-6: what one mB gives with the server's generatorOutput / generatorFuel
+        double eu = GeneratorType.COMBUSTION.euPerMb(f.getFluid().getName()) * com.sc.util.ConfigSC.generatorOutput
+                / Math.max(0.01F, com.sc.util.ConfigSC.generatorFuel);
+        eu = Math.round(eu * 10) / 10.0;
         if (eu > 0) {
             p.text(Lang.tr("sc.nei.obtain.fluid.burn", eu == Math.rint(eu) ? String.valueOf((long) eu) : String.valueOf(eu)));
             p.rel(ModBlocks.generatorStack(GeneratorType.COMBUSTION, 1));

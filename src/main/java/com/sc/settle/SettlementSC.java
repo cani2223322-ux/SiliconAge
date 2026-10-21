@@ -136,6 +136,31 @@ public final class SettlementSC {
         return r == null ? null : r.protecting(w.provider.dimensionId, x, y, z);
     }
 
+    /**
+     * ПС-1 (audit 2026-10-20): the embassy whose level ground holds the column - its whole disc, radius + EmbassyLayoutSC.LEVEL_OUT
+     * (the Vokzal's far corners in it), in the embassies' world (server, while it governs); null elsewhere. By the registry's
+     * region index (no walk of all records).
+     */
+    public static SettlementRegistrySC.Settlement embassyGroundAt(World w, double x, double z) {
+        SettlementRegistrySC r = governed(w);
+        if (r == null || w.provider.dimensionId != EMBASSY_DIM) {
+            return null;
+        }
+        int out = com.sc.embassy.EmbassyLayoutSC.LEVEL_OUT;
+        for (SettlementRegistrySC.Settlement s : r.near(EMBASSY_DIM, (int) Math.floor(x), (int) Math.floor(z), out)) {
+            if (isEmbassy(s) && onEmbassyGround(s.distSq(x, z), s.radius)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    /** ПС-1, pure: a point `distSq` (squared, across) from an embassy of `radius` is on its level ground. */
+    public static boolean onEmbassyGround(double distSq, int radius) {
+        double r = radius + com.sc.embassy.EmbassyLayoutSC.LEVEL_OUT;
+        return distSq <= r * r;
+    }
+
     /** ПЖ-2: the settlement whose dome or belt holds the column (server, a world it governs), or null. */
     public static SettlementRegistrySC.Settlement beltAt(World w, double x, double z) {
         SettlementRegistrySC r = governed(w);

@@ -154,7 +154,7 @@ public class GuiTradeSC extends GuiContainer {
     private final List<String[]> friends = new ArrayList<String[]>();
     private final List<Integer> friendLevels = new ArrayList<Integer>();
     private boolean fhas, flightsTab = true, guarantor, talonHere, talonSoldAtEmbassy, talonGift;
-    private int fplace = FlightTargetsSC.PLACE_NONE, fleft, fmax = EmbassyRulesSC.FLIGHTS_PER_DAY, guarLeft, fphase, fticks, fpass;
+    private int fplace = FlightTargetsSC.PLACE_NONE, fleft, fmax = EmbassyRulesSC.flightsPerDay(), guarLeft, fphase, fticks, fpass;
     private int seenFState = -1, seenFResult = -1, fwaited, fsel, fscroll, friend, myChips, refreshIn, fpoll;
     private int talonRide = -1, talonSoldAt, backDays, backId = -1;
     /** The soft admission: the button that was warned, ticks left to press it again, the request it sends then. */
@@ -323,7 +323,7 @@ public class GuiTradeSC extends GuiContainer {
     private void parseFlights(NBTTagCompound s) {
         fplace = s.getByte("place");
         fleft = s.getInteger("left");
-        fmax = s.hasKey("max") ? s.getInteger("max") : EmbassyRulesSC.FLIGHTS_PER_DAY;
+        fmax = s.hasKey("max") ? s.getInteger("max") : EmbassyRulesSC.flightsPerDay();   // ПС-8
         guarantor = s.getBoolean("guarantor");
         guarLeft = s.getInteger("guarLeft");
         frows.clear();
@@ -404,7 +404,8 @@ public class GuiTradeSC extends GuiContainer {
             if (r.getBoolean("go")) {
                 text = Lang.tr(ring ? "sc.flight.boarding.ring" : "sc.flight.boarding.dock");
             } else if (r.getBoolean("decline")) {
-                text = Lang.tr("sc.flight.declined");
+                text = sentGiveBack ? Lang.tr("sc.flight.refund", chips) : Lang.tr("sc.flight.declined");   // ПС-3
+                sentGiveBack = false;
             } else if (!r.getString("friend").isEmpty()) {
                 text = Lang.tr("sc.flight.bought.friend", r.getString("friend"), chips);
             } else {
@@ -537,7 +538,21 @@ public class GuiTradeSC extends GuiContainer {
         resultTicks = RESULT_TICKS;
     }
 
+    /** ПС-5 (audit 2026-10-20): a gain of «Доверие» as it lands here - an embassy stops it at its ceiling. */
+    private int gainHere(int amount) {
+        return SettlementClientSC.embassy(tuner) ? ReputationSC.gainUnder(rep, amount, ReputationSC.EMBASSY_CEILING) : amount;
+    }
+
+    /** ПС-5: the gain's text for "+%s" - "50", or with the embassy's ceiling cutting it "39 (ceiling 599)". */
+    private String gainArg(int amount) {
+        int eff = gainHere(amount);
+        return eff < amount ? Lang.tr("sc.trade.rep.capped", eff, ReputationSC.EMBASSY_CEILING) : String.valueOf(amount);
+    }
+
     private static String reason(int code) {
+        if (code == TradeServerSC.R_CEILING) {
+            return Lang.tr("sc.trade.refuse.ceiling", ReputationSC.EMBASSY_CEILING);   // ПС-5
+        }
         String[] keys = TradeServerSC.RESULT_KEYS;
         return Lang.tr("sc.trade.result." + keys[code >= 0 && code < keys.length ? code : TradeServerSC.R_UNKNOWN]);
     }
@@ -619,8 +634,9 @@ public class GuiTradeSC extends GuiContainer {
         FRow r = fsel >= 0 && fsel < frows.size() ? frows.get(fsel) : null;
         boolean open = fhas && r != null && r.code == EmbassyRulesSC.OK;
         boolean back = r != null && r.ride == EmbassyRulesSC.RIDE_BACK;
-        buyBtn.displayString = Lang.tr(declining() ? "sc.flight.decline" : back ? "sc.flight.useBack" : "sc.flight.buy");
-        buyBtn.enabled = declining() || open && (back || myChips >= r.price);
+        buyBtn.displayString = Lang.tr(declining() ? "sc.flight.decline" : givingBack() ? "sc.flight.giveback" : back ? "sc.flight.useBack"
+                : "sc.flight.buy");
+        buyBtn.enabled = declining() || givingBack() || open && (back || myChips >= r.price);
         roundBtn.displayString = Lang.tr("sc.flight.round");
         roundBtn.enabled = open && r.round > 0 && myChips >= r.round && backId < 0;   // ПЯ-12: one return half at a time
         friendBtn.displayString = Lang.tr("sc.flight.friend");
@@ -641,6 +657,14 @@ public class GuiTradeSC extends GuiContainer {
     private boolean declining() {
         return fhas && talonRide >= 0 && talonHere && talonGift;
     }
+
+    /** ПС-3 (audit 2026-10-20): the player's own talon of this Dispatcher - «Купить» becomes «Сдать талон». */
+    private boolean givingBack() {
+        return fhas && talonRide >= 0 && talonHere && !talonGift;
+    }
+
+    /** ПС-3: the last FLIGHT_DO was «Сдать талон» (its answer comes as a decline's). */
+    private boolean sentGiveBack;
 
     private static boolean canTurnIn(CRow c) {
         if (c.anchor) {
@@ -708,7 +732,8 @@ public class GuiTradeSC extends GuiContainer {
             send(id, d);
             return;
         }
-        if (id == FL_BUY && declining()) {
+        if (id == FL_BUY && (declining() || givingBack())) {
+            sentGiveBack = givingBack();                        // ПС-3: one's own talon handed back (FlightRunSC.decline -> giveBack)
             d.setBoolean("decline", true);                      // the guarantor's talon back to him
             send(id, d);
             return;
@@ -954,13 +979,15 @@ public class GuiTradeSC extends GuiContainer {
         int x = RX + 4, w = RW - 8, y = detailsY() + 4;
         TradeOfferSC o = r.offer;
         String out;
+        int outCol = GuiHoloSC.VALUE;
         if (o.outKind == TradeOfferSC.OUT_REPUTATION) {
-            out = Lang.tr("sc.trade.out.rep", o.outAmount);
+            out = Lang.tr("sc.trade.out.rep", gainArg(o.outAmount));    // ПС-5: at an embassy - what its ceiling leaves
+            outCol = gainHere(o.outAmount) <= 0 ? GuiHoloSC.IDLE : outCol;
         } else {
             ItemStack s = outStack(r);
             out = s == null ? "?" : Lang.tr("sc.trade.count", s.stackSize, s.getDisplayName());
         }
-        y = wrapped(out, x, y, w, GuiHoloSC.VALUE, 2);
+        y = wrapped(out, x, y, w, outCol, 2);
         fontRendererObj.drawString(Lang.tr("sc.trade.give"), x, y, GuiHoloSC.LABEL);
         y += 10;
         for (int k = 0; k < o.in.length; k++) {
@@ -1042,18 +1069,55 @@ public class GuiTradeSC extends GuiContainer {
         return choices.isEmpty() ? null : choices.get((int) ((Minecraft.getSystemTime() / 1000L) % choices.size()));
     }
 
-    /** The selected service's slot framed in the inventory below (what will be taken - the hand's is framed too). */
+    /**
+     * The selected service's slot framed in the inventory below (what will be taken - the hand's is framed too). ПС-4 (audit
+     * 2026-10-20): a deal's and a contract's too - the slots their sides are taken from, in the server's order (TradeOfferSC
+     * takePlan: vanilla logs before another mod's precious ones).
+     */
     private void frameTaken() {
-        Row r = !contractsTab && !flights() && sel >= 0 && sel < rows.size() ? rows.get(sel) : null;
-        if (r == null || !r.offer.service() || r.slot < 0 || r.slot >= 36) {
+        ItemStack[] inv = mc.thePlayer == null ? null : mc.thePlayer.inventory.mainInventory;
+        if (inv == null || flights()) {
             return;
         }
-        int x = ContainerTradeSC.INV_X + (r.slot % 9) * 18, y = r.slot < 9 ? ContainerTradeSC.HOTBAR_Y : ContainerTradeSC.INV_Y + (r.slot / 9 - 1) * 18;
+        if (contractsTab) {
+            CRow c = csel >= 0 && csel < crows.size() ? crows.get(csel) : null;
+            TradeOfferSC.Ingredient in = c == null || c.anchor ? null : c.c.handIn();
+            if (in != null) {
+                int need = Math.max(0, c.c.target - c.progress);
+                frameSlots(in.takePlan(inv, Math.min(need, in.countIn(inv)), -1));
+            }
+            return;
+        }
+        Row r = sel >= 0 && sel < rows.size() ? rows.get(sel) : null;
+        if (r == null) {
+            return;
+        }
+        if (r.offer.service()) {
+            if (r.slot >= 0 && r.slot < 36) {
+                frameSlots(new int[]{r.slot});
+            }
+        }
+        for (int k = r.offer.service() ? 1 : 0; r.n != null && k < r.offer.in.length && k < r.n.length; k++) {
+            TradeOfferSC.Ingredient in = r.offer.in[k];
+            if (in != null && in.countIn(inv) >= r.n[k]) {
+                frameSlots(in.takePlan(inv, r.n[k], in.any() ? mc.thePlayer.inventory.currentItem : -1));
+            }
+        }
+    }
+
+    /** Frames main-inventory slots `slots` (0..35) as frameTaken does. */
+    private void frameSlots(int[] slots) {
         int c = 0xFF6EE6FF;
-        drawRect(x - 1, y - 1, x + 17, y, c);
-        drawRect(x - 1, y + 16, x + 17, y + 17, c);
-        drawRect(x - 1, y, x, y + 16, c);
-        drawRect(x + 16, y, x + 17, y + 16, c);
+        for (int s : slots) {
+            if (s < 0 || s >= 36) {
+                continue;
+            }
+            int x = ContainerTradeSC.INV_X + (s % 9) * 18, y = s < 9 ? ContainerTradeSC.HOTBAR_Y : ContainerTradeSC.INV_Y + (s / 9 - 1) * 18;
+            drawRect(x - 1, y - 1, x + 17, y, c);
+            drawRect(x - 1, y + 16, x + 17, y + 17, c);
+            drawRect(x - 1, y, x, y + 16, c);
+            drawRect(x + 16, y, x + 17, y + 16, c);
+        }
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }
 
@@ -1076,7 +1140,7 @@ public class GuiTradeSC extends GuiContainer {
                 sub = Lang.tr("sc.contract.anchor." + k[Math.max(0, Math.min(3, c.st))]);
                 col = c.st == TradeServerSC.ANCHOR_YOURS ? GuiHoloSC.OK : GuiHoloSC.LABEL;
             } else if (c.st == TradeServerSC.C_FREE) {
-                sub = Lang.tr("sc.contract.state.free", c.c.chips, c.c.reputation);
+                sub = Lang.tr("sc.contract.state.free", c.c.chips, gainArg(c.c.reputation));   // ПС-5
                 col = GuiHoloSC.LABEL;
             } else if (c.st == TradeServerSC.C_OPEN) {
                 boolean ready = c.progress >= c.c.target;
@@ -1103,7 +1167,7 @@ public class GuiTradeSC extends GuiContainer {
         int x = RX + 4, w = RW - 8, y = detailsY() + 4, bottom = BY - 4;
         y = wrapped(Lang.tr(c.c.langKey()), x, y, w, GuiHoloSC.VALUE, 2);
         List<String> tail = new ArrayList<String>();
-        tail.add(Lang.tr("sc.contract.reward", c.c.chips, c.c.reputation));
+        tail.add(Lang.tr("sc.contract.reward", c.c.chips, gainArg(c.c.reputation)));   // ПС-5
         if (c.c.modulePct > 0) {
             tail.add(Lang.tr("sc.contract.reward.module", c.c.modulePct));
         }
@@ -1358,6 +1422,8 @@ public class GuiTradeSC extends GuiContainer {
         List<String> l = new ArrayList<String>();
         if (buyBtn != null && buyBtn.visible && inside(buyBtn, mx, my) && declining()) {
             l.add(Lang.tr("sc.flight.decline.tip"));
+        } else if (buyBtn != null && buyBtn.visible && inside(buyBtn, mx, my) && givingBack()) {
+            l.add(Lang.tr("sc.flight.giveback.tip"));          // ПС-3
         } else if (buyBtn != null && buyBtn.visible && inside(buyBtn, mx, my) && r != null) {
             l.add(r.ride == EmbassyRulesSC.RIDE_BACK ? Lang.tr("sc.flight.useBack.tip") : Lang.tr("sc.flight.buy.tip", r.price));
         } else if (roundBtn != null && roundBtn.visible && inside(roundBtn, mx, my) && r != null) {
@@ -1539,9 +1605,10 @@ public class GuiTradeSC extends GuiContainer {
                 Row r = rows.get(scroll + i);
                 if (r.offer.outKind == TradeOfferSC.OUT_REPUTATION) {   // the badge's amount, and its tooltip
                     int x = guiLeft + LX + 49, y = guiTop + LY + 2 + i * ROW_H + 1;
-                    String t = "+" + r.offer.outAmount;
-                    fontRendererObj.drawStringWithShadow(t, x + 17 - fontRendererObj.getStringWidth(t), y + 9, 0xFFFFFF);
-                    TextFitSC.hover(x, y, 16, 16, Lang.tr("sc.trade.out.rep", r.offer.outAmount));
+                    int eff = gainHere(r.offer.outAmount);       // ПС-5: the embassy's ceiling
+                    String t = "+" + eff;
+                    fontRendererObj.drawStringWithShadow(t, x + 17 - fontRendererObj.getStringWidth(t), y + 9, eff <= 0 ? 0x8A8A8A : 0xFFFFFF);
+                    TextFitSC.hover(x, y, 16, 16, Lang.tr("sc.trade.out.rep", gainArg(r.offer.outAmount)));
                 }
             }
         }

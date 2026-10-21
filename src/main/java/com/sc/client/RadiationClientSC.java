@@ -111,7 +111,8 @@ public class RadiationClientSC {
                         prot >= 100 ? 0x60FF60 : prot > 0 ? 0xFFD040 : 0xFF5050);
             }
             if ((flags & RadiationSC.F_ARMOR_FAIL) != 0 && blink) {
-                y = line(mc, Lang.tr("sc.radhud.armorfail"), right, y, 0xFF4040);
+                int why = RadiationSC.reasonOf(flags);          // БР-2: "Armour shield off: no heavy water" ...
+                y = line(mc, Lang.tr(why > 0 ? "sc.radhud.armorfail." + why : "sc.radhud.armorfail"), right, y, 0xFF4040);
             }
         } else if (through > 0.05F || dose >= 1F) {
             int col = through > 0.05F ? (blink ? 0xFF4040 : 0xFFA040) : doseColor(dose);

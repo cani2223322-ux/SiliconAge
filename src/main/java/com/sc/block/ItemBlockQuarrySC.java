@@ -30,9 +30,9 @@ public class ItemBlockQuarrySC extends ItemBlock {
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         if (stack.getItemDamage() == 4) {
-            list.add(Lang.tr("sc.quarry.tooltip.exo", String.valueOf(TileEntityQuarrySC.EXO_COST)));
+            list.add(Lang.tr("sc.quarry.tooltip.exo", String.valueOf(TileEntityQuarrySC.energyScaled(TileEntityQuarrySC.EXO_COST))));   // КР-8 ★
             PickaxeOnlySC.tooltip(list);
-            com.sc.util.TooltipSC.more(list, Lang.tr("sc.quarry.tooltip.exo2"), null);
+            com.sc.util.TooltipSC.more(list, Lang.tr("sc.quarry.tooltip.exo2"), Lang.tr("sc.quarry.tooltip.exocraft"));   // КР-3: drain the pump first
             return;
         }
         int t = Math.max(0, Math.min(3, stack.getItemDamage()));

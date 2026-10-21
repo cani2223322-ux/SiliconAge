@@ -187,7 +187,7 @@ public class ContainerMachineSC extends Container {
             case ID_RECIPE_TICKS: return machine.getCurrentRecipeTicks();
             case ID_HEAT: return machine.getHeat();
             case ID_POWER: return machine.powerFlags();
-            default: return machine.getStatus().ordinal();
+            default: return machine.getStatus().ordinal() | (machine.isOverheatedThisRun() ? 1 << 8 : 0);   // МШ-5: the overheat bit
         }
     }
 
@@ -258,7 +258,8 @@ public class ContainerMachineSC extends Container {
                 machine.setPowerFlagsClient(data);
                 break;
             default:
-                machine.setStatusClient(MachineStatus.byOrdinal(data));
+                machine.setStatusClient(MachineStatus.byOrdinal(data & 0xFF));
+                machine.setOverheatedClient((data & 256) != 0);       // МШ-5: the defect chance shown doubled
         }
     }
 

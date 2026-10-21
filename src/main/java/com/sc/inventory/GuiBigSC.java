@@ -95,9 +95,32 @@ public final class GuiBigSC {
 
     /** A tank's small Clear button (7 x 7, a cross) above its gauge's side slot. */
     public static class ClearButton extends net.minecraft.client.gui.GuiButton {
+        /** МШ-3 (audit 2026-10-20): a first click only arms the button for this long; the second within it pours the tank out. */
+        public static final long ARM_MS = 1000;
+        private long armedAt;
+
         public ClearButton(int id) {
             super(id, 0, 0, 7, 7, "");
             visible = false;
+        }
+
+        /**
+         * МШ-3: a click - true the second time within ARM_MS (the screen sends it then), false the first time (only armed, as
+         * the power switch's double click - GuiPowerSC.allowClick).
+         */
+        public boolean fire() {
+            long now = System.currentTimeMillis();
+            if (armedAt != 0 && now - armedAt <= ARM_MS) {
+                armedAt = 0;
+                return true;
+            }
+            armedAt = now;
+            return false;
+        }
+
+        /** МШ-3: armed - the next click pours it out. */
+        public boolean armed() {
+            return armedAt != 0 && System.currentTimeMillis() - armedAt <= ARM_MS;
         }
 
         @Override
@@ -106,8 +129,9 @@ public final class GuiBigSC {
                 return;
             }
             boolean over = mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+            boolean blink = enabled && armed() && (System.currentTimeMillis() / 150) % 2 == 0;   // МШ-3: armed - it blinks bright
             rect(xPosition, yPosition, 7, 7, 0xFF1E0A0A);
-            rect(xPosition + 1, yPosition + 1, 5, 5, !enabled ? 0xFF2A2E36 : over ? 0xFF9A2E2E : 0xFF5A1E1E);
+            rect(xPosition + 1, yPosition + 1, 5, 5, !enabled ? 0xFF2A2E36 : blink ? 0xFFD04040 : over ? 0xFF9A2E2E : 0xFF5A1E1E);
             int c = enabled ? 0xFFFF9A9A : 0xFF5A606A;
             for (int i = 0; i < 3; i++) {
                 rect(xPosition + 2 + i, yPosition + 2 + i, 1, 1, c);
@@ -123,8 +147,16 @@ public final class GuiBigSC {
 
     /** The Clear button's tooltip: what it pours out and costs, or why it can't. */
     public static java.util.List<String> clearTip(int amount, int cost, int have) {
+        return clearTip(amount, cost, have, false);
+    }
+
+    /** МШ-3: clearTip with the button armed - "Click again to pour out N mB" after the title. */
+    public static java.util.List<String> clearTip(int amount, int cost, int have, boolean armed) {
         java.util.List<String> lines = new java.util.ArrayList<String>();
         lines.add(com.sc.manual.Lang.tr("sc.gui.tank.clear"));
+        if (armed && amount > 0) {
+            lines.add("\u00a7e" + com.sc.manual.Lang.tr("sc.gui.tank.clear.again", amount));
+        }
         if (amount <= 0) {
             lines.add("\u00a77" + com.sc.manual.Lang.tr("sc.gui.tank.clear.empty"));
         } else {

@@ -126,7 +126,7 @@ public class ItemWeaponSC extends Item implements ic2.api.item.ISpecialElectricI
         list.add(Lang.tr("sc.tooltip.weapon.charge", getCharge(stack), type.tier.getBuffer()));
         switch (com.sc.util.TooltipSC.page()) {
             case 1:
-                list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.stats", type.damagePerHit, type.shotsPerUse, type.range));
+                list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.stats", type.damagePerHit, type.shotsPerUse, type.range, reloadSeconds(type)));
                 list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.shots", type.euPerShot, getCharge(stack) / type.euPerShot, type.tier.name()));
                 com.sc.util.TooltipSC.hintCtrl(list);
                 break;
@@ -167,19 +167,28 @@ public class ItemWeaponSC extends Item implements ic2.api.item.ISpecialElectricI
         if (world.isRemote) {
             return stack;
         }
+        // ОР-5 (audit 2026-10-20): a short reload - a held right-click fires at the weapon's own rate (no EU, no shot before it)
+        net.minecraft.nbt.NBTTagCompound pd = player.getEntityData();
+        String shotKey = SHOT_KEY + type.name();
+        long now = world.getTotalWorldTime();
+        if (pd.hasKey(shotKey) && coolingDown(pd.getLong(shotKey), now, type.cooldownTicks())) {
+            return stack;
+        }
         int charge = getCharge(stack);
         if (charge < type.euPerShot) {
             player.addChatComponentMessage(new ChatComponentTranslation("sc.chat.weapon.nocharge",
                     new ChatComponentTranslation(getUnlocalizedName() + ".name")));
             return stack;
         }
-        Entity asked = null;
+        int before = charge;
+        Entity asked = null, hitLast = null;
         for (int i = 0; i < type.shotsPerUse && charge >= type.euPerShot; i++) {
             Entity target = findTarget(world, player);
             if (target == null) {
                 charge -= type.euPerShot;        // a miss still spends the shot
                 continue;
             }
+            hitLast = target;
             // A shot is a player's attack like a left-click: AttackEntityEvent once per target, so a private
             // field / another mod's claim can refuse it - no damage, no EU spent
             if (target != asked) {
@@ -202,7 +211,69 @@ public class ItemWeaponSC extends Item implements ic2.api.item.ISpecialElectricI
             }
         }
         setCharge(stack, charge);
+        if (charge < before) {                            // ОР-5: fired (a hit or a miss) - the reload, the sound, the beam
+            pd.setLong(shotKey, now);
+            shotEffects(world, player, hitLast);
+        }
         return stack;
+    }
+
+    /** ОР-5: the player's entity data key (not persisted) of the weapon type's last shot, by WeaponType name. */
+    private static final String SHOT_KEY = "scWeaponShot.";
+    /** ОР-5: the beam's particles a block and at most. */
+    private static final int BEAM_PER_BLOCK = 2, BEAM_MAX = 48;
+
+    /** ОР-5 ★: the type's reload in seconds for the tooltip and the handbook ("0,5", "1", "1,5" - the language's decimal mark). */
+    public static String reloadSeconds(WeaponType t) {
+        float s = t.cooldownTicks() / 20F;
+        return s == Math.round(s) ? String.valueOf(Math.round(s))
+                : String.format(java.util.Locale.ROOT, "%.1f", s).replace(".", Lang.tr("sc.num.decimal"));
+    }
+
+    /** ОР-5, pure: a shot at `last` keeps the weapon reloading at `now` (a world time turned back - no). */
+    public static boolean coolingDown(long last, long now, int cooldown) {
+        return now >= last && now - last < cooldown;
+    }
+
+    /**
+     * ОР-5: the shot's sound at the eyes and a beam of the type's colour from the muzzle to the target's chest, or on a miss to the
+     * first solid block on the look line (or the end of the range); sparks on a hit. Server; nothing for a FakePlayer.
+     */
+    private void shotEffects(World world, EntityPlayer player, Entity hit) {
+        if (!(world instanceof net.minecraft.world.WorldServer) || player instanceof net.minecraftforge.common.util.FakePlayer) {
+            return;
+        }
+        double eyeY = player.posY + 1.62D - player.yOffset + (player.getEyeHeight() - player.getDefaultEyeHeight());
+        Vec3 look = player.getLookVec();
+        double x0 = player.posX + look.xCoord * 0.4, y0 = eyeY - 0.15 + look.yCoord * 0.4, z0 = player.posZ + look.zCoord * 0.4;
+        float pitch = type == WeaponType.ION_CUTTER ? 1.9F : type == WeaponType.PULSE_EMITTER ? 1.4F : 0.9F;
+        com.sc.util.SoundsSC.play(world, player.posX, eyeY, player.posZ, "weapon.shot", 0.8F, pitch);
+        double x1, y1, z1;
+        if (hit != null) {
+            x1 = hit.posX;
+            y1 = hit.posY + hit.height * 0.6D;
+            z1 = hit.posZ;
+        } else {
+            Vec3 eyes = Vec3.createVectorHelper(player.posX, eyeY, player.posZ);
+            Vec3 end = eyes.addVector(look.xCoord * type.range, look.yCoord * type.range, look.zCoord * type.range);
+            MovingObjectPosition wall = world.func_147447_a(copy(eyes), copy(end), false, true, false);
+            Vec3 to = wall != null && wall.hitVec != null ? wall.hitVec : end;
+            x1 = to.xCoord;
+            y1 = to.yCoord;
+            z1 = to.zCoord;
+        }
+        net.minecraft.world.WorldServer ws = (net.minecraft.world.WorldServer) world;
+        int rgb = type.beamColor();
+        double red = Math.max(0.01D, (rgb >> 16 & 255) / 255D), green = (rgb >> 8 & 255) / 255D, blue = (rgb & 255) / 255D;
+        double len = Math.sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0));
+        int n = (int) Math.max(2, Math.min(BEAM_MAX, Math.round(len * BEAM_PER_BLOCK)));
+        for (int i = 1; i <= n; i++) {
+            double k = i / (double) (n + 1);
+            ws.func_147487_a("reddust", x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, z0 + (z1 - z0) * k, 0, red, green, blue, 1.0D);
+        }
+        if (hit != null) {
+            ws.func_147487_a("fireworksSpark", x1, y1, z1, 6, 0.1D, 0.1D, 0.1D, 0.05D);
+        }
     }
 
     private Entity findTarget(World world, EntityPlayer player) {

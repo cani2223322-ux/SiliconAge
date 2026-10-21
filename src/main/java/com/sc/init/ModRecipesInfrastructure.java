@@ -67,7 +67,8 @@ public final class ModRecipesInfrastructure {
         // Water electrolysis: hydrogen and oxygen on MV - alkaline, as it's done for real: a little
         // NaOH is the electrolyte (without it plain water never starts this, so a brine line that
         // ran out of halite doesn't fill its tanks with hydrogen). It costs more than a fuel cell
-        // gets back from the gases (90 EU/t x 800 t = 72 000 EU against 50 000): no endless loop.
+        // gets back from the gases (90 EU/t x 800 t = 72 000 EU against 50 000; with 4 Economizers -
+        // output x0.9, fuel x0.85 each, ГН-2 of the audit 2026-10-20 - about 62 900): no endless loop.
         RecipeRegistry.register(new MachineRecipe(MachineType.CHLOR_ALKALI_ELECTROLYZER,
                 new ItemStack[0], new FluidStack(FluidRegistry.WATER, 1000), new FluidStack(ModFluids.naoh, 10),
                 new ItemStack[0], new FluidStack(ModFluids.hydrogen, 500), new FluidStack(ModFluids.oxygen, 250),

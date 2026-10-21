@@ -685,6 +685,24 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
      * room for it works; the EU/t is shared by the streams at work. The induction furnace heats up
      * while it works (or keeps warm with nothing in, when switched to), and cools when idle.
      */
+    /**
+     * МШ-6 (audit 2026-10-20): a two-stream smelter evens its input out - with one input empty and 2 or more of a smeltable item
+     * in the other, half of them go over. The slot that was smelting keeps its item, key and progress; the new one starts at 0.
+     * Public for the self-test. @return whether anything moved
+     */
+    public boolean balanceSmelterInputs() {
+        for (int from = 0; from < 2; from++) {
+            int to = 1 - from;
+            ItemStack s = slots[from];
+            if (s != null && slots[to] == null && s.stackSize >= 2 && smeltResult(s) != null) {
+                slots[to] = s.splitStack(s.stackSize / 2);
+                markDirty();
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void updateSmelter() {
         boolean induction = machineType == MachineType.INDUCTION_FURNACE;
         int streams = machineType.smeltStreams();
@@ -692,6 +710,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
             status = powerOn ? MachineStatus.REDSTONE : MachineStatus.DISABLED;
             coolInduction();
             return;
+        }
+        if (streams == 2 && worldObj != null && !worldObj.isRemote && worldObj.getTotalWorldTime() % 20 == 0) {
+            balanceSmelterInputs();                           // МШ-6: a shift-click / a hopper fills one input - both streams work
         }
         int ticks = smeltTicks();
         for (int i = 0; i < streams; i++) {
@@ -897,8 +918,70 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 || isValuable(stack) || isTileBlock(stack) || isDiamondGear(stack)) {
             return 0;
         }
+        // МШ-1 (audit 2026-10-20): what doesn't stack (armour, tools, weapons, electric items of any mod) never goes in, nor
+        // anything of this mod but its raw materials (components, chips, upgrades, reactor cores...)
+        if (stack.getMaxStackSize() <= 1 || isModItem(stack) && !isModRaw(stack)) {
+            return 0;
+        }
         int mass = stack.getItem() instanceof net.minecraft.item.ItemBlock ? MASS_BLOCK : MASS_ITEM;
         return isHeavyMetal(stack) ? mass * MASS_HEAVY : mass;
+    }
+
+    /** МШ-1: an item of this mod (by its registry name). */
+    private static boolean isModItem(ItemStack stack) {
+        cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier id;
+        try {
+            id = cpw.mods.fml.common.registry.GameRegistry.findUniqueIdentifierFor(stack.getItem());
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return id != null && com.sc.Reference.MODID.equals(id.modId);
+    }
+
+    /** МШ-1: the ore dictionary prefixes of raw materials (a mod item under one of them still goes in). */
+    private static final String[] RAW_PREFIXES = {"ingot", "dust", "dustTiny", "dustSmall", "crushed", "crushedPurified", "ore", "block", "scrap"};
+
+    /**
+     * МШ-1: this mod's raw materials - ingots, dust (the scrap's too), tiny dust, crushed and purified ore, ores, metal and lead
+     * blocks, limestone, coke; ★: the Substrate's natural blocks too - its rock (Crystallite, the oxides, the traces, the turf, the
+     * Settlement Brick; not the Monocrystal - the silicon's source), the Singular Glass (not the pillar's core), Wireweed and the
+     * diode moss; else anything under a raw ore-dictionary name. Components, chips, upgrades, cores... are not.
+     */
+    private static boolean isModRaw(ItemStack s) {
+        net.minecraft.item.Item i = s.getItem();
+        if (i == ModItems.ingot || i == ModItems.dust || i == ModItems.dustTiny || i == ModItems.crushedOre || i == ModItems.purifiedCrushedOre
+                || i == ModItems.coke) {
+            return true;
+        }
+        if (i instanceof net.minecraft.item.ItemBlock) {
+            net.minecraft.block.Block b = net.minecraft.block.Block.getBlockFromItem(i);
+            if (b != null && (b == com.sc.init.ModBlocks.oreSC || b == com.sc.init.ModBlocks.metalBlock || b == com.sc.init.ModBlocks.metalBlock2
+                    || b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.limestoneSC)) {
+                return true;
+            }
+            if (b != null && b == com.sc.dim.SubstrateBlocksSC.rock) {
+                return s.getItemDamage() != com.sc.dim.SubstrateBlocksSC.MONOCRYSTAL;
+            }
+            if (b != null && (b == com.sc.dim.SubstrateWildBlocksSC.glass && s.getItemDamage() == com.sc.dim.SubstrateWildBlocksSC.GLASS
+                    || b == com.sc.dim.SubstrateWildBlocksSC.flora)) {
+                return true;
+            }
+        }
+        int[] ids;
+        try {
+            ids = net.minecraftforge.oredict.OreDictionary.getOreIDs(s);
+        } catch (RuntimeException e) {
+            return false;
+        }
+        for (int id : ids) {
+            String name = net.minecraftforge.oredict.OreDictionary.getOreName(id);
+            for (String p : RAW_PREFIXES) {
+                if (name.startsWith(p) && name.length() > p.length() && Character.isUpperCase(name.charAt(p.length()))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** What the compressor never takes, whatever its rarity says: nether stars, diamonds, emeralds, ender pearls and eyes, beacons. */
@@ -1083,7 +1166,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     private void eject() {
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
             net.minecraft.tileentity.TileEntity te = neighbour(dir);
-            if (te instanceof IInventory) {
+            // МШ-4 (audit 2026-10-20): never into a neighbouring Matter Compressor - the products would be burnt into mass unasked
+            // (its own puller leaves the mod's machines alone the same way); pipes set to "Insert", hoppers and its puller feed it
+            boolean compressor = te instanceof TileEntityMachineSC && ((TileEntityMachineSC) te).getMachineType() != null
+                    && ((TileEntityMachineSC) te).getMachineType().isCompressor();
+            if (te instanceof IInventory && !compressor) {
                 for (int slot = INPUT_SLOTS; slot < FIRST_UPGRADE_SLOT; slot++) {
                     if (slots[slot] == null) {
                         continue;
@@ -1216,10 +1303,32 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
         }
     }
 
+    /**
+     * МШ-5 (audit 2026-10-20): the defect chance this machine really rolls for `r` now - doubled (at most 1) once the operation
+     * running has overheated, halved for each Quality upgrade. finishRecipe rolls it; the screen shows it.
+     */
+    public float effectiveDefect(MachineRecipe r) {
+        return effectiveDefect(r, overheatedThisRun);
+    }
+
+    private float effectiveDefect(MachineRecipe r, boolean doubled) {
+        float chance = doubled ? Math.min(1.0F, r.defectChance * 2) : r.defectChance;
+        return chance * (float) Math.pow(0.5, upgradeCount(UpgradeType.QUALITY));
+    }
+
+    /** МШ-5: the operation running has overheated (its defect chance doubled); on the client - the screen's last word. */
+    public boolean isOverheatedThisRun() {
+        return overheatedThisRun;
+    }
+
+    /** МШ-5: the screen's copy (ContainerMachineSC, a bit next to the status). */
+    public void setOverheatedClient(boolean v) {
+        overheatedThisRun = v;
+    }
+
     private void finishRecipe(MachineRecipe recipe, boolean doubledDefect) {
         progressTicks = 0;
-        float defectChance = doubledDefect ? Math.min(1.0F, recipe.defectChance * 2) : recipe.defectChance;
-        defectChance *= (float) Math.pow(0.5, upgradeCount(UpgradeType.QUALITY));
+        float defectChance = effectiveDefect(recipe, doubledDefect);
         boolean defect = RANDOM.nextFloat() < defectChance;
 
         // A suit piece / energy blade going through the Upgrade Station keeps its whole NBT (§16):
@@ -1355,10 +1464,11 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     }
 
     private void consumeInputs(MachineRecipe recipe) {
-        for (ItemStack required : recipe.inputs) {
+        for (int r = 0; r < recipe.inputs.length; r++) {
+            ItemStack required = recipe.inputs[r];
             for (int i = 0; i < INPUT_SLOTS; i++) {
                 ItemStack stack = slots[i];
-                if (!MachineRecipe.ingredientMatches(stack, required)) {
+                if (!recipe.inputMatches(r, stack)) {           // МШ-8: as matches() compares, the input's name cached
                     continue;
                 }
                 // Only the mod's tools (moulds, blades, photomask...) wear instead of being used up.

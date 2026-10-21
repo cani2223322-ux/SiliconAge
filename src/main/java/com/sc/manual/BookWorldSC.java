@@ -1411,8 +1411,12 @@ public final class BookWorldSC {
                 blade(BladeType.QUANTUM).getDisplayName(), pct(stat(SHELL, "QUANTUM_BLADE_CHANCE", 0.25F)), n(stat(SHELL, "QUANTUM_BLADE_DAMAGE", 8F)),
                 n(stat(SHELL, "FIST_DAMAGE", 6F)))));
         e.add(BookEl.item(null, Lang.tr("sc.manual.world.shell.reboot"), Lang.tr("sc.manual.world.shell.reboot.desc", sec((int) stat(SHELL, "REBOOT_TICKS", 60F)))));
-        e.add(BookEl.item(ruin(BlockRuinSC.MACHINE_HUSK), Lang.tr("sc.manual.world.t.where"), Lang.tr("sc.manual.world.shell.where",
-                weight("NODE_WEIGHTS", MobEntitiesSC.ID_HOLLOW_SHELL, 70), n(stat(SHELL, "GROUP_MIN", 2F)), n(stat(SHELL, "GROUP_MAX", 3F)))));
+        // МБ-4 (audit 2026-10-20): a patrol is as big as ПС-7 lets it be - at most QUANTUM_NEAR_MAX of the Quantum tier near a player
+        float shellHi = Math.min(stat(SHELL, "GROUP_MAX", 3F), com.sc.mob.SpawnRulesSC.QUANTUM_NEAR_MAX);
+        float shellLo = Math.min(stat(SHELL, "GROUP_MIN", 2F), shellHi);
+        e.add(BookEl.item(ruin(BlockRuinSC.MACHINE_HUSK), Lang.tr("sc.manual.world.t.where"), shellLo == shellHi
+                ? Lang.tr("sc.manual.world.shell.where.one", weight("NODE_WEIGHTS", MobEntitiesSC.ID_HOLLOW_SHELL, 70), n(shellHi))
+                : Lang.tr("sc.manual.world.shell.where", weight("NODE_WEIGHTS", MobEntitiesSC.ID_HOLLOW_SHELL, 70), n(shellLo), n(shellHi))));
         e.add(BookEl.item(loot(LOOT_FIRMWARE), Lang.tr("sc.manual.world.t.loot"), Lang.tr("sc.manual.world.shell.loot", lootName(LOOT_FIRMWARE),
                 n(stat(SHELL, "FIRMWARE_MIN", 1F)), n(stat(SHELL, "FIRMWARE_MAX", 3F)), pct(stat(SHELL, "HELIUM_CELL_CHANCE", 0.1F)))));
         e.add(BookEl.item(trophy(TrophyTableSC.bladeMeta(BladeType.EXO)), Lang.tr("sc.manual.world.t.trophies"), Lang.tr("sc.manual.world.shell.trophies",
@@ -1689,7 +1693,7 @@ public final class BookWorldSC {
                 SubstrateWildTerrainSC.DUNE_MAX)));
         e.add(BookEl.item(wild(SubstrateWildBlocksSC.vent, SubstrateWildBlocksSC.FUMAROLE), riches, Lang.tr("sc.manual.world.biomes4.oxide.riches",
                 SubstrateWildGenSC.FUMAROLE_CHANCE, SubstrateWildGenSC.RTG_CHANCE)));
-        e.add(BookEl.item(dosimeter, danger, Lang.tr("sc.manual.world.biomes4.oxide.danger", n(SubstrateRadiationSC.OXIDE))));
+        e.add(BookEl.item(dosimeter, danger, Lang.tr("sc.manual.world.biomes4.oxide.danger", n(SubstrateRadiationSC.backgroundLevel(com.sc.dim.BiomeSubstrateSC.OXIDE)))));
         e.add(BookEl.item(egg(MobEntitiesSC.ID_OVERHEATED), who, Lang.tr("sc.manual.world.biomes4.oxide.who")));
 
         // the Rift (ПМ-14)
@@ -1698,7 +1702,7 @@ public final class BookWorldSC {
                 SubstrateWildTerrainSC.ISLANDS_MIN, SubstrateWildTerrainSC.ISLANDS_MAX, SubstrateWildTerrainSC.ISLAND_MIN_Y, SubstrateWildTerrainSC.ISLAND_MAX_Y)));
         e.add(BookEl.item(wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.PILLAR_CORE), Lang.tr("sc.manual.world.biomes4.pillar"),
                 Lang.tr("sc.manual.world.biomes4.pillar.desc", SubstrateWildTerrainSC.PILLAR_RADIUS, SubstrateWildTerrainSC.PILLAR_TOP)));
-        e.add(BookEl.item(dosimeter, danger, Lang.tr("sc.manual.world.biomes4.rift.danger", n(SubstrateRadiationSC.RIFT))));
+        e.add(BookEl.item(dosimeter, danger, Lang.tr("sc.manual.world.biomes4.rift.danger", n(SubstrateRadiationSC.backgroundLevel(com.sc.dim.BiomeSubstrateSC.RIFT)))));
         e.add(BookEl.item(egg(MobEntitiesSC.ID_ECLIPSE), who, Lang.tr("sc.manual.world.biomes4.rift.who", EliteModSC.chancePct(0, true))));
         e.add(BookEl.dim(Lang.tr("sc.manual.world.mp.f4", biomeId(BiomeSubstrateSC.RIDGES), biomeId(BiomeSubstrateSC.OXIDE), biomeId(BiomeSubstrateSC.RIFT))));
         e.add(BookEl.link("world.radiation", Lang.tr("sc.manual.world.radiation.title")));
@@ -1730,11 +1734,11 @@ public final class BookWorldSC {
         // the sources on top (ПА-2)
         e.add(BookEl.head(Lang.tr("sc.manual.world.radiation.sourceshead")));
         e.add(BookEl.item(wild(SubstrateWildBlocksSC.vent, SubstrateWildBlocksSC.CRACKED_RTG), wildName(SubstrateWildBlocksSC.vent, SubstrateWildBlocksSC.CRACKED_RTG),
-                Lang.tr("sc.manual.world.radiation.rtg", n(SubstrateRadiationSC.RTG_LEVEL), SubstrateRadiationSC.RTG_RADIUS,
-                        n(SubstrateRadiationSC.OXIDE + SubstrateRadiationSC.RTG_LEVEL))));
+                Lang.tr("sc.manual.world.radiation.rtg", n(SubstrateRadiationSC.rtgLevel()), SubstrateRadiationSC.RTG_RADIUS,
+                        n(SubstrateRadiationSC.backgroundLevel(com.sc.dim.BiomeSubstrateSC.OXIDE) + SubstrateRadiationSC.rtgLevel()))));
         e.add(BookEl.item(wild(SubstrateWildBlocksSC.glass, SubstrateWildBlocksSC.PILLAR_CORE), Lang.tr("sc.manual.world.biomes4.pillar"),
-                Lang.tr("sc.manual.world.radiation.pillar", n(SubstrateRadiationSC.PILLAR_LEVEL), SubstrateRadiationSC.PILLAR_RADIUS,
-                        n(SubstrateRadiationSC.RIFT + SubstrateRadiationSC.PILLAR_LEVEL))));
+                Lang.tr("sc.manual.world.radiation.pillar", n(SubstrateRadiationSC.pillarLevel()), SubstrateRadiationSC.PILLAR_RADIUS,
+                        n(SubstrateRadiationSC.backgroundLevel(com.sc.dim.BiomeSubstrateSC.RIFT) + SubstrateRadiationSC.pillarLevel()))));
         e.add(BookEl.item(egg(MobEntitiesSC.ID_OVERHEATED), mobName(EntityOverheatedSC.NAME), Lang.tr("sc.manual.world.radiation.overheated",
                 n(stat(OVERHEATED, "RADIATION_LEVEL", 2F)), n(stat(OVERHEATED, "RADIATION_RADIUS", 4F)))));
         e.add(BookEl.dim(Lang.tr("sc.manual.world.radiation.blocks")));
@@ -1817,7 +1821,7 @@ public final class BookWorldSC {
                             sec(TileEntitySubstrateVentSC.GEYSER_MAX), TileEntitySubstrateVentSC.GEYSER_RADIUS, TileEntitySubstrateVentSC.GEYSER_DAMAGE,
                             TileEntitySubstrateVentSC.GEYSER_DRAIN_PCT);
                 default:
-                    return Lang.tr(k, SubstrateWildGenSC.RTG_CHANCE, n(SubstrateRadiationSC.RTG_LEVEL), SubstrateRadiationSC.RTG_RADIUS);
+                    return Lang.tr(k, SubstrateWildGenSC.RTG_CHANCE, n(SubstrateRadiationSC.rtgLevel()), SubstrateRadiationSC.RTG_RADIUS);
             }
         }
         if (b == SubstrateWildBlocksSC.flora) {
@@ -1832,7 +1836,7 @@ public final class BookWorldSC {
     private static BookEntry storm(BookChapter c) {
         BookEntry e = new BookEntry("world.storm", c, new ItemStack(ModItems.empGun), Lang.tr("sc.manual.world.storm.title"));
         e.add(BookEl.title(Lang.tr("sc.manual.world.storm.title"))).addAll(BookContent.paras("sc.manual.world.storm",
-                new Object[]{StormRulesSC.CHANCE_PCT, minutes(StormRulesSC.MIN_TICKS), minutes(StormRulesSC.MAX_TICKS), sec(StormRulesSC.WARN_TICKS)},
+                new Object[]{StormRulesSC.chancePct(), minutes(StormRulesSC.MIN_TICKS), minutes(StormRulesSC.MAX_TICKS), sec(StormRulesSC.WARN_TICKS)},
                 new Object[]{sec(StormRulesSC.PULSE_MIN), sec(StormRulesSC.PULSE_MAX), sec(StormRulesSC.SUPPRESS_MIN), sec(StormRulesSC.SUPPRESS_MAX),
                         StormRulesSC.BOIL_MUL, sec(StormRulesSC.BOIL_TICKS)}));
         if (!SubstrateConfigSC.empStorms) {
@@ -1875,7 +1879,7 @@ public final class BookWorldSC {
         ItemStack sand = ModItems.siliconMaterial.stackOf(SiliconMaterial.SILICA_SAND);
         BookEntry e = new BookEntry("world.haze", c, sand, Lang.tr("sc.manual.world.haze.title"));
         e.add(BookEl.title(Lang.tr("sc.manual.world.haze.title"))).addAll(BookContent.paras("sc.manual.world.haze",
-                new Object[]{StormRulesSC.HAZE_CHANCE_PCT, minutes(StormRulesSC.HAZE_MIN), minutes(StormRulesSC.HAZE_MAX), StormRulesSC.HAZE_SIGHT},
+                new Object[]{StormRulesSC.hazeChancePct(), minutes(StormRulesSC.HAZE_MIN), minutes(StormRulesSC.HAZE_MAX), StormRulesSC.HAZE_SIGHT},
                 new Object[]{StormRulesSC.HAZE_SIGHT}));
         if (!SubstrateConfigSC.empStorms) {
             e.add(BookEl.warn(Lang.tr("sc.manual.world.haze.off")));

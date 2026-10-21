@@ -21,6 +21,7 @@ import com.sc.arena.ArenaWorldSC;
 import com.sc.arena.MapGenArenaSC;
 import com.sc.dim.ChunkProviderSubstrateSC;
 import com.sc.dim.SubstrateConfigSC;
+import com.sc.dim.SubstrateEntrySC;
 import com.sc.dim.SubstrateSC;
 import com.sc.dim.SubstrateSignalSC;
 import com.sc.dim.SubstrateTerrainSC;
@@ -1366,9 +1367,17 @@ public final class WorldTestFinaleSC {
             dims.appendTag(t);
         }
         boolean was = SubstrateConfigSC.requireSignal;
-        boolean hidden, refused, shown, open, inside, recordUsed;
+        boolean hidden, refused, shown, open, inside, recordUsed, jump;
         try {
+            // ПМ-2 (audit 2026-10-20): the add-on's Jump hook - no record, no arrival under the rule; without the rule, creative: yes
+            SubstrateConfigSC.requireSignal = false;
+            boolean jumpFree = SubstrateEntrySC.allowsArrival(viewer, SubstrateEntrySC.VIA_JUMP);
             SubstrateConfigSC.requireSignal = true;
+            boolean jumpShut = !SubstrateEntrySC.allowsArrival(viewer, SubstrateEntrySC.VIA_JUMP);
+            viewer.capabilities.isCreativeMode = true;
+            boolean jumpCreative = SubstrateEntrySC.allowsArrival(viewer, SubstrateEntrySC.VIA_JUMP);
+            viewer.capabilities.isCreativeMode = false;
+            jump = !SubstrateSC.active() || jumpFree && jumpShut && jumpCreative;
             hidden = SubstrateSignalSC.filterDims(dims, viewer, 0).tagCount() == 2;
             refused = SubstrateSignalSC.refuses(viewer, SubstrateSC.dimId(), 0);
             ItemStack record = FinaleItemsSC.navRecord(2);
@@ -1381,10 +1390,13 @@ public final class WorldTestFinaleSC {
             }
             shown = SubstrateSignalSC.filterDims(dims, viewer, 0).tagCount() == 3;
             open = !SubstrateSignalSC.refuses(viewer, SubstrateSC.dimId(), 0);
+            jump &= !SubstrateSC.active() || SubstrateEntrySC.allowsArrival(viewer, SubstrateEntrySC.VIA_JUMP);   // ПМ-2: the record used - yes
             inside = SubstrateSignalSC.openTo(station("nav-stranger", 0, 80, 0), SubstrateSC.dimId());
         } finally {
             SubstrateConfigSC.requireSignal = was;
         }
+        print(jump, "requireSignal (ПМ-2): the add-on's Jump hook (allowsArrival) - without the rule yes, with it no record no, creative yes, "
+                + "the record used yes");
         print(hidden && refused && recordUsed && shown && open && inside, "requireSignal (ПВ-13): the rule on - the list for a viewer without the record lacks"
                 + " the Substrate " + hidden + ", an end there refused " + refused + "; the Navigation Record used (spent one, package P's item) " + recordUsed
                 + " - listed " + shown + ", reached " + open + "; a bridge in the Substrate - open to a stranger " + inside + "; the rule back to " + was

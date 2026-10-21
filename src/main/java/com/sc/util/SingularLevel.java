@@ -86,6 +86,13 @@ public final class SingularLevel {
     public static final int GAS_MB_PER_POINT = 10, FLIGHT_BLOCKS_PER_POINT = 10;
     /** ОЧ4: a mob, a boss; at most KILL_CAP points a minute from mobs (bosses are not capped). */
     public static final int KILL_POINTS = 5, BOSS_POINTS = 500, KILL_CAP = 200;
+    /**
+     * ОР-7 (audit 2026-10-20): at most BOSS_CAP bosses give BOSS_POINTS in BOSS_WINDOW_TICKS (10 minutes) a player - past that a
+     * boss counts as a mob (the minute's cap too). The suit and the blade keep their own counts.
+     */
+    public static final int BOSS_CAP = 3, BOSS_WINDOW_TICKS = 12000;
+    /** БР-3 (audit 2026-10-20): ОЧ3 - at most this many points a minute for absorbed damage (as KILL_CAP for mobs). */
+    public static final int ABSORB_CAP = 200;
     /** ОЧ7: a biome first visited in the suit, a dimension first visited. */
     public static final int BIOME_POINTS = 50, DIMENSION_POINTS = 200;
 
@@ -165,7 +172,23 @@ public final class SingularLevel {
 
     /** Pure, ОЧ4: what a kill gives with `used` mob points already given this minute (bosses ignore the cap). */
     public static int killPoints(boolean boss, int used) {
-        return boss ? BOSS_POINTS : Math.max(0, Math.min(KILL_POINTS, KILL_CAP - used));
+        return killPoints(boss, used, 0);
+    }
+
+    /**
+     * ОР-7, pure: the points of a kill with `used` mob points this minute and `bossesInWindow` bosses already paid in the window - a
+     * boss within BOSS_CAP gives BOSS_POINTS, past it as a mob.
+     */
+    public static int killPoints(boolean boss, int used, int bossesInWindow) {
+        if (boss && bossesInWindow < BOSS_CAP) {
+            return BOSS_POINTS;
+        }
+        return Math.max(0, Math.min(KILL_POINTS, KILL_CAP - used));
+    }
+
+    /** БР-3, pure: whole ОЧ3 points given this second - at most what is left of ABSORB_CAP this minute (`used` given already). */
+    public static int absorbPoints(int whole, int used) {
+        return Math.max(0, Math.min(whole, ABSORB_CAP - used));
     }
 
     /** Pure: the whole points in an accumulated amount at `perPoint` a point (the caller keeps the rest). */

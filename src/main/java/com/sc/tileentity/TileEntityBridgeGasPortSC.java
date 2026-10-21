@@ -62,8 +62,8 @@ public class TileEntityBridgeGasPortSC extends TileEntity implements IBridgePart
     public FluidStack drain(ForgeDirection from, FluidStack resource, boolean doDrain) {
         TileEntityBridgeControllerSC c = ctrl();
         int t = resource == null ? -1 : tankOf(resource.getFluid());
-        if (c == null || t < 0) {
-            return null;
+        if (c == null || t < 0 || !c.isGasOut()) {
+            return null;                                    // МС-1: «Выдавать газы: нет» - it only takes gases in
         }
         int n = c.drainTank(t, resource.amount, doDrain);
         return n <= 0 ? null : new FluidStack(resource.getFluid(), n);
@@ -73,8 +73,8 @@ public class TileEntityBridgeGasPortSC extends TileEntity implements IBridgePart
     @Override
     public FluidStack drain(ForgeDirection from, int maxDrain, boolean doDrain) {
         TileEntityBridgeControllerSC c = ctrl();
-        if (c == null) {
-            return null;
+        if (c == null || !c.isGasOut()) {
+            return null;                                    // МС-1
         }
         int best = -1;
         for (int i = 0; i < BridgeMathSC.GASES.length; i++) {
@@ -97,7 +97,8 @@ public class TileEntityBridgeGasPortSC extends TileEntity implements IBridgePart
 
     @Override
     public boolean canDrain(ForgeDirection from, Fluid fluid) {
-        return tankOf(fluid) >= 0;
+        TileEntityBridgeControllerSC c = worldObj == null || worldObj.isRemote ? null : ctrl();
+        return tankOf(fluid) >= 0 && (c == null || c.isGasOut());   // МС-1: switched off - nothing goes out
     }
 
     @Override

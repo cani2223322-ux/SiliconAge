@@ -289,6 +289,9 @@ public class GuiMachineSC extends GuiContainer {
         if (!power.allowClick(button)) {
             return;
         }
+        if (button instanceof GuiBigSC.ClearButton && !((GuiBigSC.ClearButton) button).fire()) {
+            return;                                        // МШ-3: the first click on an «x» only arms it
+        }
         mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
     }
 
@@ -1091,7 +1094,7 @@ public class GuiMachineSC extends GuiContainer {
         smallFit(k < 0 ? Lang.tr("sc.gui.sput.none") : Lang.tr("sc.gui.sput.row", Lang.tr("sc.gui.sput.el." + k), per),
                 SAW_X, 83, SAW_W, k < 0 ? 0xE65A5A : 0xE6F0FA);
         if (r != null) {
-            small(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)), SAW_X, 90, 0x6AA8C8);
+            smallFit(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)), SAW_X, 90, SAW_W, 0x6AA8C8);
         }
         small(Lang.tr("sc.gui.sput.target"), SAW_X, SPUT_WEAR_Y, 0x6AA8C8);
         net.minecraft.item.ItemStack tg = wire();
@@ -1125,7 +1128,7 @@ public class GuiMachineSC extends GuiContainer {
                 : Lang.tr("sc.gui.ion.dopant", Lang.tr("sc.gui.ion.el." + d), d == 1 ? "p" : "n", r == null || r.fluidInputA == null ? 100 : r.fluidInputA.amount),
                 SAW_X, 83, SAW_W, d < 0 ? 0xE65A5A : 0xE6F0FA);
         if (r != null) {
-            small(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)), SAW_X, 90, 0x6AA8C8);
+            smallFit(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)), SAW_X, 90, SAW_W, 0x6AA8C8);
         }
         String line = heatLine();
         line = line.isEmpty() ? line : line.substring(0, 1).toLowerCase() + line.substring(1);
@@ -1150,8 +1153,21 @@ public class GuiMachineSC extends GuiContainer {
         int ticks = machine.getCurrentRecipeTicks(), dies = GuiSceneSC.dieCount(MAP_R);
         int done = ticks > 0 && machine.getStatus() == MachineStatus.PROCESSING ? machine.getProgressTicks() * dies / ticks : 0;
         com.sc.machine.MachineRecipe r = shownRecipe();
-        smallFit(Lang.tr("sc.gui.step.dies", done, dies, r == null ? 0 : Math.round(r.defectChance * 100)),
+        smallFit(Lang.tr("sc.gui.step.dies", done, dies, r == null ? "0%" : defectText(r)),
                 SAW_X, STEP_HEAT_Y + 14, SAW_W, 0xE6F0FA);
+    }
+
+    /**
+     * МШ-5 (audit 2026-10-20): the defect chance as this machine rolls it - "12%", or with Quality upgrades / an overheated
+     * operation "12% -> 3%"; a machine with heat that hasn't overheated yet adds "(x2 if overheated)".
+     */
+    private String defectText(com.sc.machine.MachineRecipe r) {
+        int base = Math.round(r.defectChance * 100), eff = Math.round(machine.effectiveDefect(r) * 100);
+        String text = base == eff ? base + "%" : base + "% -> " + eff + "%";
+        if (machine.getMachineType().heatCapable && r.defectChance > 0 && !machine.isOverheatedThisRun()) {
+            text = Lang.tr("sc.gui.defect.heat", text);
+        }
+        return text;
     }
 
     /** Small text (5/8 size, or smaller to fit maxW), foreground coordinates. */
@@ -1173,7 +1189,7 @@ public class GuiMachineSC extends GuiContainer {
         int ticks = machine.getCurrentRecipeTicks(), n = wafersPerRun();
         int done = ticks > 0 && machine.getStatus() == MachineStatus.PROCESSING ? machine.getProgressTicks() * Math.min(8, n) / ticks : 0;
         com.sc.machine.MachineRecipe r = shownRecipe();
-        String defect = Lang.tr("sc.gui.saw.defect", r == null ? 0 : Math.round(r.defectChance * 100));
+        String defect = Lang.tr("sc.gui.saw.defect", r == null ? "0%" : defectText(r));
         int dw = fontRendererObj.getStringWidth(defect) * 5 / 8;
         fit(Lang.tr(sk("wafers"), done, n), SAW_X, WAFER_Y + 11, WATER_X - SAW_X - dw - 8, GuiHoloSC.VALUE);
         small(defect, WATER_X - 4 - dw, WAFER_Y + 13, 0x6AA8C8);
@@ -1198,7 +1214,7 @@ public class GuiMachineSC extends GuiContainer {
         int ticks = machine.getCurrentRecipeTicks(), n = Math.max(1, Math.min(6, wafersPerRun()));
         int done = ticks > 0 && machine.getStatus() == MachineStatus.PROCESSING ? machine.getProgressTicks() * n / ticks : 0;
         com.sc.machine.MachineRecipe r = shownRecipe();
-        String defect = Lang.tr("sc.gui.saw.defect", r == null ? 0 : Math.round(r.defectChance * 100));
+        String defect = Lang.tr("sc.gui.saw.defect", r == null ? "0%" : defectText(r));
         int dw = fontRendererObj.getStringWidth(defect) * 5 / 8;
         fit(Lang.tr("sc.gui.saw.wafers", done, n), SAW_X, OX_WAFER_Y + 13, WATER_X - SAW_X - dw - 8, GuiHoloSC.VALUE);
         small(defect, WATER_X - 4 - dw, OX_WAFER_Y + 15, 0x6AA8C8);
@@ -1228,7 +1244,7 @@ public class GuiMachineSC extends GuiContainer {
         String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
         TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
         com.sc.machine.MachineRecipe r = shownRecipe();
-        String defect = Lang.tr("sc.gui.saw.defect", r == null ? 0 : Math.round(r.defectChance * 100));
+        String defect = Lang.tr("sc.gui.saw.defect", r == null ? "0%" : defectText(r));
         int dw = fontRendererObj.getStringWidth(defect) * 5 / 8;
         int cover = running ? Math.round(GuiSceneSC.coatCover(p) * 100) : 0;
         fit(Lang.tr("sc.gui.coat.cover", cover), SAW_X, SAW_Y + COAT_H + 5, WATER_X - SAW_X - dw - 8, GuiHoloSC.VALUE);
@@ -1758,7 +1774,7 @@ public class GuiMachineSC extends GuiContainer {
         String product = r != null && r.outputs != null && r.outputs.length > 0 && r.outputs[0] != null ? r.outputs[0].getDisplayName() : "-";
         smallFit(Lang.tr("sc.gui.pack.product", product, pd[0]), PACK_X, PACK_Y + PACK_H + 4, GuiBigSC.SCREEN_RIGHT - PACK_X - 2, 0xE6F0FA);
         if (r != null) {
-            smallFit(Lang.tr("sc.gui.pack.run", pd[1], Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)),
+            smallFit(Lang.tr("sc.gui.pack.run", pd[1], defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)),
                     PACK_X, PACK_Y + PACK_H + 12, GuiBigSC.SCREEN_RIGHT - PACK_X - 2, 0x6AA8C8);
         }
     }
@@ -1870,8 +1886,8 @@ public class GuiMachineSC extends GuiContainer {
             String a = r.fluidInputA != null ? String.valueOf(r.fluidInputA.amount) : "";
             String b = r.fluidInputB != null ? String.valueOf(r.fluidInputB.amount) : "";
             small(Lang.tr("sc.gui.cvd.run", a.isEmpty() ? b : b.isEmpty() ? a : a + " + " + b), fx, fy, 0xE6F0FA);
-            small(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)),
-                    fx, fy + 7, 0x6AA8C8);
+            smallFit(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)),
+                    fx, fy + 7, CVD_BELL_W - 4, 0x6AA8C8);
         }
     }
 
@@ -2074,7 +2090,8 @@ public class GuiMachineSC extends GuiContainer {
         for (Object o : buttonList) {
             if (o instanceof GuiBigSC.ClearButton && ((GuiBigSC.ClearButton) o).over(mouseX + guiLeft, mouseY + guiTop)) {
                 int tank = ((GuiBigSC.ClearButton) o).id - ContainerMachineSC.BTN_CLEAR;
-                return GuiBigSC.clearTip(machine.getTank(tank).getFluidAmount(), machine.clearCost(tank), machine.getEnergyStored());
+                return GuiBigSC.clearTip(machine.getTank(tank).getFluidAmount(), machine.clearCost(tank), machine.getEnergyStored(),
+                        ((GuiBigSC.ClearButton) o).armed());
             }
         }
 
@@ -2230,7 +2247,7 @@ public class GuiMachineSC extends GuiContainer {
             com.sc.machine.MachineRecipe r = shownRecipe();
             lines.add(Lang.tr("sc.gui.pack.title"));
             if (r != null) {
-                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+                lines.add(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.pack.hint"));
             return lines;
@@ -2263,7 +2280,7 @@ public class GuiMachineSC extends GuiContainer {
             lines.add(Lang.tr("sc.gui.etch.title"));
             lines.add(Lang.tr(second ? "sc.gui.etch.stage.1" : "sc.gui.etch.stage.0"));
             if (r != null) {
-                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+                lines.add(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.etch.hint"));
             return lines;
@@ -2275,7 +2292,7 @@ public class GuiMachineSC extends GuiContainer {
                 if (r.fluidInputA != null) {
                     lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
                 }
-                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+                lines.add(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.step.hint"));
             return lines;
@@ -2294,7 +2311,7 @@ public class GuiMachineSC extends GuiContainer {
                 if (r.fluidInputA != null) {
                     lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
                 }
-                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+                lines.add(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.coat.hint"));
             return lines;
@@ -2306,7 +2323,7 @@ public class GuiMachineSC extends GuiContainer {
                 if (r.fluidInputA != null) {
                     lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
                 }
-                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+                lines.add(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             lines.add(Lang.tr("sc.gui.oxid.hint"));
             return lines;
@@ -2318,7 +2335,7 @@ public class GuiMachineSC extends GuiContainer {
                 if (r.fluidInputA != null) {
                     lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
                 }
-                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+                lines.add(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             return lines;
         }
@@ -2336,7 +2353,7 @@ public class GuiMachineSC extends GuiContainer {
                 if (r.fluidInputA != null) {
                     lines.add(Lang.tr("sc.gui.cvd.run", String.valueOf(r.fluidInputA.amount)) + " " + r.fluidInputA.getLocalizedName());
                 }
-                lines.add(Lang.tr("sc.gui.cvd.defect", Math.round(r.defectChance * 100), Math.max(1, machine.effectiveTicks(r) / 20)));
+                lines.add(Lang.tr("sc.gui.cvd.defect", defectText(r), Math.max(1, machine.effectiveTicks(r) / 20)));
             }
             return lines;
         }

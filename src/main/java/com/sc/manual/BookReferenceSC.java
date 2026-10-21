@@ -332,7 +332,8 @@ final class BookReferenceSC {
         ItemStack rig = new ItemStack(ModBlocks.quarrySC, 1, 4);
         BookEntry e = new BookEntry("quarry.exo", c, rig, Lang.tr("sc.book.quarry.exo"));
         e.add(BookEl.head(rig.getDisplayName(), rig)).add(BookEl.dim(Tier.XV.name() + ", " + BookContent.num(TileEntityQuarrySC.EXO_BUFFER) + " EU"));
-        e.addAll(BookContent.paras("sc.book.exo", new Object[]{BookContent.num(TileEntityQuarrySC.EXO_COST), BookContent.number((float) TileEntityQuarrySC.EXO_RATE)},
+        e.addAll(BookContent.paras("sc.book.exo", new Object[]{BookContent.num(TileEntityQuarrySC.energyScaled(TileEntityQuarrySC.EXO_COST)),   // КР-8 ★: quarryEnergy
+                        BookContent.number((float) TileEntityQuarrySC.EXO_RATE)},
                 new Object[]{com.sc.machine.ExoOreTableSC.LENS_BOOST + 1, TileEntityQuarrySC.BASE_LENSES, TileEntityQuarrySC.LENSES,
                         com.sc.machine.ExoOreTableSC.LENS_BOOST},
                 null, null));

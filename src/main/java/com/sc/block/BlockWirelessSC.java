@@ -109,7 +109,7 @@ public class BlockWirelessSC extends Block {
         ForgeDirection[] faces = {ForgeDirection.NORTH, ForgeDirection.EAST, ForgeDirection.SOUTH, ForgeDirection.WEST};
         w.setFacing(faces[quarter]);
         if (placer instanceof EntityPlayer && !(placer instanceof net.minecraftforge.common.util.FakePlayer)) {
-            w.setOwner(((EntityPlayer) placer).getCommandSenderName());   // automation (a FakePlayer) leaves it ownerless
+            w.setOwner((EntityPlayer) placer);            // ЭН-3: name and UUID; automation (a FakePlayer) leaves it ownerless
         }
         if (stack.hasTagCompound()) {
             w.readFromItem(stack.getTagCompound());

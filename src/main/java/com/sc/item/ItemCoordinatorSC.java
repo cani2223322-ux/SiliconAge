@@ -104,14 +104,18 @@ public class ItemCoordinatorSC extends Item {
     /** Records (x, y, z) of `world` with the safe flag; says it. */
     public static void record(ItemStack stack, EntityPlayer player, World world, int x, int y, int z) {
         int f = MathHelper.floor_double(player.rotationYaw * 4.0F / 360.0F + 0.5D) & 3;
-        boolean safe = BridgeSpaceSC.check(BridgeSpaceSC.of(world), x, y, z, BridgeMathSC.vortexSize(BridgeMathSC.GROUND), f % 2 == 0 ? 0 : 1).free;
-        BridgeItemDataSC.setPoint(stack, x, y, z, world.provider.dimensionId, safe);
+        // МС-4 (audit 2026-10-20): checked for both bridges - the Ground's 3x3 and the Space's 5x5 vortex
+        int[] both = BridgeSpaceSC.checkBoth(BridgeSpaceSC.of(world), x, y, z, f % 2 == 0 ? 0 : 1, false);
+        BridgeItemDataSC.setPoint(stack, x, y, z, world.provider.dimensionId, both[1] != 0, both[2] != 0);
         com.sc.bridge.BridgeFamiliarSC fam = com.sc.bridge.BridgeFamiliarSC.get(world);
         if (fam != null && !world.isRemote) {
             fam.markBlock(player.getCommandSenderName(), world.provider.dimensionId, x, z, 0);      // С5: a recorded point is a familiar place
         }
-        player.addChatComponentMessage(new ChatComponentTranslation(safe ? "sc.coordinator.recorded.safe" : "sc.coordinator.recorded.unsafe",
-                String.valueOf(x), String.valueOf(y), String.valueOf(z)));
+        player.addChatComponentMessage(both[1] == 0 && both[2] == 0
+                ? new ChatComponentTranslation("sc.coordinator.recorded.unsafe", String.valueOf(x), String.valueOf(y), String.valueOf(z))
+                : new ChatComponentTranslation("sc.coordinator.recorded.check", String.valueOf(x), String.valueOf(y), String.valueOf(z),
+                        new ChatComponentTranslation(both[1] != 0 ? "sc.tooltip.coordinator.fits" : "sc.tooltip.coordinator.tight"),
+                        new ChatComponentTranslation(both[2] != 0 ? "sc.tooltip.coordinator.fits" : "sc.tooltip.coordinator.tight")));
     }
 
     @Override
@@ -160,7 +164,14 @@ public class ItemCoordinatorSC extends Item {
         int[] p = BridgeItemDataSC.point(s);
         if (p != null) {
             list.add("§b" + Lang.tr("sc.tooltip.coordinator.point", p[0], p[1], p[2], p[3]));
-            list.add(BridgeItemDataSC.safe(s) ? "§a" + Lang.tr("sc.tooltip.coordinator.safe") : "§e" + Lang.tr("sc.tooltip.coordinator.unsafe"));
+            if (BridgeItemDataSC.checked5(s)) {               // МС-4: both bridges - "Ground Bridge: fits, Space Bridge: too tight"
+                boolean g = BridgeItemDataSC.safe(s), sp = BridgeItemDataSC.safe5(s);
+                list.add((g && sp ? "§a" : g || sp ? "§e" : "§c") + Lang.tr("sc.tooltip.coordinator.check",
+                        Lang.tr(g ? "sc.tooltip.coordinator.fits" : "sc.tooltip.coordinator.tight"),
+                        Lang.tr(sp ? "sc.tooltip.coordinator.fits" : "sc.tooltip.coordinator.tight")));
+            } else {
+                list.add(BridgeItemDataSC.safe(s) ? "§a" + Lang.tr("sc.tooltip.coordinator.safe") : "§e" + Lang.tr("sc.tooltip.coordinator.unsafe"));
+            }
         } else {
             list.add("§8" + Lang.tr("sc.coordinator.empty"));
         }

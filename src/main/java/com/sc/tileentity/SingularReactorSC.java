@@ -285,6 +285,8 @@ public class SingularReactorSC {
 
     // the last scan (not saved but portMem)
     private boolean ready, frozen, scanned, portTaken;
+    /** ГН-4 (audit 2026-10-20): the last scan found a tank past TANKS_MAX / a storage past STORES_MAX in the wall (not saved). */
+    private boolean extraPort;
     /** Another XV or Singular build next to this one (they'd share walls): not lit while it stands there. */
     private boolean nearBuild;
     private final int[] walls = new int[3], ports = new int[3], junk = new int[3];
@@ -357,6 +359,11 @@ public class SingularReactorSC {
 
     public boolean isPortTaken() {
         return portTaken;
+    }
+
+    /** ГН-4: one port too many in the wall (a gap: the build isn't ready). */
+    public boolean isExtraPort() {
+        return extraPort;
     }
 
     public boolean isNearBuild() {
@@ -457,13 +464,13 @@ public class SingularReactorSC {
         return v == 255 ? -1 : v;
     }
 
-    /** EU a tick it makes at this moment (0 without a hole). */
+    /** EU a tick it makes at this moment (0 without a hole); ГН-6: times the server's generators.generatorOutput. */
     public int outputNow() {
         if (phase == PHASE_RUN) {
-            return outputFor(mass);
+            return TileEntityGeneratorSC.scaledOutput(outputFor(mass));
         }
         if (phase == PHASE_DRAIN) {
-            return (int) Math.round(RATED * (double) phaseTicks / DRAIN_TICKS);
+            return TileEntityGeneratorSC.scaledOutput(RATED * (double) phaseTicks / DRAIN_TICKS);
         }
         return 0;
     }
@@ -753,7 +760,7 @@ public class SingularReactorSC {
         if (time % 20 == 0 && !perSecond()) {
             return 0;
         }
-        return give(switchedOn, outputFor(mass));
+        return give(switchedOn, TileEntityGeneratorSC.scaledOutput(outputFor(mass)));   // ГН-6: generatorOutput
     }
 
     private int tickDrain(boolean switchedOn, long time) {
@@ -1019,7 +1026,7 @@ public class SingularReactorSC {
         int caps = 0, coilBits = 0, nTanks = 0, nStores = 0, nWeak = 0, free = 0;
         long top = 0, bottom = 0;
         int[] wl = new int[3], pt = new int[3], jk = new int[3], cap3 = new int[3], cnt3 = new int[3];
-        boolean taken = false;
+        boolean taken = false, extra = false;
         Block coil = com.sc.init.ModBlocks.gravityCoil;
         for (int dz = -3; dz <= 3; dz++) {
             for (int dx = -3; dx <= 3; dx++) {
@@ -1098,6 +1105,9 @@ public class SingularReactorSC {
                             nWeak++;
                         }
                         storePorts.add(new int[]{x, y, z});
+                    } else if (te instanceof TileEntityTankSC || store) {
+                        extra = true;                                 // ГН-4: one port too many - still a gap, but said as such
+                        portMem[cell] = null;
                     } else {
                         portMem[cell] = null;
                     }
@@ -1130,6 +1140,7 @@ public class SingularReactorSC {
         storeHave = have;
         storeRoom = room;
         portTaken = taken;
+        extraPort = extra;
         g.holdPortsSC();
         nearBuild = phase == PHASE_IDLE && TileEntityGeneratorSC.otherBuildNear(w, x0, y0, z0, 2, g);   // checked for the lighting only
         ready = coilBits == 0xFFFF && wl[0] == 0xFFFFFF && wl[1] == 0xFFFFFF && wl[2] == 0xFFFFFF && caps == 0
@@ -1147,7 +1158,7 @@ public class SingularReactorSC {
     public int[] sync() {
         int[] v = new int[SYNC];
         v[0] = phase | event << 3 | feedMode << 5 | (auto ? 128 : 0) | (ready ? 256 : 0) | (heShort ? 512 : 0) | (dShort ? 1024 : 0)
-                | (noCapsule ? 2048 : 0) | (portTaken ? 4096 : 0) | (frozen ? 8192 : 0) | (nearBuild ? 16384 : 0);
+                | (noCapsule ? 2048 : 0) | (portTaken ? 4096 : 0) | (frozen ? 8192 : 0) | (nearBuild ? 16384 : 0) | (extraPort ? 1 << 15 : 0);
         v[1] = (int) Math.round(mass * 1000000);
         v[2] = Math.round(containment * 100);
         v[3] = phaseTicks;
@@ -1203,6 +1214,7 @@ public class SingularReactorSC {
         portTaken = (v[0] & 4096) != 0;
         frozen = (v[0] & 8192) != 0;
         nearBuild = (v[0] & 16384) != 0;
+        extraPort = (v[0] & 1 << 15) != 0;
         mass = v[1] / 1000000.0;
         containment = v[2] / 100F;
         phaseTicks = v[3];

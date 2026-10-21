@@ -191,10 +191,14 @@ public class ContainerQuarrySC extends Container {
     // ---- live numbers ----
 
     /** 0..12 as before (8 / 9: the first compartment), 13..18: the other compartments' fluid and amount. */
-    private static final int COUNT = 24;             // 19, 20: the fluid vein's counters; 21: blocks a private field kept; 22: chunks held; 23: may use
+    private static final int COUNT = 25;             // 19, 20: the fluid vein's counters; 21: blocks a private field kept; 22: chunks held; 23: may use;
+                                                     // 24: КР-6's share of the cells really dug, x1000
     private final IntSyncSC sync = new IntSyncSC(COUNT);
 
     private int value(int id) {
+        if (id == 24) {
+            return Math.round(quarry.getDigShare() * 1000);
+        }
         if (id == 23) {
             return quarry.allowed(viewer) ? 1 : 0;
         }
@@ -263,6 +267,8 @@ public class ContainerQuarrySC extends Container {
         }
         if (id == 0) {
             quarry.setEnergyStoredClient(sync.value(0));
+        } else if (id == 24) {
+            quarry.setDigShareClient(sync.value(24) / 1000F);
         } else if (id == 23) {
             mayClient = sync.value(23) != 0;
         } else if (id == 22) {

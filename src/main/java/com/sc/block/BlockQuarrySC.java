@@ -188,6 +188,20 @@ public class BlockQuarrySC extends Block {
             }
             return true;
         }
+        if (com.sc.util.FluidHandSC.isContainer(held) && te instanceof TileEntityQuarrySC) {
+            // КР-4: a bucket / cell - water into the washing tank, or the first non-empty compartment
+            // out; the owner and ops only. The server decides (the client can't tell an op): a stranger,
+            // or nothing to trade either way, gets the screen as a plain click.
+            if (!world.isRemote) {
+                TileEntityQuarrySC q = (TileEntityQuarrySC) te;
+                if (q.allowed(player) && com.sc.util.FluidHandSC.canExchange(q, held)) {
+                    com.sc.util.FluidHandSC.use(world, x, y, z, player, q, held);
+                } else {
+                    player.openGui(SCMod.instance, GuiHandlerSC.QUARRY_GUI_ID, world, x, y, z);
+                }
+            }
+            return true;
+        }
         if (!world.isRemote) {
             player.openGui(SCMod.instance, GuiHandlerSC.QUARRY_GUI_ID, world, x, y, z);
         }
@@ -236,7 +250,9 @@ public class BlockQuarrySC extends Block {
 
     /**
      * An explosion drops the block whole: its settings, charge, tanks and stored XP ride in the
-     * item, and the explosion's usual 1-in-size chance would have lost them with it.
+     * item, and the explosion's usual 1-in-size chance would have lost them with it. (An owned quarry
+     * shrugs blasts off, see getExplosionResistance - all but the wither's rare blue skull, which
+     * vanilla caps at 0.8 whatever the block says.)
      */
     @Override
     public void dropBlockAsItemWithChance(World world, int x, int y, int z, int meta, float chance, int fortune) {
@@ -272,16 +288,34 @@ public class BlockQuarrySC extends Block {
         super.breakBlock(world, x, y, z, block, meta);
     }
 
-    /** With a universal transformer upgrade inside, no blast breaks the quarry (as a machine). */
+    /**
+     * No blast breaks a quarry with an owner (КР-1: it used to drop whole, and whoever placed it
+     * became the owner), nor one with a universal transformer upgrade inside (as a machine). One
+     * without an owner (placed by automation) goes as any block.
+     */
     @Override
     public float getExplosionResistance(net.minecraft.entity.Entity exploder, World world, int x, int y, int z,
                                         double explosionX, double explosionY, double explosionZ) {
         TileEntity te = world.getTileEntity(x, y, z);
-        if (te instanceof TileEntityQuarrySC
-                && ((TileEntityQuarrySC) te).upgradeCount(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER) > 0) {
+        if (te instanceof TileEntityQuarrySC && (isOwned((TileEntityQuarrySC) te)
+                || ((TileEntityQuarrySC) te).upgradeCount(com.sc.machine.UpgradeType.UNIVERSAL_TRANSFORMER) > 0)) {
             return 6000000.0F;
         }
         return super.getExplosionResistance(exploder, world, x, y, z, explosionX, explosionY, explosionZ);
+    }
+
+    /** КР-1: the wither and the dragon break blocks without a blast - not a quarry with an owner. */
+    @Override
+    public boolean canEntityDestroy(IBlockAccess world, int x, int y, int z, net.minecraft.entity.Entity entity) {
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityQuarrySC && isOwned((TileEntityQuarrySC) te)) {
+            return false;
+        }
+        return super.canEntityDestroy(world, x, y, z, entity);
+    }
+
+    private static boolean isOwned(TileEntityQuarrySC q) {
+        return q.getOwner() != null && !q.getOwner().isEmpty();
     }
 
     @Override

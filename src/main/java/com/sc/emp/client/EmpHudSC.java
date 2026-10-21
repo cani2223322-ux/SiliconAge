@@ -114,8 +114,9 @@ public final class EmpHudSC {
             y = centred(fr, Lang.tr("sc.emp.hud.throttled"), cx, y, GasUiSC.blinkOff() ? 0xB06020 : COL_WARN);   // soft overheat (2026-10-11)
         } else if (!streamHeat && ItemEmpGunSC.overheated(gun)) {
             y = centred(fr, Lang.tr("sc.emp.hud.overheat", EmpMathSC.coolSeconds(heat)), cx, y, COL_WARN);
-        } else if (ItemEmpGunSC.warnOn(gun) && EmpMathSC.overheatWarn(heat, cooling)) {
-            y = centred(fr, Lang.tr("sc.emp.hud.overheat.warn"), cx, y, GasUiSC.blinkOff() ? 0xB06020 : COL_HOT);
+        } else if (ItemEmpGunSC.warnOn(gun) && EmpMathSC.overheatWarn(heat, cooling, mode)) {   // ОР-3: by the mode, as the chat's
+            y = centred(fr, Lang.tr(mode == EmpMode.SIPHON ? "sc.emp.hud.overheat.warn" : "sc.emp.hud.overheat.next"), cx, y,
+                    GasUiSC.blinkOff() ? 0xB06020 : COL_HOT);
         }
         // the stream: the target's charge (Sensor chip) and what came in
         if (aim != null && aim.streaming) {

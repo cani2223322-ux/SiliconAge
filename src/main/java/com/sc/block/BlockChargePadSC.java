@@ -41,7 +41,7 @@ public class BlockChargePadSC extends BlockEnergyStorageSC {
         if (!world.isRemote && placer instanceof net.minecraft.entity.player.EntityPlayer
                 && !(placer instanceof net.minecraftforge.common.util.FakePlayer) && te instanceof TileEntityChargePadSC) {
             // ЭН-7: the placer owns the pad (its "owner and team" mode)
-            ((TileEntityChargePadSC) te).setOwner(((net.minecraft.entity.player.EntityPlayer) placer).getCommandSenderName());
+            ((TileEntityChargePadSC) te).setOwner((net.minecraft.entity.player.EntityPlayer) placer);   // ЭН-3: name and UUID
         }
         if (te instanceof TileEntityEnergyStorageSC && ((TileEntityEnergyStorageSC) te).getFacing() == ForgeDirection.UP) {
             // looking down at it: the side facing the placer instead

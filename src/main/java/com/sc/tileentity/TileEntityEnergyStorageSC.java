@@ -172,8 +172,8 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
         if (t.storageOnly() && this instanceof TileEntityChargePadSC) {
             return false;
         }
-        if (t == UpgradeType.ENERGY_STORAGE && capacityOf(getTier()) == Integer.MAX_VALUE) {
-            return false;                       // already at the ceiling (SV): the upgrade would be lost for nothing
+        if (t == UpgradeType.ENERGY_STORAGE && rawCount(UpgradeType.ENERGY_STORAGE, -1) >= maxCapacityUpgrades()) {
+            return false;                       // ЭН-5: one more would only hit the int ceiling (SV: already on it) - lost for nothing
         }
         return t != UpgradeType.OUTPUT_SPLITTER || getTier().ordinal() >= Tier.HV.ordinal();
     }
@@ -190,6 +190,47 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
 
     /** Industrial Upgrade's modid (as in the @Optional.Interface above). */
     public static final String IU_MODID = "industrialupgrade";
+
+    /**
+     * ЭН-5 (audit 2026-10-20): how many capacity upgrades a storage of tier `t` takes - the smallest number that brings it to the
+     * int ceiling (~2.1 billion EU), at most UpgradeType.MAX_EFFECTIVE; 0 when it is on the ceiling already. With the default
+     * storageCapacity: XV 1, QV 5, IV and below 16, SV 0.
+     */
+    public static int maxCapacityUpgrades(Tier t) {
+        long base = capacityOf(t);
+        if (base >= Integer.MAX_VALUE) {
+            return 0;
+        }
+        for (int n = 1; n < UpgradeType.MAX_EFFECTIVE; n++) {
+            if (base * (100L + (long) CAPACITY_PERCENT_PER_UPGRADE * n) / 100L >= Integer.MAX_VALUE) {
+                return n;
+            }
+        }
+        return UpgradeType.MAX_EFFECTIVE;
+    }
+
+    /** ЭН-5: maxCapacityUpgrades() of this storage's tier. */
+    public int maxCapacityUpgrades() {
+        return maxCapacityUpgrades(getTier());
+    }
+
+    /** ЭН-5: how many capacity upgrades upgrade slot `slot` may hold - the limit less those in the other slots (never below 0). */
+    public int capacityUpgradeRoom(int slot) {
+        return Math.max(0, maxCapacityUpgrades() - rawCount(UpgradeType.ENERGY_STORAGE, slot));
+    }
+
+    /** The upgrades of `type` in the slots as they lie (not capped), leaving out upgrade slot `skipSlot` (-1: none left out). */
+    private int rawCount(UpgradeType type, int skipSlot) {
+        int n = 0;
+        for (int i = 0; i < UPGRADE_SLOTS; i++) {
+            ItemStack s = upgradeSlots[i];
+            if (FIRST_UPGRADE_SLOT + i != skipSlot && s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC
+                    && com.sc.item.ItemUpgradeSC.typeOf(s) == type) {
+                n += s.stackSize;
+            }
+        }
+        return n;
+    }
 
     /** The capacity with the Energy Storage upgrades of upgrade slot `slot` taken out. */
     public int capacityWithout(int slot) {
@@ -598,8 +639,10 @@ public class TileEntityEnergyStorageSC extends TileEntityEnergyBase implements n
             }
             UpgradeType type = s.getItem() instanceof com.sc.item.ItemUpgradeSC ? com.sc.item.ItemUpgradeSC.typeOf(s) : null;
             // Overdrive / Splitter already in stay put where IC2 without Industrial Upgrade refuses new ones
+            // ЭН-5: so do capacity upgrades past the limit an item from before it carries (getMaxEnergyStored caps; they come out)
             boolean kept = type == UpgradeType.OVERDRIVE
-                    || (type == UpgradeType.OUTPUT_SPLITTER && !overdriveWorks() && !(this instanceof TileEntityChargePadSC));
+                    || (type == UpgradeType.OUTPUT_SPLITTER && !overdriveWorks() && !(this instanceof TileEntityChargePadSC))
+                    || (type == UpgradeType.ENERGY_STORAGE && maxCapacityUpgrades() > 0);
             if (i >= 0 && i < UPGRADE_SLOTS && (acceptsUpgradeHere(s) || kept)) {
                 upgradeSlots[i] = s;
             } else if (worldObj != null && !worldObj.isRemote) {

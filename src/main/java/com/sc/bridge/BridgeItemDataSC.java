@@ -40,10 +40,33 @@ public final class BridgeItemDataSC {
         return p.length == 4 ? p : null;
     }
 
+    /** The point with one check (an old way: the Ground Bridge's 3x3 only) - "Safe5" isn't written (checked5 then false). */
     public static void setPoint(ItemStack s, int x, int y, int z, int dim, boolean safe) {
         NBTTagCompound t = tag(s);
         t.setIntArray("Pt", new int[]{x, y, z, dim});
         t.setBoolean("Safe", safe);
+        t.removeTag("Safe5");
+    }
+
+    /**
+     * МС-4 (audit 2026-10-20): the point with both checks - "Safe" the Ground Bridge's 3x3 vortex fits (as before), "Safe5" the
+     * Space Bridge's 5x5 one.
+     */
+    public static void setPoint(ItemStack s, int x, int y, int z, int dim, boolean safe3, boolean safe5) {
+        NBTTagCompound t = tag(s);
+        t.setIntArray("Pt", new int[]{x, y, z, dim});
+        t.setBoolean("Safe", safe3);
+        t.setBoolean("Safe5", safe5);
+    }
+
+    /** МС-4: the Space Bridge's 5x5 vortex fits there (false also when it wasn't checked - see checked5). */
+    public static boolean safe5(ItemStack s) {
+        return s != null && s.hasTagCompound() && s.getTagCompound().getBoolean("Safe5");
+    }
+
+    /** МС-4: the point was checked for both bridges (a coordinator from before it: the 3x3 check only). */
+    public static boolean checked5(ItemStack s) {
+        return s != null && s.hasTagCompound() && s.getTagCompound().hasKey("Safe5");
     }
 
     public static String pointName(ItemStack s) {
@@ -64,7 +87,11 @@ public final class BridgeItemDataSC {
         if (p == null || to == null) {
             return;
         }
-        setPoint(to, p[0], p[1], p[2], p[3], safe(from));
+        if (checked5(from)) {
+            setPoint(to, p[0], p[1], p[2], p[3], safe(from), safe5(from));   // МС-4: both checks go along
+        } else {
+            setPoint(to, p[0], p[1], p[2], p[3], safe(from));
+        }
         setPointName(to, pointName(from));
     }
 

@@ -394,7 +394,7 @@ public final class ModRecipesCrafting {
                     'A', r[1], 'W', wire, 'M', r[2], 'T', transistor);
         }
         // the Exo Drilling Rig: an EV quarry round a fusion core, Exo cable and an Exo drill head (the quarry's contents come along)
-        GameRegistry.addRecipe(new CarryRecipe(new ItemStack(ModBlocks.quarrySC, 1, 4), CarryRecipe.COPY, com.sc.block.BlockQuarrySC.class, null,
+        GameRegistry.addRecipe(new CarryRecipe(new ItemStack(ModBlocks.quarrySC, 1, 4), CarryRecipe.COPY_DRY, com.sc.block.BlockQuarrySC.class, null,
                 "HFH", "XQX", "CEC",
                 'H', ingot(Material.HAFNIUM), 'F', comp("fusionCore"), 'X', controller, 'Q', ev,
                 'C', cable(CableType.EXO), 'E', worn[3]));
@@ -565,9 +565,10 @@ public final class ModRecipesCrafting {
                 com.sc.block.BlockEnergyStorageSC.class, null, "HCH", "XSX", "HCH",
                 'H', ingot(Material.HAFNIUM), 'C', cable(CableType.EXO), 'X', silicon(SiliconMaterial.CONTROLLER),
                 'S', new ItemStack(ModBlocks.energyStorageSC, 1, com.sc.energy.Tier.XV.ordinal())));
-        OreRecipes.shaped(new ItemStack(ModItems.entangledCrystal), "PDP", "EQE", "PMP",
+        // ЭН-8 (audit 2026-10-20): the quantum cell must be empty - its charge would be lost silently
+        GameRegistry.addRecipe(new EmptyBatteryRecipe(new ItemStack(ModItems.entangledCrystal), "PDP", "EQE", "PMP",
                 'P', new ItemStack(Items.ender_pearl), 'D', new ItemStack(Items.diamond), 'E', new ItemStack(Items.ender_eye),
-                'Q', new ItemStack(ModItems.battery, 1, 4), 'M', silicon(SiliconMaterial.MEMORY_CHIP));
+                'Q', new ItemStack(ModItems.battery, 1, 4), 'M', silicon(SiliconMaterial.MEMORY_CHIP)));
     }
 
     /**
@@ -938,9 +939,57 @@ public final class ModRecipesCrafting {
      *    an empty tank fits: a fluid could not come back as an item.
      * Generic materials go by their ore names as in OreRecipes.shaped; the carried blocks stay exact stacks.
      */
+    public static final class EmptyBatteryRecipe extends net.minecraftforge.oredict.ShapedOreRecipe {
+
+        /**
+         * ЭН-8 (audit 2026-10-20): a shaped recipe whose battery (quantum cell) must be empty - a charged one doesn't form it, as
+         * CarryRecipe.EMPTY refuses a filled tank. Generic materials go by their ore names as in OreRecipes.shaped; the battery
+         * stays an exact stack.
+         */
+        public EmptyBatteryRecipe(ItemStack result, Object... recipe) {
+            super(result, convert(recipe));
+        }
+
+        private static Object[] convert(Object[] in) {
+            Object[] out = new Object[in.length];
+            for (int i = 0; i < in.length; i++) {
+                out[i] = in[i] instanceof ItemStack && !(((ItemStack) in[i]).getItem() instanceof com.sc.item.ItemBatterySC)
+                        ? OreRecipes.oreName((ItemStack) in[i]) : in[i];
+            }
+            return out;
+        }
+
+        /** No battery among `stacks` holds any charge (nulls and other items don't matter). */
+        public static boolean allEmpty(ItemStack[] stacks) {
+            for (ItemStack s : stacks) {
+                if (s != null && s.getItem() instanceof com.sc.item.ItemBatterySC && com.sc.item.ItemBatterySC.chargeOf(s) != 0) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public boolean matches(net.minecraft.inventory.InventoryCrafting grid, net.minecraft.world.World world) {
+            if (!super.matches(grid, world)) {
+                return false;
+            }
+            ItemStack[] in = new ItemStack[grid.getSizeInventory()];
+            for (int i = 0; i < in.length; i++) {
+                in[i] = grid.getStackInSlot(i);
+            }
+            return allEmpty(in);
+        }
+    }
+
     public static final class CarryRecipe extends net.minecraftforge.oredict.ShapedOreRecipe {
 
         public static final int COPY = 0, ENERGY = 1, GENERATOR = 2, EMPTY = 3;
+        /**
+         * КР-3 (audit 2026-10-20): as COPY, but a carried quarry with fluid in its pump compartments doesn't form the recipe (the
+         * Exo rig has no pump to give it back), and its washing water comes along cut to TileEntityQuarrySC.WATER_BASE.
+         */
+        public static final int COPY_DRY = 4;
         private static final String[] GEN_TANKS = {"FuelTank", "FuelTank2", "OutTank"};
 
         private final int mode;
@@ -987,7 +1036,26 @@ public final class ModRecipesCrafting {
                     }
                 }
             }
+            if (mode == COPY_DRY) {
+                for (int i = 0; i < grid.getSizeInventory(); i++) {
+                    ItemStack s = grid.getStackInSlot(i);
+                    if (isOf(s, carry) && s.hasTagCompound() && pumpHolds(s.getTagCompound())) {
+                        return false;                   // КР-3: the quarry's pump tanks hold fluid - drain them first
+                    }
+                }
+            }
             return true;
+        }
+
+        /** КР-3: a carried quarry's item tag has fluid in a pump compartment ("Tanks", or an old save's "Pumped"). */
+        static boolean pumpHolds(net.minecraft.nbt.NBTTagCompound t) {
+            net.minecraft.nbt.NBTTagList list = t.getTagList("Tanks", 10);
+            for (int i = 0; i < list.tagCount(); i++) {
+                if (list.getCompoundTagAt(i).getInteger("Amount") > 0) {
+                    return true;
+                }
+            }
+            return t.hasKey("Pumped") && t.getCompoundTag("Pumped").getInteger("Amount") > 0;
         }
 
         @Override
@@ -1005,7 +1073,7 @@ public final class ModRecipesCrafting {
                     continue;
                 }
                 net.minecraft.nbt.NBTTagCompound t = s.getTagCompound();
-                if (mode == COPY) {
+                if (mode == COPY || mode == COPY_DRY) {
                     for (Object k : t.func_150296_c()) {        // getKeySet
                         String key = (String) k;
                         if (!"display".equals(key) && !"RepairCost".equals(key) && !"ench".equals(key)) {
@@ -1027,6 +1095,16 @@ public final class ModRecipesCrafting {
                         } else if (fitsFuel2(into, f.getFluid().getName())) {
                             f2 = add(f2, f);
                         }
+                    }
+                }
+            }
+            if (mode == COPY_DRY) {
+                tag.removeTag("Tanks");                 // КР-3: none (matches() refused any fluid) - nothing to carry
+                tag.removeTag("Pumped");
+                if (tag.hasKey("Water")) {
+                    net.minecraft.nbt.NBTTagCompound w = tag.getCompoundTag("Water");
+                    if (w.getInteger("Amount") > com.sc.tileentity.TileEntityQuarrySC.WATER_BASE) {
+                        w.setInteger("Amount", com.sc.tileentity.TileEntityQuarrySC.WATER_BASE);   // the rig's washing tank holds no more
                     }
                 }
             }

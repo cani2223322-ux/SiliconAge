@@ -1,5 +1,9 @@
 package com.sc.dim;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -8,6 +12,7 @@ import com.sc.ruin.StructureRuinStartSC;
 import com.sc.settle.gen.SettlementLayoutSC;
 
 import cpw.mods.fml.common.FMLLog;
+import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.World;
@@ -28,11 +33,11 @@ import net.minecraft.world.WorldServer;
  * <p>
  * ПМ-11 «the land of Ф1..Ф3 is never torn»: on the server the kind is decided once per cell, when it is first needed (its first
  * chunk with inner columns is made, or anything asks the biome there) and kept in the Substrate's own WorldSavedData DATA
- * (DIM-1414/data/SCSi14Cells.dat, written at once: a decision is rare, and it must be on disk before the cell's chunks - else a
- * crash before the autosave would find them «explored» and make the cell LEGACY against its new ground). A cell whose pure kind
- * is new but whose inner chunks exist on disk already (a world of Ф1..Ф3 explored there - StructureRuinStartSC.explored) stays
- * the plateaus for good: no half-ridge cell, no cliff against an old chunk. Clients (no seed, no data) answer pureKind - a client
- * only reads a chunk's own biome array anyway.
+ * (DIM-1414/data/SCSi14Cells.dat, written at once - that file alone, saveCellsNow: a decision is rare, and it must be on disk
+ * before the cell's chunks - else a crash before the autosave would find them «explored» and make the cell LEGACY against its
+ * new ground). A cell whose pure kind is new but whose inner chunks exist on disk already (a world of Ф1..Ф3 explored there -
+ * StructureRuinStartSC.explored) stays the plateaus for good: no half-ridge cell, no cliff against an old chunk. Clients (no
+ * seed, no data) answer pureKind - a client only reads a chunk's own biome array anyway.
  * <p>
  * Server thread only for the world-aware calls (chunk generation, the spawn director). Shared core: only the coordinator edits
  * this file.
@@ -183,8 +188,47 @@ public final class SubstrateCellsSC {
         }
         d.kinds.put(k, Integer.valueOf(decided));
         d.markDirty();
-        w.perWorldStorage.saveAllData();    // on disk before the cell's chunks are (they are written as they unload): a crash keeps it
+        saveCellsNow((WorldServer) w, d);   // on disk before the cell's chunks are (they are written as they unload): a crash keeps it
         return decided & ~LEGACY;
+    }
+
+    /**
+     * ПМ-5: writes only DIM-1414/data/SCSi14Cells.dat, now, as MapStorage.saveData does (a "data" tag in a gzip'd NBT) - not
+     * all the dimension's data in the middle of chunk generation. Through a .tmp file, so a crash mid-write leaves the old file.
+     * Written - no longer dirty; failed - stays dirty (the game's next save writes it) and a line in the log.
+     */
+    private static void saveCellsNow(WorldServer w, Data d) {
+        try {
+            File dir = new File(w.getChunkSaveLocation(), "data");     // the dimension's folder (perWorldStorage writes there too)
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                throw new IOException("cannot create " + dir);
+            }
+            File file = new File(dir, DATA + ".dat"), tmp = new File(dir, DATA + ".dat.tmp");
+            NBTTagCompound inner = new NBTTagCompound();
+            d.writeToNBT(inner);
+            NBTTagCompound root = new NBTTagCompound();
+            root.setTag("data", inner);
+            write(root, tmp);
+            if (!tmp.renameTo(file)) {                              // Windows: no rename over an existing file
+                if (file.exists() && !file.delete() || !tmp.renameTo(file)) {
+                    write(root, file);                              // can't replace it: straight into the file itself
+                    tmp.delete();
+                }
+            }
+            d.setDirty(false);
+        } catch (Exception e) {
+            FMLLog.warning("[Silicon Age] Si-14 Substrate: could not write %s.dat now (%s) - it is written with the world's next save",
+                    DATA, e);
+        }
+    }
+
+    private static void write(NBTTagCompound root, File f) throws IOException {
+        OutputStream out = new FileOutputStream(f);
+        try {
+            CompressedStreamTools.writeCompressed(root, out);
+        } finally {
+            out.close();
+        }
     }
 
     /** The column's biome kind in world `w` (cellKind for its cell's inner square, the canyons / plateaus in the belt and the band). */

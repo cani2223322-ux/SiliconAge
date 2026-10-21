@@ -42,7 +42,12 @@ public final class SignalRulesSC {
 
     /** ПЛ-5 (pure): game day `day` has a Signal. */
     public static boolean rolls(long seed, long day) {
-        return pick(mix(seed ^ SALT, day, 0), 100) < CHANCE_PCT;
+        return pick(mix(seed ^ SALT, day, 0), 100) < chancePct();
+    }
+
+    /** ПМ-6 (audit 2026-10-20): the day's Signal chance with dimension.signalChanceMultiplier (CHANCE_PCT by default), at most 100. */
+    public static int chancePct() {
+        return Math.max(0, Math.min(100, Math.round(CHANCE_PCT * com.sc.dim.SubstrateConfigSC.signalChanceMultiplier)));
     }
 
     /** ПЛ-5 (pure): when in day `day` (ticks into it) its Signal begins. */

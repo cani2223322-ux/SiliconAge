@@ -235,10 +235,12 @@ public final class EmpSC {
 
     /** What applyHit did. */
     public static final class HitResult {
-        /** Suppression ticks given per slot (0: none - no mod piece, or immune). */
+        /** Suppression ticks given per slot (0: none - no mod piece, immune, or still suppressed). */
         public final int[] ticks = new int[4];
         /** Slots that were immune. */
         public final boolean[] immune = new boolean[4];
+        /** ОР-1 (2026-10-21): ticks still left on slots that were suppressed already - the hit didn't extend them (0: not so). */
+        public final int[] already = new int[4];
         /** Some aimed slot held a mod piece. */
         public boolean anyArmour;
         /** Heat units given. */
@@ -254,6 +256,25 @@ public final class EmpSC {
             }
             return false;
         }
+
+        /** ОР-1: some aimed slot was still suppressed (left as it was). */
+        public boolean anyAlready() {
+            for (int t : already) {
+                if (t > 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** ОР-1: the most ticks left on a still suppressed slot, 0 none. */
+        public int maxAlready() {
+            int m = 0;
+            for (int t : already) {
+                m = Math.max(m, t);
+            }
+            return m;
+        }
     }
 
     /**
@@ -261,6 +282,8 @@ public final class EmpSC {
      * package A, see docs/plan-pe1-tech.md): suppresses the mod pieces in `pieces` (immune ones only heat half),
      * heats the suit, starts the helium boil, syncs. A target with no mod piece in those slots: Slowness
      * (applyNoArmour). Siphon: use streamSecond.
+     * ОР-1 (2026-10-21): a piece still suppressed is not extended - its end and its immunity stay those of the hit that
+     * suppressed it (HitResult.already says how long is left); the heat and the boil still come, at the full (not immune) rate.
      */
     public static HitResult applyHit(EntityPlayer target, EmpMode mode, boolean upgraded, int[] pieces) {
         HitResult r = new HitResult();
@@ -283,6 +306,10 @@ public final class EmpSC {
                 continue;
             }
             allImmune = false;
+            if (s.suppressed(slot, now)) {
+                r.already[slot] = (int) Math.min(Integer.MAX_VALUE, s.until[slot] - now);   // ОР-1: until / immuneUntil untouched
+                continue;
+            }
             ArmorSuit suit = ((ItemArmorSC) piece.getItem()).getSuit();
             int t = EmpMathSC.durationTicks(suit, mode, upgraded, defense, helium, ConfigSC.empDurationMultiplier);
             long until = Math.max(s.until[slot], now + t);
@@ -317,8 +344,9 @@ public final class EmpSC {
      * Ф4, ПФ-2 (docs/plan-substrate-tech-f4.md §5.3, the coordinator's; only a new helper - the ПЭ-1's paths are untouched): an
      * EMP storm's pulse on the worn piece `slot` of `target` - suppressed for `ticks` (the storm's own 3..4 s), the usual
      * immunity after it, the helium loop boiling `boilMul` times as fast for `boilTicks` («гелий подкипает»); no heat, no
-     * Slowness. An immune piece, none of the mod's in that slot, ПЭ-1 off in the config: nothing. Syncs, and tells the target
-     * as a ПЭ-1 hit does («Ваша броня подавлена ЭМИ»). @return the ticks given (0: nothing happened)
+     * Slowness. An immune piece, none of the mod's in that slot, ПЭ-1 off in the config: nothing. ОР-1 (2026-10-21): a piece
+     * still suppressed - nothing either (not extended, its immunity keeps its time). Syncs, and tells the target as a ПЭ-1 hit
+     * does («Ваша броня подавлена ЭМИ»). @return the ticks given (0: nothing happened)
      */
     public static int stormHit(EntityPlayer target, int slot, int ticks, int boilMul, int boilTicks) {
         if (target == null || target.worldObj.isRemote || slot < 0 || slot > 3 || ticks <= 0 || !ConfigSC.empEnabled) {
@@ -327,10 +355,10 @@ public final class EmpSC {
         ItemStack piece = modPiece(target, slot);
         long now = now(target);
         EmpStateSC s = state(target);
-        if (piece == null || s.immune(slot, now)) {
+        if (piece == null || s.immune(slot, now) || s.suppressed(slot, now)) {
             return 0;
         }
-        long until = Math.max(s.until[slot], now + ticks);
+        long until = now + ticks;
         s.until[slot] = until;
         s.immuneUntil[slot] = until + EmpMathSC.immunityTicks(ConfigSC.empImmunitySeconds);
         if (boilMul > 1 && boilTicks > 0 && modPiece(target, 1) != null) {

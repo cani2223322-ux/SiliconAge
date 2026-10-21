@@ -81,8 +81,9 @@ final class SelfTestEmbassySC {
     /** The seeds the layouts are sampled on. */
     private static final long[] SEEDS = {1234567L, -77L, 0x5C14L};
     /** The six rules of the section embassy and their defaults (docs/plan-substrate-tech-f6.md §2.1). */
-    private static final String[] RULES = {"embassies", "embassyGrid", "embassyChance", "embassySpawnMin", "embassyRingMin", "embassyRingMax"};
-    private static final Object[] DEFAULTS = {Boolean.TRUE, 2048, 100, 1500, 1300, 2500};
+    private static final String[] RULES = {"embassies", "embassyGrid", "embassyChance", "embassySpawnMin", "embassyRingMin", "embassyRingMax",
+            "flightPriceMultiplier", "flightsPerDay"};   // the last two: ПС-8 of the audit 2026-10-20
+    private static final Object[] DEFAULTS = {Boolean.TRUE, 2048, 100, 1500, 1300, 2500, 1F, 2};
     /** A test dimension id for the Substrate's records (the pure questions take it as an argument). */
     private static final int SUB_DIM = -1414;
     private static final UUID P1 = UUID.fromString("5c0e7a1e-0000-4000-8000-0000000000f6"), P2 = UUID.fromString("5c0e7a1e-0000-4000-8000-0000000000f7");
@@ -164,6 +165,66 @@ final class SelfTestEmbassySC {
                 t.printStackTrace();
             }
         }
+        try {
+            auditStar();
+        } catch (Throwable t) {
+            check(false, "the audit 2026-10-20 (★) - exception " + t);
+            t.printStackTrace();
+        }
+    }
+
+    /** The shortcomings of 2026-10-20, ★ (docs/plan-audit-2026-10-20-star.md): ПС-1, ПС-5, ПС-7, ПС-8 - the pure parts. */
+    private static void auditStar() {
+        // ПС-1: no hostile spawns on an embassy's whole level ground (radius + LEVEL_OUT, the Vokzal in it) - found by the index
+        SettlementRegistrySC r = new SettlementRegistrySC(SettlementRegistrySC.NAME);
+        SettlementRegistrySC.Settlement emb = r.add(record(SettlementSizeSC.EMBASSY, 0, 5000, -3000));
+        int edge = emb.radius + EmbassyLayoutSC.LEVEL_OUT;
+        check(onGround(r, 5000 + edge - 1, -3000) && !onGround(r, 5000 + edge + 1, -3000) && onGround(r, 5000, -3000 + emb.radius + 30)
+                        && !onGround(r, 5000, -3000 + emb.radius + 32),
+                "embassy ground (ПС-1): radius + 30 on it, radius + 32 off it (the disc radius + " + EmbassyLayoutSC.LEVEL_OUT + ")");
+        // ПС-5: the gain under the embassy's ceiling, as give(..., ceiling) applies it
+        check(ReputationSC.gainUnder(560, 50, 599) == 39 && ReputationSC.gainUnder(599, 50, 599) == 0 && ReputationSC.gainUnder(700, 50, 599) == 0
+                        && ReputationSC.gainUnder(100, -20, 599) == -20 && ReputationSC.gainUnder(560, 50, ReputationSC.MAX) == 50
+                        && "ceiling".equals(com.sc.settle.trade.TradeServerSC.RESULT_KEYS[com.sc.settle.trade.TradeServerSC.R_CEILING]),
+                "Trust ceiling (ПС-5): 560 + 50 under 599 gives 39, at / over it 0, a loss as it is, no ceiling - all; the penance's refusal key");
+        // ПС-7: a dweller taken away by the rule leaves its slot as never filled
+        SettlementRegistrySC.Settlement sub = r.add(substrateRecord(SettlementSizeSC.OUTPOST, 3));
+        java.util.UUID who = java.util.UUID.randomUUID();
+        r.slotAlive(sub.id, 0, who, 100L);
+        r.slotNever(sub.id, 0);
+        SettlementRegistrySC.Slot sl = r.slot(sub.id, 0);
+        check(sl != null && sl.state == SettlementRegistrySC.NEVER && sl.uuidMost == 0L && sl.uuidLeast == 0L && sl.diedAt == 0L,
+                "embassies rule (ПС-7): slotNever - NEVER, no UUID, no death time (the roster makes it at once, no Clone Capsule)");
+        // ПС-8: the flights' price multiplier and the day's flights
+        float mWas = SubstrateConfigSC.flightPriceMultiplier;
+        int fWas = SubstrateConfigSC.flightsPerDay;
+        boolean same = true, raised;
+        int perDay;
+        try {
+            SubstrateConfigSC.flightPriceMultiplier = 1F;
+            SubstrateConfigSC.flightsPerDay = EmbassyRulesSC.FLIGHTS_PER_DAY;
+            for (int ride = 0; ride < EmbassyRulesSC.RIDE_BASE.length; ride++) {
+                same &= EmbassyRulesSC.base(ride) == EmbassyRulesSC.RIDE_BASE[ride];
+            }
+            perDay = EmbassyRulesSC.flightsPerDay();
+            SubstrateConfigSC.flightPriceMultiplier = 1.5F;
+            raised = EmbassyRulesSC.base(EmbassyRulesSC.RIDE_FIRST) == 36 && EmbassyRulesSC.base(EmbassyRulesSC.RIDE_BACK) == 0;
+        } finally {
+            SubstrateConfigSC.flightPriceMultiplier = mWas;
+            SubstrateConfigSC.flightsPerDay = fWas;
+        }
+        check(same && raised && perDay == 2, "flight config (ПС-8): at x1 every ride's base as RIDE_BASE, at x1.5 the first flight 36 (BACK still 0), "
+                + perDay + " flights a day by default");
+    }
+
+    /** ПС-1: SettlementSC.embassyGroundAt's look-up on a test registry (the world's own needs a server). */
+    private static boolean onGround(SettlementRegistrySC r, int x, int z) {
+        for (SettlementRegistrySC.Settlement s : r.near(0, x, z, EmbassyLayoutSC.LEVEL_OUT)) {
+            if (com.sc.settle.SettlementSC.isEmbassy(s) && com.sc.settle.SettlementSC.onEmbassyGround(s.distSq(x, z), s.radius)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void section(int i) throws Exception {
@@ -190,7 +251,7 @@ final class SelfTestEmbassySC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        boolean rules = sent.size() == 20 && sent.containsAll(Arrays.asList(RULES));
+        boolean rules = sent.size() == 28 && sent.containsAll(Arrays.asList(RULES));
         // the defaults as an empty file reads them, the ring widened when it is too thin - loadEmbassies on Configurations in memory
         Object[] was = new Object[RULES.length];
         for (int k = 0; k < RULES.length; k++) {
@@ -232,7 +293,7 @@ final class SelfTestEmbassySC {
         }
         boolean grid = EmbassySiteSC.grid() == Math.max(1024, SubstrateConfigSC.embassyGrid) && "embassy".equals(SubstrateConfigSC.CATEGORY_EMBASSY);
         check(rules && "ok".equals(defaults) && "ok".equals(widened) && restart && grid, "config (§2.1, ПК-26): " + sent.size() + " rules the server sends"
-                + " (20), the six of the section embassy among them " + rules + "; an empty file reads true / 2048 / 100 / 1500 / 1300 / 2500 " + defaults
+                + " (28), the eight of the section embassy among them " + rules + "; an empty file reads true / 2048 / 100 / 1500 / 1300 / 2500 / 1.0 / 2 " + defaults
                 + "; a ring 2000..2100 is widened to 2000..2256 " + widened + "; the section asks a world restart " + restart + "; grid() "
                 + EmbassySiteSC.grid() + " (at least 1024) " + grid);
     }

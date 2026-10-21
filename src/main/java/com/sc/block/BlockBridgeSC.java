@@ -120,7 +120,50 @@ public class BlockBridgeSC extends Block {
 
     @Override
     public float getPlayerRelativeBlockHardness(EntityPlayer player, World world, int x, int y, int z) {
+        if (refusesBreak(world, player, x, y, z)) {
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.owneronly", ownerFor(world, x, y, z));   // МС-1
+            return 0F;
+        }
         return PickaxeOnlySC.hardness(super.getPlayerRelativeBlockHardness(player, world, x, y, z), player);
+    }
+
+    /**
+     * МС-1 (audit 2026-10-20): the controller a block of the bridge belongs to - the controller itself, or the one a capacitor /
+     * energy port / gas port is linked to (its chunk loaded); null for the rest (beacons, anchors, unlinked parts).
+     */
+    public static TileEntityBridgeControllerSC controllerFor(World world, int x, int y, int z) {
+        if (world == null || !(world.getBlock(x, y, z) instanceof BlockBridgeSC)) {
+            return null;
+        }
+        TileEntity te = world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityBridgeControllerSC) {
+            return (TileEntityBridgeControllerSC) te;
+        }
+        int meta = world.getBlockMetadata(x, y, z);
+        if (te instanceof IBridgePartSC && (meta == CAPACITOR || meta == ENERGY_PORT || meta == GAS_PORT)) {
+            int[] cp = ((IBridgePartSC) te).controllerPos();
+            TileEntity ct = cp == null || !world.blockExists(cp[0], cp[1], cp[2]) ? null : world.getTileEntity(cp[0], cp[1], cp[2]);
+            return ct instanceof TileEntityBridgeControllerSC ? (TileEntityBridgeControllerSC) ct : null;
+        }
+        return null;
+    }
+
+    /**
+     * МС-1: a controller with an owner and the parts with contents linked to it are broken or dismantled by its owner, its friends,
+     * anyone in creative and server ops only (as BlockQuarrySC.refusesBreak). Server side (false on the client).
+     */
+    public static boolean refusesBreak(World world, EntityPlayer player, int x, int y, int z) {
+        if (world == null || world.isRemote || player == null) {
+            return false;
+        }
+        TileEntityBridgeControllerSC c = controllerFor(world, x, y, z);
+        return c != null && !c.ownerless() && !c.trusted(player) && !player.capabilities.isCreativeMode && !BlockQuarrySC.isOp(player);
+    }
+
+    /** МС-1: the owner's name for the refusal ("" - none). */
+    public static String ownerFor(World world, int x, int y, int z) {
+        TileEntityBridgeControllerSC c = controllerFor(world, x, y, z);
+        return c == null ? "" : c.getOwner();
     }
 
     @Override
@@ -202,7 +245,7 @@ public class BlockBridgeSC extends Block {
                 c.readFromItem(tag);
             }
             if (placer instanceof EntityPlayer && !(placer instanceof net.minecraftforge.common.util.FakePlayer)) {
-                c.setOwner(((EntityPlayer) placer).getCommandSenderName());   // М-7: automation (a FakePlayer) leaves it ownerless - claim
+                c.setOwner((EntityPlayer) placer);            // ЭН-3: name and UUID. М-7: automation (a FakePlayer) leaves it ownerless - claim
             }
             c.setPowerOn(false);                                 // placed off, as every energy block
             world.markBlockForUpdate(x, y, z);
@@ -249,6 +292,11 @@ public class BlockBridgeSC extends Block {
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
+        if (refusesBreak(world, player, x, y, z)) {
+            BlockQuarrySC.tellRefused(player, "sc.chat.break.owneronly", ownerFor(world, x, y, z));   // МС-1
+            world.markBlockForUpdate(x, y, z);
+            return false;
+        }
         if (willHarvest) {
             return true;
         }

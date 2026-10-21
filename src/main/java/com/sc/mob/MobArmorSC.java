@@ -396,6 +396,8 @@ public final class MobArmorSC {
      * same as EmpSC.applyHit for a player (ПЭ-1М, the Defense chip, helium -20%, the config, then the immunity), without
      * the heat and the helium boil (not modelled on mobs in Ф1). A suppressed Exo / Singular chestplate drops the shield
      * (shieldUp asks suppressed(1): «Сердце комплекта»). None of the mod's armour in the zone: Slowness.
+     * ОР-1 (2026-10-21): a piece still suppressed is not extended - its end and its immunity stay those of the hit that
+     * suppressed it (HitResult.already: the ticks left), as for a player.
      */
     public EmpSC.HitResult empHit(Entity shooter, EmpMode mode, boolean upgraded, int[] pieces) {
         EmpSC.HitResult r = new EmpSC.HitResult();
@@ -412,6 +414,10 @@ public final class MobArmorSC {
             r.anyArmour = true;
             if (immune(slot)) {
                 r.immune[slot] = true;
+                continue;
+            }
+            if (suppressedUntil[slot] > now) {
+                r.already[slot] = (int) Math.min(Integer.MAX_VALUE, suppressedUntil[slot] - now);   // ОР-1: the ends untouched
                 continue;
             }
             int t = EmpMathSC.durationTicks(suit, mode, upgraded, defenseTier, he, ConfigSC.empDurationMultiplier);
@@ -432,14 +438,16 @@ public final class MobArmorSC {
      * Ф4, ПФ-2 (docs/plan-substrate-tech-f4.md §5.3, the coordinator's): an EMP storm's pulse on worn piece `piece` - suppressed
      * for `ticks` (the storm's own 3..4 s, not EmpMathSC's by suit), the usual immunity after it; an immune piece, or none of
      * the mod's there: nothing. No Slowness, no shield of its own to spare (a suppressed Exo / Singular chestplate drops the
-     * shield, as a Point does). @return it was suppressed now
+     * shield, as a Point does). ОР-1 (2026-10-21): a piece still suppressed - nothing either (not extended). @return it was
+     * suppressed now
      */
     public boolean stormHit(int piece, int ticks) {
-        if (!server() || piece < 0 || piece > 3 || ticks <= 0 || pieceSuit(mob, piece) == null || immune(piece) || !ConfigSC.empEnabled) {
+        if (!server() || piece < 0 || piece > 3 || ticks <= 0 || pieceSuit(mob, piece) == null || immune(piece) || suppressed(piece)
+                || !ConfigSC.empEnabled) {
             return false;
         }
         long now = now();
-        long until = Math.max(suppressedUntil[piece], now + ticks);
+        long until = now + ticks;
         suppressedUntil[piece] = until;
         immuneUntil[piece] = until + EmpMathSC.immunityTicks(ConfigSC.empImmunitySeconds);
         sync();

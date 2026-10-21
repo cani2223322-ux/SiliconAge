@@ -20,7 +20,8 @@ import net.minecraft.world.gen.structure.StructureBoundingBox;
  * on it without scatter; the bridge's vortex needs the air over it: nothing stands there);</li>
  * <li>the platform: in the dock zone (EmbassyLayoutSC.DOCK_ZONE across from the beacon - protected) Settlement Brick, copper landing
  * guides along both axes, a trace ring with lamps on the zone's edge; outside the zone (its corners, nobody protects them) plain
- * stone bricks - no copper, nothing of value;</li>
+ * stone bricks - no copper, nothing of value; the «Достройка» (EmbassyRepairSC.repairing) leaves the corners as they are, as the
+ * ground piece leaves the open ground (ПС-6: a player's block there stays);</li>
  * <li>«Диспетчерская» round P_OFFICE (EmbassyQuartersSC.OFFICE, in the zone): a booth of brick on steel posts with lead glass windows,
  * a steel roof with a lamp, its counter towards the street - two Dispatcher's Desks (BlockShowcase2SC DISPATCH_CONSOLE, their screens
  * towards the Dispatchers inside), a gap to walk in by;</li>
@@ -49,6 +50,7 @@ public class ComponentEmbVokzalSC extends ComponentEmbFrameSC {
     @Override
     protected void build(World w, StructureBoundingBox win) {
         Block rock = rock();
+        boolean repair = EmbassyRepairSC.repairing();
         int beacon = radius + EmbassyLayoutSC.VOKZAL_OUT, h = EmbassyLayoutSC.VOKZAL_HALF, zone2 = EmbassyLayoutSC.DOCK_ZONE * EmbassyLayoutSC.DOCK_ZONE;
         for (int da = -h; da <= h; da++) {
             for (int p = -h; p <= h; p++) {
@@ -61,7 +63,9 @@ public class ComponentEmbVokzalSC extends ComponentEmbFrameSC {
                         at(w, win, a, 0, p, SettlementBlocksSC.dock, da == 0 && p == 0 ? BlockDockSC.BEACON : BlockDockSC.PLATE);
                     }
                 } else if (d2 > zone2) {                                     // the corners: plain stone, nothing of value
-                    at(w, win, a, 0, p, Blocks.stonebrick, Math.abs(da) == h || Math.abs(p) == h ? 3 : 0);
+                    if (!repair) {                                           // ПС-6: unprotected - the «Достройка» leaves a player's block
+                        at(w, win, a, 0, p, Blocks.stonebrick, Math.abs(da) == h || Math.abs(p) == h ? 3 : 0);
+                    }
                 } else if (d2 > RIM_IN2) {                                   // the zone's edge: a trace ring, lamps at its eight points
                     boolean lamp = da == 0 || p == 0 || Math.abs(da) == Math.abs(p);
                     at(w, win, a, 0, p, rock, lamp ? SubstrateBlocksSC.TRACE_NODE : SubstrateBlocksSC.COPPER_TRACE);

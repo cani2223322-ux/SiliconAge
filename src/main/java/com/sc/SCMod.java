@@ -70,6 +70,7 @@ public class SCMod {
         FMLCommonHandler.instance().bus().register(com.sc.item.BladeEventsSC.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.item.DrillEventsSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.item.DrillEventsSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.item.PlacedChunksSC.INSTANCE);   // СТ-2: placed marks in the chunks
         // ПЭ-1 (docs/plan-pe1-tech.md): login / tracking sync, package A's per-tick work
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.emp.EmpEventsSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.emp.EmpEventsSC.INSTANCE);
@@ -186,6 +187,7 @@ public class SCMod {
     @Mod.EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         ModRecipesCrafting.metalBlocksLate();            // after every mod's ore dictionary and recipes
+        ModRecipesOreProcessing.registerForeignOres();   // МШ-7: other mods' oreCopper, oreTin... crush into 2 crushed ores
         proxy.postInit();
     }
 
@@ -209,6 +211,7 @@ public class SCMod {
         com.sc.emp.EmpSC.clearAll();                     // ПЭ-1: the cached per-player states
         com.sc.emp.EmpGunLogicSC.forget(null);           // ПЭ-1: streams / charge-ups (package A)
         com.sc.item.DrillEventsSC.INSTANCE.clearAll();   // the drill's queued forgets and tracked falling blocks (no World kept between sessions)
+        com.sc.item.PlacedChunksSC.INSTANCE.clearAll();  // СТ-2: the loaded chunks' placed marks
         com.sc.tileentity.TileEntityMachineSC.clearSmeltCache();   // furnace answers: the next world may bring changed furnace recipes
         com.sc.dim.TeleportQueueSC.clear();              // Подложка: the queued moves, the arrival grants, the director's counts
         com.sc.dim.SubstrateEntrySC.clearAll();
@@ -238,6 +241,7 @@ public class SCMod {
     @Mod.EventHandler
     public void serverStarting(cpw.mods.fml.common.event.FMLServerStartingEvent event) {
         com.sc.tileentity.TileEntityMachineSC.clearSmeltCache();   // МШ-8: furnace answers are taken afresh for this world (MineTweaker scripts and the like)
+        com.sc.machine.MachineRecipe.forgetNames();                // МШ-8 (audit 2026-10-20): the recipes' ingredient names too
         event.registerServerCommand(new com.sc.debug.CommandEnergySC());
         if (event.getServer().isDedicatedServer()) {
             com.sc.util.UpdateCheckSC.start();               // operators hear about a newer version as they log in

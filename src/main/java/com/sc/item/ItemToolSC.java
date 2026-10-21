@@ -27,6 +27,26 @@ public class ItemToolSC extends Item {
         return type;
     }
 
+    /**
+     * СТ-1 (audit 2026-10-20): what the tool / mould is for, the machines it works in (their recipes - MadeInSC), how many
+     * operations it lasts; under Ctrl where it is made (a lang ".howto" overrides it).
+     */
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void addInformation(net.minecraft.item.ItemStack stack, net.minecraft.entity.player.EntityPlayer player, java.util.List list,
+                               boolean advanced) {
+        String key = "sc.tool.tooltip." + type.name().toLowerCase(java.util.Locale.ROOT);
+        list.add("\u00a77" + com.sc.manual.Lang.tr(key));
+        String works = MadeInSC.worksIn(stack);
+        if (!works.isEmpty()) {
+            list.add("\u00a77" + com.sc.manual.Lang.tr("sc.tool.tooltip.worksin", works));
+        }
+        list.add("\u00a77" + com.sc.manual.Lang.tr("sc.tool.tooltip.wear", type.durability));
+        String made = MadeInSC.madeIn(stack);
+        com.sc.util.TooltipSC.more(list, null, com.sc.manual.Lang.trOr(key + ".howto",
+                made.isEmpty() ? null : com.sc.manual.Lang.tr("sc.tooltip.madein", made)));
+    }
+
     @Override
     public void registerIcons(IIconRegister register) {
         icon = register.registerIcon(Reference.ASSETS + ":" + type.textureName);

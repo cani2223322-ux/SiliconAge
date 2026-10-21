@@ -241,6 +241,19 @@ final class SelfTestEmpSC {
         boolean warn = !EmpMathSC.overheatWarn(94, false) && EmpMathSC.overheatWarn(95, false) && !EmpMathSC.overheatWarn(100, false)
                 && EmpMathSC.overheatWarn(96, true) && !EmpMathSC.overheatWarn(95, true)
                 && EmpMathSC.overheatWarnTenths(942, false) && !EmpMathSC.overheatWarnTenths(941, false);
+        // ОР-3: by the mode - the Point / Pulse when the next shot overheats the gun (Cooling: +7 / +21), the Siphon as before
+        boolean warnMode = EmpMathSC.overheatWarn(90, false, EmpMode.POINT) && !EmpMathSC.overheatWarn(80, false, EmpMode.POINT)
+                && EmpMathSC.overheatWarn(70, false, EmpMode.PULSE) && !EmpMathSC.overheatWarn(60, false, EmpMode.PULSE)
+                && !EmpMathSC.overheatWarn(100, false, EmpMode.POINT) && !EmpMathSC.overheatWarn(100, false, EmpMode.PULSE)
+                && EmpMathSC.overheatWarn(93, true, EmpMode.POINT) && !EmpMathSC.overheatWarn(92, true, EmpMode.POINT)
+                && EmpMathSC.overheatWarn(79, true, EmpMode.PULSE) && !EmpMathSC.overheatWarn(78, true, EmpMode.PULSE);
+        for (int hh = 0; hh <= EmpMathSC.GUN_HEAT_MAX; hh++) {
+            for (int c = 0; c < 2; c++) {
+                warnMode &= EmpMathSC.overheatWarn(hh, c == 1, EmpMode.SIPHON) == EmpMathSC.overheatWarn(hh, c == 1)
+                        && EmpMathSC.overheatWarn(hh, c == 1, null) == EmpMathSC.overheatWarn(hh, c == 1);
+            }
+        }
+        warn &= warnMode;
         boolean cool = EmpMathSC.coolFullSeconds(100) == 5 && EmpMathSC.coolFullSeconds(0) == 0 && EmpMathSC.coolFullSeconds(21) == 2
                 && EmpMathSC.coolSeconds(100) == 2 && EmpMathSC.coolSeconds(69) == 0 && EmpMathSC.coolSeconds(70) == 1
                 && EmpMathSC.coolSeconds(89) == 1 && EmpMathSC.coolSeconds(90) == 2 && EmpMathSC.GUN_HEAT_RECOVER == 70;
@@ -249,7 +262,8 @@ final class SelfTestEmpSC {
                 && EmpShotSC.startRefusal(true, true, false, 600000, 5000, 0) == EmpShotSC.START_OK;
         check(heat && soft && warn && cool && lock && toOverheat[0] == 35 && toOverheat[1] == 50, "gun heat: Point 10, Pulse 30, Siphon 2.9/s "
                 + "(Cooling 2.0); a stream overheats it in " + toOverheat[0] + " s (Cooling " + toOverheat[1] + " s); then 25% speed, cooling 3/s, "
-                + "full speed again below 70 after " + recover + " s; warned 2 s ahead; cools 100 -> 0 in 5 s, Point / Pulse locked until below 70 (2 s)");
+                + "full speed again below 70 after " + recover + " s; warned 2 s ahead (the Siphon) / a shot ahead (the Point from 90, the Pulse from 70: "
+                + warnMode + "); cools 100 -> 0 in 5 s, Point / Pulse locked until below 70 (2 s)");
     }
 
     // ------------------------------------------------------------------ ItemEmpGunSC
@@ -435,6 +449,7 @@ final class SelfTestEmpSC {
             "sc.emp.hud.noreceiver", "sc.emp.hud.overheat", "sc.emp.hud.suppressed", "sc.emp.hud.boil", "sc.emp.hud.aimed", "sc.emp.hud.drain",
             "sc.emp.hud.target", "sc.emp.hud.received", "sc.emp.hud.throttled", "sc.emp.hud.vented",
             "sc.emp.siphon.throttled", "sc.emp.siphon.recovered", "sc.empgui.tip.siphon.rate", "sc.manual.emp.siphon.4", "sc.tooltip.emp.summary", "sc.tooltip.emp.state", "sc.tooltip.emp.statehot",
+            "sc.emp.already", "sc.emp.overheat.next", "sc.emp.hud.overheat.next", "sc.emp.hud.overheat.warn", "sc.empgui.warn.tip",
             "sc.tooltip.emp.modules", "sc.tooltip.emp.nomodules", "sc.tooltip.emp.modes", "sc.tooltip.emp.line.point", "sc.tooltip.emp.line.pulse",
             "sc.tooltip.emp.line.siphon", "sc.tooltip.emp.off", "sc.tooltip.emp.table", "sc.tooltip.emp.tablerow", "sc.tooltip.emp.immunity",
             "sc.tooltip.emp.upgraded", "sc.tooltip.emp.howto", "sc.tooltip.emp.charge", "sc.tooltip.emp.recipe", "sc.tooltip.emp.upgrade",
@@ -479,6 +494,17 @@ final class SelfTestEmpSC {
                     diff.append(' ').append(from == en ? "only en_US:" : "only ru_RU:").append(k);
                 } else if (from == en && args(e.getValue()) != args(to.get(k))) {
                     diff.append(" args differ:").append(k);
+                }
+            }
+        }
+        // ОР-1 / ОР-3 (2026-10-21): the arguments the code passes - «уже подавлена: ещё N с», the tip's seconds; the «next shot» lines none
+        String[][] argKeys = {{"sc.emp.already", "1"}, {"sc.empgui.warn.tip", "1"}, {"sc.emp.overheat.next", "0"}, {"sc.emp.hud.overheat.next", "0"}};
+        for (String[] ka : argKeys) {
+            for (Map<String, String> lang : new Map[]{en, ru}) {
+                String v = lang.get(ka[0]);
+                if (v != null && args(v) != Integer.parseInt(ka[1])) {
+                    diff.append(" args ").append(args(v)).append(" (want ").append(ka[1]).append("):").append(lang == en ? "en_US:" : "ru_RU:")
+                            .append(ka[0]);
                 }
             }
         }

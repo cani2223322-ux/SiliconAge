@@ -32,6 +32,15 @@ public class ItemSCManual extends Item {
         return icon;
     }
 
+    /** СТ-1 (audit 2026-10-20): how it opens, and the key that opens an item's article (the player's own binding). */
+    @Override
+    @cpw.mods.fml.relauncher.SideOnly(cpw.mods.fml.relauncher.Side.CLIENT)
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void addInformation(ItemStack stack, EntityPlayer player, java.util.List list, boolean advanced) {
+        list.add("\u00a77" + com.sc.manual.Lang.tr("sc.manual.tooltip",
+                net.minecraft.client.settings.GameSettings.getKeyDisplayString(com.sc.client.BookKeySC.KEY_BOOK.getKeyCode())));
+    }
+
     @Override
     public ItemStack onItemRightClick(ItemStack stack, World world, EntityPlayer player) {
         if (world.isRemote) {

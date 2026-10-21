@@ -67,6 +67,20 @@ public final class GuiEmpTabSC {
     }
 
     /**
+     * The gun is in use (charging up or streaming): the server keeps the copy it started with and would undo a change at
+     * the end, so the settings and modules wait (grey, «Нельзя во время набора или потока»). Modes and the reboot don't.
+     */
+    private static boolean busy() {
+        EntityPlayer p = Minecraft.getMinecraft().thePlayer;
+        return p != null && p.isUsingItem() && ItemEmpGunSC.isGun(p.getItemInUse());
+    }
+
+    /** The buttons busy() locks: the zone, the receivers (+ "up"), the limit, the warning, the modules. */
+    private static boolean lockedWhileBusy(int id) {
+        return id >= ID_ZONE && id <= ID_WARN || id >= ID_MODULE && id < ID_MODULE + EmpModule.values().length;
+    }
+
+    /**
      * Lays the tab out in (x, y, w) down to `footY` and adds its buttons. @return {x, y, switch width, pitch} of the first
      * mode row: GuiArmorSC adds the EmpMode rows under each other at that pitch (button height pitch - 2), the key button
      * keyW wide after a gap.
@@ -115,6 +129,7 @@ public final class GuiEmpTabSC {
     public void refresh(List buttons) {
         EntityPlayer p = Minecraft.getMinecraft().thePlayer;
         ItemStack gun = gun();
+        boolean busy = busy();
         for (Object o : buttons) {
             GuiButton b = (GuiButton) o;
             if (b.id < ID_FIRST || b.id > ID_LAST) {
@@ -159,11 +174,17 @@ public final class GuiEmpTabSC {
                     b.displayString = Lang.tr("sc.empgui.module.none", name);
                 }
             }
+            if (lockedWhileBusy(b.id)) {
+                b.enabled = !busy && (b.enabled || b.id < ID_MODULE);   // the settings come back on once the use ends
+            }
         }
     }
 
     /** A click on one of this class's buttons (GuiArmorSC routes ID_FIRST..ID_LAST here). */
     public void action(GuiButton b) {
+        if (lockedWhileBusy(b.id) && busy()) {
+            return;                                                // charging up or streaming: nothing changed here, nothing sent
+        }
         if (b.id == ID_REBOOT) {
             EmpNetSC.send(EmpNetSC.EMERGENCY_REBOOT, 0, 0);       // the server pays, refuses or says why not
             return;
@@ -295,9 +316,13 @@ public final class GuiEmpTabSC {
         // the modules: heading with the totals as its hover
         int hw = fit(font, Lang.tr("sc.empgui.modules"), rx, modulesY, rw, HEAD);
         TextFitSC.hover(rx, modulesY, Math.max(hw, 40), LINE, totals(gun));
+        boolean busy = busy();
         for (Object o : buttons) {
             GuiButton b = (GuiButton) o;
             List<String> tip = buttonTip(gun, b.id);
+            if (tip != null && busy && lockedWhileBusy(b.id)) {
+                tip.add("§c" + Lang.tr("sc.empgui.busy"));
+            }
             if (tip != null) {
                 TextFitSC.hover(b.xPosition, b.yPosition, b.width, b.height, tip);
             }

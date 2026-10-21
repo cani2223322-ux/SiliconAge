@@ -52,11 +52,10 @@ public class ContainerEnergyStorageSC extends Container {
         }
         if (id == BTN_PAD_MODE && storage instanceof com.sc.tileentity.TileEntityChargePadSC) {
             com.sc.tileentity.TileEntityChargePadSC pad = (com.sc.tileentity.TileEntityChargePadSC) storage;
-            String name = player.getCommandSenderName();
             if (pad.getOwner().isEmpty()) {
-                pad.setOwner(name);                        // a pad from before owners: the first to switch it claims it
+                pad.setOwner(player);                      // a pad from before owners: the first to switch it claims it (ЭН-3: and his UUID)
             }
-            if (!pad.getOwner().equalsIgnoreCase(name) && !player.capabilities.isCreativeMode) {
+            if (!pad.isOwner(player) && !player.capabilities.isCreativeMode) {
                 player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.pad.owneronly", pad.getOwner()));
                 return false;
             }
@@ -66,8 +65,25 @@ public class ContainerEnergyStorageSC extends Container {
         return false;
     }
 
+    /** ЭН-5: the cursor's stack (what a click would put into a slot) for the capacity upgrades' limit. */
+    private final InventoryPlayer playerInv;
+
+    /** ЭН-5: a capacity (Energy Storage) upgrade. */
+    static boolean isCapacityUpgrade(ItemStack s) {
+        return s != null && s.getItem() instanceof com.sc.item.ItemUpgradeSC
+                && com.sc.item.ItemUpgradeSC.typeOf(s) == com.sc.machine.UpgradeType.ENERGY_STORAGE;
+    }
+
+    /** ЭН-5: a slot whose limit depends on the item going in (SlotMergeSC.Limited). */
+    private abstract static class LimitedSlot extends Slot implements SlotMergeSC.Limited {
+        LimitedSlot(net.minecraft.inventory.IInventory inv, int index, int x, int y) {
+            super(inv, index, x, y);
+        }
+    }
+
     public ContainerEnergyStorageSC(InventoryPlayer playerInv, TileEntityEnergyStorageSC storage) {
         this.storage = storage;
+        this.playerInv = playerInv;
         for (int k = 0; k < storage.chargeSlots(); k++) {
             final int index = TileEntityEnergyStorageSC.chargeSlotIndex(k);
             addSlotToContainer(new Slot(storage, index, chargeX(k), chargeY(k)) {
@@ -95,10 +111,24 @@ public class ContainerEnergyStorageSC extends Container {
         });
         for (int i = 0; i < TileEntityEnergyStorageSC.UPGRADE_SLOTS; i++) {
             final int upgSlot = TileEntityEnergyStorageSC.FIRST_UPGRADE_SLOT + i;
-            addSlotToContainer(new Slot(storage, upgSlot, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y) {
+            addSlotToContainer(new LimitedSlot(storage, upgSlot, GuiBigSC.UPG_X + i * 18, GuiBigSC.UPG_Y) {
                 @Override
                 public boolean isItemValid(ItemStack stack) {
                     return ContainerEnergyStorageSC.this.storage.acceptsUpgradeHere(stack);   // the splitter from HV, none in a pad
+                }
+
+                /** ЭН-5: capacity upgrades no more than the storage still takes (shift-click, the hotbar keys). */
+                @Override
+                public int limitFor(ItemStack stack) {
+                    return isCapacityUpgrade(stack) ? ContainerEnergyStorageSC.this.storage.capacityUpgradeRoom(upgSlot) : super.getSlotStackLimit();
+                }
+
+                /** ЭН-5: the same for a click (vanilla's slotClick asks this), by the stack in the slot or on the cursor. */
+                @Override
+                public int getSlotStackLimit() {
+                    ItemStack cur = ContainerEnergyStorageSC.this.playerInv.getItemStack();
+                    return isCapacityUpgrade(getStack()) || isCapacityUpgrade(cur)
+                            ? ContainerEnergyStorageSC.this.storage.capacityUpgradeRoom(upgSlot) : super.getSlotStackLimit();
                 }
 
                 /** A capacity upgrade stays while the charge wouldn't fit without it. */
@@ -180,7 +210,12 @@ public class ContainerEnergyStorageSC extends Container {
             if (!mergeItemStack(original, tileSlots, inventorySlots.size(), true)) {
                 return null;
             }
-        } else if (!SlotMergeSC.mergeValid(inventorySlots, original, 0, tileSlots)) {
+        } else if (SlotMergeSC.mergeValid(inventorySlots, original, 0, tileSlots)) {
+            if (original.stackSize > 0) {
+                slot.onSlotChanged();
+                return null;                               // ЭН-5: partly in (a capacity upgrade's limit) - the rest stays put, no retry
+            }
+        } else {
             int hotbarStart = tileSlots + 27;
             boolean moved = slotIndex < hotbarStart
                     ? mergeItemStack(original, hotbarStart, inventorySlots.size(), false)

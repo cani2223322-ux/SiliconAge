@@ -27,6 +27,46 @@ public final class FluidHandSC {
         return held != null && (FluidContainerRegistry.isContainer(held) || held.getItem() instanceof IFluidContainerItem);
     }
 
+    /**
+     * Whether a container in the hand has anything to trade with the handler, simulated only: a full
+     * one some room for its fluid, an empty one something to take, a part-filled cell either. When
+     * not, the click opens the screen instead of a "nothing there" chat line. Machines and quarries alike.
+     */
+    public static boolean canExchange(IFluidHandler te, ItemStack held) {
+        ForgeDirection any = ForgeDirection.UNKNOWN;
+        if (held == null || te == null) {
+            return false;
+        }
+        if (FluidContainerRegistry.isFilledContainer(held)) {
+            FluidStack in = FluidContainerRegistry.getFluidForFilledItem(held);
+            return in != null && te.canFill(any, in.getFluid()) && te.fill(any, in, false) > 0;
+        }
+        if (FluidContainerRegistry.isEmptyContainer(held)) {
+            FluidStack avail = te.drain(any, Integer.MAX_VALUE, false);
+            return avail != null && avail.amount > 0;
+        }
+        if (held.getItem() instanceof IFluidContainerItem && held.stackSize == 1) {
+            IFluidContainerItem item = (IFluidContainerItem) held.getItem();
+            FluidStack carried = item.getFluid(held);
+            if (carried != null && carried.amount > 0) {
+                if (te.canFill(any, carried.getFluid()) && te.fill(any, carried, false) > 0) {
+                    return true;                                  // pours in
+                }
+                if (carried.amount >= item.getCapacity(held)) {
+                    return false;                                 // full, and nowhere to pour it
+                }
+                FluidStack same = te.drain(any, new FluidStack(carried, 1), false);
+                if (same == null || !same.isFluidEqual(carried) || same.amount <= 0) {
+                    same = te.drain(any, 1, false);               // handlers that only drain by amount
+                }
+                return same != null && same.isFluidEqual(carried) && same.amount > 0;   // a top-up
+            }
+            FluidStack avail = te.drain(any, Integer.MAX_VALUE, false);
+            return avail != null && avail.amount > 0 && item.fill(held, avail.copy(), false) > 0;
+        }
+        return false;
+    }
+
     /** Server side: pour or take, then tell the player what happened. */
     public static void use(World world, int x, int y, int z, EntityPlayer player, IFluidHandler te, ItemStack held) {
         boolean creative = player.capabilities.isCreativeMode;

@@ -65,7 +65,17 @@ public final class StormRulesSC {
 
     /** ПФ-1: game day `day` of the world of `seed` has a storm. */
     public static boolean rolls(long seed, long day) {
-        return pick(mix(seed ^ SALT, day, 1), 100) < CHANCE_PCT;
+        return pick(mix(seed ^ SALT, day, 1), 100) < chancePct();
+    }
+
+    /** ПМ-6 (audit 2026-10-20): the day's storm chance with dimension.stormChanceMultiplier (CHANCE_PCT by default), at most 100. */
+    public static int chancePct() {
+        return Math.max(0, Math.min(100, Math.round(CHANCE_PCT * com.sc.dim.SubstrateConfigSC.stormChanceMultiplier)));
+    }
+
+    /** ПМ-6: the day's haze chance with dimension.hazeChanceMultiplier (HAZE_CHANCE_PCT by default), at most 100. */
+    public static int hazeChancePct() {
+        return Math.max(0, Math.min(100, Math.round(HAZE_CHANCE_PCT * com.sc.dim.SubstrateConfigSC.hazeChanceMultiplier)));
     }
 
     /** ПФ-1: the storm's length on that day (ticks, MIN_TICKS..MAX_TICKS). */
@@ -89,7 +99,7 @@ public final class StormRulesSC {
 
     /** ПФ-9: game day `day` has a Silica Haze. */
     public static boolean hazeRolls(long seed, long day) {
-        return pick(mix(seed ^ SALT, day, 11), 100) < HAZE_CHANCE_PCT;
+        return pick(mix(seed ^ SALT, day, 11), 100) < hazeChancePct();   // ПМ-6
     }
 
     /**

@@ -14,7 +14,8 @@ import net.minecraft.world.gen.structure.StructureBoundingBox;
  * depots, the street on from the main gate to the Vokzal). Under the dome (the protected cylinder): Settlement Brick, a copper trace
  * down the middle, nodes along the edges every LAMP_EVERY blocks, lamp posts (steel, a node on top) at the sides every POST_EVERY;
  * outside it - nothing of value lies where nobody protects it, no copper (a trace drops Crushed Copper Ore): plain stone bricks, the
- * axis chiselled.
+ * axis chiselled. The «Достройка» (EmbassyRepairSC.repairing) puts those back only in the Vokzal's dock zone (protected), as the
+ * ground piece does: elsewhere outside the dome a player's block stays (ПС-6).
  */
 public class ComponentEmbStreetSC extends ComponentEmbFrameSC {
 
@@ -35,12 +36,15 @@ public class ComponentEmbStreetSC extends ComponentEmbFrameSC {
             return;
         }
         Block rock = rock();
+        boolean repair = EmbassyRepairSC.repairing();
         int edge = EmbassyQuartersSC.STREET_HALF;
         for (int a = q[0]; a <= q[2]; a++) {
             for (int p = q[1]; p <= q[3]; p++) {
                 int m = Math.abs(p);
                 if (!domed(a, p)) {                                // outside the dome: stone bricks, the axis chiselled
-                    at(w, win, a, 0, p, Blocks.stonebrick, p == 0 ? 3 : 0);
+                    if (!repair || inDockZone(a, p)) {             // ПС-6: the «Достройка» puts back the protected cells only
+                        at(w, win, a, 0, p, Blocks.stonebrick, p == 0 ? 3 : 0);
+                    }
                     continue;
                 }
                 if (m < edge) {
@@ -57,5 +61,14 @@ public class ComponentEmbStreetSC extends ComponentEmbFrameSC {
                 }
             }
         }
+    }
+
+    /**
+     * (a, p) is in the Vokzal's dock zone (EmbassyLayoutSC.DOCK_ZONE across from the beacon at (radius + VOKZAL_OUT, 0) - protected,
+     * SettlementRegistrySC.Settlement.inDockZone; the frame turns, it doesn't stretch: the same distance as the ground piece's).
+     */
+    private boolean inDockZone(int a, int p) {
+        long ba = a - (radius + EmbassyLayoutSC.VOKZAL_OUT), zone = EmbassyLayoutSC.DOCK_ZONE;
+        return ba * ba + (long) p * p <= zone * zone;
     }
 }

@@ -82,7 +82,7 @@ public class ItemBlockSubstrateWildSC extends ItemBlock {
                 return new Object[]{TileEntitySubstrateVentSC.GEYSER_MIN / 20, TileEntitySubstrateVentSC.GEYSER_MAX / 20,
                         TileEntitySubstrateVentSC.GEYSER_RADIUS, TileEntitySubstrateVentSC.GEYSER_DAMAGE, TileEntitySubstrateVentSC.GEYSER_DRAIN_PCT};
             case SubstrateWildBlocksSC.CRACKED_RTG:
-                return new Object[]{(int) SubstrateRadiationSC.RTG_LEVEL, SubstrateRadiationSC.RTG_RADIUS};
+                return new Object[]{com.sc.radiation.RadiationSC.fmt(SubstrateRadiationSC.rtgLevel()), SubstrateRadiationSC.RTG_RADIUS};   // ПМ-6
             default:
                 return new Object[0];
         }

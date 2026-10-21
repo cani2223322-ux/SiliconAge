@@ -56,7 +56,7 @@ public class ItemUpgradeSC extends Item {
         com.sc.util.TooltipSC.more(list, details, Lang.tr("sc.upgrade.tooltip.slot.where", where(stack)));
     }
 
-    /** "machines, generators, storages, the field generator" - every block whose upgrade slots take it (their own checks). */
+    /** "machines, generators, storages, the field generator, the energy converter" - every block whose upgrade slots take it (their own checks). */
     private static String where(ItemStack stack) {
         UpgradeType t = typeOf(stack);
         StringBuilder sb = new StringBuilder();
@@ -71,6 +71,9 @@ public class ItemUpgradeSC extends Item {
         }
         if (com.sc.tileentity.TileEntityFieldGeneratorSC.isFieldUpgrade(stack)) {
             sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr("sc.book.modules.w.field"));
+        }
+        if (com.sc.tileentity.TileEntityEnergyConverterSC.isModule(stack)) {
+            sb.append(sb.length() > 0 ? ", " : "").append(Lang.tr("sc.book.modules.w.converter"));
         }
         return sb.toString();
     }

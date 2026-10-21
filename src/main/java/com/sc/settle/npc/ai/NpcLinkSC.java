@@ -86,6 +86,14 @@ public final class NpcLinkSC {
             if (s == null || s.dim == mob.worldObj.provider.dimensionId) {
                 return false;                                   // at home (or its record is lost: the core makes it again)
             }
+        } else if (mob.worldObj.provider.dimensionId == SettlementSC.EMBASSY_DIM && !com.sc.dim.SubstrateConfigSC.embassies) {
+            // ПС-7 (audit 2026-10-20): the rule took the embassies away - its slot as never filled, so all come back at once with it
+            SettlementRegistrySC r = SettlementRegistrySC.get(mob.worldObj);
+            SettlementRegistrySC.Slot sl = r == null ? null : r.slot(id, ((ISettlementMemberSC) mob).slot());
+            if (sl != null && sl.state == SettlementRegistrySC.ALIVE && sl.uuidMost == mob.getUniqueID().getMostSignificantBits()
+                    && sl.uuidLeast == mob.getUniqueID().getLeastSignificantBits()) {
+                r.slotNever(id, ((ISettlementMemberSC) mob).slot());
+            }
         }
         mob.setDead();
         return true;

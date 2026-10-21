@@ -36,6 +36,9 @@ public enum EliteModSC {
     /** ПС-21 (package A): an order once in ORDER_EVERY_TICKS while the Commander fights, its group's bonus lasts ORDER_BUFF_TICKS;
      * the lines sc.elite.order.0..ORDER_LINES-1. TODO(balance): 100 / 200 ticks */
     public static final int ORDER_EVERY_TICKS = 100, ORDER_BUFF_TICKS = 200, ORDER_LINES = 4;
+    /** МБ-1: an order's line reaches a player's chat at most once in ORDER_CHAT_TICKS (30 s), the first order of a fight at once;
+     * the horn and the telegraph still come with every order. */
+    public static final int ORDER_CHAT_TICKS = 600;
     /** ПС-21: the Charged one's extra reserve. */
     public static final float CHARGED_BONUS = 0.5F;
     /** ПС-21, ПБ-19: the personal EMP screen comes back this long after it took a shot (30 s - the Jammer's too). */

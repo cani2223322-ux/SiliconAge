@@ -42,6 +42,16 @@ public final class ConfigSC {
     public static int leadSuitPartProtection = 22;
     /** The field generator's upkeep; quarries' and the Exo rig's speed. */
     public static float fieldUpkeep = 1F, quarrySpeed = 1F;
+    /** КР-8 (audit 2026-10-20): the quarries' and the Exo rig's EU a block, times this; their Chunk Loader module works at all. */
+    public static float quarryEnergy = 1F;
+    public static boolean quarryChunkLoading = true;
+    /**
+     * ГН-6 (audit 2026-10-20, section "generators"): every generator's EU/t and every fuel generator's fuel a tick, times these;
+     * the Combustion Generator's fuels "fluid=EU/mB" (a String[] - ConfigSyncSC sends it after the numbers; read it through
+     * combustionEuPerMb / combustionFuelNames, never by hand).
+     */
+    public static float generatorOutput = 1F, generatorFuel = 1F;
+    public static String[] combustionFuels = defaultCombustionFuels();
     /** Wireless: transmitter range (XV stays unlimited), the loss over distance, the quantum pair's upkeep; translators load chunks. */
     public static float wirelessRange = 1F, wirelessLoss = 1F, quantumUpkeep = 1F;
     public static boolean quantumChunkLoading = true;
@@ -96,6 +106,75 @@ public final class ConfigSC {
         return Math.max(1L, Math.round(base * (double) mul));
     }
 
+    // ------------------------------------------------------------------ ГН-6: the Combustion Generator's fuels
+
+    /**
+     * The Combustion Generator's fuels by default: the ones it always took (GeneratorType.euPerMb before ГН-6) and, at moderate
+     * values, EnderIO's (hootch, rocket_fuel, fire_water), Thermal Foundation's (coal) and Forestry's (biomass). TODO(pack): the
+     * exact fluid names of the user's pack are not checked (its folder is not to be opened) - a wrong name just never matches.
+     */
+    public static String[] defaultCombustionFuels() {
+        return new String[]{"diesel=16", "fuel=24", "biodiesel=20", "ethanol=12", "bioethanol=12", "biofuel=10", "crudeoil=5", "oil=5",
+                "ic2biogas=4", "hootch=10", "rocket_fuel=24", "fire_water=20", "coal=12", "biomass=5"};
+    }
+
+    /** The parsed combustionFuels (name -> EU/mB, in the list's order) and the array it was parsed from (swapped whole by the sync). */
+    private static volatile Map<String, Double> fuelTable;
+    private static volatile String[] fuelTableOf;
+
+    /** EU one mB of `fluid` gives in the Combustion Generator (combustionFuels), 0 when it isn't one of them. */
+    public static double combustionEuPerMb(String fluid) {
+        if (fluid == null) {
+            return 0;
+        }
+        Double v = fuels().get(fluid);
+        return v == null ? 0 : v.doubleValue();
+    }
+
+    /** The Combustion Generator's fuel names in the list's order (the handbook, NEI, the screen, the fluid drops). */
+    public static String[] combustionFuelNames() {
+        return fuels().keySet().toArray(new String[0]);
+    }
+
+    private static Map<String, Double> fuels() {
+        String[] src = combustionFuels;
+        Map<String, Double> t = fuelTable;
+        if (t == null || fuelTableOf != src) {
+            t = parseFuels(src);
+            fuelTable = t;
+            fuelTableOf = src;
+        }
+        return t;
+    }
+
+    /**
+     * Pure: "fluid=EU/mB" entries (spaces round either side ignored); a line without "=", an empty name, a number that isn't one or
+     * isn't in (0, 1000] is skipped; a name given twice - the first counts.
+     */
+    public static Map<String, Double> parseFuels(String[] lines) {
+        Map<String, Double> out = new java.util.LinkedHashMap<String, Double>();
+        if (lines == null) {
+            return out;
+        }
+        for (String line : lines) {
+            int eq = line == null ? -1 : line.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String name = line.substring(0, eq).trim();
+            double v;
+            try {
+                v = Double.parseDouble(line.substring(eq + 1).trim());
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (name.length() > 0 && v > 0 && v <= 1000 && !Double.isNaN(v) && !out.containsKey(name)) {
+                out.put(name, Double.valueOf(v));
+            }
+        }
+        return out;
+    }
+
     private ConfigSC() {
     }
 
@@ -106,13 +185,13 @@ public final class ConfigSC {
             for (OreEntry ore : OreEntry.values()) {
                 String category = "worldgen.ore." + ore.oreName;
                 int minY = config.getInt("minY", category, ore.defaultMinY, 0, 255,
-                        "Minimum generation height for " + ore.oreName);
+                        "Minimum generation height for " + ore.oreName + " / Наименьшая высота генерации " + ore.oreName);
                 int maxY = config.getInt("maxY", category, ore.defaultMaxY, 0, 255,
-                        "Maximum generation height for " + ore.oreName);
+                        "Maximum generation height for " + ore.oreName + " / Наибольшая высота генерации " + ore.oreName);
                 // Capped at 32: WorldGenMinable's reach grows with vein size, and past ~40 it
                 // writes into not-yet-generated neighbour chunks (cascading worldgen).
                 int veinSize = config.getInt("veinSize", category, ore.defaultVeinSize, 1, 32,
-                        "Blocks per vein for " + ore.oreName);
+                        "Blocks per vein for " + ore.oreName + " / Блоков в жиле " + ore.oreName);
                 int veinsPerChunk = config.getInt("veinsPerChunk", category, 4, 0, 64,
                         "Attempted veins per chunk / Попыток жил на чанк");
                 ORE_SETTINGS.put(ore, new OreGenSettings(minY, maxY, veinSize, veinsPerChunk));
@@ -134,13 +213,14 @@ public final class ConfigSC {
                     "On joining a world or server, tell in the chat about the mod's site (guides, handbook, calculator) with links"
                     + " / При входе в мир или на сервер писать в чате о сайте мода (гайды, справочник, калькулятор) со ссылками");
             machineSounds = config.getBoolean("machines", "sounds", true,
-                    "Working machines, generators and quarries make their sound");
+                    "Working machines, generators and quarries make their sound / Работающие машины, генераторы и карьеры звучат");
             soundVolume = num(config, "volume", "sounds", 1F, 0F, 1F,
-                    "Volume of every Silicon Age sound (0 = silent)");
+                    "Volume of every Silicon Age sound (0 = silent) / Громкость всех звуков Silicon Age (0 - тишина)");
             radiation = config.getBoolean("enabled", "radiation", true,
-                    "RTGs and reactors irradiate players nearby: a dose builds up and makes them ill (lead, suits and fields protect)");
+                    "RTGs and reactors irradiate players nearby: a dose builds up and makes them ill (lead, suits and fields protect)"
+                    + " / РИТЭГи и реакторы облучают игроков рядом: копится доза, от неё болеют (защищают свинец, костюмы и поля)");
             radiationMultiplier = num(config, "multiplier", "radiation", 1F, 0F, 10F,
-                    "Every radiation level is multiplied by this (0.5 = half as strong)");
+                    "Every radiation level is multiplied by this (0.5 = half as strong) / Каждый уровень радиации умножается на это (0.5 - вдвое слабее)");
             String en = "energy";
             config.setCategoryComment(en, "Overvoltage and overheat explosions / Взрывы от перенапряжения и перегрева");
             explosions = config.getBoolean("explosions", en, true,
@@ -152,38 +232,59 @@ public final class ConfigSC {
                     "An overheat explosion breaks the blocks around (off: it only hurts and knocks back, like overvoltage)"
                     + " / Взрыв от перегрева ломает блоки вокруг (выкл.: только ранит и отбрасывает, как при перенапряжении)");
             String b = "balance";
-            config.setCategoryComment(b, "Multipliers on the mod's balance (1 = as designed). On a server, give the clients the same file"
-                    + " so their screens and tooltips show the same numbers.");
+            config.setCategoryComment(b, "Multipliers on the mod's balance (1 = as designed); on a server players get these values on joining"
+                    + " / Множители баланса мода (1 - как задумано); на сервере игроки получают эти значения при входе");
             machineSpeed = num(config, "machineSpeed", b, 1F, 0.1F, 10F,
-                    "Machines work this many times faster (2 = recipes take half the time, at twice the EU a tick - the same EU an operation)");
+                    "Machines work this many times faster (2 = recipes take half the time, at twice the EU a tick - the same EU an operation)"
+                    + " / Машины работают во столько раз быстрее (2 - рецепт вдвое короче при вдвое большем EU/t - тот же EU на операцию)");
             machineEnergy = num(config, "machineEnergy", b, 1F, 0.1F, 10F,
-                    "Machines use this many times the EU (below ~0.7 water electrolysis + a fuel cell starts to give free energy)");
-            storageCapacity = num(config, "storageCapacity", b, 1F, 0.1F, 10F, "Energy storages hold this many times the EU");
-            batteryCapacity = num(config, "batteryCapacity", b, 1F, 0.1F, 10F, "Portable batteries hold this many times the EU");
-            armorCapacity = num(config, "armorCapacity", b, 1F, 0.1F, 10F, "Suit pieces (Nano, Quantum, Exo) hold this many times the EU");
+                    "Machines use this many times the EU (below ~0.7 - ~0.87 with 4 Economizers - water electrolysis + a fuel cell starts to give free energy)"
+                    + " / Машины тратят во столько раз больше EU (ниже ~0.7 - с 4 экономайзерами ниже ~0.87 - электролиз воды и топливный элемент начинают давать бесплатную энергию)");
+            storageCapacity = num(config, "storageCapacity", b, 1F, 0.1F, 10F, "Energy storages hold this many times the EU / Энергонакопители вмещают во столько раз больше EU");
+            batteryCapacity = num(config, "batteryCapacity", b, 1F, 0.1F, 10F, "Portable batteries hold this many times the EU / Переносные аккумуляторы вмещают во столько раз больше EU");
+            armorCapacity = num(config, "armorCapacity", b, 1F, 0.1F, 10F, "Suit pieces (Nano, Quantum, Exo) hold this many times the EU / Части брони (Нано, Квант, Экзо) вмещают во столько раз больше EU");
             armorDamageCost = num(config, "armorDamageCost", b, 1F, 0.1F, 10F,
-                    "EU a suit spends on each point of damage it stops, times this (lower = stronger armour)");
+                    "EU a suit spends on each point of damage it stops, times this (lower = stronger armour)"
+                    + " / Множитель EU, которые броня тратит на каждую единицу поглощённого урона (меньше - броня сильнее)");
             leadSuitPartProtection = config.getInt("leadSuitPartProtection", b, 22, 0, 25,
                     "Radiation each lead suit piece stops, % (4 pieces at 25 = all of it) / Защита от радиации за каждую часть свинцового костюма, %");
-            fieldUpkeep = num(config, "fieldUpkeep", b, 1F, 0.1F, 10F, "The field generator's upkeep, times this");
+            fieldUpkeep = num(config, "fieldUpkeep", b, 1F, 0.1F, 10F, "The field generator's upkeep, times this / Множитель поддержания генератора поля");
             fieldClaimCheck = config.getBoolean("fieldClaimCheck", b, true,
                     "A private field zone can't be switched on over other mods' claims (checked with fake BreakEvents as the owner; off if block loggers or quests count them)"
                     + " / Приватную зону поля нельзя включить поверх клеймов других модов (проверка ложными BreakEvent от имени владельца; выкл., если их считают логгеры или квесты)");
-            quarrySpeed = num(config, "quarrySpeed", b, 1F, 0.1F, 10F, "Quarries and the Exo Drilling Rig dig this many times faster");
-            wirelessRange = num(config, "wirelessRange", b, 1F, 0.1F, 10F, "Wireless transmitters reach this many times as far (XV stays unlimited)");
-            wirelessLoss = num(config, "wirelessLoss", b, 1F, 0F, 10F, "Wireless loss over distance, times this (0 = no loss)");
-            quantumUpkeep = num(config, "quantumUpkeep", b, 1F, 0F, 10F, "The quantum translator pair's upkeep, times this");
+            quarrySpeed = num(config, "quarrySpeed", b, 1F, 0.1F, 10F, "Quarries and the Exo Drilling Rig dig this many times faster / Карьеры и Экзо-установка копают во столько раз быстрее");
+            quarryEnergy = num(config, "quarryEnergy", b, 1F, 0.1F, 10F,
+                    "Quarries and the Exo Drilling Rig use this many times the EU a block / Карьеры и Экзо-установка тратят во столько раз больше EU на блок");
+            quarryChunkLoading = config.getBoolean("quarryChunkLoading", b, true,
+                    "The quarries' and the Exo rig's Chunk Loader module keeps their chunks loaded (off: the module does nothing, a player must be near)"
+                    + " / Модуль „Удержание чанков“ карьеров и Экзо-установки держит их чанки загруженными (выкл.: модуль не работает, нужен игрок рядом)");
+            wirelessRange = num(config, "wirelessRange", b, 1F, 0.1F, 10F, "Wireless transmitters reach this many times as far (XV stays unlimited) / Дальность энергопередатчиков, множитель (у XV без предела)");
+            wirelessLoss = num(config, "wirelessLoss", b, 1F, 0F, 10F, "Wireless loss over distance, times this (0 = no loss) / Множитель потерь беспроводной передачи на расстояние (0 - без потерь)");
+            quantumUpkeep = num(config, "quantumUpkeep", b, 1F, 0F, 10F, "The quantum translator pair's upkeep, times this / Множитель поддержания пары квантовых трансляторов");
             quantumChunkLoading = config.getBoolean("quantumChunkLoading", b, true,
-                    "Quantum translators keep their chunks loaded (off: both ends must be loaded by players)");
+                    "Quantum translators keep their chunks loaded (off: both ends must be loaded by players)"
+                    + " / Квантовые трансляторы держат свои чанки загруженными (выкл.: оба конца должны загружать игроки)");
             ic2CableCurrentLimit = config.getBoolean("ic2CableCurrentLimit", b, false,
                     "With IC2: a cable also burns when the current through it stays above its rating (voltage x amps) for a few ticks, not only on overvoltage"
                     + " / С IC2 кабель сгорает и при превышении тока (напряжение x ток) несколько тиков подряд, а не только при перенапряжении");
             bladeExecutePlayers = config.getBoolean("bladeExecutePlayers", b, false,
-                    "The Exo blade's execute (absolute blow below 20% health) works on players too (off: players take the plain blow)"
-                    + " / Казнь клинка Экзо действует и на игроков (выкл.: по игроку обычный удар)");
+                    "The Exo blade's Execute (absolute blow below 20% health) works on players too (off: players take the plain blow)"
+                    + " / „Добивание“ клинка Экзо действует и на игроков (выкл.: по игроку обычный удар)");
             drillArmorReserve = config.getInt("drillArmorReserve", b, 15, 0, 90,
                     "A drill stops taking energy from the chestplate below this % of its charge (an overheated chestplate never feeds it)"
                     + " / Бур не берёт энергию с нагрудника, если его заряд ниже этого % (перегретый нагрудник не питает)");
+            String gn = "generators";
+            config.setCategoryComment(gn, "Generators (1 = as designed); on a server players get these values on joining"
+                    + " / Генераторы (1 - как задумано); на сервере игроки получают эти значения при входе");
+            generatorOutput = num(config, "generatorOutput", gn, 1F, 0.1F, 10F,
+                    "Every generator makes this many times the EU a tick (above ~1.4 - ~1.15 with 4 Economizers - water electrolysis + a fuel cell starts to give free energy, as machineEnergy below ~0.7)"
+                    + " / Генераторы вырабатывают во столько раз больше EU/t (выше ~1.4 - с 4 экономайзерами выше ~1.15 - электролиз воды и топливный элемент начинают давать бесплатную энергию, как machineEnergy ниже ~0.7)");
+            generatorFuel = num(config, "generatorFuel", gn, 1F, 0.1F, 10F,
+                    "Fuel generators burn this many times the fuel a tick (below ~0.7 - ~0.87 with 4 Economizers - water electrolysis + a fuel cell starts to give free energy)"
+                    + " / Генераторы на топливе сжигают во столько раз больше топлива за тик (ниже ~0.7 - с 4 экономайзерами ниже ~0.87 - электролиз воды и топливный элемент начинают давать бесплатную энергию)");
+            combustionFuels = config.getStringList("combustionFuels", gn, defaultCombustionFuels(),
+                    "The Combustion Generator's fuels, fluid=EU per mB (the fluid's registered name; one that isn't there just never matches)"
+                    + " / Топливо генератора внутреннего сгорания: жидкость=EU за мБ (зарегистрированное имя жидкости; несуществующее просто не подходит)");
             String cv = "converter";
             config.setCategoryComment(cv, "The Energy Converter: exchange rates and loss / Преобразователь энергии: курсы и потери");
             converterRfPerEu = num(config, "rfPerEu", cv, 4F, 0.1F, 1000F, "RF for one EU / RF за 1 EU");
@@ -236,9 +337,9 @@ public final class ConfigSC {
             // after the client had registered its world with its own (docs/plan-substrate-tech.md §2)
             com.sc.dim.SubstrateConfigSC.load(config);
         } finally {
-            if (config.hasChanged()) {
-                config.save();
-            }
+            // СТ-5 (audit 2026-10-20): always - Forge's setCategoryComment / get(..., comment) don't mark the config changed, so
+            // without this an existing file would keep its old (one-language) comments; the values are not touched
+            config.save();
         }
     }
 
@@ -261,9 +362,10 @@ public final class ConfigSC {
         for (java.lang.reflect.Field f : ConfigSC.class.getDeclaredFields()) {
             int m = f.getModifiers();
             if (java.lang.reflect.Modifier.isPublic(m) && java.lang.reflect.Modifier.isStatic(m) && !java.lang.reflect.Modifier.isFinal(m)
-                    && f.getType().isPrimitive()) {
+                    && (f.getType().isPrimitive() || f.getType() == String[].class)) {
                 try {
-                    h = 31 * h + String.valueOf(f.get(null)).hashCode();
+                    Object v = f.get(null);
+                    h = 31 * h + (v instanceof String[] ? java.util.Arrays.hashCode((String[]) v) : String.valueOf(v).hashCode());
                 } catch (Exception ignored) {
                     // not counted
                 }

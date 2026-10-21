@@ -56,7 +56,10 @@ final class SelfTestSubstrateSC {
      */
     private static final String[] RULES = {"strictEntry", "respawnDimension", "bridgeCostMultiplier", "nativesCrossBridge", "empMobTargets",
             "siphonMobs", "gearDropMultiplier", "villages", "guardsAggroOnViolations", "mobsUseEmp", "empStorms", "raids", "requireSignal", "caravans",
-            "embassies", "embassyGrid", "embassyChance", "embassySpawnMin", "embassyRingMin", "embassyRingMax"};
+            "embassies", "embassyGrid", "embassyChance", "embassySpawnMin", "embassyRingMin", "embassyRingMax",
+            // the audit of 2026-10-20: ПМ-6's multipliers of the section dimension, ПС-8's two of embassy
+            "stormChanceMultiplier", "hazeChanceMultiplier", "signalChanceMultiplier", "wardenHealthMultiplier", "wardenLootCooldownDays",
+            "backgroundRadiationMultiplier", "flightPriceMultiplier", "flightsPerDay"};
     /**
      * The ids: private behind getters, never synced (ПК-4); Ф4's three biomes (docs/plan-substrate-tech-f4.md §2.1); Ф5's customSky -
      * not an id, but each client's own look: private as they are, never the server's (docs/plan-substrate-tech-f5.md §2.1).

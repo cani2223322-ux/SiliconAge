@@ -10,11 +10,9 @@ import net.minecraft.world.WorldSavedData;
 /**
  * Blocks placed by players in one dimension (the world's per-dimension storage, "SiliconAgePlaced"): the Singular
  * drill's black hole gives no singularity crumbs for them (docs/plan-singular-tools.md §3.2 - no farming).
- * DrillEventsSC adds on BlockEvent.PlaceEvent, where a piston moves a block and where falling sand / gravel
- * lands, and forgets after a BreakEvent once the block is really gone. Bounded: the newest
- * PlacedRecordSC.DEFAULT_MAX positions per dimension are kept, older ones count as natural again.
- * Not tracked: blocks set by other mods without a PlaceEvent (machines, world editors), anything placed before
- * this record existed.
+ * СТ-2 (audit 2026-10-20): the OLD journal - read only now. The marks live in their chunks (PlacedChunksSC); this file is
+ * never written again (never marked dirty) nor removed: when a chunk from before the change loads, its marks here move
+ * into it (takeChunk) - nothing is lost. Its static placed / mark / forget pass to PlacedChunksSC.
  */
 public class PlacedBlocksSC extends WorldSavedData {
 
@@ -39,24 +37,58 @@ public class PlacedBlocksSC extends WorldSavedData {
         return m;
     }
 
+    /** СТ-2: the chunks' own marks (PlacedChunksSC). */
+    @Deprecated
     public static boolean placed(World w, int x, int y, int z) {
-        PlacedBlocksSC m = get(w);
-        return m != null && m.record.contains(x, y, z);
+        return PlacedChunksSC.placed(w, x, y, z);
     }
 
+    /** СТ-2: into the chunk (PlacedChunksSC) - this journal is never written again. */
+    @Deprecated
     public static void mark(World w, int x, int y, int z) {
-        PlacedBlocksSC m = get(w);
-        if (m != null && y >= 0 && y < 4096) {
-            m.record.add(x, y, z);
-            m.markDirty();
-        }
+        PlacedChunksSC.mark(w, x, y, z);
     }
 
+    @Deprecated
     public static void forget(World w, int x, int y, int z) {
+        PlacedChunksSC.forget(w, x, y, z);
+    }
+
+    /** СТ-2: the journal's marks by chunk (chunkXZ2Int -> the chunk-local keys), laid out on the first take; never saved. */
+    private java.util.Map<Long, int[]> byChunk;
+
+    /**
+     * СТ-2: the old marks of chunk (cx, cz) as PlacedChunkSetSC keys - handed over once (forgotten here in memory; the file
+     * keeps them, but the chunk is written as moved over, so it never asks again). null - none.
+     */
+    public static int[] takeChunk(World w, int cx, int cz) {
         PlacedBlocksSC m = get(w);
-        if (m != null && m.record.remove(x, y, z)) {
-            m.markDirty();
+        if (m == null || m.record.size() == 0 && m.byChunk == null) {
+            return null;
         }
+        if (m.byChunk == null) {
+            java.util.Map<Long, java.util.List<Integer>> lists = new java.util.HashMap<Long, java.util.List<Integer>>();
+            for (long k : m.record.toArray()) {
+                int[] p = com.sc.util.DrillZoneSC.unpack(k);
+                Long key = Long.valueOf(net.minecraft.world.ChunkCoordIntPair.chunkXZ2Int(p[0] >> 4, p[2] >> 4));
+                java.util.List<Integer> l = lists.get(key);
+                if (l == null) {
+                    l = new java.util.ArrayList<Integer>();
+                    lists.put(key, l);
+                }
+                l.add(Integer.valueOf(com.sc.util.PlacedChunkSetSC.key(p[0], p[1], p[2])));
+            }
+            m.byChunk = new java.util.HashMap<Long, int[]>();
+            for (java.util.Map.Entry<Long, java.util.List<Integer>> e : lists.entrySet()) {
+                int[] a = new int[e.getValue().size()];
+                for (int i = 0; i < a.length; i++) {
+                    a[i] = e.getValue().get(i).intValue();
+                }
+                m.byChunk.put(e.getKey(), a);
+            }
+            m.record.clear();                               // laid out by chunk: the flat copy goes (the file stays as it is)
+        }
+        return m.byChunk.remove(Long.valueOf(net.minecraft.world.ChunkCoordIntPair.chunkXZ2Int(cx, cz)));
     }
 
     public int size() {
@@ -73,6 +105,7 @@ public class PlacedBlocksSC extends WorldSavedData {
         }
     }
 
+    /** СТ-2: never asked (never dirty) - the old journal is read only; kept so a save written anyway would be the same. */
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
         long[] all = record.toArray();

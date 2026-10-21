@@ -71,7 +71,8 @@ public class ItemRuinFinderSC extends Item {
         int dx = at[1] - px, dz = at[2] - pz;
         ChatComponentTranslation m = new ChatComponentTranslation(at[0] == VAULT ? "sc.finder.vault" : "sc.finder.litho",
                 new ChatComponentTranslation("sc.finder.dir." + DIRS[direction(dx, dz)]),
-                String.valueOf((int) Math.round(Math.sqrt(dx * (double) dx + dz * (double) dz))));
+                String.valueOf((int) Math.round(Math.sqrt(dx * (double) dx + dz * (double) dz))),
+                String.valueOf(at[1]), String.valueOf(at[2]));            // ПМ-3: and where - X, Z
         m.setChatStyle(new ChatStyle().setColor(EnumChatFormatting.AQUA));
         player.addChatComponentMessage(m);
         world.playSoundAtEntity(player, "random.click", 0.5F, 1.6F);
@@ -88,6 +89,11 @@ public class ItemRuinFinderSC extends Item {
 
     /** reading's kinds. */
     public static final int LITHOGRAPH = 0, VAULT = 1;
+    /**
+     * ПМ-3 (audit 2026-10-20): a ruin nearer than this to the player is passed over - standing in a lithograph or a Vault (looted
+     * as like as not) the finder points to the next one.
+     */
+    public static final int SKIP_NEAR = 48;
 
     /**
      * ПХ-6: the reading at (px, pz) of the Substrate world `world` - {LITHOGRAPH or VAULT, x, z} of the nearer of the nearest
@@ -109,7 +115,7 @@ public class ItemRuinFinderSC extends Item {
                 }
                 double d = dist2(px, pz, s.x, s.z);
                 int r = RuinLayoutSC.HALL_HALF;                 // MapGenLithographSC.getStructureStart's box
-                if (d >= lithoD || gen != null
+                if (d < (double) SKIP_NEAR * SKIP_NEAR || d >= lithoD || gen != null
                         && gone(world, gen.lithographs().startAt(s.x >> 4, s.z >> 4), s.x - r, s.z - r, s.x + r, s.z + r)) {
                     continue;
                 }
@@ -130,7 +136,7 @@ public class ItemRuinFinderSC extends Item {
                 }
                 int x = v[0] * SubstrateTerrainSC.GRID, z = v[1] * SubstrateTerrainSC.GRID, r = RuinLayoutSC.NODE_HALF;
                 double d = dist2(px, pz, x, z);
-                if (d >= vaultD || gen != null && gone(world, gen.vaults().startAt(x >> 4, z >> 4), x - r, z - r, x + r, z + r)) {
+                if (d < (double) SKIP_NEAR * SKIP_NEAR || d >= vaultD || gen != null && gone(world, gen.vaults().startAt(x >> 4, z >> 4), x - r, z - r, x + r, z + r)) {
                     continue;                                   // the box: MapGenVaultSC.getStructureStart's
                 }
                 vaultD = d;

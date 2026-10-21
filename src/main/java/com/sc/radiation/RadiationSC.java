@@ -252,7 +252,17 @@ public final class RadiationSC {
             if (x == ex && z == ez && (y == ey || y == ey - 1)) {
                 break;                                      // the player's own blocks
             }
-            f *= blockPasses(w.getBlock(x, y, z), w.getBlockMetadata(x, y, z));
+            Block b = w.getBlock(x, y, z);
+            int meta = w.getBlockMetadata(x, y, z);
+            float pass = blockPasses(b, meta);
+            // ГН-1 (audit 2026-10-20): a port of a standing build (a tank / store in the wall of a lit Tokamak XV or a compressing
+            // Singular reactor - exactly when there is radiation) is part of its shell: it shields as lead glass. Server only,
+            // and only blocks with a tile entity are looked up (a map lookup)
+            if (pass > THROUGH_LEAD_GLASS && !w.isRemote && b.hasTileEntity(meta)
+                    && com.sc.tileentity.TileEntityGeneratorSC.portHolder(w, x, y, z) != null) {
+                pass = THROUGH_LEAD_GLASS;
+            }
+            f *= pass;
             if (f < 0.001F) {
                 return 0F;
             }
@@ -351,6 +361,13 @@ public final class RadiationSC {
 
     /** Result flags sent to the client. */
     public static final int F_FIELD = 1, F_LEAD = 2, F_ARMOR = 4, F_ARMOR_FAIL = 8;
+    /** БР-2 (audit 2026-10-20): with F_ARMOR_FAIL, its reason (ArmorLogicSC.RAD_FAIL_*) in bits 4-6 - the packet's byte holds them. */
+    public static final int F_REASON_SHIFT = 4, F_REASON_MASK = 7;
+
+    /** БР-2, pure: the shield's failure reason in the flags, 0 - none told. */
+    public static int reasonOf(int flags) {
+        return flags >> F_REASON_SHIFT & F_REASON_MASK;
+    }
 
     /** Once a second, server side. */
     public static void perSecond(EntityPlayer p) {
@@ -414,7 +431,8 @@ public final class RadiationSC {
                     ArmorLogicSC.addHeat(p, whole);
                 }
             } else {
-                flags |= F_ARMOR_FAIL;                      // switched on but overheated or out of charge
+                flags |= F_ARMOR_FAIL                       // switched on but overheated or out of charge - БР-2: and why
+                        | (ArmorLogicSC.radShieldFailure(p) & F_REASON_MASK) << F_REASON_SHIFT;
             }
         }
         if (heavy && left > 0.01F) {                        // added to the shield's share: Quantum 75 + 20 = 95%

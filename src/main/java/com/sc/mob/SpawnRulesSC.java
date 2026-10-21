@@ -79,13 +79,31 @@ public final class SpawnRulesSC {
 
     /** A group of `group` may spawn near a player with `near` natives around and `inWorld` in the whole dimension (Peaceful: never). */
     public static boolean maySpawn(int near, int inWorld, int group, boolean peaceful) {
-        return !peaceful && group > 0 && near + group <= NEAR_MAX && inWorld + group <= WORLD_MAX;
+        return maySpawn(near, inWorld, group, peaceful, WORLD_MAX);
+    }
+
+    /**
+     * МБ-3 (audit 2026-10-20): the dimension's cap with `players` players in it - WORLD_MAX, or NEAR_MAX a player when there are
+     * more of them (6 players: 48), so a full LAN game doesn't starve.
+     */
+    public static int worldMax(int players) {
+        return Math.max(WORLD_MAX, NEAR_MAX * Math.max(0, players));
+    }
+
+    /** МБ-3: maySpawn with the dimension's cap `cap` (worldMax). */
+    public static boolean maySpawn(int near, int inWorld, int group, boolean peaceful, int cap) {
+        return !peaceful && group > 0 && near + group <= NEAR_MAX && inWorld + group <= cap;
     }
 
     /** The largest group from `want` down to `min` that maySpawn allows, 0 if none. */
     public static int fitGroup(int near, int inWorld, int want, int min, boolean peaceful) {
+        return fitGroup(near, inWorld, want, min, peaceful, WORLD_MAX);
+    }
+
+    /** МБ-3: fitGroup with the dimension's cap `cap`. */
+    public static int fitGroup(int near, int inWorld, int want, int min, boolean peaceful, int cap) {
         for (int g = want; g >= Math.max(1, min); g--) {
-            if (maySpawn(near, inWorld, g, peaceful)) {
+            if (maySpawn(near, inWorld, g, peaceful, cap)) {
                 return g;
             }
         }
@@ -97,13 +115,23 @@ public final class SpawnRulesSC {
      * around already.
      */
     public static boolean maySpawn(int near, int nearQuantum, int inWorld, int group, boolean quantum, boolean peaceful) {
-        return maySpawn(near, inWorld, group, peaceful) && (!quantum || nearQuantum + group <= QUANTUM_NEAR_MAX);
+        return maySpawn(near, nearQuantum, inWorld, group, quantum, peaceful, WORLD_MAX);
+    }
+
+    /** МБ-3: the Quantum-aware maySpawn with the dimension's cap `cap`. */
+    public static boolean maySpawn(int near, int nearQuantum, int inWorld, int group, boolean quantum, boolean peaceful, int cap) {
+        return maySpawn(near, inWorld, group, peaceful, cap) && (!quantum || nearQuantum + group <= QUANTUM_NEAR_MAX);
     }
 
     /** Ф3: the largest group from `want` down to `min` that both counts allow, 0 if none. */
     public static int fitGroup(int near, int nearQuantum, int inWorld, int want, int min, boolean quantum, boolean peaceful) {
+        return fitGroup(near, nearQuantum, inWorld, want, min, quantum, peaceful, WORLD_MAX);
+    }
+
+    /** МБ-3: the Quantum-aware fitGroup with the dimension's cap `cap`. */
+    public static int fitGroup(int near, int nearQuantum, int inWorld, int want, int min, boolean quantum, boolean peaceful, int cap) {
         for (int g = want; g >= Math.max(1, min); g--) {
-            if (maySpawn(near, nearQuantum, inWorld, g, quantum, peaceful)) {
+            if (maySpawn(near, nearQuantum, inWorld, g, quantum, peaceful, cap)) {
                 return g;
             }
         }

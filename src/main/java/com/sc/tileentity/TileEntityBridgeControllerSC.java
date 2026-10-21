@@ -66,7 +66,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     // ------------------------------------------------------------------ saved state
 
-    private String owner = "";
+    /** ЭН-3 (audit 2026-10-20): the owner by name and UUID (an old controller - by the name until its owner's first action). */
+    private final com.sc.util.OwnerSC owner = new com.sc.util.OwnerSC();
     private int facing = 3;
     private boolean powerOn;
     private final int[] tanks = new int[BridgeMathSC.GASES.length];
@@ -148,11 +149,17 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     // ------------------------------------------------------------------ getters
 
     public String getOwner() {
-        return owner;
+        return owner.name();
     }
 
     public void setOwner(String o) {
-        owner = o == null ? "" : o;
+        owner.set(o, worldObj);
+        markDirty();
+    }
+
+    /** ЭН-3: owned by the placer (his name and UUID); a FakePlayer or null leaves it ownerless (М-7: the first player claims it). */
+    public void setOwner(EntityPlayer p) {
+        owner.set(p);
         markDirty();
     }
 
@@ -648,21 +655,22 @@ public class TileEntityBridgeControllerSC extends TileEntity {
      * settings and bindings need an owner (ownerlessRefusal); the first player to right-click it becomes its owner (claim).
      */
     public boolean allowed(EntityPlayer p) {
-        return trusted(p) || access == BridgeMathSC.ACCESS_PUBLIC || owner.length() == 0;
+        return trusted(p) || access == BridgeMathSC.ACCESS_PUBLIC || owner.isEmpty();
     }
 
     /** The owner or a friend: remotes and helmets bind and work only for them (§10); without an owner - nobody (М-7). */
     public boolean trusted(EntityPlayer p) {
-        return p == null || owner.length() > 0 && (isOwner(p) || isFriend(p.getCommandSenderName()));
+        return p == null || !owner.isEmpty() && (isOwner(p) || isFriend(p.getCommandSenderName()));
     }
 
+    /** ЭН-3: by the UUID (an old controller by the name; its owner's first action writes the UUID down); friends stay by names. */
     public boolean isOwner(EntityPlayer p) {
-        return p == null || owner.length() > 0 && owner.equals(p.getCommandSenderName());
+        return p == null || owner.matches(p, this);
     }
 
     /** No owner yet. */
     public boolean ownerless() {
-        return owner.length() == 0;
+        return owner.isEmpty();
     }
 
     /**
@@ -670,10 +678,10 @@ public class TileEntityBridgeControllerSC extends TileEntity {
      * @return whether p became the owner now
      */
     public boolean claim(EntityPlayer p) {
-        if (p == null || worldObj == null || worldObj.isRemote || owner.length() > 0 || p instanceof net.minecraftforge.common.util.FakePlayer) {
+        if (p == null || worldObj == null || worldObj.isRemote || !owner.isEmpty() || p instanceof net.minecraftforge.common.util.FakePlayer) {
             return false;
         }
-        setOwner(p.getCommandSenderName());
+        setOwner(p);
         BridgeMsgSC m = new BridgeMsgSC("sc.bridge.msg.claimed");
         log(m, nameOf(p), false);
         tell(p, m);
@@ -683,7 +691,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     /** М-7: the settings / bindings of an ownerless controller are refused (said to the player); null - go on. */
     public BridgeMsgSC ownerlessRefusal(EntityPlayer p) {
-        if (p == null || owner.length() > 0) {
+        if (p == null || !owner.isEmpty()) {
             return null;
         }
         BridgeMsgSC m = new BridgeMsgSC("sc.bridge.refuse.noowner");
@@ -716,7 +724,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     /** Adds a friend (not the owner, not twice, at most MAX_FRIENDS, a plausible name). @return whether added */
     public boolean addFriend(String n) {
         String t = n == null ? "" : n.trim();
-        if (t.length() < 2 || t.length() > 16 || !t.matches("[A-Za-z0-9_]+") || t.equalsIgnoreCase(owner) || isFriend(t)
+        if (t.length() < 2 || t.length() > 16 || !t.matches("[A-Za-z0-9_]+") || owner.nameIs(t) || isFriend(t)
                 || friends.size() >= BridgeMathSC.MAX_FRIENDS) {
             return false;
         }
@@ -769,6 +777,21 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     public boolean isRemoteMode() {
         return remoteMode;
+    }
+
+    /**
+     * МС-1 (audit 2026-10-20): the gas ports give gases out (pipes, containers) - on by default; the owner or a friend switches it
+     * off for a bridge in the open: the ports then only take gases in. NBT "GasOut" (none - on).
+     */
+    private boolean gasOut = true;
+
+    public boolean isGasOut() {
+        return gasOut;
+    }
+
+    public void setGasOut(boolean on) {
+        gasOut = on;
+        markDirty();
     }
 
     /** A remote or a helmet was bound: remembered for the screen (the newest 16). */
@@ -1157,7 +1180,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     /** «Ремонт» (С2): the wear back to 0 for helium and EU, at once. */
     public BridgeMsgSC repair(EntityPlayer p) {
         if (!trusted(p)) {                                   // МС-2: spends the owner's helium and EU - owner / friends only
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
         }
         if (open) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.open"));
@@ -1323,7 +1346,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     /** «Проверить место» (1 mB krypton): free or not, why, the nearest free place. */
     public BridgeMsgSC probe(EntityPlayer p) {
         if (!allowed(p)) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
         }
         if (tanks[BridgeMathSC.KR] < BridgeMathSC.PROBE_KR) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.probekr", BridgeMathSC.PROBE_KR));
@@ -1488,7 +1511,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     public BridgeMsgSC calibrate(EntityPlayer p) {
         if (!allowed(p)) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
         }
         BridgeStructureSC.Scan s = rescan();
         if (s == null || !s.valid) {
@@ -1911,19 +1934,15 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     }
 
     /**
-     * МП-3: who other mods' claims are asked for - the owner (online: his profile; offline: the offline UUID of his
-     * name, as the quarry does), an ownerless controller - the opener; null - nobody to ask for (the server itself).
+     * МП-3: who other mods' claims are asked for - the owner (ЭН-3: the saved UUID; else online - his profile; else the UUID
+     * the server last saw his name with; else the offline UUID of his name - OwnerSC.profile), an ownerless controller - the opener;
+     * null - nobody to ask for (the server itself).
      */
     private com.mojang.authlib.GameProfile claimProfile(EntityPlayer p) {
-        if (owner.length() == 0) {
+        if (owner.isEmpty()) {
             return p == null || p instanceof net.minecraftforge.common.util.FakePlayer ? null : p.getGameProfile();
         }
-        MinecraftServer srv = MinecraftServer.getServer();
-        EntityPlayer on = srv == null ? null : srv.getConfigurationManager().func_152612_a(owner);
-        if (on != null && on.getGameProfile() != null && on.getGameProfile().getId() != null) {
-            return on.getGameProfile();
-        }
-        return new com.mojang.authlib.GameProfile(EntityPlayer.func_146094_a(new com.mojang.authlib.GameProfile(null, owner)), owner);
+        return owner.profile(this);
     }
 
     /**
@@ -2000,7 +2019,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         boolean far = o.source != BridgeMathSC.SRC_CONTROLLER;
         if (far ? !trusted(p) : !allowed(p)) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
         }
         BridgeStructureSC.Scan s = rescan();
         if (open) {
@@ -2871,6 +2890,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             A_FROM_COORD = 22, A_TO_COORD = 23, A_COPY_COORD = 24;
     /** Stage 3: «Ремонт» (С2). */
     public static final int A_REPAIR = 25;
+    /** МС-1 (audit 2026-10-20): «Выдавать газы через порты» on / off (owner / friends). */
+    public static final int A_GAS_OUT = 26;
 
     /** М-7: what an ownerless controller refuses - its settings, bindings, the ring's service; opening / closing stay open to all. */
     private static boolean needsOwner(int a) {
@@ -2888,15 +2909,19 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             case A_BM_ADD:
             case A_BM_RENAME:
             case A_BM_DELETE:
+            case A_GAS_OUT:
                 return true;
             default:
                 return false;
         }
     }
 
-    /** МС-2: what a public bridge keeps from strangers - the power, the tanks, deleting / renaming bookmarks (owner / friends only). */
+    /**
+     * МС-2: what a public bridge keeps from strangers - the power, the tanks, deleting / renaming bookmarks (owner / friends only);
+     * МС-5 (audit 2026-10-20): adding bookmarks too (strangers type coordinates and open, but keep no bookmarks); МС-1: the gas out.
+     */
     private static boolean trustedOnly(int a) {
-        return a == A_POWER || a == A_CLEAR || a == A_BM_RENAME || a == A_BM_DELETE;
+        return a == A_POWER || a == A_CLEAR || a == A_BM_RENAME || a == A_BM_DELETE || a == A_BM_ADD || a == A_GAS_OUT;
     }
 
     public void action(EntityPlayer p, int a, int[] v, String s) {
@@ -2912,7 +2937,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             case A_FRIEND_DEL:
             case A_ACCESS:
                 if (!isOwner(p)) {
-                    refuse(p, new BridgeMsgSC("sc.bridge.refuse.owneronly", owner));
+                    refuse(p, new BridgeMsgSC("sc.bridge.refuse.owneronly", owner.name()));
                     return;
                 }
                 if (a == A_NAME) {
@@ -2931,7 +2956,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 return;
             case A_REMOTE_MODE:
                 if (!trusted(p)) {
-                    refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+                    refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
                     return;
                 }
                 setRemoteMode(!remoteMode);
@@ -2980,7 +3005,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 break;
         }
         if (!allowed(p) || trustedOnly(a) && !trusted(p)) {
-            refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
             return;
         }
         switch (a) {
@@ -2998,6 +3023,9 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 if (v.length >= 1) {
                     clearTank(v[0]);
                 }
+                return;
+            case A_GAS_OUT:
+                setGasOut(!gasOut);
                 return;
             case A_BM_ADD:
                 if (bookmarks.size() >= maxBookmarks()) {
@@ -3040,7 +3068,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             return null;
         }
         if (!trusted(p)) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
         }
         net.minecraft.item.ItemStack helmet = p.getCurrentArmor(3);
         if (!com.sc.util.SingularLevel.isSingular(helmet) || ((com.sc.item.ItemArmorSC) helmet.getItem()).armorType != 0) {
@@ -3101,15 +3129,14 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                     w = null;                                // a point far off isn't checked: a packet never loads / generates chunks for free
                 }
                 int y = v[1];
-                boolean safe = false;
-                if (w != null && y != AUTO_Y) {
-                    safe = BridgeSpaceSC.check(BridgeSpaceSC.of(w), v[0], y, v[2], BridgeMathSC.vortexSize(BridgeMathSC.GROUND), ringAxis()).free;
-                } else if (w != null) {
-                    y = BridgeSpaceSC.autoY(BridgeSpaceSC.of(w), v[0], v[2], BridgeMathSC.vortexSize(BridgeMathSC.GROUND), ringAxis(), BridgeSpaceSC.AUTO_DEPTH);
-                    safe = y >= 0;
-                    y = y >= 0 ? y : v[1];
+                boolean safe = false, safe5 = false;
+                if (w != null) {                             // МС-4: both bridges' vortices (an auto Y - the 3x3's place, the 5x5 there)
+                    int[] both = BridgeSpaceSC.checkBoth(BridgeSpaceSC.of(w), v[0], y, v[2], ringAxis(), y == AUTO_Y);
+                    y = both[0];
+                    safe = both[1] != 0;
+                    safe5 = both[2] != 0;
                 }
-                com.sc.bridge.BridgeItemDataSC.setPoint(c, v[0], y, v[2], bridgeKind() == BridgeMathSC.SPACE ? v[3] : ownDim(), safe);
+                com.sc.bridge.BridgeItemDataSC.setPoint(c, v[0], y, v[2], bridgeKind() == BridgeMathSC.SPACE ? v[3] : ownDim(), safe, safe5);
                 if (s != null && s.trim().length() > 0) {
                     com.sc.bridge.BridgeItemDataSC.setPointName(c, s);
                 }
@@ -3131,8 +3158,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     /** Adds a bookmark (the screen, a remote, the armour's «Запомнить точку»). @return the refusal, or null */
     public BridgeMsgSC addBookmark(EntityPlayer p, String n, int x, int y, int z, int dim) {
-        if (!allowed(p)) {
-            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+        if (!trusted(p)) {                                   // МС-5: the owner and friends only (remotes and helmets are theirs anyway)
+            return refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
         }
         if (bookmarks.size() >= maxBookmarks()) {
             return refuse(p, new BridgeMsgSC("sc.bridge.refuse.bookmarks", maxBookmarks()));
@@ -3156,7 +3183,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         NBTTagCompound t = new NBTTagCompound();
         t.setString("name", name);
-        t.setString("owner", owner);
+        t.setString("owner", owner.name());
         t.setInteger("kind", bridgeKind());
         t.setBoolean("trusted", trusted(viewer));
         t.setBoolean("found", scan != null && scan.found);
@@ -3337,7 +3364,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
 
     public void closeFrom(EntityPlayer p) {
         if (!trusted(p)) {
-            refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner));
+            refuse(p, new BridgeMsgSC("sc.bridge.refuse.access", owner.name()));
             return;
         }
         if (open) {
@@ -3359,7 +3386,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         NBTTagCompound t = new NBTTagCompound();
         boolean ok = allowed(viewer);                         // a stranger at a FRIENDS / PRIVATE controller: no coordinates,
         boolean trust = trusted(viewer);                      // bookmarks, journal or friends (the screen reads missing keys as empty)
-        t.setString("owner", owner);
+        t.setString("owner", owner.name());
         t.setBoolean("allowed", ok);
         t.setBoolean("isOwner", isOwner(viewer));
         t.setBoolean("trusted", trust);
@@ -3372,6 +3399,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         t.setTag("friends", fr);
         t.setBoolean("remoteMode", remoteMode);
+        t.setBoolean("gasOut", gasOut);                        // МС-1
         int remotes = 0, helmets = 0;
         for (NBTTagCompound l : links) {
             if (l.getInteger("k") == BridgeMathSC.SRC_ARMOUR) {
@@ -3480,7 +3508,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
         super.readFromNBT(nbt);
-        owner = nbt.getString("Owner");
+        owner.read(nbt, "Owner", "OwnerId");
         facing = nbt.hasKey("Facing") ? nbt.getInteger("Facing") : 3;
         powerOn = nbt.getBoolean("PowerOn");
         readTanks(nbt);
@@ -3570,6 +3598,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
             friends.add(fl.getStringTagAt(i));
         }
         remoteMode = nbt.getBoolean("RemoteMode");
+        gasOut = !nbt.hasKey("GasOut") || nbt.getBoolean("GasOut");   // МС-1: an old bridge gives out, as before
         bridgeId = nbt.getLong("BridgeId");
         links.clear();
         NBTTagList ll = nbt.getTagList("Links", 10);
@@ -3596,7 +3625,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
         super.writeToNBT(nbt);
-        nbt.setString("Owner", owner);
+        owner.write(nbt, "Owner", "OwnerId");
         nbt.setInteger("Facing", facing);
         nbt.setBoolean("PowerOn", powerOn);
         nbt.setIntArray("BridgeTanks", tanks.clone());
@@ -3642,6 +3671,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         }
         nbt.setTag("Friends", fl);
         nbt.setBoolean("RemoteMode", remoteMode);
+        nbt.setBoolean("GasOut", gasOut);
         nbt.setLong("BridgeId", bridgeId);
         NBTTagList ll = new NBTTagList();
         for (NBTTagCompound l : links) {

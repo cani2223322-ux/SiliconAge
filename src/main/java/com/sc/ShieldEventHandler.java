@@ -95,6 +95,37 @@ public class ShieldEventHandler {
         }
     }
 
+    /**
+     * БР-1 (audit 2026-10-20): a player's death drop is marked with his UUID - the Singular magnet of another player leaves it a
+     * minute (ArmorLogicSC.magnetPulls). LOWEST: after the mods that keep or move the drops (graves, soulbound).
+     */
+    @SubscribeEvent(priority = cpw.mods.fml.common.eventhandler.EventPriority.LOWEST)
+    public void onPlayerDrops(net.minecraftforge.event.entity.player.PlayerDropsEvent event) {
+        if (event.entityPlayer == null || event.entityPlayer.worldObj.isRemote || event.drops == null) {
+            return;
+        }
+        String dead = event.entityPlayer.getUniqueID().toString();
+        for (net.minecraft.entity.item.EntityItem item : event.drops) {
+            if (item != null) {
+                item.getEntityData().setString(com.sc.item.ArmorLogicSC.DIED_BY, dead);
+            }
+        }
+    }
+
+    /**
+     * БР-3 (audit 2026-10-20): the blow a player in a Singular piece takes, as it finally lands (LOWEST, after every change; a
+     * cancelled one - not at all) - the absorbed-damage points of this blow are at most its damage (SingularProgressSC.absorbed).
+     */
+    @SubscribeEvent(priority = cpw.mods.fml.common.eventhandler.EventPriority.LOWEST)
+    public void onHurtLast(net.minecraftforge.event.entity.living.LivingHurtEvent event) {
+        if (event.entityLiving instanceof net.minecraft.entity.player.EntityPlayer && !event.entityLiving.worldObj.isRemote) {
+            net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) event.entityLiving;
+            if (com.sc.util.SingularLevel.wearsSingular(p)) {
+                com.sc.item.SingularProgressSC.noteHit(p, event.ammount);
+            }
+        }
+    }
+
     /** What a player throws is marked (the Singular magnet leaves it alone a moment, ArmorLogicSC.magnetPulls). */
     @SubscribeEvent
     public void onToss(net.minecraftforge.event.entity.item.ItemTossEvent event) {

@@ -9,11 +9,11 @@ public enum ChipType {
     MOBILITY("chipMobility"),
     UTILITY("chipUtility"),
     // life support (docs/plan-armor-gases.md), appended - metadata is ordinal x 3 + tier.
-    // TODO(textures): no icons of their own yet - they borrow the old chips' pictures.
-    CRYO_LOOP("chipDefense"),      // helium cools 50 / 75 / 100% better (more heat per mB)
-    CRYO_TANK("chipUtility"),      // every gas tank of the worn suit +50 / 75 / 100% (piece NBT GasCapBonus)
-    OXYGEN_REGEN("chipSensor"),    // Exo: under water the helmet's oxygen is refilled for EU
-    RECUPERATOR("chipPower");      // 30 / 45 / 60% of the helium that boils away comes back
+    // Their own icons (БР-4) are drawn by tools/gen_gas_chip_tex.py in the old chips' style.
+    CRYO_LOOP("chipCryoLoop"),          // helium cools 50 / 75 / 100% better (more heat per mB)
+    CRYO_TANK("chipCryoTank"),          // every gas tank of the worn suit +50 / 75 / 100% (piece NBT GasCapBonus)
+    OXYGEN_REGEN("chipOxygenRegen"),    // Exo: under water the helmet's oxygen is refilled for EU
+    RECUPERATOR("chipRecuperator");     // 30 / 45 / 60% of the helium that boils away comes back
 
     public final String textureName;
 
