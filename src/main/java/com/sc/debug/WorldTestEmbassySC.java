@@ -128,6 +128,8 @@ public final class WorldTestEmbassySC {
 
     /** Never before this; and after WorldTestFinaleSC is finished. */
     static final int START = WorldTestFinaleSC.START + 600;
+    /** Done (WorldTestEmbassyFlySC flies after it). */
+    static volatile boolean finished;
     /** Waits this long for WorldTestFinaleSC, then begins anyway (INFO). */
     private static final int WAIT_MAX = 72000;
     private static final int TIMEOUT = 4000;
@@ -315,7 +317,12 @@ public final class WorldTestEmbassySC {
         tickets.clear();
         w = null;
         sub = null;
-        System.out.println("[SC-WORLDTEST] DONE embassy");
+        if (WorldTestEmbassyFlySC.registered) {
+            System.out.println("[SC-WORLDTEST] INFO embassy: the fly-through comes next (WorldTestEmbassyFlySC); this test's end line follows its own");
+        } else {
+            System.out.println("[SC-WORLDTEST] DONE embassy");
+        }
+        finished = true;
     }
 
     // ------------------------------------------------------------------ 1. registration (§2.2, ПК-27)

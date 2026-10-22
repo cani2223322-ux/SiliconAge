@@ -117,6 +117,8 @@ public class SCMod {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.lore.SignalSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.settle.caravan.CaravanSC.INSTANCE);
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.caravan.CaravanSC.INSTANCE);
+        // Forge's chunk saving: a chunk being written stays readable (the crash of 2026-10-22 - a null chunk in the block ticks)
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.worldgen.ChunkSaveGuardSC.INSTANCE);
         // Подложка Ф6, docs/plan-substrate-tech-f6.md: the embassies' generation (package G - Forge's ReplaceBiomeBlocks and world
         // load on EVENT_BUS, the populate and decorate bans on TERRAIN_GEN_BUS), the flights' windows (package R - FML's ticks and
         // logouts), the beams (package S - FML's logins, dimension changes, ticks), the first login's line (package T - FML's logins),
@@ -268,6 +270,10 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWildSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestFinaleSC());   // Подложка Ф5 (package D)
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassySC());  // Подложка Ф6 (package D)
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassyFlySC(false));   // a player flying in
+        } else if (System.getProperty("sc.flytest") != null) {
+            // the embassy fly-through alone along a route of the operator's (the crash of 2026-10-22), then the server stops
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassyFlySC(true));
         }
     }
 }

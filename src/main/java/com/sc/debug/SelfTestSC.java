@@ -118,11 +118,28 @@ public final class SelfTestSC {
             SelfTestHazardSC.run();                      // Подложка Ф4 (docs/plan-substrate-tech-f4.md §11.1)
             SelfTestFinaleSC.run();                      // Подложка Ф5 (docs/plan-substrate-tech-f5.md §11.1)
             SelfTestEmbassySC.run();                     // Подложка Ф6 (docs/plan-substrate-tech-f6.md §10.1)
+            chunkSaveGuard();                            // the crash of 2026-10-22: a null chunk in the block ticks
         } catch (Throwable t) {
             fail("exception: " + t);
             t.printStackTrace();
         }
         System.out.println("[SC-TEST] SUMMARY passed=" + passed + " failed=" + failed);
+    }
+
+    /**
+     * The chunk save guard (com.sc.worldgen.ChunkSaveGuardSC, the crash of 2026-10-22) finds Forge's AnvilChunkLoader's save queue, its
+     * lock and PendingChunk's fields by their names in a built jar; an empty one has nothing queued or being written. The window
+     * itself - WorldTestEmbassyFlySC.
+     */
+    private static void chunkSaveGuard() {
+        try {
+            com.sc.worldgen.ChunkSaveGuardSC.Loader l = new com.sc.worldgen.ChunkSaveGuardSC.Loader(
+                    new java.io.File(System.getProperty("java.io.tmpdir"), "sc-selftest-chunkio"));
+            check(!l.queued(0, 0) && !l.writing(0, 0) && !l.writeNextIO() && !l.broken(), "chunk save guard: Forge's AnvilChunkLoader's save queue,"
+                    + " its lock and PendingChunk's fields found; an empty one - nothing queued, nothing being written, writeNextIO false, not broken");
+        } catch (Throwable t) {
+            fail("chunk save guard: " + t);
+        }
     }
 
     static void check(boolean ok, String what) {
