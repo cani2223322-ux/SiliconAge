@@ -56,12 +56,18 @@ public enum MachineType {
      * presses a Compressed Matter Capsule out of every MATTER_PER_CAPSULE of it. Not a recipe
      * machine - it has a branch of its own in TileEntityMachineSC. Appended last: meta = ordinal.
      */
-    MATTER_COMPRESSOR("MatterCompressor", Tier.IV, 2048, false);
+    MATTER_COMPRESSOR("MatterCompressor", Tier.IV, 2048, false),
+    /**
+     * ОМ-4 (docs/plan-ideas-2026-10-26.md, «ЭУФ-литограф и процессоры», the coordinator's - appended, ordinal 32: the third machine
+     * block machineSC3, meta 0): the EUV Lithograph (QV) - processor wafers with the EUV mask, krypton / fluorine and heat (a Stepper's
+     * kin). Its recipes and screen are ОМ-4's. TODO(balance): EU/t
+     */
+    EUV_LITHOGRAPH("EUVLithograph", Tier.QV, 8000, true);
 
     public final String displayName;
     public final Tier tier;
     public final int euPerTick;
-    /** §13.3: only Blast Furnace, Czochralski Puller(+EV), Stepper(+EV), Ion Implanter accumulate heat. */
+    /** §13.3: only Blast Furnace, Czochralski Puller(+EV), Stepper(+EV), Ion Implanter accumulate heat; ОМ-4: the EUV Lithograph too. */
     public final boolean heatCapable;
 
     MachineType(String displayName, Tier tier, int euPerTick, boolean heatCapable) {

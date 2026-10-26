@@ -143,10 +143,17 @@ public class ContainerQuarrySC extends Container {
             return null;                            // a hotbar key would put a whole stack past the slot's limit
         }
         clicking = player.inventory.getItemStack();
+        int loaders = quarry.moduleCount(com.sc.item.ItemQuarryModuleSC.Kind.CHUNK_LOADER);
         try {
             return super.slotClick(slotId, button, mode, player);
         } finally {
             clicking = null;
+            // ОМ-1: a Chunk Loader module put into a quarry / a rig standing in the Substrate - one yellow line (it works as it did)
+            if (!player.worldObj.isRemote && com.sc.dim.SubstrateSC.is(quarry.getWorldObj())
+                    && quarry.moduleCount(com.sc.item.ItemQuarryModuleSC.Kind.CHUNK_LOADER) > loaders) {
+                player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.quarry.chunkLoader.substrate")
+                        .setChatStyle(new net.minecraft.util.ChatStyle().setColor(net.minecraft.util.EnumChatFormatting.YELLOW)));
+            }
         }
     }
 

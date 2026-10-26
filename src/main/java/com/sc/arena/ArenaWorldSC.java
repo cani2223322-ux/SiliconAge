@@ -109,6 +109,9 @@ public final class ArenaWorldSC {
             tell(p, EnumChatFormatting.GRAY, "sc.arena.noarena");
             return true;
         }
+        if (BreachFightSC.insert(w, a, p)) {
+            return true;                                        // ПД-6: a Breach Protocol in (or all taken back) - no countdown
+        }
         if (!a.keyIn) {
             ItemStack held = p.getCurrentEquippedItem();
             if (!isKey(held)) {
@@ -212,6 +215,7 @@ public final class ArenaWorldSC {
         }
         a.state = ArenaDataSC.READY;
         a.keyIn = false;                                        // ПУ-11: the key is spent when the Warden falls
+        BreachFightSC.spent(a);                                 // ПД-6: the protocols with it (the loot has read them already)
         a.bossUuid = "";
         closeCracks(w, a, d);
         LOST.remove(key(a));

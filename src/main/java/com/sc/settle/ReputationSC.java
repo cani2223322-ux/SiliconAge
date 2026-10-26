@@ -55,6 +55,11 @@ public final class ReputationSC {
     public static final int SRC_RAID = 9;
     /** Ф5 (docs/plan-substrate-tech-f5.md §8, ПН-15, the coordinator's): a caravan's ambush beaten off (CaravanRulesSC.REWARD_REP, no day cap). */
     public static final int SRC_CARAVAN = 10;
+    /**
+     * 2026-10-26 (docs/plan-ideas-2026-10-26.md, the coordinator's; no day cap of their own): ПД-5's Gatherer saved (+10, once a game day a
+     * settlement), ПД-4's wanted Renegade (WantedRulesSC.REWARD_REP to each with 10% of the damage), ПД-7's relay post held.
+     */
+    public static final int SRC_RESCUE = 11, SRC_WANTED = 12, SRC_RELAY = 13;
     /** Ф6 (ПД-7): what an embassy's «Доверие» can lift a player to at most - the top of «Партнёр» (OWN_FROM - 1). */
     public static final int EMBASSY_CEILING = OWN_FROM - 1;
     /** Ф6: no ceiling (a Substrate settlement's). */

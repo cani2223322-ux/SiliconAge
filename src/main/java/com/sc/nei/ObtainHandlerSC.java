@@ -161,6 +161,10 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (item == ModItems.fluidDrop) {
             return fluidPage(s);
         }
+        Page idea = ideaPage(s);                          // 2026-10-26 (docs/plan-ideas-2026-10-26.md): the Wanted Token, the Relay
+        if (idea != null) {
+            return idea;
+        }
         Page embassy = embassyPage(s);                    // Ф6: before the settlements' (the showcase metas 7..9 are an embassy's)
         if (embassy != null) {
             return embassy;
@@ -451,6 +455,37 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
      * (crafted - the shapeless recipe is NEI's own page; here what it does and how far it hears) and the showcase metas only an
      * embassy has (BlockShowcase2SC 7..9: the ring's coils, the Vokzal's tanks, the Dispatchers' desk). Null: none of them.
      */
+    /**
+     * The proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md): the «how to get» pages of its items no recipe makes - ПД-4's Wanted Token
+     * (the wanted Renegade's reward), ПД-7's Relay (the Elder's deal at «Свой») and its post's Mast (hidden; only the post has one). One
+     * block an item, each implementer his own. Null: none of them.
+     */
+    private Page ideaPage(ItemStack s) {
+        Item item = s.getItem();
+        // ПД-4: the Wanted Token - the wanted Renegade's reward, no recipe
+        if (com.sc.init.IdeaItemsSC.wantedToken != null && item == com.sc.init.IdeaItemsSC.wantedToken) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.wantedToken", Math.round(com.sc.mob.WantedRulesSC.REWARD_SHARE * 100F)));
+            p.text(Lang.tr("sc.tooltip.wantedToken.howto", com.sc.mob.WantedRulesSC.TOKENS_PER_RESTORE));
+            p.rel(com.sc.settle.SettlementItemsSC.chips(com.sc.mob.WantedRulesSC.REWARD_CHIPS));
+            return p;
+        }
+        // ПД-7: the Relay (an Elder's deal); the Mast is hidden (NEISiliconAgeConfig.hideIdeaBlocks)
+        if (blockItem(item, com.sc.init.IdeaBlocksSC.relay) && s.getItemDamage() == com.sc.block.BlockRelaySC.RELAY) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.relay", levelName(com.sc.settle.RelayRulesSC.BUY_LEVEL), com.sc.settle.RelayRulesSC.PRICE_CHIPS));
+            p.text(Lang.tr("sc.tooltip.relay.relay.details", com.sc.settle.RelayRulesSC.HOLD_TICKS / 1200, com.sc.settle.RelayRulesSC.WAVES));
+            p.rel(com.sc.settle.SettlementItemsSC.chips(com.sc.settle.RelayRulesSC.PRICE_CHIPS));
+            return p;
+        }
+        return null;
+    }
+
+    /** ПД-7: a level's name for a page («Свой»). */
+    private static String levelName(int level) {
+        return Lang.tr("sc.settle.rep." + com.sc.settle.ReputationSC.LEVEL_KEYS[Math.max(0, Math.min(com.sc.settle.ReputationSC.LEVEL_KEYS.length - 1, level))]);
+    }
+
     private Page embassyPage(ItemStack s) {
         Item item = s.getItem();
         if (blockItem(item, com.sc.embassy.EmbassyBlocksSC.ring)) {

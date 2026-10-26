@@ -1036,6 +1036,10 @@ public class GuiQuarrySC extends GuiContainer {
         if (quarry.getChunksHeld() > 0) {
             small(Lang.tr("sc.quarrygui.chunks", quarry.getChunksHeld()), 14, y, 88, GuiHoloSC.OK);
         }
+        if (quarry.moduleCount(ItemQuarryModuleSC.Kind.CHUNK_LOADER) > 0 && com.sc.dim.SubstrateSC.is(quarry.getWorldObj())) {
+            small("!", 6, y, 6, GuiHoloSC.WARN);       // ОМ-1: the warning's mark, its line on hover
+            TextFitSC.hover(guiLeft + 2, guiTop + y - 1, 10, 10, Lang.tr("sc.quarry.chunkLoader.substrate"));
+        }
     }
 
     /** The head card beside the power mode button: which head, how worn. */
@@ -1206,7 +1210,8 @@ public class GuiQuarrySC extends GuiContainer {
             }
         });
         int x = 92, y = 38;
-        small(Lang.tr("sc.quarrygui.exo.chances"), x, y + 1, SX + SW - 6 - x, CAP);
+        boolean sub = com.sc.dim.SubstrateSC.is(quarry.getWorldObj());       // ОМ-1: the Substrate's own table
+        small(Lang.tr(sub ? "sc.gui.quarry.substrateTable" : "sc.quarrygui.exo.chances"), x, y + 1, SX + SW - 6 - x, CAP);
         RenderHelper.enableGUIStandardItemLighting();
         int shown = 0;
         for (com.sc.machine.ExoOreTableSC.Entry e : list) {

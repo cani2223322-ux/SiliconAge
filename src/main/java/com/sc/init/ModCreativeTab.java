@@ -59,8 +59,9 @@ public class ModCreativeTab extends CreativeTabs {
         add(order, ModItems.upgrade, ModItems.tubeSpeedUpgrade, ModItems.itemFilter, ModItems.armorChip,
                 ModItems.fieldLinkModule, ModItems.windRotor, ModItems.isotopeCapsule, ModItems.manual);
         // machines, energy, logistics, the field
-        add(order, ModBlocks.machineSC, ModBlocks.machineSC2);
-        add(order, ModBlocks.generatorSC, ModBlocks.generatorSC2, ModBlocks.tokamakCoil, ModBlocks.gravityCoil, ModBlocks.cableSC, ModBlocks.transformerSC, ModBlocks.energyStorageSC, ModBlocks.chargePadSC);
+        add(order, ModBlocks.machineSC, ModBlocks.machineSC2, ModBlocks.machineSC3);
+        add(order, ModBlocks.generatorSC, ModBlocks.generatorSC2, ModBlocks.tokamakCoil, ModBlocks.gravityCoil, ModBlocks.cableSC, ModBlocks.transformerSC, ModBlocks.energyStorageSC, ModBlocks.chargePadSC,
+                IdeaBlocksSC.energyBank, IdeaBlocksSC.dataPort);
         // energy on the move: batteries, wireless links, the converter
         add(order, ModItems.battery, ModBlocks.wirelessTx, ModBlocks.wirelessRx, ModBlocks.quantumTranslator, ModItems.linkCard,
                 ModItems.entangledCrystal, ModBlocks.energyConverter, ModItems.converterModule);

@@ -89,13 +89,14 @@ public final class WardenLootSC {
         }
         long day = SettlementSC.day(w);
         boolean pe1m = boss.holdsPe1m();
+        int mask = com.sc.arena.BreachFightSC.mask(boss.arena());      // ПД-6: read before bossDied spends them
         int n = 0;
         for (Map.Entry<UUID, Float> en : shares.entrySet()) {
             if (en.getKey() == null || en.getValue() == null || !WardenRulesSC.lootEligible(en.getValue().floatValue())) {
                 continue;                                       // under 10%: experience only
             }
             EntityPlayerMP p = online(en.getKey());
-            if (lootFor(r, en.getKey(), p, day, pe1m, boss.getRNG())) {
+            if (lootFor(r, en.getKey(), p, day, pe1m, boss.getRNG(), mask)) {
                 n++;
             }
             if (p != null) {
@@ -106,7 +107,7 @@ public final class WardenLootSC {
     }
 
     /** One player's loot by his record W. @return given or kept (false: the cooldown) */
-    private static boolean lootFor(SettlementRegistrySC r, UUID id, EntityPlayerMP p, long day, boolean pe1m, Random rand) {
+    private static boolean lootFor(SettlementRegistrySC r, UUID id, EntityPlayerMP p, long day, boolean pe1m, Random rand, int mask) {
         SettlementRegistrySC.PlayerRec rec = r.player(id);
         NBTTagCompound wr = rec.extra.getCompoundTag(WardenRulesSC.EXTRA);
         boolean had = wr.hasKey(WardenRulesSC.LAST_DAY);
@@ -119,7 +120,16 @@ public final class WardenLootSC {
             return false;
         }
         boolean first = !wr.getBoolean(WardenRulesSC.FIRST);
-        List<ItemStack> loot = lootStacks(rand, first, pe1m, trophyMul(p));
+        List<ItemStack> loot = lootStacks(rand, first, pe1m, trophyMul(p) * com.sc.arena.BreachProtocolsSC.trophyMul(mask));
+        int extra = com.sc.arena.BreachProtocolsSC.crumbs(mask);   // ПД-6: +2 Crumbs a protocol (past the day's cap, as the boss's own)
+        if (extra > 0 && ModItems.singularCrumb != null) {
+            add(loot, new ItemStack(ModItems.singularCrumb, extra));
+        }
+        if (com.sc.arena.BreachProtocolsSC.scheme(mask) && p != null
+                && com.sc.finale.FinaleRulesSC.unlock(p, com.sc.util.SingularScheme.N)) {
+            p.addChatComponentMessage(new ChatComponentTranslation("sc.protocol.scheme",
+                    new ChatComponentTranslation(com.sc.util.SingularScheme.N.langKey())));
+        }
         wr.setLong(WardenRulesSC.LAST_DAY, day);
         wr.setInteger(WardenRulesSC.KILLS, wr.getInteger(WardenRulesSC.KILLS) + 1);
         wr.setBoolean(WardenRulesSC.FIRST, true);

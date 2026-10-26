@@ -25,7 +25,13 @@ public enum SiliconMaterial {
     CONTROLLER("controller"),
     // §18.1 GaAs subsystem - reuses Chem Reactor/Czochralski Puller/Wire Saw, not new machines.
     GAAS_INGOT("gaAsIngot"),
-    GAAS_WAFER("gaAsWafer");
+    GAAS_WAFER("gaAsWafer"),
+    // ОМ-4 (docs/plan-ideas-2026-10-26.md, «ЭУФ-литограф и процессоры», the coordinator's - appended, metas 18..21): the EUV
+    // Lithograph's wafer, the Processor (QV), the Exo Processor (XV), the Singular Matrix (SV)
+    PROCESSOR_WAFER("processorWafer"),
+    PROCESSOR("processor"),
+    EXO_PROCESSOR("exoProcessor"),
+    SINGULAR_MATRIX("singularMatrix");
 
     public final String textureName;
 

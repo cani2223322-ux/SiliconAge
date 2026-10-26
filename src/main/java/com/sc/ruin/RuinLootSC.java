@@ -169,6 +169,19 @@ public final class RuinLootSC {
         }
     }
 
+    /** ПД-8 (docs/plan-ideas-2026-10-26.md): a tunnel chest's rolls - the Dead Node's table, weaker (TODO(balance)). */
+    public static final int TUNNEL_ROLLS_MIN = 2, TUNNEL_ROLLS_MAX = 4;
+
+    /** ПД-8: a tunnel chest's contents (the Dead Node's table, fewer rolls; no Crumb, no Journal). */
+    public static List<ItemStack> tunnelChest(Random rand) {
+        return rolls(NODE, nodeItems(), TUNNEL_ROLLS_MIN + rand.nextInt(TUNNEL_ROLLS_MAX - TUNNEL_ROLLS_MIN + 1), rand);
+    }
+
+    /** ПД-8: fills a tunnel's chest (ComponentTunnelSC, ComponentTunnelJunctionSC). */
+    public static void fillTunnel(IInventory inv, Random rand) {
+        fill(inv, tunnelChest(rand), rand);
+    }
+
     /** Fills a Dead Node chest (empty slots at random). Ф5: and, on its chance, a Journal №1 / №2 (not nodeChest's - raids roll that). */
     public static void fillNode(IInventory inv, Random rand) {
         List<ItemStack> out = nodeChest(rand);

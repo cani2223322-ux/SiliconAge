@@ -125,6 +125,9 @@ public class ItemQuarryModuleSC extends Item {
         if (k == Kind.CHUNK_LOADER && !com.sc.util.ConfigSC.quarryChunkLoading) {
             list.add("§c" + Lang.tr("sc.quarry.chunks.off"));   // КР-8 (audit 2026-10-20): the server keeps no chunks for quarries
         }
+        if (k == Kind.CHUNK_LOADER && com.sc.util.TooltipSC.shift()) {
+            list.add("§e" + Lang.tr("sc.tooltip.quarryModule.chunkLoader.substrate"));   // ОМ-1: the whole Substrate kept loaded
+        }
         com.sc.util.TooltipSC.more(list, Lang.tr("sc.quarrymodule.tooltip." + k.name().toLowerCase(java.util.Locale.ROOT)),
                 Lang.tr("sc.quarrymodule.tooltip.slot", k.max));
         String working = com.sc.inventory.GuiQuarrySC.moduleWorkingLine(stack);   // tooltips are client-only; NEI draws them too

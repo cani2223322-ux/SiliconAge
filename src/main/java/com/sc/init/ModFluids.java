@@ -44,6 +44,11 @@ public final class ModFluids {
     public static Fluid heavyWater;
     /** Singular matter (docs/plan-singular-armor.md §4): the Singular suit's 8th tank; made by the Matter Compressor's liquid mode and the Singular Reactor's by-product. */
     public static Fluid singularMatter;
+    /**
+     * ОМ-3 (docs/plan-ideas-2026-10-26.md, «Гафний из лишнего циркония», ★ A; the coordinator's): zirconium and hafnium chlorides
+     * (ZrCl4 / HfCl4) - the Chemical Reactor's chlorination of zirconium, split again in the Refinery. Corrosive: PTFE pipes only.
+     */
+    public static Fluid zrcl4;
 
     /** Fluids this mod actually registered - only these get our icons (see register()). */
     public static final List<Fluid> OWNED = new ArrayList<Fluid>();
@@ -58,7 +63,7 @@ public final class ModFluids {
         // them. Dry chlorine, caustic soda, TiCl4 and the dopant hydrides are handled in steel
         // in real plants; listing them made the first titanium (Cl2 -> TiCl4 -> Kroll) need PTFE,
         // which only the HV Refinery makes - built from titanium.
-        for (String corrosive : new String[]{"hcl", "hf", "fluorine", "bcl3"}) {
+        for (String corrosive : new String[]{"hcl", "hf", "fluorine", "bcl3", "zrcl4"}) {      // ОМ-3: the chlorides of Zr / Hf too
             com.sc.util.CorrosiveFluids.register(corrosive);
         }
         COLORS.put("hcl", 0xFFC8D87A);
@@ -85,6 +90,7 @@ public final class ModFluids {
         COLORS.put("ticl4", 0xFFE8E4C8);
         COLORS.put("heavywater", 0xFF3A62C0);
         COLORS.put("singularmatter", 0xFFC85AFF);
+        COLORS.put("zrcl4", 0xFFD8E0B0);
         hcl = register("hcl");
         sihcl3 = register("sihcl3");
         hydrogen = register("hydrogen", true);
@@ -109,6 +115,7 @@ public final class ModFluids {
         ticl4 = register("ticl4", false);
         heavyWater = register("heavywater");
         singularMatter = register("singularmatter");
+        zrcl4 = register("zrcl4");                       // ОМ-3 (appended)
     }
 
     private static Fluid register(String name) {

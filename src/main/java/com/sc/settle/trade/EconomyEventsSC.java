@@ -81,24 +81,42 @@ public final class EconomyEventsSC {
             int src = ReputationSC.smallKill(suit) ? ReputationSC.SRC_KILL_SMALL : ReputationSC.SRC_KILL_BIG;
             changed |= ReputationSC.give(rec, ReputationSC.killReward(suit), src, day) != 0;
         }
-        // ПО-8: the open contracts that count this kill
+        // ПО-8: the open contracts that count this kill - 2026-10-26, ПД-2 (docs/plan-ideas-2026-10-26.md): the killer's and his squad
+        // mates' with 10% of the damage (SquadSC.contractCredits; the kill's «Доверие» above stays the killer's alone)
         boolean suppressed = armor != null && suit != null && armor.anySuppressed();
         String name = mobName(mob);
-        for (SettlementRegistrySC.ContractRec r : rec.open()) {
-            ContractTableSC.Contract k = ContractTableSC.byKey(r.key);
-            if (k == null || r.progress >= r.target) {
-                continue;
-            }
-            boolean counts = k.goal == ContractTableSC.KILL ? k.what.equals(name) : k.goal == ContractTableSC.SUPPRESS_KILL && suppressed;
-            if (counts) {
-                r.progress++;
-                changed = true;
-                say(killer, k, r);
+        for (EntityPlayerMP p : com.sc.settle.SquadSC.contractCredits(mob, killer)) {
+            SettlementRegistrySC.PlayerRec pr = p == killer ? rec : reg.player(p.getUniqueID());
+            for (SettlementRegistrySC.ContractRec r : pr.open()) {
+                ContractTableSC.Contract k = ContractTableSC.byKey(r.key);
+                if (k == null || r.progress >= r.target) {
+                    continue;
+                }
+                if (killCounts(k, mob, name, suppressed)) {
+                    r.progress++;
+                    changed = true;
+                    say(p, k, r);
+                }
             }
         }
         if (changed) {
             reg.markDirty();
         }
+    }
+
+    /**
+     * ПО-8: contract `k` counts the kill of `mob` (its registry name without the prefix `name`; a piece of its armour suppressed by ПЭ-1 at
+     * death - `suppressed`). The coordinator's split (2026-10-26): ПД-1 adds its kill goals here (the storm's armoured kills, the local
+     * hunts), ПД-2 never touches it. Server.
+     */
+    public static boolean killCounts(ContractTableSC.Contract k, EntityLivingBase mob, String name, boolean suppressed) {
+        if (k == null) {
+            return false;
+        }
+        if (k.goal == ContractTableSC.STORM_KILL) {             // ПД-1: an armoured hostile finished off during an EMP storm
+            return ContractTableSC.stormCounts(mob instanceof IArmoredMobSC, mob != null && com.sc.hazard.EmpStormSC.active(mob.worldObj));
+        }
+        return k.goal == ContractTableSC.KILL ? k.what.equals(name) : k.goal == ContractTableSC.SUPPRESS_KILL && suppressed;
     }
 
     /** The first Interdimensional Anchor placed in the Substrate by a real player is theirs to be paid for (once a world). */
@@ -149,8 +167,8 @@ public final class EconomyEventsSC {
         return dot < 0 ? s : s.substring(dot + 1);
     }
 
-    /** One line for a contract's step: the count, or - the last one - where to hand it in. */
-    private static void say(EntityPlayer p, ContractTableSC.Contract k, SettlementRegistrySC.ContractRec r) {
+    /** One line for a contract's step: the count, or - the last one - where to hand it in (ПД-1: ContractEventsSC's steps too). */
+    static void say(EntityPlayer p, ContractTableSC.Contract k, SettlementRegistrySC.ContractRec r) {
         ChatComponentTranslation title = new ChatComponentTranslation(k.langKey());
         if (r.progress >= r.target) {
             p.addChatComponentMessage(new ChatComponentTranslation("sc.contract.ready", title)

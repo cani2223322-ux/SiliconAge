@@ -50,7 +50,11 @@ public final class BossClientSC {
      * FinaleNetSC.BOSS_FX kinds (fixed, append only): the core reset's blast, the silencing pulse's wave, a coil dark / broken / lit.
      * The server's code sends the same numbers from WardenFightSC.FX_* (it never names this client class).
      */
-    public static final int FX_CORE_RESET = 1, FX_SILENCE = 2, FX_COIL_DARK = 3, FX_COIL_BROKEN = 4, FX_COIL_LIT = 5;
+    public static final int FX_CORE_RESET = 1, FX_SILENCE = 2, FX_COIL_DARK = 3, FX_COIL_BROKEN = 4, FX_COIL_LIT = 5,
+            // ---- ПД-6 (docs/plan-ideas-2026-10-26.md, appended): a «Помехи» pulse over the pit (com.sc.arena.BreachFightSC.FX_JAMMING)
+            FX_JAMMING = 6;
+    /** ПД-6: the jamming ring's colour (the Breach's crimson) and life. */
+    public static final int JAMMING_RGB = 0xFF2E6E, JAMMING_TICKS = 18;
     /** The rings: their colours, life (ticks), the bands' width and the wall's height; the sky's flash within FLASH_RANGE. */
     public static final int SILENCE_RGB = 0xA06EFF, RESET_RGB = 0xFFF0C8, SILENCE_TICKS = 14, RESET_TICKS = 22, FLASH_RANGE = 64;
     private static final double BAND = 0.6D, WALL = 2.2D;
@@ -158,6 +162,14 @@ public final class BossClientSC {
                 burst(mc, w, "largesmoke", x, y - 0.5D, z, 14, 0.08D);
                 burst(mc, w, "lava", x, y - 0.5D, z, 4, 0D);
                 break;
+            case FX_JAMMING: {
+                RINGS.add(new double[]{x, y, z, WardenRulesSC.SCALE_RADIUS, tick, JAMMING_TICKS, JAMMING_RGB});
+                if (mc.thePlayer.getDistanceSq(x, y, z) <= (double) WardenRulesSC.SCALE_RADIUS * WardenRulesSC.SCALE_RADIUS) {
+                    burst(mc, w, "witchMagic", mc.thePlayer.posX, mc.thePlayer.posY + 1D, mc.thePlayer.posZ, 20, 0.2D);
+                    w.playSound(mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ, "random.fizz", 1.0F, 0.5F, false);
+                }
+                break;
+            }
             case FX_COIL_LIT:
                 for (int i = 0; i < scaled(mc, 20); i++) {
                     double a = Math.PI * 2D * i / 20D;

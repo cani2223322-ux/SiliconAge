@@ -1171,7 +1171,8 @@ public final class SelfTestSettlementSC {
                 bad.append(" twice ").append(c.key);
             }
             boolean ambassadors = c.key.startsWith("emb");            // Ф6 (ПО-27): the Ambassador's, its «Депеша» a goal of its own - SelfTestEmbassySC's
-            if (c.goal < ContractTableSC.KILL || c.goal > ContractTableSC.CARGO && !ambassadors || c.target <= 0 || c.chips <= 0 || c.reputation < ReputationSC.CONTRACT_MIN
+            // ПД-1 (docs/plan-ideas-2026-10-26.md): the new goals STORM_KILL..BIG_ORDER (the Big order's own sides - SelfTestIdeasSC.pd1)
+            if (c.goal < ContractTableSC.KILL || c.goal > ContractTableSC.BIG_ORDER && !ambassadors || c.target <= 0 || c.chips <= 0 || c.reputation < ReputationSC.CONTRACT_MIN
                     || c.reputation > ReputationSC.CONTRACT_MAX || c.modulePct < 0 || c.modulePct > 100 || ContractTableSC.byKey(c.key) != c) {
                 bad.append(' ').append(c.key).append(" goal ").append(c.goal).append(" target ").append(c.target).append(" reward ").append(c.chips)
                         .append(" / +").append(c.reputation);

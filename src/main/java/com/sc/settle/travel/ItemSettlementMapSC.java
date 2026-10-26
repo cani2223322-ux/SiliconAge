@@ -63,7 +63,7 @@ public class ItemSettlementMapSC extends Item {
             return st;
         }
         NBTTagList l = new NBTTagList();
-        for (SettlementRegistrySC.Settlement s : reg.nearestDocks(at.dim, at.x + 0.5D, at.z + 0.5D, TravelRulesSC.MAP_DOCKS, -1)) {
+        for (SettlementRegistrySC.Settlement s : reg.nearestDocks(at.dim, at.x + 0.5D, at.z + 0.5D, TravelRulesSC.MAP_DOCKS, -1, false)) {   // ПД-7: no relay posts
             NBTTagCompound e = new NBTTagCompound();
             e.setInteger("id", s.id);
             e.setIntArray("name", new int[]{s.nameElement, s.nameNumber});

@@ -25,7 +25,9 @@ public final class TravelRulesSC {
     /** ПР-3: the bridge's list holds at most this many known docks (besides «Первый причал» and the death mark), nearest first. */
     public static final int LIST_DOCKS = 12;
     /** ПР-3: the kinds of a bridge list entry (the screens' `si14` list, "k"). Append only. */
-    public static final int T_FIRST = 0, T_DOCK = 1, T_DEATH = 2;
+    public static final int T_FIRST = 0, T_DOCK = 1, T_DEATH = 2,
+            // ---- ПД-2 (docs/plan-ideas-2026-10-26.md, appended): a squad mate's death mark ("pn" - his name)
+            T_MATE_DEATH = 3;
     /** ПР-2, ПР-6: famInfo's 5th value - the target point is plain ground, a dock, the viewer's death mark. */
     public static final int AT_NONE = 0, AT_DOCK = 1, AT_MARK = 2;
 

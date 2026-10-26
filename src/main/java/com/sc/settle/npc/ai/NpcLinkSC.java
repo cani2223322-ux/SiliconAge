@@ -83,6 +83,10 @@ public final class NpcLinkSC {
         if (SettlementSC.governs(mob.worldObj)) {
             SettlementRegistrySC r = SettlementRegistrySC.get(mob.worldObj);
             SettlementRegistrySC.Settlement s = r == null ? null : r.byId(id);
+            if (s == null && com.sc.settle.RelayPostSC.gone(r, id)) {
+                mob.setDead();                                  // ПД-7: its relay post was destroyed - no core makes the record again
+                return true;
+            }
             if (s == null || s.dim == mob.worldObj.provider.dimensionId) {
                 return false;                                   // at home (or its record is lost: the core makes it again)
             }

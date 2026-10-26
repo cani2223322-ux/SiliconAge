@@ -273,6 +273,8 @@ public final class BookWorldSC {
         BookFinaleSC.add(list, c);
         // Ф6 «Посольства Наладчиков» (docs/plan-substrate-tech-f6.md §9.2): at the chapter's end
         BookEmbassySC.add(list, c);
+        // the proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md): ПД-2..ПД-8's own articles, at the chapter's end
+        BookIdeasSC.add(list, c);
     }
 
     /** Ф3: the eight new articles, in the chapter's order (the self-test counts and checks them). */
@@ -287,6 +289,12 @@ public final class BookWorldSC {
     /** Ф6: the six new articles (§9.2), in the chapter's order (BookEmbassySC; SelfTestEmbassySC counts and checks them). */
     public static final String[] F6_ARTICLES = {"world.embassies", "world.embassyCity", "world.flights", "world.flightsBack", "world.embassyTrade",
             "world.embassyRules"};
+    /**
+     * The proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md): its six new articles at the chapter's end, after Ф6's (BookIdeasSC;
+     * SelfTestIdeasSC checks them, the phases' self-tests count them).
+     */
+    public static final String[] IDEAS_ARTICLES = {"world.squads", "world.wanted", "world.gatherers", "world.protocols", "world.relayPosts",
+            "world.tunnels"};
 
     /** The chapter's tile: Crystallite while the Substrate's blocks exist, else a compass. */
     static ItemStack icon() {
@@ -826,8 +834,10 @@ public final class BookWorldSC {
             if (k.key.startsWith(BookEmbassySC.EMB_PREFIX)) {
                 continue;                                   // Ф6 (ПО-27): the Ambassador's own - «Лавка и Интендант»
             }
-            ct.row(null, Lang.tr("sc.contract." + k.key), String.valueOf(k.target), reward(k.chips, k.reputation)
-                    + (k.modulePct > 0 ? " " + Lang.tr("sc.manual.world.cell.module", k.modulePct) : ""));
+            String group = k.group == ContractTableSC.G_LOCAL ? "sc.contract.group.local" : k.group == ContractTableSC.G_ORDER
+                    ? "sc.contract.group.order" : k.group == ContractTableSC.G_BIG ? "sc.contract.group.big" : null;   // ПД-1: the board's parts
+            ct.row(null, Lang.tr("sc.contract." + k.key) + (group == null ? "" : " (" + Lang.tr(group) + ")"), String.valueOf(k.target),
+                    reward(k.chips, k.reputation) + (k.modulePct > 0 ? " " + Lang.tr("sc.manual.world.cell.module", k.modulePct) : ""));
         }
         ct.row(com.sc.block.BlockBridgeSC.stack(com.sc.block.BlockBridgeSC.ANCHOR, 1), Lang.tr("sc.contract.anchor"), "1",
                 reward(ReputationSC.ANCHOR_CHIPS, ReputationSC.ANCHOR) + " " + Lang.tr("sc.manual.world.cell.once"));
@@ -1946,6 +1956,23 @@ public final class BookWorldSC {
         e.add(r);
         e.addAll(BookContent.paras("sc.manual.world.raids.end", null, new Object[]{minutes(RaidRulesSC.RAID_TICKS), minutes(RaidRulesSC.ABANDON_TICKS),
                 days(RaidRulesSC.CLOSED_TICKS)}));
+        // ПД-3 (docs/plan-ideas-2026-10-26.md): a raid called for - «Тревога» and «Тяжёлая ночь», the deposit, the fourth wave, x1.5
+        e.add(BookEl.head(Lang.tr("sc.trade.offer.elderAlarm") + " / " + Lang.tr("sc.trade.offer.elderHeavyNight"), kindIcon(NpcKindSC.ELDER)));
+        e.add(BookEl.para(Lang.tr("sc.manual.world.raids.alarm", levelName(com.sc.hazard.RaidAlarmSC.ALARM_LEVEL), com.sc.hazard.RaidAlarmSC.ALARM_DAYS,
+                levelName(com.sc.hazard.RaidAlarmSC.HEAVY_LEVEL), com.sc.hazard.RaidAlarmSC.HEAVY_DAYS, com.sc.hazard.RaidAlarmSC.DEPOSIT,
+                multiplier(com.sc.hazard.RaidAlarmSC.HEAVY_MUL))));
+        if (!com.sc.dim.SubstrateConfigSC.raidAlarms) {
+            e.add(BookEl.warn(Lang.tr("sc.alarm.refuse.off")));
+        }
+        BookEl heavy = BookEl.table(Lang.tr("sc.manual.world.t.size"), Lang.tr("sc.manual.world.t.trust"), Lang.tr("sc.manual.world.t.chips"),
+                Lang.tr("sc.manual.world.t.elderchest"));
+        for (int s = 0; s < sizes.length; s++) {
+            float m = com.sc.hazard.RaidAlarmSC.HEAVY_MUL;
+            heavy.row(null, Lang.tr(sizes[s].langKey()) + " (" + Lang.tr("sc.trade.offer.elderHeavyNight") + ")", "+" + RaidRulesSC.scaled(RaidRulesSC.rep(s), m),
+                    String.valueOf(RaidRulesSC.scaled(RaidRulesSC.chips(s), m)), String.valueOf(RaidRulesSC.scaled(RaidRulesSC.chestRolls(s), m)));
+        }
+        e.add(heavy);
+        e.add(BookEl.dim(waveText(RaidRulesSC.wave(RaidRulesSC.WAVES_HEAVY - 1, 0, new java.util.Random(0L)))));
         e.add(BookEl.link("world.settlements", Lang.tr("sc.manual.world.settlements.title")));
         e.add(BookEl.link("world.trust", Lang.tr("sc.manual.world.trust.title")));
         e.add(BookEl.link("world.wardens", Lang.tr("sc.manual.world.wardens.title")));
@@ -2734,6 +2761,23 @@ public final class BookWorldSC {
 
     /** The NEI line of loot `meta`: who drops it and how often. */
     public static String lootLine(int meta) {
+        return lootLine0(meta) + homeSuffix(meta);
+    }
+
+    /**
+     * ОМ-2 (docs/plan-ideas-2026-10-26.md): « <how it is used at home>» - the Substrate's loot in the home machines (the loot's own
+     * sc.tooltip.loot.<name>.howto: the crusher, the rolling machine, the centrifuge, the reactor...); "" for the rest.
+     */
+    static String homeSuffix(int meta) {
+        if (meta != LOOT_NANITE_DUST && meta != LOOT_BOILED_LOOP && meta != LOOT_INDUCTION_THREAD && meta != LOOT_PLASMA_CONDENSATE
+                && meta != LOOT_SINGULAR_SCRAP && meta != LOOT_NATURAL_WAFER) {
+            return "";
+        }
+        String s = Lang.trOr("sc.tooltip.loot." + LOOT_NAMES[meta] + ".howto", null);
+        return s == null ? "" : " " + s;
+    }
+
+    private static String lootLine0(int meta) {
         if (meta == LOOT_NANO_SCRAP) {
             return Lang.tr("sc.manual.world.loot.nanoScrap", pct(stat(DROPS, "SCRAP_CHANCE", 0.4F)));
         }

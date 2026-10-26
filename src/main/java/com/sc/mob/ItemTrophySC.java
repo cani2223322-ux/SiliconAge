@@ -169,6 +169,9 @@ public class ItemTrophySC extends Item {
         if (sale != null && sale.out != null) {
             text += "\n" + Lang.tr("sc.tooltip.trophy.salvager", sale.out.count);
         }
+        if (com.sc.item.SalvageSC.refusal(stack) == com.sc.item.SalvageSC.OK) {
+            text += "\n" + Lang.tr("sc.tooltip.trophy.salvage");   // ОМ-6: or broken up at the Armour Service Station
+        }
         return text;
     }
 

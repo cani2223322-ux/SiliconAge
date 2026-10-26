@@ -6,11 +6,13 @@ import com.sc.inventory.ContainerTradeSC;
 import com.sc.settle.NpcKindSC;
 import com.sc.settle.SettleNetSC;
 import com.sc.settle.SettlementRegistrySC;
+import com.sc.settle.SquadSC;
 import com.sc.settle.npc.EntityTunerSC;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraftforge.common.util.FakePlayer;
 
 /**
@@ -72,7 +74,18 @@ public final class FlightServerSC {
             } else if (!fid.isEmpty() && friend == null) {
                 r = new int[]{EmbassyRulesSC.R_FRIEND, 0, 0, 0};    // he walked off, logged out
             } else {
+                // ПД-2: a rescue to a squad mate's mark - the choice goes with his own talon (the passenger's record): set for his own buy
+                // only (the checks ask it), kept only if that buy went through - a refused buy, a guarantee for a friend leave it as it was
+                UUID before = null;
+                if (friend == null) {
+                    before = EmbassyTicketSC.rescueMate(c.me.rec);
+                    UUID mate = ride == EmbassyRulesSC.RIDE_RESCUE ? SettlementRegistrySC.uuid(data.getString("mate")) : null;
+                    EmbassyTicketSC.setRescueMate(c.me.rec, mate != null && SquadSC.allMates(p).contains(mate) ? mate : null);
+                }
                 r = FlightRunSC.buy(c, ride, data.getInteger("target"), round, friend, data.getBoolean("confirm"));
+                if (friend == null && r[0] != EmbassyRulesSC.OK) {
+                    EmbassyTicketSC.setRescueMate(c.me.rec, EmbassyTicketSC.talon(c.me.rec) == null ? null : before);
+                }
             }
             NBTTagCompound res = new NBTTagCompound();
             res.setInteger("tuner", t.getEntityId());
@@ -121,7 +134,41 @@ public final class FlightServerSC {
     /** FLIGHT_STATE's compound for `p` at Dispatcher `t` without sending it (the world test; null on a client). */
     public static NBTTagCompound state(EntityPlayer p, EntityTunerSC t) {
         FlightRunSC.Ctx c = p == null || t == null ? null : FlightRunSC.Ctx.of(p, t);
-        return c == null ? null : FlightRunSC.state(c);
+        if (c == null) {
+            return null;
+        }
+        if (EmbassyTicketSC.talon(c.me.rec) == null) {
+            EmbassyTicketSC.setRescueMate(c.me.rec, null);      // ПД-2: no talon - no mate's rescue pending: the rows are his own
+        }
+        NBTTagCompound n = FlightRunSC.state(c);
+        n.setTag("rescueMates", rescueMates(c));
+        return n;
+    }
+
+    /**
+     * ПД-2: the «Рейсы» rows of the rescue to the squad mates' fresh death marks (RESCUE sold here): {n: his name, u: his UUID, x, z: the
+     * mark, p: the price, c: the code - as the own rescue's row, with the mate's mark}. Empty with the rule off or no mates.
+     */
+    private static NBTTagList rescueMates(FlightRunSC.Ctx c) {
+        NBTTagList l = new NBTTagList();
+        if (c.s == null || !FlightTargetsSC.sells(c.s, EmbassyRulesSC.RIDE_RESCUE)) {
+            return l;
+        }
+        for (UUID u : SquadSC.allMates(c.p)) {
+            SettlementRegistrySC.PlayerRec m = c.reg.playerIfAny(u);
+            if (m == null || !FlightTargetsSC.rescueOpenMark(m, c.now) || l.tagCount() >= FlightRunSC.MAX_FRIENDS) {
+                continue;
+            }
+            NBTTagCompound e = new NBTTagCompound();
+            e.setString("n", SquadSC.nameOf(u));
+            e.setString("u", u.toString());
+            e.setInteger("x", m.deathX);
+            e.setInteger("z", m.deathZ);
+            e.setInteger("p", FlightRunSC.price(c, EmbassyRulesSC.RIDE_RESCUE, false, c.me.level));
+            e.setByte("c", (byte) FlightRunSC.code(c, c.me, EmbassyRulesSC.RIDE_RESCUE, EmbassyRulesSC.TARGET_MARK, c.me.level));
+            l.appendTag(e);
+        }
+        return l;
     }
 
     /**

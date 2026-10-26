@@ -164,6 +164,7 @@ public class BlockCampSC extends Block {
         }
         openSafe(world, x, y, z);
         tell(player, "sc.camp.safe.opened", EnumChatFormatting.GREEN);
+        com.sc.settle.trade.ContractEventsSC.safeOpened(player, x, y, z);  // ПД-1: «Сейф Отступников» (a real player, never a FakePlayer)
         return true;
     }
 

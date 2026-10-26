@@ -51,7 +51,7 @@ import net.minecraftforge.oredict.OreDictionary;
  * next to it. The screen's settings reach the client with the block (description packet); the
  * live numbers through ContainerQuarrySC.
  */
-public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler {
+public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler, com.sc.energy.IComparatorSC {
 
     public static final int BUFFER = 27, FIRST_UPGRADE = BUFFER, UPGRADES = 18;
     public static final int SLOT_HEAD = FIRST_UPGRADE + UPGRADES, SLOT_SCANNER = SLOT_HEAD + 1, SLOT_CARD = SLOT_SCANNER + 1;
@@ -608,6 +608,9 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             fixTierFromMeta();
         }
         long time = worldObj.getTotalWorldTime();
+        if ((time + (xCoord & 7)) % 20 == 0) {
+            comparatorLast = com.sc.energy.ComparatorSC.notify(this, comparatorLast);    // ОМ-5: a comparator's reading, once a second
+        }
         if (applyTankCapacityLater || time % 20 == 0) {
             applyTankCapacityLater = false;
             applyTankCapacity();                   // modules in or out: the compartments' size follows
@@ -859,6 +862,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     /** The ores the rig can bring up: the table, plus other mods' ores with a deep scan module. */
     public List<com.sc.machine.ExoOreTableSC.Entry> exoEntries() {
+        if (worldObj != null && com.sc.dim.SubstrateSC.is(worldObj)) {   // ОМ-1: the Substrate's own ores (the client's screen too)
+            if (!active(ItemQuarryModuleSC.Kind.DEEP_SCAN, F_DEEP_SCAN)) {
+                return com.sc.machine.ExoOreTableSC.substrateEntries();
+            }
+            List<com.sc.machine.ExoOreTableSC.Entry> sub = new ArrayList<com.sc.machine.ExoOreTableSC.Entry>(com.sc.machine.ExoOreTableSC.substrateEntries());
+            sub.addAll(com.sc.machine.ExoOreTableSC.substrateDeep());
+            return sub;
+        }
         if (!active(ItemQuarryModuleSC.Kind.DEEP_SCAN, F_DEEP_SCAN)) {
             return com.sc.machine.ExoOreTableSC.entries();
         }
@@ -2459,6 +2470,36 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
             filter[i] = s == null ? null : single(s);
             markDirty();
         }
+    }
+
+    /** ОМ-5: the comparator level last told (-1 never). */
+    private int comparatorLast = -1;
+
+    /**
+     * ОМ-5 (docs/plan-ideas-2026-10-26.md): a comparator reads the quarry's area done (the blocks looked at of the area's; done - 15,
+     * not started - 0); the Exo rig - its output buffer filled (the container's rule).
+     */
+    @Override
+    public int comparatorLevel() {
+        if (isExo()) {
+            double full = 0;
+            for (int i = 0; i < BUFFER; i++) {
+                ItemStack s = slots[i];
+                if (s != null && s.getItem() != null) {
+                    full += s.stackSize / (double) Math.min(getInventoryStackLimit(), s.getMaxStackSize());
+                }
+            }
+            return com.sc.energy.ComparatorSC.level(full, BUFFER);
+        }
+        if (done) {
+            return 15;
+        }
+        int[] a = area();
+        if (a == null || layerY < 0) {
+            return 0;
+        }
+        long total = (long) (a[4] - a[5] + 1) * cellsPerLayer(a);
+        return total <= 0 ? 0 : com.sc.energy.ComparatorSC.level(total - blocksLeft(), total);
     }
 
     /** Blocks left to look at in the area (for the forecast). */

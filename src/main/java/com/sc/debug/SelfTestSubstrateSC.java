@@ -59,7 +59,9 @@ final class SelfTestSubstrateSC {
             "embassies", "embassyGrid", "embassyChance", "embassySpawnMin", "embassyRingMin", "embassyRingMax",
             // the audit of 2026-10-20: ПМ-6's multipliers of the section dimension, ПС-8's two of embassy
             "stormChanceMultiplier", "hazeChanceMultiplier", "signalChanceMultiplier", "wardenHealthMultiplier", "wardenLootCooldownDays",
-            "backgroundRadiationMultiplier", "flightPriceMultiplier", "flightsPerDay"};
+            "backgroundRadiationMultiplier", "flightPriceMultiplier", "flightsPerDay",
+            // the proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md): ПД-2..ПД-8's switches
+            "squads", "raidAlarms", "wanted", "gatherers", "breachProtocols", "relayPosts", "tunnels"};
     /**
      * The ids: private behind getters, never synced (ПК-4); Ф4's three biomes (docs/plan-substrate-tech-f4.md §2.1); Ф5's customSky -
      * not an id, but each client's own look: private as they are, never the server's (docs/plan-substrate-tech-f5.md §2.1).
@@ -602,7 +604,8 @@ final class SelfTestSubstrateSC {
                 + SelfTestCombatSC.ARTICLES.length                                      // Ф3 its eight (SelfTestCombatSC)
                 + SelfTestHazardSC.ARTICLES.length                                      // Ф4 its fifteen (SelfTestHazardSC)
                 + SelfTestFinaleSC.ARTICLES.length                                      // Ф5 its thirteen (SelfTestFinaleSC)
-                + SelfTestEmbassySC.ARTICLES.length;                                    // Ф6 its six (SelfTestEmbassySC)
+                + SelfTestEmbassySC.ARTICLES.length                                     // Ф6 its six (SelfTestEmbassySC)
+                + BookWorldSC.IDEAS_ARTICLES.length;                                    // the 2026-10-26 proposal its six (SelfTestIdeasSC)
         check(bad.length() == 0 && chapter == articles && table && noG.length() == 0 && iconOk, "handbook: the chapter \"" + BookChapter.WORLD.title()
                 + "\" - " + chapter + " articles (" + articles + ": Ф1's " + ARTICLES.length + " with no raw keys, Ф2's, Ф3's, Ф4's, Ф5's and Ф6's), the armour table by suit " + table
                 + ", G on the rock / ore / druse"

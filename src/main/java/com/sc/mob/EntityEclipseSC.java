@@ -91,6 +91,12 @@ public class EntityEclipseSC extends EntityArmoredMobSC implements IFactionLootS
     /** DataWatcher (package M's, §2.6): it flees now (byte 0 / 1). */
     public static final int DW_FLEE = 26;
     public static final String NBT_FLEE = "scFlee";
+    /** ПД-6 (docs/plan-ideas-2026-10-26.md): a «Тень Затмения» copy's fight {ri, rj, id} - no record, no loot, gone with the fight. */
+    public static final String NBT_SHADOW = "scShadow";
+
+    /** ПД-6: a shadow copy's fight (shadowId 0 - a real «Затмение»). */
+    private int shadowRi, shadowRj;
+    private long shadowId;
 
     private final EntityAIEclipseStrikeSC strike;
 
@@ -226,6 +232,12 @@ public class EntityEclipseSC extends EntityArmoredMobSC implements IFactionLootS
         } else if (flee && (ticksExisted + getEntityId()) % 20 == 0) {
             recover();
         }
+        if (shadowId != 0L) {                                   // ПД-6: a shadow - its fight over, it goes (no death, no loot)
+            if (ticksExisted % 20 == 0 && !com.sc.arena.ArenaWorldSC.fightCurrent(worldObj, shadowRi, shadowRj, shadowId)) {
+                setDead();
+            }
+            return;
+        }
         if ((ticksExisted + getEntityId()) % SpawnDirectorSC.RARE_SEEN_TICKS == 0) {
             SpawnDirectorSC.rareSeen(this);                  // ПС-30: its record; a stale copy leaves
         }
@@ -254,9 +266,23 @@ public class EntityEclipseSC extends EntityArmoredMobSC implements IFactionLootS
     @Override
     public void onDeath(DamageSource src) {
         super.onDeath(src);
-        if (!worldObj.isRemote && dead) {
-            SpawnDirectorSC.rareDied(this);                  // ПС-34: its 3 days begin
+        if (!worldObj.isRemote && dead && shadowId == 0L) {
+            SpawnDirectorSC.rareDied(this);                  // ПС-34: its 3 days begin (a shadow has no record)
         }
+    }
+
+    /** ПД-6 (BreachFightSC): this one is the shadow of arena (ri, rj)'s fight `id` - no record, no loot, gone with the fight. */
+    public void makeShadow(int ri, int rj, long id) {
+        shadowRi = ri;
+        shadowRj = rj;
+        shadowId = id;
+        getEntityData().setBoolean(NBT_SHADOW, true);           // MobDropsSC: no loot
+        func_110163_bv();
+    }
+
+    /** ПД-6: a shadow copy (MobDropsSC gives it no loot). */
+    public static boolean shadow(Entity e) {
+        return e instanceof EntityEclipseSC && ((EntityEclipseSC) e).shadowId != 0L;
     }
 
     // ------------------------------------------------------------------ drops
@@ -282,12 +308,25 @@ public class EntityEclipseSC extends EntityArmoredMobSC implements IFactionLootS
     public void writeEntityToNBT(NBTTagCompound tag) {
         super.writeEntityToNBT(tag);
         tag.setBoolean(NBT_FLEE, fleeing());
+        if (shadowId != 0L) {
+            NBTTagCompound s = new NBTTagCompound();
+            s.setInteger("ri", shadowRi);
+            s.setInteger("rj", shadowRj);
+            s.setLong("id", shadowId);
+            tag.setTag(NBT_SHADOW, s);
+        }
     }
 
     @Override
     public void readEntityFromNBT(NBTTagCompound tag) {
         super.readEntityFromNBT(tag);
         dataWatcher.updateObject(DW_FLEE, Byte.valueOf((byte) (tag.getBoolean(NBT_FLEE) ? 1 : 0)));
+        if (tag.hasKey(NBT_SHADOW, 10)) {
+            NBTTagCompound s = tag.getCompoundTag(NBT_SHADOW);
+            shadowRi = s.getInteger("ri");
+            shadowRj = s.getInteger("rj");
+            shadowId = s.getLong("id");
+        }
     }
 
     // ------------------------------------------------------------------ the clients (ПС-9)

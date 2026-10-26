@@ -181,8 +181,8 @@ public final class CaravanSC {
         }
         int dim = w.provider.dimensionId;
         for (SettlementRegistrySC.Settlement s : new ArrayList<SettlementRegistrySC.Settlement>(r.all())) {
-            if (s.dim != dim || !w.blockExists(s.x, s.y, s.z) || !playerNear(w, s)) {
-                continue;
+            if (s.dim != dim || com.sc.settle.SettlementSC.isRelay(s) || !w.blockExists(s.x, s.y, s.z) || !playerNear(w, s)) {
+                continue;                                       // ПД-7: a relay post is never a caravan's
             }
             CaravanRunSC c = CaravanRunSC.begin(w, r, s, null, CaravanRulesSC.ambushRoll(w.getSeed(), today), newId(w));
             if (c != null) {

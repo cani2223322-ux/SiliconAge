@@ -528,18 +528,24 @@ public class GuiBridgeControllerSC extends GuiScreen {
         if (e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_DEATH) {
             return Lang.tr(e.getString("l"));
         }
+        if (e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_MATE_DEATH) {
+            return Lang.tr(e.getString("l"), e.getString("pn"));    // ПД-2: «Метка гибели: <имя напарника>»
+        }
         return Lang.tr(e.getString("l"), com.sc.settle.travel.ItemSettlementMapSC.settlementName(e.getInteger("e"), e.getInteger("num")));
     }
 
     static int si14Color(NBTTagCompound e) {
-        return e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_DEATH ? SI14_DEATH : SI14_DOCK;
+        int k = e.getInteger("k");
+        return k == com.sc.settle.travel.TravelRulesSC.T_DEATH || k == com.sc.settle.travel.TravelRulesSC.T_MATE_DEATH ? SI14_DEATH : SI14_DOCK;
     }
 
     /** ПР-3: the hover lines of a Substrate target. */
     static void si14Tip(List<String> t, NBTTagCompound e) {
         t.add(si14Label(e));
         boolean death = e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_DEATH;
+        boolean mate = e.getInteger("k") == com.sc.settle.travel.TravelRulesSC.T_MATE_DEATH;     // ПД-2
         t.add("§7" + (death ? Lang.tr("sc.bridge.target.death.hint", com.sc.settle.travel.TravelRulesSC.DEATH_SCATTER, com.sc.settle.travel.TravelRulesSC.DEATH_CLEAR)
+                : mate ? Lang.tr("sc.bridge.target.mateDeath.hint", com.sc.settle.travel.TravelRulesSC.DEATH_SCATTER)
                 : Lang.tr("sc.bridge.target.dock.hint")));
         t.add("§8" + Lang.tr("sc.bridge.target.hint"));
     }

@@ -42,6 +42,8 @@ public final class RaidRulesSC {
     public static final long CLOSED_TICKS = 24000L;
     /** ПН-2: the third wave is the elite one (an elite with a Jammer) with this chance, else the Shells' column. */
     public static final float ELITE_WAVE_CHANCE = 0.5F;
+    /** ПД-3 (docs/plan-ideas-2026-10-26.md): a heavy night's waves - the fourth one the Exo Executioner, a Commander Trooper, a Jammer. */
+    public static final int WAVES_HEAVY = 4;
 
     private static final long SALT = 0x2A1D5L;
 
@@ -50,7 +52,31 @@ public final class RaidRulesSC {
 
     /** ПН-1: the defenders' reach of a settlement of SettlementSizeSC ordinal `size`. */
     public static int reach(int size) {
-        return REACH[Math.max(0, Math.min(REACH.length - 1, size))];
+        return REACH[row(size, REACH.length)];
+    }
+
+    /**
+     * The tables' row of SettlementSizeSC ordinal `size` (2026-10-26, ПД-3 / ПД-7): SettlementSizeSC.tableIndex - a Substrate size its
+     * own, a relay post the Post's, anything else the last (as the old clamp), within `length`.
+     */
+    static int row(int size, int length) {
+        int i = size < 0 ? 0 : size >= SettlementSizeSC.values().length ? length - 1 : SettlementSizeSC.of(size).tableIndex();   // out of range: clamped
+        return Math.max(0, Math.min(length - 1, i));
+    }
+
+    /** ПД-3: the waves of a raid of kind `kind` (RaidRunSC.KIND_*: 0 ordinary, 1 an alarm, 2 a heavy night). */
+    public static int waves(int kind) {
+        return kind == RaidAlarmSC.KIND_HEAVY ? WAVES_HEAVY : WAVES;
+    }
+
+    /** ПД-3 (pure): `v` scaled by `mul`, rounded up (a heavy night's reward: 45/60/75, 9/14/18, 3/5/6). */
+    public static int scaled(int v, float mul) {
+        return (int) Math.ceil(v * (double) mul - 1.0E-6D);
+    }
+
+    /** ПД-3: the Elder chest's rolls of a won raid by size. */
+    public static int chestRolls(int size) {
+        return CHEST_ROLLS[row(size, CHEST_ROLLS.length)];
     }
 
     /** ПН-1: world time `worldTime` is in the night's window. */
@@ -82,7 +108,10 @@ public final class RaidRulesSC {
      * elite is the first armoured one of it (RaidSC applies EliteSC). TODO(balance): the counts.
      */
     public static int[][] wave(int n, int size, Random r) {
-        int s = Math.max(0, Math.min(SettlementSizeSC.values().length - 1, size));
+        int s = row(size, SettlementSizeSC.SUBSTRATE_SIZES);   // 2026-10-26: by tableIndex (a relay post - the Post's)
+        if (n >= WAVES_HEAVY - 1) {                           // ПД-3: a heavy night's fourth - the Trooper first (RaidRunSC: the Commander)
+            return new int[][]{{MobEntitiesSC.ID_TROOPER, 1}, {MobEntitiesSC.ID_EXECUTIONER, 1}, {MobEntitiesSC.ID_JAMMER, 1}};
+        }
         if (n <= 0) {
             return new int[][]{{MobEntitiesSC.ID_MARAUDER, 2 + s}, {MobEntitiesSC.ID_LINEMAN, 2}};
         }
@@ -102,11 +131,11 @@ public final class RaidRulesSC {
 
     /** ПН-3: the «Доверие» of a won raid by size. */
     public static int rep(int size) {
-        return REP[Math.max(0, Math.min(REP.length - 1, size))];
+        return REP[row(size, REP.length)];
     }
 
     /** ПН-3: the Credit Chips of a won raid by size. */
     public static int chips(int size) {
-        return CHIPS[Math.max(0, Math.min(CHIPS.length - 1, size))];
+        return CHIPS[row(size, CHIPS.length)];
     }
 }

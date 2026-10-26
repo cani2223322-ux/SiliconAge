@@ -39,6 +39,9 @@ public class TileEntityBreakdownConsoleSC extends TileEntity {
     private boolean set;
     /** Client: a key lies in the console (the glow). */
     public boolean clientKey;
+    /** ПД-6: the Breach Protocols in (the arena record's mask), for BlockArenaSC's lights. Client. */
+    public int clientMask;
+    private int sentMask = -1;
     /** Server: the first tick after a load is done; the glow the clients were last sent. */
     private boolean loaded, sentKey;
 
@@ -105,8 +108,10 @@ public class TileEntityBreakdownConsoleSC extends TileEntity {
         }
         ArenaDataSC.Arena a = arena();
         boolean key = a != null && a.keyIn;
-        if (key != sentKey) {
+        int mask = com.sc.arena.BreachFightSC.mask(a);
+        if (key != sentKey || mask != sentMask) {
             sentKey = key;
+            sentMask = mask;
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
         }
     }
@@ -137,6 +142,7 @@ public class TileEntityBreakdownConsoleSC extends TileEntity {
         NBTTagCompound t = new NBTTagCompound();
         ArenaDataSC.Arena a = arena();
         t.setBoolean("key", a != null && a.keyIn);
+        t.setByte("pm", (byte) com.sc.arena.BreachFightSC.mask(a));     // ПД-6
         return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 1, t);
     }
 
@@ -144,6 +150,7 @@ public class TileEntityBreakdownConsoleSC extends TileEntity {
     @Override
     public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
         boolean key = pkt.func_148857_g().getBoolean("key");
+        clientMask = pkt.func_148857_g().getByte("pm");
         if (key != clientKey) {
             clientKey = key;
             if (worldObj != null) {

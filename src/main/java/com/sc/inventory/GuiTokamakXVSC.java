@@ -555,8 +555,8 @@ public class GuiTokamakXVSC extends GuiContainer {
         } else if (gen.getBigEvent() == TileEntityGeneratorSC.EVENT_BROKE) {
             chip = "broke";
             col = GuiHoloSC.BAD;
-        } else if (gen.getBigEvent() == TileEntityGeneratorSC.EVENT_SOFT) {
-            chip = "soft";
+        } else if (gen.getBigEvent() == TileEntityGeneratorSC.EVENT_SOFT || gen.getBigEvent() == TileEntityGeneratorSC.EVENT_PORT) {
+            chip = "soft";                                      // ОМ-5: a Data Port's stop is a soft stop too
             col = GuiHoloSC.WARN;
         } else {
             chip = "prep";
@@ -782,6 +782,11 @@ public class GuiTokamakXVSC extends GuiContainer {
                 add(k, l, 2, Lang.tr("sc.gui.big.st.disrupted"));
             } else if (gen.getBigEvent() == TileEntityGeneratorSC.EVENT_SOFT) {
                 add(k, l, 4, Lang.tr("sc.gui.big.st.softstop"));
+            } else if (gen.getBigEvent() == TileEntityGeneratorSC.EVENT_PORT) {
+                add(k, l, 1, Lang.tr("sc.gen.port.stopped"));     // ОМ-5: a Data Port put it out
+            }
+            if (gen.isPortBlocked()) {                        // ОМ-5: a PERMIT Data Port unpowered
+                add(k, l, 2, Lang.tr("sc.gen.port.noPermit"));
             }
             int[] miss = missingCoil();
             if (miss != null) {

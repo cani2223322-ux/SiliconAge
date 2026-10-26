@@ -112,6 +112,11 @@ public final class MobDropsSC {
             return;
         }
         EntityLivingBase mob = event.entityLiving;
+        if (EntityEclipseSC.shadow(mob)) {                       // ПД-6: «Тень Затмения» - a copy, nothing of its own
+            MobEventsSC.forget(mob);
+            event.drops.clear();
+            return;
+        }
         if (mob instanceof IOwnDropsSC) {                            // Ф5: the Breakdown Warden's personal loot (package B)
             Map<java.util.UUID, Float> shares = MobEventsSC.damageShares(mob);
             MobEventsSC.forget(mob);

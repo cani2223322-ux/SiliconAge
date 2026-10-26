@@ -102,7 +102,16 @@ public final class TradeTableSC {
             CART_ARENA_COORDINATOR = "cartArenaCoordinator", ELDER_LITHO_MODULE = "elderLithoModule", ELDER_TUNER_SCHEME = "elderTunerScheme",
             ARM_MOD_WIDE = "armModWide",
             // ---- Ф6 (appended): the embassy's Quartermaster
-            QM_BREAD = "qmBread", QM_LOGS = "qmLogs", QM_COAL = "qmCoal", QM_IRON = "qmIron";
+            QM_BREAD = "qmBread", QM_LOGS = "qmLogs", QM_COAL = "qmCoal", QM_IRON = "qmIron",
+            // ---- 2026-10-26 (docs/plan-ideas-2026-10-26.md, appended): ПД-3 the Elder's alarms, ПД-4 the Cartographer's hint and the
+            // Armourer's restoring for Wanted Tokens, ПД-7 the Elder's Relay
+            ELDER_ALARM = "elderAlarm", ELDER_HEAVY_NIGHT = "elderHeavyNight", CART_WANTED = "cartWanted",
+            ARM_RESTORE_TOKENS_NANO = "armRestoreTokensNano", ARM_RESTORE_TOKENS_QUANTUM = "armRestoreTokensQuantum",
+            ARM_RESTORE_TOKENS_EXO = "armRestoreTokensExo", ARM_RESTORE_TOKENS_ARMS_NANO = "armRestoreTokensArmsNano",
+            ARM_RESTORE_TOKENS_ARMS_QUANTUM = "armRestoreTokensArmsQuantum", ARM_RESTORE_TOKENS_ARMS_EXO = "armRestoreTokensArmsExo",
+            ARM_RESTORE_TOKENS_PE1 = "armRestoreTokensPe1", ELDER_RELAY = "elderRelay";
+    /** ПД-4: the Cartographer's hint - its price (chips) and the day's limit. TODO(balance) */
+    public static final int WANTED_HINT_CHIPS = com.sc.mob.WantedRulesSC.HINT_CHIPS, WANTED_HINT_LIMIT = 2;
     /** The Power Engineer's three charges share one limit (4 a day for all of them, ПО-10): their counter. */
     public static final String PE_CHARGE_COUNTER = "peCharge";
     /** The charge service's chips by suit (Nano, Quantum, Exo; ПО-10). TODO(balance) */
@@ -196,6 +205,7 @@ public final class TradeTableSC {
         buildF3(l, anyone, acq, partner, own);
         buildF5(l, acq, own);
         buildF6(l, anyone);
+        buildIdeas(l, acq, own);
         for (TradeOfferSC o : l) {
             if (!complete(o)) {
                 return Collections.emptyList();                 // an item missing (not registered yet): ask again later
@@ -289,6 +299,55 @@ public final class TradeTableSC {
         l.add(sale(QM_LOGS, k, TradeOfferSC.Ingredient.ore("logWood", 32), 1, anyone, 4));
         l.add(sale(QM_COAL, k, item(new ItemStack(Items.coal, 1, 0), 16), 1, anyone, 4));
         l.add(sale(QM_IRON, k, TradeOfferSC.Ingredient.ore("ingotIron", 8), 2, anyone, 3));
+    }
+
+    /**
+     * 2026-10-26 (docs/plan-ideas-2026-10-26.md): ПД-3 - the Elder's «Тревога» (from «Знакомый») and «Тяжёлая ночь» (from «Свой», where a
+     * Captain serves - TradeServerSC asks RaidAlarmSC), the DEPOSIT paid as the deal, no limit of its own (RaidAlarmSC keeps the days);
+     * ПД-4 - the Cartographer's «Где видели разыскиваемого» (OUT_WANTED_HINT, «Чужак», 2 a day) and the Armourer's restoring twins paid
+     * with Wanted Tokens instead of his chips (the same levels, the same parts); ПД-7 - the Elder's Relay (24 chips, «Свой», one a day).
+     */
+    private static void buildIdeas(List<TradeOfferSC> l, int acq, int own) {
+        int stranger = ReputationSC.STRANGER;
+        l.add(new TradeOfferSC(ELDER_ALARM, NpcKindSC.ELDER, chipsIn(com.sc.hazard.RaidAlarmSC.DEPOSIT), null, TradeOfferSC.OUT_ALARM, 0,
+                com.sc.hazard.RaidAlarmSC.ALARM_LEVEL, TradeOfferSC.UNLIMITED, false, 1));
+        l.add(new TradeOfferSC(ELDER_HEAVY_NIGHT, NpcKindSC.ELDER, chipsIn(com.sc.hazard.RaidAlarmSC.DEPOSIT), null, TradeOfferSC.OUT_ALARM, 0,
+                com.sc.hazard.RaidAlarmSC.HEAVY_LEVEL, TradeOfferSC.UNLIMITED, false, 1));
+        l.add(new TradeOfferSC(CART_WANTED, NpcKindSC.CARTOGRAPHER, chipsIn(WANTED_HINT_CHIPS), null, TradeOfferSC.OUT_WANTED_HINT, 0, stranger,
+                WANTED_HINT_LIMIT, false, 1));
+        String[] pieces = {ARM_RESTORE_TOKENS_NANO, ARM_RESTORE_TOKENS_QUANTUM, ARM_RESTORE_TOKENS_EXO};
+        String[] arms = {ARM_RESTORE_TOKENS_ARMS_NANO, ARM_RESTORE_TOKENS_ARMS_QUANTUM, ARM_RESTORE_TOKENS_ARMS_EXO};
+        for (int t = 0; t < TrophyRestoreSC.ARMOURER_TIERS; t++) {
+            l.add(restoreTokens(pieces[t], TrophyRestoreSC.G_PIECE, t));
+        }
+        for (int t = 0; t < TrophyRestoreSC.ARMOURER_TIERS; t++) {
+            l.add(restoreTokens(arms[t], TrophyRestoreSC.G_ARMS, t));
+        }
+        l.add(restoreTokens(ARM_RESTORE_TOKENS_PE1, TrophyRestoreSC.G_PE1, ArmorSuit.EXO.ordinal()));
+        l.add(purchase(ELDER_RELAY, NpcKindSC.ELDER, chipsIn(com.sc.settle.RelayRulesSC.PRICE_CHIPS),
+                item(com.sc.init.IdeaBlocksSC.relay == null ? null : com.sc.init.IdeaBlocksSC.relay(1)), com.sc.settle.RelayRulesSC.BUY_LEVEL, 1));
+    }
+
+    /**
+     * ПД-4: a restoring service's twin paid with TrophyRestoreSC.TOKENS_PER_RESTORE Wanted Tokens instead of the Armourer's chips - the
+     * trophy, the tokens, the parts (TrophyRestoreSC.tokenParts: kept within TradeOfferSC.MAX_SERVICE_SIDES); the same level.
+     */
+    private static TradeOfferSC restoreTokens(String key, int group, int tier) {
+        TradeOfferSC.Ingredient[] parts = TrophyRestoreSC.tokenParts(group, tier);
+        if (parts == null) {
+            parts = new TradeOfferSC.Ingredient[]{TradeOfferSC.Ingredient.of(null, 1)};
+        }
+        TradeOfferSC.Ingredient[] in = new TradeOfferSC.Ingredient[2 + parts.length];
+        in[0] = TradeOfferSC.Ingredient.trophies(TrophyRestoreSC.metas(group, tier));
+        in[1] = item(com.sc.init.IdeaItemsSC.wantedToken == null ? null : com.sc.init.IdeaItemsSC.wantedToken(1), TrophyRestoreSC.TOKENS_PER_RESTORE);
+        System.arraycopy(parts, 0, in, 2, parts.length);
+        return new TradeOfferSC(key, NpcKindSC.ARMOURER, in, null, TradeOfferSC.OUT_RESTORE, 0, TrophyRestoreSC.armourerLevel(group, tier),
+                TradeOfferSC.UNLIMITED, false, 1);
+    }
+
+    /** ПД-4: the restoring service `key` is paid with Wanted Tokens (one of the twins). */
+    public static boolean tokenRestore(String key) {
+        return key != null && key.startsWith("armRestoreTokens");
     }
 
     /**

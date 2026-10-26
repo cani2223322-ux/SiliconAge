@@ -99,7 +99,7 @@ public final class FlightTargetsSC {
         if (!EmbassySiteSC.regionFileExists(dim, 0, 0) && SettlementSC.generates()) {
             return EmbassyRulesSC.TARGET_FIRST_PURE;            // never opened: the carry makes it (the chunk and its record)
         }
-        List<SettlementRegistrySC.Settlement> near = reg.nearestDocks(dim, 0, 0, 1, -1);
+        List<SettlementRegistrySC.Settlement> near = reg.nearestDocks(dim, 0, 0, 1, -1, false);  // ПД-7: never a relay post's
         return near.isEmpty() ? NO_TARGET : near.get(0).id;  // opened before Ф2: the dock nearest the world's middle
     }
 
@@ -133,7 +133,8 @@ public final class FlightTargetsSC {
 
     /** `s` is a dock DOCK flies to: a Substrate settlement's, not «Первый причал» (FIRST's), not an embassy's. */
     public static boolean dockTarget(SettlementRegistrySC.Settlement s) {
-        return s != null && s.hasDock && !s.first && SettlementSC.inSubstrate(s) && !SettlementSC.isEmbassy(s);
+        return s != null && s.hasDock && !s.first && SettlementSC.inSubstrate(s) && !SettlementSC.isEmbassy(s)
+                && !SettlementSC.isRelay(s);                    // ПД-7: a relay post's dock is the bridge's, never a flight's
     }
 
     /** ПЯ-9: the embassies OTHER may go to - those `rec` has been to, but the one he flew out of (HOME goes there). */
@@ -166,10 +167,31 @@ public final class FlightTargetsSC {
         return id >= 0 && EmbassyRulesSC.backValid(EmbassyTicketSC.backUntil(rec), now) && embassy(reg.byId(id)) ? id : NO_TARGET;
     }
 
-    /** RESCUE: `rec`'s death mark in the Substrate may be flown to at `now` (fresh, not rescued yet). */
+    /**
+     * RESCUE: `rec`'s death mark in the Substrate may be flown to at `now` (fresh, not rescued yet) - ПД-2: the mark the rescue goes to
+     * (rescueRec: a squad mate's when he chose one at the Dispatcher).
+     */
     public static boolean rescueOpen(SettlementRegistrySC.PlayerRec rec, long now) {
+        return rescueOpenMark(rescueRec(rec), now);
+    }
+
+    /** ПД-2: record `rec`'s own death mark may be rescued at `now` (no squad choice followed). */
+    public static boolean rescueOpenMark(SettlementRegistrySC.PlayerRec rec, long now) {
         return rec != null && rec.hasDeath && SubstrateSC.isDim(rec.deathDim)
                 && EmbassyRulesSC.rescuable(true, rec.deathAt, now, EmbassyTicketSC.rescuedAt(rec));
+    }
+
+    /**
+     * ПД-2: whose death mark the rescue of passenger `rec` flies to - a squad mate's (EmbassyTicketSC.rescueMate, chosen on the «Рейсы»
+     * tab; null if his record is gone), else his own.
+     */
+    public static SettlementRegistrySC.PlayerRec rescueRec(SettlementRegistrySC.PlayerRec rec) {
+        java.util.UUID mate = EmbassyTicketSC.rescueMate(rec);
+        if (mate == null) {
+            return rec;
+        }
+        SettlementRegistrySC reg = SettlementRegistrySC.get();
+        return reg == null ? null : reg.playerIfAny(mate);
     }
 
     /**
@@ -202,11 +224,12 @@ public final class FlightTargetsSC {
                 return dockTarget(s) ? beacon(s) : null;
             }
             case EmbassyRulesSC.RIDE_RESCUE: {
-                if (rec == null || !SubstrateSC.isDim(rec.deathDim)) {
+                SettlementRegistrySC.PlayerRec m = rescueRec(rec);  // ПД-2: a squad mate's mark, scattered as one's own
+                if (m == null || !SubstrateSC.isDim(m.deathDim)) {
                     return null;
                 }
                 int[] off = BridgeMathSC.scatterOffset(rand == null ? new Random() : rand, EmbassyRulesSC.RESCUE_SCATTER);
-                return new double[]{rec.deathDim, rec.deathX + off[0] + 0.5D, rec.deathY, rec.deathZ + off[1] + 0.5D};
+                return new double[]{m.deathDim, m.deathX + off[0] + 0.5D, m.deathY, m.deathZ + off[1] + 0.5D};
             }
             case EmbassyRulesSC.RIDE_HOME:
             case EmbassyRulesSC.RIDE_BACK:

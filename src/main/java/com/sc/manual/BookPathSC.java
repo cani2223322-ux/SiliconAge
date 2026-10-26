@@ -134,6 +134,13 @@ final class BookPathSC {
                 en.add(BookEl.dim(what));
             }
             en.add(BookEl.link(TIER_LINK[t.ordinal()], linkTitle(TIER_LINK[t.ordinal()])));
+            if (t == Tier.QV) {                                 // ОМ-4: the EUV Lithograph and the processors (QV / XV / SV)
+                en.add(BookEl.item(ModBlocks.machineSC3 == null ? null : new ItemStack(ModBlocks.machineSC3, 1, 0),
+                        Lang.tr("sc.machine.euv_lithograph"), Lang.tr("sc.manual.path.euv")));
+            }
+            if (t == Tier.SV) {                                 // ОМ-7: the Singular Energy Bank
+                en.add(BookEl.link("energybank", Lang.tr("sc.manual.energy.bank.title")));
+            }
             n++;
         }
         en.add(BookEl.gap()).add(BookEl.link("tiers", Lang.tr("sc.manual.intro.tiers")));

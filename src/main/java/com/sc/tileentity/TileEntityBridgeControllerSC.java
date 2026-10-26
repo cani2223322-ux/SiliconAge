@@ -979,10 +979,28 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         return r != null && r.dockNear(dim, x, z, com.sc.settle.travel.TravelRulesSC.DOCK_SNAP) != null;
     }
 
-    /** ПР-6: the column (x, z) of `dim` is within TravelRulesSC.MARK_SNAP of `p`'s death mark. */
+    /**
+     * ПР-6: the column (x, z) of `dim` is within TravelRulesSC.MARK_SNAP of `p`'s death mark - ПД-2: or of a squad mate's (the same
+     * scatter; the mark still goes out only when its owner comes near it).
+     */
     private boolean deathMarkAt(EntityPlayer p, int dim, int x, int z) {
         com.sc.settle.SettlementRegistrySC r = settlements();
         com.sc.settle.SettlementRegistrySC.PlayerRec rec = r == null || p == null ? null : r.playerIfAny(p.getUniqueID());
+        if (markAt(rec, dim, x, z)) {
+            return true;
+        }
+        if (r == null || p == null) {
+            return false;
+        }
+        for (java.util.UUID u : com.sc.settle.SquadSC.allMates(p)) {
+            if (markAt(r.playerIfAny(u), dim, x, z)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean markAt(com.sc.settle.SettlementRegistrySC.PlayerRec rec, int dim, int x, int z) {
         return rec != null && rec.hasDeath && rec.deathDim == dim
                 && com.sc.settle.travel.TravelRulesSC.atMark((long) rec.deathX - x, (long) rec.deathZ - z);
     }
@@ -1009,6 +1027,18 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         com.sc.settle.SettlementRegistrySC.Settlement first = r.first(sd);
         if (first != null && first.hasDock) {
             out.appendTag(si14Dock(first, com.sc.settle.travel.TravelRulesSC.T_FIRST, "sc.bridge.target.first"));
+        }
+        // ПД-2: the squad mates' death marks in the Substrate (his squad's - online or not -, his scoreboard team's online)
+        for (java.util.UUID u : com.sc.settle.SquadSC.allMates(viewer)) {
+            com.sc.settle.SettlementRegistrySC.PlayerRec m = r.playerIfAny(u);
+            if (m != null && m.hasDeath && m.deathDim == sd) {
+                NBTTagCompound t = new NBTTagCompound();
+                t.setInteger("k", com.sc.settle.travel.TravelRulesSC.T_MATE_DEATH);
+                t.setString("l", "sc.bridge.target.mateDeath");
+                t.setString("pn", com.sc.settle.SquadSC.nameOf(u));
+                t.setIntArray("p", new int[]{m.deathX, AUTO_Y, m.deathZ, m.deathDim});
+                out.appendTag(t);
+            }
         }
         com.sc.settle.SettlementRegistrySC.PlayerRec rec = r.playerIfAny(viewer.getUniqueID());
         if (rec == null) {

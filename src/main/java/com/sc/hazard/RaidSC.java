@@ -9,9 +9,11 @@ import java.util.UUID;
 import com.sc.dim.SubstrateConfigSC;
 import com.sc.dim.SubstrateSC;
 import com.sc.mob.ISubstrateNativeSC;
+import com.sc.mob.MobEventsSC;
 import com.sc.settle.SettlementRegistrySC;
 import com.sc.settle.SettlementSC;
 
+import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.relauncher.ReflectionHelper;
@@ -26,6 +28,7 @@ import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.world.WorldEvent;
 
 /**
@@ -87,7 +90,28 @@ public final class RaidSC {
         if (r == null || s == null || s.dim != w.provider.dimensionId || running(s.id) || !w.blockExists(s.x, s.y, s.z) || peaceful(w)) {
             return false;
         }
-        return begin(w, r, s, by) != null;
+        return begin(w, r, s, by, 0, false) != null;
+    }
+
+    /** The world test (ПД-3): a called raid of `kind` (RaidAlarmSC.KIND_*) on `s` now, `by` its buyer. @return it began */
+    public static boolean startNow(WorldServer w, SettlementRegistrySC.Settlement s, EntityPlayer by, int kind) {
+        SettlementRegistrySC r = w == null || !SubstrateSC.is(w) ? null : SettlementRegistrySC.get(w);
+        if (r == null || s == null || s.dim != w.provider.dimensionId || running(s.id) || !w.blockExists(s.x, s.y, s.z) || peaceful(w)) {
+            return false;
+        }
+        return begin(w, r, s, by, kind, kind != 0) != null;
+    }
+
+    /** The world test: the kills of the running raid on `id` by `player` (-1 none running). */
+    public static int killsBy(int id, UUID player) {
+        RaidRunSC run = RUNS.get(Integer.valueOf(id));
+        return run == null ? -1 : run.kills(player);
+    }
+
+    /** The world test: the running raid on `id` checks its called night now (as checks would; the night not asked). @return it began */
+    public static boolean callNow(WorldServer w, SettlementRegistrySC.Settlement s) {
+        SettlementRegistrySC r = w == null ? null : SettlementRegistrySC.get(w);
+        return r != null && s != null && !running(s.id) && called(w, r, s);
     }
 
     /** The world test: the raiders of the running raid on `id` still alive and loaded, -1 none running. */
@@ -158,6 +182,9 @@ public final class RaidSC {
             if (s.dim != dim || running(s.id) || !w.blockExists(s.x, s.y, s.z)) {
                 continue;
             }
+            if (called(w, r, s)) {
+                continue;                                       // ПД-3: the called raid - no roll, no cooldown (tonight's roll not spent)
+            }
             NBTTagCompound x = s.extra.getCompoundTag(EXTRA);
             long rolled = x.hasKey(ROLLED) ? x.getLong(ROLLED) : -1L, last = x.hasKey(LAST) ? x.getLong(LAST) : -1L;
             if (rolled == today) {
@@ -171,21 +198,67 @@ public final class RaidSC {
             s.extra.setTag(EXTRA, x);
             r.markDirty();
             if (RaidRulesSC.rolls(w.getSeed(), s.id, today)) {
-                begin(w, r, s, def);
+                begin(w, r, s, def, 0, false);
             }
         }
     }
 
-    /** A raid on `s` begins: the day remembered (ПН-1's cooldown - kept even if the server stops mid-raid), the first wave. */
-    private static RaidRunSC begin(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, EntityPlayer by) {
-        NBTTagCompound x = s.extra.getCompoundTag(EXTRA);
-        x.setLong(LAST, SettlementSC.day(w));
-        s.extra.setTag(EXTRA, x);
-        r.markDirty();
-        RaidRunSC run = new RaidRunSC(w, s, by);
+    /**
+     * ПД-3: the call waiting at `s` (RaidAlarmSC) begins when its buyer defends it (the night is the caller's to ask): no roll, no
+     * cooldown; the call is taken off. The rule dimension.raidAlarms off - it waits. @return the called raid began
+     */
+    private static boolean called(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
+        UUID by = RaidAlarmSC.pendingBy(s);
+        if (by == null || !SubstrateConfigSC.raidAlarms) {
+            return false;
+        }
+        int reach = RaidRulesSC.reach(s.size);
+        for (Object o : w.playerEntities) {
+            EntityPlayer p = (EntityPlayer) o;
+            if (by.equals(p.getUniqueID()) && defends(w, r, s, p, reach)) {
+                int kind = RaidAlarmSC.pendingKind(s);
+                RaidAlarmSC.clear(s);
+                r.markDirty();
+                com.sc.hazard.EmpStormSC.tell(p, net.minecraft.util.EnumChatFormatting.RED, "sc.alarm.begins", SettlementSC.displayName(s));
+                begin(w, r, s, p, kind == RaidAlarmSC.KIND_HEAVY ? RaidAlarmSC.KIND_HEAVY : RaidAlarmSC.KIND_ALARM, true);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A raid on `s` begins: the day remembered (ПН-1's cooldown - kept even if the server stops mid-raid; ПД-3: not for a called one -
+     * it spends neither the roll nor the cooldown), the first wave. `kind` - RaidRunSC's (0 ordinary, RaidAlarmSC.KIND_*).
+     */
+    private static RaidRunSC begin(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, EntityPlayer by, int kind, boolean called) {
+        if (!called) {
+            NBTTagCompound x = s.extra.getCompoundTag(EXTRA);
+            x.setLong(LAST, SettlementSC.day(w));
+            s.extra.setTag(EXTRA, x);
+            r.markDirty();
+        }
+        RaidRunSC run = new RaidRunSC(w, s, by, kind);
         RUNS.put(Integer.valueOf(s.id), run);
         run.begin(w, r, s);
         return run;
+    }
+
+    /** ПД-3: a raider of a running raid killed - its killer (MobEventsSC.killerOf: the most damage) counted for the summary. */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onDeath(LivingDeathEvent e) {
+        if (RUNS.isEmpty() || e.entityLiving == null || e.entityLiving.worldObj == null || e.entityLiving.worldObj.isRemote) {
+            return;
+        }
+        NBTTagCompound d = e.entityLiving.getEntityData();
+        if (!d.hasKey(RAIDER_NBT)) {
+            return;
+        }
+        RaidRunSC run = RUNS.get(Integer.valueOf(d.getInteger(RAIDER_NBT)));
+        EntityPlayerMP k = run == null ? null : MobEventsSC.killerOf(e.entityLiving);
+        if (k != null && real(k)) {
+            run.killed(k.getUniqueID(), k.getCommandSenderName());
+        }
     }
 
     /** The first defender of `s` in `w`, null none. */
@@ -244,6 +317,20 @@ public final class RaidSC {
                 run.abandon((WorldServer) e.world);
             }
         }
+    }
+
+    // ------------------------------------------------------------------ ПД-3: a called raid's deposit owed
+
+    /** FML: a login - the deposits of called raids won while he was away (RaidAlarmSC.payOwed). */
+    @SubscribeEvent
+    public void onLoggedIn(cpw.mods.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent e) {
+        RaidAlarmSC.payOwed(e.player);
+    }
+
+    /** FML: a respawn - the deposit of a called raid won after its buyer fell in it (RaidAlarmSC.payOwed). */
+    @SubscribeEvent
+    public void onRespawn(cpw.mods.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent e) {
+        RaidAlarmSC.payOwed(e.player);
     }
 
     // ------------------------------------------------------------------ the raiders

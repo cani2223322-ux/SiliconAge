@@ -27,7 +27,9 @@ public final class EmbassyTicketSC {
     /** Package R's key of PlayerRec.extra. */
     public static final String EXTRA = "R";
     public static final String INTRO = "intro", FROM = "from", SEEN = "seen", BACK = "back", TALON = "talon", RESCUED = "rescued",
-            GUARANTEE = "guar", GUARANTEE_PAID = "guarPaid";
+            GUARANTEE = "guar", GUARANTEE_PAID = "guarPaid",
+            // ---- ПД-2 (docs/plan-ideas-2026-10-26.md, appended): the squad mate whose death mark the rescue talon is for (a UUID)
+            RESCUE_MATE = "rescueMate";
 
     private EmbassyTicketSC() {
     }
@@ -184,8 +186,43 @@ public final class EmbassyTicketSC {
         return c == null || !c.hasKey(RESCUED) ? -1L : c.getLong(RESCUED);
     }
 
+    /**
+     * The rescue flight of `p` has flown (FlightSC.carry): his death at `deathAt` is rescued - ПД-2: a talon for a squad mate's mark
+     * (rescueMate) marks the MATE's death instead (one death, one rescue for the whole squad) and forgets the choice.
+     */
     public static void setRescued(SettlementRegistrySC.PlayerRec p, long deathAt) {
+        java.util.UUID mate = rescueMate(p);
+        if (mate != null) {
+            SettlementRegistrySC reg = SettlementRegistrySC.get();
+            SettlementRegistrySC.PlayerRec m = reg == null ? null : reg.playerIfAny(mate);
+            setRescueMate(p, null);
+            if (m != null) {
+                of(m).setLong(RESCUED, m.deathAt);
+                reg.markDirty();
+            }
+            return;
+        }
         of(p).setLong(RESCUED, deathAt);
+    }
+
+    /** ПД-2: the squad mate the rescue talon of `p` is for (null - his own mark). */
+    public static java.util.UUID rescueMate(SettlementRegistrySC.PlayerRec p) {
+        NBTTagCompound c = p == null ? null : p.extra.getCompoundTag(EXTRA);
+        return c == null || !c.hasKey(RESCUE_MATE) ? null : SettlementRegistrySC.uuid(c.getString(RESCUE_MATE));
+    }
+
+    /** ПД-2: the rescue of `p` goes to mate `mate`'s mark (null - his own). */
+    public static void setRescueMate(SettlementRegistrySC.PlayerRec p, java.util.UUID mate) {
+        if (p == null) {
+            return;
+        }
+        if (mate == null) {
+            if (p.extra.hasKey(EXTRA, 10)) {
+                of(p).removeTag(RESCUE_MATE);
+            }
+        } else {
+            of(p).setString(RESCUE_MATE, mate.toString());
+        }
     }
 
     // ------------------------------------------------------------------ the guarantee (ПЯ-13)

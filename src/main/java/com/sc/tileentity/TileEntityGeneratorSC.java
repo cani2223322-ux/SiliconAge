@@ -50,7 +50,7 @@ import net.minecraftforge.fluids.IFluidHandler;
  */
 @cpw.mods.fml.common.Optional.Interface(iface = "ic2.api.energy.tile.IMultiEnergySource", modid = "industrialupgrade")
 public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler,
-        ic2.api.energy.tile.IMultiEnergySource {
+        ic2.api.energy.tile.IMultiEnergySource, com.sc.energy.IComparatorSC {
 
     public static final int MODULE_LIFE_TICKS = 1000000;
     /**
@@ -626,7 +626,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             new java.util.HashMap<Integer, java.util.Map<Long, TileEntityGeneratorSC>>();
     /** What ended the last run, kept until the next lighting (the screen): 0 nothing, 1 put out safely, 2 broke down. */
     private int bigEvent;
-    public static final int EVENT_SOFT = 1, EVENT_BROKE = 2;
+    public static final int EVENT_SOFT = 1, EVENT_BROKE = 2,
+            // ---- ОМ-5 (docs/plan-ideas-2026-10-26.md, appended): put out by a Data Port (the screen says so)
+            EVENT_PORT = 3;
 
     public int getBigEvent() {
         return bigEvent;
@@ -790,7 +792,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         int flags = (bigReady ? 1 : 0) | (bigRunning ? 2 : 0) | (portTaken ? 4 : 0) | (heShort ? 8 : 0) | (h2Short ? 16 : 0)
                 | bigEvent << 5 | (svOut ? 128 : 0);
         return new int[]{coilMask | flags << 24, wallMask, portMask | portTanks << 24 | portStores << 27 | weakStores << 29,
-                capMissing | Math.round(stability * 10) << 8 | (extraPort ? 1 << 29 : 0) | (nearBuild ? 1 << 30 : 0),
+                capMissing | Math.round(stability * 10) << 8 | (extraPort ? 1 << 29 : 0) | (nearBuild ? 1 << 30 : 0) | (portBlocked ? 1 << 31 : 0),
                 portFluid[0], portFluid[1], portFluid[2], portFluid[3]};
     }
 
@@ -817,6 +819,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         stability = (v[3] >>> 8 & 0x1FFFFF) / 10F;               // bits 8-28 (bit 29 - ГН-4's extra port)
         extraPort = (v[3] & 1 << 29) != 0;
         nearBuild = (v[3] & 1 << 30) != 0;
+        portBlocked = (v[3] & 1 << 31) != 0;                  // ОМ-5
         for (int i = 0; i < 4; i++) {
             portFluid[i] = v[4 + i];
         }
@@ -895,6 +898,108 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         return v == 255 ? -1 : v;
     }
 
+    // ------------------------------------------------------------------ ОМ-5: the comparator, the Data Ports
+
+    /** ОМ-5: the comparator level last told (-1 never). */
+    private int comparatorLast = -1;
+    /** ОМ-5: the Data Ports in this build's walls (found by its scan), {x, y, z}. */
+    private final java.util.List<int[]> dataPorts = new java.util.ArrayList<int[]>();
+    /** ОМ-5: a PERMIT port unpowered keeps the reactor from lighting (the screen's line - synced). */
+    private boolean portBlocked;
+
+    /**
+     * ОМ-5: what a comparator reads - a reactor that must be lit: nothing until lit, then its ramp (Fusion, Tokamak, Exo) or the plasma's
+     * stability (Tokamak XV); the Singular Reactor its hole's mass to the feeding's ceiling; any other generator its buffer.
+     */
+    @Override
+    public int comparatorLevel() {
+        if (singular()) {
+            return getSingular().hasHole() ? com.sc.energy.ComparatorSC.level(getSingular().getMass(), 1D) : 0;   // the screen's 0..100% mass
+        }
+        if (xv()) {
+            return ignited ? com.sc.energy.ComparatorSC.level(stability, 100D) : 0;
+        }
+        if (generatorType == GeneratorType.FUSION_REACTOR || generatorType == GeneratorType.TOKAMAK || generatorType == GeneratorType.EXO_REACTOR) {
+            return ignited ? com.sc.energy.ComparatorSC.level(ramp, RAMP_FULL) : 0;
+        }
+        return com.sc.energy.ComparatorSC.level(getEnergyStored(), getMaxEnergyStored());
+    }
+
+    /**
+     * ОМ-5 (the scans - the Tokamak XV's 7x7x3, the Singular Reactor's 7x7x5): every Data Port in the build's shell (its walls, cap and floor)
+     * is told it belongs here (TileEntityDataPortSC.bind) and listed. `dyMin..dyMax` - the build's layers round this block.
+     */
+    public void bindPortsSC(int dyMin, int dyMax) {
+        dataPorts.clear();
+        if (com.sc.init.IdeaBlocksSC.dataPort == null) {
+            return;
+        }
+        for (int dy = dyMin; dy <= dyMax; dy++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int dx = -3; dx <= 3; dx++) {
+                    boolean shell = dy == dyMin || dy == dyMax || Math.abs(dx) == 3 || Math.abs(dz) == 3;
+                    int x = xCoord + dx, y = yCoord + dy, z = zCoord + dz;
+                    if (!shell || worldObj.getBlock(x, y, z) != com.sc.init.IdeaBlocksSC.dataPort) {
+                        continue;
+                    }
+                    net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y, z);
+                    if (te instanceof TileEntityDataPortSC) {
+                        ((TileEntityDataPortSC) te).bind(xCoord, yCoord, zCoord);
+                        dataPorts.add(new int[]{x, y, z});
+                    }
+                }
+            }
+        }
+    }
+
+    /** ОМ-5: the port at (x, y, z) is one of this build's (its scan found it there). */
+    public boolean hasPort(int x, int y, int z) {
+        for (int[] p : dataPorts) {
+            if (p[0] == x && p[1] == y && p[2] == z) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** ОМ-5: lighting is allowed by the ports - every PERMIT port of the build powered (none in PERMIT: yes). Server. */
+    public boolean ignitionAllowedByPorts() {
+        for (int[] p : dataPorts) {
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            if (te instanceof TileEntityDataPortSC && ((TileEntityDataPortSC) te).mode() == TileEntityDataPortSC.PERMIT
+                    && !worldObj.isBlockIndirectlyGettingPowered(p[0], p[1], p[2])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** ОМ-5: a PERMIT port keeps it from lighting now (the screen). */
+    public boolean isPortBlocked() {
+        return portBlocked;
+    }
+
+    /** ОМ-5: the reactor burns (or charges / compresses / holds a hole) - a port's stop has something to stop. */
+    public boolean litForPorts() {
+        if (singular()) {
+            return getSingular().getPhase() != SingularReactorSC.PHASE_IDLE;
+        }
+        return ignited;
+    }
+
+    /** ОМ-5 (a Data Port's STOP pulse, a PERMIT port losing its signal): the emergency soft stop - the «Allow lighting» latch is the screen's. */
+    public void portStop() {
+        if (singular()) {
+            getSingular().portStop();
+            return;
+        }
+        if (ignited) {
+            bigEvent = xv() && bigRunning ? EVENT_PORT : bigEvent;
+            shutDown(GeneratorStatus.SOFT_STOP);
+            tellNearSC("sc.gen.port.stopped");
+        }
+    }
+
     /** The screen's button: the plasma put out safely. */
     public void softStop() {
         if (!ignited && bigEvent != 0) {
@@ -947,6 +1052,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private boolean isShell(int x, int y, int z) {
         net.minecraft.block.Block b = worldObj.getBlock(x, y, z);
         return b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.leadGlass
+                || com.sc.init.IdeaBlocksSC.dataPort != null && b == com.sc.init.IdeaBlocksSC.dataPort     // ОМ-5: a Data Port is wall
                 || com.sc.radiation.RadiationSC.isLeadBlock(b, worldObj.getBlockMetadata(x, y, z));   // another mod's block of lead
     }
 
@@ -1076,6 +1182,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         extraPort = extra;
         holdPorts();
         nearBuild = !ignited && otherBuildNear(worldObj, x0, y0, z0, 1, this);   // checked for the lighting only
+        bindPortsSC(-1, 1);                                     // ОМ-5: the Data Ports in its shell
         bigReady = coils == 0xFFFFFF && walls == 0xFFFFFF && caps == 0 && stores > 0 && weak == 0;
         for (int i = 0; i < 4; i++) {
             portFluid[i] = portAmount(PORT_FLUIDS[i]);
@@ -1730,6 +1837,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         if (worldObj == null || worldObj.isRemote) {
             return;
         }
+        if ((worldObj.getTotalWorldTime() + (xCoord & 7)) % 20 == 0) {
+            comparatorLast = com.sc.energy.ComparatorSC.notify(this, comparatorLast);    // ОМ-5: a comparator's reading, once a second
+        }
         syncTankCapacity();
         if (singular()) {
             updateSingular();
@@ -2231,8 +2341,12 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      * only when the last is spent) and deuterium, EXO enough liquid helium. Not lit - the charge stays.
      */
     private boolean ignite() {
+        portBlocked = xv() && !ignitionAllowedByPorts();         // ОМ-5: the screen's line, latched or not
         if (xv() && bigEvent != 0) {
             return false;               // put out / broken down: lit again only once the player allows it (the screen's button)
+        }
+        if (portBlocked) {
+            return false;               // ОМ-5: a PERMIT Data Port unpowered - no lighting (the screen says so)
         }
         if (status == GeneratorStatus.BLANKET_DEPLETED && moduleLifeRemaining <= 0 && !hasBlanket()) {
             return false;               // "blanket spent" stays on the screen until a new one is in (the charge still comes in)

@@ -364,6 +364,24 @@ public final class GuiSceneSC {
         }
     }
 
+    /**
+     * ОМ-4 (docs/plan-ideas-2026-10-26.md): the EUV Lithograph's column - the stepper's (stepperColumn) with its own source and optics: a
+     * tin-droplet plasma source (a violet-white flash), two curved mirrors folding the beam (no lens passes EUV) and the reflective mask.
+     */
+    public static void euvColumn(int x, int y, int w, int h, float t, boolean running, float progress) {
+        stepperColumn(x, y, w, h, t, running, progress);
+        int cx = x + w / 2;
+        rect(cx - 12, y + 3, 24, 6, 0xFF20242C);                               // the source's vessel over the lamp
+        rect(cx - 2, y + 4, 4, 4, !running ? 0xFF3A2A4A : (int) t % 3 == 0 ? 0xFFFFFFFF : 0xFFC890FF);   // the plasma
+        rect(cx - 14, y + 15, 6, 2, 0xFFC8D8E8);                                // the mirrors (left, right)
+        rect(cx + 8, y + 21, 6, 2, 0xFFC8D8E8);
+        if (running) {
+            rect(cx - 11, y + 9, 1, 6, 0x60C890FF);
+            rect(cx - 11, y + 17, 20, 1, 0x50C890FF);
+            rect(cx + 10, y + 17, 1, 4, 0x50C890FF);
+        }
+    }
+
     /** How many dies the die map of radius r shows. */
     public static int dieCount(int r) {
         int n = 0;

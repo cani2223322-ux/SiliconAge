@@ -53,6 +53,12 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     public static final int SLOTS = 4;
     /** Module slots after the armour slots. */
     public static final int UPGRADE_SLOTS = 4, FIRST_UPGRADE_SLOT = SLOTS, ALL_SLOTS = SLOTS + UPGRADE_SLOTS;
+    /**
+     * ОМ-6 (docs/plan-ideas-2026-10-26.md): the salvage slot - after the modules, the Armour Service Station's alone (the Singular
+     * station's index 8 is its donor: TileEntitySingularStationSC routes every slot from ALL_SLOTS on to its own). Kept apart from
+     * `slots` (NBT "SalvageSC"; an older station has none): not in the station's item, not seen by hoppers, dropped when broken.
+     */
+    public static final int SALVAGE_SLOT = ALL_SLOTS;
     /** Overclockers stop adding up past this many. */
     public static final int MAX_OVERCLOCKERS = 4;
     /** NBT key the station's item carries its modules under. */
@@ -84,6 +90,8 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     /** Slot i holds the piece of ItemArmor.armorType i (0 helmet .. 3 boots); FIRST_UPGRADE_SLOT.. the modules. */
     private final ItemStack[] slots = new ItemStack[ALL_SLOTS];
+    /** ОМ-6: the salvage slot's thing (SALVAGE_SLOT). */
+    private ItemStack salvage;
     private ForgeDirection facing = ForgeDirection.NORTH;
     private boolean fillGases = true;
     private int gasMask = ALL_GASES;
@@ -770,17 +778,31 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     @Override
     public int getSizeInventory() {
-        return ALL_SLOTS;
+        return ALL_SLOTS + 1;                              // ОМ-6: + the salvage slot
     }
 
     @Override
     public ItemStack getStackInSlot(int slot) {
+        if (slot == SALVAGE_SLOT) {
+            return salvage;
+        }
         return slot >= 0 && slot < ALL_SLOTS ? slots[slot] : null;
     }
 
     @Override
     public ItemStack decrStackSize(int slot, int amount) {
-        if (slots[slot] == null) {
+        if (slot == SALVAGE_SLOT) {                        // ОМ-6
+            if (salvage == null) {
+                return null;
+            }
+            ItemStack out = salvage.splitStack(Math.min(amount, salvage.stackSize));
+            if (salvage.stackSize <= 0) {
+                salvage = null;
+            }
+            markDirty();
+            return out;
+        }
+        if (slot < 0 || slot >= ALL_SLOTS || slots[slot] == null) {
             return null;
         }
         ItemStack out = slots[slot].splitStack(Math.min(amount, slots[slot].stackSize));
@@ -801,6 +823,11 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     @Override
     public void setInventorySlotContents(int slot, ItemStack stack) {
+        if (slot == SALVAGE_SLOT) {                        // ОМ-6
+            salvage = stack;
+            markDirty();
+            return;
+        }
         if (slot >= 0 && slot < SLOTS) {
             com.sc.util.SingularLevel.clearSync(stack);     // Н-2: a piece in a station's armour slot is not worn (СБ-2)
         }
@@ -842,7 +869,64 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     @Override
     public boolean isItemValidForSlot(int slot, ItemStack stack) {
+        if (slot == SALVAGE_SLOT) {
+            return com.sc.item.SalvageSC.refusal(stack) == com.sc.item.SalvageSC.OK;    // ОМ-6
+        }
         return fits(slot, stack);
+    }
+
+    // ------------------------------------------------------------------ ОМ-6: salvage
+
+    /**
+     * ОМ-6 (the screen's «Разобрать», ContainerArmorStationSC.BTN_SALVAGE): the salvage slot's thing broken up - SalvageSC.result into
+     * the player's inventory (what doesn't fit at the feet), SalvageSC.STATION_EU off the buffer; refused for another's private field,
+     * a thing that isn't salvaged, too little EU (the chat says why). Server. @return true when done
+     */
+    public boolean salvage(EntityPlayer player) {
+        if (!salvages() || worldObj == null || worldObj.isRemote || player == null || salvage == null) {
+            return false;
+        }
+        int why = com.sc.item.SalvageSC.refusal(salvage);
+        if (why != com.sc.item.SalvageSC.OK) {
+            sayTo(player, net.minecraft.util.EnumChatFormatting.RED, com.sc.item.SalvageSC.REFUSE_KEYS[why]);
+            return false;
+        }
+        com.sc.tileentity.TileEntityFieldGeneratorSC f = com.sc.ShieldEventHandler.privateFieldAgainst(worldObj, player, xCoord, yCoord, zCoord);
+        if (f != null) {
+            player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.field.private", f.getOwner()));
+            return false;
+        }
+        int eu = com.sc.item.SalvageSC.STATION_EU;
+        if (getEnergyStored() < eu) {
+            sayTo(player, net.minecraft.util.EnumChatFormatting.RED, "sc.salvage.refuse.noEu", eu - getEnergyStored());
+            return false;
+        }
+        List<ItemStack> out = com.sc.item.SalvageSC.result(salvage);
+        String name = salvage.getDisplayName();
+        extractForItemCharging(eu);
+        salvage = null;
+        markDirty();
+        int n = 0;
+        for (ItemStack s : out) {
+            n += s.stackSize;
+            if (!player.inventory.addItemStackToInventory(s) && s.stackSize > 0) {
+                player.dropPlayerItemWithRandomChoice(s, false);
+            }
+        }
+        player.inventory.markDirty();
+        worldObj.playSoundEffect(xCoord + 0.5D, yCoord + 0.5D, zCoord + 0.5D, "random.anvil_use", 0.5F, 0.8F);
+        sayTo(player, net.minecraft.util.EnumChatFormatting.GREEN, "sc.salvage.done", name, n);
+        return true;
+    }
+
+    /** ОМ-6: this station has the salvage slot - the Armour Service Station's, not the Singular station's (its slot 8 is the donor). */
+    public boolean salvages() {
+        return !(this instanceof TileEntitySingularStationSC);
+    }
+
+    private static void sayTo(EntityPlayer p, net.minecraft.util.EnumChatFormatting c, String key, Object... args) {
+        p.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation(key, args)
+                .setChatStyle(new net.minecraft.util.ChatStyle().setColor(c)));
     }
 
     /** Hoppers and tubes reach the armour slots only - the modules are the player's. */
@@ -1007,6 +1091,10 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             }
             slots[i] = null;                              // no second copy for a screen still open (the item's modules too)
         }
+        if (salvage != null) {
+            out.add(salvage);                             // ОМ-6: the salvage slot's thing drops, never into the item
+            salvage = null;
+        }
         markDirty();
         return out;
     }
@@ -1107,6 +1195,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
                 slots[slot] = ItemStack.loadItemStackFromNBT(t);
             }
         }
+        salvage = nbt.hasKey("SalvageSC") ? ItemStack.loadItemStackFromNBT(nbt.getCompoundTag("SalvageSC")) : null;   // ОМ-6
         loadTanks(nbt.hasKey(TANKS_KEY) ? nbt.getCompoundTag(TANKS_KEY) : null);     // an older station: empty tanks
         syncTankCapacity();
         lastSinkKey = sinkKey();                           // loaded before the tile joins the net: nothing to re-announce
@@ -1130,6 +1219,9 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             }
         }
         nbt.setTag("Items", list);
+        if (salvage != null) {
+            nbt.setTag("SalvageSC", salvage.writeToNBT(new NBTTagCompound()));   // ОМ-6
+        }
         nbt.setTag(TANKS_KEY, tanksTag());
     }
 

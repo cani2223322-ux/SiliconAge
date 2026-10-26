@@ -50,6 +50,7 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         hideWildBlocks();
         hideArenaBlocks();
         hideEmbassyBlocks();
+        hideIdeaBlocks();                                // 2026-10-26: the relay post's Mast
         // the Energy Converter and its modules: no other energy in this game (no RF API, Mekanism, Galacticraft) - no use, no recipe
         if (!com.sc.energy.ForeignEnergySC.anyPresent()) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.ModBlocks.energyConverter));
@@ -173,6 +174,13 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
      * Dispatchers' desk) are hidden with every other meta of showcase2SC (hideSettlementBlocks, by BlockShowcase2SC.NAMES). Shown: the
      * Embassy Direction Finder - its shapeless recipe is NEI's own page, ObtainHandlerSC adds what it does.
      */
+    /** 2026-10-26 (docs/plan-ideas-2026-10-26.md, ПД-7): the relay post's Mast - only the post has one (the Relay itself stays). */
+    static void hideIdeaBlocks() {
+        if (com.sc.init.IdeaBlocksSC.relay != null) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.init.IdeaBlocksSC.relay, 1, com.sc.block.BlockRelaySC.MAST));
+        }
+    }
+
     static void hideEmbassyBlocks() {
         if (com.sc.embassy.EmbassyBlocksSC.ring != null) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.embassy.EmbassyBlocksSC.ring));

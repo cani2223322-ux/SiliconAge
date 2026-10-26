@@ -38,6 +38,8 @@ public class GuiHandlerSC implements IGuiHandler {
     public static final int FILTER_GUI_ID = 20;
     /** Подложка Ф2: a Tuner's «Терминал обмена» - x is the Tuner's entity id, not a position. */
     public static final int TRADE_GUI_ID = 21;
+    /** ОМ-7 (docs/plan-ideas-2026-10-26.md): the Energy Bank's controller. */
+    public static final int ENERGY_BANK_GUI_ID = 22;
 
     /** The Tuner of a trade screen: the entity `id`, alive and within ContainerTradeSC.REACH of the player. */
     private static com.sc.settle.npc.EntityTunerSC tuner(EntityPlayer player, World world, int id) {
@@ -62,6 +64,9 @@ public class GuiHandlerSC implements IGuiHandler {
             return t == null ? null : new com.sc.inventory.ContainerTradeSC(player, t);
         }
         TileEntity te = world.getTileEntity(x, y, z);
+        if (id == ENERGY_BANK_GUI_ID && te instanceof com.sc.tileentity.TileEntityEnergyBankSC) {
+            return new com.sc.inventory.ContainerEnergyBankSC(player.inventory, (com.sc.tileentity.TileEntityEnergyBankSC) te);
+        }
         if (id == QUARRY_GUI_ID && te instanceof com.sc.tileentity.TileEntityQuarrySC) {
             return new com.sc.inventory.ContainerQuarrySC(player.inventory, (com.sc.tileentity.TileEntityQuarrySC) te);
         }
@@ -109,6 +114,9 @@ public class GuiHandlerSC implements IGuiHandler {
             return t == null ? null : new com.sc.settle.client.GuiTradeSC(player, t);
         }
         TileEntity te = world.getTileEntity(x, y, z);
+        if (id == ENERGY_BANK_GUI_ID && te instanceof com.sc.tileentity.TileEntityEnergyBankSC) {
+            return new com.sc.inventory.GuiEnergyBankSC(player.inventory, (com.sc.tileentity.TileEntityEnergyBankSC) te);
+        }
         if (id == QUARRY_GUI_ID && te instanceof com.sc.tileentity.TileEntityQuarrySC) {
             return new com.sc.inventory.GuiQuarrySC(player.inventory, (com.sc.tileentity.TileEntityQuarrySC) te);
         }

@@ -45,8 +45,16 @@ public class GuiArmorStationSC extends GuiContainer {
 
     private static final int PANEL = 0xFFB9C1CC, TITLE_BAR = 0xFF2E3642;
 
+    /** ОМ-6: the salvage slot's caption, the «Разобрать» button (beside the slot). */
+    private static final int SALVAGE_X = ContainerArmorStationSC.SALVAGE_X, SALVAGE_Y = ContainerArmorStationSC.SALVAGE_Y,
+            SALVAGE_LABEL_Y = SALVAGE_Y - 11, SALVAGE_BTN_X = SALVAGE_X + 22, SALVAGE_BTN_W = W - 8 - SALVAGE_BTN_X, SALVAGE_BTN_H = 16;
+
     private final TileEntityArmorStationSC te;
     private GuiPowerSC power;
+    private SalvageButton salvageBtn;
+    /** ОМ-6: the preview of what the slot's thing gives (worked out again only when the thing changes). */
+    private ItemStack previewOf;
+    private List<ItemStack> preview = new ArrayList<ItemStack>();
     private final GuiBigSC.ClearButton[] clear = new GuiBigSC.ClearButton[GASES];
 
     public GuiArmorStationSC(InventoryPlayer inv, TileEntityArmorStationSC te) {
@@ -83,12 +91,18 @@ public class GuiArmorStationSC extends GuiContainer {
         }
         buttonList.add(new HoloButton(ContainerArmorStationSC.BTN_FILL, guiLeft + BTN_X, guiTop + FILL_Y, BTN_W, BTN_H));
         buttonList.add(new HoloButton(ContainerArmorStationSC.BTN_HELIUM, guiLeft + BTN_X, guiTop + HELIUM_Y, BTN_W, BTN_H));
+        salvageBtn = new SalvageButton(guiLeft + SALVAGE_BTN_X, guiTop + SALVAGE_Y - 1);
+        salvageBtn.visible = te.salvages();
+        buttonList.add(salvageBtn);
     }
 
     @Override
     protected void actionPerformed(GuiButton button) {
         if (button instanceof GuiBigSC.ClearButton && !((GuiBigSC.ClearButton) button).fire()) {
             return;                                        // МШ-3: the first click on an «x» only arms it
+        }
+        if (button == salvageBtn && !salvageBtn.fire()) {
+            return;                                        // ОМ-6: the first click only arms «Разобрать»
         }
         if (power.allowClick(button)) {
             mc.playerController.sendEnchantPacket(inventorySlots.windowId, button.id);
@@ -142,6 +156,7 @@ public class GuiArmorStationSC extends GuiContainer {
         for (int c = 0; c < 9; c++) {
             GuiBigSC.pocket(x + ContainerArmorStationSC.INV_X + c * 18, y + ContainerArmorStationSC.HOTBAR_Y);
         }
+        GuiBigSC.pocket(x + SALVAGE_X, y + SALVAGE_Y);      // ОМ-6: the salvage slot
     }
 
     /** The gases a piece has tanks for (ArmorGasSC.capacity > 0), in Gas order. */
@@ -204,6 +219,9 @@ public class GuiArmorStationSC extends GuiContainer {
         GuiGaugeSC.drawTierBadge(fontRendererObj, te.getTier(), W - 6, 3);
         fontRendererObj.drawString(Lang.tr("sc.gui.big.upgrades"), UPG_LABEL_X, UPG_Y + 4, 0x404040);
         fontRendererObj.drawString(Lang.tr("container.inventory"), ContainerArmorStationSC.INV_X, ContainerArmorStationSC.INV_Y - 10, 0x404040);
+        if (te.salvages()) {
+            fit(Lang.tr("sc.salvage.slot"), SALVAGE_X - 2, SALVAGE_LABEL_Y, W - 8 - SALVAGE_X, 0x404040);     // ОМ-6
+        }
         drawModuleLine();
         for (int i = 0; i < TileEntityArmorStationSC.SLOTS; i++) {
             fit(Lang.tr("sc.armorhud.piece." + i), PART_TEXT_X, partY(i) - 1, PART_TEXT_W, te.getStackInSlot(i) != null ? GuiHoloSC.VALUE : GuiHoloSC.IDLE);
@@ -337,11 +355,101 @@ public class GuiArmorStationSC extends GuiContainer {
         if (tip == null && GuiGaugeSC.isOver(UPG_LABEL_X, UPG_Y - 1, W - 8 - UPG_LABEL_X, 18, mx, my) && !overUpgradeSlot(mx, my)) {
             tip = moduleTip();
         }
+        if (tip == null && te.salvages() && (salvageBtn.isMouseOver(mouseX, mouseY)
+                || GuiGaugeSC.isOver(SALVAGE_X - 2, SALVAGE_LABEL_Y - 1, W - 8 - SALVAGE_X, 10, mx, my)
+                || te.getStackInSlot(TileEntityArmorStationSC.SALVAGE_SLOT) == null && GuiGaugeSC.isOver(SALVAGE_X - 1, SALVAGE_Y - 1, 18, 18, mx, my))) {
+            tip = salvageTip();                            // ОМ-6
+        }
         if (tip == null) {
             tip = TextFitSC.hoverAt(mouseX, mouseY);
         }
         if (tip != null) {
             drawHoveringText(GuiGaugeSC.wrapTooltip(fontRendererObj, tip, width), mouseX, mouseY, fontRendererObj);
+        }
+    }
+
+    // ------------------------------------------------------------------ ОМ-6: salvage
+
+    /** ОМ-6: the slot's thing, its preview (SalvageSC.result - worked out on the client too, again only when the thing changes). */
+    private List<ItemStack> preview() {
+        ItemStack s = te.getStackInSlot(TileEntityArmorStationSC.SALVAGE_SLOT);
+        if (s == null) {
+            previewOf = null;
+            preview = new ArrayList<ItemStack>();
+        } else if (previewOf == null || !ItemStack.areItemStacksEqual(previewOf, s)) {
+            previewOf = s.copy();
+            preview = com.sc.item.SalvageSC.result(s);
+        }
+        return preview;
+    }
+
+    /** ОМ-6: the button's / slot's tooltip - what goes in, what comes out, that charge and gases are lost, the EU. */
+    private List<String> salvageTip() {
+        List<String> tip = new ArrayList<String>();
+        tip.add(Lang.tr("sc.salvage.slot"));
+        ItemStack s = te.getStackInSlot(TileEntityArmorStationSC.SALVAGE_SLOT);
+        String share = Lang.tr("sc.salvage.slot.tip", Math.round(com.sc.item.SalvageSC.SHARE_MIN * 100), Math.round(com.sc.item.SalvageSC.SHARE_MAX * 100));
+        if (s == null) {
+            tip.add("§7" + share);
+            return tip;
+        }
+        int why = com.sc.item.SalvageSC.refusal(s);
+        if (why != com.sc.item.SalvageSC.OK) {
+            tip.add("§c" + Lang.tr(com.sc.item.SalvageSC.REFUSE_KEYS[why]));
+            return tip;
+        }
+        tip.add(Lang.tr("sc.salvage.preview"));
+        for (ItemStack o : preview()) {
+            tip.add("§b " + o.stackSize + " x " + o.getDisplayName());
+        }
+        tip.add("§7" + share);
+        int eu = com.sc.item.SalvageSC.STATION_EU;
+        tip.add((te.getEnergyStored() >= eu ? "§7" : "§c") + eu + " EU"
+                + (te.getEnergyStored() >= eu ? "" : " - " + Lang.tr("sc.salvage.refuse.noEu", eu - te.getEnergyStored())));
+        return tip;
+    }
+
+    /** ОМ-6: «Разобрать» - the first click arms it («Ещё раз - разобрать»), the second within ARM_MS sends it. */
+    private class SalvageButton extends GuiButton {
+        static final long ARM_MS = 2000;
+        private long armedAt;
+
+        SalvageButton(int x, int y) {
+            super(ContainerArmorStationSC.BTN_SALVAGE, x, y, SALVAGE_BTN_W, SALVAGE_BTN_H, "");
+        }
+
+        boolean fire() {
+            long now = System.currentTimeMillis();
+            if (armedAt != 0 && now - armedAt <= ARM_MS) {
+                armedAt = 0;
+                return true;
+            }
+            armedAt = now;
+            return false;
+        }
+
+        boolean armed() {
+            return armedAt != 0 && System.currentTimeMillis() - armedAt <= ARM_MS;
+        }
+
+        boolean isMouseOver(int mx, int my) {
+            return visible && mx >= xPosition && my >= yPosition && mx < xPosition + width && my < yPosition + height;
+        }
+
+        @Override
+        public void drawButton(Minecraft mc, int mx, int my) {
+            if (!visible) {
+                return;
+            }
+            ItemStack s = te.getStackInSlot(TileEntityArmorStationSC.SALVAGE_SLOT);
+            enabled = s != null && com.sc.item.SalvageSC.refusal(s) == com.sc.item.SalvageSC.OK;
+            boolean over = isMouseOver(mx, my), armed = enabled && armed();
+            boolean blink = armed && (System.currentTimeMillis() / 150) % 2 == 0;
+            rect(xPosition, yPosition, width, height, !enabled ? 0xFF343C48 : over || blink ? 0xFFD04040 : 0xFF9A2E2E);
+            rect(xPosition + 1, yPosition + 1, width - 2, height - 2, !enabled ? 0xFF141C26 : armed ? 0xFF3A1010 : 0xFF241014);
+            TextFitSC.drawCentered(mc.fontRenderer, Lang.tr(armed ? "sc.salvage.confirm" : "sc.salvage.btn"), xPosition + 2,
+                    yPosition + (height - 8) / 2, width - 4, !enabled ? GuiHoloSC.IDLE : armed ? 0xFFFFC0C0 : 0xFFFF9A9A, false, 0, 0);
+            GL11.glColor4f(1F, 1F, 1F, 1F);
         }
     }
 

@@ -251,7 +251,7 @@ final class SelfTestEmbassySC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        boolean rules = sent.size() == 28 && sent.containsAll(Arrays.asList(RULES));
+        boolean rules = sent.size() == 35 && sent.containsAll(Arrays.asList(RULES));   // 2026-10-26: + 7 (docs/plan-ideas-2026-10-26.md)
         // the defaults as an empty file reads them, the ring widened when it is too thin - loadEmbassies on Configurations in memory
         Object[] was = new Object[RULES.length];
         for (int k = 0; k < RULES.length; k++) {
@@ -293,7 +293,7 @@ final class SelfTestEmbassySC {
         }
         boolean grid = EmbassySiteSC.grid() == Math.max(1024, SubstrateConfigSC.embassyGrid) && "embassy".equals(SubstrateConfigSC.CATEGORY_EMBASSY);
         check(rules && "ok".equals(defaults) && "ok".equals(widened) && restart && grid, "config (§2.1, ПК-26): " + sent.size() + " rules the server sends"
-                + " (28), the eight of the section embassy among them " + rules + "; an empty file reads true / 2048 / 100 / 1500 / 1300 / 2500 / 1.0 / 2 " + defaults
+                + " (35), the eight of the section embassy among them " + rules + "; an empty file reads true / 2048 / 100 / 1500 / 1300 / 2500 / 1.0 / 2 " + defaults
                 + "; a ring 2000..2100 is widened to 2000..2256 " + widened + "; the section asks a world restart " + restart + "; grid() "
                 + EmbassySiteSC.grid() + " (at least 1024) " + grid);
     }
@@ -305,7 +305,8 @@ final class SelfTestEmbassySC {
         boolean size = e.ordinal() == 3 && "embassy".equals(e.key) && e.radiusMin == 88 && e.radiusMax == 96 && e.tunersMin == 18 && e.tunersMax == 22
                 && e.sentries == 6 && e.seniors == 4 && e.captainPct == 100 && e.commandant && e.dock && !e.substrate()
                 && SettlementSizeSC.SUBSTRATE_SIZES == 3 && SettlementSizeSC.OUTPOST.substrate() && SettlementSizeSC.SETTLEMENT.substrate()
-                && SettlementSizeSC.CITY.substrate() && SettlementSizeSC.values().length == 4 && "sc.settle.size.embassy".equals(e.langKey())
+                && SettlementSizeSC.CITY.substrate() && SettlementSizeSC.values().length == 5 && "sc.settle.size.embassy".equals(e.langKey())   // 2026-10-26: + RELAY
+                && SettlementSizeSC.RELAY.ordinal() == 4 && !SettlementSizeSC.RELAY.substrate() && SettlementSizeSC.RELAY.tableIndex() == 0
                 && SettlementSizeSC.of(3) == e && e.captain(0L) && e.guards() == 10;
         Random r = new Random(14L);
         boolean bounds = true, lo = false, hi = false;
@@ -1386,7 +1387,7 @@ final class SelfTestEmbassySC {
             }
         }
         int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + BookWorldSC.F4_ARTICLES.length + BookWorldSC.F5_ARTICLES.length
-                + ARTICLES.length;
+                + ARTICLES.length + BookWorldSC.IDEAS_ARTICLES.length;                 // + the 2026-10-26 proposal's six (SelfTestIdeasSC)
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {

@@ -164,6 +164,12 @@ public class BlockArenaSC extends Block {
         TileEntity te = world.getTileEntity(x, y, z);
         boolean key = te instanceof TileEntityBreakdownConsoleSC && ((TileEntityBreakdownConsoleSC) te).clientKey;
         double cx = x + 0.5D, top = y + 1.05D, cz = z + 0.5D;
+        int protocols = te instanceof TileEntityBreakdownConsoleSC
+                ? Integer.bitCount(((TileEntityBreakdownConsoleSC) te).clientMask & 0x1F) : 0;
+        for (int i = 0; i < 3; i++) {                           // ПД-6: three lights along the slab's back edge - crimson when a protocol is in
+            boolean on = i < protocols;
+            world.spawnParticle("reddust", x + 0.25D + i * 0.25D, top + 0.02D, z + 0.85D, on ? 1.0D : 0.25D, on ? 0.18D : 0.25D, on ? 0.43D : 0.3D);
+        }
         if (key) {
             for (int i = 0; i < 3; i++) {
                 world.spawnParticle("reddust", cx + (r.nextDouble() - 0.5D) * 0.35D, top + r.nextDouble() * 0.2D,

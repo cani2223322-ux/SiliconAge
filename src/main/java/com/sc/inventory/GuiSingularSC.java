@@ -876,6 +876,12 @@ public class GuiSingularSC extends GuiContainer {
             } else if (sing.getEvent() == SingularReactorSC.EVENT_SOFT) {
                 add(k, l, 4, Lang.tr("sc.gui.sing.st.soft"));
             }
+            if (sing.isPortStopped()) {                       // ОМ-5: a Data Port put it out
+                add(k, l, 1, Lang.tr("sc.gen.port.stopped"));
+            }
+            if (sing.isPortNoPermit()) {                      // ОМ-5: a PERMIT Data Port unpowered
+                add(k, l, 2, Lang.tr("sc.gen.port.noPermit"));
+            }
             int[] miss = missingCoil();
             if (miss != null) {
                 add(k, l, 2, Lang.tr("sc.gui.sing.st.coil", 16 - sing.getCoilCount(), miss[0], miss[1], miss[2]));

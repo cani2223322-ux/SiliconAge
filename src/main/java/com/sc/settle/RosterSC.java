@@ -377,6 +377,9 @@ public final class RosterSC {
         if (had != null) {
             return had;
         }
+        if (RelayPostSC.gone(r, id)) {
+            return null;                                        // ПД-7: a destroyed post's core (unloaded at the loss) - its sweep ruins it
+        }
         SettlementRegistrySC.Settlement s = new SettlementRegistrySC.Settlement();
         s.id = id;
         s.dim = w.provider.dimensionId;
@@ -414,6 +417,10 @@ public final class RosterSC {
             } while (!used.add(Integer.valueOf(c)));
             sl.nameElement = NpcNamesSC.element(c);
             sl.nameNumber = NpcNamesSC.number(c);
+        }
+        if (!embassy && s.radius <= SettlementSizeSC.RELAY.radiusMax) {
+            relayRoster(s);                                     // ПД-7: a relay post's core - its two Sentries, no Elder, no Tuners
+            planned = true;
         }
         NBTTagCompound mine = new NBTTagCompound();
         mine.setBoolean(RESTORED, true);
@@ -652,6 +659,36 @@ public final class RosterSC {
     }
 
     /** The size a dome of `radius` is (the record lost it; the self-test asks it). */
+    /**
+     * ПД-7 (docs/plan-ideas-2026-10-26.md): a lost record of a relay post (a core of the post's dome) made again - SettlementSizeSC.RELAY,
+     * its crossing (extra Y), its Sentries' slots (NEVER) round the core, no Elder and no Tuners; its dock is lost with the record (the
+     * bridge no longer lists it - nothing else knows where it stood).
+     */
+    static void relayRoster(SettlementRegistrySC.Settlement s) {
+        s.size = SettlementSizeSC.RELAY.ordinal();
+        s.slots.clear();
+        s.points.clear();
+        s.hasDock = false;
+        s.points.put(SettlementRegistrySC.P_PLAZA, new int[]{s.x, s.floorY + 1, s.z});
+        s.points.put(SettlementRegistrySC.P_SQUARE, new int[]{s.x, s.floorY + 1, s.z});
+        for (int k = 0; k < SettlementSizeSC.RELAY.sentries; k++) {
+            SettlementRegistrySC.Slot sl = new SettlementRegistrySC.Slot();
+            sl.kind = NpcKindSC.SENTRY.ordinal();
+            sl.postX = sl.homeX = s.x + (k == 0 ? 4 : -4);
+            sl.postY = sl.homeY = s.floorY + 1;
+            sl.postZ = sl.homeZ = s.z;
+            sl.state = SettlementRegistrySC.NEVER;
+            s.slots.add(sl);
+        }
+        int[] n = com.sc.ruin.RuinLayoutSC.nodeNear(s.x, s.z);
+        if (n != null) {
+            NBTTagCompound y = new NBTTagCompound();
+            y.setInteger("i", n[0]);
+            y.setInteger("j", n[1]);
+            s.extra.setTag(RelayRulesSC.EXTRA, y);
+        }
+    }
+
     public static SettlementSizeSC sizeOf(int radius) {
         if (radius <= SettlementSizeSC.OUTPOST.radiusMax) {
             return SettlementSizeSC.OUTPOST;

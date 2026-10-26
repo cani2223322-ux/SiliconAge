@@ -38,6 +38,11 @@ public class RareRegistrySC extends WorldSavedData {
     public static final int NONE = 0, ALIVE = 1, DEAD = 2;
     /** The single «Затмение». */
     public static final String ECLIPSE = "eclipse";
+    /**
+     * ПД-4 (docs/plan-ideas-2026-10-26.md, the coordinator's): the week's wanted named Renegade, one in the dimension (WantedSC: its extra
+     * keeps the week, the name, the two modifiers, the suit, where it roams and was seen last).
+     */
+    public static final String WANTED = "wanted";
     /** Looks at a loaded place without the creature before it counts as gone (the owner's check, about once a second each). */
     public static final int LOST_CHECKS = 10;
 

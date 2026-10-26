@@ -250,8 +250,16 @@ public final class WardenFightSC {
         if (pressStage == STAGE_PRESS) {
             tickPress();
         }
+        if (boss.bound() && w() instanceof WorldServer) {       // ПД-6: the Breach Protocols' own effects (jamming, the shadow)
+            com.sc.arena.BreachFightSC.tick((WorldServer) w(), boss.arena(), w().getTotalWorldTime());
+        }
         telegraph();
         sync();
+    }
+
+    /** ПД-6: «Перегрузка»'s time to finish - the arena's SHORT_FUSE shortens it (BreachFightSC.finishTicks). */
+    public int finishTicks() {
+        return boss.bound() ? com.sc.arena.BreachFightSC.finishTicks(boss.arena()) : WardenRulesSC.FINISH_TICKS;
     }
 
     /** «Удержание»: the window, the waves. */
@@ -322,7 +330,7 @@ public final class WardenFightSC {
                     coreReset();
                     clockTicks = 0;
                 }
-            } else if (WardenRulesSC.coreResetDue(clockTicks)) {
+            } else if (clockTicks >= finishTicks()) {          // ПД-6: WardenRulesSC.coreResetDue at the arena's own fuse
                 resetLeft = WardenRulesSC.CORE_RESET_WARN;      // ACT_CORE_RESET, FLAG_RESET_ARMED: the last seconds
                 tell("sc.warden.reset.warn");
                 SoundsSC.play(w(), cx, cy + 4D, cz, "warden.siren", 4F, 0.8F);
@@ -581,7 +589,9 @@ public final class WardenFightSC {
                 alive++;
             }
         }
-        int want = Math.min(WardenRulesSC.waveSize(Math.max(1, players(WardenRulesSC.SCALE_RADIUS).size())), WardenRulesSC.WAVE_MAX - alive);
+        float mul = boss.bound() ? com.sc.arena.BreachFightSC.swarmMul(boss.arena()) : 1F;   // ПД-6 «Нашествие»: the wave and its cap x1.5
+        int size = (int) Math.ceil(WardenRulesSC.waveSize(Math.max(1, players(WardenRulesSC.SCALE_RADIUS).size())) * mul - 1.0E-6D);
+        int want = Math.min(size, (int) Math.ceil(WardenRulesSC.WAVE_MAX * mul - 1.0E-6D) - alive);
         if (want <= 0) {
             return;
         }
@@ -1044,7 +1054,7 @@ public final class WardenFightSC {
             flags |= EntityBreakdownWardenSC.FLAG_RESET_ARMED;
         }
         int timer = phase == WardenRulesSC.PHASE_HOLD ? windowLeft
-                : phase == WardenRulesSC.PHASE_OVERLOAD ? (resetLeft > 0 ? resetLeft : Math.max(0, WardenRulesSC.FINISH_TICKS - clockTicks)) : 0;
+                : phase == WardenRulesSC.PHASE_OVERLOAD ? (resetLeft > 0 ? resetLeft : Math.max(0, finishTicks() - clockTicks)) : 0;
         boss.syncWatchers(flags, highlight, litBits(), (timer + 19) / 20, scale, pressStage);   // seconds: a packet a second, not 20
     }
 

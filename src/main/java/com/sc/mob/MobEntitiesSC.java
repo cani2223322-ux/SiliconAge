@@ -34,6 +34,12 @@ public final class MobEntitiesSC {
      * the coil and the caravan have no spawn egg (hasEgg).
      */
     public static final int ID_BREAKDOWN_WARDEN = 22, ID_CONTAINMENT_COIL = 23, ID_CARAVAN_MASTER = 24, ID_CARAVAN_GUARD = 25;
+    /**
+     * The proposal of 2026-10-26 (the coordinator's, docs/plan-ideas-2026-10-26.md): ПД-4's wanted named Renegade (WantedSC brings it, never
+     * the spawn director) and ПД-5's Gatherer (a Settlement's / City's Tuner out by day - GathererSC). Neither has a spawn egg (hasEgg): both
+     * belong to a record (the week's wanted, a settlement).
+     */
+    public static final int ID_WANTED = 26, ID_GATHERER = 27;
     /** Tracking: as vanilla's monsters (80 blocks, every 3 ticks, with velocity). */
     public static final int TRACKING = 80, UPDATES = 3;
 
@@ -77,6 +83,10 @@ public final class MobEntitiesSC {
                 ID_CARAVAN_MASTER, SCMod.instance, TRACKING, UPDATES, true);
         EntityRegistry.registerModEntity(com.sc.settle.caravan.EntityCaravanGuardSC.class, com.sc.settle.caravan.EntityCaravanGuardSC.NAME,
                 ID_CARAVAN_GUARD, SCMod.instance, TRACKING, UPDATES, true);
+        // 2026-10-26 (docs/plan-ideas-2026-10-26.md): ПД-4's wanted Renegade, ПД-5's Gatherer
+        EntityRegistry.registerModEntity(EntityWantedSC.class, EntityWantedSC.NAME, ID_WANTED, SCMod.instance, TRACKING, UPDATES, true);
+        EntityRegistry.registerModEntity(com.sc.settle.npc.EntityGathererSC.class, com.sc.settle.npc.EntityGathererSC.NAME, ID_GATHERER, SCMod.instance,
+                TRACKING, UPDATES, true);
     }
 
     /** Ф5: the boss and its coils are tracked this far (the arena is 60 across; the coils' beams reach the boss). */
@@ -84,7 +94,8 @@ public final class MobEntitiesSC {
 
     /** Ф5: the pool ids that have a spawn egg (ItemSpawnEggSC) - all but the coil and the caravan's two (meaningless alone). */
     public static boolean hasEgg(int id) {
-        return id >= 0 && id < NAMES.length && id != ID_CONTAINMENT_COIL && id != ID_CARAVAN_MASTER && id != ID_CARAVAN_GUARD;
+        return id >= 0 && id < NAMES.length && id != ID_CONTAINMENT_COIL && id != ID_CARAVAN_MASTER && id != ID_CARAVAN_GUARD
+                && id != ID_WANTED && id != ID_GATHERER;
     }
 
     /** The names by pool id (the spawn egg's meta; the bestiary). Append with the pool. */
@@ -93,7 +104,8 @@ public final class MobEntitiesSC {
             EntityExecutionerSC.NAME, EntityNaniteSC.NAME, EntitySentryDroneSC.NAME, EntityMimicSC.NAME, EntityOverheatedSC.NAME, EntityWarlordSC.NAME,
             EntitySentinelSC.NAME, EntityEclipseSC.NAME, EntityPhantomSC.NAME, EntityLeechSC.NAME, EntityColossusSC.NAME, EntityStriderSC.NAME,
             EntityScrapperSC.NAME, EntityWaferCrabSC.NAME, EntityBreakdownWardenSC.NAME, EntityContainmentCoilSC.NAME,
-            com.sc.settle.caravan.EntityCaravanMasterSC.NAME, com.sc.settle.caravan.EntityCaravanGuardSC.NAME};
+            com.sc.settle.caravan.EntityCaravanMasterSC.NAME, com.sc.settle.caravan.EntityCaravanGuardSC.NAME, EntityWantedSC.NAME,
+            com.sc.settle.npc.EntityGathererSC.NAME};
     /**
      * The spawn egg's colours by pool id: {shell, spots}. Lineman grey-blue / its diode's yellow, Marauder mud / orange,
      * Tuner faded turquoise / its diodes' green, guard steel / the dome's turquoise; Ф3: Trooper dark red / crimson, Jammer
@@ -102,13 +114,14 @@ public final class MobEntitiesSC {
      * crimson / gold, Sentinel void black / violet, «Затмение» black / crimson, Phantom glass blue / pale, Leech cable black / copper,
      * Colossus quartzite white / grey, Strider gunmetal / arc blue, Scrapper rust / yellow, Wafer Crab teal / iridescent violet;
      * Ф5: the Breakdown Warden void black / the reactor's white-violet, the coil copper / its beam's blue, the caravan's master faded
-     * turquoise / gold, its guard steel / the dome's turquoise (the last three have no egg).
+     * turquoise / gold, its guard steel / the dome's turquoise (the last three have no egg); 2026-10-26: the wanted Renegade crimson-black /
+     * gold (no egg), the Gatherer faded turquoise / a sack's ochre (no egg).
      */
     public static final int[][] EGG_COLORS = {{0x8A9BA8, 0xFFE040}, {0x5A4A3A, 0xFF9A30}, {0x6FA8A2, 0x7CFF9A}, {0x4A5560, 0x3CD2C8},
             {0x3A2026, 0xFF4040}, {0x2A3348, 0x4A7CFF}, {0xB8C4CC, 0xFFFFFF}, {0x8C8C7A, 0xFFE040}, {0x4A4F5A, 0x40E0FF}, {0x30343A, 0x50FF70},
             {0x6A5A4A, 0xFF9A30}, {0x777777, 0xB060FF}, {0xC84020, 0xF0F0F0}, {0x7A1020, 0xFFC040}, {0x101018, 0x8040FF}, {0x0A0A0E, 0xFF2040},
             {0x9AC8E8, 0xE8F4FF}, {0x202020, 0xD08040}, {0xE0E0E8, 0x9A9AA8}, {0x4A4F5A, 0x60B0FF}, {0x7A5A3A, 0xFFE040}, {0x3FA8A0, 0xC080FF},
-            {0x0C0A14, 0xE0C8FF}, {0xB87333, 0x60C0FF}, {0x6FA8A2, 0xFFC040}, {0x4A5560, 0x3CD2C8}};
+            {0x0C0A14, 0xE0C8FF}, {0xB87333, 0x60C0FF}, {0x6FA8A2, 0xFFC040}, {0x4A5560, 0x3CD2C8}, {0x2A0A10, 0xFFC040}, {0x6FA8A2, 0xC89A40}};
 
     /** The entity name of pool id `id` ("lineman"), null for an unknown id. */
     public static String nameOf(int id) {

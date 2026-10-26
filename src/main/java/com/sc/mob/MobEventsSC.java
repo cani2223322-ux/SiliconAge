@@ -228,6 +228,29 @@ public final class MobEventsSC {
     }
 
     /**
+     * 2026-10-26 (docs/plan-ideas-2026-10-26.md, the coordinator's): the real players online who dealt at least `minShare` (0..1) of the
+     * damage the mob took - ПД-2's squad (a contract's kill for every member with 10%), ПД-4's wanted Renegade (each with 10% rewarded).
+     * Ask before the log is forgotten (MobDropsSC: at the drops). Server; empty when no one fought it.
+     */
+    public static List<EntityPlayerMP> participants(EntityLivingBase mob, float minShare) {
+        List<EntityPlayerMP> out = new ArrayList<EntityPlayerMP>();
+        Map<UUID, Float> shares = damageShares(mob);
+        MinecraftServer server = MinecraftServer.getServer();
+        if (shares.isEmpty() || server == null || server.getConfigurationManager() == null) {
+            return out;
+        }
+        for (Object o : server.getConfigurationManager().playerEntityList) {
+            if (o instanceof EntityPlayerMP && !(o instanceof FakePlayer)) {
+                Float f = shares.get(((EntityPlayerMP) o).getUniqueID());
+                if (f != null && f.floatValue() + 1.0E-4F >= minShare) {
+                    out.add((EntityPlayerMP) o);
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
      * Ф5 (docs/plan-substrate-tech-f5.md §5.6): the mob's damage log as it stands, to keep in its own NBT - the Breakdown Warden's
      * fight outlives an unload and a restart (WardenFightSC's scWarden), so its log must too: each real player's damage by UUID put
      * into `into`. @return the total (0 - no one fought it)

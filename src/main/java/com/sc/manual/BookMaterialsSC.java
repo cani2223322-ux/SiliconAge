@@ -42,10 +42,10 @@ final class BookMaterialsSC {
                     "turbineBladeTitanium", "turbineBladeTungsten"},
             {"mat.ore", "crushedOreSC", "purifiedCrushedOreSC", "dustSC", "dustTinySC", "ingotSC", "coke", "limestoneSC", "rubber", "rubberBlue",
                     "rubberHeatResist"},
-            {"mat.tools", "toolDIAMOND_WIRE", "toolDIAMOND_BLADE", "toolSEED_CRYSTAL", "toolPHOTOMASK", "toolSPUTTER_TARGET_COPPER",
+            {"mat.tools", "toolDIAMOND_WIRE", "toolDIAMOND_BLADE", "toolSEED_CRYSTAL", "toolPHOTOMASK", "toolEUV_MASK", "toolSPUTTER_TARGET_COPPER",
                     "toolSPUTTER_TARGET_ALUMINIUM", "toolSPUTTER_TARGET_TUNGSTEN", "toolMOLD_PLATE", "toolMOLD_BLADE", "toolMOLD_COIL", "toolMOLD_TARGET",
                     "toolMOLD_LEAD_FRAME_3", "toolMOLD_LEAD_FRAME_16", "toolMOLD_LEAD_FRAME_40", "drillHeadSteel", "drillHeadTungsten", "drillHeadDiamond",
-                    "drillHeadExo", "oreScanner"},
+                    "drillHeadExo", "oreScanner", "nanitePaste"},                 // ОМ-4 the EUV mask, ОМ-2 the paste (2026-10-26)
             {"mat.cells", "liquidHeCell", "deuteriumCell", "isotopeCapsule", "windRotor"}};
 
     /** Items with many kinds (metadata): shown as a row of icons, their G key on any kind. */
@@ -91,6 +91,9 @@ final class BookMaterialsSC {
                 ItemStack s = stackOf(g[i]);
                 if (s != null) {
                     entry(e, g[i], s);
+                }
+                if ("dustSC".equals(g[i])) {                         // ОМ-3: hafnium out of spare zirconium (the reactor, the refinery)
+                    e.add(BookEl.para(Lang.tr("sc.manual.materials.hafniumZr")));
                 }
             }
             e.add(BookEl.link("materials", Lang.tr("sc.book.mat.title")));

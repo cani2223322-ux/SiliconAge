@@ -41,7 +41,10 @@ public final class TradeOfferSC {
      * settlement; Ф3's services: the player's own piece charged (OUT_CHARGE), the player's trophy restored (OUT_RESTORE).
      * Appended only.
      */
-    public static final int OUT_ITEM = 0, OUT_REPUTATION = 1, OUT_MAP = 2, OUT_CHARGE = 3, OUT_RESTORE = 4;
+    public static final int OUT_ITEM = 0, OUT_REPUTATION = 1, OUT_MAP = 2, OUT_CHARGE = 3, OUT_RESTORE = 4,
+            // ---- 2026-10-26 (docs/plan-ideas-2026-10-26.md, the coordinator's): ПД-3's «Тревога» / «Тяжёлая ночь» (the deposit paid - a raid
+            // called: hazard.RaidAlarmSC), ПД-4's Cartographer's word on the wanted Renegade (where it was seen last - mob.WantedSC)
+            OUT_ALARM = 5, OUT_WANTED_HINT = 6;
     /** Sides in: a deal 1..2 (the screen's row shows them all), a service 2..4 (the matcher and the chips in the row, all in the details). */
     public static final int MAX_SIDES = 2, MAX_SERVICE_SIDES = 4;
     /** `limit` of a deal with no limit of its own (the Armourer's restoring, TODO(balance)): the screen says «без лимита», nothing is counted. */

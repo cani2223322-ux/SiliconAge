@@ -819,6 +819,18 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
             return false;
         }
         p.addChatComponentMessage(greeting(p));
+        if (p.isSneaking() && kind() == com.sc.settle.NpcKindSC.CAPTAIN && link.get() != null) {
+            // 2026-10-26 (docs/plan-ideas-2026-10-26.md): ПД-3 - the heavy night is the Elder's to call, the defence his; ПД-4 - the week's wanted one
+            if (com.sc.dim.SubstrateConfigSC.raidAlarms) {
+                p.addChatComponentMessage(new ChatComponentTranslation("sc.alarm.captain").setChatStyle(new net.minecraft.util.ChatStyle()
+                        .setColor(EnumChatFormatting.GOLD)));
+            }
+            if (com.sc.dim.SubstrateConfigSC.wanted) {
+                IChatComponent w = com.sc.mob.WantedSC.captainLine(worldObj);
+                w.getChatStyle().setColor(EnumChatFormatting.GOLD);
+                p.addChatComponentMessage(w);
+            }
+        }
         return true;
     }
 

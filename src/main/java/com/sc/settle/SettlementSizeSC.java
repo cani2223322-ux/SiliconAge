@@ -10,6 +10,11 @@ package com.sc.settle;
  * 18..22 Tuners, 6 Sentries + 4 Senior Wardens + the Captain + the Commandant, the Vokzal for its dock). The Substrate's generator
  * never picks it (SettlementLayoutSC.SIZE_WEIGHTS holds three; RosterSC.sizeOf never answers it); tables of the Substrate's sizes
  * (the raids', the caravans') stay three long - substrate() tells them apart. Shared core: only the coordinator edits this file.
+ * <p>
+ * ПД-7 (docs/plan-ideas-2026-10-26.md, the coordinator's): RELAY, ordinal 4 - a Tuners' relay post on a cleared Dead Node's plaza, made
+ * in play (settle.RelayPostSC - never by a generator): dome 12, no Tuners, 2 Sentries, a dock. It stands in the Substrate but is not one
+ * of its generated sizes (substrate() false: no Dispatcher, no flights there; the raids' tables take OUTPOST's row for it -
+ * tableIndex()). A lost raid on it destroys it (SettlementRegistrySC.remove).
  */
 public enum SettlementSizeSC {
 
@@ -21,7 +26,10 @@ public enum SettlementSizeSC {
     CITY("city", 56, 64, 15, 20, 4, 3, true, 100, true),
     // ---- Ф6 (appended)
     /** «Посольство Наладчиков» (the Overworld): dome 88..96, 18..22 Tuners, 6 Sentries + 4 Senior Wardens + the Captain + the Commandant, the Vokzal. */
-    EMBASSY("embassy", 88, 96, 18, 22, 6, 4, true, 100, true);
+    EMBASSY("embassy", 88, 96, 18, 22, 6, 4, true, 100, true),
+    // ---- ПД-7 (docs/plan-ideas-2026-10-26.md, appended)
+    /** «Пост-ретранслятор»: dome 12, no Tuners, 2 Sentries, a dock - made in play on a held Dead Node (RelayPostSC). */
+    RELAY("relay", 12, 12, 0, 0, 2, 0, true, 0, false);
 
     /** The sizes the Substrate's generator makes (OUTPOST, SETTLEMENT, CITY) - the tables indexed by a Substrate size are this long. */
     public static final int SUBSTRATE_SIZES = 3;
@@ -67,6 +75,19 @@ public enum SettlementSizeSC {
     /** Ф6: one of the Substrate's own sizes (not the Overworld's EMBASSY). */
     public boolean substrate() {
         return ordinal() < SUBSTRATE_SIZES;
+    }
+
+    /** ПД-7: a relay post (made in play on a Dead Node). */
+    public boolean relay() {
+        return this == RELAY;
+    }
+
+    /**
+     * ПД-7: the row of a table indexed by the Substrate's sizes (RaidRulesSC.REACH / REP / CHIPS / CHEST_ROLLS, CaravanRulesSC): a
+     * Substrate size its own ordinal, a relay post OUTPOST's, anything else the last row (as the tables' clamps always did).
+     */
+    public int tableIndex() {
+        return substrate() ? ordinal() : this == RELAY ? OUTPOST.ordinal() : SUBSTRATE_SIZES - 1;
     }
 
     /** The size of an ordinal (an unknown one: OUTPOST). */

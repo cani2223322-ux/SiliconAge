@@ -133,6 +133,30 @@ public class SettlementRegistrySC extends WorldSavedData {
         return s;
     }
 
+    /**
+     * ПД-7 (docs/plan-ideas-2026-10-26.md, the coordinator's): record `id` leaves the registry - a relay post destroyed by a lost defence
+     * (RelayPostSC; never a generated settlement or an embassy: refused, null). Its index entries go; the players' knownDocks keep the id
+     * (byId answers null for it - every list skips it); the id is never handed out again (nextId stays). The caller removes the post's core
+     * block first, or notes the id as gone (RelayPostSC.GONE: its core unloaded) - a core whose record is missing would make it again
+     * (RosterSC.restore). @return the removed record, or null
+     */
+    public Settlement remove(int id) {
+        Settlement s = byId.get(Integer.valueOf(id));
+        if (s == null || s.size != SettlementSizeSC.RELAY.ordinal()) {
+            return null;
+        }
+        byId.remove(Integer.valueOf(id));
+        for (Iterator<List<Settlement>> it = regions.values().iterator(); it.hasNext(); ) {
+            List<Settlement> l = it.next();
+            l.remove(s);
+            if (l.isEmpty()) {
+                it.remove();
+            }
+        }
+        markDirty();
+        return s;
+    }
+
     /** After a change of a record's site, radius or dock: its index entries again. */
     public void reindex(Settlement s) {
         for (List<Settlement> l : regions.values()) {
@@ -284,9 +308,14 @@ public class SettlementRegistrySC extends WorldSavedData {
      * `skipId` is left out (-1: none). A walk of the dimension's records - asked rarely (a map bought, a screen opened).
      */
     public List<Settlement> nearestDocks(int dim, final double x, final double z, int n, int skipId) {
+        return nearestDocks(dim, x, z, n, skipId, true);
+    }
+
+    /** ПД-7 (the review's fix): nearestDocks without the relay posts (`relays` false) - a map's settlements, a first flight's dock. */
+    public List<Settlement> nearestDocks(int dim, final double x, final double z, int n, int skipId, boolean relays) {
         List<Settlement> l = new ArrayList<Settlement>();
         for (Settlement s : byId.values()) {
-            if (s.dim == dim && s.hasDock && s.id != skipId) {
+            if (s.dim == dim && s.hasDock && s.id != skipId && (relays || !SettlementSC.isRelay(s))) {
                 l.add(s);
             }
         }
@@ -381,6 +410,14 @@ public class SettlementRegistrySC extends WorldSavedData {
     /** The player's record or null - for readers that shouldn't create one (the bridge's list, the handbook). */
     public PlayerRec playerIfAny(UUID id) {
         return id == null ? null : players.get(id);
+    }
+
+    /**
+     * 2026-10-26 (docs/plan-ideas-2026-10-26.md, ПД-2; the coordinator's): every player's record by UUID, read only (a squad's mates are the
+     * records with its id in their extra - SquadSC.matesOf walks them; keep the walk rare: invitations, the bridge's list, the flights).
+     */
+    public Map<UUID, PlayerRec> players() {
+        return Collections.unmodifiableMap(players);
     }
 
     // ------------------------------------------------------------------ NBT
@@ -936,6 +973,11 @@ public class SettlementRegistrySC extends WorldSavedData {
         public int settlement = -1;
         public long takenDay;
         public boolean done;
+        /**
+         * 2026-10-26 (docs/plan-ideas-2026-10-26.md, ПД-1; the coordinator's): a contract's own state - «Срочная депеша»'s destination
+         * settlement and deadline, «Снять показания»'s crossings already read (ПД-1's keys). Saved only when not empty ("Extra").
+         */
+        public NBTTagCompound extra = new NBTTagCompound();
 
         NBTTagCompound write() {
             NBTTagCompound t = new NBTTagCompound();
@@ -943,6 +985,9 @@ public class SettlementRegistrySC extends WorldSavedData {
             t.setIntArray("P", new int[]{target, progress, settlement});
             t.setLong("Day", takenDay);
             t.setBoolean("Done", done);
+            if (extra != null && !extra.hasNoTags()) {
+                t.setTag("Extra", extra);
+            }
             return t;
         }
 
@@ -957,6 +1002,7 @@ public class SettlementRegistrySC extends WorldSavedData {
             }
             c.takenDay = t.getLong("Day");
             c.done = t.getBoolean("Done");
+            c.extra = t.getCompoundTag("Extra");
             return c;
         }
     }

@@ -38,6 +38,8 @@ public final class ModBlocks {
     public static com.sc.block.BlockConduitSC conduitBundle;
     public static BlockMachineSC machineSC;
     public static BlockMachineSC machineSC2;
+    /** ОМ-4 (2026-10-26): the third machine block - MachineType ordinals 32-47 (the EUV Lithograph). */
+    public static BlockMachineSC machineSC3;
     public static BlockGeneratorSC generatorSC;
     public static BlockGeneratorSC generatorSC2;
     public static Block tokamakCoil;
@@ -114,6 +116,9 @@ public final class ModBlocks {
         GameRegistry.registerBlock(machineSC, ItemBlockMachineSC.class, "machineSC");
         machineSC2 = new BlockMachineSC(16);
         GameRegistry.registerBlock(machineSC2, ItemBlockMachineSC.class, "machineSC2");
+        // ОМ-4 (docs/plan-ideas-2026-10-26.md): ordinals 32-47 - the EUV Lithograph first
+        machineSC3 = new BlockMachineSC(32);
+        GameRegistry.registerBlock(machineSC3, ItemBlockMachineSC.class, "machineSC3");
 
         generatorSC = new BlockGeneratorSC(0);
         GameRegistry.registerBlock(generatorSC, ItemBlockGeneratorSC.class, "generatorSC");
@@ -216,6 +221,7 @@ public final class ModBlocks {
         com.sc.ruin.CampBlocksSC.init();
         com.sc.arena.ArenaBlocksSC.init();              // Подложка Ф5: the Breakdown Epicentre's blocks and its Console
         com.sc.embassy.EmbassyBlocksSC.init();          // Подложка Ф6: the Great Ring's core (its tile)
+        IdeaBlocksSC.init();                            // 2026-10-26 (docs/plan-ideas-2026-10-26.md): the Relay, the Data Port, the Energy Bank
 
         registerOreDict();
     }

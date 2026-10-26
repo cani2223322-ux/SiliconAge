@@ -26,7 +26,10 @@ public enum SCToolType {
     MOLD_TARGET("moldTarget", 256),
     MOLD_LEAD_FRAME_3("moldLeadFrame3", 256),
     MOLD_LEAD_FRAME_16("moldLeadFrame16", 256),
-    MOLD_LEAD_FRAME_40("moldLeadFrame40", 256);
+    MOLD_LEAD_FRAME_40("moldLeadFrame40", 256),
+    // ОМ-4 (docs/plan-ideas-2026-10-26.md, the coordinator's - appended: registry name "toolEUV_MASK"): the EUV Lithograph's reflective
+    // mask - worn like the Stepper's photomask. TODO(balance): durability
+    EUV_MASK("euvMask", 24);
 
     public final String textureName;
     public final int durability;

@@ -461,6 +461,12 @@ public final class FlightSC {
             say(p, EmbassyRulesSC.refuseKey(EmbassyRulesSC.R_OFF));
             return;
         }
+        if (k.ride == EmbassyRulesSC.RIDE_RESCUE && !FlightTargetsSC.rescueOpen(rec, w.getTotalWorldTime())) {
+            win.passengers.remove(id);                          // ПД-2: one death, one rescue a squad - a mate flew there first (or it went cold)
+            FlightRunSC.refund(reg, id, rec, k, p, "sc.flight.rescueClosed");
+            EmbassyTicketSC.setRescueMate(rec, null);
+            return;
+        }
         double[] to = FlightTargetsSC.point(reg, rec, k, w.getSeed(), RAND);
         double fx = p.posX, fy = p.posY + 1D, fz = p.posZ;
         IChatComponent name = targetName(reg, rec, k, w.getSeed());
@@ -647,6 +653,12 @@ public final class FlightSC {
     /** The talon's target as the chat names it: a dome, an embassy, the death mark. */
     private static IChatComponent targetName(SettlementRegistrySC reg, SettlementRegistrySC.PlayerRec rec, EmbassyTicketSC.Talon k, long seed) {
         if (k.ride == EmbassyRulesSC.RIDE_RESCUE) {
+            UUID mate = EmbassyTicketSC.rescueMate(rec);       // ПД-2: a squad mate's mark - his name on the line
+            SettlementRegistrySC.PlayerRec m = mate == null ? null : FlightTargetsSC.rescueRec(rec);
+            if (m != null) {
+                return new ChatComponentTranslation("sc.flight.target.mateMark", com.sc.settle.SquadSC.nameOf(mate),
+                        String.valueOf(m.deathX), String.valueOf(m.deathZ));
+            }
             return new ChatComponentTranslation("sc.flight.target.mark", String.valueOf(rec.deathX), String.valueOf(rec.deathZ));
         }
         SettlementRegistrySC.Settlement s = k.target >= 0 ? reg.byId(k.target) : null;

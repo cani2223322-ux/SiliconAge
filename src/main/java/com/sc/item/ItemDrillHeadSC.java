@@ -54,6 +54,7 @@ public class ItemDrillHeadSC extends Item {
         list.add(Lang.tr(kind.maxHardness < 50 ? "sc.drillhead.noobsidian" : "sc.drillhead.all"));
         if (kind.life > 0) {
             list.add(Lang.tr("sc.drillhead.life", kind.life - stack.getItemDamage(), kind.life));
+            ItemToolSC.pasteLine(stack, list);                      // ОМ-2: the Nanite Paste's repairs
         } else {
             list.add(Lang.tr("sc.drillhead.forever"));
         }

@@ -134,6 +134,29 @@ public final class SubstrateConfigSC {
     public static float flightPriceMultiplier = 1F;
     public static int flightsPerDay = 2;
 
+    // ------------------------------------------------------------------ the proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md, rules too)
+
+    /** ПД-2: a squad («звено») shares a contract's kill - every member with 10% of the damage; «Доверие» stays the killer's (off: as before). */
+    public static boolean squads = true;
+    /** ПД-3: the Elder's and the Captain's «Тревога» / «Тяжёлая ночь» - a raid called for the next night (off: no such service). */
+    public static boolean raidAlarms = true;
+    /** ПД-4: once a game week the City's Captain posts a wanted named Renegade somewhere 600..1500 from a City (off: none). */
+    public static boolean wanted = true;
+    /** ПД-5: by day a Settlement's / City's Gatherers walk out to the druses and fumaroles while a player is near (off: none). */
+    public static boolean gatherers = true;
+    /** ПД-6: «Протоколы Пробоя» go into the Breakdown Console with the Key (off: the Console refuses them). */
+    public static boolean breachProtocols = true;
+    /** ПД-7: a cleared Dead Node held with a Relay becomes a Tuners' relay post with a dock (off: the Relay can't be set up). */
+    public static boolean relayPosts = true;
+    /** ПД-8: the copper busbar tunnels under the plateaus generate in land not explored yet (off: no new ones; those made stay). */
+    public static boolean tunnels = true;
+
+    /**
+     * ПД-5: this client draws the Substrate's ambient life - the Tuner drones over the workshops, the moths in the canyons (each client's
+     * own look, never the server's: a private field, read at start, as customSky).
+     */
+    private static boolean ambientLife = true;
+
     /** The section of the embassies' rules. */
     public static final String CATEGORY_EMBASSY = "embassy";
 
@@ -229,7 +252,43 @@ public final class SubstrateConfigSC {
         backgroundRadiationMultiplier = num(c, "backgroundRadiationMultiplier", d, 1F, 0F, 10F,
                 "The Substrate's own radiation (the Oxide Fields, the Rift, the cracked RTGs, the pillar), times this (on top of radiation.multiplier; 0: none)"
                 + " / Множитель собственной радиации Подложки (Окисные поля, Разлом, треснувшие РИТЭГи, столп; поверх radiation.multiplier; 0 - нет)");
+        loadIdeas(c);
         loadEmbassies(c);
+    }
+
+    /** The proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md): ПД-2..ПД-8's switches in the section "dimension". */
+    private static void loadIdeas(Configuration c) {
+        String d = CATEGORY;
+        squads = c.getBoolean("squads", d, true,
+                "A squad (two or more players by a Credit Chip click, or one scoreboard team) shares a contract's kill: every member who dealt 10% of"
+                + " the damage counts it; the kill's reputation stays the killer's (off: only the killer's kills count, as before)"
+                + " / Звено (игроки, собранные щелчком Кредит-чипа, или одна команда scoreboard) делит убийство для контрактов: его засчитывает"
+                + " каждый, кто нанёс 10% урона; „Доверие“ за убийство - только добившему (выкл.: засчитываются только свои убийства, как раньше)");
+        raidAlarms = c.getBoolean("raidAlarms", d, true,
+                "The Elder and the Captain sell an \"Alarm\" (from \"Acquaintance\") and a \"Heavy night\" (from \"Own\"): an 8-chip deposit, a raid"
+                + " the next night the buyer is near (off: no such service) / Старейшина и Капитан продают „Тревогу“ (с „Знакомого“) и „Тяжёлую ночь“"
+                + " (со „Своего“): залог 8 КЧ, налёт в ближайшую ночь, когда покупатель рядом (выкл.: такой услуги нет)");
+        wanted = c.getBoolean("wanted", d, true,
+                "Once a game week the City's Captain posts a wanted named Renegade with an escort, roaming 600-1500 blocks from a City (off: none)"
+                + " / Раз в игровую неделю Капитан Города объявляет розыск: именной Отступник с охраной кочует в 600-1500 блоках от Города (выкл.: розыска нет)");
+        gatherers = c.getBoolean("gatherers", d, true,
+                "By day 1-2 Gatherers walk out of a Settlement or a City to the druses and fumaroles while a player is within 96 blocks (off: none)"
+                + " / Днём 1-2 Собирателя выходят из Посёлка или Города к друзам и фумаролам, пока игрок в 96 блоках (выкл.: Собирателей нет)");
+        breachProtocols = c.getBoolean("breachProtocols", d, true,
+                "Up to three \"Breach Protocols\" go into the Breakdown Console with the Key: a harder fight, more loot (off: the Console refuses them)"
+                + " / До трёх „Протоколов Пробоя“ вставляются в Консоль Пробоя вместе с Ключом: бой тяжелее, добычи больше (выкл.: Консоль их не берёт)");
+        relayPosts = c.getBoolean("relayPosts", d, true,
+                "A Relay set up on a cleared Dead Node's plaza and held for 5 minutes becomes a Tuners' relay post with a dome and a dock"
+                + " (off: the Relay can't be set up; posts already built stay) / Ретранслятор на площади зачищенного Мёртвого Узла, удержанный 5 минут,"
+                + " становится постом Наладчиков с куполом и Причалом (выкл.: Ретранслятор не ставится; построенные посты остаются)");
+        tunnels = c.getBoolean("tunnels", d, true,
+                "Copper busbar tunnels under the plateaus (Y 22-28, entrances in the canyons' walls) generate in land not explored yet (off: no new"
+                + " ones; those made stay) / Тоннели-шины под плато (Y 22-28, входы в стенах каньонов) появляются в ещё не открытой земле"
+                + " (выкл.: новых нет; созданные остаются)");
+        ambientLife = c.getBoolean("ambientLife", d, true,
+                "This client draws the Substrate's ambient life: the Tuner drones over the settlements' workshops and the moths in the canyons"
+                + " (each client's own choice) / Этот клиент рисует живность Подложки: Дронов-наладчиков над мастерскими поселений и мотыльков"
+                + " в каньонах (у каждого клиента своё)");
     }
 
     /** Ф6 (docs/plan-substrate-tech-f6.md §2.1): the section "embassy". The placement numbers matter only for land not generated yet. */
@@ -319,6 +378,11 @@ public final class SubstrateConfigSC {
     /** Ф5: this client asked for the Substrate's own sky (SubstrateSkySC also checks ShadersModCore). */
     public static boolean customSky() {
         return customSky;
+    }
+
+    /** ПД-5: this client draws the drones over the workshops and the canyons' moths (AmbientLifeClientSC asks; each client's own). */
+    public static boolean ambientLife() {
+        return ambientLife;
     }
 
     /**

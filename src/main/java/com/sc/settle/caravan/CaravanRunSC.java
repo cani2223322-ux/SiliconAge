@@ -206,7 +206,7 @@ public final class CaravanRunSC {
         SettlementRegistrySC.Settlement best = null;
         double bd = (double) CaravanRulesSC.NEIGHBOUR_MAX * CaravanRulesSC.NEIGHBOUR_MAX;
         for (SettlementRegistrySC.Settlement o : r.near(s.dim, s.x, s.z, CaravanRulesSC.NEIGHBOUR_MAX)) {
-            if (o.id == s.id || o.dim != s.dim) {
+            if (o.id == s.id || o.dim != s.dim || com.sc.settle.SettlementSC.isRelay(o)) {     // ПД-7: a relay post is no caravan's road
                 continue;
             }
             double d = s.distSq(o.x + 0.5D, o.z + 0.5D);

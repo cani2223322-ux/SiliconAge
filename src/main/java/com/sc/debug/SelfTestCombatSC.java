@@ -175,9 +175,9 @@ final class SelfTestCombatSC {
         }
         // Ф4 appended empStorms and raids (docs/plan-substrate-tech-f4.md §2.1), Ф5 requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1):
         // 14 rules then; Ф6 appended the embassy section's six (docs/plan-substrate-tech-f6.md §2.1): 20; the audit of 2026-10-20 (ПМ-6, ПС-8)
-        // six of the section dimension and two of embassy: 28 now (SelfTestEmbassySC checks them)
-        check(rule && rules.size() == 28, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
-                + ", true by default) " + rule + ", " + rules.size() + " rules (28 with Ф4's, Ф5's, Ф6's and the audit's)");
+        // six of the section dimension and two of embassy: 28; the proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md) seven more: 35 now
+        check(rule && rules.size() == 35, "config (§2.1, ПБ-18): dimension.mobsUseEmp is a rule the server sends (now " + SubstrateConfigSC.mobsUseEmp
+                + ", true by default) " + rule + ", " + rules.size() + " rules (35 with Ф4's, Ф5's, Ф6's, the audit's and the 2026-10-26 proposal's)");
     }
 
     // ------------------------------------------------------------------ 2. «Пробой» (ПБ-15, ПБ-16)
@@ -285,9 +285,10 @@ final class SelfTestCombatSC {
                 EntitySentryDroneSC.HP, EntityMimicSC.HP};
         boolean hps = Arrays.equals(hp, MOB_HP);
         // Ф4 appended its ten (12..21, docs/plan-substrate-tech-f4.md §2.2), Ф5 its four (22..25, docs/plan-substrate-tech-f5.md §2.2): the pool is
-        // 26 now, Ф3's 4..11 unchanged
-        boolean pool = MobEntitiesSC.NAMES.length == 26 && MobEntitiesSC.EGG_COLORS.length == 26 && "trooper".equals(MobEntitiesSC.nameOf(4))
-                && "mimic".equals(MobEntitiesSC.nameOf(11)) && "breakdownWarden".equals(MobEntitiesSC.nameOf(22)) && MobEntitiesSC.nameOf(26) == null
+        // 26, the proposal of 2026-10-26 its two (26 the wanted Renegade, 27 the Gatherer - docs/plan-ideas-2026-10-26.md): 28 now, Ф3's 4..11 unchanged
+        boolean pool = MobEntitiesSC.NAMES.length == 28 && MobEntitiesSC.EGG_COLORS.length == 28 && "trooper".equals(MobEntitiesSC.nameOf(4))
+                && "mimic".equals(MobEntitiesSC.nameOf(11)) && "breakdownWarden".equals(MobEntitiesSC.nameOf(22)) && MobEntitiesSC.nameOf(28) == null
+                && "wantedRenegade".equals(MobEntitiesSC.nameOf(26)) && "gatherer".equals(MobEntitiesSC.nameOf(27))
                 && MobEntitiesSC.ID_TROOPER == 4 && MobEntitiesSC.ID_MIMIC == 11;
         // the caps (ПС-10): MobCombatSC's tables, the mobs' own by name
         boolean caps = MobCombatSC.BLADE[BladeType.QUANTUM.ordinal()] == 8 && MobCombatSC.BLADE[BladeType.EXO.ordinal()] == 10
@@ -1140,7 +1141,8 @@ final class SelfTestCombatSC {
                     + " A / M / X / S / T, or direct references in BookWorldSC): " + unresolved);
         }
         int want = 20 + BookWorldSC.F4_ARTICLES.length + BookWorldSC.F5_ARTICLES.length    // Ф1..Ф3's 20, Ф4's and Ф5's (SelfTestHazardSC / SelfTestFinaleSC)
-                + BookWorldSC.F6_ARTICLES.length;                                            // and Ф6's (SelfTestEmbassySC)
+                + BookWorldSC.F6_ARTICLES.length                                             // and Ф6's (SelfTestEmbassySC)
+                + BookWorldSC.IDEAS_ARTICLES.length;                                         // and the 2026-10-26 proposal's (SelfTestIdeasSC)
         check(bad.length() == 0 && tables && noG.length() == 0 && chapter == want, "handbook (§10.2): the " + ARTICLES.length + " new WORLD articles (the"
                 + " chapter " + chapter + " of " + want + ") build with no raw keys, the extended ones too" + (bad.length() == 0 ? "" : " -" + bad) + "; tables: the"
                 + " elites " + elites + ", the ranks " + wardens + " (4), the restoring " + restore + ", the trophies " + trophies + " (SHOWN) " + tables

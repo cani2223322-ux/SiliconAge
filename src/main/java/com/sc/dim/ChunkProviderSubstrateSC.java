@@ -99,6 +99,8 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
     /** Ф5 (package A / J): the Breakdown Epicentres, the Lithographers' bridge wrecks. */
     private final com.sc.arena.MapGenArenaSC arenas = new com.sc.arena.MapGenArenaSC();
     private final com.sc.lore.MapGenWreckSC wrecks = new com.sc.lore.MapGenWreckSC();
+    /** ПД-8 (docs/plan-ideas-2026-10-26.md, the coordinator's wiring): the copper busbar tunnels under the plateaus. */
+    private final com.sc.ruin.MapGenTunnelSC tunnels = new com.sc.ruin.MapGenTunnelSC();
     /** The carver - after the structures above: it keeps out of the settlements' boxes and (Ф4) the built camps' and Vaults'. */
     private final MapGenSubstrateCavesSC caves = new MapGenSubstrateCavesSC(settlements, camps, vaults);
 
@@ -112,10 +114,16 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         return wrecks;
     }
 
+    /** ПД-8: the tunnels' generator (the carver, the world test ask it). */
+    public com.sc.ruin.MapGenTunnelSC tunnels() {
+        return tunnels;
+    }
+
     public ChunkProviderSubstrateSC(World world, long seed) {
         this.world = world;
         this.seed = seed;
         caves.keepOut(arenas, wrecks);                          // Ф5: no via or cave into an arena's pit or a wreck
+        caves.keepOut(tunnels);                                 // ПД-8: nor through a tunnel
     }
 
     /** Ф2: the settlements' structure (the world test asks it for a site's start). */
@@ -191,6 +199,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         vaults.func_151539_a(this, world, cx, cz, blocks);
         arenas.func_151539_a(this, world, cx, cz, blocks);          // Ф5: after the Nodes' (their saved starts are loaded by now)
         wrecks.func_151539_a(this, world, cx, cz, blocks);
+        tunnels.func_151539_a(this, world, cx, cz, blocks);         // ПД-8: the tunnels' starts (before the carver)
         caves.func_151539_a(this, world, cx, cz, blocks);
         arenas.carve(cx, cz, blocks, metas);                       // Ф5 (package A): a built arena's pit, into the arrays
         pond(cx, cz, cell, blocks, metas);
@@ -323,6 +332,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         vaults.generateStructuresInChunk(world, popRand, cx, cz);
         arenas.generateStructuresInChunk(world, popRand, cx, cz);         // Ф5: the arenas' plating and Console; the wrecks
         wrecks.generateStructuresInChunk(world, popRand, cx, cz);
+        tunnels.generateStructuresInChunk(world, popRand, cx, cz);       // ПД-8: under the plateaus (the settlements stand far above)
         settlements.generateStructuresInChunk(world, popRand, cx, cz);    // last: the settlements lie over everything
     }
 
@@ -534,6 +544,9 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         if (com.sc.ruin.MapGenVaultSC.START_NAME.equals(structure)) {
             return vaults.func_151545_a(w, x, y, z);
         }
+        if (com.sc.ruin.MapGenTunnelSC.START_NAME.equals(structure)) {
+            return tunnels.func_151545_a(w, x, y, z);
+        }
         return MapGenSettlementSC.START_NAME.equals(structure) ? settlements.func_151545_a(w, x, y, z) : null;
     }
 
@@ -552,6 +565,7 @@ public class ChunkProviderSubstrateSC implements IChunkProvider {
         vaults.func_151539_a(this, world, x, z, null);
         arenas.func_151539_a(this, world, x, z, null);
         wrecks.func_151539_a(this, world, x, z, null);
+        tunnels.func_151539_a(this, world, x, z, null);
     }
 
     @Override

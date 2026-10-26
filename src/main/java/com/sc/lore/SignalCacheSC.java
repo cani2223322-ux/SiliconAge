@@ -104,6 +104,9 @@ public final class SignalCacheSC {
         }
         d.cacheDone = true;
         d.markDirty();
+        if (p != null) {
+            com.sc.settle.trade.ContractEventsSC.signalCache(p);    // ПД-1: «Тайник Сигнала» - the cache was made for `p`
+        }
         List<EntityLiving> patrol = patrol(w, d, p);
         String key = patrol.isEmpty() ? "sc.signal.cache.quiet" : "sc.signal.cache";      // Peaceful / no room: nobody came
         for (Object o : w.playerEntities) {

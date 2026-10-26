@@ -30,7 +30,9 @@ public enum SingularScheme {
     J(0x0E282E, 0xFF78BE),   // Туманность / Nebula
     K(0x343A42, 0x3C8CFF),   // Нейтронная звезда / Neutron Star
     L(0x1C1A24, 0xF0E2B4),   // Подложка Ф5: Литограф / Lithographer (unlockable - the Breakdown Warden's)
-    M(0x24423F, 0x3CD2C8);   // Подложка Ф5: Наладчик / Tuner (unlockable - the Elder's)
+    M(0x24423F, 0x3CD2C8),   // Подложка Ф5: Наладчик / Tuner (unlockable - the Elder's)
+    // ---- ПД-6 (docs/plan-ideas-2026-10-26.md, appended): Пробой / Breach - all three Breach Protocols at once (WardenLootSC)
+    N(0x14060E, 0xFF2E6E);
 
     /** Piece NBT key: the scheme's ordinal. */
     public static final String NBT = "SingScheme";
@@ -55,7 +57,7 @@ public enum SingularScheme {
 
     /** Подложка Ф5: a scheme a player must unlock first (L, M) - the station offers it only to who did (FinaleRulesSC). */
     public boolean unlockable() {
-        return this == L || this == M;
+        return this == L || this == M || this == N;             // ПД-6: N's bit is 4
     }
 
     /** Подложка Ф5: the bit of an unlockable scheme in a player's mask (FinaleRulesSC.unlockedSchemes); 0 for the others. */

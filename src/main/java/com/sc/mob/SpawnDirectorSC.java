@@ -259,6 +259,9 @@ public final class SpawnDirectorSC {
             return 0;
         }
         int[] node = RuinLayoutSC.nodeNear(spot[0], spot[2]);
+        if (node != null && com.sc.settle.RelayPostSC.claimed(w, node[0], node[1])) {
+            return 0;                                           // ПД-7: a relay post holds this Node - its patrols never come again
+        }
         int place = SpawnRulesSC.placeOf(node != null, kindOf(w, spot[0], spot[2]));       // Ф4: the Ridges, the Oxide Fields, the Rift
         int elitesNear = near(spot[0] + 0.5D, spot[1], spot[2] + 0.5D, SpawnRulesSC.ELITE_RADIUS, F_ELITE);
         double fromSpawn = fromSpawn(w, spot[0], spot[2]);

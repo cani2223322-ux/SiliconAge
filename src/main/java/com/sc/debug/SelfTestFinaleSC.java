@@ -209,7 +209,8 @@ final class SelfTestFinaleSC {
         for (Field f : SubstrateNetSC.ruleFields()) {
             sent.add(f.getName());
         }
-        boolean rules = sent.size() == 28 && sent.contains("requireSignal") && sent.contains("caravans") && !sent.contains("customSky")   // Ф6: + 6, audit 2026-10-20: + 8
+        boolean rules = sent.size() == 35 && sent.contains("requireSignal") && sent.contains("caravans") && !sent.contains("customSky")   // Ф6: + 6, audit 2026-10-20: + 8, 2026-10-26: + 7
+                && !sent.contains("ambientLife")
                 && !SubstrateConfigSC.requireSignal && SubstrateConfigSC.caravans;
         String sky;
         try {
@@ -218,7 +219,7 @@ final class SelfTestFinaleSC {
         } catch (NoSuchFieldException e) {
             sky = "missing";
         }
-        check(rules && "private".equals(sky) && !SubstrateConfigSC.customSky(), "config (§2.1, ПК-21): " + sent.size() + " rules the server sends (28),"
+        check(rules && "private".equals(sky) && !SubstrateConfigSC.customSky(), "config (§2.1, ПК-21): " + sent.size() + " rules the server sends (35),"
                 + " requireSignal " + SubstrateConfigSC.requireSignal + " (false) / caravans " + SubstrateConfigSC.caravans + " (true) " + rules + "; customSky "
                 + sky + ", off by default " + !SubstrateConfigSC.customSky() + ", not a rule" + (rules ? "" : " (the dimension section of the test config edited?)"));
     }
@@ -694,13 +695,13 @@ final class SelfTestFinaleSC {
         SingularScheme[] all = SingularScheme.values();
         StringBuilder locked = new StringBuilder();
         for (SingularScheme s : all) {
-            boolean shouldLock = s == SingularScheme.L || s == SingularScheme.M;
+            boolean shouldLock = s == SingularScheme.L || s == SingularScheme.M || s == SingularScheme.N;   // ПД-6: N «Пробой»
             if (s.unlockable() != shouldLock || (s.unlockBit() != 0) != shouldLock) {
                 locked.append(' ').append(s.name());
             }
         }
-        boolean schemes = all.length == 13 && SingularScheme.L.ordinal() == 11 && SingularScheme.M.ordinal() == 12 && SingularScheme.L.unlockBit() == 1
-                && SingularScheme.M.unlockBit() == 2 && locked.length() == 0 && SingularScheme.L.base == 0x1C1A24 && SingularScheme.M.accent == 0x3CD2C8;
+        boolean schemes = all.length == 14 && SingularScheme.L.ordinal() == 11 && SingularScheme.M.ordinal() == 12 && SingularScheme.L.unlockBit() == 1
+                && SingularScheme.M.unlockBit() == 2 && SingularScheme.N.ordinal() == 13 && SingularScheme.N.unlockBit() == 4 && locked.length() == 0 && SingularScheme.L.base == 0x1C1A24 && SingularScheme.M.accent == 0x3CD2C8;
         boolean open = !FinaleRulesSC.open(SingularScheme.L, 0) && FinaleRulesSC.open(SingularScheme.L, 1) && !FinaleRulesSC.open(SingularScheme.M, 1)
                 && FinaleRulesSC.open(SingularScheme.M, 3) && FinaleRulesSC.open(SingularScheme.A, 0) && !FinaleRulesSC.open(null, 3)
                 && FinaleRulesSC.schemeOf(FinaleRulesSC.PAINT_LITHOGRAPHER) == SingularScheme.L && FinaleRulesSC.schemeOf(FinaleRulesSC.PAINT_TUNER) == SingularScheme.M
@@ -712,7 +713,7 @@ final class SelfTestFinaleSC {
         boolean nums = FinaleRulesSC.UPKEEP_SHARE == 0.5F && FinaleRulesSC.TUNER_DOME_RGB == 0x48F0DC && "scSchemes".equals(FinaleRulesSC.SCHEMES_NBT)
                 && FinaleRulesSC.PAINT_NAMES.length == 2 && "lithographer".equals(FinaleRulesSC.PAINT_NAMES[0]) && "tuner".equals(FinaleRulesSC.PAINT_NAMES[1]);
         check(upkeep && schemes && open && cycle && nums, "finale rules (FinaleRulesSC, ПО-20, ПТ-25): the upkeep 0 -> 0, 1 -> 1, 7 -> 4, 100 -> 50, without the"
-                + " Module unchanged " + upkeep + "; SingularScheme 13, L / M the only unlockable (bits 1 / 2)" + (locked.length() == 0 ? "" : " - NOT:" + locked) + " "
+                + " Module unchanged " + upkeep + "; SingularScheme 14, L / M / N the only unlockable (bits 1 / 2 / 4)" + (locked.length() == 0 ? "" : " - NOT:" + locked) + " "
                 + schemes + "; open by the mask, schemeOf, nothing for a null player " + open + "; cycle - A -> B, A <- K, K -> A as before, with mask 3 A <- M,"
                 + " K -> L, a locked one stepped off " + cycle + "; the numbers " + nums);
     }
@@ -756,12 +757,13 @@ final class SelfTestFinaleSC {
     // ------------------------------------------------------------------ 12. the pool (§2.2)
 
     private static void pool() throws Exception {
-        boolean names = MobEntitiesSC.NAMES.length == 26 && MobEntitiesSC.EGG_COLORS.length == 26 && "breakdownWarden".equals(MobEntitiesSC.nameOf(22))
+        boolean names = MobEntitiesSC.NAMES.length == 28 && MobEntitiesSC.EGG_COLORS.length == 28 &&   // 2026-10-26: + 26, 27
+                "breakdownWarden".equals(MobEntitiesSC.nameOf(22))
                 && "containmentCoil".equals(MobEntitiesSC.nameOf(23)) && "caravanMaster".equals(MobEntitiesSC.nameOf(24)) && "caravanGuard".equals(MobEntitiesSC.nameOf(25))
-                && MobEntitiesSC.nameOf(26) == null && MobEntitiesSC.ID_BREAKDOWN_WARDEN == 22 && MobEntitiesSC.ID_CONTAINMENT_COIL == 23
+                && MobEntitiesSC.nameOf(28) == null && MobEntitiesSC.ID_BREAKDOWN_WARDEN == 22 && MobEntitiesSC.ID_CONTAINMENT_COIL == 23
                 && MobEntitiesSC.ID_CARAVAN_MASTER == 24 && MobEntitiesSC.ID_CARAVAN_GUARD == 25 && MobEntitiesSC.BOSS_TRACKING == 128;
         boolean eggs = MobEntitiesSC.hasEgg(22) && !MobEntitiesSC.hasEgg(23) && !MobEntitiesSC.hasEgg(24) && !MobEntitiesSC.hasEgg(25) && MobEntitiesSC.hasEgg(0)
-                && MobEntitiesSC.hasEgg(21) && !MobEntitiesSC.hasEgg(26);
+                && MobEntitiesSC.hasEgg(21) && !MobEntitiesSC.hasEgg(26) && !MobEntitiesSC.hasEgg(27) && !MobEntitiesSC.hasEgg(28);
         // every weight table by the pool: 26 long, nothing for 22..25 (the director never sets them)
         StringBuilder bad = new StringBuilder();
         int tables = 0;
@@ -793,8 +795,9 @@ final class SelfTestFinaleSC {
             info("the Breakdown Warden can't be made without a world:" + noWorld + " - its HP: WorldTestFinaleSC");
         }
         boolean hpOk = !(boss instanceof EntityLivingBase) || Math.abs(((EntityLivingBase) boss).getMaxHealth() - WardenRulesSC.maxHealth(1)) < 0.01F;
-        check(names && eggs && tables >= 6 && bad.length() == 0 && hpOk, "pool (MobEntitiesSC, §2.2): 26 names and egg colours, 22 breakdownWarden .. 25"
-                + " caravanGuard, 26 none, tracking 128 " + names + "; an egg for the boss only (none for 23..25) " + eggs + "; " + tables + " weight tables 26 long"
+        check(names && eggs && tables >= 6 && bad.length() == 0 && hpOk, "pool (MobEntitiesSC, §2.2): 28 names and egg colours, 22 breakdownWarden .. 25"
+                + " caravanGuard (26, 27 - 2026-10-26's), 28 none, tracking 128 " + names + "; an egg for the boss only (none for 23..27) " + eggs + "; " + tables
+                + " weight tables 28 long"
                 + " with 0 for 22..25, the groups too" + (bad.length() == 0 ? "" : " - BAD:" + bad) + "; the stub boss's HP " + hp + " (600)");
     }
 
@@ -1252,7 +1255,8 @@ final class SelfTestFinaleSC {
             }
         }
         int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + BookWorldSC.F4_ARTICLES.length + ARTICLES.length
-                + BookWorldSC.F6_ARTICLES.length;                                      // Ф6's six after them (SelfTestEmbassySC)
+                + BookWorldSC.F6_ARTICLES.length                                       // Ф6's six after them (SelfTestEmbassySC)
+                + BookWorldSC.IDEAS_ARTICLES.length;                                   // the 2026-10-26 proposal's six (SelfTestIdeasSC)
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {

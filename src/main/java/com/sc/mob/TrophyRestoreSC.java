@@ -82,6 +82,8 @@ public final class TrophyRestoreSC {
     public static final int[] LEVELS = {ReputationSC.ACQUAINTANCE, ReputationSC.PARTNER, ReputationSC.OWN};
     /** The tiers the Armourer restores (Nano..Exo); the Singular one is the Singular station's alone. */
     public static final int ARMOURER_TIERS = 3;
+    /** ПД-4 (docs/plan-ideas-2026-10-26.md): the Wanted Tokens that stand in for the Armourer's chips of one restoring. TODO(balance) */
+    public static final int TOKENS_PER_RESTORE = WantedRulesSC.TOKENS_PER_RESTORE;
     /** click()'s answers: not a trophy at a station; the price said; restored; refused (Singular, unknown); parts or EU short; a private field; a held button. */
     public static final int C_NONE = 0, C_PRICE = 1, C_DONE = 2, C_REFUSED = 3, C_MISSING = 4, C_NO_EU = 5, C_PRIVATE = 6, C_HELD = 7;
 
@@ -217,6 +219,21 @@ public final class TrophyRestoreSC {
             l.add(TradeOfferSC.Ingredient.ore("ingotTantalum", 2));
         }
         return complete(l);
+    }
+
+    /**
+     * ПД-4: the parts of a restoring paid with Wanted Tokens - parts(group, tier) cut to what fits beside the trophy and the tokens
+     * (TradeOfferSC.MAX_SERVICE_SIDES - 2 sides; the first ones kept). Null as parts' null.
+     */
+    public static TradeOfferSC.Ingredient[] tokenParts(int group, int tier) {
+        TradeOfferSC.Ingredient[] all = parts(group, tier);
+        int room = TradeOfferSC.MAX_SERVICE_SIDES - 2;
+        if (all == null || all.length <= room) {
+            return all;
+        }
+        TradeOfferSC.Ingredient[] out = new TradeOfferSC.Ingredient[room];
+        System.arraycopy(all, 0, out, 0, room);
+        return out;
     }
 
     /** The Singular station's part for a Singular trophy: one Singularity Clot (null before init). */

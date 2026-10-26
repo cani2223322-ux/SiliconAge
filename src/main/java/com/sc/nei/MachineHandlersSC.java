@@ -87,6 +87,13 @@ public final class MachineHandlersSC {
         }
     }
 
+    /** ОМ-4 (docs/plan-ideas-2026-10-26.md): the EUV Lithograph. */
+    public static class EuvLithograph extends MachineRecipeHandlerSC {
+        public EuvLithograph() {
+            super(MachineType.EUV_LITHOGRAPH);
+        }
+    }
+
     public static class EtchingBath extends MachineRecipeHandlerSC {
         public EtchingBath() {
             super(MachineType.ETCHING_BATH);
@@ -203,6 +210,7 @@ public final class MachineHandlersSC {
                 new PhotoresistCoater(),
                 new Stepper(),
                 new StepperEv(),
+                new EuvLithograph(),
                 new EtchingBath(),
                 new IonImplanter(),
                 new Sputterer(),

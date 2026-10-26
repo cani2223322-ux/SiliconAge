@@ -427,12 +427,21 @@ final class BookFinaleSC {
 
     // ------------------------------------------------------------------ «Схемы окраски и купол» (ПТ-25, §9.3)
 
+    /** The schemes every Singular suit has from the start (not unlockable): ПД-6 - three unlockable ones now (L, M, N). */
+    private static int freeSchemes() {
+        int n = 0;
+        for (SingularScheme s : SingularScheme.values()) {
+            n += s.unlockable() ? 0 : 1;
+        }
+        return n;
+    }
+
     private static BookEntry cosmetics(BookChapter c) {
         ItemStack l = FinaleItemsSC.paintScheme(FinaleRulesSC.PAINT_LITHOGRAPHER, 1), m = FinaleItemsSC.paintScheme(FinaleRulesSC.PAINT_TUNER, 1);
         BookEntry e = new BookEntry("world.cosmetics", c, l != null ? l : new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[0]),
                 Lang.tr("sc.manual.world.cosmetics.title"));
         e.add(BookEl.title(Lang.tr("sc.manual.world.cosmetics.title"))).addAll(BookContent.paras("sc.manual.world.cosmetics",
-                new Object[]{SingularScheme.values().length - 2}));
+                new Object[]{freeSchemes()}));
 
         // the two schemes (L, M) and where they come from
         e.add(BookEl.head(Lang.tr("sc.manual.world.cosmetics.schemeshead"), new ItemStack(ModItems.ARMOR.get(ArmorSuit.SINGULAR)[1])));
@@ -442,6 +451,8 @@ final class BookFinaleSC {
         e.add(BookEl.item(m, paintName(FinaleRulesSC.PAINT_TUNER), Lang.tr("sc.manual.world.cosmetics.m", Lang.tr(SingularScheme.M.langKey())) + " "
                 + (elder != null ? elder : Lang.tr("sc.manual.world.cosmetics.m.seller", Lang.tr(NpcKindSC.ELDER.langKey())))));
         e.addAll(BookContent.paras("sc.manual.world.cosmetics.use"));
+        // ПД-6 (docs/plan-ideas-2026-10-26.md): the third unlockable one, N «Пробой» - all three Breach Protocols in one fight
+        e.add(BookEl.link("world.protocols", Lang.tr(SingularScheme.N.langKey()) + " - " + Lang.tr("sc.manual.world.protocols.title")));
 
         // the dome's preset «Бирюза Наладчиков» (PRESETS[24]) - everybody's
         int preset = com.sc.tileentity.TileEntityFieldGeneratorSC.PRESETS.length - 1;

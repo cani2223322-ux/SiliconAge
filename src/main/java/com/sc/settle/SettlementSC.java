@@ -85,6 +85,11 @@ public final class SettlementSC {
         return s != null && s.size == SettlementSizeSC.EMBASSY.ordinal();
     }
 
+    /** ПД-7 (docs/plan-ideas-2026-10-26.md): record `s` is a relay post (SettlementSizeSC.RELAY, made in play on a Dead Node). */
+    public static boolean isRelay(SettlementRegistrySC.Settlement s) {
+        return s != null && s.size == SettlementSizeSC.RELAY.ordinal();
+    }
+
     /** Record `s` stands in the Substrate (the bridge's targets, the known docks, the raids and caravans go by this). */
     public static boolean inSubstrate(SettlementRegistrySC.Settlement s) {
         return s != null && SubstrateSC.active() && SubstrateSC.isDim(s.dim);

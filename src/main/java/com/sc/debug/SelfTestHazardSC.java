@@ -241,8 +241,8 @@ final class SelfTestHazardSC {
             sent.add(f.getName());
         }
         // Ф5 appended requireSignal and caravans (docs/plan-substrate-tech-f5.md §2.1), Ф6 the embassy section's six (-f6.md §2.1), the audit of
-        // 2026-10-20 six more of dimension (ПМ-6) and two of embassy (ПС-8): 28 rules now
-        boolean rules = sent.size() == 28 && sent.contains("empStorms") && sent.contains("raids") && sent.contains("stormChanceMultiplier")
+        // 2026-10-20 six more of dimension (ПМ-6) and two of embassy (ПС-8): 28; the proposal of 2026-10-26 seven more: 35 rules now
+        boolean rules = sent.size() == 35 && sent.contains("empStorms") && sent.contains("raids") && sent.contains("stormChanceMultiplier")
                 && SubstrateConfigSC.empStorms && SubstrateConfigSC.raids;
         StringBuilder pub = new StringBuilder();
         for (String n : new String[]{"biomeIdRidges", "biomeIdOxide", "biomeIdRift"}) {
@@ -948,9 +948,10 @@ final class SelfTestHazardSC {
     // ------------------------------------------------------------------ 15. the pool (§2.2, §7)
 
     private static void pool() {
-        // Ф5 appended its four (22..25, docs/plan-substrate-tech-f5.md §2.2): the pool is 26 now, Ф4's 12..21 unchanged
-        boolean names = MobEntitiesSC.NAMES.length == 26 && MobEntitiesSC.EGG_COLORS.length == 26 && "overheated".equals(MobEntitiesSC.nameOf(12))
-                && "waferCrab".equals(MobEntitiesSC.nameOf(21)) && "breakdownWarden".equals(MobEntitiesSC.nameOf(22)) && MobEntitiesSC.nameOf(26) == null
+        // Ф5 appended its four (22..25, docs/plan-substrate-tech-f5.md §2.2), the proposal of 2026-10-26 its two (26, 27): the pool is 28 now,
+        // Ф4's 12..21 unchanged
+        boolean names = MobEntitiesSC.NAMES.length == 28 && MobEntitiesSC.EGG_COLORS.length == 28 && "overheated".equals(MobEntitiesSC.nameOf(12))
+                && "waferCrab".equals(MobEntitiesSC.nameOf(21)) && "breakdownWarden".equals(MobEntitiesSC.nameOf(22)) && MobEntitiesSC.nameOf(28) == null
                 && MobEntitiesSC.ID_OVERHEATED == 12 && MobEntitiesSC.ID_WARLORD == 13
                 && MobEntitiesSC.ID_SENTINEL == 14 && MobEntitiesSC.ID_ECLIPSE == 15 && MobEntitiesSC.ID_PHANTOM == 16 && MobEntitiesSC.ID_LEECH == 17
                 && MobEntitiesSC.ID_COLOSSUS == 18 && MobEntitiesSC.ID_STRIDER == 19 && MobEntitiesSC.ID_SCRAPPER == 20 && MobEntitiesSC.ID_WAFER_CRAB == 21;
@@ -1282,7 +1283,8 @@ final class SelfTestHazardSC {
             }
         }
         int chapter = BookContent.chapter(BookChapter.WORLD).size(), want = 6 + 6 + 8 + ARTICLES.length + BookWorldSC.F5_ARTICLES.length   // + Ф5's (SelfTestFinaleSC)
-                + BookWorldSC.F6_ARTICLES.length;                                                                                       // + Ф6's (SelfTestEmbassySC)
+                + BookWorldSC.F6_ARTICLES.length                                                                                        // + Ф6's (SelfTestEmbassySC)
+                + BookWorldSC.IDEAS_ARTICLES.length;                                                                                    // + the 2026-10-26 proposal's
         List<String> unresolved = BookWorldSC.unresolved();
         BookContent.invalidate();
         if (!unresolved.isEmpty()) {

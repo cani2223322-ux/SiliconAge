@@ -52,6 +52,7 @@ SCHEMES = [
     ('k', 'Neutron Star',    (52, 58, 66),    (60, 140, 255)),
     ('l', 'Lithographer',    (28, 26, 36),    (240, 226, 180)),   # Подложка Ф5: unlockable (the Breakdown Warden's)
     ('m', 'Tuner',           (36, 66, 63),    (60, 210, 200)),    # Подложка Ф5: unlockable (the Elder's)
+    ('n', 'Breach',          (20, 6, 14),     (255, 46, 110)),    # ПД-6: unlockable (all three Breach Protocols at once)
 ]
 
 PIECES = ['Helmet', 'Chestplate', 'Leggings', 'Boots']

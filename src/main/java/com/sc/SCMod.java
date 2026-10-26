@@ -129,6 +129,18 @@ public class SCMod {
         FMLCommonHandler.instance().bus().register(com.sc.embassy.EmbassyBeamSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.embassy.EmbassyHintSC.INSTANCE);
         FMLCommonHandler.instance().bus().register(com.sc.embassy.EmbassyRepairSC.INSTANCE);
+        // the proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md, the coordinator's wiring): ПД-1's contract events (FML's player
+        // tick), ПД-2's squads (Forge's interactions, FML's logouts), ПД-4's wanted Renegade, ПД-5's Gatherers, ПД-7's relay posts (FML's
+        // world ticks, Forge's deaths / attacks / placing)
+        FMLCommonHandler.instance().bus().register(com.sc.settle.trade.ContractEventsSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.SquadSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.settle.SquadSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.mob.WantedSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.mob.WantedSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.GathererSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.settle.GathererSC.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.sc.settle.RelayPostSC.INSTANCE);
+        FMLCommonHandler.instance().bus().register(com.sc.settle.RelayPostSC.INSTANCE);
         proxy.preInit();
         // Developer check only (see SelfTestSC): run early, since a dedicated test server
         // without an accepted EULA never gets past preInit.
@@ -161,6 +173,7 @@ public class SCMod {
         com.sc.mob.MobRecipesSC.init();                  // the Substrate mobs' combat loot (package M)
         com.sc.finale.FinaleRecipesSC.init();            // Ф5: the Breakdown Key, the Navigation Record (the coordinator's)
         com.sc.embassy.EmbassyRecipesSC.init();          // Ф6: the Embassy Direction Finder (the coordinator's)
+        com.sc.init.ModRecipesIdeasSC.init();            // 2026-10-26 (docs/plan-ideas-2026-10-26.md): one method an item
     }
 
     @Mod.EventHandler
@@ -237,6 +250,13 @@ public class SCMod {
         com.sc.lore.SignalSC.clearAll();
         com.sc.settle.caravan.CaravanSC.clearAll();
         com.sc.embassy.EmbassySC.clearAll();             // Ф6: the sites' cache, the map generator, the windows, the beams, the hints
+        com.sc.settle.trade.ContractEventsSC.clearAll(); // 2026-10-26: the plazas' timers, the squads' invitations, the alarms, the
+        com.sc.settle.SquadSC.clearAll();                // wanted's cache, the outings, the protocols' timers, the relay defences
+        com.sc.hazard.RaidAlarmSC.clearAll();
+        com.sc.mob.WantedSC.clearAll();
+        com.sc.settle.GathererSC.clearAll();
+        com.sc.arena.BreachFightSC.clearAll();
+        com.sc.settle.RelayPostSC.clearAll();
     }
 
     /** /scenergy: what the energy nets see (debugging a network that doesn't move energy). */
@@ -250,6 +270,7 @@ public class SCMod {
         }
         event.registerServerCommand(new com.sc.bridge.CommandBridgeSC());          // [Принять] / [Отклонить] of a bridge consent
         event.registerServerCommand(new com.sc.embassy.CommandEmbassySC());        // Ф6: /scembassy list | where | repair (operators)
+        event.registerServerCommand(new com.sc.settle.CommandSquadSC());            // ПД-2: /scsquad accept | decline | leave | list
         if (Boolean.getBoolean("sc.worldtest")) {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestWirelessSC());
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestTokamakSC());
@@ -271,6 +292,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestFinaleSC());   // Подложка Ф5 (package D)
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassySC());  // Подложка Ф6 (package D)
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassyFlySC(false));   // a player flying in
+            com.sc.debug.WorldTestIdeasSC.register();                                // 2026-10-26 (docs/plan-ideas-2026-10-26.md)
         } else if (System.getProperty("sc.flytest") != null) {
             // the embassy fly-through alone along a route of the operator's (the crash of 2026-10-22), then the server stops
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassyFlySC(true));

@@ -129,6 +129,12 @@ public class EntityContainmentCoilSC extends EntityLiving implements IEmpReactiv
     }
 
     /** It belongs to that fight (the Warden looking for its coils). */
+    /** ПД-6: the arena record of its fight (null unbound, a client, none). */
+    private com.sc.arena.ArenaDataSC.Arena fightArena() {
+        com.sc.arena.ArenaDataSC d = worldObj == null || worldObj.isRemote ? null : com.sc.arena.ArenaDataSC.get(worldObj);
+        return d == null || !bound ? null : d.arena(arenaRi, arenaRj);
+    }
+
     public boolean ofFight(int ri, int rj, long id) {
         return bound && arenaRi == ri && arenaRj == rj && fightId == id;
     }
@@ -205,6 +211,13 @@ public class EntityContainmentCoilSC extends EntityLiving implements IEmpReactiv
     public boolean empStruck(Entity shooter, EmpMode mode, double x, double y, double z) {
         if (worldObj.isRemote || mode != EmpMode.POINT || spent || isDead || coilState() == BROKEN) {
             return false;                                       // a Pulse: the old Slowness - harmless to a coil
+        }
+        if (bound && com.sc.arena.BreachFightSC.deafCoils(fightArena())) {
+            if (worldObj instanceof net.minecraft.world.WorldServer) {   // ПД-6 «Глухие катушки»: the Point takes, nothing goes dark
+                ((net.minecraft.world.WorldServer) worldObj).func_147487_a("smoke", posX, posY + 1D, posZ, 8, 0.2D, 0.3D, 0.2D, 0.01D);
+            }
+            SoundsSC.play(worldObj, posX, posY + 1D, posZ, "random.fizz", 0.6F, 0.5F);
+            return true;
         }
         darkUntil = Math.max(darkUntil, worldObj.getTotalWorldTime() + WardenRulesSC.COIL_OFF_TICKS);
         if (coilState() == LIT) {

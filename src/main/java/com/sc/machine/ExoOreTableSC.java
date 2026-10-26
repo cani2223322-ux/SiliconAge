@@ -35,7 +35,52 @@ public final class ExoOreTableSC {
         }
     }
 
-    private static List<Entry> entries, foreign;
+    private static List<Entry> entries, foreign, substrate, substrateDeep;
+    /** ОМ-1 (docs/plan-ideas-2026-10-26.md): the deep scanner's Monocrystal and druses - this share of the Substrate's table. TODO(balance) */
+    public static final int SUBSTRATE_DEEP_SHARE = 10;
+
+    /**
+     * ОМ-1: the Substrate's own table - the mod's ores only (no vanilla ore, no other mod's), each by its vein size x 4 x the Substrate's
+     * vein multiplier (SubstrateOreTableSC.veinMultiplier: tantalum x2; the rare five x1.5; copper and tin x0.5), a lens the same as at home.
+     */
+    public static List<Entry> substrateEntries() {
+        if (substrate == null) {
+            List<Entry> l = new ArrayList<Entry>();
+            for (OreEntry o : OreEntry.values()) {
+                int w = Math.max(1, Math.round(o.defaultVeinSize * 4 * com.sc.dim.SubstrateOreTableSC.veinMultiplier(o)));
+                l.add(new Entry(new ItemStack(com.sc.init.ModBlocks.oreSC, 1, o.meta()), w, o.meta()));
+            }
+            substrate = l;
+        }
+        return substrate;
+    }
+
+    /**
+     * ОМ-1: what the deep scanner adds in the Substrate - Monocrystal (the Substrate's rock, meta MONOCRYSTAL) and a Crystal Druse, together
+     * SUBSTRATE_DEEP_SHARE % of the whole table (half each, at least 1); no lens boosts them, no other mod's ore comes.
+     */
+    public static List<Entry> substrateDeep() {
+        if (substrateDeep == null) {
+            List<Entry> l = new ArrayList<Entry>();
+            if (com.sc.dim.SubstrateBlocksSC.rock != null && com.sc.dim.SubstrateBlocksSC.druse != null) {
+                int base = 0;
+                for (Entry e : substrateEntries()) {
+                    base += e.weight;
+                }
+                int[] w = deepWeights(base);
+                l.add(new Entry(new ItemStack(com.sc.dim.SubstrateBlocksSC.rock, 1, com.sc.dim.SubstrateBlocksSC.MONOCRYSTAL), w[0], -1));
+                l.add(new Entry(new ItemStack(com.sc.dim.SubstrateBlocksSC.druse, 1, 0), w[1], -1));
+            }
+            substrateDeep = l;
+        }
+        return substrateDeep;
+    }
+
+    /** ОМ-1 (pure): the deep pair's weights - together SUBSTRATE_DEEP_SHARE % of (base + theirs), half each, at least 1. */
+    public static int[] deepWeights(int base) {
+        int total = Math.round(base * (float) SUBSTRATE_DEEP_SHARE / (100 - SUBSTRATE_DEEP_SHARE));
+        return new int[]{Math.max(1, total / 2 + total % 2), Math.max(1, total / 2)};
+    }
 
     /**
      * Other mods' ores (the ore dictionary's "ore..." names, one block each) - what the deep scan

@@ -1,9 +1,14 @@
 package com.sc.hazard;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -31,7 +36,10 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.WorldServer;
 
@@ -51,7 +59,8 @@ import net.minecraft.world.WorldServer;
  * fallen Shell) is no kill: a wave gone with none of it killed calls the raid off, Peaceful calls it off at once;</li>
  * <li>the orders: a raider without a live target in its follow range takes the nearest defender in it, else walks to the gate
  * (NpcNavSC's legs: the gate is past the path search's reach) - under the dome it can't come (IMob is pushed out);</li>
- * <li>won (ПН-3) - the last wave down: each present defender «Доверие» RaidRulesSC.rep (ReputationSC.SRC_RAID), the Credit Chips
+ * <li>won (ПН-3) - the last wave down (ПД-3: a called raid's deposit back to its buyer by UUID, present or not - RaidAlarmSC.returnDeposit):
+ * each present defender «Доверие» RaidRulesSC.rep (ReputationSC.SRC_RAID), the Credit Chips
  * RaidRulesSC.chips (outside the daily chips' cap, as the Pass), the Elder's reward - CHEST_ROLLS draws of the Dead Node's chest
  * (RuinLootSC.nodeChest) - into the inventory, what doesn't fit at the feet; sc.raid.won;</li>
  * <li>lost (ПН-4) - RAID_TICKS over, or no defender present for ABANDON_TICKS: the trade closed until world time + CLOSED_TICKS
@@ -74,9 +83,16 @@ final class RaidRunSC {
     static final double MARCH = 1.0D;
 
     final int id, dim, size;
+    /** ПД-3: 0 an ordinary raid, RaidAlarmSC.KIND_ALARM / KIND_HEAVY a called one (its waves, its reward, its deposit). */
+    final int kind;
     private final long startedAt;
-    /** The world test's defender (a FakePlayer is in no player list), or the first real one. */
+    /** The world test's defender (a FakePlayer is in no player list), or the first real one; ПД-3: a called raid's buyer. */
     private final EntityPlayer by;
+    /** ПД-3: a called raid's buyer (the deposit goes back to him on a win), null for an ordinary raid. */
+    private final UUID buyer;
+    /** ПД-3: the raiders each defender finished off (MobEventsSC.killerOf), in the order they first killed; their names. */
+    private final Map<UUID, int[]> kills = new LinkedHashMap<UUID, int[]>();
+    private final Map<UUID, String> names = new HashMap<UUID, String>();
     private final Set<UUID> defenders = new LinkedHashSet<UUID>();
     /** The raiders of the wave running, and of all the waves (the orders, the release at the end). */
     private final List<EntityLiving> current = new ArrayList<EntityLiving>(), all = new ArrayList<EntityLiving>();
@@ -87,12 +103,14 @@ final class RaidRunSC {
     private final double dirX, dirZ;
     private final int[] gate;
 
-    RaidRunSC(WorldServer w, SettlementRegistrySC.Settlement s, EntityPlayer by) {
+    RaidRunSC(WorldServer w, SettlementRegistrySC.Settlement s, EntityPlayer by, int kind) {
         id = s.id;
         dim = w.provider.dimensionId;
         size = s.size;
+        this.kind = kind;
         startedAt = w.getTotalWorldTime();
         this.by = by;
+        this.buyer = kind != 0 && by != null ? by.getUniqueID() : null;
         if (by != null) {
             defenders.add(by.getUniqueID());
         }
@@ -119,6 +137,28 @@ final class RaidRunSC {
 
     int wave() {
         return wave;
+    }
+
+    /** ПД-3: the waves of this raid (a heavy night's four). */
+    int waves() {
+        return RaidRulesSC.waves(kind);
+    }
+
+    /** ПД-3 (RaidSC.onDeath): a raider of this raid finished off by `player`. */
+    void killed(UUID player, String name) {
+        int[] n = kills.get(player);
+        if (n == null) {
+            kills.put(player, new int[]{1});
+        } else {
+            n[0]++;
+        }
+        names.put(player, name);
+    }
+
+    /** ПД-3: the raiders `player` finished off. */
+    int kills(UUID player) {
+        int[] n = kills.get(player);
+        return n == null ? 0 : n[0];
     }
 
     /** The raiders not killed yet (all the waves; an unloaded one counts - it is still out there). */
@@ -205,7 +245,7 @@ final class RaidRunSC {
                 downSince = t;
             }
             if (t - downSince >= NEXT_DELAY) {
-                if (wave >= RaidRulesSC.WAVES - 1) {
+                if (wave >= waves() - 1) {
                     win(w, r, s);
                     return true;
                 }
@@ -213,7 +253,7 @@ final class RaidRunSC {
             }
         } else {
             downSince = -1L;
-            if (wave < RaidRulesSC.WAVES - 1 && t - waveAt >= RaidRulesSC.WAVE_TICKS) {
+            if (wave < waves() - 1 && t - waveAt >= RaidRulesSC.WAVE_TICKS) {
                 nextWave(w, r, s);
             }
         }
@@ -233,7 +273,10 @@ final class RaidRunSC {
         current.clear();
         spawnWave(w, r, s);
         for (EntityPlayer p : audience(w, s)) {
-            EmpStormSC.tell(p, EnumChatFormatting.GOLD, "sc.raid.wave", String.valueOf(wave + 1), String.valueOf(RaidRulesSC.WAVES));
+            EmpStormSC.tell(p, EnumChatFormatting.GOLD, "sc.raid.wave", String.valueOf(wave + 1), String.valueOf(waves()));
+            if (wave == RaidRulesSC.WAVES_HEAVY - 1) {
+                EmpStormSC.tell(p, EnumChatFormatting.RED, "sc.raid.wave4");   // ПД-3: the heavy night's fourth
+            }
         }
         EmpStormSC.siren(w, s);
     }
@@ -242,6 +285,7 @@ final class RaidRunSC {
     private void spawnWave(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
         int[][] comp = RaidRulesSC.wave(wave, size, w.rand);
         boolean elite = RaidRulesSC.eliteWave(wave, comp);
+        boolean commander = wave == RaidRulesSC.WAVES_HEAVY - 1;   // ПД-3: the fourth wave's Trooper is a Commander
         List<EntityHollowShellSC> shells = new ArrayList<EntityHollowShellSC>();
         for (int[] pair : comp) {
             for (int k = 0; k < pair[1]; k++) {
@@ -269,7 +313,10 @@ final class RaidRunSC {
                 if (e instanceof EntityHollowShellSC) {
                     shells.add((EntityHollowShellSC) e);
                 }
-                if (elite && e instanceof EntityArmoredMobSC) {     // the elite wave: its first armoured one
+                if (commander && e instanceof com.sc.mob.EntityTrooperSC) {
+                    EliteSC.apply((EntityArmoredMobSC) e, EliteModSC.COMMANDER);
+                    commander = false;
+                } else if (elite && e instanceof EntityArmoredMobSC) {     // the elite wave: its first armoured one
                     MobArmorSC a = ((EntityArmoredMobSC) e).mobArmor();
                     EliteSC.apply((EntityArmoredMobSC) e, EliteModSC.pick(w.rand, a.screen, a.heliumOn()));
                     elite = false;
@@ -351,8 +398,16 @@ final class RaidRunSC {
     /** ПН-3: the last wave down - each present defender's reward. */
     private void win(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
         long day = SettlementSC.day(w);
-        int rep = RaidRulesSC.rep(size), chips = RaidRulesSC.chips(size);
-        int rolls = RaidRulesSC.CHEST_ROLLS[Math.max(0, Math.min(RaidRulesSC.CHEST_ROLLS.length - 1, size))];
+        float mul = kind == RaidAlarmSC.KIND_HEAVY ? RaidAlarmSC.HEAVY_MUL : 1F;     // ПД-3: a heavy night's x1.5, rounded up
+        int rep = RaidRulesSC.scaled(RaidRulesSC.rep(size), mul), chips = RaidRulesSC.scaled(RaidRulesSC.chips(size), mul);
+        int rolls = RaidRulesSC.scaled(RaidRulesSC.chestRolls(size), mul);
+        if (buyer != null) {                                    // ПД-3: the deposit back to the buyer wherever he is (outside the day's 64)
+            if (by != null && !RaidSC.real(by) && buyer.equals(by.getUniqueID()) && by.isEntityAlive()) {
+                give(by, SettlementItemsSC.chips(RaidAlarmSC.DEPOSIT));     // the world test's FakePlayer (in no player list)
+            } else {
+                RaidAlarmSC.returnDeposit(r, buyer);            // online and alive - now; dead or away - at his respawn / login
+            }
+        }
         for (EntityPlayer p : present(w, s)) {
             int got = ReputationSC.give(r.player(p.getUniqueID()), rep, ReputationSC.SRC_RAID, day);
             give(p, SettlementItemsSC.chips(chips));
@@ -368,19 +423,66 @@ final class RaidRunSC {
                     String.valueOf(chips));
         }
         r.markDirty();
+        summary(w, s, waves());
         releaseAll();
     }
 
     /** ПН-4: the trade closed for a day (world time), the line to the defenders and those near. */
     private void lose(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
+        List<EntityPlayer> told = audience(w, s);
+        for (EntityPlayer p : told) {
+            EmpStormSC.tell(p, EnumChatFormatting.RED, "sc.raid.lost", SettlementSC.displayName(s));
+            if (buyer != null && buyer.equals(p.getUniqueID())) {
+                EmpStormSC.tell(p, EnumChatFormatting.RED, "sc.raid.deposit.lost");     // ПД-3: the deposit burns
+            }
+        }
+        summary(w, s, Math.max(0, wave));
+        if (SettlementSC.isRelay(s)) {
+            releaseAll();
+            com.sc.settle.RelayPostSC.destroy(w, s);            // ПД-7: a lost raid on a relay post destroys it (no trade to close)
+            return;
+        }
         NBTTagCompound x = s.extra.getCompoundTag(RaidSC.EXTRA);
         x.setLong(RaidSC.CLOSED, w.getWorldTime() + RaidRulesSC.CLOSED_TICKS);
         s.extra.setTag(RaidSC.EXTRA, x);
         r.markDirty();
-        for (EntityPlayer p : audience(w, s)) {
-            EmpStormSC.tell(p, EnumChatFormatting.RED, "sc.raid.lost", SettlementSC.displayName(s));
-        }
         releaseAll();
+    }
+
+    /**
+     * ПД-3: the summary at a raid's end (any raid, won or lost) to those near and the defenders online: the waves passed of all, the time,
+     * who finished off how many raiders (most first; nobody - .none).
+     */
+    private void summary(WorldServer w, SettlementRegistrySC.Settlement s, int passed) {
+        long secs = Math.max(0L, (w.getTotalWorldTime() - startedAt) / 20L);
+        List<Map.Entry<UUID, int[]>> l = new ArrayList<Map.Entry<UUID, int[]>>(kills.entrySet());
+        Collections.sort(l, new Comparator<Map.Entry<UUID, int[]>>() {
+            @Override
+            public int compare(Map.Entry<UUID, int[]> a, Map.Entry<UUID, int[]> b) {
+                return b.getValue()[0] - a.getValue()[0];
+            }
+        });
+        IChatComponent list = null;
+        for (Map.Entry<UUID, int[]> e : l) {
+            String n = names.get(e.getKey());
+            IChatComponent one = new ChatComponentTranslation("sc.raid.summary.kill", n == null ? "?" : n, String.valueOf(e.getValue()[0]));
+            if (list == null) {
+                list = new ChatComponentText("");
+                list.appendSibling(one);
+            } else {
+                list.appendText(", ");
+                list.appendSibling(one);
+            }
+        }
+        for (EntityPlayer p : audience(w, s)) {
+            EmpStormSC.tell(p, EnumChatFormatting.YELLOW, "sc.raid.summary", SettlementSC.displayName(s), String.valueOf(passed),
+                    String.valueOf(waves()), String.valueOf(secs / 60L), String.valueOf(secs % 60L));
+            if (list == null) {
+                EmpStormSC.tell(p, EnumChatFormatting.GRAY, "sc.raid.summary.none");
+            } else {
+                EmpStormSC.tell(p, EnumChatFormatting.GRAY, "sc.raid.summary.kills", list);
+            }
+        }
     }
 
     /** The raiders still about are ordinary mobs again (an unloaded one: on its next load - RaidSC.onJoin). */

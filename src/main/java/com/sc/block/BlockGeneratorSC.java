@@ -228,6 +228,18 @@ public class BlockGeneratorSC extends Block {
         return 1;
     }
 
+    /** ОМ-5 (docs/plan-ideas-2026-10-26.md): a comparator reads the tile (IComparatorSC.comparatorLevel - the buffer, a reactor's ramp / plasma / hole). */
+    @Override
+    public boolean hasComparatorInputOverride() {
+        return true;
+    }
+
+    @Override
+    public int getComparatorInputOverride(World world, int x, int y, int z, int side) {
+        net.minecraft.tileentity.TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof com.sc.energy.IComparatorSC ? ((com.sc.energy.IComparatorSC) te).comparatorLevel() : 0;
+    }
+
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hitX, float hitY, float hitZ) {
         if (com.sc.util.FluidHandSC.isContainer(player.getCurrentEquippedItem())) {    // a bucket / cell: pour in or take out

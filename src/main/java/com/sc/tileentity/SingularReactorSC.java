@@ -483,7 +483,30 @@ public class SingularReactorSC {
     /** Everything is there to press "Lighting" (the charge may still be missing from the storages - see chargeOk). */
     public boolean canLight() {
         return phase == PHASE_IDLE && event == EVENT_NONE && ready && !nearBuild && portFluid[0] >= HE_START && portFluid[1] >= D_IGNITION
-                && hasCapsule() && chargeOk();
+                && hasCapsule() && chargeOk() && !portNoPermit;
+    }
+
+    // ------------------------------------------------------------------ ОМ-5: the Data Ports
+
+    /** ОМ-5: a PERMIT Data Port in the walls is unpowered (the last scan's - synced); the last stop was a port's (synced, not saved). */
+    private boolean portNoPermit, portStopped;
+
+    public boolean isPortNoPermit() {
+        return portNoPermit;
+    }
+
+    public boolean isPortStopped() {
+        return portStopped;
+    }
+
+    /** ОМ-5: a Data Port's emergency stop - the charge / compression cancelled, a running hole eaten (the "Stop" button's); else nothing. */
+    public void portStop() {
+        if (phase != PHASE_CHARGE && phase != PHASE_COMPRESS && phase != PHASE_RUN) {
+            return;
+        }
+        stop();
+        portStopped = true;
+        g.tellNearSC("sc.gen.port.stopped");
     }
 
     /** The port storages hold the rest of the charge. */
@@ -533,9 +556,16 @@ public class SingularReactorSC {
 
     /** "Lighting": the charge starts coming out of the port storages. */
     public boolean light() {
+        if (canLight() && !g.ignitionAllowedByPorts()) {
+            portNoPermit = true;                                // ОМ-5: the signal went since the last scan
+            g.tellNearSC("sc.gen.port.noPermit");
+            syncBlock();
+            return false;
+        }
         if (!canLight()) {
             return false;
         }
+        portStopped = false;
         phase = PHASE_CHARGE;
         phaseTicks = 0;
         g.markDirty();
@@ -1007,6 +1037,7 @@ public class SingularReactorSC {
     private static boolean isShell(World w, int x, int y, int z) {
         Block b = w.getBlock(x, y, z);
         return b == com.sc.init.ModBlocks.leadBlock || b == com.sc.init.ModBlocks.leadGlass
+                || com.sc.init.IdeaBlocksSC.dataPort != null && b == com.sc.init.IdeaBlocksSC.dataPort    // ОМ-5: a Data Port is wall
                 || com.sc.radiation.RadiationSC.isLeadBlock(b, w.getBlockMetadata(x, y, z));   // another mod's block of lead
     }
 
@@ -1148,6 +1179,8 @@ public class SingularReactorSC {
         for (int i = 0; i < 3; i++) {
             portFluid[i] = g.portAmountSC(GASES[i]);
         }
+        g.bindPortsSC(-2, 2);                                   // ОМ-5: the Data Ports in its shell
+        portNoPermit = phase == PHASE_IDLE && !g.ignitionAllowedByPorts();
     }
 
     // ------------------------------------------------------------------ the screen's sync
@@ -1158,7 +1191,8 @@ public class SingularReactorSC {
     public int[] sync() {
         int[] v = new int[SYNC];
         v[0] = phase | event << 3 | feedMode << 5 | (auto ? 128 : 0) | (ready ? 256 : 0) | (heShort ? 512 : 0) | (dShort ? 1024 : 0)
-                | (noCapsule ? 2048 : 0) | (portTaken ? 4096 : 0) | (frozen ? 8192 : 0) | (nearBuild ? 16384 : 0) | (extraPort ? 1 << 15 : 0);
+                | (noCapsule ? 2048 : 0) | (portTaken ? 4096 : 0) | (frozen ? 8192 : 0) | (nearBuild ? 16384 : 0) | (extraPort ? 1 << 15 : 0)
+                | (portNoPermit ? 1 << 16 : 0) | (portStopped ? 1 << 17 : 0);                                     // ОМ-5
         v[1] = (int) Math.round(mass * 1000000);
         v[2] = Math.round(containment * 100);
         v[3] = phaseTicks;
@@ -1215,6 +1249,8 @@ public class SingularReactorSC {
         frozen = (v[0] & 8192) != 0;
         nearBuild = (v[0] & 16384) != 0;
         extraPort = (v[0] & 1 << 15) != 0;
+        portNoPermit = (v[0] & 1 << 16) != 0;                  // ОМ-5
+        portStopped = (v[0] & 1 << 17) != 0;
         mass = v[1] / 1000000.0;
         containment = v[2] / 100F;
         phaseTicks = v[3];

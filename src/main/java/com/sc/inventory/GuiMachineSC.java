@@ -188,7 +188,8 @@ public class GuiMachineSC extends GuiContainer {
         oxid = machine.getMachineType() == com.sc.machine.MachineType.OXIDATION_FURNACE;
         coat = machine.getMachineType() == com.sc.machine.MachineType.PHOTORESIST_COATER;
         step = machine.getMachineType() == com.sc.machine.MachineType.STEPPER
-                || machine.getMachineType() == com.sc.machine.MachineType.STEPPER_EV;
+                || machine.getMachineType() == com.sc.machine.MachineType.STEPPER_EV
+                || machine.getMachineType() == com.sc.machine.MachineType.EUV_LITHOGRAPH;     // ОМ-4: the stepper's screen, its own column
         ion = machine.getMachineType() == com.sc.machine.MachineType.ION_IMPLANTER;
         sput = machine.getMachineType() == com.sc.machine.MachineType.SPUTTERER;
         chem = machine.getMachineType() == com.sc.machine.MachineType.CHEM_REACTOR;
@@ -264,6 +265,10 @@ public class GuiMachineSC extends GuiContainer {
                 gx = tank == 0 ? WATER_X : -1;
             } else if (comp) {
                 gx = tank == 2 && compLiquid() ? COMP_TANK_X : -1;      // СМ1: the singular matter tank
+            } else if (cent) {
+                gx = tank == 2 && centTank() ? WATER_X : -1;            // ОМ-2: the argon out
+            } else if (station) {
+                gx = tank == 0 && stationTank() ? WATER_X : -1;         // ОМ-4: the liquid helium in
             } else if (ownTanks != null) {
                 for (int k = 0; k < ownTanks.length; k++) {
                     if (ownTanks[k] == tank) {
@@ -347,9 +352,72 @@ public class GuiMachineSC extends GuiContainer {
         return comp && (machine.isMatterLiquid() || machine.getTank(2).getFluidAmount() > 0);
     }
 
+    /** ОМ-2: the Centrifuge shows its output tank (WATER_X) - a recipe with a fluid out, or fluid still in it. */
+    private boolean centTank() {
+        if (!cent) {
+            return false;
+        }
+        if (machine.getTank(2).getFluidAmount() > 0) {
+            return true;
+        }
+        com.sc.machine.MachineRecipe r = centRecipe();
+        return r != null && r.fluidOutputA != null;
+    }
+
+    /** ОМ-4: an Upgrade Station shows its input tank (WATER_X) - the recipe its items make takes a fluid. */
+    private boolean stationTank() {
+        if (!station) {
+            return false;
+        }
+        com.sc.machine.MachineRecipe r = itemRecipe();
+        return r != null && (r.fluidInputA != null || r.fluidInputB != null);
+    }
+
+    /** The Centrifuge's list width: narrower beside its tank. */
+    private int centBarW() {
+        return centTank() ? WATER_X - CENT_LIST_X - 4 : CENT_BAR_W;
+    }
+
+    /** The Upgrade Station's right edge: before its tank when it shows. */
+    private int stationRight() {
+        return stationTank() ? WATER_X - 4 : GuiBigSC.SCREEN_RIGHT;
+    }
+
+    /** The Upgrade Station's ladder step width (narrower beside its tank). */
+    private int stationStepW() {
+        return stationTank() ? (WATER_X - 4 - ST_X - 8) / 3 : ST_STEP_W;
+    }
+
+    /**
+     * The recipe the input slots make (the tanks as they are), else the first one whose items they hold, its own fluids taken as there
+     * (a station's helium recipe shown before the helium is in). Null none.
+     */
+    private com.sc.machine.MachineRecipe itemRecipe() {
+        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
+        boolean any = false;
+        for (int i = 0; i < in.length; i++) {
+            in[i] = machine.getStackInSlot(i);
+            any |= in[i] != null;
+        }
+        if (!any) {
+            return null;
+        }
+        com.sc.machine.MachineRecipe r = RecipeRegistry.findMatch(machine.getMachineType(), in, machine.getTank(0).getFluid(),
+                machine.getTank(1).getFluid());
+        if (r != null) {
+            return r;
+        }
+        for (com.sc.machine.MachineRecipe c : RecipeRegistry.recipesFor(machine.getMachineType())) {
+            if ((c.fluidInputA != null || c.fluidInputB != null) && c.matches(in, c.fluidInputA, c.fluidInputB)) {
+                return c;
+            }
+        }
+        return null;
+    }
+
     private void collectTanks() {
         shownCount = 0;
-        if (washer || blast || saw || oxid || coat || step || ion || sput || fill || comp || ownTanks != null) {
+        if (washer || blast || saw || oxid || coat || step || ion || sput || fill || comp || cent || station || ownTanks != null) {
             return;                                                     // its tanks have places of their own
         }
         for (int i = 0; i < ContainerMachineSC.TANK_COUNT; i++) {
@@ -525,7 +593,11 @@ public class GuiMachineSC extends GuiContainer {
         } else if (step) {                                              // the column, the die map, the mask, the heat
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
             boolean running = machine.getStatus() == MachineStatus.PROCESSING;
-            GuiSceneSC.stepperColumn(x + SAW_X, y + SAW_Y, STEP_W, STEP_H, t, running, progress);
+            if (machine.getMachineType() == com.sc.machine.MachineType.EUV_LITHOGRAPH) {
+                GuiSceneSC.euvColumn(x + SAW_X, y + SAW_Y, STEP_W, STEP_H, t, running, progress);
+            } else {
+                GuiSceneSC.stepperColumn(x + SAW_X, y + SAW_Y, STEP_W, STEP_H, t, running, progress);
+            }
             GuiSceneSC.frame(x + MAP_X, y + SAW_Y, STEP_W, STEP_H);
             int dies = GuiSceneSC.dieCount(MAP_R);
             GuiSceneSC.dieMap(x + MAP_X + STEP_W / 2, y + SAW_Y + STEP_H / 2, MAP_R, running ? (int) (progress * dies) : 0, t, running);
@@ -636,15 +708,16 @@ public class GuiMachineSC extends GuiContainer {
             int[] ld = stationLadder();
             int[] cols = ld[0] == 1 ? ST_CHIP : ST_GEAR;
             boolean assembly = ld[1] < 0 && ld[3] == 1;                // the recipe makes neither gear nor a chip: no ladder
+            int sw = stationStepW();
             for (int i = 0; i < 3 && !assembly; i++) {
-                int bx = x + ST_X + i * (ST_STEP_W + 4), by = y + CAPTION_Y - 1;
+                int bx = x + ST_X + i * (sw + 4), by = y + CAPTION_Y - 1;
                 boolean now = i == ld[1], done = i < ld[1] && ld[1] >= 0, lock = i > ld[2];
-                drawRect(bx, by, bx + ST_STEP_W, by + 12, now ? 0xFF2A6A8A : done ? 0xFF1E4A30 : 0xFF1A2430);
-                drawRect(bx + 1, by + 1, bx + ST_STEP_W - 1, by + 11, 0xFF0A1218);
+                drawRect(bx, by, bx + sw, by + 12, now ? 0xFF2A6A8A : done ? 0xFF1E4A30 : 0xFF1A2430);
+                drawRect(bx + 1, by + 1, bx + sw - 1, by + 11, 0xFF0A1218);
                 drawRect(bx + 3, by + 3, bx + 9, by + 9, lock ? GuiSceneSC.mix(cols[i], 0xFF0A1218, 0.6F) : cols[i]);
             }
             int step = Math.max(1, ld[1]);
-            GuiSceneSC.upgradeBench(x + ST_X, y + ST_Y, GuiBigSC.SCREEN_RIGHT - ST_X, ST_H, t, machine.getStatus() == MachineStatus.PROCESSING,
+            GuiSceneSC.upgradeBench(x + ST_X, y + ST_Y, stationRight() - ST_X, ST_H, t, machine.getStatus() == MachineStatus.PROCESSING,
                     progress, cols[step - 1], cols[step], ld[0] == 1);
         } else if (roll) {                                              // the mold badges, the mill, the wear
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
@@ -671,13 +744,20 @@ public class GuiMachineSC extends GuiContainer {
             net.minecraft.item.ItemStack[] outs = centOutputs(r);
             GuiSceneSC.centrifuge(x + CENT_X, y + CENT_Y, CENT_S, CENT_S, t, machine.getStatus() == MachineStatus.PROCESSING, progress,
                     outs.length > 0 ? itemColour(outs[0]) : 0);
-            int rowH = centRowH(outs.length);
+            boolean fluidOut = r != null && r.fluidOutputA != null;
+            int rowH = centRowH(outs.length + (fluidOut ? 1 : 0)), bw = centBarW();
             for (int i = 0; i < outs.length; i++) {
                 int by = y + CENT_Y + 2 + i * rowH + 6;
                 float c = centChance(r, i);
-                drawRect(x + CENT_LIST_X, by, x + CENT_LIST_X + CENT_BAR_W, by + 4, 0xFF04080C);
-                drawRect(x + CENT_LIST_X + 1, by + 1, x + CENT_LIST_X + 1 + Math.max(1, (int) ((CENT_BAR_W - 2) * c)), by + 3,
+                drawRect(x + CENT_LIST_X, by, x + CENT_LIST_X + bw, by + 4, 0xFF04080C);
+                drawRect(x + CENT_LIST_X + 1, by + 1, x + CENT_LIST_X + 1 + Math.max(1, (int) ((bw - 2) * c)), by + 3,
                         itemColour(outs[i]) | 0xFF000000);
+            }
+            if (fluidOut) {                                             // ОМ-2: the fluid out - always, into the tank beside
+                int by = y + CENT_Y + 2 + outs.length * rowH + 6;
+                drawRect(x + CENT_LIST_X, by, x + CENT_LIST_X + bw, by + 4, 0xFF04080C);
+                drawRect(x + CENT_LIST_X + 1, by + 1, x + CENT_LIST_X + bw - 1, by + 3,
+                        GuiTankGaugeSC.colourOf(r.fluidOutputA.getFluid()) | 0xFF000000);
             }
         } else if (comp) {                                              // the press, the mass gauge
             float t = mc.theWorld == null ? 0F : (mc.theWorld.getTotalWorldTime() % 1000000L) + partialTicks;
@@ -739,6 +819,10 @@ public class GuiMachineSC extends GuiContainer {
         if (compLiquid()) {                                            // СМ1: the singular matter tank
             FluidTank tank = machine.getTank(2);
             GuiTankGaugeSC.draw(mc, x + COMP_TANK_X, y + TANK_Y, tank.getFluid(), tank.getCapacity(), null, false);
+        }
+        if (centTank() || stationTank()) {                             // ОМ-2 / ОМ-4: the argon out, the helium in
+            FluidTank tank = machine.getTank(cent ? 2 : 0);
+            GuiTankGaugeSC.draw(mc, x + WATER_X, y + WATER_Y, tank.getFluid(), tank.getCapacity(), null, false);
         }
         for (int k = 0; k < shownCount; k++) {
             FluidTank tank = machine.getTank(shownTanks[k]);
@@ -1543,7 +1627,7 @@ public class GuiMachineSC extends GuiContainer {
             in[i] = machine.getStackInSlot(i);
             any |= in[i] != null;
         }
-        com.sc.machine.MachineRecipe r = any ? RecipeRegistry.findMatch(type, in, null, null) : null;
+        com.sc.machine.MachineRecipe r = any ? itemRecipe() : null;
         net.minecraft.item.ItemStack out = r == null || r.outputs.length == 0 ? null : r.outputs[0];
         int kind = 0, step = -1;
         if (out != null && out.getItem() instanceof com.sc.item.ItemArmorChipSC) {
@@ -1566,24 +1650,27 @@ public class GuiMachineSC extends GuiContainer {
     private void drawStationText() {
         int[] ld = stationLadder();
         boolean assembly = ld[1] < 0 && ld[3] == 1;                    // the recipe makes neither gear nor a chip
+        int right = stationRight(), sw = stationStepW();
         if (assembly) {
-            smallFit(Lang.tr("sc.gui.station.assembly"), ST_X + 2, CAPTION_Y + 2, GuiBigSC.SCREEN_RIGHT - ST_X - 4, 0x96F0FF);
+            smallFit(Lang.tr("sc.gui.station.assembly"), ST_X + 2, CAPTION_Y + 2, right - ST_X - 4, 0x96F0FF);
         }
         for (int i = 0; i < 3 && !assembly; i++) {
             boolean now = i == ld[1], done = i < ld[1] && ld[1] >= 0, lock = i > ld[2];
             String s = Lang.tr((ld[0] == 1 ? "sc.gui.station.chip." : "sc.gui.station.gear.") + i);
-            smallFit(s, ST_X + i * (ST_STEP_W + 4) + 11, CAPTION_Y + 2, ST_STEP_W - 13,
+            smallFit(s, ST_X + i * (sw + 4) + 11, CAPTION_Y + 2, sw - 13,
                     now ? 0x96F0FF : done ? 0x5AE66E : lock ? 0x3A4658 : 0x6A7A8A);
             if (i < 2) {
-                small(">", ST_X + i * (ST_STEP_W + 4) + ST_STEP_W + 1, CAPTION_Y + 2, 0x6AA8C8);
+                small(">", ST_X + i * (sw + 4) + sw + 1, CAPTION_Y + 2, 0x6AA8C8);
             }
         }
-        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
-        for (int i = 0; i < in.length; i++) {
-            in[i] = machine.getStackInSlot(i);
+        com.sc.machine.MachineRecipe r = itemRecipe();
+        int y0 = ST_Y + ST_H + 3, w = right - ST_X - 2;
+        if (stationTank()) {                                           // ОМ-4: the helium's tank label
+            FluidTank tank = machine.getTank(0);
+            net.minecraftforge.fluids.FluidStack need = r.fluidInputA != null ? r.fluidInputA : r.fluidInputB;
+            String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : need.getLocalizedName();
+            TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
         }
-        com.sc.machine.MachineRecipe r = RecipeRegistry.findMatch(machine.getMachineType(), in, null, null);
-        int y0 = ST_Y + ST_H + 3, w = GuiBigSC.SCREEN_RIGHT - ST_X - 2;
         if (r == null) {
             smallFit(Lang.tr("sc.gui.station.empty"), ST_X + 2, y0, w, 0x6AA8C8);
         } else {
@@ -1591,6 +1678,11 @@ public class GuiMachineSC extends GuiContainer {
             for (net.minecraft.item.ItemStack s : r.inputs) {
                 if (s != null) {
                     b.append(b.length() == 0 ? "" : " + ").append(s.stackSize > 1 ? s.stackSize + " x " : "").append(s.getDisplayName());
+                }
+            }
+            for (net.minecraftforge.fluids.FluidStack f : new net.minecraftforge.fluids.FluidStack[]{r.fluidInputA, r.fluidInputB}) {
+                if (f != null) {
+                    b.append(" + ").append(f.amount).append(' ').append(Lang.trOr("sc.levelgui.mb", "mB")).append(' ').append(f.getLocalizedName());
                 }
             }
             smallFit(b.toString(), ST_X + 2, y0, w, 0xE6F0FA);
@@ -1711,24 +1803,36 @@ public class GuiMachineSC extends GuiContainer {
 
     /** The Centrifuge: caption, each output's name and chance over its bar, the ore and the time. */
     private void drawCentText(int rx) {
-        fit(Lang.tr("sc.gui.holo.separating"), rx, CAPTION_Y, GuiBigSC.SCREEN_RIGHT - rx, GuiHoloSC.CYAN & 0xFFFFFF);
+        boolean tank = centTank();
+        int right = tank ? WATER_X - 4 : GuiBigSC.SCREEN_RIGHT, bw = centBarW();
+        fit(Lang.tr("sc.gui.holo.separating"), rx, CAPTION_Y, (tank ? WATER_X - 2 : GuiBigSC.SCREEN_RIGHT) - rx, GuiHoloSC.CYAN & 0xFFFFFF);
         com.sc.machine.MachineRecipe r = centRecipe();
         net.minecraft.item.ItemStack[] outs = centOutputs(r);
-        int rowH = centRowH(outs.length);
+        boolean fluidOut = r != null && r.fluidOutputA != null;
+        int rowH = centRowH(outs.length + (fluidOut ? 1 : 0));
         for (int i = 0; i < outs.length; i++) {
             int ry = CENT_Y + 2 + i * rowH;
             String pct = Math.round(centChance(r, i) * 100) + "%";
             int pw = fontRendererObj.getStringWidth(pct) * 5 / 8;
-            smallFit(outs[i].getDisplayName(), CENT_LIST_X, ry, CENT_BAR_W - pw - 3, 0xE6F0FA);
-            small(pct, CENT_LIST_X + CENT_BAR_W - pw, ry, 0x6AA8C8);
+            smallFit(outs[i].getDisplayName(), CENT_LIST_X, ry, bw - pw - 3, 0xE6F0FA);
+            small(pct, CENT_LIST_X + bw - pw, ry, 0x6AA8C8);
+        }
+        if (fluidOut) {                                                 // ОМ-2: the fluid out, its amount a run
+            smallFit(r.fluidOutputA.amount + " " + Lang.trOr("sc.levelgui.mb", "mB") + " " + r.fluidOutputA.getLocalizedName(), CENT_LIST_X,
+                    CENT_Y + 2 + outs.length * rowH, bw, 0xE6F0FA);
+        }
+        if (tank) {                                                     // the tank's label (its fluid, else the recipe's)
+            FluidTank t = machine.getTank(2);
+            String name = t.getFluid() != null ? t.getFluid().getLocalizedName() : fluidOut ? r.fluidOutputA.getLocalizedName() : "-";
+            TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
         }
         if (r == null) {
-            smallFit(Lang.tr("sc.gui.cent.empty"), CENT_LIST_X, CENT_Y + 2, GuiBigSC.SCREEN_RIGHT - CENT_LIST_X, 0x6AA8C8);
+            smallFit(Lang.tr("sc.gui.cent.empty"), CENT_LIST_X, CENT_Y + 2, right - CENT_LIST_X, 0x6AA8C8);
             return;
         }
         net.minecraft.item.ItemStack in = r.inputs.length > 0 ? r.inputs[0] : null;
         smallFit(Lang.tr("sc.gui.cent.run", in == null ? "-" : in.getDisplayName(), Math.max(1, machine.effectiveTicks(r) / 20)),
-                CENT_X, CENT_Y + CENT_S + 4, GuiBigSC.SCREEN_RIGHT - CENT_X - 2, 0xE6F0FA);
+                CENT_X, CENT_Y + CENT_S + 4, right - CENT_X - 2, 0xE6F0FA);
         small(Lang.tr("sc.gui.cent.chance"), CENT_X, CENT_Y + CENT_S + 12, 0x6AA8C8);
     }
 
@@ -2053,6 +2157,7 @@ public class GuiMachineSC extends GuiContainer {
                 return 4;
             case STEPPER:
             case STEPPER_EV:
+            case EUV_LITHOGRAPH:                                // ОМ-4
             case ION_IMPLANTER:
                 return 5;
             case CVD_CHAMBER:

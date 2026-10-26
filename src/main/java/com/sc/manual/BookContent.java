@@ -566,7 +566,37 @@ public final class BookContent {
         }
         qm.about(new ItemStack(ModItems.quarryModule, 1, OreDictionary.WILDCARD_VALUE));
         list.add(qm);
-        list.add(BookReferenceSC.exoRig(c));
+        // ОМ-4 (docs/plan-ideas-2026-10-26.md): the EUV Lithograph - its chain, both ways to the Singular Matrix
+        if (ModBlocks.machineSC3 != null && ModItems.siliconMaterial != null) {
+            ItemStack euv = new ItemStack(ModBlocks.machineSC3, 1, 0);
+            BookEntry eu = new BookEntry("machine.euv", c, euv, Lang.tr("sc.machine.euv_lithograph"));
+            eu.add(BookEl.title(Lang.tr("sc.machine.euv_lithograph"))).add(BookEl.dim(com.sc.energy.Tier.QV.name() + ", "
+                    + num(com.sc.machine.MachineType.EUV_LITHOGRAPH.euPerTick) + " EU/t"));
+            eu.add(BookEl.para(Lang.tr("sc.manual.machine.euv_lithograph")));
+            List<ItemStack> chain = new ArrayList<ItemStack>();
+            for (com.sc.util.SiliconMaterial m : new com.sc.util.SiliconMaterial[]{com.sc.util.SiliconMaterial.METALLIZED_WAFER,
+                    com.sc.util.SiliconMaterial.PROCESSOR_WAFER, com.sc.util.SiliconMaterial.PROCESSOR, com.sc.util.SiliconMaterial.EXO_PROCESSOR,
+                    com.sc.util.SiliconMaterial.SINGULAR_MATRIX}) {
+                chain.add(ModItems.siliconMaterial.stackOf(m));
+            }
+            eu.add(BookEl.items(chain));
+            eu.add(BookEl.para(Lang.tr("sc.si.tooltip.singular_matrix.howto")));
+            for (com.sc.machine.MachineRecipe r : com.sc.machine.RecipeRegistry.recipesFor(com.sc.machine.MachineType.EUV_LITHOGRAPH)) {
+                eu.add(BookEl.machine(r));
+            }
+            eu.about(euv, ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.PROCESSOR_WAFER),
+                    ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.PROCESSOR), ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.EXO_PROCESSOR),
+                    ModItems.siliconMaterial.stackOf(com.sc.util.SiliconMaterial.SINGULAR_MATRIX));
+            list.add(eu);
+        }
+        BookEntry exo = BookReferenceSC.exoRig(c);
+        // ОМ-1 (docs/plan-ideas-2026-10-26.md): the rig in the Substrate - its own ores, the deep scanner's Monocrystal and druses, the warning
+        exo.add(BookEl.head(Lang.tr("sc.gui.quarry.substrateTable")));
+        exo.add(BookEl.para(Lang.tr("sc.manual.quarry.exo.substrate", multiplier(com.sc.dim.SubstrateOreTableSC.veinMultiplier(com.sc.util.OreEntry.TANTALITE)),
+                multiplier(com.sc.dim.SubstrateOreTableSC.veinMultiplier(com.sc.util.OreEntry.BADDELEYITE)),
+                multiplier(com.sc.dim.SubstrateOreTableSC.veinMultiplier(com.sc.util.OreEntry.CHALCOPYRITE)))));
+        exo.add(BookEl.warn(Lang.tr("sc.manual.quarry.exo.substrateChunks")));
+        list.add(exo);
         list.add(BookReferenceSC.defects(c));
         int perTank = com.sc.machine.UpgradeType.TANK_PER_UPGRADE, maxTank = com.sc.machine.UpgradeType.MAX_TANK_UPGRADES;
         BookEntry up = simple("upgrades", c, ModItems.upgrade.stackOf(com.sc.machine.UpgradeType.OVERDRIVE), "sc.manual.machines.upgradeshead")
@@ -999,6 +1029,36 @@ public final class BookContent {
                         new ItemStack(ModItems.linkCard)));
         list.add(simple("quantum", c, new ItemStack(ModBlocks.quantumTranslator), "sc.manual.energy.quantumhead", "sc.manual.energy.quantum")
                 .about(new ItemStack(ModBlocks.quantumTranslator, 1, OreDictionary.WILDCARD_VALUE), new ItemStack(ModItems.entangledCrystal, 1, OreDictionary.WILDCARD_VALUE)));
+        // ОМ-7 (docs/plan-ideas-2026-10-26.md): the Singular Energy Bank (BookPathSC links "energybank" at SV)
+        ItemStack bankCtl = com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.CONTROLLER, 1);
+        if (bankCtl != null) {
+            List<ItemStack> parts = new ArrayList<ItemStack>();
+            for (int m = 0; m < com.sc.block.BlockEnergyBankSC.PORT_FIRST + 1; m++) {
+                parts.add(com.sc.init.IdeaBlocksSC.energyBank(m, 1));
+            }
+            int lo = com.sc.energy.EnergyBankMathSC.SIZE_MIN, hi = com.sc.energy.EnergyBankMathSC.SIZE_MAX;
+            String most = com.sc.bridge.BridgeMathSC.group(com.sc.energy.EnergyBankMathSC.scaledCapacity(0,
+                    com.sc.energy.EnergyBankMathSC.cellSlots(hi), com.sc.util.ConfigSC.storageCapacity));
+            BookEntry bank = new BookEntry("energybank", c, bankCtl, Lang.tr("sc.manual.energy.bank.title"));
+            bank.add(BookEl.title(Lang.tr("sc.manual.energy.bank.title"))).add(BookEl.items(parts))
+                    .add(BookEl.para(Lang.tr("sc.manual.energy.bank.1", lo, lo, lo, hi, hi, hi, most, com.sc.energy.EnergyBankMathSC.PORT_AMPS)))
+                    .add(BookEl.para(Lang.tr("sc.tooltip.energyBank.details", lo, hi)))
+                    .add(BookEl.para(Lang.tr("sc.manual.energy.bank.2")))
+                    .add(BookEl.para(Lang.tr("sc.tooltip.energyBank.howto")));
+            crafting(bank, bankCtl);
+            bank.about(new ItemStack(com.sc.init.IdeaBlocksSC.energyBank, 1, OreDictionary.WILDCARD_VALUE));
+            list.add(bank);
+        }
+        // ОМ-5 (docs/plan-ideas-2026-10-26.md): what a comparator reads at each; the Data Port in a reactor's wall
+        ItemStack port = com.sc.init.IdeaBlocksSC.dataPort(1);
+        if (port != null) {
+            list.add(new BookEntry("dataport", c, port, port.getDisplayName()).add(BookEl.title(port.getDisplayName()))
+                    .add(BookEl.para(Lang.tr("sc.manual.energy.comparator")))
+                    .add(BookEl.item(port, port.getDisplayName(), Lang.tr("sc.tooltip.dataPort")))
+                    .add(BookEl.para(Lang.tr("sc.manual.energy.dataPort")))
+                    .add(BookEl.para(Lang.tr("sc.tooltip.dataPort.howto")))
+                    .about(port));
+        }
     }
 
     /**
@@ -1590,6 +1650,10 @@ public final class BookContent {
                         com.sc.machine.UpgradeType.TANK_PER_UPGRADE, com.sc.machine.UpgradeType.MAX_TANK_UPGRADES,
                         com.sc.machine.UpgradeType.CLEAR_MB_PER_EU)))
                 .add(BookEl.para(Lang.tr("sc.manual.armor.station.windows", gasCount)));
+        // ОМ-6 (docs/plan-ideas-2026-10-26.md): the salvage slot
+        station.add(BookEl.head(Lang.tr("sc.salvage.slot"))).add(BookEl.para(Lang.tr("sc.manual.armor.station.salvage",
+                Math.round(com.sc.item.SalvageSC.SHARE_MIN * 100), Math.round(com.sc.item.SalvageSC.SHARE_MAX * 100),
+                com.sc.item.SalvageSC.STATION_EU)));
         crafting(station, st);
         station.about(st);
         list.add(station);
@@ -1859,6 +1923,13 @@ public final class BookContent {
     }
 
     /** A block of prose stored as key.1, key.2, ... */
+    /** ОМ-1: a multiplier as the handbook writes it («2», «1,5», «0,5» - the client's decimal mark). */
+    static String multiplier(float m) {
+        String s = m == Math.round(m) ? String.valueOf(Math.round(m)) : String.valueOf(m);
+        String mark = Lang.trOr("sc.num.decimal", ".");
+        return s.replace(".", mark.isEmpty() ? "." : mark);
+    }
+
     static List<BookEl> paras(String baseKey) {
         List<BookEl> out = new ArrayList<BookEl>();
         for (int i = 1; ; i++) {

@@ -50,7 +50,7 @@ import net.minecraftforge.fluids.IFluidHandler;
  * Four upgrade slots (IC2 style, UpgradeType): overclocker, transformer, energy storage, ejector,
  * puller, heat sink, quality control. Not reachable by automation.
  */
-public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler {
+public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedInventory, IFluidHandler, com.sc.energy.IComparatorSC {
 
     public static final int INPUT_SLOTS = 3;
     public static final int OUTPUT_SLOTS = 3;
@@ -116,6 +116,16 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
 
     public int getCurrentRecipeTicks() {
         return currentRecipeTicks;
+    }
+
+    /** ОМ-5: the comparator level last told (-1 never). */
+    private int comparatorLast = -1;
+
+    /** ОМ-5 (docs/plan-ideas-2026-10-26.md): a comparator reads the operation's progress (the furnace: its further stream); idle - 0. */
+    @Override
+    public int comparatorLevel() {
+        int p = Math.max(progressTicks, Math.max(smeltProgress[0], smeltProgress[1]));
+        return currentRecipeTicks <= 0 ? 0 : com.sc.energy.ComparatorSC.level(Math.min(p, currentRecipeTicks), currentRecipeTicks);
     }
 
     public int getHeat() {
@@ -462,6 +472,9 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
     public void updateEntity() {
         if (worldObj == null || worldObj.isRemote) {
             return;
+        }
+        if ((worldObj.getTotalWorldTime() + (xCoord & 7)) % 20 == 0) {
+            comparatorLast = com.sc.energy.ComparatorSC.notify(this, comparatorLast);    // ОМ-5: a comparator's reading, once a second
         }
         syncTankCapacity();
 

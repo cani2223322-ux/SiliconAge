@@ -145,7 +145,7 @@ public class BlockShowcaseSC extends Block {
     private IIcon look(int side, int meta) {
         MachineType t = LOOK[meta];
         if (t != null) {
-            BlockMachineSC b = t.ordinal() < 16 ? ModBlocks.machineSC : ModBlocks.machineSC2;
+            BlockMachineSC b = (BlockMachineSC) BlockMachineSC.blockFor(t);
             return b == null ? null : b.getIcon(side, t.ordinal() - b.getTypeOffset());
         }
         switch (meta) {

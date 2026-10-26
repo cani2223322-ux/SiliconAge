@@ -118,6 +118,7 @@ public final class SelfTestSC {
             SelfTestHazardSC.run();                      // Подложка Ф4 (docs/plan-substrate-tech-f4.md §11.1)
             SelfTestFinaleSC.run();                      // Подложка Ф5 (docs/plan-substrate-tech-f5.md §11.1)
             SelfTestEmbassySC.run();                     // Подложка Ф6 (docs/plan-substrate-tech-f6.md §10.1)
+            SelfTestIdeasSC.run();                       // the proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md)
             chunkSaveGuard();                            // the crash of 2026-10-22: a null chunk in the block ticks
         } catch (Throwable t) {
             fail("exception: " + t);
@@ -1852,7 +1853,7 @@ public final class SelfTestSC {
         // colour schemes: default A, set / get, an unknown value falls back to A; 11 schemes
         com.sc.util.SingularScheme[] all = com.sc.util.SingularScheme.values();
         ItemStack piece = new ItemStack(p[1]);
-        boolean schemes = all.length == 13 && com.sc.util.SingularScheme.DEFAULT == com.sc.util.SingularScheme.A   // Подложка Ф5: + L, M
+        boolean schemes = all.length == 14 && com.sc.util.SingularScheme.DEFAULT == com.sc.util.SingularScheme.A   // Подложка Ф5: + L, M; ПД-6: + N
                 && com.sc.util.SingularScheme.of(piece) == com.sc.util.SingularScheme.A
                 && com.sc.item.ItemArmorSC.textureBase(piece).equals("singular_a")
                 && com.sc.item.ItemArmorSC.textureBase(new ItemStack(ModItems.ARMOR.get(exo)[1])).equals("exo")
@@ -4410,8 +4411,9 @@ public final class SelfTestSC {
         dark.setInventorySlotContents(0, new ItemStack(net.minecraft.init.Blocks.stone, 64));
         dark.compressorTickForTest();
         boolean unpowered = dark.getMatter() == 0 && dark.getStackInSlot(0) != null && dark.getStackInSlot(0).stackSize == 64;
-        boolean last = all[all.length - 1] == com.sc.machine.MachineType.MATTER_COMPRESSOR
-                && com.sc.machine.MachineType.MATTER_COMPRESSOR.ordinal() < 32 && com.sc.machine.MachineType.MATTER_COMPRESSOR.tier == com.sc.energy.Tier.IV;
+        boolean last = all[31] == com.sc.machine.MachineType.MATTER_COMPRESSOR                    // the last of the first two blocks (ОМ-4 appends
+                && all[32] == com.sc.machine.MachineType.EUV_LITHOGRAPH                                 // the EUV Lithograph after it, on machineSC3)
+                && com.sc.machine.MachineType.MATTER_COMPRESSOR.tier == com.sc.energy.Tier.IV;
         check(mass && idle && made && absorb && refused && unpowered && last, "matter compressor: stone 9, lead block 36, NBT / capsule refused, capsule at "
                 + com.sc.tileentity.TileEntityMachineSC.MATTER_PER_CAPSULE + "; water bucket, the mod's machine, nether star, diamond refused; nothing swallowed"
                 + " without power (mass " + mass + ", idle " + idle + ", made " + made + ", absorb " + absorb + ", refused " + refused

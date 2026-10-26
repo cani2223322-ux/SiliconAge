@@ -47,12 +47,13 @@ public class BlockMachineSC extends Block {
     public static final String ITEM_BATTERY_KEY = "BatteryModeSC", ITEM_KEEP_WARM_KEY = "KeepWarmSC",
             ITEM_PROGRESS_KEY = "ProgressSC", ITEM_PROGRESS_OF_KEY = "ProgressOfSC";
 
-    /** Machine types the two blocks hold: machineSC ordinals 0-15, machineSC2 16-31. */
-    public static final int MAX_TYPES = 32;
+    /** Machine types the blocks hold: machineSC ordinals 0-15, machineSC2 16-31, machineSC3 (ОМ-4, 2026-10-26) 32-47. */
+    public static final int MAX_TYPES = 48;
 
     /** The block a machine type sits on (see MAX_TYPES). */
     public static Block blockFor(MachineType type) {
-        return type.ordinal() < 16 ? com.sc.init.ModBlocks.machineSC : com.sc.init.ModBlocks.machineSC2;
+        int o = type.ordinal();
+        return o < 16 ? com.sc.init.ModBlocks.machineSC : o < 32 ? com.sc.init.ModBlocks.machineSC2 : com.sc.init.ModBlocks.machineSC3;
     }
 
     /** The metadata a machine type has on its block. */
@@ -67,9 +68,9 @@ public class BlockMachineSC extends Block {
 
     public BlockMachineSC(int typeOffset) {
         super(Material.iron);
-        if (MachineType.values().length > MAX_TYPES) {     // a 33rd type would silently land on another machine's meta
+        if (MachineType.values().length > MAX_TYPES) {     // a 49th type would silently land on another machine's meta
             throw new IllegalStateException("MachineType has " + MachineType.values().length + " values, the machine blocks hold "
-                    + MAX_TYPES + ": register a third block (machineSC3) and extend BlockMachineSC.blockFor");
+                    + MAX_TYPES + ": register a fourth block (machineSC4) and extend BlockMachineSC.blockFor");
         }
         this.typeOffset = typeOffset;
         this.typeCount = Math.min(16, MachineType.values().length - typeOffset);
@@ -320,6 +321,18 @@ public class BlockMachineSC extends Block {
     @Override
     public ItemStack getPickBlock(net.minecraft.util.MovingObjectPosition target, World world, int x, int y, int z) {
         return new ItemStack(this, 1, world.getBlockMetadata(x, y, z));
+    }
+
+    /** ОМ-5 (docs/plan-ideas-2026-10-26.md): a comparator reads the tile (IComparatorSC.comparatorLevel - the operation's progress). */
+    @Override
+    public boolean hasComparatorInputOverride() {
+        return true;
+    }
+
+    @Override
+    public int getComparatorInputOverride(World world, int x, int y, int z, int side) {
+        net.minecraft.tileentity.TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof com.sc.energy.IComparatorSC ? ((com.sc.energy.IComparatorSC) te).comparatorLevel() : 0;
     }
 
     @Override

@@ -21,6 +21,7 @@ public final class RuinSC {
         MapGenLithographSC.registerStructures();
         MapGenCampSC.registerStructures();                  // Ф4 (package C): the Renegades' camps, the Vaults
         MapGenVaultSC.registerStructures();
+        MapGenTunnelSC.registerStructures();                // ПД-8 (docs/plan-ideas-2026-10-26.md): the copper busbar tunnels
     }
 
     /** New ruins generate: the world is on (the ruins made already stay either way). No config key of their own. */

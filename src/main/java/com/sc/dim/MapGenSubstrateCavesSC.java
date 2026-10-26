@@ -74,6 +74,8 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
     /** Ф5 (the coordinator's): the Breakdown Epicentres' and the bridge wrecks' boxes nothing cuts into (null: none). */
     private com.sc.arena.MapGenArenaSC arenas;
     private com.sc.lore.MapGenWreckSC wrecks;
+    /** ПД-8: the copper busbar tunnels (null: none). */
+    private com.sc.ruin.MapGenTunnelSC tunnels;
 
     public MapGenSubstrateCavesSC() {
         this(null, null, null);
@@ -89,6 +91,11 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
     public void keepOut(com.sc.arena.MapGenArenaSC arenas, com.sc.lore.MapGenWreckSC wrecks) {
         this.arenas = arenas;
         this.wrecks = wrecks;
+    }
+
+    /** ПД-8: the tunnels under the plateaus - no cave or via cut through one (ChunkProviderSubstrateSC, once). */
+    public void keepOut(com.sc.ruin.MapGenTunnelSC tunnels) {
+        this.tunnels = tunnels;
     }
 
     /** Ф4: masks the chunk's columns (the class comment), then cuts as MapGenBase does. */
@@ -115,7 +122,8 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
                 int wx = cx * 16 + x, wz = cz * 16 + z;
                 boolean k = rift && (SubstrateWildTerrainSC.riftVoid(seed, wx, wz) || SubstrateWildTerrainSC.pillar(wx, wz))
                         || vaults != null && vaults.covers(wx, wz, BOX_MARGIN) || camps != null && camps.covers(wx, wz, BOX_MARGIN)
-                        || arenas != null && arenas.covers(wx, wz, BOX_MARGIN) || wrecks != null && wrecks.covers(wx, wz, BOX_MARGIN);
+                        || arenas != null && arenas.covers(wx, wz, BOX_MARGIN) || wrecks != null && wrecks.covers(wx, wz, BOX_MARGIN)
+                        || tunnels != null && tunnels.covers(wx, wz, BOX_MARGIN);                    // ПД-8
                 keep[x * 16 + z] = k;
                 keepAny |= k;
                 ridgeCol[x * 16 + z] = ridge && SubstrateCellsSC.inner(wx, wz);
@@ -167,6 +175,7 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
         int d = VIA_MIN + rand.nextInt(VIA_MAX - VIA_MIN + 1);
         int vx = ox * 16 + 4 + rand.nextInt(8), vz = oz * 16 + 4 + rand.nextInt(8);
         if (SubstrateTerrainSC.inCanyonBelt(vx, vz) || nearSpawn(vx, vz) || settlements != null && settlements.covers(vx, vz, d)
+                || tunnels != null && tunnels.covers(vx, vz, d)                                     // ПД-8: never through a tunnel
                 || worldObj != null && com.sc.ruin.RuinLayoutSC.lithoNear(worldObj.getSeed(), vx, vz, d + 1) != null) {
             return;                                              // Ф3: never through a lithograph's hall (pure: its start may be empty)
         }

@@ -42,9 +42,29 @@ public class ItemToolSC extends Item {
             list.add("\u00a77" + com.sc.manual.Lang.tr("sc.tool.tooltip.worksin", works));
         }
         list.add("\u00a77" + com.sc.manual.Lang.tr("sc.tool.tooltip.wear", type.durability));
+        pasteLine(stack, list);
         String made = MadeInSC.madeIn(stack);
         com.sc.util.TooltipSC.more(list, null, com.sc.manual.Lang.trOr(key + ".howto",
                 made.isEmpty() ? null : com.sc.manual.Lang.tr("sc.tooltip.madein", made)));
+    }
+
+    /** ОМ-2: the paste repairs a mendable tool had (PasteRepairRecipeSC) - «n of 3», or «worn out for good». */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static void pasteLine(net.minecraft.item.ItemStack stack, java.util.List list) {
+        if (!com.sc.init.PasteRepairRecipeSC.mendable(stack)) {
+            return;
+        }
+        int n = com.sc.init.PasteRepairRecipeSC.repairs(stack), max = com.sc.init.PasteRepairRecipeSC.MAX_REPAIRS;
+        if (n >= max) {
+            list.add("\u00a78" + com.sc.manual.Lang.tr("sc.tooltip.pasteRepairs.done"));
+            return;
+        }
+        if (n > 0) {
+            list.add("\u00a77" + com.sc.manual.Lang.tr("sc.tooltip.pasteRepairs", n, max));
+        }
+        if (stack.getItemDamage() > 0) {                        // worn: what the next repair takes (the tool's weight in)
+            list.add("\u00a77" + com.sc.manual.Lang.tr("sc.tooltip.pasteNext", com.sc.init.PasteRepairRecipeSC.pastesFor(stack)));
+        }
     }
 
     @Override

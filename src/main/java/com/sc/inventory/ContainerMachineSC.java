@@ -69,7 +69,10 @@ public class ContainerMachineSC extends Container {
                 && type != com.sc.machine.MachineType.STEPPER && type != com.sc.machine.MachineType.STEPPER_EV
                 && type != com.sc.machine.MachineType.ION_IMPLANTER && type != com.sc.machine.MachineType.SPUTTERER
                 && type != com.sc.machine.MachineType.DICING_SAW
-                && type != com.sc.machine.MachineType.FLUID_CELL_FILLER;
+                && type != com.sc.machine.MachineType.FLUID_CELL_FILLER
+                // ОМ-2 / ОМ-4: the Centrifuge's argon and the EV station's helium - their tanks stand in their own screens' place
+                && type != com.sc.machine.MachineType.CENTRIFUGE && type != com.sc.machine.MachineType.UPGRADE_STATION_MV
+                && type != com.sc.machine.MachineType.UPGRADE_STATION_HV && type != com.sc.machine.MachineType.UPGRADE_STATION_EV;
         // (the Rolling Machine has no tanks: its slots are roomy already)
     }
 

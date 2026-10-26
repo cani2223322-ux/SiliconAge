@@ -18,13 +18,19 @@ import net.minecraft.util.IIcon;
 public class ContainerArmorStationSC extends Container {
 
     /** BTN_GAS + gas: its check box; BTN_CLEAR + gas: pour its tank out for EU. */
-    public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_FILL = 12, BTN_HELIUM = 13, BTN_GAS = 20, BTN_CLEAR = 30;
+    public static final int BTN_POWER = 10, BTN_REDSTONE = 11, BTN_FILL = 12, BTN_HELIUM = 13, BTN_GAS = 20, BTN_CLEAR = 30,
+            // ОМ-6 (docs/plan-ideas-2026-10-26.md): «Разобрать» - the salvage slot's thing broken up (two clicks on the screen)
+            BTN_SALVAGE = 40;
     /** The screen's size (the station's own layout, wider than GuiBigSC's). */
     public static final int W = 400, H = 292;
     /** The armour slots (item coordinates): a column at the left of the screen, helmet on top. */
     public static final int PIECE_X = 15, PIECE_Y = 30, PIECE_STEP = 32;
     /** The module row (item coordinates of the first) and the player's inventory, centred. */
     public static final int UPG_X = 48, UPG_Y = 176, INV_X = 119, INV_Y = 210, HOTBAR_Y = 268;
+    /** ОМ-6: the salvage slot (item coordinates) - right of the player's inventory, the button beside it. */
+    public static final int SALVAGE_X = 300, SALVAGE_Y = 222;
+    /** ОМ-6: the salvage slot's index in the container - after the player's 36 (the older indices unchanged). */
+    public static final int SALVAGE_INDEX = TileEntityArmorStationSC.ALL_SLOTS + 36;
 
     private static final int GASES = Gas.values().length;
     private final TileEntityArmorStationSC te;
@@ -47,6 +53,26 @@ public class ContainerArmorStationSC extends Container {
         }
         for (int col = 0; col < 9; col++) {
             addSlotToContainer(new Slot(playerInv, col, INV_X + col * 18, HOTBAR_Y));
+        }
+        if (te.salvages()) {
+            addSlotToContainer(new SlotSalvage(te, TileEntityArmorStationSC.SALVAGE_SLOT, SALVAGE_X, SALVAGE_Y));    // ОМ-6: SALVAGE_INDEX
+        }
+    }
+
+    /** ОМ-6: the salvage slot - a trophy, one's own old piece, blade, drill or gun (SalvageSC.refusal OK), one at a time. */
+    public static class SlotSalvage extends Slot {
+        public SlotSalvage(IInventory inv, int index, int x, int y) {
+            super(inv, index, x, y);
+        }
+
+        @Override
+        public boolean isItemValid(ItemStack stack) {
+            return com.sc.item.SalvageSC.refusal(stack) == com.sc.item.SalvageSC.OK;
+        }
+
+        @Override
+        public int getSlotStackLimit() {
+            return 1;
         }
     }
 
@@ -114,6 +140,7 @@ public class ContainerArmorStationSC extends Container {
             case BTN_REDSTONE: te.setRedstoneMode((te.getRedstoneMode() + 1) % 3); return true;
             case BTN_FILL: te.toggleFillGases(); return true;
             case BTN_HELIUM: te.toggleHeliumOnly(); return true;
+            case BTN_SALVAGE: te.salvage(player); return true;       // ОМ-6
             default: return false;
         }
     }
@@ -163,12 +190,16 @@ public class ContainerArmorStationSC extends Container {
         }
         ItemStack original = slot.getStack();
         ItemStack result = original.copy();
-        int pieces = TileEntityArmorStationSC.SLOTS, own = TileEntityArmorStationSC.ALL_SLOTS, end = inventorySlots.size(),
+        int pieces = TileEntityArmorStationSC.SLOTS, own = TileEntityArmorStationSC.ALL_SLOTS, end = own + 36,
                 hotbar = own + 27;
-        if (index < own) {
+        Slot salvage = SALVAGE_INDEX < inventorySlots.size() ? (Slot) inventorySlots.get(SALVAGE_INDEX) : null;
+        if (index < own || index == SALVAGE_INDEX) {
             if (!mergeItemStack(original, own, end, true)) {
                 return null;
             }
+        } else if (salvage != null && !salvage.getHasStack() && !(original.getItem() instanceof com.sc.item.ItemArmorSC)
+                && salvage.isItemValid(original)) {
+            salvage.putStack(original.splitStack(1));           // ОМ-6: a trophy, a blade, a drill, a gun - into the salvage slot
         } else if (TileEntityArmorStationSC.acceptsModule(original)
                 && SlotMergeSC.mergeValid(inventorySlots, original, TileEntityArmorStationSC.FIRST_UPGRADE_SLOT, own)) {
             // a module: into the module row (what didn't fit stays where it was)

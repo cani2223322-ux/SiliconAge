@@ -87,7 +87,11 @@ public final class TradeServerSC {
     public static final int OK = 0, R_UNKNOWN = 1, R_ENEMY = 2, R_LEVEL = 3, R_LIMIT = 4, R_CHIPS_CAP = 5, R_MISSING = 6,
             R_NO_SETTLEMENT = 7, R_NOT_HERE = 8, R_CONTRACTS_CAP = 9, R_TAKEN = 10, R_NOT_ON_BOARD = 11, R_NOT_DONE = 12,
             R_NO_CONTRACT = 13, R_ANCHOR = 14, R_PARTIAL = 15, R_NO_ITEM = 16, R_RAID = 17, R_CRUMBS = 18, R_CARAVAN_DEAL = 19,
-            R_DISPATCH_LATE = 20, R_ELSEWHERE = 21, R_CEILING = 22;
+            R_DISPATCH_LATE = 20, R_ELSEWHERE = 21, R_CEILING = 22,
+            // ---- ПД-1 (docs/plan-ideas-2026-10-26.md, appended): «Срочная депеша» after noon, the Big order taken this week
+            R_URGENT_TIME = 23, R_BIG_WEEK = 24,
+            // ---- ПД-3 (appended): an alarm can't be called (TRADE_RESULT "alarm": RaidAlarmSC's answer); ПД-4: nobody is wanted this week
+            R_ALARM = 25, R_NO_WANTED = 26;
     /**
      * Appended only (Ф3: "noItem" - a service found nothing of the player's to work on; Ф4: "raid" - the settlement's trade closed
      * after a lost raid, "crumbs" - the player's Crumbs for today are taken; Ф5: "caravanDeal" - the caravan's rare deal isn't open
@@ -95,7 +99,9 @@ public final class TradeServerSC {
      */
     public static final String[] RESULT_KEYS = {"ok", "unknown", "enemy", "level", "limit", "chipsCap", "missing", "noSettlement",
             "notHere", "contractsCap", "taken", "notOnBoard", "notDone", "noContract", "anchor", "partial", "noItem", "raid", "crumbs",
-            "caravanDeal", "dispatchLate", "elsewhere", "ceiling"};       // ПС-5: the penance that would give nothing (appended)
+            "caravanDeal", "dispatchLate", "elsewhere", "ceiling",        // ПС-5: the penance that would give nothing (appended)
+            "urgentTime", "bigWeek",                                      // ПД-1 (appended)
+            "alarm", "noWanted"};                                         // ПД-3, ПД-4 (appended)
     /** TRADE_STATE "anchor": nobody placed the first anchor yet / it is the viewer's, unpaid / paid to the viewer / someone else's. */
     public static final int ANCHOR_OPEN = 0, ANCHOR_YOURS = 1, ANCHOR_PAID = 2, ANCHOR_OTHER = 3;
     /** TRADE_STATE board "st": on the board, not taken / taken and open / handed in today. */
@@ -174,6 +180,7 @@ public final class TradeServerSC {
             res.setString("key", key);
             res.setInteger("code", r[0]);
             res.setInteger("done", r[1]);
+            res.setInteger("alarm", r.length > 2 ? r[2] : 0);  // ПД-3: R_ALARM's own reason (RaidAlarmSC.R_*)
             res.setInteger("tuner", t.getEntityId());
             SettleNetSC.send(p, SettleNetSC.TRADE_RESULT, res);
             p.openContainer.detectAndSendChanges();     // the inventory as it is now, before the new numbers
@@ -274,6 +281,9 @@ public final class TradeServerSC {
     /** Up to `times` deals of `key`, stopping at the first refusal. @return {the refusal that stopped it (OK: all made), deals made} */
     private static int[] run(Ctx c, String key, int times) {
         TradeOfferSC o = TradeTableSC.byKey(key);
+        if (o != null && o.outKind == TradeOfferSC.OUT_ALARM) {
+            return alarm(c, o);                                 // ПД-3: one call (or its cancel), never `times`
+        }
         int done = 0;
         int why = OK;
         while (done < times) {
@@ -314,6 +324,18 @@ public final class TradeServerSC {
         }
         if (!TradeRulesSC.available(o, c.level)) {
             return R_LEVEL;
+        }
+        if (o.outKind == TradeOfferSC.OUT_ALARM) {             // ПД-3: the call's own rules (its cancel is always open to its buyer)
+            int kind = com.sc.hazard.RaidAlarmSC.kindOf(o.key);
+            if (com.sc.hazard.RaidAlarmSC.pendingBy(c.s, c.id, kind)) {
+                return OK;
+            }
+            if (com.sc.hazard.RaidAlarmSC.refusal(c.p, c.s, kind) != com.sc.hazard.RaidAlarmSC.OK) {
+                return R_ALARM;
+            }
+        }
+        if (o.outKind == TradeOfferSC.OUT_WANTED_HINT && !com.sc.mob.WantedSC.active(c.p.worldObj)) {
+            return R_NO_WANTED;                                 // ПД-4: nobody to hunt - nothing paid for nothing
         }
         if (TradeTableSC.ARM_MOD_WIDE.equals(o.key) && !com.sc.settle.caravan.CaravanSC.dealOpen(c.p)) {
             return R_CARAVAN_DEAL;                              // Ф5 (ПО-21, ПН-15): the caravan's rare deal - not open, or used
@@ -375,6 +397,8 @@ public final class TradeServerSC {
             }
         } else if (o.outKind == TradeOfferSC.OUT_MAP) {
             give(c.p, ItemSettlementMapSC.make(c.reg, c.s));
+        } else if (o.outKind == TradeOfferSC.OUT_WANTED_HINT) {
+            com.sc.mob.WantedSC.hint(c.p);                      // ПД-4: where the wanted one was seen (a chat line)
         } else {
             boolean penance = TradeTableSC.ELDER_PENANCE.equals(o.key);
             ReputationSC.give(c.rec, o.outAmount, penance ? ReputationSC.SRC_PENANCE : ReputationSC.SRC_CARGO, c.day, c.ceiling());
@@ -467,8 +491,22 @@ public final class TradeServerSC {
         if (c.level < ContractTableSC.takeLevel(c.embassy())) {
             return R_LEVEL;                                     // Ф6: the Ambassador's from «Чужак», the Substrate's from «Знакомый»
         }
-        if (!ContractTableSC.board(c.id, c.day, c.embassy()).contains(key)) {
+        expireUrgent(c);
+        if (k.goal == ContractTableSC.BIG_ORDER && !c.embassy() && bigTakenWeek(c) && !bigTakenToday(c)) {
+            return R_BIG_WEEK;                                  // ПД-1: once a game week
+        }
+        if (!boardOf(c).contains(key)) {
             return R_NOT_ON_BOARD;
+        }
+        SettlementRegistrySC.Settlement dest = null;
+        if (k.goal == ContractTableSC.URGENT) {
+            if (!ContractTableSC.urgentTakeable(c.p.worldObj.getWorldTime())) {
+                return R_URGENT_TIME;                           // ПД-1: from dawn until noon only
+            }
+            dest = urgentDest(c);
+            if (dest == null) {
+                return R_NOT_ON_BOARD;
+            }
         }
         if (ContractTableSC.EMB_DISPATCH.equals(key)) {
             for (Iterator<SettlementRegistrySC.ContractRec> it = c.rec.contracts.iterator(); it.hasNext(); ) {
@@ -491,10 +529,147 @@ public final class TradeServerSC {
         r.target = k.target;
         r.settlement = c.s == null ? -1 : c.s.id;
         r.takenDay = c.day;
+        if (dest != null) {                                     // ПД-1: «Срочная депеша» - where to, by sunset of today
+            r.extra.setInteger(ContractTableSC.X_TO, dest.id);
+            r.extra.setLong(ContractTableSC.X_BY, ContractTableSC.urgentBy(c.day));
+        }
+        if (k.goal == ContractTableSC.BIG_ORDER) {             // ПД-1: the week (and the day) it was taken
+            NBTTagCompound o = new NBTTagCompound();
+            o.setLong("w", SettlementSC.week(c.p.worldObj));
+            o.setLong("d", c.day);
+            c.rec.extra.setTag(ContractTableSC.BIG_EXTRA, o);
+        }
         c.rec.contracts.add(r);
         c.rec.contractsTaken++;
         c.reg.markDirty();
         return OK;
+    }
+
+    // ================================================================== ПД-3: the alarms
+
+    /**
+     * ПД-3: «Тревога» / «Тяжёлая ночь» (OUT_ALARM) - the buyer's own call waiting here: taken back (the deposit back); else the call made
+     * for exactly RaidAlarmSC.DEPOSIT chips (no level discount: the deposit comes back whole). No «Доверие» for it.
+     * @return {code, done, RaidAlarmSC's answer}
+     */
+    private static int[] alarm(Ctx c, TradeOfferSC o) {
+        int kind = com.sc.hazard.RaidAlarmSC.kindOf(o.key);
+        if (com.sc.hazard.RaidAlarmSC.pendingBy(c.s, c.id, kind)) {
+            com.sc.hazard.RaidAlarmSC.cancel(c.p, c.s, kind);
+            c.p.inventory.markDirty();
+            return new int[]{OK, 1, 0};
+        }
+        int why = refusal(c, o);
+        if (why == R_ALARM) {
+            return new int[]{R_ALARM, 0, com.sc.hazard.RaidAlarmSC.refusal(c.p, c.s, kind)};
+        }
+        if (why != OK) {
+            return new int[]{why, 0, 0};
+        }
+        TradeOfferSC.Ingredient chips = TradeOfferSC.Ingredient.chips(1);
+        if (!(c.p instanceof EntityPlayerMP) || chips.countIn(c.p.inventory.mainInventory) < com.sc.hazard.RaidAlarmSC.DEPOSIT) {
+            return new int[]{R_MISSING, 0, 0};
+        }
+        chips.takeFrom(c.p.inventory.mainInventory, com.sc.hazard.RaidAlarmSC.DEPOSIT);
+        int got = com.sc.hazard.RaidAlarmSC.order((EntityPlayerMP) c.p, c.s, kind);
+        if (got != com.sc.hazard.RaidAlarmSC.OK) {
+            giveChips(c.p, com.sc.hazard.RaidAlarmSC.DEPOSIT);  // refused after all: the deposit back
+            return new int[]{R_ALARM, 0, got};
+        }
+        c.p.inventory.markDirty();
+        c.reg.markDirty();
+        return new int[]{OK, 1, 0};
+    }
+
+    // ================================================================== ПД-1: the Substrate board, the dispatch, the Big order
+
+    /** The board of the Elder of `c`: the Ambassador's (Ф6), or a Substrate Elder's (ПД-1: common + local + order + the Big order). */
+    static List<String> boardOf(Ctx c) {
+        if (c.embassy()) {
+            return ContractTableSC.embassyBoard(c.id, c.day);
+        }
+        int tags = c.s == null ? ContractLocalSC.TAG_NODE : ContractLocalSC.tags(c.p.worldObj, c.s);
+        boolean bigOn = !bigTakenWeek(c) || bigTakenToday(c);
+        return ContractTableSC.substrateBoard(c.id, c.day, tags, urgentDest(c) != null, bigOn);
+    }
+
+    private static boolean bigTakenWeek(Ctx c) {
+        NBTTagCompound o = c.rec.extra.getCompoundTag(ContractTableSC.BIG_EXTRA);
+        return o.hasKey("w") && o.getLong("w") == SettlementSC.week(c.p.worldObj);
+    }
+
+    private static boolean bigTakenToday(Ctx c) {
+        NBTTagCompound o = c.rec.extra.getCompoundTag(ContractTableSC.BIG_EXTRA);
+        return o.hasKey("d") && o.getLong("d") == c.day;
+    }
+
+    /**
+     * ПД-1: «Срочная депеша»'s destination from this Elder - the nearest other Substrate settlement with an Elder (not an embassy, not a
+     * relay post) within URGENT_MAX blocks of this one's core; null - none (the dispatch isn't on this board), an unbound Elder.
+     */
+    static SettlementRegistrySC.Settlement urgentDest(Ctx c) {
+        return urgentDest(c.reg, c.s);
+    }
+
+    /** The same for settlement `from` of registry `reg` (the world test asks). */
+    public static SettlementRegistrySC.Settlement urgentDest(SettlementRegistrySC reg, SettlementRegistrySC.Settlement from) {
+        if (reg == null || from == null || !elderHere(from)) {
+            return null;
+        }
+        SettlementRegistrySC.Settlement best = null;
+        double bestD = (double) ContractTableSC.URGENT_MAX * ContractTableSC.URGENT_MAX;
+        for (SettlementRegistrySC.Settlement s : reg.all()) {
+            if (s.id == from.id || s.dim != from.dim || !elderHere(s)) {
+                continue;
+            }
+            double d = from.distSq(s.x + 0.5D, s.z + 0.5D);
+            if (d <= bestD) {
+                bestD = d;
+                best = s;
+            }
+        }
+        return best;
+    }
+
+    /** A Substrate settlement with an Elder of its own (a generated size - never an embassy or a relay post). */
+    private static boolean elderHere(SettlementRegistrySC.Settlement s) {
+        return s != null && s.sizeKind().substrate() && !SettlementSC.isEmbassy(s) && !SettlementSC.isRelay(s) && SettlementSC.inSubstrate(s);
+    }
+
+    /** ПД-1: the open «Срочные депеши» of `c`'s player past their sunset are lost (one line each). */
+    static void expireUrgent(Ctx c) {
+        if (expireUrgent(c.p, c.rec, c.p.worldObj.getWorldTime())) {
+            c.reg.markDirty();
+        }
+    }
+
+    /** The same for record `rec` of player `p` at world time `now` (ContractEventsSC's tick too). @return any lost */
+    public static boolean expireUrgent(EntityPlayer p, SettlementRegistrySC.PlayerRec rec, long now) {
+        boolean lost = false;
+        for (Iterator<SettlementRegistrySC.ContractRec> it = rec.contracts.iterator(); it.hasNext(); ) {
+            SettlementRegistrySC.ContractRec r = it.next();
+            if (!r.done && ContractTableSC.URGENT_DISPATCH.equals(r.key) && r.extra.hasKey(ContractTableSC.X_BY)
+                    && ContractTableSC.urgentLate(r.extra.getLong(ContractTableSC.X_BY), now)) {
+                it.remove();
+                lost = true;
+                if (p != null && !(p instanceof FakePlayer)) {
+                    p.addChatComponentMessage(new ChatComponentTranslation("sc.contract.urgent.late")
+                            .setChatStyle(new ChatStyle().setColor(EnumChatFormatting.RED)));
+                }
+            }
+        }
+        return lost;
+    }
+
+    /** ПД-1: the Big order's sides are all in the player's main inventory now. */
+    private static boolean bundleHeld(EntityPlayer p, ContractTableSC.Contract k) {
+        TradeOfferSC.Ingredient[] b = k.bundle();
+        for (TradeOfferSC.Ingredient in : b) {
+            if (in.countIn(p.inventory.mainInventory) < in.count) {
+                return false;
+            }
+        }
+        return b.length > 0;
     }
 
     /** @return {result, things handed in} */
@@ -515,6 +690,20 @@ public final class TradeServerSC {
             return new int[]{R_ELSEWHERE, 0};                   // Ф6: the Ambassador's at an embassy, the rest at a Substrate Elder
         }
         boolean dispatch = k.goal == ContractTableSC.DISPATCH;
+        boolean urgent = k.goal == ContractTableSC.URGENT, big = k.goal == ContractTableSC.BIG_ORDER;
+        if (urgent) {                                           // ПД-1: «Срочная депеша» - before sunset, to its Elder only
+            if (ContractTableSC.urgentLate(r.extra.getLong(ContractTableSC.X_BY), c.p.worldObj.getWorldTime())) {
+                expireUrgent(c);
+                return new int[]{R_DISPATCH_LATE, 0};
+            }
+            if (c.s == null || c.s.id != r.extra.getInteger(ContractTableSC.X_TO)) {
+                return new int[]{R_ELSEWHERE, 0};
+            }
+            r.progress = r.target;
+        }
+        if (big && !bundleHeld(c.p, k)) {
+            return new int[]{R_MISSING, 0};                     // ПД-1: the Big order - everything at once, never a part
+        }
         if (dispatch && ContractTableSC.dispatchLate(r.takenDay, c.day)) {
             c.rec.contracts.remove(r);                          // Ф6 (ПО-27): too late - the dispatch is lost (nothing paid back)
             c.reg.markDirty();
@@ -537,7 +726,7 @@ public final class TradeServerSC {
                 c.reg.markDirty();
                 return new int[]{R_PARTIAL, handed};
             }
-        } else if (r.progress < r.target) {
+        } else if (r.progress < r.target && !big) {
             return new int[]{R_NOT_DONE, 0};
         }
         if (TradeRulesSC.chipsAllowed(c.rec.chips, k.chips) < k.chips) {
@@ -546,6 +735,13 @@ public final class TradeServerSC {
         if (in != null && handed > 0) {
             in.takeFrom(c.p.inventory.mainInventory, handed);
             r.progress += handed;
+        }
+        if (big) {
+            for (TradeOfferSC.Ingredient side : k.bundle()) {
+                side.takeFrom(c.p.inventory.mainInventory, side.count);
+                handed += side.count;
+            }
+            r.progress = r.target;
         }
         r.done = true;
         reward(c, k);
@@ -641,6 +837,9 @@ public final class TradeServerSC {
      * (the hand-in button lights: late or not, the server says), not done at an embassy (it can't be handed in there).
      */
     private static int shownProgress(Ctx c, SettlementRegistrySC.ContractRec r) {
+        if (ContractTableSC.URGENT_DISPATCH.equals(r.key)) {   // ПД-1: done at its destination's Elder only
+            return c.s != null && c.s.id == r.extra.getInteger(ContractTableSC.X_TO) ? r.target : 0;
+        }
         if (!ContractTableSC.EMB_DISPATCH.equals(r.key)) {
             return r.progress;
         }
@@ -691,20 +890,30 @@ public final class TradeServerSC {
             e.setInteger("o", TradeRulesSC.outCount(o, c.level, c.pct(o)));
             e.setInteger("left", TradeRulesSC.remaining(o, used(c, o)));
             e.setByte("why", (byte) refusal(c, o));
+            if (o.outKind == TradeOfferSC.OUT_ALARM) {         // ПД-3: the deposit, the call's own state here
+                int kind = com.sc.hazard.RaidAlarmSC.kindOf(o.key);
+                e.setIntArray("n", new int[]{com.sc.hazard.RaidAlarmSC.DEPOSIT});
+                e.setBoolean("ap", com.sc.hazard.RaidAlarmSC.pendingBy(c.s, c.id, kind));
+                e.setByte("aw", (byte) com.sc.hazard.RaidAlarmSC.refusal(c.p, c.s, kind));
+                e.setInteger("ad", com.sc.hazard.RaidAlarmSC.daysLeft(kind, com.sc.hazard.RaidAlarmSC.lastDay(c.rec, kind), c.day));
+            }
             offers.appendTag(e);
         }
         n.setTag("offers", offers);
         if (c.t.kind() == NpcKindSC.ELDER) {
+            expireUrgent(c);                                    // ПД-1: a dispatch past sunset is lost before the board is shown
             NBTTagList board = new NBTTagList();
-            List<String> keys = ContractTableSC.board(c.id, c.day, c.embassy());
+            List<String> keys = boardOf(c);
             for (String key : keys) {
                 NBTTagCompound e = new NBTTagCompound();
                 e.setString("k", key);
                 int st = C_FREE, progress = 0;
+                SettlementRegistrySC.ContractRec mine = null;
                 for (SettlementRegistrySC.ContractRec r : c.rec.contracts) {
                     if (r.key.equals(key) && !r.done) {
                         st = C_OPEN;
                         progress = shownProgress(c, r);
+                        mine = r;
                     } else if (r.key.equals(key) && r.takenDay == c.day && st == C_FREE) {
                         st = C_DONE;
                         progress = r.target;
@@ -712,6 +921,7 @@ public final class TradeServerSC {
                 }
                 e.setByte("st", (byte) st);
                 e.setInteger("p", progress);
+                contractExtras(c, key, mine, e);
                 board.appendTag(e);
             }
             n.setTag("board", board);
@@ -722,6 +932,7 @@ public final class TradeServerSC {
                     e.setString("k", r.key);
                     e.setByte("st", (byte) C_OPEN);
                     e.setInteger("p", shownProgress(c, r));
+                    contractExtras(c, r.key, r, e);
                     open.appendTag(e);
                 }
             }
@@ -735,6 +946,29 @@ public final class TradeServerSC {
             n.setByte("anchor", (byte) anchor);
         }
         return n;
+    }
+
+    /**
+     * ПД-1: a contract line's extras for the screen - "g" its group; «Срочная депеша»: "to" the destination's name code (NpcNamesSC),
+     * "far" its distance from here in blocks, "dl" the ticks to its sunset (taken: its own deadline; on the board: today's).
+     */
+    private static void contractExtras(Ctx c, String key, SettlementRegistrySC.ContractRec mine, NBTTagCompound e) {
+        ContractTableSC.Contract k = ContractTableSC.byKey(key);
+        if (k == null) {
+            return;
+        }
+        e.setByte("g", (byte) k.group);
+        if (k.goal != ContractTableSC.URGENT) {
+            return;
+        }
+        long now = c.p.worldObj.getWorldTime();
+        SettlementRegistrySC.Settlement to = mine != null ? c.reg.byId(mine.extra.getInteger(ContractTableSC.X_TO)) : urgentDest(c);
+        long by = mine != null ? mine.extra.getLong(ContractTableSC.X_BY) : ContractTableSC.urgentBy(c.day);
+        if (to != null) {
+            e.setInteger("to", NpcNamesSC.code(to.nameElement, to.nameNumber));
+            e.setInteger("far", c.s == null ? -1 : (int) Math.round(Math.sqrt(c.s.distSq(to.x + 0.5D, to.z + 0.5D))));
+        }
+        e.setInteger("dl", (int) Math.max(0L, Math.min(Integer.MAX_VALUE, by - now)));
     }
 
     // ================================================================== who, where, when

@@ -90,6 +90,38 @@ public final class EliteSC {
         MobArmorSC a = mob.mobArmor();
         a.elite = true;
         mob.setEliteMod(mod);
+        effect(a, mod);
+        a.sync();
+    }
+
+    /**
+     * ПД-4 (docs/plan-ideas-2026-10-26.md): the wanted Renegade's second modifier (EntityWantedSC.mod2 - its NBT scEliteMod2) - the
+     * modifier's own change as apply's, the first one kept. Only a pair WantedRulesSC.allowedPair takes.
+     */
+    public static void applySecond(EntityWantedSC mob, EliteModSC mod) {
+        if (mob == null || mod == null || mob.worldObj == null || mob.worldObj.isRemote || mob.eliteMod() == null
+                || !WantedRulesSC.allowedPair(mob.eliteMod(), mod)) {
+            return;
+        }
+        mob.setMod2(mod);
+        MobArmorSC a = mob.mobArmor();
+        effect(a, mod);
+        a.sync();
+    }
+
+    /**
+     * ПД-4: `mob` works with modifier `m` - its own (eliteMod) or, the wanted Renegade, its second one (scEliteMod2). Every modifier's
+     * check here goes through it.
+     */
+    public static boolean has(EntityArmoredMobSC mob, EliteModSC m) {
+        if (mob == null || m == null) {
+            return false;
+        }
+        return mob.eliteMod() == m || mob instanceof EntityWantedSC && ((EntityWantedSC) mob).mod2() == m;
+    }
+
+    /** A modifier's own change of the armour (Charged: +50% reserve; Shielded: the personal screen; Veteran: helium). */
+    private static void effect(MobArmorSC a, EliteModSC mod) {
         switch (mod) {
             case CHARGED:
                 a.reserveMax *= 1F + EliteModSC.CHARGED_BONUS;
@@ -106,7 +138,6 @@ public final class EliteSC {
             default:
                 break;                                  // the Commander, the Repairer, the Avenger work later
         }
-        a.sync();
     }
 
     /** Server, every tick of an armoured mob (EntityArmoredMobSC.onLivingUpdate): its modifier's work; nothing for a plain one. */
@@ -118,7 +149,7 @@ public final class EliteSC {
         long now = mob.worldObj.getTotalWorldTime();
         boolean alive = mob.isEntityAlive();
         long phase = now + mob.getEntityId();           // the elites don't all act on the same tick
-        if (m == EliteModSC.COMMANDER) {
+        if (has(mob, EliteModSC.COMMANDER)) {
             MobArmorSC a = mob.mobArmor();
             if (a.orderAt > 0L && now - a.orderAt >= EliteModSC.ORDER_TICKS) {
                 a.orderAt = 0L;
@@ -131,14 +162,15 @@ public final class EliteSC {
             } else if (a.orderAt == 0L && alive && phase % EliteModSC.ORDER_EVERY_TICKS == 0 && mob.getAttackTarget() != null) {
                 order(mob, now);
             }
-        } else if (m == EliteModSC.REPAIRER && alive && phase % EliteModSC.REPAIR_EVERY_TICKS == 0) {
+        }
+        if (has(mob, EliteModSC.REPAIRER) && alive && phase % EliteModSC.REPAIR_EVERY_TICKS == 0) {
             repair(mob);
         }
     }
 
     /** Server, the mob died (EntityArmoredMobSC.onDeath): the Avenger's fuse starts (AVENGER_FUSE_TICKS, then the blast). */
     public static void onDeath(EntityArmoredMobSC mob) {
-        if (mob == null || mob.worldObj == null || mob.worldObj.isRemote || mob.eliteMod() != EliteModSC.AVENGER
+        if (mob == null || mob.worldObj == null || mob.worldObj.isRemote || !has(mob, EliteModSC.AVENGER)
                 || PENDING.size() >= MAX_PENDING) {
             return;
         }

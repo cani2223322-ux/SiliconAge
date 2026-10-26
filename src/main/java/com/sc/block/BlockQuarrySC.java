@@ -176,6 +176,18 @@ public class BlockQuarrySC extends Block {
         world.markBlockForUpdate(x, y, z);
     }
 
+    /** ОМ-5 (docs/plan-ideas-2026-10-26.md): a comparator reads the tile (IComparatorSC.comparatorLevel - the area done, the Exo rig's buffer). */
+    @Override
+    public boolean hasComparatorInputOverride() {
+        return true;
+    }
+
+    @Override
+    public int getComparatorInputOverride(World world, int x, int y, int z, int side) {
+        net.minecraft.tileentity.TileEntity te = world.getTileEntity(x, y, z);
+        return te instanceof com.sc.energy.IComparatorSC ? ((com.sc.energy.IComparatorSC) te).comparatorLevel() : 0;
+    }
+
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hx, float hy, float hz) {
         ItemStack held = player.getCurrentEquippedItem();

@@ -111,6 +111,9 @@ public class GuiTradeSC extends GuiContainer {
         int[] have;
         /** A service: the main inventory's slot it will work on (TradeServicesSC.slot), -1 none. */
         int slot = -1;
+        /** ПД-3 (OUT_ALARM): the viewer's own call waits here (the line takes it back), RaidAlarmSC's answer, the days left. */
+        boolean ap;
+        int aw, ad;
     }
 
     /** One contract line: on the board, open from an earlier day, or the one-time anchor. */
@@ -119,7 +122,12 @@ public class GuiTradeSC extends GuiContainer {
         int st, progress;
         boolean anchor;
         int have;
+        /** ПД-1: the group (ContractTableSC.G_*); «Срочная депеша»: the destination's name code (0 none), its distance, ticks to sunset. */
+        int group, to, far = -1, dl;
     }
+
+    /** ПД-1: the client's world time the last state came at («Срочная депеша»'s time to sunset counts down from it). */
+    private long stateAt;
 
     private final List<Row> rows = new ArrayList<Row>();
     private final List<CRow> crows = new ArrayList<CRow>();
@@ -147,6 +155,8 @@ public class GuiTradeSC extends GuiContainer {
     private static final class FRow {
         int ride, target, name, x, z, price, round, guar, code;
         boolean embassy, xz;
+        /** ПД-2: a rescue to a squad mate's death mark - his UUID and name ("" - one's own / not a rescue). */
+        String mate = "", mateName = "";
     }
 
     private final List<FRow> frows = new ArrayList<FRow>();
@@ -346,6 +356,21 @@ public class GuiTradeSC extends GuiContainer {
                 frows.add(r);
             }
         }
+        NBTTagList mates = s.getTagList("rescueMates", 10);    // ПД-2: the squad mates' death marks - rescue rows of their own
+        for (int i = 0; i < mates.tagCount(); i++) {
+            NBTTagCompound e = mates.getCompoundTagAt(i);
+            FRow r = new FRow();
+            r.ride = EmbassyRulesSC.RIDE_RESCUE;
+            r.target = EmbassyRulesSC.TARGET_MARK;
+            r.mate = e.getString("u");
+            r.mateName = e.getString("n");
+            r.xz = true;
+            r.x = e.getInteger("x");
+            r.z = e.getInteger("z");
+            r.price = e.getInteger("p");
+            r.code = e.getByte("c");
+            frows.add(r);
+        }
         backId = -1;
         if (s.hasKey("back", 10)) {
             NBTTagCompound b = s.getCompoundTag("back");
@@ -466,6 +491,9 @@ public class GuiTradeSC extends GuiContainer {
             r.out = e.hasKey("o") ? e.getInteger("o") : o.out == null ? 0 : o.out.count;
             r.left = e.getInteger("left");
             r.why = e.getByte("why");
+            r.ap = e.getBoolean("ap");                          // ПД-3
+            r.aw = e.getByte("aw");
+            r.ad = e.getInteger("ad");
             r.have = new int[n.length];
             rows.add(r);
         }
@@ -481,6 +509,10 @@ public class GuiTradeSC extends GuiContainer {
                         r.c = c;
                         r.st = e.getByte("st");
                         r.progress = e.getInteger("p");
+                        r.group = e.hasKey("g") ? e.getByte("g") : c.group;     // ПД-1
+                        r.to = e.getInteger("to");
+                        r.far = e.hasKey("far") ? e.getInteger("far") : -1;
+                        r.dl = e.getInteger("dl");
                         crows.add(r);
                     }
                 }
@@ -497,6 +529,7 @@ public class GuiTradeSC extends GuiContainer {
             }
         }
         stateDay = mc.theWorld == null ? -1 : SettlementSC.day(mc.theWorld);
+        stateAt = mc.theWorld == null ? 0L : mc.theWorld.getTotalWorldTime();
         has = true;
         sel = clamp(sel, rows.size());
         csel = clamp(csel, crows.size());
@@ -524,6 +557,12 @@ public class GuiTradeSC extends GuiContainer {
         } else if (code == TradeServerSC.R_PARTIAL) {
             text = Lang.tr("sc.trade.result.partial", done);
             good = true;
+        } else if (code == TradeServerSC.R_ALARM && com.sc.hazard.RaidAlarmSC.refuseKey(r.getInteger("alarm")) != null) {
+            int why = r.getInteger("alarm");                    // ПД-3: the alarm's own reason
+            String key = com.sc.hazard.RaidAlarmSC.refuseKey(why);
+            text = why == com.sc.hazard.RaidAlarmSC.R_LEVEL ? Lang.tr(key, levelName(com.sc.hazard.RaidAlarmSC.ALARM_LEVEL))
+                    : why == com.sc.hazard.RaidAlarmSC.R_COOLDOWN ? Lang.tr(key, 1) : Lang.tr(key);
+            good = false;
         } else if (code == TradeServerSC.OK) {
             String k = kind == SettleNetSC.CONTRACT_TAKE ? "sc.contract.taken" : kind == SettleNetSC.CONTRACT_DROP ? "sc.contract.dropped"
                     : "sc.contract.handedIn";
@@ -550,6 +589,9 @@ public class GuiTradeSC extends GuiContainer {
     }
 
     private static String reason(int code) {
+        if (code == TradeServerSC.R_NO_WANTED) {
+            return Lang.tr("sc.wanted.none");                    // ПД-4
+        }
         if (code == TradeServerSC.R_CEILING) {
             return Lang.tr("sc.trade.refuse.ceiling", ReputationSC.EMBASSY_CEILING);   // ПС-5
         }
@@ -570,11 +612,22 @@ public class GuiTradeSC extends GuiContainer {
         for (CRow r : crows) {
             TradeOfferSC.Ingredient in = r.anchor ? null : r.c.handIn();
             r.have = in == null ? 0 : in.countIn(inv);
+            if (!r.anchor && r.c.goal == ContractTableSC.BIG_ORDER) {   // ПД-1: the Big order - 1 when every side is there at once
+                r.have = 1;
+                for (TradeOfferSC.Ingredient side : r.c.bundle()) {
+                    if (side.countIn(inv) < side.count) {
+                        r.have = 0;
+                    }
+                }
+            }
         }
     }
 
     /** One more deal of `r` could be made now (the server decides; this only lights the button). */
     private static boolean canOnce(Row r) {
+        if (r.offer.outKind == TradeOfferSC.OUT_ALARM && r.ap) {
+            return r.why == TradeServerSC.OK;                   // ПД-3: taking one's call back costs nothing
+        }
         if (r.why != TradeServerSC.OK || r.offer.service() && r.slot < 0) {
             return false;
         }
@@ -673,6 +726,9 @@ public class GuiTradeSC extends GuiContainer {
         if (c.st != TradeServerSC.C_OPEN) {
             return false;
         }
+        if (c.c.goal == ContractTableSC.BIG_ORDER) {
+            return c.have > 0;                                  // ПД-1: everything at once
+        }
         return c.c.handIn() != null ? c.have > 0 : c.progress >= c.c.target;
     }
 
@@ -744,6 +800,7 @@ public class GuiTradeSC extends GuiContainer {
         }
         d.setInteger("ride", r.ride);
         d.setInteger("target", r.target);
+        d.setString("mate", r.mate);                            // ПД-2: "" - one's own mark
         d.setBoolean("round", id == FL_ROUND);
         d.setString("friend", id == FL_FRIEND && friend >= 0 && friend < friends.size() ? friends.get(friend)[1] : "");
         d.setBoolean("confirm", false);
@@ -930,10 +987,18 @@ public class GuiTradeSC extends GuiContainer {
                 drawTexturedModalRect(LX + 49, y + 1, BADGE_U, SPR_V, 16, 16);
             }
             int tx = LX + 68, tw = LW - 8 - 68;
-            TextFitSC.draw(fontRendererObj, Lang.tr(r.offer.langKey()), tx, y + 1, tw, open ? GuiHoloSC.VALUE : GuiHoloSC.IDLE, guiLeft, guiTop);
+            boolean alarm = r.offer.outKind == TradeOfferSC.OUT_ALARM;
+            String title = alarm && r.ap ? Lang.tr("sc.trade.offer.alarmCancel") : Lang.tr(r.offer.langKey());
+            TextFitSC.draw(fontRendererObj, title, tx, y + 1, tw, open ? GuiHoloSC.VALUE : GuiHoloSC.IDLE, guiLeft, guiTop);
             String sub;
             int col;
-            if (r.why == TradeServerSC.R_LEVEL) {
+            if (alarm && r.why != TradeServerSC.R_LEVEL) {        // ПД-3: the deposit, or why not (waits here / days left / no Captain)
+                sub = alarmStatus(r);
+                col = r.why == TradeServerSC.OK ? canOnce(r) ? GuiHoloSC.OK : GuiHoloSC.LABEL : GuiHoloSC.IDLE;
+            } else if (r.why == TradeServerSC.R_NO_WANTED) {     // ПД-4
+                sub = Lang.tr("sc.wanted.none");
+                col = GuiHoloSC.IDLE;
+            } else if (r.why == TradeServerSC.R_LEVEL) {
                 bindTex();
                 drawTexturedModalRect(tx, y + 9, LOCK_U, SPR_V, 7, 9);
                 sub = levelName(r.offer.minLevel);
@@ -976,6 +1041,10 @@ public class GuiTradeSC extends GuiContainer {
             serviceDetails(r);
             return;
         }
+        if (r.offer.outKind == TradeOfferSC.OUT_ALARM) {
+            alarmDetails(r);
+            return;
+        }
         int x = RX + 4, w = RW - 8, y = detailsY() + 4;
         TradeOfferSC o = r.offer;
         String out;
@@ -1010,6 +1079,45 @@ public class GuiTradeSC extends GuiContainer {
         int bottom = BY - 4;
         if (why != null) {
             wrapped(why, x, y, w, r.why == TradeServerSC.OK ? GuiHoloSC.BAD : GuiHoloSC.WARN, Math.max(1, (bottom - y) / 9));
+        }
+    }
+
+    /** ПД-3: the alarm row's line - the deposit, or the call's state here. */
+    private String alarmStatus(Row r) {
+        String key = com.sc.hazard.RaidAlarmSC.refuseKey(r.aw);
+        if (r.ap) {
+            return Lang.tr("sc.alarm.deposit", com.sc.hazard.RaidAlarmSC.DEPOSIT) + " - " + Lang.tr("sc.alarm.refuse.pending");
+        }
+        if (r.aw == com.sc.hazard.RaidAlarmSC.R_COOLDOWN) {
+            return Lang.tr(key, Math.max(1, r.ad));
+        }
+        if (r.aw == com.sc.hazard.RaidAlarmSC.R_LEVEL) {
+            int lv = com.sc.hazard.RaidAlarmSC.kindOf(r.offer.key) == com.sc.hazard.RaidAlarmSC.KIND_HEAVY ? com.sc.hazard.RaidAlarmSC.HEAVY_LEVEL
+                    : com.sc.hazard.RaidAlarmSC.ALARM_LEVEL;
+            return Lang.tr(key, levelName(lv));
+        }
+        return key != null ? Lang.tr(key) : Lang.tr("sc.alarm.deposit", com.sc.hazard.RaidAlarmSC.DEPOSIT);
+    }
+
+    /** ПД-3: the alarm's details - what it is, the deposit, its state; the cancel when the viewer's call waits here. */
+    private void alarmDetails(Row r) {
+        int x = RX + 4, w = RW - 8, y = detailsY() + 4, bottom = BY - 4;
+        boolean heavy = com.sc.hazard.RaidAlarmSC.kindOf(r.offer.key) == com.sc.hazard.RaidAlarmSC.KIND_HEAVY;
+        y = wrapped(Lang.tr(r.ap ? "sc.trade.offer.alarmCancel" : r.offer.langKey()), x, y, w, GuiHoloSC.VALUE, 2);
+        int have = r.have.length > 0 ? r.have[0] : 0;
+        TextFitSC.draw(fontRendererObj, Lang.tr("sc.alarm.deposit", com.sc.hazard.RaidAlarmSC.DEPOSIT) + (r.ap ? "" : " (" + have + ")"), x, y, w,
+                r.ap || have >= com.sc.hazard.RaidAlarmSC.DEPOSIT ? GuiHoloSC.OK : GuiHoloSC.BAD, guiLeft, guiTop);
+        y += 10;
+        String about = Lang.tr("sc.manual.world.raids.alarm", levelName(com.sc.hazard.RaidAlarmSC.ALARM_LEVEL), com.sc.hazard.RaidAlarmSC.ALARM_DAYS,
+                levelName(com.sc.hazard.RaidAlarmSC.HEAVY_LEVEL), com.sc.hazard.RaidAlarmSC.HEAVY_DAYS, com.sc.hazard.RaidAlarmSC.DEPOSIT,
+                String.valueOf(com.sc.hazard.RaidAlarmSC.HEAVY_MUL));
+        if (heavy || !r.ap) {
+            y = wrapped(about, x, y, w, GuiHoloSC.LABEL, Math.max(1, (bottom - y) / 9 - 2));
+        }
+        if (r.why == TradeServerSC.R_LEVEL) {
+            wrapped(Lang.tr("sc.trade.need.level", levelName(r.offer.minLevel)), x, y, w, GuiHoloSC.WARN, 2);
+        } else if (r.why != TradeServerSC.OK || r.aw != com.sc.hazard.RaidAlarmSC.OK && !r.ap) {
+            wrapped(alarmStatus(r), x, y, w, GuiHoloSC.WARN, 2);
         }
     }
 
@@ -1142,6 +1250,10 @@ public class GuiTradeSC extends GuiContainer {
             } else if (c.st == TradeServerSC.C_FREE) {
                 sub = Lang.tr("sc.contract.state.free", c.c.chips, gainArg(c.c.reputation));   // ПС-5
                 col = GuiHoloSC.LABEL;
+                String g = groupLabel(c.group);                 // ПД-1: «Местный» / «Заказ» / «Раз в неделю» in the group's colour
+                if (g != null) {
+                    sub = "\u00a7" + groupColour(c.group) + g + "\u00a7r " + sub;
+                }
             } else if (c.st == TradeServerSC.C_OPEN) {
                 boolean ready = c.progress >= c.c.target;
                 sub = ready ? Lang.tr("sc.contract.state.ready") : Lang.tr("sc.contract.state.open", c.progress, c.c.target);
@@ -1171,18 +1283,69 @@ public class GuiTradeSC extends GuiContainer {
         if (c.c.modulePct > 0) {
             tail.add(Lang.tr("sc.contract.reward.module", c.c.modulePct));
         }
-        if (!c.anchor && c.st == TradeServerSC.C_OPEN) {
+        boolean urgent = !c.anchor && c.c.goal == ContractTableSC.URGENT;
+        String toName = c.to == 0 ? "?" : NpcNamesSC.name(c.to).getUnformattedText();
+        if (urgent && c.st != TradeServerSC.C_DONE) {           // ПД-1: where to, how far, the time to sunset
+            tail.add(Lang.tr("sc.contract.urgent.to", toName, c.far < 0 ? "?" : String.valueOf(c.far), clock(urgentLeft(c))));
+        }
+        if (!c.anchor && c.st == TradeServerSC.C_OPEN && c.c.goal != ContractTableSC.BIG_ORDER && !urgent) {
             tail.add(c.c.handIn() != null ? Lang.tr("sc.contract.handInLine", c.progress, c.c.target, c.have)
                     : Lang.tr("sc.contract.state.open", c.progress, c.c.target));
         } else if (!c.anchor && c.st == TradeServerSC.C_FREE && level < cLevel) {
             tail.add(Lang.tr("sc.trade.need.level", levelName(cLevel)));
         }
         int descLines = Math.max(0, (bottom - y) / 9 - tail.size());
-        y = wrapped(Lang.tr(c.c.langKey() + ".desc", c.c.target), x, y, w, GuiHoloSC.LABEL, descLines);
+        Object descArg = urgent ? toName : String.valueOf(c.c.target);
+        y = wrapped(Lang.tr(c.c.langKey() + ".desc", descArg), x, y, w, GuiHoloSC.LABEL, descLines);
         for (int i = 0; i < tail.size(); i++) {
             int col = i == 0 ? GuiHoloSC.OK : i == tail.size() - 1 && level < cLevel && c.st == TradeServerSC.C_FREE ? GuiHoloSC.WARN : GuiHoloSC.VALUE;
             TextFitSC.draw(fontRendererObj, tail.get(i), x, y, w, col, guiLeft, guiTop);
             y += 9;
+        }
+    }
+
+    /** ПД-1: the group's mark on the board (null for a common one). */
+    private static String groupLabel(int g) {
+        return g == ContractTableSC.G_LOCAL ? Lang.tr("sc.contract.group.local") : g == ContractTableSC.G_ORDER ? Lang.tr("sc.contract.group.order")
+                : g == ContractTableSC.G_BIG ? Lang.tr("sc.contract.group.big") : null;
+    }
+
+    /** ПД-1: the group's colour code: local - green, order - aqua, the Big order - gold. */
+    private static char groupColour(int g) {
+        return g == ContractTableSC.G_LOCAL ? 'a' : g == ContractTableSC.G_ORDER ? 'b' : '6';
+    }
+
+    /** ПД-1: «Срочная депеша»'s ticks to sunset now (the state's, counted down since it came). */
+    private long urgentLeft(CRow c) {
+        long gone = mc.theWorld == null ? 0L : Math.max(0L, mc.theWorld.getTotalWorldTime() - stateAt);
+        return Math.max(0L, c.dl - gone);
+    }
+
+    /** Ticks as m:ss. */
+    private static String clock(long ticks) {
+        long s = ticks / 20L;
+        return (s / 60L) + ":" + (s % 60L < 10L ? "0" : "") + (s % 60L);
+    }
+
+    /** ПД-1: the group's small picture over a contract's icon - a local one's land, an order's crate, the Big order's gold. */
+    private static ItemStack groupMark(CRow c) {
+        if (c.anchor) {
+            return null;
+        }
+        switch (c.group) {
+            case ContractTableSC.G_LOCAL:
+                if (c.c.localTag == com.sc.settle.trade.ContractLocalSC.TAG_NODE) {
+                    return com.sc.ruin.RuinBlocksSC.ruin == null ? null : new ItemStack(com.sc.ruin.RuinBlocksSC.ruin);
+                }
+                return com.sc.dim.SubstrateBlocksSC.rock == null ? null : new ItemStack(com.sc.dim.SubstrateBlocksSC.rock, 1,
+                        c.c.localTag == com.sc.settle.trade.ContractLocalSC.TAG_OXIDE ? com.sc.dim.SubstrateBlocksSC.OXIDE_VIOLET
+                                : com.sc.dim.SubstrateBlocksSC.CRYSTALLITE);
+            case ContractTableSC.G_ORDER:
+                return new ItemStack(net.minecraft.init.Blocks.chest);
+            case ContractTableSC.G_BIG:
+                return new ItemStack(net.minecraft.init.Blocks.gold_block);
+            default:
+                return null;
         }
     }
 
@@ -1350,6 +1513,9 @@ public class GuiTradeSC extends GuiContainer {
 
     /** A row's target in words: a dome, an embassy (the return half with its days), the death mark, none. */
     private String targetText(FRow r) {
+        if (r.mate.length() > 0) {
+            return Lang.tr("sc.flight.target.mateMark", r.mateName, r.x, r.z);     // ПД-2
+        }
         if (r.ride == EmbassyRulesSC.RIDE_RESCUE) {
             return r.target == EmbassyRulesSC.TARGET_MARK && r.xz ? Lang.tr("sc.flight.target.mark", r.x, r.z) : Lang.tr("sc.flight.target.none");
         }
@@ -1572,7 +1738,16 @@ public class GuiTradeSC extends GuiContainer {
         } else {
             for (int i = 0; i < ROWS && cscroll + i < crows.size(); i++) {
                 CRow c = crows.get(cscroll + i);
-                hovered = icon(contractIcon(c), guiLeft + LX + 4, guiTop + LY + 2 + i * ROW_H + 1, mx, my, hovered);
+                int ix = guiLeft + LX + 4, iy = guiTop + LY + 2 + i * ROW_H + 1;
+                hovered = icon(contractIcon(c), ix, iy, mx, my, hovered);
+                ItemStack mark = groupMark(c);                  // ПД-1: half size over the icon's lower right corner
+                if (mark != null) {
+                    GL11.glPushMatrix();
+                    GL11.glTranslatef(ix + 9F, iy + 9F, 50F);
+                    GL11.glScalef(0.5F, 0.5F, 1F);
+                    itemRender.renderItemAndEffectIntoGUI(fontRendererObj, mc.getTextureManager(), mark, 0, 0);
+                    GL11.glPopMatrix();
+                }
             }
         }
         itemRender.zLevel = 0F;
@@ -1647,7 +1822,19 @@ public class GuiTradeSC extends GuiContainer {
             case ContractTableSC.SUPPRESS_KILL:
                 return ModItems.empGun == null ? null : new ItemStack(ModItems.empGun);
             case ContractTableSC.DISPATCH:
+            case ContractTableSC.URGENT:
                 return new ItemStack(Items.paper);
+            case ContractTableSC.STORM_KILL:                    // ПД-1
+                return new ItemStack(Items.iron_chestplate);
+            case ContractTableSC.READINGS:
+                return new ItemStack(Items.compass);
+            case ContractTableSC.SAFE:
+                return new ItemStack(Items.iron_door);
+            case ContractTableSC.SIGNAL:
+                return new ItemStack(Items.ender_eye);
+            case ContractTableSC.BIG_ORDER:
+                TradeOfferSC.Ingredient[] b = c.c.bundle();
+                return b.length == 0 ? null : b[(int) ((System.currentTimeMillis() / 1000L) % b.length)].display();
             default:
                 TradeOfferSC.Ingredient in = c.c.handIn();
                 return in == null ? null : in.display();

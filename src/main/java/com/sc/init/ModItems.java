@@ -318,6 +318,7 @@ public final class ModItems {
         com.sc.ruin.RelicItemsSC.init();
         com.sc.finale.FinaleItemsSC.init();             // Подложка Ф5: the Arena Coordinator, the journals, the schemes, the Module, the Navigation Record
         com.sc.embassy.EmbassyItemsSC.init();           // Подложка Ф6: the Embassy Direction Finder
+        IdeaItemsSC.init();                             // 2026-10-26 (docs/plan-ideas-2026-10-26.md): the Wanted Token, the Breach Protocols, the Nanite Paste
     }
 
     public static com.sc.item.ItemConverterModuleSC converterModule;
