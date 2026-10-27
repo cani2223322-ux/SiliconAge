@@ -136,6 +136,7 @@ public final class TradeServerSC {
             SettleNetSC.send(p, SettleNetSC.TRADE_STATE, state(c));
             if (t.kind() == NpcKindSC.DISPATCHER) {
                 com.sc.embassy.FlightServerSC.sendState(p, t);    // Ф6 (the coordinator's hook): the Dispatcher's «Рейсы» tab, package R
+                com.sc.embassy.EmbassyAirServerSC.sendState(p, t);    // «Лётное поле» (the coordinator's hook): the airfield tab, package T
             }
         }
     }

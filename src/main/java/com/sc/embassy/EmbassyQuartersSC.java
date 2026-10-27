@@ -39,6 +39,11 @@ import com.sc.settle.gen.SettlementLayoutSC;
  * </ul>
  * Every lot stands under the dome's shell (a hemisphere from the core, half a block clear) or on the level ground, inside the area;
  * problem() checks it all (the self-test's).
+ * <p>
+ * «Лётное поле посольства» (package G, docs/plan-embassy-airfield-core.md §4.5, ЛП-18): a plan with a FULL or SHORT field (Plan.field,
+ * set before lay) moves three posts onto it - Sentries #5 and #6 to Field.posts 0 and 1 (they sleep at them), the second Gas Engineer
+ * to posts 2 (his home stays his living cell); no new creature, the lots and every other post as without it. A plan without a field
+ * (or HELI) is exactly the plan of before.
  */
 public final class EmbassyQuartersSC {
 
@@ -307,9 +312,13 @@ public final class EmbassyQuartersSC {
         int[] office = framed(p, EmbassyLayoutSC.P_OFFICE, beacon - 6, -8);
         int[] used = new int[trades.size()];
         int home = 0, sentries = 0, seniors = 0, quartermasters = 0, dispatchers = 0;
+        int[] nth = new int[NpcKindSC.values().length];       // ЛП-18: the entries of each kind so far (the field's posts)
+        boolean onField = fieldPosts(p);
         for (NpcKindSC k : roster) {
             int[] at, sleep = null;
             int y = stand;
+            int fp = onField ? fieldPost(k, nth[k.ordinal()]) : -1;
+            nth[k.ordinal()]++;
             if (k == NpcKindSC.ELDER) {                         // ПЖ-14: the Ambassador - his hall
                 at = framed(p, EmbassyLayoutSC.P_HALL, EmbassyLayoutSC.AT_HALL[0], EmbassyLayoutSC.AT_HALL[1]);
             } else if (k == NpcKindSC.DISPATCHER) {             // the office on the Vokzal: their home is round it (NpcLinkSC.setHome)
@@ -343,6 +352,9 @@ public final class EmbassyQuartersSC {
                     at = new int[]{EmbassyLayoutSC.AT_PLAZA[0], 2 + home % 5};
                 }
             }
+            if (fp >= 0) {                                      // ЛП-18: Sentries #5, #6 (they sleep at it) and the second Gas Engineer
+                at = fieldPostAt(p, fp);
+            }
             if (!k.guard && k != NpcKindSC.DISPATCHER) {        // every settler sleeps in a living cell
                 int cell = home / homesEach;
                 if (cell < hLots.length) {
@@ -365,6 +377,38 @@ public final class EmbassyQuartersSC {
         int in = innerFace(p.radius);
         int[] gate = framed(p, SettlementRegistrySC.P_GATE, in - 2, 2), back = framed(p, EmbassyLayoutSC.P_BACK_GATE, -(in - 2), -2);
         return new int[][]{gate, back, {gate[0], -gate[1]}, {back[0], -back[1]}, {0, in - 2}, {0, -(in - 2)}};
+    }
+
+    /**
+     * ЛП-18 («Лётное поле посольства», docs/plan-embassy-airfield-core.md §4.5): the Sentries of these indexes (by the roster's order: #5
+     * and #6 - sentryPosts' «inside the wall at the sides», whose cells stay taken) stand on EmbassyAirfieldSC.Field.posts 0 and 1 (by
+     * the apron / the helipad, by the windsock) and sleep there; the Gas Engineer of index FIELD_GAS_TECH (the second) on posts 2 (by the
+     * columns) - he sleeps in his living cell; the first stays in the workshop. FULL and SHORT only (HELI has no posts).
+     */
+    public static final int[] FIELD_SENTRIES = {4, 5};
+    public static final int FIELD_GAS_TECH = 1;
+
+    /** Plan `p` has the field's posts (FULL, SHORT): its three posts move there. Pure. */
+    static boolean fieldPosts(EmbassyLayoutSC.Plan p) {
+        return p.field != null && p.field.posts != null && p.field.posts.length >= 3;
+    }
+
+    /** The field's post (Field.posts index) of the roster's `nth` (from 0) entry of kind `k` in a plan with the field's posts; -1 its own. Pure. */
+    public static int fieldPost(NpcKindSC k, int nth) {
+        if (k == NpcKindSC.SENTRY) {
+            for (int i = 0; i < FIELD_SENTRIES.length; i++) {
+                if (FIELD_SENTRIES[i] == nth) {
+                    return i;
+                }
+            }
+        }
+        return k == NpcKindSC.GAS_TECH && nth == FIELD_GAS_TECH ? FIELD_SENTRIES.length : -1;
+    }
+
+    /** The field's post `i` in plan `p`'s frame {a, p} (the field's frame is (a, q), q = p x side). */
+    static int[] fieldPostAt(EmbassyLayoutSC.Plan p, int i) {
+        int[] q = p.field.posts[i];
+        return new int[]{q[0], q[1] * p.field.side};
     }
 
     /** A named point of the plan in its frame {a, p} (its fallback where the plan has none). */
@@ -406,7 +450,8 @@ public final class EmbassyQuartersSC {
      * the Dispatchers in the dock zone; the guards inside the wall's inner face or on a tower's platform (P_TOWER*); the towers where
      * the plan's P_TOWER says; no two lots overlap (the wall: no lot but a gate or a tower in its band; the Ring: inside the Vokzal);
      * every lot inside the area, under the dome's shell (its top half a block under it) or on the level ground; one Ring lot, on
-     * a = r + VOKZAL_OUT + RING_BACK. Pure.
+     * a = r + VOKZAL_OUT + RING_BACK. ЛП-18: with the field's posts, Sentries #5, #6 and the second Gas Engineer exactly on them (on the
+     * floor; the Sentries' homes there, the Gas Engineer's in the dome - 2). Pure.
      */
     public static String problem(EmbassyLayoutSC.Plan p, List<NpcKindSC> roster) {
         int r = p.radius, in = innerFace(r), out = r - EmbassyLayoutSC.WALL_IN;
@@ -422,6 +467,8 @@ public final class EmbassyQuartersSC {
             }
         }
         long dome2 = (long) (r - 2) * (r - 2), zone2 = (long) EmbassyLayoutSC.DOCK_ZONE * EmbassyLayoutSC.DOCK_ZONE;
+        int[] nth = new int[NpcKindSC.values().length];
+        boolean onField = fieldPosts(p);
         for (int i = 0; i < roster.size(); i++) {
             SettlementLayoutSC.Post q = p.posts.get(i);
             NpcKindSC k = roster.get(i);
@@ -429,6 +476,18 @@ public final class EmbassyQuartersSC {
                 return "post " + i + " is a " + q.kind + ", the roster's a " + k;
             }
             long dx = q.x - p.coreX, dz = q.z - p.coreZ, hx = q.homeX - p.coreX, hz = q.homeZ - p.coreZ;
+            int fp = onField ? fieldPost(k, nth[k.ordinal()]) : -1;
+            nth[k.ordinal()]++;
+            if (fp >= 0) {                                      // ЛП-18: on the field's post (EmbassyAirfieldSC.problem checks the post's ground)
+                int[] at = fieldPostAt(p, fp);
+                if (q.x != p.x(at[0], at[1]) || q.z != p.z(at[0], at[1]) || q.y != p.floorY + 1) {
+                    return "a " + k + " (#" + nth[k.ordinal()] + ") isn't on the field's post " + fp;
+                }
+                if (k.guard ? q.homeX != q.x || q.homeZ != q.z : hx * hx + hz * hz > dome2) {
+                    return "a " + k + " (#" + nth[k.ordinal()] + ") on the field's post " + fp + (k.guard ? " doesn't sleep at it" : " has no home in the dome");
+                }
+                continue;
+            }
             if (k == NpcKindSC.DISPATCHER) {
                 long ox = q.x - p.dockX, oz = q.z - p.dockZ;
                 if (ox * ox + oz * oz > zone2) {

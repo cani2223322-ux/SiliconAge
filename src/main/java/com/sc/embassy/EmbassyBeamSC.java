@@ -46,6 +46,11 @@ import net.minecraftforge.common.util.FakePlayer;
  * <li>recordMade comes in the middle of a chunk's generation (package G's start): it only marks every player of the world - his
  * next tick looks again (no biome reads, no explored checks inside the generation).</li>
  * </ul>
+ * «Лётное поле посольства» (package P, docs/plan-embassy-airfield-core.md §2.6, rule ЛП-20): the same message carries lights: [{x, y,
+ * z}] - the «Светомаяк» of every airfield embassy within SEND_REACH (lights(w, x, z): the records' fields - EmbassyAirfieldSC.fieldOf,
+ * Field.beaconBlock - FULL ones only, the tower's roof; sorted the same way); the list's key covers both, so a new field's beacon is
+ * sent as a new beam is. No new message kind (EmbassyBeamClientSC flashes them white and green at night). A client of an older core
+ * reads no "lights" - nothing changes for it.
  */
 public final class EmbassyBeamSC {
 
@@ -146,12 +151,21 @@ public final class EmbassyBeamSC {
             return;
         }
         List<int[]> list = beams((WorldServer) p.worldObj, p.posX, p.posZ);
-        String key = key(list);
+        List<int[]> beacons = lights((WorldServer) p.worldObj, p.posX, p.posZ);
+        String key = key(list) + '|' + key(beacons);
         UUID id = p.getUniqueID();
         if (!force && key.equals(SENT.get(id))) {
             return;
         }
         SENT.put(id, key);
+        NBTTagCompound data = new NBTTagCompound();
+        data.setTag("list", tags(list));
+        data.setTag("lights", tags(beacons));
+        EmbassyNetSC.send(p, EmbassyNetSC.BEAMS, data);
+    }
+
+    /** A list of blocks as [{x, y, z}]. */
+    private static NBTTagList tags(List<int[]> list) {
         NBTTagList l = new NBTTagList();
         for (int[] b : list) {
             NBTTagCompound t = new NBTTagCompound();
@@ -160,9 +174,7 @@ public final class EmbassyBeamSC {
             t.setInteger("z", b[2]);
             l.appendTag(t);
         }
-        NBTTagCompound data = new NBTTagCompound();
-        data.setTag("list", l);
-        EmbassyNetSC.send(p, EmbassyNetSC.BEAMS, data);
+        return l;
     }
 
     private static void forget(EntityPlayer p) {
@@ -220,12 +232,44 @@ public final class EmbassyBeamSC {
                 out.add(ringOf(site));
             }
         }
-        Collections.sort(out, new Comparator<int[]>() {
-            @Override
-            public int compare(int[] a, int[] b) {
-                return a[0] != b[0] ? (a[0] < b[0] ? -1 : 1) : a[2] != b[2] ? (a[2] < b[2] ? -1 : 1) : (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0);
+        Collections.sort(out, BY_POSITION);
+        return out;
+    }
+
+    /** By x, then z, then y (the same set - the same list). */
+    private static final Comparator<int[]> BY_POSITION = new Comparator<int[]>() {
+        @Override
+        public int compare(int[] a, int[] b) {
+            return a[0] != b[0] ? (a[0] < b[0] ? -1 : 1) : a[2] != b[2] ? (a[2] < b[2] ? -1 : 1) : (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0);
+        }
+    };
+
+    /**
+     * ЛП-20 (package P): the «Светомаяк» blocks a player at (x, z) of the Overworld `w` is told of - {x, y, z} of each airfield embassy's
+     * beacon (EmbassyAirfieldSC.fieldOf - the record's decision; Field.beaconBlock - the tower's roof, FULL only) within SEND_REACH, sorted.
+     * Only made records (their field is decided): an unmade site's field is not known before its start. Server thread.
+     */
+    public static List<int[]> lights(WorldServer w, double x, double z) {
+        List<int[]> out = new ArrayList<int[]>();
+        if (w == null || w.provider == null || w.provider.dimensionId != EmbassySiteSC.DIM || !SettlementSC.governs(w)) {
+            return out;
+        }
+        SettlementRegistrySC reg = SettlementRegistrySC.get(w);
+        if (reg == null) {
+            return out;
+        }
+        double r2 = (double) SEND_REACH * SEND_REACH;
+        for (SettlementRegistrySC.Settlement s : reg.embassies()) {
+            if (s.dim != EmbassySiteSC.DIM || s.distSq(x, z) > r2) {
+                continue;
             }
-        });
+            EmbassyAirfieldSC.Field f = EmbassyAirfieldSC.fieldOf(s);
+            int[] b = f == null ? null : f.beaconBlock();
+            if (b != null) {
+                out.add(b);
+            }
+        }
+        Collections.sort(out, BY_POSITION);
         return out;
     }
 

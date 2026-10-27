@@ -27,6 +27,9 @@ import net.minecraftforge.common.util.FakePlayer;
  * this player, their prices, the day's flights left, the window's phase, the ticket's way back) and FLIGHT_RESULT (bought / refused,
  * with the reason; the soft admission's warning); to the server FLIGHT_DO {ride, target, round, friend, confirm, go, decline} and FLIGHT_REFRESH {} -
  * handled by embassy.FlightServerSC.onMessage, which checks the sender's open screen at a Dispatcher itself.</li>
+ * <li>«Лётное поле посольства» (docs/plan-embassy-airfield-core.md §8, package T): to a client AIR_STATE (a Dispatcher's «Лётное поле»
+ * tab: the field, the lore, the player's admission, pass and logbook, the column's price, the add-on's rows) and AIR_RESULT (an action's
+ * answer); to the server AIR_DO {act} and AIR_REFRESH {} - handled by embassy.EmbassyAirServerSC.onMessage (it checks the open screen).</li>
  * </ul>
  * Never sent to a FakePlayer (it has no connection). Shared core: only the coordinator edits this file.
  */
@@ -37,10 +40,14 @@ public final class SettleNetSC {
     public static final int TRADE_STATE = 1, TRADE_RESULT = 2;
     /** To a client, Ф6 (package R): a Dispatcher's flights tab. */
     public static final int FLIGHT_STATE = 3, FLIGHT_RESULT = 4;
+    /** To a client, «Лётное поле» (package T): a Dispatcher's airfield tab. */
+    public static final int AIR_STATE = 5, AIR_RESULT = 6;
     /** To the server. */
     public static final int TRADE_DO = 1, CONTRACT_TAKE = 2, CONTRACT_TURN_IN = 3, CONTRACT_DROP = 4, TRADE_REFRESH = 5;
     /** To the server, Ф6 (package R): buy / board a flight at the open Dispatcher's screen; its state again. */
     public static final int FLIGHT_DO = 6, FLIGHT_REFRESH = 7;
+    /** To the server, «Лётное поле» (package T): the airfield tab's button; its state again. */
+    public static final int AIR_DO = 8, AIR_REFRESH = 9;
 
     private static SimpleNetworkWrapper channel;
 
@@ -130,6 +137,8 @@ public final class SettleNetSC {
             EntityPlayerMP p = ctx.getServerHandler().playerEntity;
             if (p != null && (msg.kind == FLIGHT_DO || msg.kind == FLIGHT_REFRESH)) {
                 com.sc.embassy.FlightServerSC.onMessage(p, msg.kind, msg.data);   // Ф6: the flights (package R)
+            } else if (p != null && (msg.kind == AIR_DO || msg.kind == AIR_REFRESH)) {
+                com.sc.embassy.EmbassyAirServerSC.onMessage(p, msg.kind, msg.data);   // «Лётное поле» (package T)
             } else if (p != null) {
                 com.sc.settle.trade.TradeServerSC.onMessage(p, msg.kind, msg.data);
             }

@@ -14,7 +14,8 @@ import net.minecraft.item.ItemStack;
  * PACKAGE S (docs/plan-substrate-tech-f3.md §6.3): the second showcase block as items (/give only: no tab, hidden in NEI). A
  * name per meta (tile.siliconage.showcase2.<name>.name); the tooltip is the first block's (sc.tooltip.showcase, Shift
  * .details, Ctrl .howto) - the same thing. Ф6: the embassies' Vokzal metas (GRAVITY_COIL and on) stand only there - their Ctrl
- * line is sc.tooltip.showcase.embassy.howto.
+ * line is sc.tooltip.showcase.embassy.howto. The airfield's metas (TOWER_CONSOLE and on, docs/plan-embassy-airfield-core.md §2.4):
+ * sc.tooltip.airfield.<name> (+ .details), Ctrl sc.tooltip.airfield.howto.
  */
 public class ItemBlockShowcase2SC extends ItemBlock {
 
@@ -37,6 +38,14 @@ public class ItemBlockShowcase2SC extends ItemBlock {
     @Override
     @SuppressWarnings("unchecked")
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
+        int meta = stack.getItemDamage();
+        if (meta >= BlockShowcase2SC.TOWER_CONSOLE && meta < BlockShowcase2SC.NAMES.length) {
+            // the embassies' airfield (docs/plan-embassy-airfield-core.md §2.4): a line of its own a meta, the airfield's Ctrl line
+            String n = BlockShowcase2SC.nameOf(meta);
+            list.add("§7" + Lang.tr("sc.tooltip.airfield." + n));
+            TooltipSC.more(list, Lang.tr("sc.tooltip.airfield." + n + ".details"), Lang.tr("sc.tooltip.airfield.howto"));
+            return;
+        }
         list.add("§7" + Lang.tr("sc.tooltip.showcase"));
         boolean embassy = stack.getItemDamage() >= BlockShowcase2SC.GRAVITY_COIL;      // the Vokzal's: only at the embassies
         TooltipSC.more(list, Lang.tr("sc.tooltip.showcase.details"), Lang.tr(embassy ? "sc.tooltip.showcase.embassy.howto" : "sc.tooltip.showcase.howto"));

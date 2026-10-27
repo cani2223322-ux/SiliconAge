@@ -3,6 +3,8 @@ package com.sc.settle.npc;
 import java.util.Collections;
 import java.util.List;
 
+import com.sc.embassy.EmbassyAirfieldSC;
+import com.sc.embassy.EmbassyQuartersSC;
 import com.sc.emp.EmpMode;
 import com.sc.emp.EmpMobGunSC;
 import com.sc.emp.EmpSC;
@@ -499,7 +501,8 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
      * ПГ-5: slot `slot`'s duty - a Senior at its post (a tower, the gate); Sentry #0 at the gate; the next HEART_GUARDS
      * Sentries at the Heart at night; the other Sentries on patrol (an Outpost's two: the gate and one patrolling, who
      * stands at the Heart at night). Ф3: the Captain and the Commandant - their posts (the guard square, the plaza), day
-     * and night.
+     * and night. ЛП-18: an embassy with an airfield's posts (FULL, SHORT) - Sentries #5 and #6 at their posts on the field,
+     * day and night.
      */
     public static int role(SettlementRegistrySC.Settlement s, int slot, boolean night) {
         int n = rankIndex(s, slot);
@@ -509,6 +512,12 @@ public class EntityWardenSC extends EntityCreature implements INpc, ISettlementG
         NpcKindSC k = s.slots.get(slot).kindOf();
         if (k == NpcKindSC.SENIOR_WARDEN || k.chief()) {
             return ROLE_POST;
+        }
+        if (k == NpcKindSC.SENTRY && EmbassyQuartersSC.fieldPost(k, n) >= 0) {
+            EmbassyAirfieldSC.Field f = EmbassyAirfieldSC.fieldOf(s);
+            if (f != null && f.posts != null) {
+                return ROLE_POST;                               // ЛП-18: on the airfield's post, day and night
+            }
         }
         if (n == 0) {
             return ROLE_GATE;

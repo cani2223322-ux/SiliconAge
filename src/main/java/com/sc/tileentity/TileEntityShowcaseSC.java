@@ -28,6 +28,10 @@ import net.minecraftforge.common.util.ForgeDirection;
  * never closes): the Great Ring's coils a turquoise mote now and then (a ring is 40 of them - sparse), the cryo tanks' cold
  * vapour off the gauge and over the lid, the Dispatchers' desk's screens flickering turquoise with a quiet click.
  * <p>
+ * «Лётное поле посольства» (package P, docs/plan-embassy-airfield-core.md §2.2): the control tower's desk - the radar's green flicker
+ * and a key's click, the service column - its display's amber blink; the beacon (its flashes - EmbassyBeamClientSC) and the air
+ * defence gun nothing.
+ * <p>
  * Ф3 (docs/plan-substrate-tech-f3.md §6.3): the tile of the second block too (BlockShowcase2SC - the same tile id
  * "SiliconAge.showcase", told apart by its block): the energy storage's and the transformer's sparks while the Power
  * Engineer works, the wind generator's gusts always, the scrap pile's sparks and clatter while the Salvager sorts it; the
@@ -48,6 +52,8 @@ public class TileEntityShowcaseSC extends TileEntity {
 
     /** Ф6: «Бирюза Наладчиков» (0x48F0DC) as reddust's colour (the ring's coils, the desk's screens). */
     private static final double TURQ_R = 0.28D, TURQ_G = 0.94D, TURQ_B = 0.86D;
+    /** The airfield (package P): the tower desk's radar green, the service column display's amber. */
+    private static final double RADAR_R = 0.30D, RADAR_G = 0.95D, RADAR_B = 0.40D, AMBER_R = 0.95D, AMBER_G = 0.68D, AMBER_B = 0.20D;
 
     /** ForgeDirection ordinal of the front (2..5), south by default. */
     private byte facing = 3;
@@ -175,7 +181,21 @@ public class TileEntityShowcaseSC extends TileEntity {
                 volume = 0.05F;
                 pitch = 1.6F;
                 break;
-            default:
+            case BlockShowcase2SC.TOWER_CONSOLE:                            // the airfield: the radar's green sweep, a key now and then
+                if (r.nextInt(2) == 0) {
+                    worldObj.spawnParticle("reddust", fx + (r.nextDouble() - 0.5D) * Math.abs(f.offsetZ) * 0.6D, cy + 0.15D + r.nextDouble() * 0.25D,
+                            fz + (r.nextDouble() - 0.5D) * Math.abs(f.offsetX) * 0.6D, RADAR_R, RADAR_G, RADAR_B);
+                }
+                sound = "random.click";
+                volume = 0.04F;
+                pitch = 1.8F;
+                break;
+            case BlockShowcase2SC.SERVICE_COLUMN:                           // the display's amber blink (no sound: it stands idle)
+                if (r.nextInt(3) == 0) {
+                    worldObj.spawnParticle("reddust", fx, cy + 0.3D, fz, AMBER_R, AMBER_G, AMBER_B);
+                }
+                break;
+            default:                                                        // the beacon flashes by its own renderer; the gun is silent
                 break;
         }
         if (sound != null && r.nextInt(SOUND_ONE_IN) == 0) {

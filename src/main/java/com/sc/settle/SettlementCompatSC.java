@@ -34,7 +34,8 @@ import net.minecraft.item.ItemStack;
  * Console keeps no key (the record does), but a pit carried off would leave the arena's record without its Console and plating.
  * <p>
  * Ф6 (the coordinator's, docs/plan-substrate-tech-f6.md §2.2, rule ПК-29): the Great Ring's core embassyRingSC too (showcase2SC's
- * Ф6 metas - the ring's coils, the tanks, the desk - go with its NAMES).
+ * Ф6 metas - the ring's coils, the tanks, the desk - go with its NAMES). The airfield (docs/plan-embassy-airfield-core.md §2.4):
+ * embassyAirfieldSC, every meta (the airfield's showcases - the column, the beacon, the emplacements - go with showcase2SC's NAMES).
  */
 public final class SettlementCompatSC {
 
@@ -53,12 +54,14 @@ public final class SettlementCompatSC {
                 + blacklist(com.sc.ruin.CampBlocksSC.stolenField, 1);
         int arena = blacklist(com.sc.arena.ArenaBlocksSC.arena, com.sc.arena.ArenaBlocksSC.NAMES.length);   // Ф5 (ПУ-10): the Epicentre whole
         int embassy = blacklist(com.sc.embassy.EmbassyBlocksSC.ring, 1);    // Ф6 (ПК-29): the Great Ring's core (its showcases are showcase2SC's)
+        // the embassies' airfield (docs/plan-embassy-airfield-core.md §2.4): its surface, markings and lights (the showcases are showcase2SC's)
+        embassy += blacklist(com.sc.embassy.EmbassyBlocksSC.airfield, com.sc.block.BlockAirfieldSC.NAMES.length);
         if (Loader.isModLoaded(AE2)) {
             FMLLog.info("[Silicon Age] Si-14 settlements: %d stacks of the core, showcases, dock and trim sent to AE2's spatial IO blacklist (%s)",
                     sent, AE2_SPATIAL_BLACKLIST);
             FMLLog.info("[Silicon Age] Si-14 camps: %d stacks of the Renegades' safe, panels, pad and Stolen Field Generator sent to it too", camp);
             FMLLog.info("[Silicon Age] Si-14 arenas: %d stacks of the Breakdown Epicentre's blocks (the Console, pedestals, plating) sent to it too", arena);
-            FMLLog.info("[Silicon Age] Tuners' Embassies: %d stack of the Great Ring's core sent to it too", embassy);
+            FMLLog.info("[Silicon Age] Tuners' Embassies: %d stacks of the Great Ring's core and the airfield's surface sent to it too", embassy);
         }
     }
 

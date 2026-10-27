@@ -40,6 +40,12 @@ import net.minecraftforge.event.world.WorldEvent;
  * The levelling and populate serve the starts already made also when no new one may come (embassy.embassies off, the world's
  * structures switched off later): a made start's chunks are always levelled and built. Fixed (the coordinator's): the class,
  * INSTANCE / DECOR, WEIGHT, the handlers' signatures. The bodies G's.
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §4.2, §4.4): a start decided with a field is levelled by its shape (the
+ * ground piece's levelChunk passes its field(): the disc and the level rectangles - still this chunk's arrays only); the bans need
+ * nothing new - covers() asks the start's box, which the field's funnel pieces stretch to a = +-FUNNEL_A (150) along the main street,
+ * so TREE and BIG_SHROOM (and the rest) are denied over the funnels too (and over the strips of the box past the square at both ends:
+ * risk 4 of the plan - no vanilla trees there).
  */
 public final class EmbassyWorldGenSC implements IWorldGenerator {
 
@@ -76,6 +82,7 @@ public final class EmbassyWorldGenSC implements IWorldGenerator {
                 continue;
             }
             byte[] band = new byte[256];
+            // ЛП-2: by its field's shape when the start has one (g.field(); none - the disc, as before)
             if (g.levelChunk(e.blockArray, e.metaArray, e.chunkX, e.chunkZ, band) > 0) {
                 EmbassyTerrainSC.rememberBand(e.chunkX, e.chunkZ, band);
             }

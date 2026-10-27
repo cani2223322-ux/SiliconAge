@@ -26,7 +26,9 @@ import net.minecraft.item.crafting.IRecipe;
  * Module, the Record), the Burnt Coil, the ПЭ-1М trophy and the boss's egg each have a page (ObtainHandlerSC.finalePage and the
  * older branches) or a recipe - none is a gap. Ф6's Great Ring core (embassyRingSC, no tab: its one stack comes through
  * getSubBlocks) is hidden on purpose with its page, the showcase metas 7..9 with the rest of showcase2SC; the Embassy Direction
- * Finder has its recipe and a page (ObtainHandlerSC.embassyPage) - none is a gap. Client only, NEI loaded.
+ * Finder has its recipe and a page (ObtainHandlerSC.embassyPage) - none is a gap. «Лётное поле посольства» (docs/plan-embassy-airfield-
+ * core.md §2.4): the airfield's surface (embassyAirfieldSC, no tab) and the showcase metas 10..13 are taken meta by meta
+ * (NEISiliconAgeConfig.airfieldStacks) - hidden on purpose, each with its page. Client only, NEI loaded.
  */
 public final class NeiCoverageSC {
 
@@ -68,6 +70,11 @@ public final class NeiCoverageSC {
             }
             if (com.sc.arena.ArenaBlocksSC.arena != null && item == Item.getItemFromBlock(com.sc.arena.ArenaBlocksSC.arena)) {
                 subs.addAll(NEISiliconAgeConfig.arenaStacks());     // Ф5: in no tab, every meta (hidden, each with its page)
+            }
+            for (ItemStack a : NEISiliconAgeConfig.airfieldStacks()) {
+                if (a.getItem() == item) {
+                    subs.add(a);                                    // «Лётное поле»: every surface meta and the showcase's 10..13 (hidden, pages)
+                }
             }
             for (ItemStack s : subs) {
                 if (s != null && s.getItem() != null && seen.add(Item.itemRegistry.getNameForObject(s.getItem()) + ":" + s.getItemDamage())) {

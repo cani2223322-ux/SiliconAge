@@ -118,6 +118,7 @@ public final class SelfTestSC {
             SelfTestHazardSC.run();                      // Подложка Ф4 (docs/plan-substrate-tech-f4.md §11.1)
             SelfTestFinaleSC.run();                      // Подложка Ф5 (docs/plan-substrate-tech-f5.md §11.1)
             SelfTestEmbassySC.run();                     // Подложка Ф6 (docs/plan-substrate-tech-f6.md §10.1)
+            SelfTestAirfieldSC.run();                    // «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §11.1)
             SelfTestIdeasSC.run();                       // the proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md)
             chunkSaveGuard();                            // the crash of 2026-10-22: a null chunk in the block ticks
         } catch (Throwable t) {

@@ -72,6 +72,15 @@ import net.minecraftforge.event.world.ExplosionEvent;
  * sliding WINDOW_TICKS - ViolationRulesSC.stageAt; a held click counts once a second - REPEAT_TICKS), the last blow at
  * a Tuner; a chat line at most once a SAY_TICKS per player (the «Враг» lines always).
  * The signatures are fixed (package N's guard calls violation for a ПЭ-1 Point on it); the bodies are package C's.
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §6.1, rule ЛП-6, package R): an embassy's airfield zone
+ * (SettlementSC.airfieldProtecting - Field.zone, from FOUNDATION under the floor up) is guarded as a dock zone - SILENTLY,
+ * for everyone, creative too, no violation and no «Доверие» lost (the user's choice 5: no penalties): no block broken or
+ * set (MultiPlace too), no fire, no bucket, no blast takes its blocks; a right click on a tile entity or a mechanism there
+ * is refused - but the settlements' own blocks (SettlementBlocksSC.unbreakable: the «Колонка обслуживания» reaches its
+ * onBlockActivated - EmbassyAirServiceSC.useColumn) and the gates and doors (passage: the field's «калитки») work. No
+ * hostile spawns there (onCheckSpawn - embassyGroundAt knows the zone); a creative player takes no block away from it.
+ * A player logging out: his pending column quote goes (EmbassyAirServiceSC.forget).
  */
 public final class SettlementProtectSC {
 
@@ -251,21 +260,23 @@ public final class SettlementProtectSC {
         if (s != null) {
             e.setCanceled(true);
             violation(e.getPlayer(), s, ViolationRulesSC.BREAK);
-        } else if (SettlementSC.dockZoneAt(e.world, e.x + 0.5D, e.y + 0.5D, e.z + 0.5D) != null) {
-            e.setCanceled(true);                                // the dock's zone: nobody, no violation
+        } else if (silentZone(e.world, e.x + 0.5D, e.y + 0.5D, e.z + 0.5D)) {
+            e.setCanceled(true);                                // the dock's zone, an embassy's airfield (ЛП-6): nobody, no violation
         }
     }
 
     /**
      * A creative player may take away a settlement's block that stands in no settlement - outside every protected
-     * cylinder and dock zone, and a core of no settlement (id -1): one put there by /give or a command (an unbreakable
-     * copy, or a core's eternal private field, over somebody's base would stay for good). A settlement's own core,
-     * showcases, dock and trim stay unbreakable for everyone. Server (a client answers false: the server removes it).
+     * cylinder, dock zone and embassy airfield zone, and a core of no settlement (id -1): one put there by /give or a
+     * command (an unbreakable copy, or a core's eternal private field, over somebody's base would stay for good). A
+     * settlement's own core, showcases, dock, trim and airfield stay unbreakable for everyone. Server (a client answers
+     * false: the server removes it).
      */
     public static boolean takenAway(EntityPlayer p, World w, int x, int y, int z, Block b) {
         if (p == null || p instanceof FakePlayer || !p.capabilities.isCreativeMode || w == null || w.isRemote
                 || SettlementSC.protecting(w, x + 0.5D, y + 0.5D, z + 0.5D) != null
-                || SettlementSC.dockZoneAt(w, x + 0.5D, y + 0.5D, z + 0.5D) != null) {
+                || SettlementSC.dockZoneAt(w, x + 0.5D, y + 0.5D, z + 0.5D) != null
+                || SettlementSC.airfieldProtecting(w, x + 0.5D, y + 0.5D, z + 0.5D) != null) {
             return false;
         }
         if (b == SettlementBlocksSC.core) {
@@ -283,14 +294,15 @@ public final class SettlementProtectSC {
             return;
         }
         SettlementRegistrySC.Settlement s = SettlementSC.protecting(e.world, e.x + 0.5D, e.y + 0.5D, e.z + 0.5D);
-        boolean dock = s == null && SettlementSC.dockZoneAt(e.world, e.x + 0.5D, e.y + 0.5D, e.z + 0.5D) != null;
+        // the dock's zone, an embassy's airfield (ЛП-6): refused silently
+        boolean dock = s == null && silentZone(e.world, e.x + 0.5D, e.y + 0.5D, e.z + 0.5D);
         if (s == null && e instanceof BlockEvent.MultiPlaceEvent) {
             for (BlockSnapshot b : ((BlockEvent.MultiPlaceEvent) e).getReplacedBlockSnapshots()) {
                 s = SettlementSC.protecting(e.world, b.x + 0.5D, b.y + 0.5D, b.z + 0.5D);
                 if (s != null) {
                     break;
                 }
-                dock |= SettlementSC.dockZoneAt(e.world, b.x + 0.5D, b.y + 0.5D, b.z + 0.5D) != null;
+                dock = dock || silentZone(e.world, b.x + 0.5D, b.y + 0.5D, b.z + 0.5D);
             }
         }
         if (s != null) {
@@ -304,6 +316,9 @@ public final class SettlementProtectSC {
     /**
      * RIGHT_CLICK_BLOCK in a cylinder: a tile entity or a mechanism (ShieldEventHandler.isMechanism) - USE; flint and
      * steel, a fire charge, a bucket (where the fire / fluid would go) - FIRE, in a dock zone too (no violation there).
+     * An embassy's airfield zone (ЛП-6): a tile entity or a mechanism refused silently - not the settlements' own blocks
+     * (the service column's click goes on to its onBlockActivated; a sneaking one with something in hand - served here: vanilla
+     * would not call it) nor the gates and doors; the fire as in a dock zone.
      */
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent e) {
@@ -311,6 +326,15 @@ public final class SettlementProtectSC {
             return;
         }
         World w = e.world;
+        if (e.entityPlayer.isSneaking() && e.entityPlayer.getCurrentEquippedItem() != null && SettlementBlocksSC.showcase2 != null
+                && w.getBlock(e.x, e.y, e.z) == SettlementBlocksSC.showcase2
+                && w.getBlockMetadata(e.x, e.y, e.z) == com.sc.block.BlockShowcase2SC.SERVICE_COLUMN) {
+            // «Лётное поле» (the review's): vanilla never calls onBlockActivated for a sneaking click with something in hand - the
+            // column's armour gases (a sneaking click) are served here, and the item is not used on it
+            e.setCanceled(true);
+            com.sc.embassy.EmbassyAirServiceSC.useColumn(w, e.x, e.y, e.z, e.entityPlayer);
+            return;
+        }
         SettlementRegistrySC.Settlement s = SettlementSC.protecting(w, e.x + 0.5D, e.y + 0.5D, e.z + 0.5D);
         if (s != null) {
             Block b = w.getBlock(e.x, e.y, e.z);
@@ -320,6 +344,13 @@ public final class SettlementProtectSC {
             } else if (!SettlementBlocksSC.unbreakable(b) && (w.getTileEntity(e.x, e.y, e.z) != null || ShieldEventHandler.isMechanism(b))) {
                 e.setCanceled(true);
                 violation(e.entityPlayer, s, ViolationRulesSC.USE);
+                return;
+            }
+        } else if (SettlementSC.airfieldProtecting(w, e.x + 0.5D, e.y + 0.5D, e.z + 0.5D) != null) {
+            Block b = w.getBlock(e.x, e.y, e.z);
+            if (!SettlementBlocksSC.unbreakable(b) && !passage(b)
+                    && (w.getTileEntity(e.x, e.y, e.z) != null || ShieldEventHandler.isMechanism(b))) {
+                e.setCanceled(true);                            // the field: no machine, lever or bed of anybody's - silently
                 return;
             }
         }
@@ -334,12 +365,15 @@ public final class SettlementProtectSC {
         if (t != null) {
             e.setCanceled(true);
             violation(e.entityPlayer, t, ViolationRulesSC.FIRE);
-        } else if (SettlementSC.dockZoneAt(w, ax, ay, az) != null) {
+        } else if (silentZone(w, ax, ay, az)) {
             e.setCanceled(true);
         }
     }
 
-    /** Buckets filled or emptied at a block in a cylinder or a dock zone (the block hit and the one before its face). */
+    /**
+     * Buckets filled or emptied at a block in a cylinder or a dock zone (the block hit and the one before its face); an
+     * embassy's airfield zone as a dock zone (silently).
+     */
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onBucket(FillBucketEvent e) {
         if (e.world.isRemote || e.target == null || e.target.typeOfHit != MovingObjectPosition.MovingObjectType.BLOCK) {
@@ -355,7 +389,7 @@ public final class SettlementProtectSC {
         if (s != null) {
             e.setCanceled(true);
             violation(e.entityPlayer, s, ViolationRulesSC.FIRE);
-        } else if (SettlementSC.dockZoneAt(e.world, x, y, z) != null || SettlementSC.dockZoneAt(e.world, ax, ay, az) != null) {
+        } else if (silentZone(e.world, x, y, z) || silentZone(e.world, ax, ay, az)) {
             e.setCanceled(true);
         }
     }
@@ -363,6 +397,7 @@ public final class SettlementProtectSC {
     /**
      * ПП-7, ПР-1: an explosion breaks no block in a cylinder or a dock zone, nor a settlement's own block anywhere near. Ф6 (ПП-14):
      * in every world SettlementSC.governs - an embassy's cylinder and Vokzal too (a creeper, TNT, a Galacticraft meteor alike).
+     * «Лётное поле» (ЛП-6): nor in an embassy's airfield zone (asked only when a record near has a field).
      */
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onDetonate(ExplosionEvent.Detonate e) {
@@ -375,14 +410,20 @@ public final class SettlementProtectSC {
         double ex = e.explosion.explosionX, ez = e.explosion.explosionZ;
         // a settlement indexed in a region the blast's blocks may reach (rays go some 1.3 x its size; mods' blasts further)
         int reach = (int) Math.ceil(Math.max(0F, e.explosion.explosionSize) * 2F) + 16;
-        if (r == null || r.near(dim, (int) Math.floor(ex), (int) Math.floor(ez), reach).isEmpty()) {
+        java.util.List<SettlementRegistrySC.Settlement> near = r == null ? null : r.near(dim, (int) Math.floor(ex), (int) Math.floor(ez), reach);
+        if (near == null || near.isEmpty()) {
             return;
+        }
+        boolean air = false;                                    // «Лётное поле»: a record near has an airfield (its reach holds the zone)
+        for (SettlementRegistrySC.Settlement s : near) {
+            air = air || SettlementSC.isEmbassy(s) && com.sc.embassy.EmbassyAirfieldSC.fieldOf(s) != null;
         }
         boolean kept = false;
         for (Iterator<ChunkPosition> it = e.getAffectedBlocks().iterator(); it.hasNext(); ) {
             ChunkPosition c = it.next();
             double x = c.chunkPosX + 0.5D, y = c.chunkPosY + 0.5D, z = c.chunkPosZ + 0.5D;
             if (r.protecting(dim, x, y, z) != null || r.dockZoneAt(dim, x, y, z) != null
+                    || air && SettlementSC.airfieldProtecting(w, x, y, z) != null
                     || SettlementBlocksSC.unbreakable(w.getBlock(c.chunkPosX, c.chunkPosY, c.chunkPosZ))) {
                 kept |= !w.isAirBlock(c.chunkPosX, c.chunkPosY, c.chunkPosZ);
                 it.remove();
@@ -511,6 +552,7 @@ public final class SettlementProtectSC {
     public void onLoggedOut(cpw.mods.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent e) {
         if (e.player != null) {
             GuardAlertSC.forgetAll(e.player.getUniqueID());
+            com.sc.embassy.EmbassyAirServiceSC.forget(e.player.getUniqueID());   // «Лётное поле»: his pending column quote
         }
     }
 
@@ -569,6 +611,19 @@ public final class SettlementProtectSC {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * The point is guarded without a violation: a dock's zone (ПР-1), or an embassy's airfield zone from FOUNDATION under its
+     * floor up («Лётное поле», ЛП-6 - SettlementSC.airfieldProtecting). Server.
+     */
+    static boolean silentZone(World w, double x, double y, double z) {
+        return SettlementSC.dockZoneAt(w, x, y, z) != null || SettlementSC.airfieldProtecting(w, x, y, z) != null;
+    }
+
+    /** A gate or a door - the airfield's «калитки» open for everyone (ЛП-6); every other mechanism there stays shut. */
+    static boolean passage(Block b) {
+        return b instanceof net.minecraft.block.BlockFenceGate || b instanceof net.minecraft.block.BlockDoor;
+    }
 
     /** A real player on the server (not a FakePlayer: it gets no packets and never «violates»). */
     static boolean real(EntityPlayer p) {

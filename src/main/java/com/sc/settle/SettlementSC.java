@@ -26,6 +26,9 @@ import net.minecraft.world.World;
  * (SettlementSizeSC.EMBASSY, record.dim 0). Everything that guarded «the Substrate only» for a settlement's protection, its core's
  * roster, its creatures' exile now asks governs(w): the Substrate, or the Overworld while dimension's embassy.embassies is on. The
  * Substrate's own events stay the Substrate's (raids, caravans, the EMP storm, the economy's kills, the capsule, the death mark).
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §6.1, the coordinator's): airfieldAt / airfieldProtecting - an embassy's
+ * airfield zone (EmbassyAirfieldSC.Field.inZone); embassyGroundAt and refusesBridgeEnd know it too.
  */
 public final class SettlementSC {
 
@@ -157,7 +160,37 @@ public final class SettlementSC {
                 return s;
             }
         }
+        return airfieldAt(w, x, z);                             // «Лётное поле»: its protected zone is the embassy's ground too
+    }
+
+    /**
+     * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §6.1, rule ЛП-6, the coordinator's): the embassy whose airfield's
+     * protected zone holds the column (any height - see airfieldProtecting for the blocks) - server, the embassies' world while it
+     * governs; null elsewhere and for an embassy without a field (every one made before, or without the add-on). By the registry's
+     * region index (Settlement.reach holds the zone's box).
+     */
+    public static SettlementRegistrySC.Settlement airfieldAt(World w, double x, double z) {
+        SettlementRegistrySC r = governed(w);
+        if (r == null || w.provider.dimensionId != EMBASSY_DIM) {
+            return null;
+        }
+        int bx = (int) Math.floor(x), bz = (int) Math.floor(z);
+        for (SettlementRegistrySC.Settlement s : r.candidates(EMBASSY_DIM, bx, bz)) {
+            com.sc.embassy.EmbassyAirfieldSC.Field f = isEmbassy(s) ? com.sc.embassy.EmbassyAirfieldSC.fieldOf(s) : null;
+            if (f != null && f.inZone(bx, bz)) {
+                return s;
+            }
+        }
         return null;
+    }
+
+    /**
+     * ЛП-6: the embassy whose airfield protects block (x, y, z) - its zone, from FOUNDATION under the floor up (as the cylinder: no block
+     * broken or set, no blast, no hostile spawn; the column and the gates work) - or null. Server.
+     */
+    public static SettlementRegistrySC.Settlement airfieldProtecting(World w, double x, double y, double z) {
+        SettlementRegistrySC.Settlement s = airfieldAt(w, x, z);
+        return s != null && y >= s.floorY - FOUNDATION ? s : null;
     }
 
     /** ПС-1, pure: a point `distSq` (squared, across) from an embassy of `radius` is on its level ground. */
@@ -202,6 +235,9 @@ public final class SettlementSC {
             return false;
         }
         int d = w.provider.dimensionId;
+        if (airfieldProtecting(w, x + 0.5D, y + 0.5D, z + 0.5D) != null) {
+            return true;                                        // «Лётное поле» (ЛП-6): no end on an embassy's airfield
+        }
         return r.protecting(d, x + 0.5D, y + 0.5D, z + 0.5D) != null && r.dockZoneAt(d, x + 0.5D, y + 0.5D, z + 0.5D) == null;
     }
 

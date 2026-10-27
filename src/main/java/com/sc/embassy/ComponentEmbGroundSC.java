@@ -44,6 +44,14 @@ import net.minecraft.world.gen.structure.StructureStart;
  * the chunk's array).</li>
  * </ul>
  * NBT (G's): "Core" {core x, z, radius, level radius}, "Dock" {beacon x, z, dock zone}, "Green" {x0, z0, x1, z1} per greenhouse lot.
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §4, the coordinator's part: the field, its NBT "Air" {kind, side, ils,
+ * version} - only when the start was decided with one - and airDecision / field; package G's: the shape's levelling and filling and
+ * clearing over the field, the «Достройка»'s rules there). A start saved before has no "Air": its ground stays the disc.
+ * G's (ЛП-2, ЛП-5, ЛП-7): with a field the level ground is its shape (Field.levelPast: the disc and the level rectangles) - the arrays
+ * levelled by it (levelChunk), the caves filled under all of it, the band round all of it; the first build clears over the floor of the
+ * whole shape every block up to VOKZAL_CLEAR (the dome's shell where higher), growth over that; the «Достройка» puts back the field's
+ * protected zone too (Field.inZone - filled as the protected ground, growth and snow / ice over the floor: foreign).
  */
 public class ComponentEmbGroundSC extends ComponentEmbassySC {
 
@@ -55,6 +63,11 @@ public class ComponentEmbGroundSC extends ComponentEmbassySC {
     private int coreX, coreZ, radius, levelRadius, dockX, dockZ, dockZone;
     /** The greenhouse lots {x0, z0, x1, z1} (their leaves and flowers are the city's own). */
     private int[] greens = new int[0];
+    /** The airfield's decision of the start {kind, side, ils, version} (null: none - an old start, or made without a field). */
+    private int[] air;
+    /** The field it gives (made on first ask; null: none or NONE). */
+    private EmbassyAirfieldSC.Field field;
+    private boolean fieldMade;
 
     public ComponentEmbGroundSC() {
     }
@@ -84,6 +97,7 @@ public class ComponentEmbGroundSC extends ComponentEmbassySC {
         for (int i = 0; i < greens.length; i++) {
             greens[i] = g.get(i).intValue();
         }
+        air = p.air == null ? null : p.air.clone();
     }
 
     /** The ground piece of an embassy's start (its first), or null. */
@@ -99,9 +113,12 @@ public class ComponentEmbGroundSC extends ComponentEmbassySC {
         return null;
     }
 
-    /** ПЕ-6: chunk (cx, cz)'s arrays levelled for this embassy (EmbassyTerrainSC.levelChunk with its numbers). @return columns levelled */
+    /**
+     * ПЕ-6: chunk (cx, cz)'s arrays levelled for this embassy (EmbassyTerrainSC.levelChunk with its numbers; ЛП-2 - by its field's shape,
+     * field(); none - the disc, as before). @return columns levelled
+     */
     public int levelChunk(Block[] blocks, byte[] metas, int cx, int cz, byte[] bandOut) {
-        return EmbassyTerrainSC.levelChunk(blocks, metas, cx, cz, coreX, coreZ, levelRadius, floorY, bandOut);
+        return EmbassyTerrainSC.levelChunk(blocks, metas, cx, cz, coreX, coreZ, levelRadius, floorY, field(), bandOut);
     }
 
     public int coreX() {
@@ -125,12 +142,29 @@ public class ComponentEmbGroundSC extends ComponentEmbassySC {
         return floorY;
     }
 
+    /** The airfield's decision kept in the start {kind, side, ils, version} (a copy; null: none) - a lost record is made again with it. */
+    public int[] airDecision() {
+        return air == null ? null : air.clone();
+    }
+
+    /** The start's airfield (null: none) - the shape the levelling and the filling follow (package G). The piece's facing is the main gate's way. */
+    public EmbassyAirfieldSC.Field field() {
+        if (!fieldMade) {
+            fieldMade = true;
+            field = air == null ? null : EmbassyAirfieldSC.Field.of(coreX, coreZ, radius, floorY, facing, air[0], air[1], air[2], air[3]);
+        }
+        return field;
+    }
+
     @Override
     protected void func_143012_a(NBTTagCompound nbt) {
         super.func_143012_a(nbt);
         nbt.setIntArray("Core", new int[]{coreX, coreZ, radius, levelRadius});
         nbt.setIntArray("Dock", new int[]{dockX, dockZ, dockZone});
         nbt.setIntArray("Green", greens);
+        if (air != null) {
+            nbt.setIntArray("Air", air);
+        }
     }
 
     @Override
@@ -147,11 +181,15 @@ public class ComponentEmbGroundSC extends ComponentEmbassySC {
         dockZone = d[2] > 0 ? d[2] : EmbassyLayoutSC.DOCK_ZONE;
         int[] g = nbt.getIntArray("Green");
         greens = g.length % 4 == 0 ? g : new int[0];
+        int[] a = nbt.getIntArray("Air");
+        air = a.length == 4 ? a : null;
+        fieldMade = false;
     }
 
     @Override
     protected void build(World w, StructureBoundingBox win) {
         boolean repair = EmbassyRepairSC.repairing();
+        EmbassyAirfieldSC.Field f = field();                    // null: no field (an old start, or made without one) - all as before
         int x0 = Math.max(boundingBox.minX, win.minX), x1 = Math.min(boundingBox.maxX, win.maxX);
         int z0 = Math.max(boundingBox.minZ, win.minZ), z1 = Math.min(boundingBox.maxZ, win.maxZ);
         long r2 = (long) radius * radius, zone2 = (long) dockZone * dockZone;
@@ -159,13 +197,14 @@ public class ComponentEmbGroundSC extends ComponentEmbassySC {
         for (int x = x0; x <= x1; x++) {
             for (int z = z0; z <= z1; z++) {
                 int dx = x - coreX, dz = z - coreZ;
-                double past = EmbassyLayoutSC.levelPast(dx, dz, levelRadius);
+                double past = f == null ? EmbassyLayoutSC.levelPast(dx, dz, levelRadius) : f.levelPast(x, z);
                 if (past >= EmbassyLayoutSC.BLEND) {
                     continue;
                 }
                 long d2 = (long) dx * dx + (long) dz * dz, bx = x - dockX, bz = z - dockZ;
                 boolean dome = d2 <= r2, vokzal = Math.abs(bx) <= vh && Math.abs(bz) <= vh, zone = bx * bx + bz * bz <= zone2;
-                if (repair && !dome && !zone) {
+                boolean onField = f != null && f.inZone(x, z); // ЛП-6, ЛП-7: the field's protected zone
+                if (repair && !dome && !zone && !onField) {
                     continue;                                   // the «Достройка» puts back only the protected ground
                 }
                 if (repair) {
@@ -185,8 +224,13 @@ public class ComponentEmbGroundSC extends ComponentEmbassySC {
                 if (past > 0D) {
                     continue;                                   // the band: its caves only
                 }
-                if (dome || vokzal) {
-                    int shell = dome ? floorY + (int) Math.floor(Math.sqrt((double) (r2 - d2))) : floorY;
+                int shell = dome ? floorY + (int) Math.floor(Math.sqrt((double) (r2 - d2))) : floorY;
+                if (f != null && !repair) {
+                    // ЛП-5: a field's first build - over the floor of its whole shape (the disc and the level rectangles, not only the dome
+                    // and the Vokzal) every block up to VOKZAL_CLEAR (the dome's shell where higher), growth over that: IC2's and
+                    // Thaumcraft's trees (IWorldGenerator, past Decorate's bans) never stand on the runway
+                    clear(w, x, z, floorY + 1, Math.max(shell, floorY + VOKZAL_CLEAR), false, green);
+                } else if (dome || vokzal || onField) {         // (onField: the «Достройка» only - growth, snow and ice go)
                     clear(w, x, z, floorY + 1, vokzal ? Math.max(shell, floorY + VOKZAL_CLEAR) : shell, repair, green);
                 }
             }

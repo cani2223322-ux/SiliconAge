@@ -11,6 +11,7 @@ import com.sc.Reference;
 import com.sc.block.BlockBridgeSC;
 import com.sc.embassy.EmbassyRulesSC;
 import com.sc.embassy.FlightTargetsSC;
+import com.sc.embassy.api.EmbassyAirApiSC;
 import com.sc.init.ModBlocks;
 import com.sc.init.ModItems;
 import com.sc.inventory.ContainerTradeSC;
@@ -79,6 +80,12 @@ import net.minecraft.util.ResourceLocation;
  * равно» for CONFIRM_TICKS. The status line: the last answer, the talon, the flights left today. The title says «Посол» for an
  * embassy's Elder: NpcKindSC.langKey(SettlementClientSC.embassy(tuner)) - the client knows the world by its provider. At an embassy the
  * contracts are taken from the state's "cLevel" and the anchor row is left out ("noAnchor"); the dispatch's icon is a paper.
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §8, rule ЛП-17; package T): a Dispatcher of an embassy WITH a field gets a
+ * third tab, «Лётное поле» (AirTabSC draws it from TradeClientSC's AIR_STATE: the lore, the ICAO and the runway, the air defence's
+ * admission, the 7700 pass, the «Лётная книжка», the column's price, the add-on's rows and ATIS; «Обслуживание» - AIR_DO). The tabs share
+ * the right column's width: «Сделки» (if he has deals), «Рейсы», «Лётное поле» (if a state came); one alone - no tabs. The screen still
+ * opens on «Рейсы».
  */
 @SideOnly(Side.CLIENT)
 public class GuiTradeSC extends GuiContainer {
@@ -174,9 +181,18 @@ public class GuiTradeSC extends GuiContainer {
     private int friendLineY = -1;
     private GuiButton buyBtn, roundBtn, friendBtn, goBtn, flightsTabBtn;
 
+    // ------------------------------------------------------------------ «Лётное поле» (package T)
+
+    private static final int AIR_SERVICE = 7, TAB_AIR = 13;
+    /** The airfield tab's state (it shows once a state came: an embassy with a field). */
+    private final AirTabSC air;
+    private boolean airTab;
+    private GuiButton airTabBtn, airBtn;
+
     public GuiTradeSC(EntityPlayer player, EntityTunerSC tuner) {
         super(new ContainerTradeSC(player, tuner));
         this.tuner = tuner;
+        this.air = new AirTabSC(tuner == null ? -1 : tuner.getEntityId());
         xSize = W;
         ySize = H;
     }
@@ -190,14 +206,19 @@ public class GuiTradeSC extends GuiContainer {
         return tuner.kind() == NpcKindSC.DISPATCHER;
     }
 
-    /** Ф6: a Dispatcher with deals shows both tabs (none: the flights only). */
+    /** Ф6: a Dispatcher with deals (or «Лётное поле»: with a field) shows the tabs (neither: the flights only). */
     private boolean dispatcherTabs() {
-        return dispatcher() && !rows.isEmpty();
+        return dispatcher() && (!rows.isEmpty() || air.has);
     }
 
     /** Ф6: the flights are on the screen. */
     private boolean flights() {
-        return dispatcher() && (flightsTab || rows.isEmpty());
+        return dispatcher() && !air() && (flightsTab || rows.isEmpty());
+    }
+
+    /** «Лётное поле»: the airfield tab is on the screen. */
+    private boolean air() {
+        return dispatcher() && airTab && air.has;
     }
 
     private int detailsY() {
@@ -247,9 +268,15 @@ public class GuiTradeSC extends GuiContainer {
                     Lang.tr("sc.flight.tab"), Lang.tr("sc.flight.tab"));
             buttonList.add(dealsTab);
             buttonList.add(flightsTabBtn);
+            airTabBtn = new TextFitSC.Tab(TAB_AIR, x + RW / 2 + 1, guiTop + TAB_Y, half, TAB_H, new ItemStack(Items.feather),
+                    Lang.tr("sc.airfield.tab"), Lang.tr("sc.airfield.tab"));
+            airBtn = new TextFitSC.Button(AIR_SERVICE, x, y, RW, BH, Lang.tr("sc.airfield.tab.service"));
+            buttonList.add(airTabBtn);
+            buttonList.add(airBtn);
         }
         pickUp();
         pickUpFlights();
+        pickUpAir();
         updateButtons();
     }
 
@@ -270,9 +297,16 @@ public class GuiTradeSC extends GuiContainer {
             if (dispatcher()) {
                 SettleNetSC.sendToServer(SettleNetSC.FLIGHT_REFRESH, new NBTTagCompound());   // the talons, the day's flights
             }
+            if (dispatcher() && air.has) {
+                SettleNetSC.sendToServer(SettleNetSC.AIR_REFRESH, new NBTTagCompound());      // the day's gases, the 7700 pass
+            }
         }
         if (dispatcher()) {
             flightTick();
+            pickUpAir();
+            if (air.tick(air())) {
+                SettleNetSC.sendToServer(SettleNetSC.AIR_REFRESH, new NBTTagCompound());
+            }
         }
         countHave();
         if (resultTicks > 0) {
@@ -305,6 +339,15 @@ public class GuiTradeSC extends GuiContainer {
             confirmReq = null;
         }
         myChips = TradeOfferSC.Ingredient.chips(1).countIn(mc.thePlayer == null ? null : mc.thePlayer.inventory.mainInventory);
+    }
+
+    /** «Лётное поле»: the newest AIR_STATE / AIR_RESULT for this Dispatcher; an answer goes to the status line. */
+    private void pickUpAir() {
+        if (dispatcher() && air.pickUp()) {
+            resultText = air.resultText;
+            resultColour = air.resultOk ? 0x1E7A2E : 0xA02018;
+            resultTicks = RESULT_TICKS;
+        }
     }
 
     /** Ф6: the newest FLIGHT_STATE / FLIGHT_RESULT for this Dispatcher, if any came since the last look. */
@@ -655,12 +698,12 @@ public class GuiTradeSC extends GuiContainer {
         if (tradeBtn == null) {
             return;
         }
-        boolean deals = !contractsTab && !flights();
+        boolean deals = !contractsTab && !flights() && !air();
         flightButtons();
         tradeBtn.visible = deals;
         Row r = deals && sel >= 0 && sel < rows.size() ? rows.get(sel) : null;
         tradeBtn.enabled = r != null && canOnce(r);
-        contractBtn.visible = dropBtn.visible = contractsTab && !flights();
+        contractBtn.visible = dropBtn.visible = contractsTab && !flights() && !air();
         CRow c = contractsTab && csel >= 0 && csel < crows.size() ? crows.get(csel) : null;
         boolean take = c != null && !c.anchor && c.st == TradeServerSC.C_FREE;
         contractBtn.displayString = Lang.tr(take ? "sc.trade.btn.take" : "sc.trade.btn.turnIn");
@@ -681,8 +724,14 @@ public class GuiTradeSC extends GuiContainer {
         buyBtn.visible = roundBtn.visible = friendBtn.visible = goBtn.visible = fl;
         if (dealsTab != null && flightsTabBtn != null) {
             dealsTab.visible = flightsTabBtn.visible = dispatcherTabs();
-            dealsTab.enabled = fl;
+            dealsTab.enabled = fl || air();
             flightsTabBtn.enabled = !fl;
+            layoutTabs();
+        }
+        if (airBtn != null) {
+            airBtn.visible = air() && air.act;                  // the add-on's service window (no add-on: no button)
+            airBtn.enabled = true;
+            airBtn.displayString = Lang.tr("sc.airfield.tab.service");
         }
         FRow r = fsel >= 0 && fsel < frows.size() ? frows.get(fsel) : null;
         boolean open = fhas && r != null && r.code == EmbassyRulesSC.OK;
@@ -703,6 +752,30 @@ public class GuiTradeSC extends GuiContainer {
                 b.displayString = Lang.tr("sc.flight.confirm");
                 b.enabled = true;
             }
+        }
+    }
+
+    /**
+     * «Лётное поле»: the Dispatcher's tabs side by side over the right column (RW): «Сделки» (if he has deals), «Рейсы», «Лётное поле»
+     * (if its state came) - two halves as before, three thirds (icons, the names in the tooltips).
+     */
+    private void layoutTabs() {
+        boolean tabs = dispatcherTabs();
+        dealsTab.visible = tabs && !rows.isEmpty();
+        flightsTabBtn.visible = tabs;
+        airTabBtn.visible = tabs && air.has;
+        airTabBtn.enabled = !air();
+        List<GuiButton> on = new ArrayList<GuiButton>();
+        for (GuiButton b : new GuiButton[]{dealsTab, flightsTabBtn, airTabBtn}) {
+            if (b.visible) {
+                on.add(b);
+            }
+        }
+        int n = on.size(), step = n == 0 ? 0 : (RW - 2 * (n - 1)) / n + 2;
+        for (int i = 0; i < n; i++) {
+            GuiButton b = on.get(i);
+            b.xPosition = guiLeft + RX + i * step;
+            b.width = i == n - 1 ? RW - i * step : step - 2;
         }
     }
 
@@ -743,7 +816,19 @@ public class GuiTradeSC extends GuiContainer {
             case TAB_FLIGHTS:
                 contractsTab = b.id == TAB_CONTRACTS;
                 flightsTab = b.id == TAB_FLIGHTS;
+                airTab = false;
                 updateButtons();
+                return;
+            case TAB_AIR:
+                airTab = true;                                  // «Рейсы» / «Сделки» as they were, under it
+                SettleNetSC.sendToServer(SettleNetSC.AIR_REFRESH, new NBTTagCompound());   // the add-on's rows as they are now
+                updateButtons();
+                return;
+            case AIR_SERVICE:
+                if (air() && air.act) {
+                    d.setString("act", EmbassyAirApiSC.TAB_ACTION_SERVICE);
+                    SettleNetSC.sendToServer(SettleNetSC.AIR_DO, d);
+                }
                 return;
             case FL_BUY:
             case FL_ROUND:
@@ -816,6 +901,9 @@ public class GuiTradeSC extends GuiContainer {
     @Override
     protected void mouseClicked(int mx, int my, int button) {
         super.mouseClicked(mx, my, button);
+        if (air()) {
+            return;                                             // «Лётное поле»: a page to read, nothing to pick
+        }
         if (flights()) {
             flightClick(mx, my, button);
             return;
@@ -867,7 +955,9 @@ public class GuiTradeSC extends GuiContainer {
     public void handleMouseInput() {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
-        if (wheel != 0 && flights()) {
+        if (wheel != 0 && air()) {
+            air.scroll(wheel);
+        } else if (wheel != 0 && flights()) {
             fscroll = Math.max(0, Math.min(Math.max(0, frows.size() - ROWS), fscroll + (wheel > 0 ? -1 : 1)));
         } else if (wheel != 0) {
             if (contractsTab) {
@@ -908,7 +998,10 @@ public class GuiTradeSC extends GuiContainer {
         TextFitSC.draw(fontRendererObj, lv, W - 8 - lvW, 6, lvW, has ? LEVEL_COLOURS[Math.max(0, Math.min(6, level))] : 0x8898A8, guiLeft, guiTop);
         TextFitSC.hover(guiLeft + 4, guiTop + 4, W - 8, 11, titleTip());
         friendLineY = -1;
-        if (flights()) {
+        if (air()) {
+            air.drawList(fontRendererObj, LX, LY, LW, LH, guiLeft, guiTop);
+            air.drawCard(fontRendererObj, RX + 4, detailsY() + 4, RW - 8, detailsBottom() - 2, guiLeft, guiTop);
+        } else if (flights()) {
             drawFlights(mx, my);
         } else if (!has) {
             fontRendererObj.drawString(Lang.tr("sc.trade.wait"), LX + 6, LY + 6, GuiHoloSC.IDLE);
@@ -929,6 +1022,8 @@ public class GuiTradeSC extends GuiContainer {
         if (resultTicks > 0) {
             left = resultText;
             colour = resultColour;
+        } else if (air()) {
+            left = "";                                          // «Лётное поле»: the answers only
         } else if (flights()) {
             left = flightStatus();
         } else if (contractsTab) {
@@ -1184,7 +1279,7 @@ public class GuiTradeSC extends GuiContainer {
      */
     private void frameTaken() {
         ItemStack[] inv = mc.thePlayer == null ? null : mc.thePlayer.inventory.mainInventory;
-        if (inv == null || flights()) {
+        if (inv == null || flights() || air()) {
             return;
         }
         if (contractsTab) {
@@ -1679,6 +1774,14 @@ public class GuiTradeSC extends GuiContainer {
 
     /** «Обменять»: Shift - how many at most; a disabled contract button: why. Ф6: the flights' buttons. */
     private List<String> buttonTip(int mx, int my) {
+        if (air()) {
+            if (airBtn != null && airBtn.visible && inside(airBtn, mx, my)) {
+                List<String> l = new ArrayList<String>();
+                l.add(Lang.tr("sc.airfield.tab.service.tip"));
+                return l;
+            }
+            return null;
+        }
         if (flights()) {
             return flightButtonTip(mx, my);
         }
@@ -1696,6 +1799,9 @@ public class GuiTradeSC extends GuiContainer {
 
     /** The item icons of the list (absolute coordinates, over the foreground). @return the stack under the mouse, or null */
     private ItemStack drawIcons(int mx, int my) {
+        if (air()) {
+            return null;                                        // «Лётное поле»: text only
+        }
         if (flights()) {
             flightIcons();
             return null;

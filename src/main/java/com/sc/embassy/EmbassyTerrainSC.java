@@ -25,6 +25,10 @@ import net.minecraft.world.ChunkCoordIntPair;
  * </ul>
  * Pure apart from the band's memory (levelColumn and levelChunk change only the arrays they are given) - the self-test calls them on
  * synthetic arrays. Server thread.
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §4.2, ЛП-2): a start decided with a field levels its shape - the disc and
+ * the field's level rectangles (EmbassyAirfieldSC.Field.levelPast, the nearest of them), the band round all of it - through the same
+ * arrays (levelChunk's Field overload; null - the disc, as before).
  */
 public final class EmbassyTerrainSC {
 
@@ -109,6 +113,17 @@ public final class EmbassyTerrainSC {
      */
     public static int levelChunk(Block[] blocks, byte[] metas, int cx, int cz, int coreX, int coreZ, int levelRadius, int floorY,
             byte[] bandOut) {
+        return levelChunk(blocks, metas, cx, cz, coreX, coreZ, levelRadius, floorY, null, bandOut);
+    }
+
+    /**
+     * levelChunk by the airfield's shape (ЛП-2, docs/plan-embassy-airfield-core.md §4.2): `field` null - the disc of `levelRadius`, exactly
+     * as above; else how far past the level ground a column lies is field.levelPast (its disc - the same radius + LEVEL_OUT - and its
+     * level rectangles, the nearest), the band eased from that. Only this chunk's arrays: no cascade. Pure. @return the columns levelled or
+     * eased
+     */
+    public static int levelChunk(Block[] blocks, byte[] metas, int cx, int cz, int coreX, int coreZ, int levelRadius, int floorY,
+            EmbassyAirfieldSC.Field field, byte[] bandOut) {
         if (blocks == null || blocks.length < 512) {
             return 0;
         }
@@ -116,7 +131,8 @@ public final class EmbassyTerrainSC {
         byte[] m = metas != null && metas.length == blocks.length ? metas : null;
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                double past = EmbassyLayoutSC.levelPast((cx << 4) + x - coreX, (cz << 4) + z - coreZ, levelRadius);
+                int wx = (cx << 4) + x, wz = (cz << 4) + z;
+                double past = field == null ? EmbassyLayoutSC.levelPast(wx - coreX, wz - coreZ, levelRadius) : field.levelPast(wx, wz);
                 int t = levelColumn(blocks, m, index(x, z, 0, h), h, floorY, past);
                 if (t < 0) {
                     continue;

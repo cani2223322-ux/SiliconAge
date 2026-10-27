@@ -94,6 +94,9 @@ public final class WorldTestEmbassyFlySC {
     /** Registered after WorldTestEmbassySC (-Dsc.worldtest): the world test's last "DONE embassy" is printed after this one's. */
     static volatile boolean registered;
 
+    /** The fly-through ended (end()): WorldTestAirfieldSC begins after it (read by name). */
+    static volatile boolean finished;
+
     public WorldTestEmbassyFlySC(boolean alone) {
         this.alone = alone;
         registered |= !alone;
@@ -546,6 +549,7 @@ public final class WorldTestEmbassyFlySC {
             w.playerEntities.remove(flyer);
         }
         flyer = null;
+        finished = true;
         System.out.println("[SC-WORLDTEST] DONE embassy-fly");
         if (!alone) {
             System.out.println("[SC-WORLDTEST] DONE embassy");      // the embassy world test's own end, kept the world test's last line

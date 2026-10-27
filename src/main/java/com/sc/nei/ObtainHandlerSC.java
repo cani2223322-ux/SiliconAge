@@ -77,7 +77,7 @@ import net.minecraftforge.oredict.OreDictionary;
  * schemes (the Warden's 25%, the Elder's), the Lithographers' Module (the Elder for a Matrix), the Navigation Record (its recipe),
  * the Burnt Coil (the bridge wrecks), the ПЭ-1М trophy (the Warden's 2%) and the boss's egg, Ф6's (docs/plan-substrate-tech-f6.md
  * §9.3) Great Ring core (hidden: only in an embassy), the Embassy Direction Finder (its recipe, what it shows) and the embassy-only
- * showcase metas, and - in a pack that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
+ * showcase metas, the embassies' airfield surface and its showcase metas 10..13 (docs/plan-embassy-airfield-core.md §2.4), and - in a pack that unifies metals (UniDict) - the mod's ingots and dusts it swaps for another mod's.
  */
 public class ObtainHandlerSC extends TemplateRecipeHandler {
 
@@ -165,7 +165,7 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         if (idea != null) {
             return idea;
         }
-        Page embassy = embassyPage(s);                    // Ф6: before the settlements' (the showcase metas 7..9 are an embassy's)
+        Page embassy = embassyPage(s);                    // Ф6: before the settlements' (the showcase metas 7..9 and the airfield's 10..13 are an embassy's)
         if (embassy != null) {
             return embassy;
         }
@@ -451,11 +451,6 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
     // ------------------------------------------------------------------ Подложка Ф6 (docs/plan-substrate-tech-f6.md §9.3)
 
     /**
-     * The Great Ring's core (hidden in NEI - only under an embassy's ring; R in cheat mode still asks), the Embassy Direction Finder
-     * (crafted - the shapeless recipe is NEI's own page; here what it does and how far it hears) and the showcase metas only an
-     * embassy has (BlockShowcase2SC 7..9: the ring's coils, the Vokzal's tanks, the Dispatchers' desk). Null: none of them.
-     */
-    /**
      * The proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md): the «how to get» pages of its items no recipe makes - ПД-4's Wanted Token
      * (the wanted Renegade's reward), ПД-7's Relay (the Elder's deal at «Свой») and its post's Mast (hidden; only the post has one). One
      * block an item, each implementer his own. Null: none of them.
@@ -486,6 +481,14 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
         return Lang.tr("sc.settle.rep." + com.sc.settle.ReputationSC.LEVEL_KEYS[Math.max(0, Math.min(com.sc.settle.ReputationSC.LEVEL_KEYS.length - 1, level))]);
     }
 
+    /**
+     * The Great Ring's core (hidden in NEI - only under an embassy's ring; R in cheat mode still asks), the Embassy Direction Finder
+     * (crafted - the shapeless recipe is NEI's own page; here what it does and how far it hears) and the showcase metas only an
+     * embassy has (BlockShowcase2SC 7..9: the ring's coils, the Vokzal's tanks, the Dispatchers' desk). «Лётное поле посольства»
+     * (docs/plan-embassy-airfield-core.md §2.4): the airfield's surface (embassyAirfieldSC, every meta) and the showcase metas 10..13 (the
+     * tower's desk, the service column, the beacon, the AA emplacement) - only on an embassy's airfield (hidden; their pages: where, what
+     * the meta is). Null: none of them.
+     */
     private Page embassyPage(ItemStack s) {
         Item item = s.getItem();
         if (blockItem(item, com.sc.embassy.EmbassyBlocksSC.ring)) {
@@ -508,6 +511,17 @@ public class ObtainHandlerSC extends TemplateRecipeHandler {
                 && meta <= com.sc.block.BlockShowcase2SC.DISPATCH_CONSOLE) {
             Page p = new Page(s);
             p.text(Lang.tr("sc.nei.obtain.embassy"));
+            p.rel(com.sc.embassy.EmbassyItemsSC.finder(1));
+            return p;
+        }
+        // «Лётное поле»: the surface's metas and the showcase metas 10..13 - only on an embassy's airfield (the add-on's new embassies)
+        boolean surface = blockItem(item, com.sc.embassy.EmbassyBlocksSC.airfield);
+        if (surface || blockItem(item, SettlementBlocksSC.showcase2) && meta >= com.sc.block.BlockShowcase2SC.TOWER_CONSOLE
+                && meta < com.sc.block.BlockShowcase2SC.NAMES.length) {
+            Page p = new Page(s);
+            p.text(Lang.tr("sc.nei.obtain.airfield"));
+            p.text(Lang.tr(surface ? "sc.tooltip.embassyAirfield." + com.sc.block.BlockAirfieldSC.nameOf(meta)
+                    : "sc.tooltip.airfield." + com.sc.block.BlockShowcase2SC.nameOf(meta)));
             p.rel(com.sc.embassy.EmbassyItemsSC.finder(1));
             return p;
         }

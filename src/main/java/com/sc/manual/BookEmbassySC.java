@@ -3,12 +3,15 @@ package com.sc.manual;
 import java.util.List;
 import java.util.Random;
 
+import com.sc.block.BlockAirfieldSC;
 import com.sc.block.BlockDockSC;
 import com.sc.block.BlockShowcase2SC;
 import com.sc.block.BlockShowcaseSC;
 import com.sc.dim.SubstrateConfigSC;
 import com.sc.dim.SubstrateSC;
 import com.sc.embassy.CommandEmbassySC;
+import com.sc.embassy.EmbassyAirRulesSC;
+import com.sc.embassy.EmbassyAirfieldSC;
 import com.sc.embassy.EmbassyBeamSC;
 import com.sc.embassy.EmbassyBlocksSC;
 import com.sc.embassy.EmbassyItemsSC;
@@ -29,9 +32,11 @@ import com.sc.settle.trade.TradeRulesSC;
 import com.sc.settle.trade.TradeTableSC;
 import com.sc.util.ConfigSC;
 
+import cpw.mods.fml.common.Loader;
 import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.biome.BiomeGenBase;
+import net.minecraftforge.oredict.OreDictionary;
 
 /**
  * Подложка Ф6 «Посольства Наладчиков» (docs/plan-substrate-tech-f6.md §9.2, package D): the six articles BookWorldSC.add puts at the
@@ -50,6 +55,11 @@ import net.minecraft.world.biome.BiomeGenBase;
  * deals and contracts from TradeTableSC / ContractTableSC as they are (the Quartermaster's deals, embassyPool, takeLevel, DISPATCH_DAYS).
  * G on the Direction Finder, the Great Ring's core and the Ф6 showcase metas opens these pages. Plain data: safe
  * on a server (no client class touched).
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §9, package D): «Город посольства» has a section of its own - only new
+ * embassies with the Vehicles add-on, the layout, the protection, the services' table, the embassy's air defence and 7700, the «Лётная
+ * книжка», the beacon (airfield; EmbassyAirfieldSC's and EmbassyAirRulesSC's numbers); G on the airfield's surface and the showcase
+ * metas 10..13 opens it.
  */
 final class BookEmbassySC {
 
@@ -165,13 +175,123 @@ final class BookEmbassySC {
         // the protection (ПЕ-13): the Substrate's settlements' own, what the Overworld has not
         e.add(BookEl.head(Lang.tr("sc.manual.world.embassyCity.protecthead")));
         e.addAll(BookContent.paras("sc.manual.world.embassyCity.protect", new Object[]{SettlementSC.BELT}, new Object[]{EmbassyLayoutSC.DOCK_ZONE}));
+        airfield(e);                                                    // «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §9)
         e.add(BookEl.link("world.flights", Lang.tr("sc.manual.world.flights.title")));
         e.add(BookEl.link("world.embassies", Lang.tr("sc.manual.world.embassies.title")));
         e.add(BookEl.link("world.settlements", Lang.tr("sc.manual.world.settlements.title")));
         e.add(BookEl.link("world.tuners", Lang.tr("sc.manual.world.tuners.title")));
         e.add(BookEl.link("world.wardens", Lang.tr("sc.manual.world.wardens.title")));
         e.about(showcase2(BlockShowcase2SC.CRYO_TANK));
+        // G on the airfield's surface (every meta) and its showcase metas 10..13 opens this page
+        e.about(EmbassyBlocksSC.airfield == null ? null : new ItemStack(EmbassyBlocksSC.airfield, 1, OreDictionary.WILDCARD_VALUE),
+                showcase2(BlockShowcase2SC.TOWER_CONSOLE), showcase2(BlockShowcase2SC.SERVICE_COLUMN), showcase2(BlockShowcase2SC.AIRFIELD_BEACON),
+                showcase2(BlockShowcase2SC.AA_POST));
         return e;
+    }
+
+    // ------------------------------------------------------------------ «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §9)
+
+    /**
+     * The section «Лётное поле» of «Город посольства» (the user's choices of 2026-10-26, rules ЛП-1..ЛП-20): a field only at a NEW embassy
+     * and only with the Vehicles add-on (embassy.airfield - the server's own, never sent to a client: the page asks Loader.isModLoaded
+     * alone and names the rule), the layout and the names (EmbassyAirfieldSC's numbers), the zone's protection, the services' table
+     * (EmbassyAirRulesSC: from which level, the base a unit, the caps), the column, the embassy's air defence (the zone, the admission, the
+     * warning, the cover, the 7700 pass), the «Лётная книжка», the beacon and the Dispatcher's tab. Every number from the code.
+     */
+    private static void airfield(BookEntry e) {
+        String k = "sc.manual.world.embassyCity.air";
+        ItemStack paving = airfield(BlockAirfieldSC.RUNWAY), lights = airfield(BlockAirfieldSC.LIGHT_EDGE), desk = showcase2(BlockShowcase2SC.TOWER_CONSOLE),
+                column = showcase2(BlockShowcase2SC.SERVICE_COLUMN), beacon = showcase2(BlockShowcase2SC.AIRFIELD_BEACON), gun = showcase2(BlockShowcase2SC.AA_POST);
+        e.add(BookEl.head(Lang.tr(k + "head"), paving));
+        e.addAll(BookContent.paras(k));
+        e.add(BookEl.dim(Lang.tr(Loader.isModLoaded(EmbassyAirfieldSC.ADDON) ? k + ".addon" : k + ".noaddon")));
+
+        // the layout (ЛП-3): FULL, SHORT and HELI, the names (ICAO, the runway's numbers)
+        e.add(BookEl.head(Lang.tr(k + ".layouthead"), desk));
+        e.add(BookEl.para(Lang.tr(k + ".full", 2 * EmbassyAirfieldSC.RWY_HALF, 2 * EmbassyAirfieldSC.RWY_W_HALF + 1, EmbassyAirfieldSC.SHOULDER,
+                EmbassyAirfieldSC.THRESHOLD_SHIFT, 2 * EmbassyAirfieldSC.RWY_HALF - EmbassyAirfieldSC.THRESHOLD_SHIFT + 1)));
+        e.add(BookEl.para(Lang.tr(k + ".apron")));
+        e.add(BookEl.para(Lang.tr(k + ".short", 2 * EmbassyAirfieldSC.SHORT_HALF, 2 * EmbassyAirfieldSC.SHORT_W_HALF + 1)));
+        e.add(BookEl.para(Lang.tr(k + ".names")));
+        e.add(BookEl.item(paving, name(paving, "tile.siliconage.embassyAirfield.runway.name"), Lang.tr(k + ".paving")));
+        e.add(BookEl.item(lights, Lang.tr(k + ".lights"), Lang.tr(k + ".lights.desc", EmbassyAirfieldSC.LIGHT_STEP)));
+        e.add(BookEl.item(desk, name(desk, "tile.siliconage.showcase2.towerConsole.name"), Lang.tr(k + ".desk")));
+        e.add(BookEl.item(beacon, name(beacon, "tile.siliconage.showcase2.airfieldBeacon.name"), Lang.tr(k + ".beacon")));
+        e.add(BookEl.para(Lang.tr(k + ".protect")));
+
+        // the services (ЛП-10..ЛП-12): EmbassyAirRulesSC's table - from which level, the base a unit, the caps
+        e.add(BookEl.head(Lang.tr(k + ".serviceshead"), column));
+        e.add(BookEl.para(Lang.tr(k + ".services")));
+        BookEl t = BookEl.table(Lang.tr(k + ".t.service"), Lang.tr("sc.manual.world.t.level"), Lang.tr(k + ".t.price"), Lang.tr("sc.manual.world.t.limit"));
+        for (int s = 0; s < EmbassyAirRulesSC.SERVICE_KEYS.length; s++) {
+            int lo = EmbassyAirRulesSC.MIN_LEVEL[s], hi = EmbassyAirRulesSC.MAX_LEVEL[s];
+            t.row(s == EmbassyAirRulesSC.S_ARMOUR_GAS ? column : null, Lang.tr("sc.airfield.service." + EmbassyAirRulesSC.SERVICE_KEYS[s]),
+                    hi < ReputationSC.HONOURED ? Lang.tr(k + ".cell.levels", BookWorldSC.levelName(lo), BookWorldSC.levelName(hi)) : BookWorldSC.levelName(lo),
+                    servicePrice(k, s), serviceCap(k, s));
+        }
+        e.add(t);
+        e.add(BookEl.dim(Lang.tr(k + ".services.note", TradeRulesSC.SEED_SPREAD_PCT)));
+        e.add(BookEl.item(column, name(column, "tile.siliconage.showcase2.serviceColumn.name"), Lang.tr(k + ".column",
+                BookWorldSC.sec(EmbassyAirRulesSC.COLUMN_CONFIRM_TICKS), BookContent.num(EmbassyAirRulesSC.PER_DAY[EmbassyAirRulesSC.S_ARMOUR_GAS]),
+                BookWorldSC.levelName(EmbassyAirRulesSC.MIN_LEVEL[EmbassyAirRulesSC.S_ARMOUR_GAS]))));
+
+        // the embassy's air defence (ЛП-9, ЛП-13..ЛП-15): the zone, the admission, the warning, the cover, 7700
+        String admit = BookWorldSC.levelName(EmbassyAirRulesSC.ADMIT_LEVEL);
+        e.add(BookEl.head(Lang.tr(k + ".adhead"), gun));
+        e.addAll(BookContent.paras(k + ".ad", new Object[]{EmbassyAirfieldSC.AA_POSTS, EmbassyAirRulesSC.AD_RADIUS, admit},
+                new Object[]{EmbassyAirRulesSC.WARN_SECONDS, EmbassyAirRulesSC.ESCORT_RANGE}, new Object[]{admit},
+                new Object[]{EmbassyAirRulesSC.PASS_SECONDS}));
+        e.add(BookEl.item(gun, name(gun, "tile.siliconage.showcase2.aaPost.name"), Lang.tr(k + ".aapost")));
+
+        // the «Лётная книжка» (ЛП-16) and the Dispatcher's tab (ЛП-17)
+        e.add(BookEl.head(Lang.tr(k + ".bookhead"), SettlementItemsSC.chips(EmbassyAirRulesSC.LOGBOOK_CHIPS)));
+        e.add(BookEl.para(Lang.tr(k + ".book", EmbassyAirRulesSC.LOGBOOK_CHIPS, EmbassyAirRulesSC.LOGBOOK_TRUST, TradeRulesSC.CHIPS_PER_DAY,
+                ReputationSC.EMBASSY_CEILING)));
+        e.add(BookEl.para(Lang.tr(k + ".tab")));
+    }
+
+    /** A service's price cell: its base a unit in the service's measure (sc.manual.world.embassyCity.air.unit.<key>). */
+    private static String servicePrice(String k, int s) {
+        String key = k + ".unit." + EmbassyAirRulesSC.SERVICE_KEYS[s];
+        int base = EmbassyAirRulesSC.BASE[s], unit = EmbassyAirRulesSC.UNIT[s];
+        switch (s) {
+            case EmbassyAirRulesSC.S_CHARGE:
+            case EmbassyAirRulesSC.S_HYDROGEN:
+            case EmbassyAirRulesSC.S_ARMOUR_GAS:
+            case EmbassyAirRulesSC.S_REPAIR:
+                return Lang.tr(key, base, BookContent.num(unit));
+            default:
+                return Lang.tr(key, base);
+        }
+    }
+
+    /** A service's caps cell (EmbassyAirRulesSC.PER_SERVICE / PER_DAY, the stands, the free ones; «-»: none). */
+    private static String serviceCap(String k, int s) {
+        String key = k + ".cap." + EmbassyAirRulesSC.SERVICE_KEYS[s];
+        int one = EmbassyAirRulesSC.PER_SERVICE[s], day = EmbassyAirRulesSC.PER_DAY[s];
+        switch (s) {
+            case EmbassyAirRulesSC.S_PARK:
+                return Lang.tr(key, EmbassyAirRulesSC.SPOTS_PER_PLAYER);
+            case EmbassyAirRulesSC.S_EMERGENCY:
+                return Lang.tr(key, day, EmbassyAirRulesSC.EMERGENCY_PCT);
+            case EmbassyAirRulesSC.S_CHARGE:
+            case EmbassyAirRulesSC.S_HYDROGEN:
+                return Lang.tr(key, BookContent.num(one), BookContent.num(day));
+            case EmbassyAirRulesSC.S_ARMOUR_GAS:
+                return Lang.tr(key, BookContent.num(day));
+            case EmbassyAirRulesSC.S_REPAIR:
+                return Lang.tr(key, one);
+            case EmbassyAirRulesSC.S_TOW:
+            case EmbassyAirRulesSC.S_CHART:
+                return Lang.tr(key);
+            default:
+                return "-";
+        }
+    }
+
+    /** A stack's own name, or the lang key's when it isn't registered. */
+    private static String name(ItemStack s, String key) {
+        return s != null ? s.getDisplayName() : Lang.tr(key);
     }
 
     /** One quarter: sc.manual.world.embassyCity.part.<key> and its .desc (with `args`). */
@@ -443,9 +563,14 @@ final class BookEmbassySC {
         return EmbassyBlocksSC.ring == null ? null : new ItemStack(EmbassyBlocksSC.ring);
     }
 
-    /** A showcase machine of the second block (BlockShowcase2SC; Ф6's metas 7..9), null before it is registered. */
+    /** A showcase machine of the second block (BlockShowcase2SC; Ф6's metas 7..9, the airfield's 10..13), null before it is registered. */
     static ItemStack showcase2(int meta) {
         return SettlementBlocksSC.showcase2 == null ? null : new ItemStack(SettlementBlocksSC.showcase2, 1, meta);
+    }
+
+    /** A meta of the airfield's surface (BlockAirfieldSC), null before it is registered. */
+    static ItemStack airfield(int meta) {
+        return EmbassyBlocksSC.airfield == null ? null : new ItemStack(EmbassyBlocksSC.airfield, 1, meta);
     }
 
     private static ItemStack showcase(int meta) {

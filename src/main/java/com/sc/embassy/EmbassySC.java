@@ -63,5 +63,8 @@ public final class EmbassySC {
         FlightSC.clearAll();
         EmbassyBeamSC.clearAll();
         EmbassyHintSC.clearAll();
+        EmbassyAirfieldSC.clearAll();                           // «Лётное поле» (the coordinator's): the fields' cache, the services' quotes, the API's infos
+        EmbassyAirServiceSC.clearAll();
+        com.sc.embassy.api.EmbassyAirApiSC.clearAll();
     }
 }

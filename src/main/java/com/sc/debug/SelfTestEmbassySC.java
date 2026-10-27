@@ -119,6 +119,12 @@ final class SelfTestEmbassySC {
             {"sc.cmd.embassy.where.nearest", "5"}, {"sc.cmd.embassy.where.noNearest", "1"}, {"sc.cmd.embassy.repair.none", "0"},
             {"sc.cmd.embassy.repair.noId", "1"}, {"sc.cmd.embassy.repair.noStart", "1"}, {"sc.cmd.embassy.repair.done", "4"},
             {"sc.cmd.embassy.state.made", "1"}, {"sc.cmd.embassy.state.empty", "0"}, {"sc.cmd.embassy.state.unexplored", "0"},
+            {"sc.cmd.embassy.air.line", "4"}, {"sc.cmd.embassy.air.lineHeli", "2"}, {"sc.cmd.embassy.air.none", "0"},
+            {"sc.cmd.embassy.air.noIls", "0"}, {"sc.cmd.embassy.air.would", "0"}, {"sc.cmd.embassy.air.wouldOff", "1"},
+            {"sc.cmd.embassy.air.share", "6"}, {"sc.cmd.embassy.airfield.none", "0"}, {"sc.cmd.embassy.airfield.noX", "2"},
+            {"sc.cmd.embassy.airfield.kindNone", "2"}, {"sc.cmd.embassy.airfield.head", "6"}, {"sc.cmd.embassy.airfield.runway", "6"},
+            {"sc.cmd.embassy.airfield.noRunway", "0"}, {"sc.cmd.embassy.airfield.zone", "5"}, {"sc.cmd.embassy.airfield.ad", "5"},
+            {"sc.cmd.embassy.airfield.rev", "2"},
             {"sc.flight.countdown.ring", "1"}, {"sc.flight.countdown.dock", "1"}, {"sc.flight.open.ring", "1"}, {"sc.flight.open.dock", "1"},
             {"sc.flight.missed", "0"}, {"sc.flight.noTalon", "0"}, {"sc.flight.full", "0"}, {"sc.flight.mounted", "0"},
             {"sc.flight.channelLost", "0"}, {"sc.flight.carried", "1"}, {"sc.flight.refund", "1"}, {"sc.flight.guarantee.given", "1"},
@@ -1272,7 +1278,10 @@ final class SelfTestEmbassySC {
         return n;
     }
 
-    /** The new block, item and showcase metas of Ф6 (what isn't registered is left out). */
+    /**
+     * The new block, item and showcase metas of Ф6 (what isn't registered is left out) - with the embassies' airfield's (docs/plan-embassy-
+     * airfield-core.md §2.4: the showcase metas 10..13 after 7..9, the airfield surface's every meta): names, G and the WORLD chapter alike.
+     */
     static List<ItemStack> newStacks() {
         List<ItemStack> out = new ArrayList<ItemStack>();
         if (EmbassyBlocksSC.ring != null && Item.getItemFromBlock(EmbassyBlocksSC.ring) != null) {
@@ -1281,8 +1290,12 @@ final class SelfTestEmbassySC {
         if (EmbassyItemsSC.finder != null) {
             out.add(EmbassyItemsSC.finder(1));
         }
-        for (int m = BlockShowcase2SC.GRAVITY_COIL; SettlementBlocksSC.showcase2 != null && m <= BlockShowcase2SC.DISPATCH_CONSOLE; m++) {
+        for (int m = BlockShowcase2SC.GRAVITY_COIL; SettlementBlocksSC.showcase2 != null && m < BlockShowcase2SC.NAMES.length; m++) {
             out.add(new ItemStack(SettlementBlocksSC.showcase2, 1, m));
+        }
+        for (int m = 0; EmbassyBlocksSC.airfield != null && Item.getItemFromBlock(EmbassyBlocksSC.airfield) != null
+                && m < com.sc.block.BlockAirfieldSC.NAMES.length; m++) {
+            out.add(new ItemStack(EmbassyBlocksSC.airfield, 1, m));
         }
         return out;
     }

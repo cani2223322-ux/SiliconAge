@@ -168,12 +168,6 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         }
     }
 
-    /**
-     * Ф6 (docs/plan-substrate-tech-f6.md §9.3): the Great Ring's core (embassyRingSC) stands only under an embassy's ring, unbreakable:
-     * hidden, with its «Как получить» page for R in cheat mode. The showcase metas 7..9 (the ring's coils, the cryo tanks, the
-     * Dispatchers' desk) are hidden with every other meta of showcase2SC (hideSettlementBlocks, by BlockShowcase2SC.NAMES). Shown: the
-     * Embassy Direction Finder - its shapeless recipe is NEI's own page, ObtainHandlerSC adds what it does.
-     */
     /** 2026-10-26 (docs/plan-ideas-2026-10-26.md, ПД-7): the relay post's Mast - only the post has one (the Relay itself stays). */
     static void hideIdeaBlocks() {
         if (com.sc.init.IdeaBlocksSC.relay != null) {
@@ -181,10 +175,39 @@ public class NEISiliconAgeConfig implements IConfigureNEI {
         }
     }
 
+    /**
+     * Ф6 (docs/plan-substrate-tech-f6.md §9.3): the Great Ring's core (embassyRingSC) stands only under an embassy's ring, unbreakable:
+     * hidden, with its «Как получить» page for R in cheat mode. The showcase metas 7..9 (the ring's coils, the cryo tanks, the
+     * Dispatchers' desk) are hidden with every other meta of showcase2SC (hideSettlementBlocks, by BlockShowcase2SC.NAMES). Shown: the
+     * Embassy Direction Finder - its shapeless recipe is NEI's own page, ObtainHandlerSC adds what it does.
+     * <p>
+     * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §2.4): the airfield's surface (embassyAirfieldSC, every meta - the
+     * paving, the markings, the lights) stands only on an embassy's airfield, unbreakable: hidden, each meta with its page; the showcase
+     * metas 10..13 (the tower's desk, the service column, the beacon, the AA emplacement) go with showcase2SC's NAMES.
+     */
     static void hideEmbassyBlocks() {
         if (com.sc.embassy.EmbassyBlocksSC.ring != null) {
             API.hideItem(new net.minecraft.item.ItemStack(com.sc.embassy.EmbassyBlocksSC.ring));
         }
+        for (int m = 0; com.sc.embassy.EmbassyBlocksSC.airfield != null && m < com.sc.block.BlockAirfieldSC.NAMES.length; m++) {
+            API.hideItem(new net.minecraft.item.ItemStack(com.sc.embassy.EmbassyBlocksSC.airfield, 1, m));
+        }
+    }
+
+    /**
+     * «Лётное поле»: every meta of the airfield's surface and the showcase metas 10..13 (registered ones only; NeiCoverageSC checks each:
+     * hidden, with its «Как получить» page).
+     */
+    static List<net.minecraft.item.ItemStack> airfieldStacks() {
+        List<net.minecraft.item.ItemStack> out = new ArrayList<net.minecraft.item.ItemStack>();
+        for (int m = 0; com.sc.embassy.EmbassyBlocksSC.airfield != null && m < com.sc.block.BlockAirfieldSC.NAMES.length; m++) {
+            out.add(new net.minecraft.item.ItemStack(com.sc.embassy.EmbassyBlocksSC.airfield, 1, m));
+        }
+        for (int m = com.sc.block.BlockShowcase2SC.TOWER_CONSOLE; com.sc.settle.SettlementBlocksSC.showcase2 != null
+                && m < com.sc.block.BlockShowcase2SC.NAMES.length; m++) {
+            out.add(new net.minecraft.item.ItemStack(com.sc.settle.SettlementBlocksSC.showcase2, 1, m));
+        }
+        return out;
     }
 
     /** Ф5: every meta of the arena block (none before it is registered). */

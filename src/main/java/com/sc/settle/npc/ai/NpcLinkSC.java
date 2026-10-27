@@ -2,12 +2,16 @@ package com.sc.settle.npc.ai;
 
 import java.util.UUID;
 
+import com.sc.embassy.EmbassyAirfieldSC;
+import com.sc.embassy.EmbassyQuartersSC;
 import com.sc.settle.ISettlementGuardSC;
 import com.sc.settle.ISettlementMemberSC;
+import com.sc.settle.NpcKindSC;
 import com.sc.settle.RosterSC;
 import com.sc.settle.SettlementRegistrySC;
 import com.sc.settle.SettlementSC;
 import com.sc.settle.ViolationRulesSC;
+import com.sc.settle.npc.EntityWardenSC;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityCreature;
@@ -132,7 +136,7 @@ public final class NpcLinkSC {
             mob.setHomeArea(s.x, s.floorY + 1, s.z, r);
             return;
         }
-        mob.setHomeArea(s.x, s.floorY + 1, s.z, leash(s));
+        mob.setHomeArea(s.x, s.floorY + 1, s.z, leash(s, ((ISettlementMemberSC) mob).slot()));
     }
 
     /** Ф6: the home area's radius round a Tuner's post out past its dome (an embassy's Vokzal office). */
@@ -155,6 +159,37 @@ public final class NpcLinkSC {
      */
     public static int leash(SettlementRegistrySC.Settlement s) {
         return ViolationRulesSC.leash(s.radius);
+    }
+
+    /**
+     * Slot `slot`'s leash: leash(s); ЛП-18 - a field Sentry (fieldSentry: #5 / #6 of an embassy whose airfield has posts) at least out to
+     * its own post and FIELD_LEASH past it (FULL's far post, by the windsock, lies past the belt): the brain and the home area don't drag
+     * him back. Only theirs (the review's): the rest of the guard keeps the belt's leash. Pure.
+     */
+    public static int leash(SettlementRegistrySC.Settlement s, int slot) {
+        int l = leash(s);
+        int[] p = fieldSentry(s, slot) ? post(s.slots.get(slot)) : null;
+        if (p != null) {
+            l = Math.max(l, (int) Math.ceil(Math.sqrt(s.distSq(p[0] + 0.5D, p[2] + 0.5D))) + FIELD_LEASH);
+        }
+        return l;
+    }
+
+    /** ЛП-18: how far past its post on the airfield a field Sentry's leash reaches. */
+    public static final int FIELD_LEASH = 8;
+
+    /**
+     * ЛП-18: slot `slot` of `s` is one of the field's Sentries - a Sentry of EmbassyQuartersSC.FIELD_SENTRIES' rank in an embassy whose
+     * airfield has posts (FULL, SHORT). Pure.
+     */
+    public static boolean fieldSentry(SettlementRegistrySC.Settlement s, int slot) {
+        if (s == null || slot < 0 || slot >= s.slots.size() || s.dim != SettlementSC.EMBASSY_DIM
+                || s.slots.get(slot).kind != NpcKindSC.SENTRY.ordinal()
+                || EmbassyQuartersSC.fieldPost(NpcKindSC.SENTRY, EntityWardenSC.rankIndex(s, slot)) < 0) {
+            return false;
+        }
+        EmbassyAirfieldSC.Field f = EmbassyAirfieldSC.fieldOf(s);
+        return f != null && f.posts != null;
     }
 
     /**

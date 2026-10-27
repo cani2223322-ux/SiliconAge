@@ -291,12 +291,16 @@ public class SettlementRegistrySC extends WorldSavedData {
         return out;
     }
 
-    /** ПП-8: a settlement whose protected cylinder's box meets `box` (a player's field zone), or null. */
+    /**
+     * ПП-8: a settlement whose protected cylinder's box meets `box` (a player's field zone), or null. «Лётное поле»: an embassy's airfield
+     * zone too - its rectangles one by one (Settlement.airfieldMeets; the review's: not their common box - the ground between the
+     * emplacements and the runway is nobody's).
+     */
     public Settlement overlapping(int dim, AxisAlignedBB box) {
         int reach = (int) Math.ceil(Math.max(box.maxX - box.minX, box.maxZ - box.minZ) / 2D) + 1;
         int cx = (int) Math.floor((box.minX + box.maxX) / 2D), cz = (int) Math.floor((box.minZ + box.maxZ) / 2D);
         for (Settlement s : near(dim, cx, cz, reach + SettlementSizeSC.CITY.radiusMax)) {
-            if (s.protectedBox().intersectsWith(box)) {
+            if (s.protectedBox().intersectsWith(box) || s.airfieldMeets(box)) {
                 return s;
             }
         }
@@ -527,10 +531,19 @@ public class SettlementRegistrySC extends WorldSavedData {
             return py >= floorY - SettlementSC.FOUNDATION && distSq(px, pz) <= (double) radius * radius;
         }
 
-        /** ПЖ-2: inside the dome or the belt round it (any height). */
+        /**
+         * ПЖ-2: inside the dome or the belt round it (any height). «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §6.1, the
+         * coordinator's): an embassy's airfield zone too - its Tuners and guards there are the belt's (the posts on the field).
+         */
         public boolean inBelt(double px, double pz) {
             double r = radius + SettlementSC.BELT;
-            return distSq(px, pz) <= r * r;
+            return distSq(px, pz) <= r * r || inAirfield(px, pz);
+        }
+
+        /** «Лётное поле»: the column is in this embassy's airfield zone (false: not an embassy, no field). */
+        public boolean inAirfield(double px, double pz) {
+            com.sc.embassy.EmbassyAirfieldSC.Field f = SettlementSC.isEmbassy(this) ? com.sc.embassy.EmbassyAirfieldSC.fieldOf(this) : null;
+            return f != null && f.inZone((int) Math.floor(px), (int) Math.floor(pz));
         }
 
         /** ПР-1: inside the dock's protected zone (dockZone across from the beacon, a little below it to well above). */
@@ -548,7 +561,10 @@ public class SettlementRegistrySC extends WorldSavedData {
                     x + 0.5D + radius, 256D, z + 0.5D + radius);
         }
 
-        /** {minX, minZ, maxX, maxZ} of everything a look-up may ask about: the belt and the dock's zone. */
+        /**
+         * {minX, minZ, maxX, maxZ} of everything a look-up may ask about: the belt and the dock's zone; «Лётное поле посольства» (the
+         * coordinator's): an embassy's airfield zone (EmbassyAirfieldSC.zoneBox - the record's extra "X" read before it is indexed).
+         */
         public int[] reach() {
             int r = radius + SettlementSC.BELT + 1;
             int[] b = {x - r, z - r, x + r, z + r};
@@ -559,7 +575,36 @@ public class SettlementRegistrySC extends WorldSavedData {
                 b[2] = Math.max(b[2], dockX + d);
                 b[3] = Math.max(b[3], dockZ + d);
             }
+            int[] f = SettlementSC.isEmbassy(this) ? com.sc.embassy.EmbassyAirfieldSC.zoneBox(this) : null;
+            if (f != null) {
+                b[0] = Math.min(b[0], f[0] - 1);
+                b[1] = Math.min(b[1], f[1] - 1);
+                b[2] = Math.max(b[2], f[2] + 1);
+                b[3] = Math.max(b[3], f[3] + 1);
+            }
             return b;
+        }
+
+        /** «Лётное поле»: the airfield zone's box from FOUNDATION under the floor up (ПП-8: a player's field may not reach it; null: none). */
+        public AxisAlignedBB airfieldBox() {
+            int[] f = SettlementSC.isEmbassy(this) ? com.sc.embassy.EmbassyAirfieldSC.zoneBox(this) : null;
+            return f == null ? null : AxisAlignedBB.getBoundingBox(f[0], floorY - SettlementSC.FOUNDATION, f[1], f[2] + 1D, 256D, f[3] + 1D);
+        }
+
+        /** «Лётное поле» (ПП-8): `box` meets one of the airfield zone's rectangles (each from FOUNDATION under the floor up; false: none). */
+        public boolean airfieldMeets(AxisAlignedBB box) {
+            com.sc.embassy.EmbassyAirfieldSC.Field f = SettlementSC.isEmbassy(this) ? com.sc.embassy.EmbassyAirfieldSC.fieldOf(this) : null;
+            AxisAlignedBB all = f == null ? null : airfieldBox();
+            if (all == null || !all.intersectsWith(box)) {
+                return false;
+            }
+            for (int[] q : f.zone) {
+                int[] w = f.world(q);
+                if (AxisAlignedBB.getBoundingBox(w[0], floorY - SettlementSC.FOUNDATION, w[1], w[2] + 1D, 256D, w[3] + 1D).intersectsWith(box)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /** The core field's owner «[Поселение-N]» (never a Minecraft name: those are [A-Za-z0-9_] only). */

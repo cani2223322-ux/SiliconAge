@@ -68,6 +68,13 @@ public final class EmbassyLayoutSC {
     /** Lot kinds of an embassy's plan (SettlementLayoutSC.Lot.kind; package S's pieces build by them). Append only. */
     public static final int LOT_HEART = 0, LOT_SQUARE = 1, LOT_WORKSHOP = 2, LOT_DEPOT = 3, LOT_GREENHOUSE = 4, LOT_HOUSE = 5, LOT_WALL = 6,
             LOT_TOWER = 7, LOT_GATE = 8, LOT_STREET = 9, LOT_VOKZAL = 10, LOT_RING = 11, LOT_OFFICE = 12, LOT_ENERGY = 13;
+    /**
+     * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §3.3, appended): the airfield's lots - EmbassyAirfieldSC.Field.lots, kept
+     * apart from Plan.lots (the quarters' rules never see them), built after the city's (EmbassyPiecesSC.pieces): the runway, the apron, the
+     * terminal with the tower, the hangar, the helipad, an approach funnel, an air defence emplacement.
+     */
+    public static final int LOT_RUNWAY = 14, LOT_APRON = 15, LOT_TERMINAL = 16, LOT_HANGAR = 17, LOT_HELIPAD = 18, LOT_FUNNEL = 19,
+            LOT_AIR_DEFENCE = 20;
 
     /** ПЖ-13: the trades two of each (the Power Engineer one), the extras' pool (2..6 more: the size's 18..22). */
     public static final NpcKindSC[] TRADES = {NpcKindSC.TECHNOLOGIST, NpcKindSC.METALLURGIST, NpcKindSC.GAS_TECH, NpcKindSC.CARTOGRAPHER,
@@ -89,6 +96,12 @@ public final class EmbassyLayoutSC {
         public int levelRadius, backGateDir;
         /** The Great Ring's middle (its plane across the main street). */
         public int ringX, ringY, ringZ;
+        /**
+         * The airfield's decision {kind, side, ils, version} (EmbassyAirfieldSC; null: none made - no "X" in the record, no field) and the
+         * field it gives (null: none, or NONE). Set by plan() before the quarters are laid (package G moves three posts onto the field).
+         */
+        public int[] air;
+        public EmbassyAirfieldSC.Field field;
 
         public Plan(EmbassySiteSC.Site site) {
             super(new SettlementLayoutSC.Site(site.x, site.z, SettlementSizeSC.EMBASSY, site.radius, false, site.seed));
@@ -251,6 +264,14 @@ public final class EmbassyLayoutSC {
      * package S), the names, the footprint. Pure; a few milliseconds - once per structure start.
      */
     public static Plan plan(long worldSeed, EmbassySiteSC.Site site, int floorY) {
+        return plan(worldSeed, site, floorY, null);
+    }
+
+    /**
+     * plan() with the airfield's decision `air` ({kind, side, ils, version} - EmbassyAirfieldSC.decideFor for a new embassy, decisionOf a
+     * record's "X"; null: no field, exactly the plan of before). The field is set before the quarters (Plan.field). Pure.
+     */
+    public static Plan plan(long worldSeed, EmbassySiteSC.Site site, int floorY, int[] air) {
         Plan p = new Plan(site);
         int r = site.radius;
         p.floorY = floorY;
@@ -289,6 +310,8 @@ public final class EmbassyLayoutSC {
         p.framePoint(P_VOKZAL, beacon, 0, stand);
         p.framePoint(P_RING, beacon + RING_BACK, 0, p.ringY);
         p.framePoint(P_OFFICE, beacon - 6, -8, stand);
+        p.air = air == null || air.length < 4 ? null : air.clone();
+        p.field = EmbassyAirfieldSC.Field.of(p, p.air);
         List<NpcKindSC> roster = roster(site);
         EmbassyQuartersSC.lay(p, roster, new Random(site.seed ^ PLAN_SALT));
         names(p);
@@ -346,7 +369,7 @@ public final class EmbassyLayoutSC {
 
     /**
      * The plan's size, seed, Vokzal (dock, its zone), points and slots (NEVER, unnamed) into record `s` - its id, core, radius, floor
-     * and name are left as they are (RosterSC.restore names the slots itself). Pure.
+     * and name are left as they are (RosterSC.restore names the slots itself); the airfield's decision (Plan.air) as "X". Pure.
      */
     public static void fill(SettlementRegistrySC.Settlement s, Plan p) {
         s.size = SettlementSizeSC.EMBASSY.ordinal();
@@ -374,11 +397,15 @@ public final class EmbassyLayoutSC {
             sl.state = SettlementRegistrySC.NEVER;
             s.slots.add(sl);
         }
+        EmbassyAirfieldSC.writeDecision(s, p.air);             // the airfield's "X" (none decided: the key stays as it is)
     }
 
-    /** Record `s`'s plan made again (its site from its own core, seed and radius) - the Vokzal's and the ring's points for package R. */
+    /**
+     * Record `s`'s plan made again (its site from its own core, seed and radius; its airfield from its "X" - EmbassyAirfieldSC.decisionOf)
+     * - the Vokzal's and the ring's points for package R.
+     */
     public static Plan planOf(SettlementRegistrySC.Settlement s, long worldSeed) {
         EmbassySiteSC.Site site = new EmbassySiteSC.Site(s.x, s.z, s.radius, s.floorY, s.seed, false);
-        return plan(worldSeed, site, s.floorY);
+        return plan(worldSeed, site, s.floorY, EmbassyAirfieldSC.decisionOf(s));
     }
 }

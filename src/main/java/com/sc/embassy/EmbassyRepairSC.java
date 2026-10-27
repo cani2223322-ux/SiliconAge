@@ -34,13 +34,18 @@ import net.minecraftforge.common.util.FakePlayer;
  * repair(world, s, true) - the operator's /scembassy repair: a whole pass now, players near or not, still only over loaded windows.
  * <ul>
  * <li>the windows: populate's own grid (blocks 16k + 8 .. 16k + 23: four chunks each, every neighbour a piece may look at within
- * them), the ones meeting the dome's disc or the Vokzal's platform, in x then z order (windows(s)); a window not populated yet is
- * never run (its own populate builds it the first time);</li>
+ * them), the ones meeting the dome's disc or the Vokzal's platform - and, with an airfield («Лётное поле посольства», ЛП-7), its
+ * protected zone (EmbassyAirfieldSC.Field.zone: there the ground piece takes only growth and snow / ice, the field's pieces put their
+ * own back) -, in x then z order (windows(s)); a window not populated yet is never run (its own populate builds it the first time);</li>
  * <li>a second looks at up to LOOK windows - a window not ready (its chunks not loaded, a player near) is passed over until the next
  * pass - and runs the first ready one; a new embassy rests FIRST_REST_TICKS first (its city was just built; a meteor that fell on
  * it while its land was being made is put back within minutes, not after the long rest);</li>
  * <li>while a window runs, repairing() is true: the ground piece then fills only the protected ground and clears only growth
  * (ComponentEmbGroundSC), never a building's block;</li>
+ * <li>the approach funnels («Лётное поле», the review's): past the square nobody keeps the land, so the pass never runs there - but each
+ * funnel window is cleared of growth ONCE more (settle: the funnel pieces only, over the 1:20 plane) as soon as every chunk round it
+ * is populated: other mods' trees that don't keep to their chunk (IC2's rubber trees, Thaumcraft's great trees) grow into a window
+ * built before their own chunk was; then never again (EXTRA's K_SETTLED - the land is the players');</li>
  * <li>the core itself gone (an AE2 meteor's crater sets every block but bedrock to air, the core's tile with it - its second gone
  * too): the Overworld's own tick (onWorldTick, FML's bus - SCMod registers INSTANCE) looks at every embassy record whose core's chunk
  * is loaded once a second and runs its Heart's window when the core block or its tile isn't there (heal: the Heart's piece puts the
@@ -59,6 +64,10 @@ public final class EmbassyRepairSC {
     public static final String EXTRA = "G";
     /** EXTRA's keys: the next window's index (0: a pass not begun), the world time the last pass ended. */
     public static final String K_NEXT = "w", K_PASS = "p";
+    /** EXTRA's key (the review's): the funnel windows settled (funnelWindows' indexes as bits of a long - at most 64 windows; -1: all). */
+    public static final String K_SETTLED = "f";
+    /** settle: the chunks this far round a funnel window's own (every populate that can still put growth into it) must be populated. */
+    public static final int SETTLE_AROUND = 1;
     /** Windows a second looks at most (the not ready ones are passed over cheaply). */
     public static final int LOOK = 8;
 
@@ -68,6 +77,8 @@ public final class EmbassyRepairSC {
     private static final Map<Integer, Long> HEALED = new HashMap<Integer, Long>();
     /** A window of the «Достройка» runs now (server thread). */
     private static boolean repairing;
+    /** A funnel window is settled now (settle: the funnel pieces run once more past the square - server thread). */
+    private static boolean settling;
 
     private EmbassyRepairSC() {
     }
@@ -75,6 +86,11 @@ public final class EmbassyRepairSC {
     /** The pieces run for the «Достройка» now, not for their window's populate (ComponentEmbGroundSC asks it). */
     public static boolean repairing() {
         return repairing;
+    }
+
+    /** A funnel window is settled now (repairing() true too): ComponentEmbFunnelSC clears its growth once more. */
+    public static boolean settling() {
+        return settling;
     }
 
     /** The core's second (server; `s` the core's own embassy record). */
@@ -91,6 +107,9 @@ public final class EmbassyRepairSC {
             return;
         }
         LAST.put(Integer.valueOf(s.id), Long.valueOf(now));
+        if (settle(w, r, s, st)) {
+            return;                                             // a funnel window settled this second
+        }
         NBTTagCompound g = s.extra.getCompoundTag(EXTRA);
         if (!g.hasKey(K_PASS)) {                                // a new embassy: its city was just built - a short rest first
             g.setInteger(K_NEXT, 0);
@@ -207,7 +226,9 @@ public final class EmbassyRepairSC {
 
     /**
      * The «Достройка»'s windows of record `s` - {minX, minZ} of populate's grid (16k + 8), the ones meeting its dome's disc or its
-     * Vokzal's platform (the beacon's VOKZAL_HALF square), in x then z order. Pure.
+     * Vokzal's platform (the beacon's VOKZAL_HALF square) or (ЛП-7, docs/plan-embassy-airfield-core.md §4.3) its airfield's protected
+     * zone (EmbassyAirfieldSC.Field.zone; not the funnels: past the square the land isn't protected), in x then z order. A record without
+     * a field ("X") - the same windows as before. Pure.
      */
     public static List<int[]> windows(SettlementRegistrySC.Settlement s) {
         List<int[]> out = new ArrayList<int[]>();
@@ -219,18 +240,122 @@ public final class EmbassyRepairSC {
             maxX = Math.max(maxX, s.dockX + h);
             maxZ = Math.max(maxZ, s.dockZ + h);
         }
+        EmbassyAirfieldSC.Field f = EmbassyAirfieldSC.fieldOf(s);
+        int[][] zone = new int[f == null ? 0 : f.zone.length][];
+        for (int i = 0; i < zone.length; i++) {
+            zone[i] = f.world(f.zone[i]);                       // {minX, minZ, maxX, maxZ}
+            minX = Math.min(minX, zone[i][0]);
+            minZ = Math.min(minZ, zone[i][1]);
+            maxX = Math.max(maxX, zone[i][2]);
+            maxZ = Math.max(maxZ, zone[i][3]);
+        }
         long r2 = (long) r * r;
         for (int wx = windowOf(minX); wx <= maxX; wx += 16) {
             for (int wz = windowOf(minZ); wz <= maxZ; wz += 16) {
                 long nx = Math.max(wx, Math.min(wx + 15, s.x)) - s.x, nz = Math.max(wz, Math.min(wz + 15, s.z)) - s.z;
                 boolean disc = nx * nx + nz * nz <= r2;
                 boolean vokzal = s.hasDock && wx <= s.dockX + h && wx + 15 >= s.dockX - h && wz <= s.dockZ + h && wz + 15 >= s.dockZ - h;
-                if (disc || vokzal) {
+                boolean field = false;
+                for (int[] b : zone) {
+                    field |= wx <= b[2] && wx + 15 >= b[0] && wz <= b[3] && wz + 15 >= b[1];
+                }
+                if (disc || vokzal || field) {
                     out.add(new int[]{wx, wz});
                 }
             }
         }
         return out;
+    }
+
+    /**
+     * The review's: record `s`'s approach funnels' windows ({minX, minZ} of populate's grid, the ones meeting Field.funnels; x then z
+     * order; at most 64 - settle's bits). Empty: no field, no funnels (SHORT, HELI). Pure.
+     */
+    public static List<int[]> funnelWindows(SettlementRegistrySC.Settlement s) {
+        List<int[]> out = new ArrayList<int[]>();
+        EmbassyAirfieldSC.Field f = EmbassyAirfieldSC.fieldOf(s);
+        for (int i = 0; f != null && i < f.funnels.length; i++) {
+            int[] b = f.world(f.funnels[i]);
+            for (int wx = windowOf(b[0]); wx <= b[2]; wx += 16) {
+                for (int wz = windowOf(b[1]); wz <= b[3] && out.size() < 64; wz += 16) {
+                    boolean twice = false;
+                    for (int[] o : out) {
+                        twice |= o[0] == wx && o[1] == wz;
+                    }
+                    if (!twice) {
+                        out.add(new int[]{wx, wz});
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The review's: one funnel window of `s` not settled yet (of the next LOOK) whose chunks and every chunk SETTLE_AROUND round them are
+     * loaded and populated, no player near (ready) - its funnel pieces run once more (settling: growth over the 1:20 plane goes), its
+     * bit set. @return one ran
+     */
+    static boolean settle(World w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, StructureEmbassyStartSC st) {
+        NBTTagCompound g = s.extra.getCompoundTag(EXTRA);
+        if (g.getLong(K_SETTLED) == -1L) {
+            return false;                                       // every funnel window settled: never again
+        }
+        List<int[]> wins = funnelWindows(s);
+        if (wins.isEmpty()) {
+            return false;
+        }
+        long done = g.getLong(K_SETTLED), all = wins.size() >= 64 ? -1L : (1L << wins.size()) - 1L;
+        int looked = 0;
+        for (int i = 0; i < wins.size() && looked < LOOK; i++) {
+            if ((done & 1L << i) != 0L) {
+                continue;
+            }
+            looked++;
+            int[] win = wins.get(i);
+            if (!aroundPopulated(w, win) || !ready(w, win, false)) {
+                continue;
+            }
+            runFunnels(w, st, win);
+            done |= 1L << i;
+            g.setLong(K_SETTLED, (done & all) == all ? -1L : done);     // all of them: -1, never looked at again
+            s.extra.setTag(EXTRA, g);
+            r.markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    /** Every chunk of window `win` and SETTLE_AROUND round them is loaded and populated (nothing is loaded for it). */
+    static boolean aroundPopulated(World w, int[] win) {
+        IChunkProvider cp = w.getChunkProvider();
+        int cx = win[0] >> 4, cz = win[1] >> 4;
+        for (int x = cx - SETTLE_AROUND; x <= cx + 1 + SETTLE_AROUND; x++) {
+            for (int z = cz - SETTLE_AROUND; z <= cz + 1 + SETTLE_AROUND; z++) {
+                if (cp == null || !cp.chunkExists(x, z) || !w.getChunkFromChunkCoords(x, z).isTerrainPopulated) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** The start's funnel pieces only run again over window `win` (repairing() and settling() true meanwhile). */
+    private static void runFunnels(World w, StructureEmbassyStartSC st, int[] win) {
+        StructureBoundingBox box = new StructureBoundingBox(win[0], win[1], win[0] + 15, win[1] + 15);
+        Random rand = new Random(w.getSeed() ^ ((long) win[0] * 341873128712L + (long) win[1] * 132897987541L));
+        repairing = true;
+        settling = true;
+        try {
+            for (Object o : st.getComponents()) {
+                if (o instanceof ComponentEmbFunnelSC && ((ComponentEmbFunnelSC) o).getBoundingBox().intersectsWith(box)) {
+                    ((ComponentEmbFunnelSC) o).addComponentParts(w, rand, box);
+                }
+            }
+        } finally {
+            repairing = false;
+            settling = false;
+        }
     }
 
     /** The populate window (its min corner, 16k + 8) holding block coordinate `c`. */
@@ -285,5 +410,6 @@ public final class EmbassyRepairSC {
         LAST.clear();
         HEALED.clear();
         repairing = false;
+        settling = false;
     }
 }

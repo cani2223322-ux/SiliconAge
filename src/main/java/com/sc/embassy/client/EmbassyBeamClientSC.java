@@ -15,6 +15,7 @@ import cpw.mods.fml.common.network.FMLNetworkEvent;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.entity.RenderManager;
@@ -44,7 +45,13 @@ import net.minecraftforge.common.MinecraftForge;
  * its width is HALF_WIDTH + GROW per block of distance - at 1 km a few pixels;</li>
  * <li>no texture, no lightmap, no fog, no depth writes; the GL state pushed and popped round all the beams (one draw).</li>
  * </ul>
- * Client only.
+ * «Лётное поле посольства» (package P, docs/plan-embassy-airfield-core.md §2.6, rule ЛП-20): the same message's lights: [{x, y, z}] -
+ * the airfields' «Светомаяк» blocks (EmbassyBeamSC.lights) - flash at night as a rotating aerodrome beacon: white, then green half a
+ * turn later (FLASH_TICKS a turn, each flash FLASH_HALF either side of its peak; each beacon's turn shifted by its place - two
+ * embassies never blink together), a dim steady glow between, from dusk (the sun's brightness under NIGHT_FROM, full NIGHT_FADE
+ * lower - a thunderstorm's dark day lights them a little too) to dawn, seen from BEAM_VIEW: a round camera-facing glow (ActiveRenderInfo's
+ * axes, as the particles' - a pilot over it sees it round too) just over the lamp, a wide faint halo and a bright core, their size
+ * growing with the distance and pulled in as the beam's corners past the far plane; in the beams' one draw, the same GL state.
  */
 @SideOnly(Side.CLIENT)
 public final class EmbassyBeamClientSC {
@@ -68,13 +75,35 @@ public final class EmbassyBeamClientSC {
     /** At most this many messages wait (a few at most in practice). */
     private static final int PENDING_MAX = 8;
 
+    /** ЛП-20, the beacon: the glow's middle over the lamp block's foot; its core's radius near and its growth a block of distance; the halo's size and strength. */
+    private static final double LIGHT_DY = 1.05D, LIGHT_SIZE = 0.8D, LIGHT_GROW = 0.005D, HALO = 3.0D;
+    private static final float HALO_ALPHA = 0.35F, STEADY = 0.18F;
+    /** A turn of the beacon (ticks: white at its start, green half a turn on); a flash lasts FLASH_HALF either side of its peak. */
+    private static final int FLASH_TICKS = 40;
+    private static final float FLASH_HALF = 4F;
+    /** The sun's brightness (World.getSunBrightness: 1 noon .. 0.2 night) it starts to show under, and how much lower it is full. */
+    private static final float NIGHT_FROM = 0.65F, NIGHT_FADE = 0.25F;
+    /** Colours: the white flash, the green one. */
+    private static final float WHITE_R = 1.0F, WHITE_G = 0.98F, WHITE_B = 0.9F, GREEN_R = 0.3F, GREEN_G = 1.0F, GREEN_B = 0.5F;
+    /** The round glow in this many fan pieces (their rim's cos / sin). */
+    private static final int FAN = 16;
+    private static final double[] FAN_COS = new double[FAN + 1], FAN_SIN = new double[FAN + 1];
+
+    static {
+        for (int i = 0; i <= FAN; i++) {
+            FAN_COS[i] = Math.cos(i * Math.PI * 2D / FAN);
+            FAN_SIN[i] = Math.sin(i * Math.PI * 2D / FAN);
+        }
+    }
+
     /** The messages not applied yet (written by the network thread). */
     private static final ConcurrentLinkedQueue<NBTTagCompound> PENDING = new ConcurrentLinkedQueue<NBTTagCompound>();
     /** Left the server (the network thread): the next client tick drops the beams. */
     private static volatile boolean resetAsked;
 
-    /** Client thread only: the beams {x, y, z} (each ring's middle), the world they are for. */
+    /** Client thread only: the beams {x, y, z} (each ring's middle), the beacons (each lamp block), the world they are for. */
     private final List<int[]> beams = new ArrayList<int[]>();
+    private final List<int[]> lights = new ArrayList<int[]>();
     private World seen;
 
     private EmbassyBeamClientSC() {
@@ -113,10 +142,12 @@ public final class EmbassyBeamClientSC {
         if (resetAsked) {
             resetAsked = false;
             beams.clear();
+            lights.clear();
         }
         World w = Minecraft.getMinecraft().theWorld;
         if (w != seen) {
             beams.clear();                              // another world (a dimension, the menu, another server): its own list comes
+            lights.clear();
             seen = w;
         }
         if (w == null || w.provider == null || w.provider.dimensionId != OVERWORLD) {
@@ -124,12 +155,17 @@ public final class EmbassyBeamClientSC {
         }
         NBTTagCompound m;
         while ((m = PENDING.poll()) != null) {
-            beams.clear();
-            NBTTagList l = m.getTagList("list", 10);
-            for (int i = 0; i < l.tagCount(); i++) {
-                NBTTagCompound t = l.getCompoundTagAt(i);
-                beams.add(new int[]{t.getInteger("x"), t.getInteger("y"), t.getInteger("z")});
-            }
+            read(m.getTagList("list", 10), beams);
+            read(m.getTagList("lights", 10), lights);   // (none from an older server: no beacons)
+        }
+    }
+
+    /** A message's list [{x, y, z}] into `out` (replaced). */
+    private static void read(NBTTagList l, List<int[]> out) {
+        out.clear();
+        for (int i = 0; i < l.tagCount(); i++) {
+            NBTTagCompound t = l.getCompoundTagAt(i);
+            out.add(new int[]{t.getInteger("x"), t.getInteger("y"), t.getInteger("z")});
         }
     }
 
@@ -137,7 +173,7 @@ public final class EmbassyBeamClientSC {
 
     @SubscribeEvent
     public void onRenderLast(RenderWorldLastEvent e) {
-        if (beams.isEmpty()) {
+        if (beams.isEmpty() && lights.isEmpty()) {
             return;
         }
         Minecraft mc = Minecraft.getMinecraft();
@@ -160,23 +196,7 @@ public final class EmbassyBeamClientSC {
             }
             if (!any) {                                 // the GL state once, for all the beams in one draw
                 any = true;
-                GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_LIGHTING_BIT
-                        | GL11.GL_CURRENT_BIT | GL11.GL_FOG_BIT);
-                OpenGlHelper.setActiveTexture(OpenGlHelper.lightmapTexUnit);
-                lightmap = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
-                GL11.glDisable(GL11.GL_TEXTURE_2D);
-                OpenGlHelper.setActiveTexture(OpenGlHelper.defaultTexUnit);
-                GL11.glDisable(GL11.GL_TEXTURE_2D);
-                GL11.glDisable(GL11.GL_LIGHTING);
-                GL11.glDisable(GL11.GL_FOG);
-                GL11.glDisable(GL11.GL_CULL_FACE);
-                GL11.glDisable(GL11.GL_ALPHA_TEST);
-                GL11.glEnable(GL11.GL_BLEND);
-                GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
-                GL11.glEnable(GL11.GL_DEPTH_TEST);
-                GL11.glDepthMask(false);
-                GL11.glShadeModel(GL11.GL_SMOOTH);
-                tes.startDrawingQuads();
+                lightmap = begin(tes);
             }
             double px = flat < 1.0E-3D ? 1D : -dz / flat, pz = flat < 1.0E-3D ? 0D : dx / flat;     // across the line of sight
             double half = HALF_WIDTH + flat * GROW;
@@ -184,6 +204,42 @@ public final class EmbassyBeamClientSC {
             strip(tes, dx, b[1] - cy, dz, BEAM_TOP - cy, px * half * GLOW_WIDTH, pz * half * GLOW_WIDTH, reach, GLOW_R, GLOW_G, GLOW_B,
                     alpha * GLOW_ALPHA / CORE_ALPHA);
             strip(tes, dx, b[1] - cy, dz, BEAM_TOP - cy, px * half, pz * half, reach, CORE_R, CORE_G, CORE_B, alpha);
+        }
+        float night = lights.isEmpty() ? 0F : MathHelper.clamp_float((NIGHT_FROM - w.getSunBrightness(e.partialTicks)) / NIGHT_FADE, 0F, 1F);
+        if (night > 0F) {                               // ЛП-20: the beacons
+            float turn = (float) (w.getTotalWorldTime() % FLASH_TICKS) + e.partialTicks;
+            for (int[] b : lights) {
+                double dx = b[0] + 0.5D - cx, dy = b[1] + LIGHT_DY - cy, dz = b[2] + 0.5D - cz;
+                double flat = Math.sqrt(dx * dx + dz * dz);
+                if (flat > EmbassyBeamSC.BEAM_VIEW) {
+                    continue;
+                }
+                if (!any) {
+                    any = true;
+                    lightmap = begin(tes);
+                }
+                float phase = turn + ((b[0] * 31 + b[2] * 17) & 0x7FFFFFFF) % FLASH_TICKS;
+                float white = flash(phase), green = flash(phase + FLASH_TICKS / 2);
+                float a = night * (1F - FAR_DIM * (float) (flat / EmbassyBeamSC.BEAM_VIEW));
+                double size = LIGHT_SIZE + flat * LIGHT_GROW, d = Math.sqrt(flat * flat + dy * dy);
+                if (d > reach) {                        // past the far plane: pulled in along its line of sight, its size with it
+                    double k = reach / d;
+                    dx *= k;
+                    dy *= k;
+                    dz *= k;
+                    size *= k;
+                }
+                glow(tes, dx, dy, dz, size * HALO, WHITE_R, WHITE_G, WHITE_B, a * STEADY * HALO_ALPHA);
+                glow(tes, dx, dy, dz, size, WHITE_R, WHITE_G, WHITE_B, a * STEADY);
+                if (white > 0F) {
+                    glow(tes, dx, dy, dz, size * HALO, WHITE_R, WHITE_G, WHITE_B, a * white * HALO_ALPHA);
+                    glow(tes, dx, dy, dz, size, WHITE_R, WHITE_G, WHITE_B, a * white);
+                }
+                if (green > 0F) {
+                    glow(tes, dx, dy, dz, size * HALO, GREEN_R, GREEN_G, GREEN_B, a * green * HALO_ALPHA);
+                    glow(tes, dx, dy, dz, size, GREEN_R, GREEN_G, GREEN_B, a * green);
+                }
+            }
         }
         if (!any) {
             return;
@@ -194,6 +250,52 @@ public final class EmbassyBeamClientSC {
             OpenGlHelper.setActiveTexture(OpenGlHelper.lightmapTexUnit);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             OpenGlHelper.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        }
+    }
+
+    /** The GL state once for everything this frame draws (one draw): no texture, no lightmap, no fog, additive, no depth writes. @return the lightmap was on */
+    private static boolean begin(Tessellator tes) {
+        GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_LIGHTING_BIT
+                | GL11.GL_CURRENT_BIT | GL11.GL_FOG_BIT);
+        OpenGlHelper.setActiveTexture(OpenGlHelper.lightmapTexUnit);
+        boolean lightmap = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        OpenGlHelper.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_FOG);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glDisable(GL11.GL_ALPHA_TEST);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glDepthMask(false);
+        GL11.glShadeModel(GL11.GL_SMOOTH);
+        tes.startDrawingQuads();
+        return lightmap;
+    }
+
+    /** A flash's strength (0..1) `phase` ticks into the beacon's turn: a peak at the turn's start, FLASH_HALF wide either side. */
+    private static float flash(float phase) {
+        float x = phase % FLASH_TICKS, d = Math.min(x, FLASH_TICKS - x);
+        return d >= FLASH_HALF ? 0F : 1F - d / FLASH_HALF;
+    }
+
+    /**
+     * A round glow facing the camera (ActiveRenderInfo's right and up axes - the particles' own), camera-relative middle (x, y, z),
+     * `radius`; colour (r, g, b) at `a` in the middle, fading to nothing at the rim - FAN quads, each a slice (the middle twice).
+     */
+    private static void glow(Tessellator tes, double x, double y, double z, double radius, float r, float g, float b, float a) {
+        double rx = ActiveRenderInfo.rotationX * radius, rz = ActiveRenderInfo.rotationZ * radius;
+        double ux = ActiveRenderInfo.rotationYZ * radius, uy = ActiveRenderInfo.rotationXZ * radius, uz = ActiveRenderInfo.rotationXY * radius;
+        for (int i = 0; i < FAN; i++) {
+            tes.setColorRGBA_F(r, g, b, a);
+            tes.addVertex(x, y, z);
+            tes.setColorRGBA_F(r, g, b, 0F);
+            tes.addVertex(x + rx * FAN_COS[i] + ux * FAN_SIN[i], y + uy * FAN_SIN[i], z + rz * FAN_COS[i] + uz * FAN_SIN[i]);
+            tes.addVertex(x + rx * FAN_COS[i + 1] + ux * FAN_SIN[i + 1], y + uy * FAN_SIN[i + 1], z + rz * FAN_COS[i + 1] + uz * FAN_SIN[i + 1]);
+            tes.setColorRGBA_F(r, g, b, a);
+            tes.addVertex(x, y, z);
         }
     }
 

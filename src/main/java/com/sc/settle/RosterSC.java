@@ -1,14 +1,17 @@
 package com.sc.settle;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 
 import com.sc.settle.gen.SettlementLayoutSC;
 import com.sc.settle.npc.NpcNamesSC;
+import com.sc.settle.npc.ai.NpcLinkSC;
 
 import cpw.mods.fml.common.FMLLog;
 import net.minecraft.entity.Entity;
@@ -31,7 +34,8 @@ import net.minecraft.world.chunk.IChunkProvider;
  * this settlement whose slot is ALIVE with its UUID - seen; with another UUID while the slot is ALIVE - a duplicate,
  * removed (setDead: no death, no slotDied); on a NEVER / DEAD slot of its kind - adopted (a lost one reloaded, a
  * restored record). An ALIVE slot unseen LOST_CENSUSES censuses in a row while every chunk of the belt is loaded - lost
- * (another mod's clean-up removed it without a death): DEAD from now, the Clone Capsule's timer runs.</li>
+ * (another mod's clean-up removed it without a death): DEAD from now, the Clone Capsule's timer runs. A slot whose creature
+ * may stand past the belt (reach: a field Sentry's leash, a Tuner's post out past the dome) waits for its own wider circle.</li>
  * <li><b>The roster</b> (after the first census): a NEVER slot whose post is loaded and already built (its chunk and the
  * chunk whose populate builds the post are populated - else its house would be built round it later) gets its
  * creature: SettlementSC.newMember, bindTo, at its post, spawnEntityInWorld, slotAlive.</li>
@@ -147,10 +151,10 @@ public final class RosterSC {
                 seen[i] = true;
             }
         }
-        boolean loaded = beltLoaded(w, s);
+        Map<Integer, Boolean> loaded = new HashMap<Integer, Boolean>();     // reach -> its circle loaded (asked once a census)
         for (int i = 0; i < n; i++) {
             SettlementRegistrySC.Slot sl = s.slots.get(i);
-            if (sl.state != SettlementRegistrySC.ALIVE || seen[i] || !loaded) {
+            if (sl.state != SettlementRegistrySC.ALIVE || seen[i] || !reachLoaded(w, s, reach(s, i), loaded)) {
                 st.misses[i] = 0;
             } else if (++st.misses[i] >= LOST_CENSUSES) {
                 r.slotDied(s.id, i, now);                       // lost: the Clone Capsule's timer from now
@@ -172,8 +176,45 @@ public final class RosterSC {
 
     /** Every chunk within the belt's circle is loaded (a creature can't be anywhere else - the leash keeps the guards in it). */
     static boolean beltLoaded(World w, SettlementRegistrySC.Settlement s) {
+        return loaded(w, s, s.radius + SettlementSC.BELT);
+    }
+
+    /**
+     * How far from the core slot `i`'s creature may be - the circle the census needs loaded before it counts the slot's creature as
+     * lost: the belt (r + BELT - the guards' leash, the Tuners' dome); «Лётное поле посольства» (ЛП-18, the review's) - a field Sentry's
+     * own leash (NpcLinkSC.leash(s, i): his post on the airfield and FIELD_LEASH past it), a Tuner whose home is round his post out past
+     * his dome (NpcLinkSC.setHome: an embassy's Dispatchers by the Vokzal, the second Gas Engineer by the field's columns ~140..150 from the
+     * core) - that post and OUTPOST_HOME past it. Pure.
+     */
+    public static int reach(SettlementRegistrySC.Settlement s, int i) {
+        int belt = s.radius + SettlementSC.BELT;
+        SettlementRegistrySC.Slot sl = i < 0 || i >= s.slots.size() ? null : s.slots.get(i);
+        if (sl == null) {
+            return belt;
+        }
+        if (sl.kindOf().guard) {
+            return Math.max(belt, NpcLinkSC.leash(s, i));
+        }
+        int[] post = NpcLinkSC.post(sl);
+        int home = Math.max(4, s.radius - NpcLinkSC.TUNER_HOME_INSET);
+        double d = post == null ? 0D : Math.sqrt(s.distSq(post[0] + 0.5D, post[2] + 0.5D));
+        return d > home ? Math.max(belt, (int) Math.ceil(d) + NpcLinkSC.OUTPOST_HOME) : belt;
+    }
+
+    /** loaded(w, s, reach), asked once a census for each reach (`memo`). */
+    private static boolean reachLoaded(World w, SettlementRegistrySC.Settlement s, int reach, Map<Integer, Boolean> memo) {
+        Integer k = Integer.valueOf(reach);
+        Boolean b = memo.get(k);
+        if (b == null) {
+            b = Boolean.valueOf(loaded(w, s, reach));
+            memo.put(k, b);
+        }
+        return b.booleanValue();
+    }
+
+    /** Every chunk within `reach` of the core (across) is loaded. Never loads a chunk. */
+    public static boolean loaded(World w, SettlementRegistrySC.Settlement s, int reach) {
         IChunkProvider cp = w.getChunkProvider();
-        int reach = s.radius + SettlementSC.BELT;
         double r2 = (double) reach * reach;
         for (int cx = (s.x - reach) >> 4; cx <= (s.x + reach) >> 4; cx++) {
             for (int cz = (s.z - reach) >> 4; cz <= (s.z + reach) >> 4; cz++) {
@@ -426,6 +467,9 @@ public final class RosterSC {
         mine.setBoolean(RESTORED, true);
         s.extra.setTag(EXTRA, mine);
         r.restore(s);
+        if (embassy && com.sc.embassy.EmbassyAirfieldSC.fieldOf(s) != null) {
+            com.sc.embassy.EmbassyAirfieldSC.changed(w);        // «Лётное поле» (the review's): its airfield is back - the add-on's airports again
+        }
         FMLLog.warning("[Silicon Age] Si-14 settlements: record %d was missing - made again from its core at %d %d %d in dimension %d (%s)",
                 id, x, y, z, s.dim, planned ? s.slots.size() + " slots from the plan" : "no roster");
         if (planned) {                                          // Ф3 (§6.2): the plan is the current version's
@@ -449,7 +493,9 @@ public final class RosterSC {
         if (site == null) {
             return false;
         }
-        com.sc.embassy.EmbassyLayoutSC.Plan plan = com.sc.embassy.EmbassyLayoutSC.plan(w.getSeed(), site, s.floorY);
+        // «Лётное поле посольства» (the coordinator's): the airfield's decision kept by the built start's ground piece ("Air"; none - no field)
+        int[] air = com.sc.embassy.EmbassyAirfieldSC.decisionOfStart(w, s.x, s.z);
+        com.sc.embassy.EmbassyLayoutSC.Plan plan = com.sc.embassy.EmbassyLayoutSC.plan(w.getSeed(), site, s.floorY, air);
         com.sc.embassy.EmbassyLayoutSC.fill(s, plan);
         return true;
     }

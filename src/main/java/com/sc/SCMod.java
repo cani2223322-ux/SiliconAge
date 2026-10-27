@@ -292,6 +292,7 @@ public class SCMod {
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestFinaleSC());   // Подложка Ф5 (package D)
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassySC());  // Подложка Ф6 (package D)
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestEmbassyFlySC(false));   // a player flying in
+            cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new com.sc.debug.WorldTestAirfieldSC());  // «Лётное поле посольства» (package D)
             com.sc.debug.WorldTestIdeasSC.register();                                // 2026-10-26 (docs/plan-ideas-2026-10-26.md)
         } else if (System.getProperty("sc.flytest") != null) {
             // the embassy fly-through alone along a route of the operator's (the crash of 2026-10-22), then the server stops

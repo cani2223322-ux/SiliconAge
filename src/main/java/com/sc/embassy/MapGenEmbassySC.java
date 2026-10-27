@@ -40,6 +40,11 @@ import net.minecraft.world.gen.structure.StructureStart;
  * canSpawnStructureAtCoords and getStructureStart are package G's, and builtIn (the levelling's look-up of the starts over a chunk).
  * A record found at the centre while the footprint is new land (the Overworld's region files deleted, the save's data/ kept) has its
  * roster started afresh (renew - as MapGenSettlementSC's).
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §4.1, the coordinator's): a NEW record's airfield is decided in
+ * getStructureStart (EmbassyAirfieldSC.decideFor - embassy.airfield and the land), its plan carries it (the pieces of the field come
+ * with EmbassyPiecesSC.pieces, the ground piece keeps it as "Air"), the record keeps it as "X"; a record already there keeps its own
+ * (renew keeps "X"). RANGE stays 10: the field's funnels reach FUNNEL_A (150) along the street - still within 10 chunks of the core's.
  */
 public class MapGenEmbassySC extends MapGenStructure {
 
@@ -69,8 +74,8 @@ public class MapGenEmbassySC extends MapGenStructure {
         }
         WorldServer w = (WorldServer) worldObj;
         long seed = w.getSeed(), now = w.getTotalWorldTime();
-        EmbassyLayoutSC.Plan p = EmbassyLayoutSC.plan(seed, site, site.floorY);
-        SettlementRegistrySC.Settlement rec = reg.atCentre(EmbassySiteSC.DIM, p.coreX, p.coreZ);
+        SettlementRegistrySC.Settlement rec = reg.atCentre(EmbassySiteSC.DIM, site.x, site.z);
+        EmbassyLayoutSC.Plan p;
         boolean explored = EmbassySiteSC.explored(w, site);
         if (rec == null && explored) {                          // ПЕ-4: old land - no embassy here
             FMLLog.info("[Silicon Age] Tuners' Embassies: no embassy at %d %d - its ground was explored before (old land)", site.x, site.z);
@@ -81,12 +86,22 @@ public class MapGenEmbassySC extends MapGenStructure {
             return new StructureEmbassyStartSC(cx, cz);
         }
         if (rec == null) {
+            // «Лётное поле» (docs/plan-embassy-airfield-core.md §4.1, the coordinator's): the airfield is decided here, once, for a new
+            // embassy only - embassy.airfield (AUTO: the add-on loaded now) and the land (package G's EmbassyAirSiteSC.choose, the biome
+            // layers); null: no field, no "X" - the embassy is exactly as before. A record's decision is its own (below): never changed.
+            int[] air = EmbassyAirfieldSC.decideFor(w, site);
+            p = EmbassyLayoutSC.plan(seed, site, site.floorY, air);
             reg.reserveIds(maxStartId());                       // the registry's file lost, data/SCOwEmbassy.dat kept: no id twice
             rec = reg.add(EmbassyLayoutSC.record(p, EmbassySiteSC.DIM, now));
-            FMLLog.info("[Silicon Age] Tuners' Embassies: embassy %d at %d %d (dome %d, floor %d%s) - its start is made", rec.id, p.coreX,
-                    p.coreZ, p.radius, p.floorY, site.guaranteed ? ", the guaranteed one" : "");
+            FMLLog.info("[Silicon Age] Tuners' Embassies: embassy %d at %d %d (dome %d, floor %d%s) - its start is made%s", rec.id, p.coreX,
+                    p.coreZ, p.radius, p.floorY, site.guaranteed ? ", the guaranteed one" : "", air == null ? ""
+                    : ", airfield " + EmbassyAirfieldSC.KIND_KEYS[Math.max(0, Math.min(EmbassyAirfieldSC.FULL, air[0]))] + " (side " + air[1] + ")");
             EmbassyBeamSC.recordMade(w, rec);
+            if (p.field != null) {
+                EmbassyAirfieldSC.changed(w);
+            }
         } else {
+            p = EmbassyLayoutSC.plan(seed, site, site.floorY, EmbassyAirfieldSC.decisionOf(rec));
             if (rec.floorY != p.floorY || rec.radius != p.radius || rec.seed != site.seed) {
                 p = EmbassyLayoutSC.planOf(rec, seed);          // the record's own numbers (a lost record its core made again)
             }
@@ -96,6 +111,9 @@ public class MapGenEmbassySC extends MapGenStructure {
                 reg.markDirty();
                 FMLLog.info("[Silicon Age] Tuners' Embassies: embassy %d at %d %d is built again on new ground - its roster starts afresh",
                         rec.id, p.coreX, p.coreZ);
+                if (p.field != null) {
+                    EmbassyAirfieldSC.changed(w);
+                }
             }
         }
         List<StructureComponent> parts = new ArrayList<StructureComponent>();
@@ -201,11 +219,13 @@ public class MapGenEmbassySC extends MapGenStructure {
 
     /**
      * A built embassy's box (its start made and not empty) holds column (x, z), `margin` round it - the populate / decorate bans and
-     * the «Достройка» ask it. Only the embassies within REACH_MAX + margin of the column can (their starts' chunks). Server.
+     * the «Достройка» ask it. Only the embassies within REACH_MAX (an airfield's funnels: FUNNEL_A) + margin of the column can (their
+     * starts' chunks). Server.
      */
     public boolean covers(World w, int x, int z, int margin) {
         ensureLoaded(w);
-        int reach = EmbassyLayoutSC.REACH_MAX + margin;
+        // the airfield's approach funnels reach EmbassyAirfieldSC.FUNNEL_A past the core along the street (the box grows with them)
+        int reach = Math.max(EmbassyLayoutSC.REACH_MAX, EmbassyAirfieldSC.FUNNEL_A) + margin;
         for (Object o : structureMap.values()) {
             if (!(o instanceof StructureStart) || !((StructureStart) o).isSizeableStructure()) {
                 continue;

@@ -73,9 +73,11 @@ public final class SettlementBlocksSC {
 
     /**
      * `b` is one of the settlements' unbreakable blocks (the core, a showcase, a dock block, the trim) - nobody breaks
-     * them (package C), a creative player only one standing outside every settlement (SettlementProtectSC.takenAway).
+     * them (package C), a creative player only one standing outside every settlement (SettlementProtectSC.takenAway). The embassies'
+     * airfield surface too (docs/plan-embassy-airfield-core.md §2.4, the coordinator's).
      */
     public static boolean unbreakable(Block b) {
-        return b != null && (b == core || b == showcase || b == dock || b == decor || b == glass || b == showcase2);
+        return b != null && (b == core || b == showcase || b == dock || b == decor || b == glass || b == showcase2
+                || b == com.sc.embassy.EmbassyBlocksSC.airfield);
     }
 }

@@ -157,6 +157,18 @@ public final class SubstrateConfigSC {
      */
     private static boolean ambientLife = true;
 
+    /**
+     * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §2.1, the coordinator's): embassy.airfield - whether a new embassy gets
+     * its airfield. AIRFIELD_AUTO (the default): only while the Vehicles add-on (mod id "SiliconAgeVehicles") is installed, asked at the
+     * moment the embassy's start is decided (without it embassies generate exactly as before - the same seed differs with and without
+     * the add-on: the user's choice of 2026-10-26); AIRFIELD_ALWAYS, AIRFIELD_NEVER. Old embassies are never touched. NOT a rule
+     * (private, never sent to a client: only the server's world generation reads it) - so the rule counts of the self-tests stay.
+     */
+    public static final int AIRFIELD_AUTO = 0, AIRFIELD_ALWAYS = 1, AIRFIELD_NEVER = 2;
+    /** embassy.airfield's values in the file, by mode. */
+    public static final String[] AIRFIELD_MODES = {"AUTO", "ALWAYS", "NEVER"};
+    private static int embassyAirfield = AIRFIELD_AUTO;
+
     /** The section of the embassies' rules. */
     public static final String CATEGORY_EMBASSY = "embassy";
 
@@ -254,6 +266,36 @@ public final class SubstrateConfigSC {
                 + " / Множитель собственной радиации Подложки (Окисные поля, Разлом, треснувшие РИТЭГи, столп; поверх radiation.multiplier; 0 - нет)");
         loadIdeas(c);
         loadEmbassies(c);
+        loadAirfield(c);
+    }
+
+    /**
+     * The airfield's switch (embassy.airfield, see AIRFIELD_AUTO) - its own method, after loadEmbassies: the Ф6 self-test reloads that
+     * one on empty Configurations and must not reset this key. An unknown word in the file: AUTO.
+     */
+    private static void loadAirfield(Configuration c) {
+        String v = c.getString("airfield", CATEGORY_EMBASSY, AIRFIELD_MODES[AIRFIELD_AUTO],
+                "A new embassy gets the Tuners' airfield (a runway, an apron, a terminal and a tower, its own air defence): AUTO - only while the"
+                + " Silicon Age: Vehicles add-on is installed (without it embassies generate as before); ALWAYS; NEVER. Old embassies are never"
+                + " changed / Новое посольство получает лётное поле Наладчиков (ВПП, перрон, аэровокзал и вышка, своё ПВО): AUTO - только если"
+                + " установлен аддон Silicon Age: Vehicles (без него посольства как раньше); ALWAYS - всегда; NEVER - никогда. Старые посольства"
+                + " не меняются", AIRFIELD_MODES);
+        embassyAirfield = AIRFIELD_AUTO;
+        for (int m = 0; m < AIRFIELD_MODES.length; m++) {
+            if (AIRFIELD_MODES[m].equalsIgnoreCase(v == null ? "" : v.trim())) {
+                embassyAirfield = m;
+            }
+        }
+    }
+
+    /** embassy.airfield: AIRFIELD_AUTO, AIRFIELD_ALWAYS or AIRFIELD_NEVER (EmbassyAirfieldSC.buildsNow asks it). */
+    public static int embassyAirfield() {
+        return embassyAirfield;
+    }
+
+    /** The world test's switch (WorldTestAirfieldSC: ALWAYS for its own embassy, the old value back after it). A bad mode: AUTO. */
+    public static void setEmbassyAirfield(int mode) {
+        embassyAirfield = mode >= AIRFIELD_AUTO && mode <= AIRFIELD_NEVER ? mode : AIRFIELD_AUTO;
     }
 
     /** The proposal of 2026-10-26 (docs/plan-ideas-2026-10-26.md): ПД-2..ПД-8's switches in the section "dimension". */

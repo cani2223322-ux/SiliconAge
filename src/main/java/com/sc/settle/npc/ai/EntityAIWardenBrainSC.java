@@ -26,7 +26,7 @@ import net.minecraftforge.common.util.FakePlayer;
  * PACKAGE N (rules ПГ-5..ПГ-8, ПГ-10): a guard's target and alert, decided every EntityWardenSC.THINK ticks (each guard
  * on its own tick) - the only task of its targetTasks. In this order:
  * <ol>
- * <li>past its leash (NpcLinkSC.leash from the core; back within LEASH_BACK of it) - no target, it walks back
+ * <li>past its leash (NpcLinkSC.leash(s, slot) from the core; back within LEASH_BACK of it) - no target, it walks back
  * (EntityAIWardenReturnSC): it doesn't chase anyone out of its dome's reach and forgets;</li>
  * <li>the offender package C names (GuardAlertSC.target: provoked past the 2 s warning, or a local «Враг» in sight) -
  * the only way a player becomes its target; the warned player (GuardAlertSC.warned: it faces him, blade drawn,
@@ -111,7 +111,7 @@ public class EntityAIWardenBrainSC extends EntityAIBase {
             g.showAlert(cur != null ? GuardAlertSC.ATTACKING : GuardAlertSC.CALM);
             return;
         }
-        int leash = NpcLinkSC.leash(s);
+        int leash = NpcLinkSC.leash(s, g.slot());               // ЛП-18: a field Sentry's reaches his post on the airfield
         double back = g.returning() ? leash - LEASH_BACK : leash;
         if (s.distSq(g.posX, g.posZ) > back * back) {
             target(null);
@@ -209,7 +209,7 @@ public class EntityAIWardenBrainSC extends EntityAIBase {
 
     /** The current mob target stays: still huntable (or the one that hit it), near enough, seen lately. */
     private boolean keep(SettlementRegistrySC.Settlement s, EntityLivingBase cur, List<EntityPlayer> partners) {
-        int leash = NpcLinkSC.leash(s);
+        int leash = NpcLinkSC.leash(s, g.slot());
         if (!alive(cur) || cur instanceof ISettlementMemberSC || !inLeash(s, cur, leash)
                 || g.getDistanceSqToEntity(cur) > (EntityWardenSC.FOLLOW + 8D) * (EntityWardenSC.FOLLOW + 8D)) {
             return false;

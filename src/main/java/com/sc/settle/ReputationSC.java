@@ -60,6 +60,11 @@ public final class ReputationSC {
      * settlement), ПД-4's wanted Renegade (WantedRulesSC.REWARD_REP to each with 10% of the damage), ПД-7's relay post held.
      */
     public static final int SRC_RESCUE = 11, SRC_WANTED = 12, SRC_RELAY = 13;
+    /**
+     * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §2.6, the coordinator's): the «Лётная книжка» - the first landing at an
+     * embassy (EmbassyAirRulesSC.LOGBOOK_TRUST, once an embassy a player, under the embassy's ceiling; no day cap of its own).
+     */
+    public static final int SRC_AIR = 14;
     /** Ф6 (ПД-7): what an embassy's «Доверие» can lift a player to at most - the top of «Партнёр» (OWN_FROM - 1). */
     public static final int EMBASSY_CEILING = OWN_FROM - 1;
     /** Ф6: no ceiling (a Substrate settlement's). */

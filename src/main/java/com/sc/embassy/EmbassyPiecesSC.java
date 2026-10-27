@@ -28,12 +28,19 @@ import net.minecraft.world.gen.structure.StructureComponent;
  * coils, its core and the core's setup); "SCOwEmbEnergy" - an energy field (solar panels or wind masts - decor).</li>
  * </ul>
  * ComponentEmbFrameSC is the abstract base of the pieces built in the embassy's frame - never registered.
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §4.3, the coordinator's - this file is the coordinator's in that run): the
+ * airfield's pieces appended - "SCOwEmbRunway", "SCOwEmbApron", "SCOwEmbTerminal", "SCOwEmbHangar", "SCOwEmbHelipad", "SCOwEmbFunnel",
+ * "SCOwEmbAirDefence" (package P's bodies; ComponentEmbAirSC their base, never registered), built after the city's from the plan's
+ * field (EmbassyAirfieldSC.Field.lots - never in Plan.lots: the quarters' rules don't see them). A plan without a field: none.
  */
 public final class EmbassyPiecesSC {
 
     /** The pieces' names after EmbassySC.PIECE_PREFIX, in register()'s order (the self-test checks each is registered). */
     public static final String[] NAMES = {"Heart", "Street", "Gate", "Wall", "Tower", "Workshop", "Depot", "Greenhouse", "House", "Vokzal",
-            "Ring", "Energy"};
+            "Ring", "Energy",
+            // «Лётное поле посольства» (appended)
+            "Runway", "Apron", "Terminal", "Hangar", "Helipad", "Funnel", "AirDefence"};
 
     private EmbassyPiecesSC() {
     }
@@ -42,19 +49,32 @@ public final class EmbassyPiecesSC {
     public static void register() {
         Class<?>[] classes = {ComponentEmbHeartSC.class, ComponentEmbStreetSC.class, ComponentEmbGateSC.class, ComponentEmbWallSC.class,
                 ComponentEmbTowerSC.class, ComponentEmbWorkshopSC.class, ComponentEmbDepotSC.class, ComponentEmbGreenhouseSC.class,
-                ComponentEmbHouseSC.class, ComponentEmbVokzalSC.class, ComponentEmbRingSC.class, ComponentEmbEnergySC.class};
+                ComponentEmbHouseSC.class, ComponentEmbVokzalSC.class, ComponentEmbRingSC.class, ComponentEmbEnergySC.class,
+                ComponentEmbRunwaySC.class, ComponentEmbApronSC.class, ComponentEmbTerminalSC.class, ComponentEmbHangarSC.class,
+                ComponentEmbHelipadSC.class, ComponentEmbFunnelSC.class, ComponentEmbAirDefenceSC.class};
+        if (classes.length != NAMES.length) {
+            throw new IllegalStateException("[Silicon Age] the embassy pieces' names and classes differ: " + NAMES.length + " / " + classes.length);
+        }
         for (int i = 0; i < classes.length; i++) {
             MapGenStructureIO.func_143031_a(classes[i], EmbassySC.PIECE_PREFIX + NAMES[i]);
         }
     }
 
-    /** The buildings of plan `p` of embassy `id`, in the plan's order of lots (the ground is not among them). */
+    /** The buildings of plan `p` of embassy `id`, in the plan's order of lots (the ground is not among them), then its airfield's. */
     public static List<StructureComponent> pieces(int id, EmbassyLayoutSC.Plan p) {
         List<StructureComponent> l = new ArrayList<StructureComponent>();
         for (SettlementLayoutSC.Lot lot : p.lots) {
             StructureComponent c = piece(id, p, lot);
             if (c != null) {
                 l.add(c);
+            }
+        }
+        if (p.field != null) {                                  // «Лётное поле»: after the city's (the Vokzal's platform stands first)
+            for (SettlementLayoutSC.Lot lot : p.field.lots()) {
+                StructureComponent c = piece(id, p, lot);
+                if (c != null) {
+                    l.add(c);
+                }
             }
         }
         return l;
@@ -87,6 +107,20 @@ public final class EmbassyPiecesSC {
                 return new ComponentEmbRingSC(id, p, lot);
             case EmbassyQuartersSC.LOT_ENERGY:
                 return new ComponentEmbEnergySC(id, p, lot);
+            case EmbassyLayoutSC.LOT_RUNWAY:                    // «Лётное поле» (p.field set: these lots are its)
+                return p.field == null ? null : new ComponentEmbRunwaySC(id, p, lot);
+            case EmbassyLayoutSC.LOT_APRON:
+                return p.field == null ? null : new ComponentEmbApronSC(id, p, lot);
+            case EmbassyLayoutSC.LOT_TERMINAL:
+                return p.field == null ? null : new ComponentEmbTerminalSC(id, p, lot);
+            case EmbassyLayoutSC.LOT_HANGAR:
+                return p.field == null ? null : new ComponentEmbHangarSC(id, p, lot);
+            case EmbassyLayoutSC.LOT_HELIPAD:
+                return p.field == null ? null : new ComponentEmbHelipadSC(id, p, lot);
+            case EmbassyLayoutSC.LOT_FUNNEL:
+                return p.field == null ? null : new ComponentEmbFunnelSC(id, p, lot);
+            case EmbassyLayoutSC.LOT_AIR_DEFENCE:
+                return p.field == null ? null : new ComponentEmbAirDefenceSC(id, p, lot);
             default:
                 return null;
         }

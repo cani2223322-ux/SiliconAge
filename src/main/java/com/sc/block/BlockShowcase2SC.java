@@ -14,6 +14,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.IIcon;
@@ -37,6 +38,12 @@ import net.minecraft.world.World;
  * Ф6 (docs/plan-substrate-tech-f6.md §2.2, package S's look): the Tuners' Embassies' metas appended - GRAVITY_COIL (the Great Ring's
  * segment, «витрина-гравикатушка»: the bridge's Gravity Coil's look, lit), CRYO_TANK (the Vokzal's gas tanks, «витрина-бак»), and
  * DISPATCH_CONSOLE (the Dispatchers' office desk). The same rules: unbreakable, no drop but scrap, hidden in NEI, AE2-blacklisted.
+ * <p>
+ * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §2.4, the coordinator's NAMES / LIGHT / the column's click; the look is
+ * package P's): TOWER_CONSOLE (the control tower's desk - decor until the player's console of phase А5), SERVICE_COLUMN («Колонка
+ * обслуживания»: a right click is EmbassyAirServiceSC.useColumn - the add-on's service window through its hook, else the core's
+ * armour gases for Credit Chips), AIRFIELD_BEACON (the tower's «Светомаяк», lit), AA_POST («Зенитный пост Наладчиков»: the embassy's
+ * air defence emplacement - the add-on fires from it; without the add-on it stands silent). Only on an embassy's airfield.
  */
 public class BlockShowcase2SC extends Block {
 
@@ -44,10 +51,15 @@ public class BlockShowcase2SC extends Block {
     public static final int ENERGY_STORAGE = 0, TRANSFORMER = 1, WIND_GENERATOR = 2, SOLAR_PANEL = 3, CRATE = 4, SCRAP_PILE = 5, RACK = 6;
     /** Ф6 (appended): the Great Ring's segment, the Vokzal's tank, the Dispatchers' desk. */
     public static final int GRAVITY_COIL = 7, CRYO_TANK = 8, DISPATCH_CONSOLE = 9;
+    /** The embassies' airfield (appended): the tower's desk, the service column, the tower's beacon, the air defence emplacement. */
+    public static final int TOWER_CONSOLE = 10, SERVICE_COLUMN = 11, AIRFIELD_BEACON = 12, AA_POST = 13;
     public static final String[] NAMES = {"energyStorage", "transformer", "windGenerator", "solarPanel", "crate", "scrapPile", "rack",
-            "gravityCoil", "cryoTank", "dispatchConsole"};
-    /** The light by meta (the storage's terminal, the transformer's coils; Ф6: the ring's coils, the tank's gauge, the desk's screens; the rest is dark). */
-    public static final int[] LIGHT = {5, 4, 0, 0, 0, 0, 0, 8, 3, 6};
+            "gravityCoil", "cryoTank", "dispatchConsole", "towerConsole", "serviceColumn", "airfieldBeacon", "aaPost"};
+    /**
+     * The light by meta (the storage's terminal, the transformer's coils; Ф6: the ring's coils, the tank's gauge, the desk's screens; the
+     * airfield: the tower desk's screens, the column's display, the beacon, the emplacement's lamp; the rest is dark). TODO(balance)
+     */
+    public static final int[] LIGHT = {5, 4, 0, 0, 0, 0, 0, 8, 3, 6, 6, 5, 14, 2};
     /** The real machines the metas wear: the energy storage's and the transformer's tier (their blocks' meta), the two generators. */
     public static final Tier STORAGE_TIER = Tier.HV, TRANSFORMER_TIER = Tier.MV;
     public static final GeneratorType WIND = GeneratorType.WIND_TURBINE, SOLAR = GeneratorType.SOLAR_GAAS;
@@ -57,6 +69,9 @@ public class BlockShowcase2SC extends Block {
     /** Ф6 (package S): the ring's coil (its windings, their ends), the tank (side, gauge, lid), the desk (screens, side, top). */
     @SideOnly(Side.CLIENT)
     private IIcon coilSide, coilEnd, tankSide, tankFront, tankTop, consoleFront, consoleSide, consoleTop;
+    /** The airfield (package P): the tower's desk, the service column, the beacon, the emplacement's gun - their fronts, sides, tops. */
+    @SideOnly(Side.CLIENT)
+    private IIcon towerFront, towerSide, towerTop, columnFront, columnSide, columnTop, beaconSide, beaconTop, aaFront, aaSide, aaTop;
 
     public BlockShowcase2SC() {
         super(Material.iron);
@@ -103,6 +118,22 @@ public class BlockShowcase2SC extends Block {
         return false;
     }
 
+    /**
+     * The airfield's «Колонка обслуживания» (SERVICE_COLUMN): the server hands the click to EmbassyAirServiceSC.useColumn (package R - the
+     * add-on's hook first, else the core's armour gases); both sides answer true (the hand swings, no item is used on it). Every other
+     * meta: nothing (false). The coordinator's.
+     */
+    @Override
+    public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hx, float hy, float hz) {
+        if (world.getBlockMetadata(x, y, z) != SERVICE_COLUMN) {
+            return false;
+        }
+        if (!world.isRemote && player != null) {
+            com.sc.embassy.EmbassyAirServiceSC.useColumn(world, x, y, z, player);
+        }
+        return true;
+    }
+
     /** Creative's middle click: nothing - an unbreakable copy would stand wherever it was put. */
     @Override
     public ItemStack getPickBlock(net.minecraft.util.MovingObjectPosition target, World world, int x, int y, int z) {
@@ -124,6 +155,10 @@ public class BlockShowcase2SC extends Block {
     // Ф6 (package S, tools/gen_embassy_tex.py): the Great Ring's segment - the bridge's Gravity Coil lit in the Tuners' turquoise
     // (showcase2_gravityCoil_side / _top), the Vokzal's cryo tank - frosted steel, its level gauge in front (showcase2_cryoTank_*), the
     // Dispatchers' desk - the ring and the flights on its screens (showcase2_dispatchConsole_*).
+    // The airfield (package P, tools/gen_airfield_tex.py): the tower's desk - a radar scope and the flight strips over its keys
+    // (showcase2_towerConsole_*), the «Колонка обслуживания» - its display, the hydrogen and oxygen hoses on their hooks, hazard stripes
+    // (showcase2_serviceColumn_*), the «Светомаяк» - a glass lamp, white one half and green the other, on a steel base
+    // (showcase2_airfieldBeacon_*), the «Зенитный пост» - the twin barrels' muzzles in an armoured mantlet (showcase2_aaPost_*).
 
     @Override
     @SideOnly(Side.CLIENT)
@@ -143,6 +178,17 @@ public class BlockShowcase2SC extends Block {
         consoleFront = register.registerIcon(Reference.ASSETS + ":showcase2_dispatchConsole_front");
         consoleSide = register.registerIcon(Reference.ASSETS + ":showcase2_dispatchConsole_side");
         consoleTop = register.registerIcon(Reference.ASSETS + ":showcase2_dispatchConsole_top");
+        towerFront = register.registerIcon(Reference.ASSETS + ":showcase2_towerConsole_front");
+        towerSide = register.registerIcon(Reference.ASSETS + ":showcase2_towerConsole_side");
+        towerTop = register.registerIcon(Reference.ASSETS + ":showcase2_towerConsole_top");
+        columnFront = register.registerIcon(Reference.ASSETS + ":showcase2_serviceColumn_front");
+        columnSide = register.registerIcon(Reference.ASSETS + ":showcase2_serviceColumn_side");
+        columnTop = register.registerIcon(Reference.ASSETS + ":showcase2_serviceColumn_top");
+        beaconSide = register.registerIcon(Reference.ASSETS + ":showcase2_airfieldBeacon_side");
+        beaconTop = register.registerIcon(Reference.ASSETS + ":showcase2_airfieldBeacon_top");
+        aaFront = register.registerIcon(Reference.ASSETS + ":showcase2_aaPost_front");
+        aaSide = register.registerIcon(Reference.ASSETS + ":showcase2_aaPost_side");
+        aaTop = register.registerIcon(Reference.ASSETS + ":showcase2_aaPost_top");
         blockIcon = crateSide;
     }
 
@@ -187,6 +233,14 @@ public class BlockShowcase2SC extends Block {
                 return side < 2 ? tankTop : side == 3 ? tankFront : tankSide;
             case DISPATCH_CONSOLE:                              // the screens face the Dispatcher
                 return side == 1 ? consoleTop : side == 3 ? consoleFront : consoleSide;
+            case TOWER_CONSOLE:                                 // the airfield (package P): the radar and the strips face the controller
+                return side == 1 ? towerTop : side == 3 ? towerFront : towerSide;
+            case SERVICE_COLUMN:                                // the display and the hoses face the stand
+                return side < 2 ? columnTop : side == 3 ? columnFront : columnSide;
+            case AIRFIELD_BEACON:                               // the lamp the same all round
+                return side < 2 ? beaconTop : beaconSide;
+            case AA_POST:                                       // the barrels point out
+                return side == 1 ? aaTop : side == 3 ? aaFront : aaSide;
             default:
                 return null;
         }
