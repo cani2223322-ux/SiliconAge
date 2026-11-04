@@ -446,8 +446,14 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
 
     // ------------------------------------------------------------------ what gets dug
 
-    /** Lit redstone ore (a mob walked on it) has no item: it counts as the plain ore. */
+    /**
+     * Lit redstone ore (a mob walked on it) has no item: it counts as the plain ore. The Substrate's ore counts as oreSC of
+     * the same meta (it drops only that): the filter's samples, the counters and the map's names match the ordinary ore.
+     */
     private static Block oreBlock(Block b) {
+        if (b != null && b == com.sc.dim.SubstrateBlocksSC.ore) {
+            return com.sc.init.ModBlocks.oreSC;
+        }
         return b == Blocks.lit_redstone_ore ? Blocks.redstone_ore : b;
     }
 

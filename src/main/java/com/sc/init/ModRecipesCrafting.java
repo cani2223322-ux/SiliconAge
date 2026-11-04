@@ -45,6 +45,8 @@ public final class ModRecipesCrafting {
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPELESS, "after:forge:shapelessore");
         net.minecraftforge.oredict.RecipeSorter.register("siliconage:carry", CarryRecipe.class,
                 net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
+        net.minecraftforge.oredict.RecipeSorter.register("siliconage:emptystorage", EmptyStorageRecipe.class,
+                net.minecraftforge.oredict.RecipeSorter.Category.SHAPED, "after:forge:shapedore");
         if (!returnsRegistered) {
             returnsRegistered = true;
             cpw.mods.fml.common.FMLCommonHandler.instance().bus().register(new CarryReturns());
@@ -597,10 +599,12 @@ public final class ModRecipesCrafting {
                 'I', new ItemStack(Items.iron_ingot), 'P', pipe(PipeType.COPPER), 'G', window, 'B', new ItemStack(Items.bucket),
                 'C', cable(CableType.SILVER));
         // the Armour Service Station: an MV charge pad on top, steel tanks and pistons (the pumps), a controller, MV cable
-        OreRecipes.shaped(new ItemStack(ModBlocks.armorStation), "KPK", "TXT", "ICI",
+        // (a CarryRecipe EMPTY: a filled steel tank doesn't form it - its fluid would be lost)
+        GameRegistry.addRecipe(new CarryRecipe(new ItemStack(ModBlocks.armorStation), CarryRecipe.EMPTY,
+                com.sc.block.BlockTankSC.class, null, "KPK", "TXT", "ICI",
                 'K', new ItemStack(Blocks.piston), 'P', new ItemStack(ModBlocks.chargePadSC, 1, com.sc.energy.Tier.MV.ordinal()),
                 'T', new ItemStack(ModBlocks.tankSC, 1, 0), 'X', silicon(SiliconMaterial.CONTROLLER), 'I', new ItemStack(Items.iron_ingot),
-                'C', cable(cableOf(com.sc.energy.Tier.MV)));
+                'C', cable(cableOf(com.sc.energy.Tier.MV))));
         singularCrafts();
     }
 
@@ -963,6 +967,55 @@ public final class ModRecipesCrafting {
         public static boolean allEmpty(ItemStack[] stacks) {
             for (ItemStack s : stacks) {
                 if (s != null && s.getItem() instanceof com.sc.item.ItemBatterySC && com.sc.item.ItemBatterySC.chargeOf(s) != 0) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public boolean matches(net.minecraft.inventory.InventoryCrafting grid, net.minecraft.world.World world) {
+            if (!super.matches(grid, world)) {
+                return false;
+            }
+            ItemStack[] in = new ItemStack[grid.getSizeInventory()];
+            for (int i = 0; i < in.length; i++) {
+                in[i] = grid.getStackInSlot(i);
+            }
+            return allEmpty(in);
+        }
+    }
+
+    /**
+     * A shaped recipe whose energy storages (BlockEnergyStorageSC) must be empty and without upgrades - the Energy Bank's controller and
+     * 4-billion cell (ModRecipesIdeasSC.om7) keep neither: a charged SV storage (up to ~2.1 billion EU) or its modules would be lost
+     * silently, as EmptyBatteryRecipe's battery. Generic materials go by their ore names as in OreRecipes.shaped; the storage stays an
+     * exact stack.
+     */
+    public static final class EmptyStorageRecipe extends net.minecraftforge.oredict.ShapedOreRecipe {
+
+        public EmptyStorageRecipe(ItemStack result, Object... recipe) {
+            super(result, convert(recipe));
+        }
+
+        private static Object[] convert(Object[] in) {
+            Object[] out = new Object[in.length];
+            for (int i = 0; i < in.length; i++) {
+                out[i] = in[i] instanceof ItemStack && !isStorage((ItemStack) in[i]) ? OreRecipes.oreName((ItemStack) in[i]) : in[i];
+            }
+            return out;
+        }
+
+        private static boolean isStorage(ItemStack s) {
+            return s != null && s.getItem() != null
+                    && net.minecraft.block.Block.getBlockFromItem(s.getItem()) instanceof com.sc.block.BlockEnergyStorageSC;
+        }
+
+        /** No storage among `stacks` holds any charge or upgrades (nulls and other items don't matter). */
+        public static boolean allEmpty(ItemStack[] stacks) {
+            for (ItemStack s : stacks) {
+                if (isStorage(s) && s.hasTagCompound()
+                        && (s.getTagCompound().getInteger("EnergySC") > 0 || s.getTagCompound().hasKey("UpgradesSC"))) {
                     return false;
                 }
             }

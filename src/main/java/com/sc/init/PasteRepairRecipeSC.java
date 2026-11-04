@@ -30,6 +30,8 @@ public class PasteRepairRecipeSC implements IRecipe {
     /** A repair gives back this share of the maximum; at most this many repairs a tool. TODO(balance) */
     public static final float REPAIR_SHARE = 0.25F;
     public static final int MAX_REPAIRS = 3;
+    /** A repair never takes more pastes than this - the grid's 9 less the tool (the diamond head's third: 3 x 3 = 9 -> 8). */
+    public static final int MAX_PASTES = 8;
     /** The tools the paste mends (ItemToolSC types; the drill heads with a life besides). */
     public static final SCToolType[] TOOLS = {SCToolType.PHOTOMASK, SCToolType.SPUTTER_TARGET_COPPER, SCToolType.SPUTTER_TARGET_ALUMINIUM,
             SCToolType.SPUTTER_TARGET_TUNGSTEN, SCToolType.DIAMOND_WIRE, SCToolType.DIAMOND_BLADE, SCToolType.EUV_MASK};
@@ -43,7 +45,7 @@ public class PasteRepairRecipeSC implements IRecipe {
 
     /** The pastes the next repair of `tool` takes (pastesFor x weight); 0 - none any more (or not mendable). */
     public static int pastesFor(ItemStack tool) {
-        return mendable(tool) ? pastesFor(repairs(tool)) * weight(tool) : 0;
+        return mendable(tool) ? Math.min(MAX_PASTES, pastesFor(repairs(tool)) * weight(tool)) : 0;
     }
 
     /** How dear a mendable tool is to mend (see the class): 1, 2 or 3; 0 - not one the paste mends. */
@@ -124,7 +126,7 @@ public class PasteRepairRecipeSC implements IRecipe {
         if (tool == null || tool.getItemDamage() <= 0) {
             return null;
         }
-        int done = repairs(tool), need = pastesFor(done) * Math.max(1, weight(tool));
+        int done = repairs(tool), need = Math.min(MAX_PASTES, pastesFor(done) * Math.max(1, weight(tool)));
         if (need <= 0 || pastes != need) {
             return null;
         }

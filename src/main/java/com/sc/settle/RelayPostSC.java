@@ -105,6 +105,8 @@ public final class RelayPostSC {
         long startedAt;
         int wave = -1, hp = RELAY_HP;
         long waveAt, aloneSince = -1L, lastSay;
+        /** The world total time of its last step (step: the time it wasn't stepped or its chunk was unloaded doesn't count). */
+        long steppedAt;
         final List<EntityLiving> raiders = new ArrayList<EntityLiving>();
         final List<UUID> defenders = new ArrayList<UUID>();
 
@@ -118,6 +120,7 @@ public final class RelayPostSC {
             this.by = by;
             this.startedAt = now;
             this.lastSay = now;
+            this.steppedAt = now;
         }
     }
 
@@ -140,7 +143,7 @@ public final class RelayPostSC {
 
     /**
      * {the lang key or null, its argument (a settlement's name code / a post's), the canyon way for the dock} - and a fourth, a pause's
-     * minutes, for the lost-defence pauses (the crossing's COOL, the player's LOST).
+     * minutes, for the lost-defence pauses (the crossing's COOL, the player's LOST), or the busy region's Relay "x, z".
      */
     private static String[] refusalWhy(World w, EntityPlayer p, int x, int y, int z) {
         if (!SubstrateConfigSC.relayPosts) {
@@ -162,6 +165,9 @@ public final class RelayPostSC {
             for (Defence d : DEFENCES.values()) {
                 if (d.i == n[0] && d.j == n[1]) {
                     return new String[]{"sc.relay.refuse.busy", null, null};
+                }
+                if (RelayRulesSC.regionKey(d.i, d.j) == RelayRulesSC.regionKey(n[0], n[1])) {     // ...or another in its region: one post a region
+                    return new String[]{"sc.relay.refuse.busyRegion", null, null, d.x + ", " + d.z};
                 }
             }
         }
@@ -236,7 +242,7 @@ public final class RelayPostSC {
         return -1;
     }
 
-    /** Air, the Substrate's rock, its wild blocks, a ruin's block - nothing a player put there. */
+    /** Air, the Substrate's rock, its wild blocks, a ruin's block or chest - nothing a player put there. */
     private static boolean natural(World w, int x, int y, int z) {
         if (!w.blockExists(x, y, z)) {
             return true;                                        // never loads a chunk: what isn't loaded isn't a building
@@ -252,7 +258,18 @@ public final class RelayPostSC {
         Block b = w.getBlock(x, y, z);
         return !(b == null || b.isAir(w, x, y, z) || b == SubstrateBlocksSC.rock || b == SubstrateBlocksSC.ore || b == SubstrateBlocksSC.druse
                 || b == RuinBlocksSC.ruin || b == SubstrateWildBlocksSC.flora || b == SubstrateWildBlocksSC.vent || b == SubstrateWildBlocksSC.glass
-                || b == IdeaBlocksSC.relay || b == Blocks.water || b == Blocks.flowing_water);
+                || b == IdeaBlocksSC.relay || b == Blocks.chest && ruinChest(w, x, y, z) || b == Blocks.water || b == Blocks.flowing_water);
+    }
+
+    /** A Dead Node's loot chest: one stands beside a husk (ComponentNodePlazaSC.things) - a player's chest elsewhere is his block. */
+    private static boolean ruinChest(World w, int x, int y, int z) {
+        for (int k = 0; k < DIRS.length; k++) {
+            int bx = x + DIRS[k][0], bz = z + DIRS[k][1];
+            if (w.blockExists(bx, y, bz) && w.getBlock(bx, y, bz) == RuinBlocksSC.ruin) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Server: the Dead Node at crossing (i, j) has a post now (SpawnDirectorSC: no patrols there). */
@@ -370,7 +387,8 @@ public final class RelayPostSC {
         d.defenders.add(p.getUniqueID());
         TileEntity te = w.getTileEntity(x, y, z);
         TileEntityRelaySC relay = te instanceof TileEntityRelaySC ? (TileEntityRelaySC) te : null;
-        if (resume && relay != null && relay.wave() >= 0) {
+        long lostAt = crossingPause(SettlementRegistrySC.get(w), n[0], n[1]) - RelayRulesSC.LOST_PAUSE;
+        if (resume && relay != null && relay.wave() >= 0 && lostAt < relay.at()) {     // a defence lost since its set-up: afresh
             d.wave = Math.min(relay.wave(), RelayRulesSC.WAVES - 1);
             d.startedAt = now - Math.max(0L, Math.min(relay.held(), (long) RelayRulesSC.HOLD_TICKS));
             d.waveAt = d.startedAt;
@@ -436,12 +454,35 @@ public final class RelayPostSC {
         }
     }
 
+    /** Defence `d`'s clocks `ticks` later: the time held, the wave and the alone-timer don't run on. */
+    private static void stopClock(Defence d, long ticks) {
+        d.startedAt += ticks;
+        d.waveAt += ticks;
+        if (d.aloneSince >= 0L) {
+            d.aloneSince += ticks;
+        }
+    }
+
     /** One step of defence `d`. @return over */
     static boolean step(WorldServer w, Defence d) {
-        long now = w.getTotalWorldTime(), t = now - d.startedAt;
+        long now = w.getTotalWorldTime(), gap = Math.max(0L, now - d.steppedAt);
+        d.steppedAt = now;
         if (!w.blockExists(d.x, d.y, d.z)) {
-            return false;                                       // unloaded: it waits (nobody near - the abandon below when loaded)
+            d.startedAt += gap;                                 // unloaded: the time held and the wave stop (nobody near can't run the time out)...
+            d.waveAt += gap;
+            if (d.aloneSince < 0L) {
+                d.aloneSince = now;                             // ...but nobody is near: the alone-timer runs
+            } else if (now - d.aloneSince >= RelayRulesSC.ABANDON_TICKS) {
+                release(d);                                     // abandoned: lost without loading the chunk - the Relay stays, its progress
+                pause(w, d);                                    // void (begin: a lost defence's tile isn't resumed)
+                return true;
+            }
+            return false;
         }
+        if (gap > STEP_TICKS) {
+            stopClock(d, gap - STEP_TICKS);                     // the Substrate itself was unloaded (no steps): the same
+        }
+        long t = now - d.startedAt;
         if (w.getBlock(d.x, d.y, d.z) != IdeaBlocksSC.relay) {
             lose(w, d, false);
             return true;
@@ -584,15 +625,22 @@ public final class RelayPostSC {
      * RelayRulesSC.LOST_PAUSE (no endless waves on demand: set up, beat the waves, walk off, set up again).
      */
     private static void lose(WorldServer w, Defence d, boolean drop) {
-        if (drop && w.getBlock(d.x, d.y, d.z) == IdeaBlocksSC.relay) {
+        if (drop) {
+            dropRelay(w, d);
+        }
+        release(d);
+        pause(w, d);
+        tellNear(w, d, EnumChatFormatting.RED, "sc.relay.lost");
+    }
+
+    /** The Relay (if still there) back as an item. */
+    private static void dropRelay(WorldServer w, Defence d) {
+        if (w.getBlock(d.x, d.y, d.z) == IdeaBlocksSC.relay) {
             w.setBlockToAir(d.x, d.y, d.z);
             EntityItem it = new EntityItem(w, d.x + 0.5D, d.y + 0.5D, d.z + 0.5D, IdeaBlocksSC.relay(1));
             it.delayBeforeCanPickup = 10;
             w.spawnEntityInWorld(it);
         }
-        release(d);
-        pause(w, d);
-        tellNear(w, d, EnumChatFormatting.RED, "sc.relay.lost");
     }
 
     /** A lost defence's pause: crossing (i, j) in COOL, each defender's LOST (expired crossings dropped). */
@@ -674,6 +722,17 @@ public final class RelayPostSC {
         if (r == null) {
             lose(w, d, true);
             return null;
+        }
+        long region = RelayRulesSC.regionKey(d.i, d.j);
+        for (SettlementRegistrySC.Settlement o : r.all()) {
+            NBTTagCompound oy = o.extra.getCompoundTag(RelayRulesSC.EXTRA);
+            if (o.dim == w.provider.dimensionId && SettlementSC.isRelay(o) && oy.hasKey("i")
+                    && RelayRulesSC.regionKey(oy.getInteger("i"), oy.getInteger("j")) == region) {
+                dropRelay(w, d);                                // the region got its post meanwhile: one a region - over, not lost
+                release(d);
+                tellNear(w, d, EnumChatFormatting.YELLOW, "sc.relay.refuse.region", NpcNamesSC.name(NpcNamesSC.code(o.nameElement, o.nameNumber)));
+                return null;
+            }
         }
         release(d);
         int floor = d.y - 1, dx = DIRS[d.dir][0], dz = DIRS[d.dir][1];

@@ -141,10 +141,11 @@ public final class WantedSC {
     /** EntityWantedSC's own check: `e` is the one its record holds now (this week's id, ALIVE, its UUID). Server. */
     static boolean current(EntityWantedSC e) {
         RareRegistrySC.Rec r = rec(e.worldObj);
-        if (r == null || r.state != RareRegistrySC.ALIVE || e.wantedId() == 0L || r.extra.getLong(ID) != e.wantedId()
-                || !e.getUniqueID().equals(r.uuid())) {
-            return false;
+        if (!SubstrateConfigSC.wanted || r == null || r.state != RareRegistrySC.ALIVE || e.wantedId() == 0L
+                || r.extra.getLong(ID) != e.wantedId() || !e.getUniqueID().equals(r.uuid())) {
+            return false;                                       // the rule off (the config) - it leaves too
         }
+        e.setLook(r.extra.getInteger(LOOK));                    // the DataWatcher is not saved: the look again after a load
         loaded = new WeakReference<EntityWantedSC>(e);
         return true;
     }
@@ -494,7 +495,7 @@ public final class WantedSC {
         RareRegistrySC.Rec r = rec(e.world);
         long id = e.entity.getEntityData().getLong(ESCORT_NBT);
         boolean mine = r != null && r.extra.getLong(ID) == id;
-        if (mine && r.state == RareRegistrySC.ALIVE && escort(r).contains(e.entity.getUniqueID().toString())) {
+        if (mine && SubstrateConfigSC.wanted && r.state == RareRegistrySC.ALIVE && escort(r).contains(e.entity.getUniqueID().toString())) {
             return;
         }
         if (mine && r.state != RareRegistrySC.DEAD) {
@@ -545,7 +546,7 @@ public final class WantedSC {
         World w = mob.worldObj;
         RareRegistrySC reg = RareRegistrySC.get(w);
         RareRegistrySC.Rec r = reg == null ? null : reg.recIfAny(RareRegistrySC.WANTED);
-        if (r == null || r.extra.getLong(ID) != mob.wantedId()) {
+        if (r == null || r.extra.getLong(ID) != mob.wantedId() || !SubstrateConfigSC.wanted) {
             return;
         }
         SettlementRegistrySC sr = SettlementRegistrySC.get(w);

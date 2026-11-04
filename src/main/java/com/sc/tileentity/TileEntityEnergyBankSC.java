@@ -239,6 +239,7 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
     /** Once a second: the last good cube first, then every try round the controller (see the class). */
     private void scan() {
         WorldKinds[] keep = new WorldKinds[1];
+        boolean oldBroken = false;                              // the last cube is loaded and no longer good
         if (size > 0) {
             int c = tryCube(size, ox, oy, oz, keep);
             if (c == UNLOADED) {
@@ -248,6 +249,7 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
                 form(keep[0]);
                 return;
             }
+            oldBroken = true;
         }
         int bestIndex = -1, bestCode = EnergyBankMathSC.code(0, EnergyBankMathSC.R_SIZE);
         int[] bestAt = {xCoord, yCoord, zCoord};
@@ -289,8 +291,9 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
                 }
             }
         }
-        if (unloaded) {
+        if (unloaded && !oldBroken) {
             return;                                             // nothing formed, but a try is unloaded: the bank stays as it was
+                                                                // (a broken old cube unforms: its capacity and ports mustn't stay)
         }
         unform(EnergyBankMathSC.badReason(bestCode), bestAt);
     }

@@ -62,6 +62,8 @@ public final class WardenLootSC {
     public static final WardenLootSC INSTANCE = new WardenLootSC();
     /** At most this many stacks wait for a player (a cap, never reached by the 3 days' cooldown in practice). */
     public static final int PENDING_MAX = 128;
+    /** Record W's flag: the scheme «Пробой» (N) earned while offline - opened at his next login/respawn. */
+    public static final String SCHEME_N = "n";
 
     private WardenLootSC() {
     }
@@ -125,10 +127,12 @@ public final class WardenLootSC {
         if (extra > 0 && ModItems.singularCrumb != null) {
             add(loot, new ItemStack(ModItems.singularCrumb, extra));
         }
-        if (com.sc.arena.BreachProtocolsSC.scheme(mask) && p != null
-                && com.sc.finale.FinaleRulesSC.unlock(p, com.sc.util.SingularScheme.N)) {
-            p.addChatComponentMessage(new ChatComponentTranslation("sc.protocol.scheme",
-                    new ChatComponentTranslation(com.sc.util.SingularScheme.N.langKey())));
+        if (com.sc.arena.BreachProtocolsSC.scheme(mask)) {
+            if (p == null) {
+                wr.setBoolean(SCHEME_N, true);                  // offline: the scheme waits for him, as the loot does
+            } else if (com.sc.finale.FinaleRulesSC.unlock(p, com.sc.util.SingularScheme.N)) {
+                schemeMessage(p);
+            }
         }
         wr.setLong(WardenRulesSC.LAST_DAY, day);
         wr.setInteger(WardenRulesSC.KILLS, wr.getInteger(WardenRulesSC.KILLS) + 1);
@@ -258,6 +262,28 @@ public final class WardenLootSC {
         return out;
     }
 
+    /** Server: the offline-earned scheme N flag of player `id`, taken out of his record (false: none, or no registry). */
+    public static boolean takeSchemeFlag(World w, UUID id) {
+        SettlementRegistrySC r = w == null || w.isRemote ? null : SettlementSC.registry(w);
+        SettlementRegistrySC.PlayerRec rec = r == null ? null : r.playerIfAny(id);
+        if (rec == null || !rec.extra.hasKey(WardenRulesSC.EXTRA)) {
+            return false;
+        }
+        NBTTagCompound wr = rec.extra.getCompoundTag(WardenRulesSC.EXTRA);
+        if (!wr.getBoolean(SCHEME_N)) {
+            return false;
+        }
+        wr.removeTag(SCHEME_N);
+        rec.extra.setTag(WardenRulesSC.EXTRA, wr);
+        r.markDirty();
+        return true;
+    }
+
+    private static void schemeMessage(EntityPlayerMP p) {
+        p.addChatComponentMessage(new ChatComponentTranslation("sc.protocol.scheme",
+                new ChatComponentTranslation(com.sc.util.SingularScheme.N.langKey())));
+    }
+
     /** The loot kept for `id` (a count of stacks - the world test, the handbook's line). */
     public static int pendingCount(World w, UUID id) {
         SettlementRegistrySC r = w == null || w.isRemote ? null : SettlementSC.registry(w);
@@ -269,6 +295,9 @@ public final class WardenLootSC {
     public static void deliverPending(EntityPlayerMP p) {
         if (p == null || p instanceof FakePlayer || p.worldObj == null || p.worldObj.isRemote || !p.isEntityAlive()) {
             return;                                             // dead at login: his respawn delivers it
+        }
+        if (takeSchemeFlag(p.worldObj, p.getUniqueID()) && com.sc.finale.FinaleRulesSC.unlock(p, com.sc.util.SingularScheme.N)) {
+            schemeMessage(p);
         }
         List<ItemStack> loot = takePending(p.worldObj, p.getUniqueID());
         if (loot.isEmpty()) {

@@ -290,6 +290,9 @@ public final class RadiationSC {
         if (b == ModBlocks.leadBlock || isLeadBlock(b, meta)) {
             return THROUGH_LEAD;
         }
+        if (com.sc.init.IdeaBlocksSC.dataPort != null && b == com.sc.init.IdeaBlocksSC.dataPort) {
+            return THROUGH_LEAD;                        // ОМ-5: the port is made of a lead block and stands in the shell for one
+        }
         if (b == ModBlocks.leadGlass) {
             return THROUGH_LEAD_GLASS;
         }

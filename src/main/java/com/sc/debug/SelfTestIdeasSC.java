@@ -85,6 +85,7 @@ final class SelfTestIdeasSC {
         om5();
         om6();
         om7();
+        audit1104();
         articles();
     }
 
@@ -403,9 +404,9 @@ final class SelfTestIdeasSC {
         String l = lang("tile.siliconage.relay.relay.name", "tile.siliconage.relay.mast.name", "sc.tooltip.relay.relay", "sc.tooltip.relay.relay.details",
                 "sc.tooltip.relay.relay.howto", "sc.tooltip.relay.mast", "sc.tooltip.relay.mast.details", "sc.tooltip.relay.mast.howto",
                 "sc.settle.size.relay", "sc.trade.offer.elderRelay", "sc.relay.refuse.off", "sc.relay.refuse.place", "sc.relay.refuse.region",
-                "sc.relay.refuse.near", "sc.relay.refuse.built", "sc.relay.refuse.vault", "sc.relay.refuse.busy", "sc.relay.refuse.cooldown",
-                "sc.relay.refuse.cooldownMe", "sc.relay.start", "sc.relay.wave", "sc.relay.left", "sc.relay.lost", "sc.relay.built",
-                "sc.relay.destroyed", "sc.nei.obtain.relay", "sc.manual.world.relayPosts.title", "sc.manual.world.relayPosts.1",
+                "sc.relay.refuse.near", "sc.relay.refuse.built", "sc.relay.refuse.vault", "sc.relay.refuse.busy", "sc.relay.refuse.busyRegion",
+                "sc.relay.refuse.cooldown", "sc.relay.refuse.cooldownMe", "sc.relay.start", "sc.relay.wave", "sc.relay.left", "sc.relay.lost",
+                "sc.relay.built", "sc.relay.destroyed", "sc.nei.obtain.relay", "sc.manual.world.relayPosts.title", "sc.manual.world.relayPosts.1",
                 "sc.manual.world.relayPosts.2", "sc.manual.world.relayPosts.3", "sc.manual.world.relayPosts.4");
         // the review's fixes: a destroyed post's id (GONE) - its core never makes the record again; a lost defence's pause
         net.minecraft.nbt.NBTTagCompound y = new net.minecraft.nbt.NBTTagCompound();
@@ -592,7 +593,8 @@ final class SelfTestIdeasSC {
     private static void om4() {
         com.sc.machine.MachineType t = com.sc.machine.MachineType.EUV_LITHOGRAPH;
         boolean machine = t.ordinal() == 32 && com.sc.block.BlockMachineSC.blockFor(t) == com.sc.init.ModBlocks.machineSC3
-                && com.sc.block.BlockMachineSC.metaFor(t) == 0;
+                && com.sc.block.BlockMachineSC.metaFor(t) == 0
+                && crafted(com.sc.block.BlockMachineSC.stackOf(t, 1)) > 0;              // the block itself has a crafting recipe
         boolean metas = com.sc.util.SiliconMaterial.PROCESSOR_WAFER.ordinal() == 18 && com.sc.util.SiliconMaterial.SINGULAR_MATRIX.ordinal() == 21
                 && "processorWafer".equals(com.sc.util.SiliconMaterial.PROCESSOR_WAFER.textureName)
                 && "singularMatrix".equals(com.sc.util.SiliconMaterial.SINGULAR_MATRIX.textureName);
@@ -617,7 +619,7 @@ final class SelfTestIdeasSC {
                 "item.siliconage.siliconMaterial.exo_processor.name", "item.siliconage.siliconMaterial.singular_matrix.name", "item.siliconage.euv_mask.name",
                 "sc.si.tooltip.processor_wafer", "sc.si.tooltip.processor", "sc.si.tooltip.exo_processor", "sc.si.tooltip.singular_matrix",
                 "sc.si.tooltip.singular_matrix.howto", "sc.tooltip.euvMask", "sc.tool.tooltip.euv_mask", "sc.manual.path.euv");
-        check(machine && metas && chain && cheap.length() == 0 && nei && l.isEmpty(), "ОМ-4 the EUV Lithograph: ordinal 32 on machineSC3 meta 0 " + machine
+        check(machine && metas && chain && cheap.length() == 0 && nei && l.isEmpty(), "ОМ-4 the EUV Lithograph: ordinal 32 on machineSC3 meta 0, craftable " + machine
                 + ", metas 18..21 " + metas + ", the chain (the mask, the wafer, the Processor, the Exo Processor, the matrix's two ways) " + chain
                 + ", every cheaper twin cheaper, the old one kept" + (cheap.length() == 0 ? "" : " - BAD:" + cheap) + ", the NEI handler " + nei
                 + (l.isEmpty() ? "" : " - LANG:" + l));
@@ -869,5 +871,76 @@ final class SelfTestIdeasSC {
                 + numbers + ", a 3 x 3 x 3 good " + good + ", a cell on an edge / two controllers / a hole / no controller / side 4 refused " + bad
                 + ", the controller's and the port's NBT " + nbt + ", recipes " + recipes + " of " + com.sc.block.BlockEnergyBankSC.METAS
                 + (l.isEmpty() ? "" : " - LANG:" + l));
+    }
+
+    /** The fixes after the full audit of 2026-11-04: the bank's empty-storage recipes and ports, the paste's cap, the Armour Station. */
+    private static void audit1104() {
+        // the controller and the 4-billion cell: EmptyStorageRecipe only; the station: an empty-tank CarryRecipe
+        ItemStack ctlOut = com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.CONTROLLER, 1);
+        ItemStack cellOut = com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.CELL_4, 1);
+        int ctl = 0, cell = 0, other = 0;
+        boolean station = false;
+        for (Object o : net.minecraft.item.crafting.CraftingManager.getInstance().getRecipeList()) {
+            ItemStack r = ((net.minecraft.item.crafting.IRecipe) o).getRecipeOutput();
+            if (r == null || r.getItem() == null) {
+                continue;
+            }
+            if (ctlOut != null && r.getItem() == ctlOut.getItem()
+                    && (r.getItemDamage() == ctlOut.getItemDamage() || r.getItemDamage() == cellOut.getItemDamage())) {
+                if (!(o instanceof com.sc.init.ModRecipesCrafting.EmptyStorageRecipe)) {
+                    other++;
+                } else if (r.getItemDamage() == ctlOut.getItemDamage()) {
+                    ctl++;
+                } else {
+                    cell++;
+                }
+            }
+            if (r.getItem() == net.minecraft.item.Item.getItemFromBlock(com.sc.init.ModBlocks.armorStation)) {
+                station = o instanceof com.sc.init.ModRecipesCrafting.CarryRecipe && !((com.sc.init.ModRecipesCrafting.CarryRecipe) o).carries();
+            }
+        }
+        ItemStack sv = new ItemStack(com.sc.init.ModBlocks.energyStorageSC, 1, com.sc.energy.Tier.SV.ordinal());
+        ItemStack charged = sv.copy(), modded = sv.copy(), stranger = new ItemStack(net.minecraft.init.Items.iron_ingot);
+        charged.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        charged.getTagCompound().setInteger("EnergySC", 1);
+        modded.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        modded.getTagCompound().setTag("UpgradesSC", new net.minecraft.nbt.NBTTagCompound());
+        stranger.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+        stranger.getTagCompound().setInteger("EnergySC", 5);
+        boolean empty = com.sc.init.ModRecipesCrafting.EmptyStorageRecipe.allEmpty(new ItemStack[]{sv, null})
+                && !com.sc.init.ModRecipesCrafting.EmptyStorageRecipe.allEmpty(new ItemStack[]{charged})
+                && !com.sc.init.ModRecipesCrafting.EmptyStorageRecipe.allEmpty(new ItemStack[]{modded})
+                && com.sc.init.ModRecipesCrafting.EmptyStorageRecipe.allEmpty(new ItemStack[]{stranger});
+        // the ports: Industrial Upgrade's packets for an OUT port only; the tooltip's count as the net really sends
+        com.sc.tileentity.TileEntityEnergyBankPortSC in = new com.sc.tileentity.TileEntityEnergyBankPortSC(com.sc.energy.Tier.HV);
+        com.sc.tileentity.TileEntityEnergyBankPortSC out = new com.sc.tileentity.TileEntityEnergyBankPortSC(com.sc.energy.Tier.HV);
+        out.toggleOut();
+        boolean ports = out.sendMultibleEnergyPackets() && !in.sendMultibleEnergyPackets()
+                && out.getMultibleEnergyPacketAmount() == com.sc.energy.EnergyBankMathSC.PORT_AMPS
+                && com.sc.tileentity.TileEntityEnergyBankPortSC.outPackets() == (com.sc.tileentity.TileEntityEnergyStorageSC.overdriveWorks()
+                        ? com.sc.energy.EnergyBankMathSC.PORT_AMPS : 1)
+                && com.sc.energy.EnergyBankMathSC.scaledCapacity(1, 0, 2F) == 8000000000L;
+        // the paste: no repair over MAX_PASTES (the diamond head's third: 8 - it fits the grid)
+        boolean paste = true, head = false;
+        for (com.sc.item.ItemDrillHeadSC h : com.sc.init.ModItems.DRILL_HEADS) {
+            for (int done = 0; done < com.sc.init.PasteRepairRecipeSC.MAX_REPAIRS; done++) {
+                ItemStack s = new ItemStack(h);
+                s.setTagCompound(new net.minecraft.nbt.NBTTagCompound());
+                s.getTagCompound().setInteger(com.sc.init.PasteRepairRecipeSC.NBT, done);
+                paste &= com.sc.init.PasteRepairRecipeSC.pastesFor(s) <= com.sc.init.PasteRepairRecipeSC.MAX_PASTES;
+                if (h.kind == com.sc.item.ItemDrillHeadSC.Kind.DIAMOND && h.kind.life > 0 && done == 2) {
+                    s.setItemDamage(Math.max(1, s.getMaxDamage() / 2));
+                    ItemStack m = com.sc.init.PasteRepairRecipeSC.repair(s, 8);
+                    head = com.sc.init.PasteRepairRecipeSC.pastesFor(s) == 8 && m != null
+                            && com.sc.init.PasteRepairRecipeSC.repairs(m) == 3 && com.sc.init.PasteRepairRecipeSC.repair(s, 9) == null;
+                }
+            }
+        }
+        String l = lang("sc.tooltip.energyBank.emptySv", "sc.tank.tooltip.craftempty");
+        check(ctl == 1 && cell == 1 && other == 0 && empty && station && ports && paste && head && l.isEmpty(), "audit 2026-11-04: the bank's "
+                + "controller / 4-billion cell by EmptyStorageRecipe only " + ctl + "/" + cell + " (others " + other + "), a charged or upgraded "
+                + "SV storage refused " + empty + ", the Armour Station an empty-tank CarryRecipe " + station + ", the ports' IU packets, the "
+                + "tooltip's count, the cells x storageCapacity " + ports + ", no paste repair over 8 " + paste + ", the diamond head's third "
+                + "for 8 " + head + (l.isEmpty() ? "" : " - LANG:" + l));
     }
 }

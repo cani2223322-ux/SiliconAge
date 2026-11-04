@@ -53,7 +53,7 @@ import net.minecraft.world.WorldServer;
  * side fixed at the start), spread SPREAD across, never in a dome's belt, by SpawnDirectorSC.spawnAt (born in Si-14, the usual
  * elite roll); the elite wave's first armoured one an elite (EliteSC.apply); the repair drones over the column's Shells, bound to
  * them. The next wave NEXT_DELAY after this one is down, or WAVE_TICKS after it came anyway. A wave no room was found for is tried
- * again EMPTY_TRIES steps, then the raid is called off (no win, no loss);</li>
+ * again EMPTY_TRIES steps, then the raid is called off (no win, no loss; ПД-3: a called raid's deposit back, as on a win);</li>
  * <li>down: each raider of it killed (its health gone), or - WAVE_TICKS after it came - none of it left loaded and one of it
  * killed (the rest in unloaded chunks hold no wave). A raider removed alive (setDead: Peaceful, a cleaner mod, a drone of a
  * fallen Shell) is no kill: a wave gone with none of it killed calls the raid off, Peaceful calls it off at once;</li>
@@ -64,7 +64,7 @@ import net.minecraft.world.WorldServer;
  * RaidRulesSC.chips (outside the daily chips' cap, as the Pass), the Elder's reward - CHEST_ROLLS draws of the Dead Node's chest
  * (RuinLootSC.nodeChest) - into the inventory, what doesn't fit at the feet; sc.raid.won;</li>
  * <li>lost (ПН-4) - RAID_TICKS over, or no defender present for ABANDON_TICKS: the trade closed until world time + CLOSED_TICKS
- * (RaidSC.CLOSED); sc.raid.lost.</li>
+ * (RaidSC.CLOSED); sc.raid.lost (ПД-7: a relay post destroyed instead - RelayPostSC.destroy's own line).</li>
  * </ul>
  * At the end every raider still about loses its NBT and its persistence (RaidSC.release). Server only.
  */
@@ -201,7 +201,7 @@ final class RaidRunSC {
         SettlementRegistrySC r = SettlementRegistrySC.get(w);
         SettlementRegistrySC.Settlement s = r == null ? null : r.byId(id);
         if (s == null || s.dim != dim || w.provider.dimensionId != dim || RaidSC.peaceful(w)) {
-            releaseAll();                                       // Peaceful: the mobs remove themselves - called off
+            calledOff(r);                                       // Peaceful: the mobs remove themselves - called off
             return true;
         }
         long t = w.getTotalWorldTime();
@@ -230,14 +230,14 @@ final class RaidRunSC {
         int left = pruneWave();
         if (left == 0 && made == 0) {
             if (++emptyTries > EMPTY_TRIES) {
-                releaseAll();                               // no room for it at the gate: called off
+                calledOff(r);                               // no room for it at the gate: called off
                 return true;
             }
             spawnWave(w, r, s);
             return false;
         }
         if (left == 0 && waveKilled == 0) {
-            releaseAll();                                   // the whole wave removed alive, none of it killed: called off
+            calledOff(r);                                   // the whole wave removed alive, none of it killed: called off
             return true;
         }
         if (left == 0 || waveKilled > 0 && t - waveAt >= RaidRulesSC.WAVE_TICKS && loadedIn(current) == 0) {
@@ -389,7 +389,7 @@ final class RaidRunSC {
         SettlementRegistrySC r = SettlementRegistrySC.get(w);
         SettlementRegistrySC.Settlement s = r == null ? null : r.byId(id);
         if (s == null) {
-            releaseAll();
+            calledOff(r);
         } else {
             lose(w, r, s);
         }
@@ -401,13 +401,7 @@ final class RaidRunSC {
         float mul = kind == RaidAlarmSC.KIND_HEAVY ? RaidAlarmSC.HEAVY_MUL : 1F;     // ПД-3: a heavy night's x1.5, rounded up
         int rep = RaidRulesSC.scaled(RaidRulesSC.rep(size), mul), chips = RaidRulesSC.scaled(RaidRulesSC.chips(size), mul);
         int rolls = RaidRulesSC.scaled(RaidRulesSC.chestRolls(size), mul);
-        if (buyer != null) {                                    // ПД-3: the deposit back to the buyer wherever he is (outside the day's 64)
-            if (by != null && !RaidSC.real(by) && buyer.equals(by.getUniqueID()) && by.isEntityAlive()) {
-                give(by, SettlementItemsSC.chips(RaidAlarmSC.DEPOSIT));     // the world test's FakePlayer (in no player list)
-            } else {
-                RaidAlarmSC.returnDeposit(r, buyer);            // online and alive - now; dead or away - at his respawn / login
-            }
-        }
+        depositBack(r);
         for (EntityPlayer p : present(w, s)) {
             int got = ReputationSC.give(r.player(p.getUniqueID()), rep, ReputationSC.SRC_RAID, day);
             give(p, SettlementItemsSC.chips(chips));
@@ -427,17 +421,44 @@ final class RaidRunSC {
         releaseAll();
     }
 
-    /** ПН-4: the trade closed for a day (world time), the line to the defenders and those near. */
+    /**
+     * ПД-3: a called raid ended neither won nor lost (Peaceful, the settlement gone, no room at the gate, the wave removed alive) - its
+     * deposit back to the buyer as on a win; the raiders released.
+     */
+    private void calledOff(SettlementRegistrySC r) {
+        if (r != null) {
+            depositBack(r);
+            r.markDirty();
+        }
+        releaseAll();
+    }
+
+    /** ПД-3: a called raid's deposit back to the buyer wherever he is (outside the day's 64). */
+    private void depositBack(SettlementRegistrySC r) {
+        if (buyer == null) {
+            return;
+        }
+        if (by != null && !RaidSC.real(by) && buyer.equals(by.getUniqueID()) && by.isEntityAlive()) {
+            give(by, SettlementItemsSC.chips(RaidAlarmSC.DEPOSIT));     // the world test's FakePlayer (in no player list)
+        } else {
+            RaidAlarmSC.returnDeposit(r, buyer);                // online and alive - now; dead or away - at his respawn / login
+        }
+    }
+
+    /** ПН-4: the trade closed for a day (world time), the line to the defenders and those near. ПД-7: a relay post destroyed instead. */
     private void lose(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
+        boolean relay = SettlementSC.isRelay(s);
         List<EntityPlayer> told = audience(w, s);
         for (EntityPlayer p : told) {
-            EmpStormSC.tell(p, EnumChatFormatting.RED, "sc.raid.lost", SettlementSC.displayName(s));
+            if (!relay) {                                       // a relay post has no trade to close: RelayPostSC.destroy's own line
+                EmpStormSC.tell(p, EnumChatFormatting.RED, "sc.raid.lost", SettlementSC.displayName(s));
+            }
             if (buyer != null && buyer.equals(p.getUniqueID())) {
                 EmpStormSC.tell(p, EnumChatFormatting.RED, "sc.raid.deposit.lost");     // ПД-3: the deposit burns
             }
         }
         summary(w, s, Math.max(0, wave));
-        if (SettlementSC.isRelay(s)) {
+        if (relay) {
             releaseAll();
             com.sc.settle.RelayPostSC.destroy(w, s);            // ПД-7: a lost raid on a relay post destroys it (no trade to close)
             return;

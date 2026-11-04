@@ -173,6 +173,15 @@ public class BlockEnergyBankSC extends Block {
         return true;
     }
 
+    /** A port: a bank block put or taken away next to it - its shut faces (TileEntityEnergyBankPortSC) looked at again. */
+    @Override
+    public void onNeighborBlockChange(World world, int x, int y, int z, Block neighbour) {
+        TileEntity te = world.isRemote || !isPort(world.getBlockMetadata(x, y, z)) ? null : world.getTileEntity(x, y, z);
+        if (te instanceof TileEntityEnergyBankPortSC) {
+            ((TileEntityEnergyBankPortSC) te).neighbourChanged();
+        }
+    }
+
     // ------------------------------------------------------------------ the controller's charge rides in its item
 
     @Override

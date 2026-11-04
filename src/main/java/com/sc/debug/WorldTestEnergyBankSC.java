@@ -11,18 +11,21 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.util.ForgeDirection;
 
 /**
  * ОМ-7 (docs/plan-ideas-2026-10-26.md, -Dsc.worldtest=true; the Overworld, X = 4000 + 100 x 15, Y 200, Z 0): a 3 x 3 x 3 bank - casing,
  * the controller on the west face, an LV port IN on the east face, an LV port OUT on top (its buffer full: nothing leaves), a 4-billion
  * cell inside. Formed (side 3, the capacity, 1 in / 1 out); EU put in the IN port's buffer reach the bank; the comparator > 0; the cell
- * broken - not formed, the energy kept, the input stands. Removed afterwards.
+ * broken - not formed, the energy kept, the input stands; the ports' faces against the bank's blocks shut (an MV port put beside the
+ * east one, then taken away). Removed afterwards.
  */
 public class WorldTestEnergyBankSC {
 
     private static final int X = 5500, Y = 200, Z = 0;
     private int ticks;
     private long kept;
+    private boolean shutBefore;
 
     @SubscribeEvent
     public void onTick(TickEvent.ServerTickEvent e) {
@@ -50,7 +53,19 @@ public class WorldTestEnergyBankSC {
                     + b.size() + ", capacity " + b.capacity() + " (" + cap + "), cells " + b.cellsSmall() + ", ports in " + b.portsIn() + " / out "
                     + b.portsOut() + "; energy in " + b.energy() + ", comparator " + b.comparatorLevel());
             kept = b.energy();
+            shutBefore = shut(w, X + 2, ForgeDirection.WEST) && !shut(w, X + 2, ForgeDirection.EAST);
             w.setBlockToAir(X + 1, Y + 1, Z + 1);                                     // the cell broken
+            w.setBlock(X + 3, Y + 1, Z + 1, IdeaBlocksSC.energyBank, BlockEnergyBankSC.PORT_FIRST + Tier.MV.ordinal(), 3);
+        }
+        if (ticks == 140) {
+            // the audit of 2026-11-04: a port's faces against the bank's blocks shut both ways, looked at again on a neighbour's change
+            boolean opened = !shut(w, X + 2, ForgeDirection.WEST);                    // the cell gone
+            boolean pair = shut(w, X + 2, ForgeDirection.EAST) && shut(w, X + 3, ForgeDirection.WEST);
+            w.setBlockToAir(X + 3, Y + 1, Z + 1);
+            boolean again = !shut(w, X + 2, ForgeDirection.EAST);
+            System.out.println("[SC-WORLDTEST] " + (shutBefore && opened && pair && again ? "PASS" : "FAIL") + " ОМ-7 the ports' faces: shut "
+                    + "towards the cell, open outside " + shutBefore + ", open once the cell is broken " + opened + ", two ports side by side "
+                    + "shut towards each other " + pair + ", open again once the other is gone " + again);
         }
         if (ticks == 160) {
             port(w, X + 2, Y + 1, Z + 1).setEnergyStoredClient(Tier.LV.getBuffer());
@@ -69,6 +84,12 @@ public class WorldTestEnergyBankSC {
                 }
             }
         }
+    }
+
+    /** The port at (x, Y + 1, Z + 1) takes nothing from `d` and gives it nothing. */
+    private static boolean shut(World w, int x, ForgeDirection d) {
+        TileEntityEnergyBankPortSC p = port(w, x, Y + 1, Z + 1);
+        return !p.acceptsFrom(d) && !java.util.Arrays.asList(p.outputFaces()).contains(d);
     }
 
     private static TileEntityEnergyBankSC bank(World w) {

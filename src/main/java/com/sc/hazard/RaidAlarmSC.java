@@ -190,8 +190,8 @@ public final class RaidAlarmSC {
     }
 
     /**
-     * Server (RaidRunSC, a called raid won): the deposit back to `buyer` wherever he is - online and alive: into his inventory (outside the
-     * day's 64); dead or offline: owed (OWED), paid at his next respawn or login (payOwed). A win never burns it.
+     * Server (RaidRunSC, a called raid won or called off): the deposit back to `buyer` wherever he is - online and alive: into his inventory (outside the
+     * day's 64); dead or offline: owed (OWED), paid at his next respawn or login (payOwed). Only a loss burns it.
      */
     public static void returnDeposit(SettlementRegistrySC reg, UUID buyer) {
         if (reg == null || buyer == null) {

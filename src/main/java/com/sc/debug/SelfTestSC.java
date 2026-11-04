@@ -3792,6 +3792,7 @@ public final class SelfTestSC {
     private static void radiation() {
         boolean ok = com.sc.radiation.RadiationSC.blockPasses(com.sc.init.ModBlocks.leadBlock) == 0.02F
                 && com.sc.radiation.RadiationSC.blockPasses(com.sc.init.ModBlocks.leadGlass) == 0.05F
+                && (com.sc.init.IdeaBlocksSC.dataPort == null || com.sc.radiation.RadiationSC.blockPasses(com.sc.init.IdeaBlocksSC.dataPort) == 0.02F)
                 && com.sc.radiation.RadiationSC.blockPasses(net.minecraft.init.Blocks.stone) == 0.7F
                 && com.sc.radiation.RadiationSC.blockPasses(net.minecraft.init.Blocks.water) == 0.6F
                 && com.sc.radiation.RadiationSC.blockPasses(net.minecraft.init.Blocks.air) == 1F
@@ -3799,7 +3800,7 @@ public final class SelfTestSC {
                 && Math.abs(com.sc.radiation.RadiationSC.atDistance(6F, 12, 6) - 3F) < 1e-4
                 && com.sc.radiation.RadiationSC.atDistance(10F, 16, 16) == 0F
                 && "4.5".equals(com.sc.radiation.RadiationSC.fmt(4.5F)) && "0.0".equals(com.sc.radiation.RadiationSC.fmt(0F));
-        check(ok, "radiation: lead 2%, lead glass 5%, water 60%, stone 70%, glass and air all; linear fall to the edge; 4.5 printed");
+        check(ok, "radiation: lead 2% (the data port too), lead glass 5%, water 60%, stone 70%, glass and air all; linear fall to the edge; 4.5 printed");
         com.sc.energy.GeneratorType[] hot = {com.sc.energy.GeneratorType.RTG, com.sc.energy.GeneratorType.FUSION_REACTOR,
                 com.sc.energy.GeneratorType.TOKAMAK, com.sc.energy.GeneratorType.PLASMA_REACTOR, com.sc.energy.GeneratorType.EXO_REACTOR,
                 com.sc.energy.GeneratorType.TOKAMAK_XV};

@@ -11,6 +11,7 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.IChunkProvider;
+import net.minecraft.world.gen.structure.StructureBoundingBox;
 import net.minecraftforge.event.terraingen.ChunkProviderEvent;
 import net.minecraftforge.event.terraingen.DecorateBiomeEvent;
 import net.minecraftforge.event.terraingen.PopulateChunkEvent;
@@ -30,7 +31,8 @@ import net.minecraftforge.event.world.WorldEvent;
  * height (its top stone in the array); biomeArray untouched; vanilla's surface pass then lays grass / sand on the new top
  * (EmbassyTerrainSC). Nothing while a new world looks for its spawn (findingSpawnPoint, not initialised yet): the guaranteed
  * embassy is chosen by the spawn, which isn't set then (and no embassy stands that near it);</li>
- * <li><b>populate</b> (generate, the Overworld): mapGen.generateStructuresInChunk(world, rand, cx, cz) - only the window;</li>
+ * <li><b>populate</b> (generate, the Overworld): mapGen.generateStructuresInChunk(world, rand, cx, cz) - only the window; then the
+ * funnels' growth in the chunk's own columns (ComponentEmbFunnelSC.clearChunk: other mods' trees planted past the window);</li>
  * <li><b>the bans</b> (DECOR): Populate LAKE, LAVA, DUNGEON, ANIMALS and Decorate TREE, BIG_SHROOM, CACTUS, PUMPKIN, REED, LAKE,
  * LILYPAD - DENY in a window that touches an embassy's area + BAN_MARGIN (covers); Decorate's chunkX / chunkZ are BLOCK coordinates
  * (BiomeDecorator's chunk_X), Populate's are chunks;</li>
@@ -98,6 +100,16 @@ public final class EmbassyWorldGenSC implements IWorldGenerator {
         MapGenEmbassySC m = EmbassySC.mapGen(world);
         if (m != null) {
             m.generateStructuresInChunk(world, random, chunkX, chunkZ);
+            // the funnels' growth in this chunk's own columns too: another mod's trees (IC2's) stand there past our window (shifted by 8)
+            int x0 = chunkX << 4, z0 = chunkZ << 4;
+            StructureBoundingBox chunk = new StructureBoundingBox(x0, z0, x0 + 15, z0 + 15);
+            for (StructureEmbassyStartSC st : m.builtIn(world, x0, z0, x0 + 15, z0 + 15)) {
+                for (Object o : st.getComponents()) {
+                    if (o instanceof ComponentEmbFunnelSC && ((ComponentEmbFunnelSC) o).getBoundingBox().intersectsWith(chunk)) {
+                        ((ComponentEmbFunnelSC) o).clearChunk(world, chunk);
+                    }
+                }
+            }
         }
     }
 

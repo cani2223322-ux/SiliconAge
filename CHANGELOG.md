@@ -37,6 +37,33 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - Постовые №5 и №6 стоят на постах поля днём и ночью (дальний пост — у ветроуказателя, в стороне от оси ВПП), второй Газовщик днём работает у колонок; новых жителей нет. Поводок до поста — только у этих двух Постовых; перепись жителей не считает их и Газовщика потерянными, пока не загружена земля вокруг их постов.
 - `/scembassy list` показывает вариант поля у каждого посольства (у неоткрытых мест — что решила бы земля) и долю вариантов; новая `/scembassy airfield [id]` — отчёт о поле (вид, сторона, ИКАО, ВПП и ILS, зона, посты ПВО). Публичное API для аддона `com.sc.embassy.api` (версия 1). Справочник: раздел «Лётное поле» в статье «Город посольства»; блоки поля скрыты в NEI; подсказки у всех новых блоков; самотесты и мировой тест.
 
+**Исправлено после полной проверки (2026-11-04)**
+- Порт выхода энергобанка с Industrial Upgrade отдаёт обещанные 4 пакета за тик; под IC2 без IU подсказка и справочник честно показывают один пакет.
+- Порты энергобанка больше не соединяются с соседними блоками банка: соседние порты не гоняют энергию по кругу, а под IC2 порт меньшего уровня рядом с большим не взрывается.
+- Контроллер и ячейка 4 млрд энергобанка крафтятся только из разряженных накопителей SV без модулей - заряд и модули больше не пропадают молча.
+- Подсказка ячеек энергобанка и справочник учитывают множитель ёмкости `storageCapacity` из конфига.
+- Энергобанк, который сломали у границы загруженной области, теперь разбирается и больше не хранит энергию по старой ёмкости.
+- Станция EV расходует фотошаблон целиком, когда делает ЭУФ-маску: из одного шаблона больше не получается 16 масок.
+- Станция обслуживания брони крафтится только из пустого стального бака - жидкость из полного бака больше не пропадает.
+- ЭУФ-литограф теперь крафтится (рецепт временный, ждёт решения): Степпер EV в центре, квантовый кабель, Контроллеры и фокусирующие линзы.
+- Взрывы, визер и дракон больше не ломают контроллер моста с владельцем и привязанные к нему конденсаторы и порты.
+- Оборона Ретранслятора больше не идёт, пока игроков нет рядом (выгружен чанк или вся Подложка): отойти и вернуться к готовому посту уже не выйдет.
+- Сундуки Мёртвого Узла (у остовов машин) больше не мешают поставить Ретранслятор как «чужие блоки»; сундук, поставленный игроком отдельно, по-прежнему мешает.
+- Две одновременные обороны на одном участке больше не дают два поста: вторая получает отказ с координатами уже идущей обороны, а оборона, которая выстояла, когда участок уже занял другой пост, кончается без наказания (Ретранслятор выпадает). Оборона, брошенная в выгруженном чанке, проигрывается через то же время, что и при игроках поблизости, и больше не держит участок до перезапуска.
+- Третий ремонт алмазной головки бура Нанитовой пастой теперь возможен (8 паст вместо 9, которые не помещались в сетку).
+- Воронки захода у посольского поля: деревья других модов (каучук IC2 и т.п.) больше не остаются в створах.
+- Досборка воронок больше не вырубает деревья и листву в уже исследованной земле на конце полосы без ILS и на базах игроков.
+- «Порт данных» в оболочке Токамака XV и Сингулярного реактора теперь задерживает излучение как свинцовый блок (2% вместо 70%).
+- Схема «Пробой» теперь откроется и тому участнику боя со Смотрителем, который был не в сети в момент победы: при следующем входе или возрождении.
+- Фильтр карьера „Только эти“ / „Кроме этих“ теперь узнаёт руды Подложки, а на вкладке „Карта“ и в счётчике добытого они идут под тем же именем, что и обычные руды.
+- Если сервер отказал в «Тревоге», сообщение показывает верное число оставшихся дней и нужный уровень репутации („Свой“ для «Тяжёлой ночи»).
+- Отступник после перезагрузки чанка или мира снова показывает имя, прозвище и второй модификатор.
+- При выключенном правиле `dimension.wanted` Отступник и его охрана уходят из мира, награда за него не выдаётся.
+- Сифон в режиме „пока приёмник не полон“ больше не сжигает энергию, если приёмник - аккумулятор.
+- Вызванный налёт («Тревога» / «Тяжёлая ночь»), сорвавшийся без победы и поражения (мирная сложность, нет места у ворот, волна исчезла), теперь возвращает залог 8 КЧ.
+- Проигранный налёт на пост-ретранслятор больше не пишет, что поселение закрыло торговлю: остаётся только сообщение о разрушении поста.
+- ПЭ-1: при снятии модуля в полный инвентарь теперь появляется сообщение, что модуль выброшен рядом.
+
 ### English
 **New from the 2026-10-26 proposal** (the ★ variants of ПД-1…ПД-8 and ОМ-1…ОМ-7 of `docs/idea-improvements-2026-10-26.md`, the plan `docs/plan-ideas-2026-10-26.md`, what was done `docs/ideas-2026-10-26-sdelano.md`)
 - **ПД-1:** the Substrate Elder's contract board: 3 common contracts, 1 local one by the land round the settlement (the Ridges, the Oxide Fields, a Dead Node), 1 Tuners' order (transistors, controllers, Nb3Sn coils, an EV battery) and a weekly Big order; new goals - Troopers, armoured hostiles in an EMP storm, readings on Dead Node plazas, camp safes, Signal caches, an urgent dispatch to a neighbouring settlement before sunset. Still 3 contracts a day.
@@ -68,6 +95,33 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 - An airfield embassy's Dispatcher has an "Airfield" tab: the ICAO code, the runway numbers, the air defence clearance and how to get it, the 7700 pass, the Logbook, the column's gas price; with an add-on that supports the airfield API - ATIS, its service lines and a "Service" button (without one - the "mothballed, no link" lore). Without a field the Dispatcher's screen is as before.
 - Sentries #5 and #6 stand at the field's posts day and night (the far post by the windsock, clear of the runway's axis), the second Gas Engineer works at the columns by day; no new settlers. Only those two Sentries get the leash out to their posts; the settlers' census does not count them or the Gas Engineer as lost until the land round their posts is loaded.
 - `/scembassy list` shows each embassy's airfield variant (at unexplored sites - what the land would decide) and the variants' share; the new `/scembassy airfield [id]` reports a field (kind, side, ICAO, runway and ILS, zone, AA emplacements). A public API for the add-on, `com.sc.embassy.api` (version 1). Handbook: an "Airfield" section in the "Embassy city" article; the field's blocks hidden in NEI; tooltips on every new block; self-tests and a world test.
+
+**Fixed after the full audit (2026-11-04)**
+- The Energy Bank's output port now sends the promised 4 packets a tick with Industrial Upgrade; under IC2 without it the tooltip and the handbook show one packet.
+- Energy Bank ports no longer connect to neighbouring bank blocks: adjacent ports stop passing energy in circles, and under IC2 a lower-tier port next to a higher one no longer explodes.
+- The Energy Bank's controller and 4-billion cell now need empty SV storages without upgrades, so their charge and modules are no longer lost silently.
+- Energy Bank cell tooltips and the handbook now apply the `storageCapacity` config multiplier.
+- An Energy Bank broken near the edge of the loaded area now unforms instead of keeping its old capacity.
+- The EV Upgrade Station now uses up the photomask when it makes an EUV mask: one photomask no longer gives 16 masks.
+- The Armour Service Station only crafts from an empty steel tank, so a filled tank's fluid is no longer lost.
+- The EUV Lithograph can now be crafted: an EV Stepper in the middle, with quantum cable, Controllers and focusing lenses.
+- Explosions, the Wither and the Dragon no longer break an owned bridge controller or the capacitors and ports linked to it.
+- The Relay defence clock no longer runs while nobody is around (the chunk or the whole Substrate unloaded), so you can no longer walk away and come back to a finished post.
+- A Dead Node's own chests no longer block placing a Relay as "player blocks".
+- Two simultaneous defences in one region no longer yield two posts: the second is refused as busy.
+- The third Nanite Paste repair of the diamond drill head is now possible (8 pastes instead of 9, which didn't fit the grid).
+- Embassy approach funnels: other mods' trees (IC2 rubber trees etc.) no longer remain in the approach corridors.
+- Funnel settling no longer cuts trees and leaves in already explored land at a runway end without ILS or at players' bases.
+- The Data Port in the Tokamak XV / Singular Reactor shell now blocks radiation like a lead block (2% instead of 70%).
+- The "Breach" scheme now unlocks for a Warden fight participant who was offline when the Warden fell, on their next login or respawn.
+- The quarry's "Only these" / "Except these" filter now recognizes the Substrate's ores, and the "Map" tab and the mined counter list them under the same name as ordinary ores.
+- When the server refuses an "Alarm", the message now shows the right number of days left and the right reputation level ("Own" for a "Heavy Night").
+- The Renegade keeps its name, alias and second modifier after a chunk or world reload.
+- With the `dimension.wanted` rule off, the Renegade and its escort leave the world and no bounty is paid.
+- The siphon's "until the receiver is full" limit no longer wastes energy when the receiver is a battery.
+- A called raid ("Alarm" / "Heavy Night") that falls through with neither win nor loss (Peaceful, no room at the gate, the wave vanished) now returns the 8-chip deposit.
+- A lost raid on a relay post no longer says the settlement closed its trade; only the post-destroyed message remains.
+- EMP-1: removing a module with a full inventory now tells you it was dropped nearby.
 
 ## 0.2.3-beta — 2026-10-22
 

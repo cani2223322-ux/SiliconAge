@@ -309,10 +309,13 @@ public final class ModRecipesIdeasSC {
             OreRecipes.shaped(com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.GLASS, 4), " G ", "GCG", " G ",
                     'G', new ItemStack(ModBlocks.leadGlass), 'C', casing.copy());
         }
-        OreRecipes.shaped(com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.CONTROLLER, 1), "EME", " C ", " S ",
-                'E', si(com.sc.util.SiliconMaterial.EXO_PROCESSOR, 1), 'M', matrix.copy(), 'C', casing.copy(), 'S', sv.copy());
+        // the SV storages must be empty and without upgrades - their charge and modules would be lost silently (EmptyStorageRecipe)
+        GameRegistry.addRecipe(new ModRecipesCrafting.EmptyStorageRecipe(com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.CONTROLLER, 1),
+                "EME", " C ", " S ",
+                'E', si(com.sc.util.SiliconMaterial.EXO_PROCESSOR, 1), 'M', matrix.copy(), 'C', casing.copy(), 'S', sv.copy()));
         ItemStack small = com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.CELL_4, 1);
-        OreRecipes.shaped(small, "SCS", "P P", 'S', sv.copy(), 'C', casing.copy(), 'P', si(com.sc.util.SiliconMaterial.PROCESSOR, 1));
+        GameRegistry.addRecipe(new ModRecipesCrafting.EmptyStorageRecipe(small, "SCS", "P P",
+                'S', sv.copy(), 'C', casing.copy(), 'P', si(com.sc.util.SiliconMaterial.PROCESSOR, 1)));
         OreRecipes.shaped(com.sc.init.IdeaBlocksSC.energyBank(com.sc.block.BlockEnergyBankSC.CELL_16, 1), " X ", "XMX", " X ",
                 'X', small.copy(), 'M', matrix.copy());
         for (com.sc.energy.Tier t : com.sc.energy.Tier.values()) {

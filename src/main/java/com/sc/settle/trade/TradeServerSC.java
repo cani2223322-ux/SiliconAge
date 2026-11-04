@@ -182,6 +182,10 @@ public final class TradeServerSC {
             res.setInteger("code", r[0]);
             res.setInteger("done", r[1]);
             res.setInteger("alarm", r.length > 2 ? r[2] : 0);  // ПД-3: R_ALARM's own reason (RaidAlarmSC.R_*)
+            if (r[0] == R_ALARM && r.length > 2 && r[2] == com.sc.hazard.RaidAlarmSC.R_COOLDOWN) {
+                int ak = com.sc.hazard.RaidAlarmSC.kindOf(key);  // the cooldown's days left, as the row's own line shows them
+                res.setInteger("alarmDays", com.sc.hazard.RaidAlarmSC.daysLeft(ak, com.sc.hazard.RaidAlarmSC.lastDay(c.rec, ak), c.day));
+            }
             res.setInteger("tuner", t.getEntityId());
             SettleNetSC.send(p, SettleNetSC.TRADE_RESULT, res);
             p.openContainer.detectAndSendChanges();     // the inventory as it is now, before the new numbers

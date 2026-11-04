@@ -1041,10 +1041,14 @@ public final class BookContent {
                     com.sc.energy.EnergyBankMathSC.cellSlots(hi), com.sc.util.ConfigSC.storageCapacity));
             BookEntry bank = new BookEntry("energybank", c, bankCtl, Lang.tr("sc.manual.energy.bank.title"));
             bank.add(BookEl.title(Lang.tr("sc.manual.energy.bank.title"))).add(BookEl.items(parts))
-                    .add(BookEl.para(Lang.tr("sc.manual.energy.bank.1", lo, lo, lo, hi, hi, hi, most, com.sc.energy.EnergyBankMathSC.PORT_AMPS)))
+                    .add(BookEl.para(Lang.tr("sc.manual.energy.bank.1", lo, lo, lo, hi, hi, hi,
+                            BridgeMathSC.group(com.sc.energy.EnergyBankMathSC.scaledCapacity(1, 0, ConfigSC.storageCapacity)),
+                            BridgeMathSC.group(com.sc.energy.EnergyBankMathSC.scaledCapacity(0, 1, ConfigSC.storageCapacity)),
+                            most, com.sc.tileentity.TileEntityEnergyBankPortSC.outPackets())))    // IC2 without Industrial Upgrade: 1
                     .add(BookEl.para(Lang.tr("sc.tooltip.energyBank.details", lo, hi)))
                     .add(BookEl.para(Lang.tr("sc.manual.energy.bank.2")))
-                    .add(BookEl.para(Lang.tr("sc.tooltip.energyBank.howto")));
+                    .add(BookEl.para(Lang.tr("sc.tooltip.energyBank.howto")))
+                    .add(BookEl.para(Lang.tr("sc.tooltip.energyBank.emptySv")));
             crafting(bank, bankCtl);
             bank.about(new ItemStack(com.sc.init.IdeaBlocksSC.energyBank, 1, OreDictionary.WILDCARD_VALUE));
             list.add(bank);

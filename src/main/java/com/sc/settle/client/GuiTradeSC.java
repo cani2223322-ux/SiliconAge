@@ -603,8 +603,10 @@ public class GuiTradeSC extends GuiContainer {
         } else if (code == TradeServerSC.R_ALARM && com.sc.hazard.RaidAlarmSC.refuseKey(r.getInteger("alarm")) != null) {
             int why = r.getInteger("alarm");                    // ПД-3: the alarm's own reason
             String key = com.sc.hazard.RaidAlarmSC.refuseKey(why);
-            text = why == com.sc.hazard.RaidAlarmSC.R_LEVEL ? Lang.tr(key, levelName(com.sc.hazard.RaidAlarmSC.ALARM_LEVEL))
-                    : why == com.sc.hazard.RaidAlarmSC.R_COOLDOWN ? Lang.tr(key, 1) : Lang.tr(key);
+            int lv = com.sc.hazard.RaidAlarmSC.kindOf(r.getString("key")) == com.sc.hazard.RaidAlarmSC.KIND_HEAVY
+                    ? com.sc.hazard.RaidAlarmSC.HEAVY_LEVEL : com.sc.hazard.RaidAlarmSC.ALARM_LEVEL;
+            text = why == com.sc.hazard.RaidAlarmSC.R_LEVEL ? Lang.tr(key, levelName(lv))
+                    : why == com.sc.hazard.RaidAlarmSC.R_COOLDOWN ? Lang.tr(key, Math.max(1, r.getInteger("alarmDays"))) : Lang.tr(key);
             good = false;
         } else if (code == TradeServerSC.OK) {
             String k = kind == SettleNetSC.CONTRACT_TAKE ? "sc.contract.taken" : kind == SettleNetSC.CONTRACT_DROP ? "sc.contract.dropped"

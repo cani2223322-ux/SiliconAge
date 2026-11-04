@@ -71,6 +71,11 @@ public class TileEntityRelaySC extends TileEntity {
         return by;
     }
 
+    /** When it was set up (world total time). */
+    public long at() {
+        return at;
+    }
+
     @Override
     public boolean canUpdate() {
         return false;                                           // ПД-7: true once the defence ticks here

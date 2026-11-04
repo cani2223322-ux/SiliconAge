@@ -5,6 +5,7 @@ import com.sc.energy.Tier;
 import com.sc.energy.TileEntityEnergyBase;
 
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraftforge.common.util.ForgeDirection;
 
 /**
  * ОМ-7 (docs/plan-ideas-2026-10-26.md): a port of the Energy Bank (BlockEnergyBankSC.PORT_FIRST + tier) - the energy net's side of the
@@ -12,9 +13,12 @@ import net.minecraft.nbt.NBTTagCompound;
  * mode (IN / OUT) by a wrench click; NBT "scBankPort" {out, cx, cy, cz} - fixed by the coordinator; ОМ-7 appends {b} (bound).
  * <p>
  * In the net as a storage of its tier (TileEntityEnergyBase: IC2 and the mod's own net, overvoltage by its tier): IN - a sink only, OUT -
- * a source only (EnergyBankMathSC.PORT_AMPS packets of its voltage a tick; IC2 takes one). The mode switched - the net is told again.
+ * a source only (EnergyBankMathSC.PORT_AMPS packets of its voltage a tick; IC2 + Industrial Upgrade: PORT_AMPS through IMultiEnergySource,
+ * IC2 alone: one - outPackets()). The mode switched - the net is told again. The faces against the bank's own blocks (another port
+ * included) are shut: a port next to a port would pass energy round in circles, under IC2 a lower tier's one would blow up.
  */
-public class TileEntityEnergyBankPortSC extends TileEntityEnergyBase {
+@cpw.mods.fml.common.Optional.Interface(iface = "ic2.api.energy.tile.IMultiEnergySource", modid = "industrialupgrade")
+public class TileEntityEnergyBankPortSC extends TileEntityEnergyBase implements ic2.api.energy.tile.IMultiEnergySource {
 
     public static final String NBT = "scBankPort";
 
@@ -22,6 +26,11 @@ public class TileEntityEnergyBankPortSC extends TileEntityEnergyBase {
     /** The controller whose scan found the port in its cube (the WAILA / the screen; the controller drives the port itself). */
     private int cx, cy, cz;
     private boolean bound;
+    /** The faces against a bank block (bit = ForgeDirection ordinal); -1 - not looked at yet (or a neighbour's chunk not loaded). */
+    private int bankMask = -1;
+    /** outputFaces()'s array for the mask outFacesMask (EnergyNetSC keys its face cache on the array). */
+    private ForgeDirection[] outFacesCache;
+    private int outFacesMask = -1;
 
     /** No-arg for the NBT's reflection: the tier comes from the saved "TierSC" (TileEntityEnergyBase), else the block's meta. */
     public TileEntityEnergyBankPortSC() {
@@ -96,6 +105,84 @@ public class TileEntityEnergyBankPortSC extends TileEntityEnergyBase {
     @Override
     public int packetsPerTick() {
         return EnergyBankMathSC.PORT_AMPS;
+    }
+
+    /** Industrial Upgrade's energy net: PORT_AMPS packets a tick, as the mod's own net. */
+    @Override
+    public boolean sendMultibleEnergyPackets() {
+        return out;
+    }
+
+    @Override
+    public double getMultibleEnergyPacketAmount() {
+        return EnergyBankMathSC.PORT_AMPS;
+    }
+
+    /** The packets an OUT port really sends a tick: PORT_AMPS, one under IC2 without Industrial Upgrade (the tooltip, the handbook). */
+    public static int outPackets() {
+        return TileEntityEnergyStorageSC.overdriveWorks() ? EnergyBankMathSC.PORT_AMPS : 1;
+    }
+
+    /** The faces against the bank's blocks (any meta - a port, the casing, glass, a cell) are shut both ways. */
+    private int bankFaces() {
+        if (bankMask >= 0 || worldObj == null) {
+            return Math.max(0, bankMask);
+        }
+        int m = 0;
+        boolean known = true;
+        for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+            int x = xCoord + d.offsetX, y = yCoord + d.offsetY, z = zCoord + d.offsetZ;
+            if (!worldObj.blockExists(x, y, z)) {
+                known = false;                       // asked again once the chunk is there
+            } else if (worldObj.getBlock(x, y, z) == com.sc.init.IdeaBlocksSC.energyBank) {
+                m |= 1 << d.ordinal();
+            }
+        }
+        if (known) {
+            bankMask = m;
+        }
+        return m;
+    }
+
+    @Override
+    public boolean acceptsFrom(ForgeDirection side) {
+        return side == ForgeDirection.UNKNOWN || (bankFaces() & 1 << side.ordinal()) == 0;
+    }
+
+    @Override
+    public ForgeDirection[] outputFaces() {
+        int m = bankFaces();
+        if (outFacesCache == null || outFacesMask != m) {
+            int n = 0;
+            for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+                n += (m & 1 << d.ordinal()) == 0 ? 1 : 0;
+            }
+            ForgeDirection[] faces = new ForgeDirection[n];
+            n = 0;
+            for (ForgeDirection d : ForgeDirection.VALID_DIRECTIONS) {
+                if ((m & 1 << d.ordinal()) == 0) {
+                    faces[n++] = d;
+                }
+            }
+            outFacesCache = faces;
+            outFacesMask = m;
+        }
+        return outFacesCache;
+    }
+
+    @Override
+    public void validate() {
+        bankMask = -1;                               // looked at again in the world it joins
+        super.validate();
+    }
+
+    /** BlockEnergyBankSC: a neighbouring block changed - the shut faces looked at again; IC2 caches them on load, so it's told again. */
+    public void neighbourChanged() {
+        int was = bankMask;
+        bankMask = -1;
+        if (worldObj != null && !worldObj.isRemote && bankFaces() != was) {
+            refreshEnergyNet();
+        }
     }
 
     @Override

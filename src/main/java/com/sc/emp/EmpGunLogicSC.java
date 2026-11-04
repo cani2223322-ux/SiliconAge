@@ -277,6 +277,9 @@ public final class EmpGunLogicSC {
         ItemStack out = new ItemStack(com.sc.init.ModItems.empModule, 1, m.ordinal());
         if (!p.inventory.addItemStackToInventory(out) && out.stackSize > 0) {
             p.dropPlayerItemWithRandomChoice(out, false);
+            say(p, "sc.emp.module.removed", moduleName(m));
+            say(p, "sc.emp.module.full");                       // no room: on the ground nearby
+            return;
         }
         say(p, "sc.emp.module.removed", moduleName(m));
     }

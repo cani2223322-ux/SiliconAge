@@ -45,6 +45,7 @@ public final class ModRecipesMachineBlocks {
         registerHV();
         registerEV();
         registerIV();
+        registerQV();
         registerTools();
         registerEnergyStorage();
         registerTransformers();
@@ -115,6 +116,18 @@ public final class ModRecipesMachineBlocks {
                 'W', new ItemStack(ModItems.component("wTiPlate")), 'N', cable(CableType.NIOBIUM_TITANIUM),
                 'P', new ItemStack(Blocks.piston), 'X', block(MachineType.ROLLING_MACHINE),
                 'T', ModItems.ingot.stackOf(Material.TUNGSTEN), 'K', ModItems.siliconMaterial.stackOf(SiliconMaterial.CONTROLLER)});
+    }
+
+    /**
+     * QV, ОМ-4 (TODO(balance): not in the plan - provisional, the user decides): the EUV Lithograph - the EV Stepper
+     * wrapped in quantum cable, Controllers and focusing lenses. No Processor (the Lithograph makes them - a loop) and
+     * no EUV mask (a worn tool, a shaped recipe would eat it whole).
+     */
+    private static void registerQV() {
+        OreRecipes.shaped(block(MachineType.EUV_LITHOGRAPH), new Object[]{
+                "QKQ", "LXL", "QKQ",
+                'Q', cable(CableType.QUANTUM), 'K', ModItems.siliconMaterial.stackOf(SiliconMaterial.CONTROLLER),
+                'L', new ItemStack(ModItems.component("focusLens")), 'X', block(MachineType.STEPPER_EV)});
     }
 
     /**

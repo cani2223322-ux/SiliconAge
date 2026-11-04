@@ -286,6 +286,10 @@ public final class EmpSiphonSC {
             return;
         }
         long room = recv < 0 ? 0L : stopWhenFull ? room(p, gun, u, recv) : totalRoom(p, gun, u);
+        if (stopWhenFull && recv == EmpMathSC.RECV_BATTERY) {
+            ItemStack b = battery(p);                           // a battery takes only its rate a call (give: STEP + 1 calls)
+            room = b == null ? 0L : Math.min(room, (long) ItemBatterySC.rateOf(b) * (STEP + 1));
+        }
         room = Math.min(room, capLeft);                         // past the cap: the mob keeps losing, the rest is vented
         int rate = EmpMathSC.throttle(EmpMathSC.siphonRate(targetCapacity(target), targetSuit(target), wide, targetDefense(target),
                 ConfigSC.empSiphonRateMultiplier, STEP), u.throttled);

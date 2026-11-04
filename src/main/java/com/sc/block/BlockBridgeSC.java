@@ -290,6 +290,32 @@ public class BlockBridgeSC extends Block {
         super.dropBlockAsItemWithChance(world, x, y, z, meta, 1.0F, fortune);
     }
 
+    /**
+     * МС-1: no blast breaks a controller with an owner, nor a capacitor / port linked to one (it used to drop whole, and
+     * whoever placed it became the owner - as КР-1 at the quarry). Ownerless and unlinked parts go as any block.
+     */
+    @Override
+    public float getExplosionResistance(net.minecraft.entity.Entity exploder, World world, int x, int y, int z,
+                                        double explosionX, double explosionY, double explosionZ) {
+        TileEntityBridgeControllerSC c = controllerFor(world, x, y, z);
+        if (c != null && !c.ownerless()) {
+            return 6000000.0F;
+        }
+        return super.getExplosionResistance(exploder, world, x, y, z, explosionX, explosionY, explosionZ);
+    }
+
+    /** МС-1: the wither and the dragon break blocks without a blast - not a bridge with an owner. */
+    @Override
+    public boolean canEntityDestroy(IBlockAccess world, int x, int y, int z, net.minecraft.entity.Entity entity) {
+        if (world instanceof World) {
+            TileEntityBridgeControllerSC c = controllerFor((World) world, x, y, z);
+            if (c != null && !c.ownerless()) {
+                return false;
+            }
+        }
+        return super.canEntityDestroy(world, x, y, z, entity);
+    }
+
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
         if (refusesBreak(world, player, x, y, z)) {

@@ -37,17 +37,39 @@ public class ComponentEmbFunnelSC extends ComponentEmbAirSC {
         if (EmbassyRepairSC.repairing() && !EmbassyRepairSC.settling() || variant < 0 || variant >= f.funnels.length) {
             return;                                             // the first build and the settling only: past the square nobody keeps the land
         }
-        StructureBoundingBox in = ComponentEmbAirKitSC.inside(win, boundingBox);
+        if (EmbassyRepairSC.settling() && (f.ils & (variant == 0 ? EmbassyAirfieldSC.ILS_LOW : EmbassyAirfieldSC.ILS_HIGH)) == 0) {
+            return;                                             // an end without ILS: its funnel was on disk (or the biome didn't fit) - old land isn't cleared again
+        }
+        clear(w, f, ComponentEmbAirKitSC.inside(win, boundingBox));
+    }
+
+    /**
+     * The populate of chunk `chunk` (EmbassyWorldGenSC.generate, after the window): the funnel's growth in that chunk's own columns
+     * once more - another mod's generator (IC2's rubber trees at cx * 16 + rand(16)) plants there after our window has run. The chunk
+     * itself only (loaded: it is being populated), nothing cascades.
+     */
+    void clearChunk(World w, StructureBoundingBox chunk) {
+        EmbassyAirfieldSC.Field f = field();
+        if (f != null && variant >= 0 && variant < f.funnels.length) {
+            clear(w, f, ComponentEmbAirKitSC.inside(chunk, boundingBox));
+        }
+    }
+
+    /** The growth over the 1:FUNNEL_SLOPE plane of this end inside `in` (the piece's box already; null: none) - flag 2. */
+    private void clear(World w, EmbassyAirfieldSC.Field f, StructureBoundingBox in) {
         int[] c = in == null ? null : clipq(f.funnels[variant], in);
         if (c == null) {
             return;
         }
-        boolean low = variant == 0;
+        boolean low = variant == 0, settling = EmbassyRepairSC.settling();
         for (int a = c[0]; a <= c[2]; a++) {
             int dist = low ? f.thresholdLow - a : a - f.thresholdHigh;
             int y0 = Math.max(in.minY, floorY + Math.max(0, dist) / EmbassyAirfieldSC.FUNNEL_SLOPE + 1);
             for (int q = c[1]; q <= c[3]; q++) {
                 int x = f.x(a, q), z = f.z(a, q);
+                if (settling && EmbassyAirfieldSC.playerBaseAt(w, x, z)) {
+                    continue;                                   // a player's base: the land is the players'
+                }
                 int y1 = Math.min(in.maxY, w.getChunkFromBlockCoords(x, z).getTopFilledSegment() + 15);
                 for (int y = y0; y <= y1; y++) {
                     Block b = w.getBlock(x, y, z);
