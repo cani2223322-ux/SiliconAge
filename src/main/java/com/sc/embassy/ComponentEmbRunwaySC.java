@@ -73,13 +73,11 @@ public class ComponentEmbRunwaySC extends ComponentEmbAirSC {
             lights = ComponentEmbAirKitSC.lights(f);
             lightsOf = f;
         }
-        boolean full = f.kind == EmbassyAirfieldSC.FULL;
-        int[] paved = full ? EmbassyAirfieldSC.rect(f.strip[0], f.padLow[1], Math.max(f.strip[2], f.taxi[2]), f.strip[3]) : f.runway;
-        int[] c = clipq(paved, in);
+        int[] c = clipq(paved(f), in);
         if (c != null) {
             for (int a = c[0]; a <= c[2]; a++) {
                 for (int q = c[1]; q <= c[3]; q++) {
-                    int meta = meta(f, a, q);
+                    int meta = meta(f, lights, a, q);
                     if (meta >= 0) {
                         surface(w, in, a, 0, q, meta);
                     }
@@ -90,11 +88,23 @@ public class ComponentEmbRunwaySC extends ComponentEmbAirSC {
         fence(w, in, f);
     }
 
-    /** The paving's meta at (a, q), -1 - not this piece's (the order: see the class comment). */
-    private int meta(EmbassyAirfieldSC.Field f, int a, int q) {
+    /** The rectangle the paving's walk covers (FULL: the strip, the pads and taxiway «А»; SHORT: the runway) - meta() says which cells are its. */
+    static int[] paved(EmbassyAirfieldSC.Field f) {
+        return f.kind == EmbassyAirfieldSC.FULL ? EmbassyAirfieldSC.rect(f.strip[0], f.padLow[1], Math.max(f.strip[2], f.taxi[2]), f.strip[3]) : f.runway;
+    }
+
+    /**
+     * The paving's meta at (a, q) (`lights` - ComponentEmbAirKitSC.lights(f)), -1 - not this piece's (the order: see the class comment).
+     * The +a pad's corner inside the apron (a = r + 3 .. RWY_HALF, q = r + 7 .. r + 9 - at r 88..90 the stand «МС-1»'s yellow outline
+     * crosses it) is the apron piece's alone: two pieces writing one cell differently re-set it at every «Достройка». Pure.
+     */
+    static int meta(EmbassyAirfieldSC.Field f, Map<Long, Integer> lights, int a, int q) {
         Integer l = lights.get(Long.valueOf(ComponentEmbAirKitSC.key(a, q)));
         if (l != null) {
             return l.intValue();
+        }
+        if (EmbassyAirfieldSC.in(f.apron, a, q)) {
+            return -1;                                          // the apron's (ComponentEmbApronSC.meta)
         }
         if (EmbassyAirfieldSC.in(f.runway, a, q)) {
             return white(f, a, q) ? BlockAirfieldSC.MARK_WHITE : BlockAirfieldSC.RUNWAY;
@@ -175,13 +185,18 @@ public class ComponentEmbRunwaySC extends ComponentEmbAirSC {
         }
         for (int da = -1; da <= 1; da++) {
             for (int dq = -1; dq <= 1; dq++) {
-                surface(w, in, s[0] + da, 0, s[1] + dq, da == 0 && dq == 0 ? BlockAirfieldSC.APRON : BlockAirfieldSC.MARK_WHITE);
+                surface(w, in, s[0] + da, 0, s[1] + dq, windsockMeta(da, dq));
             }
         }
         for (int dy = EmbassyAirfieldSC.WINDSOCK_DY; dy < EmbassyAirfieldSC.H_WINDSOCK; dy++) {
             atq(w, in, s[0], dy, s[1], Blocks.nether_brick_fence, 0);
         }
         atq(w, in, s[0], EmbassyAirfieldSC.H_WINDSOCK, s[1], Blocks.wool, 1);
+    }
+
+    /** The windsock's pad at (da, dq) off its mast (-1..1 each): the mast's cell concrete, the white ring round it. Pure. */
+    static int windsockMeta(int da, int dq) {
+        return da == 0 && dq == 0 ? BlockAirfieldSC.APRON : BlockAirfieldSC.MARK_WHITE;
     }
 
     /** The low fence on the field's outer edge (FULL: the runway's level rectangle's; SHORT: its zone's), the ends open. */

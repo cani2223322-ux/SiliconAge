@@ -388,7 +388,7 @@ public final class RelayPostSC {
         TileEntity te = w.getTileEntity(x, y, z);
         TileEntityRelaySC relay = te instanceof TileEntityRelaySC ? (TileEntityRelaySC) te : null;
         long lostAt = crossingPause(SettlementRegistrySC.get(w), n[0], n[1]) - RelayRulesSC.LOST_PAUSE;
-        if (resume && relay != null && relay.wave() >= 0 && lostAt < relay.at()) {     // a defence lost since its set-up: afresh
+        if (resume && relay != null && relay.wave() >= 0 && !relay.lost() && lostAt < relay.at()) {   // lost since its set-up: afresh (ПМ-2 А)
             d.wave = Math.min(relay.wave(), RelayRulesSC.WAVES - 1);
             d.startedAt = now - Math.max(0L, Math.min(relay.held(), (long) RelayRulesSC.HOLD_TICKS));
             d.waveAt = d.startedAt;
@@ -475,6 +475,7 @@ public final class RelayPostSC {
             } else if (now - d.aloneSince >= RelayRulesSC.ABANDON_TICKS) {
                 release(d);                                     // abandoned: lost without loading the chunk - the Relay stays, its progress
                 pause(w, d);                                    // void (begin: a lost defence's tile isn't resumed)
+                markLost(w, d);
                 return true;
             }
             return false;
@@ -631,6 +632,33 @@ public final class RelayPostSC {
         release(d);
         pause(w, d);
         tellNear(w, d, EnumChatFormatting.RED, "sc.relay.lost");
+    }
+
+    /**
+     * ПМ-2 А: the Relay of abandoned defence `d` (its chunk unloaded) marked lost in its own tile - a right click later always begins
+     * afresh, even once the crossing's pause is long gone (pause drops expired ones). The chunk is loaded for it only this once and queued
+     * to unload again.
+     */
+    private static void markLost(WorldServer w, Defence d) {
+        int cx = d.x >> 4, cz = d.z >> 4;
+        boolean was = w.theChunkProviderServer.chunkExists(cx, cz);
+        try {
+            if (!was) {
+                w.theChunkProviderServer.loadChunk(cx, cz);
+            }
+            if (w.getBlock(d.x, d.y, d.z) == IdeaBlocksSC.relay) {
+                TileEntity te = w.getTileEntity(d.x, d.y, d.z);
+                if (te instanceof TileEntityRelaySC) {
+                    ((TileEntityRelaySC) te).markLost();
+                }
+            }
+        } catch (RuntimeException ex) {
+            // a broken chunk: the crossing's pause still holds it for a while
+        } finally {
+            if (!was) {
+                w.theChunkProviderServer.unloadChunksIfNotNearSpawn(cx, cz);
+            }
+        }
     }
 
     /** The Relay (if still there) back as an item. */

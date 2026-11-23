@@ -25,7 +25,7 @@ import net.minecraftforge.oredict.ShapelessOreRecipe;
  * ОМ-6 (docs/plan-ideas-2026-10-26.md, «Разборка лишних трофеев», ★ A): what a thing breaks into at the Armour Service Station - a trophy
  * (any but the Singular ones and the ПЭ-1М: those the Singular station restores, nothing breaks them), and one's own Nano / Quantum / Exo
  * piece, blade, drill and gun (ItemArmorSC, ItemBladeSC, ItemDrillSC, ItemWeaponSC, the ПЭ-1): SHARE_MIN..SHARE_MAX of its crafting
- * components (the recipe's own, rounded down, at least one of the dearest), the armour chips and the ПЭ-1 modules of one's own whole;
+ * components (БР-1: of the whole recipe's count, at least one, handed out one at a time from the dearest side - parts()), the armour chips and the ПЭ-1 modules of one's own whole;
  * charge, gases and the Singular progress are lost. Never worth more than restoring the trophy (TrophyRestoreSC's price) - the self-test
  * checks every trophy meta. The station's salvage slot (TileEntityArmorStationSC.SALVAGE_SLOT) and its button
  * (ContainerArmorStationSC.BTN_SALVAGE, two clicks) do it; STATION_EU from its buffer.
@@ -43,17 +43,37 @@ public final class SalvageSC {
     public static final float SHARE_MIN = 0.25F, SHARE_MAX = 0.35F;
     /** EU off the station's buffer for one salvage. TODO(balance) */
     public static final int STATION_EU = 5000;
-    /** refusal()'s answers. */
-    public static final int OK = 0, R_NOTHING = 1, R_SINGULAR = 2;
+    /**
+     * refusal()'s answers. R_SINGULAR - a Singular trophy (the Singular station restores it); БР-2: R_OWN_SINGULAR - one's own Singular
+     * piece / blade / drill, R_PE1M - one's own ПЭ-1М (its modules come off in the K menu).
+     */
+    public static final int OK = 0, R_NOTHING = 1, R_SINGULAR = 2, R_OWN_SINGULAR = 3, R_PE1M = 4;
     /** The refusal's line by refusal() (OK - none). */
-    public static final String[] REFUSE_KEYS = {null, "sc.salvage.refuse.nothing", "sc.salvage.refuse.singular"};
+    public static final String[] REFUSE_KEYS = {null, "sc.salvage.refuse.nothing", "sc.salvage.refuse.singular",
+            "sc.salvage.refuse.ownSingular", "sc.salvage.refuse.pe1m"};
     /** The armour chips' tiers (ItemArmorChipSC's I..III). */
     private static final int CHIP_TIERS = 3;
 
     private SalvageSC() {
     }
 
-    /** Pure: may `s` be salvaged - OK, R_NOTHING (not a thing of the list), R_SINGULAR (a Singular trophy / piece, the ПЭ-1М). */
+    /**
+     * БР-2, pure: what the salvage slot takes - any trophy, any of the mod's armour pieces, blades, drills, weapons and the ПЭ-1 (also
+     * those refusal() refuses: the slot's tooltip then says why in red and the button stays grey).
+     */
+    public static boolean accepts(ItemStack s) {
+        if (s == null || s.getItem() == null) {
+            return false;
+        }
+        Item it = s.getItem();
+        return (MobItemsSC.trophy != null && it == MobItemsSC.trophy) || it instanceof ItemArmorSC || it instanceof ItemBladeSC
+                || it instanceof ItemDrillSC || it instanceof ItemWeaponSC || com.sc.emp.ItemEmpGunSC.isGun(s);
+    }
+
+    /**
+     * Pure: may `s` be salvaged - OK, R_NOTHING (not a thing of the list), R_SINGULAR (a Singular trophy, the ПЭ-1М trophy),
+     * R_OWN_SINGULAR (one's own Singular piece / blade / drill), R_PE1M (one's own ПЭ-1М).
+     */
     public static int refusal(ItemStack s) {
         if (s == null || s.getItem() == null) {
             return R_NOTHING;
@@ -65,19 +85,19 @@ public final class SalvageSC {
         }
         if (it instanceof ItemArmorSC) {
             ArmorSuit suit = ((ItemArmorSC) it).getSuit();
-            return suit == ArmorSuit.SINGULAR ? R_SINGULAR : suit == null ? R_NOTHING : OK;
+            return suit == ArmorSuit.SINGULAR ? R_OWN_SINGULAR : suit == null ? R_NOTHING : OK;
         }
         if (it instanceof ItemBladeSC) {
-            return ((ItemBladeSC) it).getType() == com.sc.util.BladeType.SINGULAR ? R_SINGULAR : OK;
+            return ((ItemBladeSC) it).getType() == com.sc.util.BladeType.SINGULAR ? R_OWN_SINGULAR : OK;
         }
         if (it instanceof ItemDrillSC) {
-            return ((ItemDrillSC) it).getType() == com.sc.util.DrillType.SINGULAR ? R_SINGULAR : OK;
+            return ((ItemDrillSC) it).getType() == com.sc.util.DrillType.SINGULAR ? R_OWN_SINGULAR : OK;
         }
         if (it instanceof ItemWeaponSC) {
             return OK;
         }
         if (com.sc.emp.ItemEmpGunSC.isGun(s)) {
-            return s.getItemDamage() == com.sc.emp.ItemEmpGunSC.META_BASIC ? OK : R_SINGULAR;   // the ПЭ-1М: the Singular station's
+            return s.getItemDamage() == com.sc.emp.ItemEmpGunSC.META_BASIC ? OK : R_PE1M;   // one's own ПЭ-1М: its modules come off in the K menu
         }
         return R_NOTHING;
     }
@@ -114,35 +134,75 @@ public final class SalvageSC {
     }
 
     /**
-     * The crafting components `real` gives back (new stacks, merged by item): its recipe's sides x share(real), rounded down, at least
-     * one of the dearest; the salvageable things among them left out. Empty - no recipe.
+     * БР-1, pure: how many components of `sum` a thing gives back at `share` - the whole recipe's sum x share, rounded to the nearest,
+     * at least one (0 - nothing to give).
      */
-    public static List<ItemStack> parts(ItemStack real) {
-        List<ItemStack> sides = merged(inputsOf(real));
+    public static int shareTotal(int sum, float share) {
+        if (sum <= 0) {
+            return 0;
+        }
+        return Math.min(sum, Math.max(1, Math.round(sum * share)));
+    }
+
+    /** БР-1, pure: the recipe's sides that may come back (the salvageable things - the piece / blade / drill / gun before it - left out). */
+    public static List<ItemStack> sides(ItemStack real) {
         List<ItemStack> out = new ArrayList<ItemStack>();
-        float sh = share(real);
-        ItemStack dearest = null;
-        int best = -1;
-        for (ItemStack side : sides) {
-            if (refusal(side) != R_NOTHING) {
-                continue;                                       // the piece / blade / drill / gun before it: not given back
-            }
-            int n = shareOf(side.stackSize, sh);
-            if (n > 0) {
-                ItemStack c = side.copy();
-                c.stackSize = n;
-                out.add(c);
-            }
-            int w = worth(side);
-            if (w > best) {
-                best = w;
-                dearest = side;
+        for (ItemStack side : merged(inputsOf(real))) {
+            if (refusal(side) == R_NOTHING) {
+                out.add(side);
             }
         }
-        if (dearest != null && countOf(out, dearest) == 0) {
-            ItemStack c = dearest.copy();
-            c.stackSize = 1;
-            out.add(c);
+        return out;
+    }
+
+    /**
+     * БР-1: the crafting components `real` gives back (new stacks, one per item, the dearest first): shareTotal(all the sides' count,
+     * share(real)) of them, handed out one at a time from the dearest side to the cheapest and round again, no side over its own count.
+     * Empty - no recipe.
+     */
+    public static List<ItemStack> parts(ItemStack real) {
+        List<ItemStack> sides = sides(real);
+        int k = sides.size();
+        int[] w = new int[k];
+        int sum = 0;
+        for (int i = 0; i < k; i++) {
+            w[i] = worth(sides.get(i));
+            sum += sides.get(i).stackSize;
+        }
+        // the dearest first (stable: the same worth keeps the recipe's order)
+        for (int i = 1; i < k; i++) {
+            ItemStack si = sides.get(i);
+            int wi = w[i], j = i - 1;
+            while (j >= 0 && w[j] < wi) {
+                w[j + 1] = w[j];
+                sides.set(j + 1, sides.get(j));
+                j--;
+            }
+            w[j + 1] = wi;
+            sides.set(j + 1, si);
+        }
+        int[] give = new int[k];
+        int left = shareTotal(sum, share(real));
+        while (left > 0) {
+            boolean any = false;
+            for (int i = 0; i < k && left > 0; i++) {
+                if (give[i] < sides.get(i).stackSize) {
+                    give[i]++;
+                    left--;
+                    any = true;
+                }
+            }
+            if (!any) {
+                break;
+            }
+        }
+        List<ItemStack> out = new ArrayList<ItemStack>();
+        for (int i = 0; i < k; i++) {
+            if (give[i] > 0) {
+                ItemStack c = sides.get(i).copy();
+                c.stackSize = give[i];
+                out.add(c);
+            }
         }
         return out;
     }
@@ -312,13 +372,5 @@ public final class SalvageSC {
             }
         }
         return out;
-    }
-
-    private static int countOf(List<ItemStack> l, ItemStack like) {
-        int n = 0;
-        for (ItemStack o : l) {
-            n += o.getItem() == like.getItem() && o.getItemDamage() == like.getItemDamage() ? o.stackSize : 0;
-        }
-        return n;
     }
 }

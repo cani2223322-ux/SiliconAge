@@ -63,7 +63,16 @@ public final class MobAnalysisClientSC {
         }
         if ((flags & Analysis.ELITE) != 0) {
             EliteModSC m = e instanceof EntityArmoredMobSC ? ((EntityArmoredMobSC) e).eliteMod() : null;
-            lines.add("§6" + (m != null ? Lang.tr("sc.analyzer.mob.elite", Lang.tr(m.langKey())) : Lang.tr("sc.analyzer.mob.elite.kind")));
+            String names = null;
+            if (m != null) {                                    // МБ-3 А: a wanted one's second modifier too, as over its head
+                names = Lang.tr(m.langKey());
+                EliteModSC m2 = e instanceof com.sc.mob.EntityWantedSC
+                        ? EliteModSC.of(com.sc.mob.WantedRulesSC.mod2Of(((com.sc.mob.EntityWantedSC) e).look())) : null;
+                if (m2 != null && m2 != m) {
+                    names += " + " + Lang.tr(m2.langKey());
+                }
+            }
+            lines.add("§6" + (names != null ? Lang.tr("sc.analyzer.mob.elite", names) : Lang.tr("sc.analyzer.mob.elite.kind")));
         }
         if ((flags & Analysis.EMP_REACTS) != 0) {
             String k = MobAnalysisSC.reactiveKey(e);

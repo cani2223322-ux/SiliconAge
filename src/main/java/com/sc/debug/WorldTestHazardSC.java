@@ -102,7 +102,7 @@ public final class WorldTestHazardSC {
     static final int START = 6000;
     /** WorldTestWildSC starts after this. */
     static volatile boolean finished;
-    private static final int WARN = 20, STORM = 400, POLL = 20, RAID_MAX = 2000, ECHO_WAIT = BridgeEchoSC.SQUAD_DELAY + 160, ECHO_TRIES = 80;
+    private static final int WARN = 20, STORM = 400, POLL = 20, RAID_MAX = 2000, ECHO_WAIT = BridgeEchoSC.SQUAD_DELAY + 160 + 60, ECHO_TRIES = 80;
     private static final int PH_STORM = 1, PH_RAID = 2, PH_ECHO = 3;
     private static final GameProfile SKY = profile("sky"), ROOF = profile("roof"), RAD = profile("rad"), TRADER = profile("trader"), CRUMBS = profile("crumbs"),
             DEFENDER = profile("defender"), HOME = profile("home");
@@ -220,7 +220,7 @@ public final class WorldTestHazardSC {
                 }
             });
         }
-        if (phase == PH_STORM && t >= WARN + 5) {
+        if (phase == PH_STORM && t >= WARN + 60) {                     // ИГ-1 А: 3 s past the warning, not a quarter of one
             step("storm pulse", new Runnable() {
                 public void run() {
                     stormPulse();
@@ -494,7 +494,7 @@ public final class WorldTestHazardSC {
         EmpStormSC.startNow(w, WARN, STORM);
         int ph = EmpStormSC.phase(w);
         print(ph == StormStateSC.WARNING && EmpStormSC.warning(w), "storm start (ПФ-1, ПФ-4): startNow(" + WARN + ", " + STORM + ") - the phase " + ph
-                + " (WARNING " + StormStateSC.WARNING + ")");
+                + " (WARNING " + StormStateSC.WARNING + "), the actors' place " + bx + " " + by + " " + bz);
     }
 
     private void stormPulse() {
@@ -536,7 +536,9 @@ public final class WorldTestHazardSC {
         pulse();
         boolean immune = maxLeft(sky, w.getTotalWorldTime()) <= 0;
         stormChance = MobDropsSC.trophyChance(lineman, null);
-        print(active && solar && hit > 0 && sup && !coverSky && coverRoof && mob && reboot && spared && immune, "storm pulse (ПФ-2, ПФ-3, ПФ-5, ПБ-21): the phase "
+        print(active && solar && hit > 0 && sup && !coverSky && coverRoof && mob && reboot && spared && immune, "storm pulse (ПФ-2, ПФ-3, ПФ-5, ПБ-21) at "
+                + bx + " " + by + " " + bz + " (sky " + pos(sky) + ", roof " + pos(roof) + ", Lineman " + pos(lineman) + ", Shell " + pos(shell) + ", warden "
+                + pos(warden) + ", sky over the place " + w.canBlockSeeTheSky(bx, by + 1, bz) + ", top block Y " + w.getHeightValue(bx, bz) + "): the phase "
                 + ph + " (STORM " + StormStateSC.STORM + ") " + active + ", the mod's panels blocked " + solar + "; a pulse suppressed " + hit + "; under the sky "
                 + skyLeft + " ticks (" + StormRulesSC.SUPPRESS_MIN + ".." + StormRulesSC.SUPPRESS_MAX + "), under three blocks " + roofLeft + " (coveredFrom "
                 + coverSky + " / " + coverRoof + ") " + sup + "; the Lineman's piece " + mob + ", the Shell reboots " + reboot + ", the warden spared " + spared
@@ -831,8 +833,8 @@ public final class WorldTestHazardSC {
         Set<Integer> got2 = nanitesNear(w0, hx, hy, hz);
         got2.removeAll(before2);
         shieldParticles = got2.size();
-        print(echoHomeHit && homeParticles >= BridgeEchoSC.PARTICLES_MIN && homeParticles <= BridgeEchoSC.PARTICLES_MAX && shieldParticles == 0, "echo home (ПН-9):"
-                + " without the Shield " + homeParticles + " particles after " + calls + " crossing(s) (" + BridgeEchoSC.PARTICLES_MIN + ".." + BridgeEchoSC.PARTICLES_MAX
+        print(echoHomeHit && homeParticles >= BridgeEchoSC.PARTICLES_MIN && homeParticles <= BridgeEchoSC.PARTICLES_MAX && shieldParticles == 0, "echo home (ПН-9) at "
+                + pos(hx, hy, hz) + ":" + " without the Shield " + homeParticles + " particles after " + calls + " crossing(s) (" + BridgeEchoSC.PARTICLES_MIN + ".." + BridgeEchoSC.PARTICLES_MAX
                 + (forced ? ", the roll forced 0" : ", a 10% roll") + "), with the Shield " + shieldParticles + " (0); they fade in " + (BridgeEchoSC.ECHO_LIFE_TICKS / 20) + " s - checked later");
         // into the Substrate: the squad comes SQUAD_DELAY later near the arrival (not at a dock, not in a dome)
         ax = bx + 64.5;
@@ -871,9 +873,10 @@ public final class WorldTestHazardSC {
         Set<Integer> left = nanitesNear(w0, hx, hy, hz);
         left.retainAll(nanitesSeen);
         int squad = newMaraudersNear(ax, ay, az), atDock = dockTried ? newMaraudersNear(dx, dy, dz) : -1;
-        print(echoHomeHit && left.isEmpty(), "echo home (ПН-9): " + homeParticles + " particles, " + left.size() + " left after " + (ECHO_WAIT / 20) + " s (0)");
+        print(echoHomeHit && left.isEmpty(), "echo home (ПН-9) at " + pos(hx, hy, hz) + ": " + homeParticles + " particles, " + left.size() + " left after " + (ECHO_WAIT / 20) + " s (0)");
         print(squad >= BridgeEchoSC.SQUAD_MIN && (atDock <= 0), "echo arrival (ПН-10, ПН-11): " + squad + " new Marauders within " + (BridgeEchoSC.SQUAD_DIST_MAX + 8)
-                + " of the arrival after " + (ECHO_WAIT / 20) + " s (" + BridgeEchoSC.SQUAD_MIN + "+ from 30 arrivals), at a dock " + (dockTried ? atDock + " (0)"
+                + " of the arrival " + pos(ax, ay, az) + " after " + (ECHO_WAIT / 20) + " s (" + BridgeEchoSC.SQUAD_MIN + "+ from 30 arrivals" + (arrivalQueued ? ""
+                : ", none queued") + "), at a dock " + (dockTried ? pos(dx, dy, dz) + " " + atDock + " (0)"
                 : "- no dock in the registry"));
         // the echo's creatures: removed
         for (Object o : new ArrayList<Object>(w0.loadedEntityList)) {
@@ -887,6 +890,15 @@ public final class WorldTestHazardSC {
                 ((Entity) o).setDead();
             }
         }
+    }
+
+    /** ИГ-1 А: a point / an entity's place for the lines (whole blocks). */
+    private static String pos(double x, double y, double z) {
+        return (int) Math.floor(x) + " " + (int) Math.floor(y) + " " + (int) Math.floor(z);
+    }
+
+    private static String pos(Entity e) {
+        return e == null ? "-" : pos(e.posX, e.posY, e.posZ) + (e.isDead ? " (dead)" : "");
     }
 
     private static Set<Integer> nanitesNear(World world, double x, double y, double z) {

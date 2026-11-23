@@ -238,8 +238,20 @@ public class WailaEntitySC implements IWailaEntityProvider {
         }
         EliteModSC m = e instanceof EntityArmoredMobSC ? ((EntityArmoredMobSC) e).eliteMod() : null;
         if (m != null) {
-            tip.add("§6" + Lang.tr("sc.waila.mob.elite", Lang.tr(m.langKey())));
+            tip.add("§6" + Lang.tr("sc.waila.mob.elite", eliteNames(e, m)));
         }
+    }
+
+    /** МБ-3 А: «Командир» - or, a wanted Renegade with its second modifier (its look), «Командир + Ветеран» as over its head. */
+    static String eliteNames(Entity e, EliteModSC m) {
+        String s = Lang.tr(m.langKey());
+        if (e instanceof com.sc.mob.EntityWantedSC) {
+            EliteModSC m2 = EliteModSC.of(com.sc.mob.WantedRulesSC.mod2Of(((com.sc.mob.EntityWantedSC) e).look()));
+            if (m2 != null && m2 != m) {
+                s += " + " + Lang.tr(m2.langKey());
+            }
+        }
+        return s;
     }
 
     private static boolean disguised(Entity e) {

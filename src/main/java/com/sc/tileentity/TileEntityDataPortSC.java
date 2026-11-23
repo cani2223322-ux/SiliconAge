@@ -67,6 +67,11 @@ public class TileEntityDataPortSC extends TileEntity implements com.sc.energy.IC
         return reactor() == null ? null : new int[]{rx, ry, rz};
     }
 
+    /** ГН-2 (WAILA): the port gets a redstone signal now. Server. */
+    public boolean powered() {
+        return worldObj != null && worldObj.isBlockIndirectlyGettingPowered(xCoord, yCoord, zCoord);
+    }
+
     /** ОМ-5: the reactor's comparator reading (the plasma's stability, the hole's mass); unbound - 0. */
     @Override
     public int comparatorLevel() {
@@ -98,7 +103,7 @@ public class TileEntityDataPortSC extends TileEntity implements com.sc.energy.IC
             return;
         }
         if (mode == STOP ? rising : !powered) {
-            g.portStop();
+            g.portStop(mode == STOP);
         }
     }
 

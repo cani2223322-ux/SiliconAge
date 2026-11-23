@@ -57,13 +57,19 @@ public class ItemQuarryModuleSC extends Item {
         RESONATOR("quarryResonator", 4, 0, EXO),
         /** Exo rig: lenses x7 instead of x5, a haul costs 50% more. */
         STABILIZER("quarryStabilizer", 1, 0, EXO),
-        /** Exo rig: other mods' ores (ore dictionary "ore...") come up too - useless without such mods. */
+        /**
+         * Exo rig: other mods' ores (ore dictionary "ore...") come up too - useless without such mods; in the Substrate the Monocrystal
+         * and druses instead (about 10% of the hauls, КР-2 of audit 2026-11-04).
+         */
         DEEP_SCAN("quarryDeepScan", 1, 0, EXO),
         /** +32 000 mB to every compartment of the pump's tank (up to 4). */
         TANK("quarryTank", 4, 0, QUARRY),
         /** The pump follows a fluid it finds through the whole lake or pool, past the area (range by tier). */
         FLUID_VEIN("quarryFluidVein", 1, 0, QUARRY),
-        /** Keeps the quarry's chunk and the chunk it digs in loaded while it works (from MV; the rig: its own chunk). */
+        /**
+         * Keeps loaded, while it works (from MV): the quarry's own chunk, the chunk it digs in and the neighbouring one when the output
+         * chest or pipe stands past the border - 4 at most; the rig: its own chunk and such neighbours - 3 at most (КР-1, audit 2026-11-04).
+         */
         CHUNK_LOADER("quarryChunkLoader", 1, 1, BOTH);
 
         public final String textureName;

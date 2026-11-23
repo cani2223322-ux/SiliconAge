@@ -1774,11 +1774,33 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
         }
     }
 
-    /** What the trash module destroys: cobblestone, stone, dirt, gravel, sand, netherrack. */
+    /**
+     * What the trash module destroys: cobblestone, stone, dirt, gravel, sand, netherrack, grass; КР-3 (audit 2026-11-04): end stone,
+     * the Substrate's Crystallite and oxide crusts (not the Monocrystal - silicon -, the copper traces or the Settlement Brick), and
+     * anything under the ore-dictionary name stone or cobblestone (another mod's stone).
+     */
     public static boolean trash(ItemStack s) {
+        if (s == null || s.getItem() == null) {
+            return false;
+        }
         Block b = Block.getBlockFromItem(s.getItem());
-        return b == Blocks.cobblestone || b == Blocks.stone || b == Blocks.dirt || b == Blocks.gravel || b == Blocks.sand
-                || b == Blocks.netherrack || b == Blocks.grass;
+        if (b == Blocks.cobblestone || b == Blocks.stone || b == Blocks.dirt || b == Blocks.gravel || b == Blocks.sand
+                || b == Blocks.netherrack || b == Blocks.grass || b == Blocks.end_stone) {
+            return true;
+        }
+        if (b != null && b == com.sc.dim.SubstrateBlocksSC.rock) {
+            int m = s.getItemDamage();
+            return m == com.sc.dim.SubstrateBlocksSC.CRYSTALLITE || m == com.sc.dim.SubstrateBlocksSC.OXIDE_VIOLET
+                    || m == com.sc.dim.SubstrateBlocksSC.OXIDE_BLUE || m == com.sc.dim.SubstrateBlocksSC.OXIDE_GOLD
+                    || m == com.sc.dim.SubstrateBlocksSC.OXIDE_GREEN;
+        }
+        for (int id : OreDictionary.getOreIDs(s)) {
+            String n = OreDictionary.getOreName(id);
+            if ("stone".equals(n) || "cobblestone".equals(n)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void flushOverflow() {

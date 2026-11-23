@@ -72,7 +72,10 @@ public class BlockDataPortSC extends Block {
         return s < 2 ? blockIcon : side;
     }
 
-    /** ОМ-5: the empty hand or a wrench - STOP <-> PERMIT (a line says which, and that the port is in no reactor's wall). */
+    /**
+     * ГН-2: the empty hand - only a line with the mode and the reactor (its block, or «not in a reactor's wall»); Shift + the empty hand
+     * or a wrench - STOP <-> PERMIT (a line says which, and that the port is in no reactor's wall).
+     */
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int s, float hx, float hy, float hz) {
         ItemStack held = player.getCurrentEquippedItem();
@@ -87,6 +90,15 @@ public class BlockDataPortSC extends Block {
             return true;
         }
         TileEntityDataPortSC port = (TileEntityDataPortSC) te;
+        if (held == null && !player.isSneaking()) {
+            int[] at = port.boundAt();
+            ChatComponentTranslation where = at == null ? new ChatComponentTranslation("sc.dataport.info.nowhere")
+                    : new ChatComponentTranslation("sc.dataport.info.at", at[0], at[1], at[2]);
+            player.addChatComponentMessage(new ChatComponentTranslation("sc.dataport.info",
+                    new ChatComponentTranslation(port.mode() == TileEntityDataPortSC.PERMIT ? "sc.dataport.name.permit" : "sc.dataport.name.stop"),
+                    where).setChatStyle(new ChatStyle().setColor(EnumChatFormatting.AQUA)));
+            return true;
+        }
         int mode = port.toggleMode();
         player.addChatComponentMessage(new ChatComponentTranslation(mode == TileEntityDataPortSC.PERMIT ? "sc.dataport.mode.permit"
                 : "sc.dataport.mode.stop").setChatStyle(new ChatStyle().setColor(EnumChatFormatting.AQUA)));

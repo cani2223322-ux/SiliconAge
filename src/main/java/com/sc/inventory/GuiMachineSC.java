@@ -364,10 +364,16 @@ public class GuiMachineSC extends GuiContainer {
         return r != null && r.fluidOutputA != null;
     }
 
-    /** ОМ-4: an Upgrade Station shows its input tank (WATER_X) - the recipe its items make takes a fluid. */
+    /**
+     * ОМ-4: an Upgrade Station shows its input tank (WATER_X) - the recipe its items make takes a fluid; МШ-2 (audit 2026-11-04): or,
+     * as the Centrifuge's, fluid is still in it (the helium can be drained with the items taken out).
+     */
     private boolean stationTank() {
         if (!station) {
             return false;
+        }
+        if (machine.getTank(0).getFluidAmount() > 0) {
+            return true;
         }
         com.sc.machine.MachineRecipe r = itemRecipe();
         return r != null && (r.fluidInputA != null || r.fluidInputB != null);
@@ -604,7 +610,7 @@ public class GuiMachineSC extends GuiContainer {
             net.minecraft.item.ItemStack mask = wire();
             float left = mask == null ? 0F : 1F - (float) mask.getItemDamage() / Math.max(1, mask.getMaxDamage());
             drawRect(x + MAP_X, y + MASK_Y + 1, x + MAP_X + STEP_W, y + MASK_Y + 5, 0xFF04080C);
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0, n = euvMaskFree() ? 0 : 16; i < n; i++) {     // МШ-1: no wear bar where no mask is wanted
                 int a = x + MAP_X + 1 + i * (STEP_W - 2) / 16, b = x + MAP_X + 1 + (i + 1) * (STEP_W - 2) / 16 - 1;
                 drawRect(a, y + MASK_Y + 2, b, y + MASK_Y + 4, (i + 0.5F) / 16 < left
                         ? (left > 0.25F ? 0xFF5AE66E : 0xFFE63C3C) : 0xFF2A3038);
@@ -1227,13 +1233,17 @@ public class GuiMachineSC extends GuiContainer {
         String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : recipeFluidName();
         TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
         net.minecraft.item.ItemStack mask = wire();
-        smallFit(mask == null ? Lang.tr("sc.gui.step.nomask")
+        boolean free = euvMaskFree();                       // МШ-1: the Lithograph's matrix - no mask, no frames
+        smallFit(free ? Lang.tr("sc.gui.euv.nomask") : mask == null ? Lang.tr("sc.gui.step.nomask")
                 : Lang.tr("sc.gui.step.mask", mask.getMaxDamage() - mask.getItemDamage(), mask.getMaxDamage()),
-                SAW_X, MASK_Y + 1, MAP_X - SAW_X - 3, mask == null ? 0xE65A5A : 0x6AA8C8);
+                SAW_X, MASK_Y + 1, MAP_X - SAW_X - 3, free ? GuiHoloSC.IDLE : mask == null ? 0xE65A5A : 0x6AA8C8);
         String line = heatLine();
         line = line.isEmpty() ? line : line.substring(0, 1).toLowerCase() + line.substring(1);
         smallFit(Lang.tr("sc.gui.step.heat", machine.getHeat(), TileEntityMachineSC.getHeatCapacity()) + " - " + line,
                 SAW_X, STEP_HEAT_Y + 7, SAW_W, 0xFFAA5A);
+        if (free) {
+            return;
+        }
         int ticks = machine.getCurrentRecipeTicks(), dies = GuiSceneSC.dieCount(MAP_R);
         int done = ticks > 0 && machine.getStatus() == MachineStatus.PROCESSING ? machine.getProgressTicks() * dies / ticks : 0;
         com.sc.machine.MachineRecipe r = shownRecipe();
@@ -1667,8 +1677,9 @@ public class GuiMachineSC extends GuiContainer {
         int y0 = ST_Y + ST_H + 3, w = right - ST_X - 2;
         if (stationTank()) {                                           // ОМ-4: the helium's tank label
             FluidTank tank = machine.getTank(0);
-            net.minecraftforge.fluids.FluidStack need = r.fluidInputA != null ? r.fluidInputA : r.fluidInputB;
-            String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : need.getLocalizedName();
+            // МШ-2: with no recipe in the slots the tank is shown for the fluid left in it - its label is that fluid's
+            net.minecraftforge.fluids.FluidStack need = r == null ? null : r.fluidInputA != null ? r.fluidInputA : r.fluidInputB;
+            String name = tank.getFluid() != null ? tank.getFluid().getLocalizedName() : need != null ? need.getLocalizedName() : "-";
             TextFitSC.drawCentered(fontRendererObj, name, WATER_X, TANK_LABEL_Y - 1, GuiTankGaugeSC.WIDTH - 7, GuiHoloSC.LABEL, false, guiLeft, guiTop);
         }
         if (r == null) {
@@ -1952,6 +1963,46 @@ public class GuiMachineSC extends GuiContainer {
             }
         }
         return best;
+    }
+
+    /**
+     * МШ-1 (audit 2026-11-04): the EUV Lithograph's job at hand takes no mask (the Singular Matrix) - no mask in the slots, and the
+     * recipe shown (or one whose items lie in the slots) has no tool among its inputs. False on any other machine.
+     */
+    private boolean euvMaskFree() {
+        if (machine.getMachineType() != com.sc.machine.MachineType.EUV_LITHOGRAPH || wire() != null) {
+            return false;
+        }
+        for (com.sc.machine.MachineRecipe c : RecipeRegistry.recipesFor(machine.getMachineType())) {
+            if (takesTool(c)) {
+                continue;
+            }
+            for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS; i++) {
+                net.minecraft.item.ItemStack s = machine.getStackInSlot(i);
+                for (net.minecraft.item.ItemStack want : c.inputs) {
+                    if (s != null && want != null && com.sc.machine.MachineRecipe.isSameIngredient(s, want)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        com.sc.machine.MachineRecipe r = shownRecipe();
+        return r != null && !takesTool(r);
+    }
+
+    /** МШ-1: whether a recipe has a tool of the mod (a mask, a wire...) among its inputs. */
+    private static boolean takesTool(com.sc.machine.MachineRecipe r) {
+        for (net.minecraft.item.ItemStack want : r.inputs) {
+            if (want != null && want.getItem() instanceof com.sc.item.ItemToolSC) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** МШ-1: the mask bar's title - the EUV mask at the Lithograph, the photomask at the steppers. */
+    private String maskTitle() {
+        return Lang.tr(machine.getMachineType() == com.sc.machine.MachineType.EUV_LITHOGRAPH ? "sc.gui.euv.mask.title" : "sc.gui.step.mask.title");
     }
 
     private static boolean sameFluid(net.minecraftforge.fluids.FluidStack have, net.minecraftforge.fluids.FluidStack want) {
@@ -2404,8 +2455,8 @@ public class GuiMachineSC extends GuiContainer {
         }
         if (step && GuiGaugeSC.isOver(SAW_X, MASK_Y, SAW_W, 7, mouseX, mouseY)) {
             net.minecraft.item.ItemStack mask = wire();
-            lines.add(Lang.tr("sc.gui.step.mask.title"));
-            lines.add(mask == null ? Lang.tr("sc.gui.step.nomask")
+            lines.add(maskTitle());                            // МШ-1: "EUV mask" at the Lithograph
+            lines.add(euvMaskFree() ? Lang.tr("sc.gui.euv.nomask") : mask == null ? Lang.tr("sc.gui.step.nomask")
                     : Lang.tr("sc.gui.step.mask", mask.getMaxDamage() - mask.getItemDamage(), mask.getMaxDamage()));
             return lines;
         }

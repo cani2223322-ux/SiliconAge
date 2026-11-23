@@ -45,8 +45,10 @@ import net.minecraftforge.common.util.FakePlayer;
  * today or the return half of a flight from there still valid - free parking);</li>
  * <li><b>services</b>: quote / pay by EmbassyAirRulesSC.SERVICE_KEYS (the core checks «Враг», the level, the caps and takes the chips -
  * PAY_*), firstLanding (the «Лётная книжка»: 2 chips and +5 «Доверия» once an embassy);</li>
- * <li><b>the embassy's air defence</b> (the user's choice 6): adRadius / adZoneAt (256 across from the core, any height - never over a
- * player's base: EmbassyAirfieldSC.playerBaseAt; AirfieldInfoSC.inAdZone is the bare circle - ask adZoneAt), the emplacements' guns
+ * <li><b>the embassy's air defence</b> (the user's choice 6; ЛП-1 of the audit 2026-11-04): adRadius / adWarnZoneAt (the circle, 256
+ * across from the core, any height: only the warning AD_NEAR there) and adZoneAt (where the guns fire: the embassy's square, about 145
+ * across, and its approach corridors, inside the circle) - never over a player's base: EmbassyAirfieldSC.playerBaseAt;
+ * AirfieldInfoSC.inAdZone / inFireZone are the bare shapes - ask adZoneAt), the emplacements' guns
  * (AirfieldInfoSC.adPosts), admitted («Знакомый» and higher, not its «Враг»), escortOf (an admitted squad mate near - no target),
  * requestPass / passUntil (7700: one PASS_SECONDS hold-fire a player an embassy a game day), requestWarn / warnUntil (the warning: one a
  * player an embassy a game day), holdFire (any of these, or over a player's base), adLine / tell (the core's chat lines - the add-on's
@@ -76,6 +78,8 @@ public final class EmbassyAirApiSC {
     /** adLine / tell: the warning (leave the zone; how to be admitted), the fire opened, the 7700 pass given / refused (used today) / over, the zone left. */
     public static final int AD_WARN = EmbassyAirDefenceSC.AD_WARN, AD_FIRE = EmbassyAirDefenceSC.AD_FIRE, AD_PASS = EmbassyAirDefenceSC.AD_PASS,
             AD_PASS_USED = EmbassyAirDefenceSC.AD_PASS_USED, AD_PASS_OVER = EmbassyAirDefenceSC.AD_PASS_OVER, AD_LEFT = EmbassyAirDefenceSC.AD_LEFT;
+    /** ЛП-1 (appended): «вы приближаетесь к зоне ПВО» - a machine in the circle (adWarnZoneAt) but not where the guns fire (adZoneAt). */
+    public static final int AD_NEAR = EmbassyAirDefenceSC.AD_NEAR;
     /** The Dispatcher's tab: at most this many of the hook's rows; its one action button's key. */
     public static final int TAB_ROWS = 8;
     public static final String TAB_ACTION_SERVICE = "service";
@@ -302,10 +306,26 @@ public final class EmbassyAirApiSC {
     }
 
     /**
-     * The embassy (its id) whose air defence zone holds (x, z) - the nearest core if two (-1: none; over a player's base -
-     * EmbassyAirfieldSC.playerBaseAt - none either: the embassy never fires over it). Cheap off the embassies' land.
+     * The embassy (its id) whose guns may fire at (x, z) - the nearest core if two (-1: none; over a player's base -
+     * EmbassyAirfieldSC.playerBaseAt - none either: the embassy never fires over it). ЛП-1 (the audit 2026-11-04): only over the
+     * embassy's square (AirfieldInfoSC.adFireHalf, about 145 across) and its approach corridors, inside adRadius - the rest of the
+     * circle is adWarnZoneAt's (AD_NEAR, no fire). Cheap off the embassies' land.
      */
     public static int adZoneAt(World w, double x, double z) {
+        return zoneAt(w, x, z, true);
+    }
+
+    /**
+     * ЛП-1 (appended): the embassy (its id) whose air defence circle (adRadius across from the core, any height) holds (x, z) - the
+     * nearest core if two (-1: none, or over a player's base): the add-on warns a machine there «вы приближаетесь к зоне ПВО» (AD_NEAR)
+     * while adZoneAt is not yet that embassy. Cheap off the embassies' land.
+     */
+    public static int adWarnZoneAt(World w, double x, double z) {
+        return zoneAt(w, x, z, false);
+    }
+
+    /** adZoneAt (`fire`) / adWarnZoneAt: the nearest embassy whose fire zone / circle holds (x, z), -1 none or over a player's base. */
+    private static int zoneAt(World w, double x, double z, boolean fire) {
         SettlementRegistrySC r = embassyRegistry(w);
         EmbassyAirfieldSC.Index ix = r == null ? null : EmbassyAirfieldSC.index(r);
         int best = -1, dim = ix == null ? 0 : w.provider.dimensionId;
@@ -314,7 +334,7 @@ public final class EmbassyAirApiSC {
             SettlementRegistrySC.Settlement s = ix.get(k);
             EmbassyAirfieldSC.Field f = ix.near(k, dim, x, z) ? EmbassyAirfieldSC.fieldOf(s) : null;
             double d = f == null ? Double.MAX_VALUE : s.distSq(x, z);
-            if (f != null && f.inAdZone(x, z) && d < bestD) {
+            if (f != null && (fire ? f.inFireZone(x, z) : f.inAdZone(x, z)) && d < bestD) {
                 best = s.id;
                 bestD = d;
             }

@@ -260,6 +260,7 @@ public final class NetViewNetSC {
         s.endpoints(m);
         TileEntity[] tiles = new TileEntity[m];
         int[] role = new int[m], offer = new int[m], demand = new int[m];
+        Set<Long> banks = new HashSet<Long>();                 // ЭН-2: the Energy Banks already summed (one bank, many ports)
         for (int e = 0; e < m; e++) {
             long pos = scan.endpoints.get(e);
             s.ex[e] = NetViewScanSC.unpackX(pos);
@@ -268,7 +269,7 @@ public final class NetViewNetSC {
             tiles[e] = w.getTileEntity(s.ex[e], s.ey[e], s.ez[e]);
             s.epct[e] = -1;
             s.etier[e] = -1;
-            describe(s, e, tiles[e], scan.endpointCables.get(e), cables, role, offer, demand);
+            describe(s, e, tiles[e], scan.endpointCables.get(e), cables, role, offer, demand, banks);
         }
         boolean ic2 = Loader.isModLoaded(Reference.IC2_MODID) && Ic2.ready();
         if (ic2) {
@@ -328,7 +329,7 @@ public final class NetViewNetSC {
 
     /** Kind, tier, role on this network, and what it offers / wants (the estimate's input). */
     private static void describe(Snapshot s, int e, TileEntity te, int[] at, TileEntityConduitBundleSC[] cables,
-                                 int[] role, int[] offer, int[] demand) {
+                                 int[] role, int[] offer, int[] demand, Set<Long> banks) {
         if (te instanceof TileEntityEnergyBase) {
             TileEntityEnergyBase t = (TileEntityEnergyBase) te;
             for (int c : at) {
@@ -353,7 +354,7 @@ public final class NetViewNetSC {
             int kind;
             if (te instanceof com.sc.tileentity.TileEntityTransformerSC) {
                 kind = NetViewScanSC.K_TRANSFORMER;
-            } else if (te instanceof com.sc.tileentity.TileEntityEnergyStorageSC
+            } else if (te instanceof com.sc.tileentity.TileEntityEnergyStorageSC || te instanceof com.sc.tileentity.TileEntityEnergyBankPortSC
                     || t.isEnergySource() && t.isEnergySink() && !(te instanceof com.sc.tileentity.TileEntityGeneratorSC)) {
                 kind = NetViewScanSC.K_STORAGE;
             } else if (t.isEnergySource()) {
@@ -366,7 +367,16 @@ public final class NetViewNetSC {
             Tier tier = out || kind != NetViewScanSC.K_CONSUMER ? t.outputTier() : t.inputTier();
             s.etier[e] = (byte) tier.ordinal();
             s.erole[e] = (byte) role[e];
-            if (kind == NetViewScanSC.K_STORAGE && t.getMaxEnergyStored() > 0) {
+            com.sc.tileentity.TileEntityEnergyBankSC bank = te instanceof com.sc.tileentity.TileEntityEnergyBankPortSC
+                    ? bankOf((com.sc.tileentity.TileEntityEnergyBankPortSC) te) : null;
+            if (bank != null) {
+                // ЭН-2: a bank's port - the bank's charge and capacity (its controller's chunk loaded), summed once per bank
+                s.epct[e] = (int) Math.min(100L, (long) (100.0 * bank.energy() / bank.capacity()));
+                if (banks.add(NetViewScanSC.pack(bank.xCoord, bank.yCoord, bank.zCoord))) {
+                    s.stored += bank.energy();
+                    s.capacity += bank.capacity();
+                }
+            } else if (kind == NetViewScanSC.K_STORAGE && t.getMaxEnergyStored() > 0) {
                 s.stored += t.getEnergyStored();
                 s.capacity += t.getMaxEnergyStored();
                 s.epct[e] = (int) Math.min(100L, 100L * t.getEnergyStored() / t.getMaxEnergyStored());
@@ -391,6 +401,18 @@ public final class NetViewNetSC {
         } else {
             s.ekind[e] = NetViewScanSC.K_FOREIGN;
         }
+    }
+
+    /** ЭН-2: a bank port's controller - bound, its chunk loaded (never loads one), with a capacity; else null (the port's own buffer). */
+    static com.sc.tileentity.TileEntityEnergyBankSC bankOf(com.sc.tileentity.TileEntityEnergyBankPortSC port) {
+        int[] c = port.controllerAt();
+        World w = port.getWorldObj();
+        if (c == null || w == null || !w.blockExists(c[0], c[1], c[2])) {
+            return null;
+        }
+        TileEntity te = w.getTileEntity(c[0], c[1], c[2]);
+        return te instanceof com.sc.tileentity.TileEntityEnergyBankSC && ((com.sc.tileentity.TileEntityEnergyBankSC) te).capacity() > 0
+                ? (com.sc.tileentity.TileEntityEnergyBankSC) te : null;
     }
 
     private static ForgeDirection dirTo(TileEntity from, int x, int y, int z) {

@@ -136,7 +136,7 @@ final class SelfTestHazardSC {
     private static final String[][] MESSAGE_ARGS = {{"sc.storm.warning", "2"}, {"sc.storm.start", "2"}, {"sc.storm.end", "0"}, {"sc.storm.hud.warn", "1"},
             {"sc.storm.hud", "1"}, {"sc.haze.start", "1"}, {"sc.haze.end", "0"}, {"sc.emission.start", "2"}, {"sc.emission.end", "0"},
             {"sc.haze.hud", "1"},
-            {"sc.emission.hud", "1"}, {"sc.raid.start", "1"}, {"sc.raid.wave", "2"}, {"sc.raid.won", "0"}, {"sc.raid.lost", "0"}, {"sc.echo.squad", "0"},
+            {"sc.emission.hud", "1"}, {"sc.raid.start", "1"}, {"sc.raid.wave", "2"}, {"sc.raid.won", "3"}, {"sc.raid.lost", "0"}, {"sc.echo.squad", "0"},
             {"sc.echo.swarm", "0"}, {"sc.camp.field.info", "4"}, {"sc.camp.field.up", "0"}, {"sc.camp.field.down", "0"}, {"sc.camp.safe.empty", "0"},
             {"sc.camp.safe.locked", "0"}, {"sc.camp.safe.powered", "0"},
             {"sc.camp.safe.opened", "0"}, {"sc.crumb.opened", "2"}, {"sc.crumb.limit", "1"}, {"sc.finder.litho", "4"}, {"sc.finder.vault", "4"},

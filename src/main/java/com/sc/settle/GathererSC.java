@@ -43,6 +43,7 @@ import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 
 /**
  * ПД-5 (docs/plan-ideas-2026-10-26.md, «Ожившие поселения», ★ A, part 1): the Gatherers' day. Every CHECK_TICKS of the Substrate's world
@@ -56,8 +57,10 @@ import net.minecraftforge.event.entity.living.LivingDeathEvent;
  * on FML's bus (the world tick) and Forge's (LivingAttackEvent) - the coordinator's.
  * <p>
  * The outings are memory only (OUTINGS, by id - the Gatherer's NBT): a restart forgets them and their Gatherers leave on their first tick.
- * The rescue: an attacked one (ATTACKED) whose attackers are dead or farther than SAFE_REACH for SAFE_TICKS, still alive - the players
- * within SAVED_REACH of it get the rescue (once a game day a settlement) or a thank-you.
+ * The rescue (МБ-1 А): an attacked one (ATTACKED) all of whose attackers were killed (none just gone), SAFE_TICKS after, still alive -
+ * the real players who hurt the attackers (not in creative, not «Враг») get the rescue (once a game day a settlement) or a thank-you.
+ * The attacks: a Lineman / a Marauder goes for a Gatherer within MOB_REACH (EntityAITargetGathererSC), and once an outing AMBUSH_PCT
+ * of an ambush at the spot.
  * <p>
  * Fixed (the coordinator's): the class, INSTANCE, EXTRA and its fields, the numbers' names, clearAll. The rest - ПД-5's.
  */
@@ -80,6 +83,11 @@ public final class GathererSC {
     public static final int SAFE_REACH = 24, SAFE_TICKS = 100, SAVED_REACH = 32;
     /** ПД-5: a hostile this near makes it run home. */
     public static final int DANGER = 12;
+    /**
+     * МБ-1 А: a Lineman / a Marauder goes for a Gatherer out this near (after a player: EntityAITargetGathererSC); once an outing (at the
+     * spot) AMBUSH_PCT of an ambush - 1-2 of them AMBUSH_FROM..AMBUSH_TO from the spot, on the Gatherer at once. TODO(balance)
+     */
+    public static final int MOB_REACH = 20, AMBUSH_PCT = 25, AMBUSH_FROM = 10, AMBUSH_TO = 14;
 
     private static final Random RAND = new Random();
     private static final Map<Long, Outing> OUTINGS = new HashMap<Long, Outing>();
@@ -94,6 +102,11 @@ public final class GathererSC {
         UUID gatherer;
         long aloneSince = -1L, lastCall = -1000L, safeSince = -1L;
         final List<Integer> attackers = new ArrayList<Integer>();
+        /** МБ-1 А: the ambush rolled (once an outing); the attackers killed, one gone without being killed (no rescue then); the real
+         * players who hurt an attacker (the rescue's reward is theirs). */
+        boolean ambushRolled, escaped;
+        int killed;
+        final List<UUID> helpers = new ArrayList<UUID>();
 
         Outing(long id, int settlement, int dim, int[] spot, int[] gate, boolean druse) {
             this.id = id;
@@ -316,7 +329,42 @@ public final class GathererSC {
             } else {
                 o.aloneSince = -1L;
             }
+            if (!o.ambushRolled && g.gatherState() == EntityGathererSC.GATHERING) {
+                o.ambushRolled = true;
+                if (w.difficultySetting != EnumDifficulty.PEACEFUL && RAND.nextInt(100) < AMBUSH_PCT) {
+                    ambush(w, s, o, g);
+                }
+            }
             rescueWatch(w, r, s, o, g, now);
+        }
+    }
+
+    /**
+     * МБ-1 А: the ambush at the spot - 1-2 Linemen / Marauders AMBUSH_FROM..AMBUSH_TO from the spot (the far side from the dome, loaded
+     * columns only, not over the dome's edge), on the Gatherer at once (its attackers: the call for help).
+     */
+    private static void ambush(WorldServer w, SettlementRegistrySC.Settlement s, Outing o, EntityGathererSC g) {
+        int n = 1 + RAND.nextInt(2);
+        double away = Math.atan2(o.spot[2] + 0.5D - (s.z + 0.5D), o.spot[0] + 0.5D - (s.x + 0.5D));
+        double keep = s.radius + 4D;
+        for (int tries = 0; n > 0 && tries < 12; tries++) {
+            double a = away + (RAND.nextDouble() - 0.5D) * Math.PI * 0.7D, d = AMBUSH_FROM + RAND.nextDouble() * (AMBUSH_TO - AMBUSH_FROM);
+            int x = MathHelper.floor_double(o.spot[0] + 0.5D + Math.cos(a) * d), z = MathHelper.floor_double(o.spot[2] + 0.5D + Math.sin(a) * d);
+            if (!w.blockExists(x, 64, z) || s.distSq(x + 0.5D, z + 0.5D) <= keep * keep) {
+                continue;                                       // never loads a chunk; never inside the dome
+            }
+            int y = w.getTopSolidOrLiquidBlock(x, z);
+            if (y <= 0) {
+                continue;
+            }
+            int kind = RAND.nextBoolean() ? com.sc.mob.MobEntitiesSC.ID_LINEMAN : com.sc.mob.MobEntitiesSC.ID_MARAUDER;
+            net.minecraft.entity.EntityLiving e = com.sc.mob.SpawnDirectorSC.spawnAt(w, kind, x + 0.5D, y, z + 0.5D, true, false);
+            if (e == null) {
+                continue;
+            }
+            e.setAttackTarget(g);
+            attacked(g, o, e);
+            n--;
         }
     }
 
@@ -379,24 +427,40 @@ public final class GathererSC {
         }
     }
 
-    /** ATTACKED: the attackers dead or far for SAFE_TICKS, the Gatherer alive - saved. */
+    /**
+     * ATTACKED: МБ-1 А - saved only when every attacker was killed (onDeath counts them) and SAFE_TICKS passed since the last; one gone
+     * without being killed (despawned, unloaded) - no rescue: the Gatherer just goes home. (SAFE_REACH - the old "far enough" - no more.)
+     */
     private static void rescueWatch(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, Outing o, EntityGathererSC g, long now) {
         if (g.gatherState() != EntityGathererSC.ATTACKED) {
             return;
         }
-        boolean safe = true;
+        boolean left;
         synchronized (OUTINGS) {
             for (Iterator<Integer> it = o.attackers.iterator(); it.hasNext(); ) {
                 Entity a = w.getEntityByID(it.next().intValue());
-                if (a == null || a.isDead || !(a instanceof EntityLivingBase) || ((EntityLivingBase) a).getHealth() <= 0F) {
-                    it.remove();
-                } else if (a.getDistanceSqToEntity(g) <= (double) SAFE_REACH * SAFE_REACH) {
-                    safe = false;
+                if (a instanceof EntityLivingBase && !a.isDead && ((EntityLivingBase) a).getHealth() <= 0F) {
+                    it.remove();                                // dying (its death event missed): killed
+                    o.killed++;
+                } else if (a == null || a.isDead || !(a instanceof EntityLivingBase)) {
+                    it.remove();                                // gone, not killed
+                    o.escaped = true;
                 }
             }
+            left = !o.attackers.isEmpty();
         }
-        if (!safe) {
+        if (left) {
             o.safeSince = -1L;
+            return;
+        }
+        if (o.escaped || o.killed <= 0) {
+            synchronized (OUTINGS) {
+                o.escaped = false;
+                o.killed = 0;
+                o.helpers.clear();
+            }
+            o.safeSince = -1L;
+            g.setGatherState(EntityGathererSC.HOME);          // not a rescue: home all the same
             return;
         }
         if (o.safeSince < 0L) {
@@ -409,16 +473,28 @@ public final class GathererSC {
         saved(w, r, s, o, g);
     }
 
-    /** The rescue: the players within SAVED_REACH - the reward once a game day a settlement, else a thank-you. */
+    /**
+     * The rescue: МБ-1 А - the real players who hurt its attackers (Outing.helpers), not in creative, not its settlement's «Враг», in
+     * this world - the reward once a game day a settlement, else a thank-you.
+     */
     static void saved(World w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, Outing o, EntityGathererSC g) {
         long day = SettlementSC.day(w);
+        long now = w.getTotalWorldTime();
         NBTTagCompound f = s.extra.getCompoundTag(EXTRA);
         boolean due = rescueDue(f.hasKey(RESCUE_DAY) ? f.getLong(RESCUE_DAY) : -1L, day);
         IChatComponent name = NpcNamesSC.name(g.nameCode());
         boolean anyone = false;
+        List<UUID> helpers;
+        synchronized (OUTINGS) {
+            helpers = new ArrayList<UUID>(o.helpers);
+        }
         for (Object p : w.playerEntities) {
             EntityPlayer pl = (EntityPlayer) p;
-            if (!real(pl) || pl.getDistanceSqToEntity(g) > (double) SAVED_REACH * SAVED_REACH) {
+            if (!real(pl) || pl.capabilities.isCreativeMode || !helpers.contains(pl.getUniqueID())) {
+                continue;
+            }
+            SettlementRegistrySC.LocalRec l = s.localIfAny(pl.getUniqueID());
+            if (l != null && l.enemy(now)) {
                 continue;
             }
             anyone = true;
@@ -442,7 +518,12 @@ public final class GathererSC {
             s.extra.setTag(EXTRA, f);
             r.markDirty();
         }
-        o.attackers.clear();
+        synchronized (OUTINGS) {
+            o.attackers.clear();
+            o.helpers.clear();
+            o.killed = 0;
+            o.escaped = false;
+        }
         o.safeSince = -1L;
         g.setGatherState(EntityGathererSC.HOME);              // shaken: home now
     }
@@ -476,7 +557,18 @@ public final class GathererSC {
     /** Forge: a Gatherer killed - the line to the players near; its outing over. */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onDeath(LivingDeathEvent e) {
-        if (!(e.entityLiving instanceof EntityGathererSC) || e.entityLiving.worldObj.isRemote) {
+        if (e.entityLiving == null || e.entityLiving.worldObj.isRemote) {
+            return;
+        }
+        if (!(e.entityLiving instanceof EntityGathererSC)) {
+            Outing o = attackedBy(e.entityLiving);              // МБ-1 А: an attacker killed
+            if (o != null) {
+                synchronized (OUTINGS) {
+                    o.attackers.remove(Integer.valueOf(e.entityLiving.getEntityId()));
+                    o.killed++;
+                    helper(o, e.source == null ? null : e.source.getEntity());
+                }
+            }
             return;
         }
         EntityGathererSC g = (EntityGathererSC) e.entityLiving;
@@ -488,6 +580,42 @@ public final class GathererSC {
             }
         }
         done(g.outingId());
+    }
+
+    /** Forge, МБ-1 А: a real player hurts a Gatherer's attacker - one of the rescuers (the reward is theirs). */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onHurt(LivingHurtEvent e) {
+        if (e.isCanceled() || e.entityLiving == null || e.entityLiving.worldObj.isRemote || e.entityLiving instanceof EntityGathererSC
+                || e.source == null || !real(e.source.getEntity())) {
+            return;
+        }
+        Outing o = attackedBy(e.entityLiving);
+        if (o != null) {
+            synchronized (OUTINGS) {
+                helper(o, e.source.getEntity());
+            }
+        }
+    }
+
+    /** The outing whose attackers hold `e` (by its entity id, the same world), or null. */
+    private static Outing attackedBy(EntityLivingBase e) {
+        Integer id = Integer.valueOf(e.getEntityId());
+        int dim = e.worldObj.provider.dimensionId;
+        synchronized (OUTINGS) {
+            for (Outing o : OUTINGS.values()) {
+                if (o.dim == dim && o.attackers.contains(id)) {
+                    return o;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** `by` (a real player) one of `o`'s rescuers. Under OUTINGS. */
+    private static void helper(Outing o, Entity by) {
+        if (real(by) && !o.helpers.contains(by.getUniqueID())) {
+            o.helpers.add(by.getUniqueID());
+        }
     }
 
     /** The outing of a loaded Gatherer, or null. */

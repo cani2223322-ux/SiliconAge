@@ -123,7 +123,7 @@ final class SelfTestEmbassySC {
             {"sc.cmd.embassy.air.noIls", "0"}, {"sc.cmd.embassy.air.would", "0"}, {"sc.cmd.embassy.air.wouldOff", "1"},
             {"sc.cmd.embassy.air.share", "6"}, {"sc.cmd.embassy.airfield.none", "0"}, {"sc.cmd.embassy.airfield.noX", "2"},
             {"sc.cmd.embassy.airfield.kindNone", "2"}, {"sc.cmd.embassy.airfield.head", "6"}, {"sc.cmd.embassy.airfield.runway", "6"},
-            {"sc.cmd.embassy.airfield.noRunway", "0"}, {"sc.cmd.embassy.airfield.zone", "5"}, {"sc.cmd.embassy.airfield.ad", "5"},
+            {"sc.cmd.embassy.airfield.noRunway", "0"}, {"sc.cmd.embassy.airfield.zone", "5"}, {"sc.cmd.embassy.airfield.ad", "6"},
             {"sc.cmd.embassy.airfield.rev", "2"},
             {"sc.flight.countdown.ring", "1"}, {"sc.flight.countdown.dock", "1"}, {"sc.flight.open.ring", "1"}, {"sc.flight.open.dock", "1"},
             {"sc.flight.missed", "0"}, {"sc.flight.noTalon", "0"}, {"sc.flight.full", "0"}, {"sc.flight.mounted", "0"},

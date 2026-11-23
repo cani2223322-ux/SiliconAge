@@ -78,7 +78,11 @@ public final class WantedSC {
             M2 = "m2", SUIT = "suit", ESC = "esc", ROAMED = "ra", ALONE = "al", MISSED = "ms",
             // ПД-4 (the review's fix, appended): the escort's Troopers not killed yet this week (missing - all ESCORT) - each trip brings
             // only these, so its escort is no Trooper spawner on demand
-            ESC_LEFT = "el";
+            ESC_LEFT = "el",
+            // МБ-2 А (appended): when the new week's posting began to wait for last week's one's fight
+            DEFER = "dw";
+    /** МБ-2 А: a new week's posting waits while last week's one fights - a target, or a player this near; at most this long. TODO(balance) */
+    public static final int FIGHT_REACH = 32, FIGHT_GRACE = 12000;
 
     private static final Random RAND = new Random();
     /** The loaded wanted one (server; a weak reference - the world holds it). */
@@ -182,11 +186,14 @@ public final class WantedSC {
         }
         long week = SettlementSC.week(w);
         RareRegistrySC.Rec r = reg.recIfAny(RareRegistrySC.WANTED);
+        long now = w.getTotalWorldTime();
         if (r == null || !r.extra.hasKey(W) || r.extra.getLong(W) != week) {
+            if (r != null && r.extra.hasKey(W) && lastFight(w, reg, r, now)) {
+                return;                                         // МБ-2 А: last week's one still in a fight - the new posting waits
+            }
             post(w, reg, week);
             return;
         }
-        long now = w.getTotalWorldTime();
         if (r.state == RareRegistrySC.NONE) {
             roam(w, reg, r, now);
             EntityPlayer near = bringer(w, r.extra.getInteger(X), r.extra.getInteger(Z));
@@ -196,6 +203,44 @@ public final class WantedSC {
         } else if (r.state == RareRegistrySC.ALIVE) {
             follow(w, reg, r, now);
         }
+    }
+
+    /**
+     * МБ-2 А: a new week came, last week's one (record `r`) is ALIVE, loaded and busy - it has a target, or a real player (not creative)
+     * within FIGHT_REACH: it plays on as ALIVE (follow: the leash, the leave, the rewards at its death as usual) and the new posting waits
+     * - at most FIGHT_GRACE ticks since the week turned (DEFER). @return the posting waits
+     */
+    private static boolean lastFight(WorldServer w, RareRegistrySC reg, RareRegistrySC.Rec r, long now) {
+        if (r.state != RareRegistrySC.ALIVE) {
+            return false;
+        }
+        EntityWantedSC e = loaded.get();
+        if (e == null || e.isDead || e.worldObj != w) {
+            e = find(w, r);
+        }
+        if (e == null || e.getHealth() <= 0F) {
+            return false;
+        }
+        boolean busy = e.getAttackTarget() != null && e.getAttackTarget().isEntityAlive();
+        double reach = FIGHT_REACH;
+        for (Object o : w.playerEntities) {
+            EntityPlayer p = (EntityPlayer) o;
+            if (busy) {
+                break;
+            }
+            busy = real(p) && !p.capabilities.isCreativeMode && p.isEntityAlive() && p.getDistanceSqToEntity(e) <= reach * reach;
+        }
+        if (!busy) {
+            return false;
+        }
+        if (!r.extra.hasKey(DEFER)) {
+            r.extra.setLong(DEFER, now);
+            reg.markDirty();
+        } else if (now - r.extra.getLong(DEFER) >= FIGHT_GRACE) {
+            return false;                                       // long enough: the new one is posted, this one goes
+        }
+        follow(w, reg, r, now);
+        return r.state == RareRegistrySC.ALIVE;
     }
 
     /** A new week's wanted one - a City (by the week's seed), the spot, the suit, the pair, the name; the line to the Substrate. */

@@ -48,8 +48,8 @@ public class ItemBlockEnergyBankSC extends ItemBlock {
                     : EnergyBankMathSC.scaledCapacity(0, 1, com.sc.util.ConfigSC.storageCapacity)));
         } else if (BlockEnergyBankSC.isPort(m)) {
             com.sc.energy.Tier t = com.sc.energy.Tier.byOrdinal(m - BlockEnergyBankSC.PORT_FIRST);
-            line = Lang.tr("sc.tooltip.energyBank.port", t.name(),        // IC2 without Industrial Upgrade: one packet out
-                    num((long) t.getVoltage() * com.sc.tileentity.TileEntityEnergyBankPortSC.outPackets()));
+            line = Lang.tr("sc.tooltip.energyBank.port", t.name(),        // ЭН-3: in - portRate under any net; out - one packet under IC2 alone
+                    num(com.sc.tileentity.TileEntityEnergyBankPortSC.inRate(t)), num(com.sc.tileentity.TileEntityEnergyBankPortSC.outRate(t)));
         } else {
             line = Lang.tr("sc.tooltip.energyBank.casing");
         }
@@ -57,6 +57,14 @@ public class ItemBlockEnergyBankSC extends ItemBlock {
         if (m == BlockEnergyBankSC.CONTROLLER && stack.hasTagCompound() && stack.getTagCompound().hasKey(com.sc.tileentity.TileEntityEnergyBankSC.NBT)) {
             long eu = stack.getTagCompound().getCompoundTag(com.sc.tileentity.TileEntityEnergyBankSC.NBT).getLong("eu");
             TooltipSC.wrap(list, Lang.tr("sc.tooltip.energyBank.stored", num(eu)), "§b");
+        }
+        String pk = com.sc.tileentity.TileEntityEnergyBankPortSC.ITEM_NBT;
+        if (BlockEnergyBankSC.isPort(m) && stack.hasTagCompound() && stack.getTagCompound().hasKey(pk)) {     // ЭН-1: the port's charge, mode
+            net.minecraft.nbt.NBTTagCompound pt = stack.getTagCompound().getCompoundTag(pk);
+            TooltipSC.wrap(list, Lang.tr(pt.getBoolean("out") ? "sc.bank.port.out" : "sc.bank.port.in"), "§b");
+            if (pt.getInteger("eu") > 0) {
+                TooltipSC.wrap(list, Lang.tr("sc.tooltip.energyBank.stored", num(pt.getInteger("eu"))), "§b");
+            }
         }
         String howto = Lang.tr("sc.tooltip.energyBank.howto");
         if (m == BlockEnergyBankSC.CONTROLLER || m == BlockEnergyBankSC.CELL_4) {

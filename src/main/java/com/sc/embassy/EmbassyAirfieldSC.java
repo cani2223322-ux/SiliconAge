@@ -40,7 +40,9 @@ import net.minecraft.world.World;
  * <li>five «Зенитный пост Наладчиков» emplacements (AA_POSTS) round the dome and the field - the add-on's air defence fires from them;</li>
  * <li>the windsock's mast; the fence (the pieces': the field's outer edge and the apron's, the ends open);</li>
  * <li>the approach funnels (FULL): growth cleared over the 1:20 plane from each threshold in a corridor of FUNNEL_HALF (15) out to
- * a = +-FUNNEL_A (150) - the only part past the square (its start's box grows; RANGE 10 still covers its chunks).</li>
+ * a = +-FUNNEL_A (150) - the only part past the square (its start's box grows); an end with an ILS of a decision of version
+ * LONG_FUNNELS on (ЛП-2 of the audit 2026-11-04) out to FUNNEL_ILS_OUT (300) past its threshold (a = +-380: MapGenEmbassySC.RANGE
+ * covers it); built in later chunks only FUNNEL_DAYS after the record was made (ЛП-6).</li>
  * </ul>
  * SHORT (no FULL fits): a runway 90 x 7 on q = r + 18 from a = -45 to +45 inside today's level disc (corner 125.8 from the core at
  * r = 96), the helipad, the column, the emplacements, the windsock. HELI: the helipad, its column, the emplacements. Every element
@@ -63,7 +65,12 @@ public final class EmbassyAirfieldSC {
     public static final String ADDON = "SiliconAgeVehicles";
     /** The record's key (Settlement.extra) and its fields; the decision's version. */
     public static final String EXTRA = "X", K_KIND = "k", K_SIDE = "s", K_VERSION = "v", K_ILS = "i";
-    public static final int VERSION = 1;
+    /**
+     * The decision's version a NEW record gets: 1 - the first fields (funnels to +-FUNNEL_A at both ends); 2 (LONG_FUNNELS, ЛП-2 of the
+     * audit 2026-11-04) - an ILS end's funnel reaches FUNNEL_ILS_OUT past its threshold. A record keeps its own version for ever (an old
+     * world's field, its pieces' boxes and its settled windows stay exactly as they were built).
+     */
+    public static final int VERSION = 2, LONG_FUNNELS = 2;
     /** The ILS ends (K_ILS's bits): the approach over the -a end (landing towards +a), over the +a end. */
     public static final int ILS_LOW = 1, ILS_HIGH = 2;
 
@@ -97,6 +104,19 @@ public final class EmbassyAirfieldSC {
     public static final int H_FENCE = 1;
     /** The approach funnels: growth cleared over the 1:FUNNEL_SLOPE plane from each threshold, FUNNEL_HALF either side of the axis, out to a = +-FUNNEL_A. */
     public static final int FUNNEL_A = 150, FUNNEL_HALF = 15, FUNNEL_SLOPE = 20;
+    /**
+     * ЛП-2 (the audit 2026-11-04, the user's choice А; decisions of version LONG_FUNNELS on): an end WITH an ILS clears its growth over the
+     * 1:FUNNEL_SLOPE plane FUNNEL_ILS_OUT past its threshold (the approach's check reaches as far - EmbassyAirSiteSC.APPROACH_OUT; a hill
+     * over the plane there takes the ILS away instead: EmbassyAirSiteSC.pierces); an end without one keeps FUNNEL_A. FUNNEL_REACH - the
+     * farthest a funnel reaches along a from the core (MapGenEmbassySC.covers, RANGE).
+     */
+    public static final int FUNNEL_ILS_OUT = 300, FUNNEL_REACH = RWY_HALF - THRESHOLD_SHIFT + FUNNEL_ILS_OUT;
+    /**
+     * ЛП-6 (the audit 2026-11-04, the user's choice А): a field's funnels are built in later chunks, their windows settled and the leaves
+     * over them taken from a neighbour chunk only this many game days after its record was made (Settlement.madeAt); later - never (the
+     * land may be the players' by then). TODO(balance)
+     */
+    public static final int FUNNEL_DAYS = 7;
     /** Buildings within APPROACH_HALF of the axis past a runway's end stay under the 1:FUNNEL_SLOPE plane from its threshold. */
     public static final int APPROACH_HALF = 12;
     /** The transitional surface: a building's height over the floor at most its distance from the strip / TRANSITION. */
@@ -119,7 +139,7 @@ public final class EmbassyAirfieldSC {
     public static final int ZONE_MARGIN = 2;
     /** The air defence emplacements («Зенитный пост Наладчиков»): how many, each a 5 x 5 platform (parapet) round its gun. */
     public static final int AA_POSTS = 5, AA_HALF = 2;
-    /** The air defence zone: this far across from the core, any height (EmbassyAirRulesSC.AD_RADIUS - the add-on's). TODO(balance) */
+    /** The air defence circle: this far across from the core, any height (EmbassyAirRulesSC.AD_RADIUS - the add-on's; ЛП-1: the warning's - the fire is Field.inFireZone's). TODO(balance) */
     public static final int AD_RADIUS = EmbassyAirRulesSC.AD_RADIUS;
 
     /** The spots' kinds (AirfieldInfoSC): the liner's, a small machine's, the helipad. */
@@ -348,6 +368,100 @@ public final class EmbassyAirfieldSC {
         return ICAO_PREFIX + e + (char) ('A' + (n - 1) % 26);
     }
 
+    /**
+     * ЛП-5 (the audit 2026-11-04, the user's choice А): `proposed` made unique among `taken` the add-on's way (its
+     * EmbassyAirportMath.uniqueIcao): free - itself; else the next free of its last two letters counted on (AA, AB .. ZZ, round again);
+     * "" - none free, not four letters. Pure.
+     */
+    public static String uniqueIcao(String proposed, List<String> taken) {
+        if (proposed == null || proposed.length() != 4) {
+            return "";
+        }
+        String p = proposed.toUpperCase();
+        if (free(p, taken)) {
+            return p;
+        }
+        int start = (p.charAt(2) - 'A') * 26 + (p.charAt(3) - 'A');
+        for (int i = 1; i < 26 * 26; i++) {
+            int k = ((start + i) % (26 * 26) + 26 * 26) % (26 * 26);
+            String c = p.substring(0, 2) + (char) ('A' + k / 26) + (char) ('A' + k % 26);
+            if (free(c, taken)) {
+                return c;
+            }
+        }
+        return "";
+    }
+
+    private static boolean free(String c, List<String> taken) {
+        for (String o : taken) {
+            if (o != null && o.equalsIgnoreCase(c)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * ЛП-5: the ICAO code record `s` shows (the Dispatcher's tab, /scembassy airfield) - the add-on's own order: the FULL fields (those with
+     * a tower) of the embassies' world by id first, each its proposed code made unique among the ones before (an embassy of a higher
+     * number takes the next free letter); then the rest by id the same way. Computed, never saved; the players' own towers' codes are the
+     * add-on's (a rare clash with one of them is still its to settle). A record without a field - its proposed code. Server.
+     */
+    public static String icaoShown(SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
+        String own = s == null ? "" : icao(s.nameElement, s.nameNumber);
+        Field mine = s == null ? null : fieldOf(s);
+        if (r == null || mine == null) {
+            return own;
+        }
+        List<SettlementRegistrySC.Settlement> recs = new ArrayList<SettlementRegistrySC.Settlement>();
+        for (SettlementRegistrySC.Settlement e : r.embassies()) {
+            if (e.dim == s.dim && fieldOf(e) != null) {
+                recs.add(e);
+            }
+        }
+        java.util.Collections.sort(recs, new java.util.Comparator<SettlementRegistrySC.Settlement>() {
+            @Override
+            public int compare(SettlementRegistrySC.Settlement a, SettlementRegistrySC.Settlement b) {
+                return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+            }
+        });
+        List<String> taken = new ArrayList<String>();
+        for (int pass = 0; pass < 2; pass++) {
+            for (SettlementRegistrySC.Settlement e : recs) {
+                if ((fieldOf(e).kind == FULL) != (pass == 0)) {
+                    continue;
+                }
+                String c = uniqueIcao(icao(e.nameElement, e.nameNumber), taken);
+                if (e == s) {
+                    return c.length() == 4 ? c : own;
+                }
+                if (c.length() == 4) {
+                    taken.add(c);
+                }
+            }
+        }
+        return own;
+    }
+
+    /**
+     * ЛП-6: the funnels of embassy `settlementId` in `w` may still be built, settled and their overhanging leaves taken - within
+     * FUNNEL_DAYS game days (24000 ticks each) of its record's making (Settlement.madeAt, world time). No registry
+     * or no such record (a test world) - yes. Server.
+     */
+    public static boolean funnelsOpen(World w, int settlementId) {
+        SettlementRegistrySC r = w == null || w.isRemote ? null : SettlementRegistrySC.get(w);
+        SettlementRegistrySC.Settlement s = r == null ? null : r.byId(settlementId);
+        return s == null || funnelsOpen(s.madeAt, w.getTotalWorldTime());
+    }
+
+    /**
+     * ЛП-6: a field made at world time `madeAt` still builds its funnels at world time `now` (a new world's first embassy is made at
+     * time 0; an old record's unknown 0 is long past in its world). Pure.
+     */
+    public static boolean funnelsOpen(long madeAt, long now) {
+        return now >= madeAt && now - madeAt <= FUNNEL_DAYS * 24000L;
+    }
+
     /** The true heading (degrees, 90..360) of a landing along +a (`plusA`) or -a in a frame whose main gate lies `gateDir` (NORTH 0 .. WEST 3). */
     public static int heading(int gateDir, boolean plusA) {
         int d = ((gateDir & 3) + (plusA ? 0 : 2)) & 3;     // NORTH 360, EAST 90, SOUTH 180, WEST 270
@@ -448,8 +562,12 @@ public final class EmbassyAirfieldSC {
                 levelL.add(rect(-lv, r + PAD_IN, lv, lv));                   // the runway's rectangle (its pads reach in to r + 7)
                 levelL.add(rect(r - 32, 14, lv, r + 15));                    // the apron's (the hangar, the terminal, the tower in it)
                 zoneL.addAll(levelL);
-                funnelL.add(rect(-FUNNEL_A, axis - FUNNEL_HALF, endLow - 1, axis + FUNNEL_HALF));
-                funnelL.add(rect(endHigh + 1, axis - FUNNEL_HALF, FUNNEL_A, axis + FUNNEL_HALF));
+                // ЛП-2: an ILS end of a LONG_FUNNELS decision clears FUNNEL_ILS_OUT past its threshold, any other end out to FUNNEL_A
+                boolean longs = version >= LONG_FUNNELS;
+                int outLow = longs && (this.ils & ILS_LOW) != 0 ? thresholdLow - FUNNEL_ILS_OUT : -FUNNEL_A;
+                int outHigh = longs && (this.ils & ILS_HIGH) != 0 ? thresholdHigh + FUNNEL_ILS_OUT : FUNNEL_A;
+                funnelL.add(rect(outLow, axis - FUNNEL_HALF, endLow - 1, axis + FUNNEL_HALF));
+                funnelL.add(rect(endHigh + 1, axis - FUNNEL_HALF, outHigh, axis + FUNNEL_HALF));
             } else if (kind == SHORT) {
                 axis = r + SHORT_AXIS;
                 endLow = -SHORT_HALF;
@@ -577,6 +695,30 @@ public final class EmbassyAirfieldSC {
         public boolean inAdZone(double x, double z) {
             double dx = x - (coreX + 0.5D), dz = z - (coreZ + 0.5D);
             return dx * dx + dz * dz <= (double) AD_RADIUS * AD_RADIUS;
+        }
+
+        /**
+         * ЛП-1 (the audit 2026-11-04, the user's choice А): the half side of the square the guns fire over, across from the core
+         * (Chebyshev: the dome, the level disc and its blend band - the embassy's own checked land - + AD_FIRE_MARGIN; about 145).
+         */
+        public int fireHalf() {
+            return radius + EmbassyLayoutSC.LEVEL_OUT + EmbassyLayoutSC.BLEND + EmbassyAirRulesSC.AD_FIRE_MARGIN;
+        }
+
+        /**
+         * ЛП-1: the embassy's guns may fire over the column (any height) - inside the AD circle (inAdZone) AND over the embassy's square
+         * (fireHalf) or an approach corridor (approaches); the rest of the circle only warns (EmbassyAirApiSC.adWarnZoneAt). Pure.
+         */
+        public boolean inFireZone(double x, double z) {
+            if (!inAdZone(x, z)) {
+                return false;
+            }
+            int bx = (int) Math.floor(x), bz = (int) Math.floor(z), h = fireHalf();
+            if (Math.abs(bx - coreX) <= h && Math.abs(bz - coreZ) <= h) {
+                return true;
+            }
+            int[] f = frame(bx, bz);
+            return inAny(approaches, f[0], f[1]);
         }
 
         /**

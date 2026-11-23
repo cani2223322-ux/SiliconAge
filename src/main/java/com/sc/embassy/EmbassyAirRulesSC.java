@@ -21,7 +21,8 @@ import com.sc.settle.trade.TradeRulesSC;
  * <li><b>the «Лётная книжка»</b> (the user's choice 9): the first landing at each embassy (the add-on sees it: the transponder on, the
  * machine stopped on a stand) - LOGBOOK_CHIPS Credit Chips (within the day's 64 - TradeRulesSC.CHIPS_PER_DAY) and LOGBOOK_TRUST
  * «Доверия» (ReputationSC.SRC_AIR, under the embassy's ceiling 599), once an embassy a player;</li>
- * <li><b>the air defence</b> (the user's choice 6, confirmed 2026-10-26): a player's machine IN THE AIR inside AD_RADIUS of the core with
+ * <li><b>the air defence</b> (the user's choice 6, confirmed 2026-10-26; ЛП-1 of the audit 2026-11-04: the fire only over the embassy's
+ * square and its approach corridors - AD_FIRE_MARGIN, the rest of the circle only warns): a player's machine IN THE AIR inside AD_RADIUS of the core with
  * nobody admitted on board - admitted: «Знакомый» (ADMIT_LEVEL) or higher at this embassy, never its «Враг» - is warned (chat and the
  * add-on's radio) and gets WARN_SECONDS to turn away; then the add-on fires from the emplacements. Never at a player on foot or flying
  * in armour, never at anything on the ground; a non-admitted mate of an admitted player's squad (SquadSC) within ESCORT_RANGE of him,
@@ -69,8 +70,18 @@ public final class EmbassyAirRulesSC {
     /** The «Лётная книжка»: chips and «Доверие» for the first landing at an embassy. */
     public static final int LOGBOOK_CHIPS = 2, LOGBOOK_TRUST = 5;
 
-    /** The air defence: its zone across from the core (any height); the warning's time to turn away; a 7700 pass; a squad mate's escort reach. */
+    /**
+     * The air defence: its circle across from the core (any height - ЛП-1 of the audit 2026-11-04: only the warning «вы приближаетесь к
+     * зоне ПВО» there now); the warning's time to turn away; a 7700 pass; a squad mate's escort reach.
+     */
     public static final int AD_RADIUS = 256, WARN_SECONDS = 10, PASS_SECONDS = 60, ESCORT_RANGE = 64;
+    /**
+     * ЛП-1 (the audit 2026-11-04, the user's choice А): the guns fire only over the embassy's own square (the level disc + its blend band,
+     * EmbassyLayoutSC.LEVEL_OUT + BLEND past the dome, + AD_FIRE_MARGIN: about 145 across from the core - the land the embassy checked
+     * was not explored) and its approach corridors (Field.approaches), inside AD_RADIUS - the ring past it may hold the players' bases
+     * (EmbassyAirfieldSC.Field.inFireZone). TODO(balance)
+     */
+    public static final int AD_FIRE_MARGIN = 10;
     /** The air defence lets a player's machine through from this level on (and never its «Враг»). */
     public static final int ADMIT_LEVEL = ReputationSC.ACQUAINTANCE;
     /** The 7700 ledger's keys (LocalRec.extra "X"): the game day of the last pass, the world time its hold-fire ends. */

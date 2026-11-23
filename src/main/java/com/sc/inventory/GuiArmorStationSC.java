@@ -406,6 +406,10 @@ public class GuiArmorStationSC extends GuiContainer {
         int eu = com.sc.item.SalvageSC.STATION_EU;
         tip.add((te.getEnergyStored() >= eu ? "§7" : "§c") + eu + " EU"
                 + (te.getEnergyStored() >= eu ? "" : " - " + Lang.tr("sc.salvage.refuse.noEu", eu - te.getEnergyStored())));
+        int shortOf = mc == null || mc.thePlayer == null ? 0 : com.sc.item.ItemArmorChipSC.slotsShort(mc.thePlayer, preview());
+        if (shortOf > 0) {
+            tip.add("§c" + Lang.tr("sc.salvage.refuse.noRoom", shortOf));      // ОР-2: the server refuses it too
+        }
         return tip;
     }
 

@@ -86,6 +86,7 @@ final class SelfTestIdeasSC {
         om6();
         om7();
         audit1104();
+        audit1104b();
         articles();
     }
 
@@ -736,6 +737,13 @@ final class SelfTestIdeasSC {
                 + "give the comparator their reading, the port's stop event 3 " + blocks + ", the recipe " + recipe + (l.isEmpty() ? "" : " - LANG:" + l));
     }
 
+    /** БР-1: `out` parts of a recipe of `sum` - SHARE_MIN..SHARE_MAX of it to a whole part, at least one, never over the sum. */
+    private static boolean shareFits(int out, int sum) {
+        int lo = Math.max(1, (int) Math.floor(sum * com.sc.item.SalvageSC.SHARE_MIN + 1e-6));
+        int hi = Math.max(1, (int) Math.ceil(sum * com.sc.item.SalvageSC.SHARE_MAX - 1e-6));
+        return out >= lo && out <= hi && out <= sum;
+    }
+
     /** ОМ-6: salvage. */
     private static void om6() {
         net.minecraft.item.Item trophy = com.sc.mob.MobItemsSC.trophy;
@@ -744,8 +752,14 @@ final class SelfTestIdeasSC {
                 && com.sc.item.SalvageSC.refusal(new ItemStack(net.minecraft.init.Blocks.stone)) == com.sc.item.SalvageSC.R_NOTHING
                 && com.sc.item.SalvageSC.refusal(null) == com.sc.item.SalvageSC.R_NOTHING
                 && com.sc.item.SalvageSC.refusal(new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.NANO)[0])) == com.sc.item.SalvageSC.OK
-                && com.sc.item.SalvageSC.refusal(new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[1])) == com.sc.item.SalvageSC.R_SINGULAR
-                && com.sc.item.SalvageSC.refusal(new ItemStack(com.sc.init.ModItems.empGun, 1, com.sc.emp.ItemEmpGunSC.META_UPGRADED)) == com.sc.item.SalvageSC.R_SINGULAR;
+                && com.sc.item.SalvageSC.refusal(new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[1])) == com.sc.item.SalvageSC.R_OWN_SINGULAR
+                && com.sc.item.SalvageSC.refusal(new ItemStack(com.sc.init.ModItems.empGun, 1, com.sc.emp.ItemEmpGunSC.META_UPGRADED)) == com.sc.item.SalvageSC.R_PE1M
+                // БР-2: the slot takes the refused ones too (the tooltip says why), not stone
+                && com.sc.item.SalvageSC.accepts(new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.SINGULAR)[1]))
+                && com.sc.item.SalvageSC.accepts(new ItemStack(com.sc.init.ModItems.empGun, 1, com.sc.emp.ItemEmpGunSC.META_UPGRADED))
+                && com.sc.item.SalvageSC.accepts(new ItemStack(trophy, 1, com.sc.mob.TrophyTableSC.META_PE1M))
+                && !com.sc.item.SalvageSC.accepts(new ItemStack(net.minecraft.init.Blocks.stone)) && !com.sc.item.SalvageSC.accepts(null)
+                && com.sc.item.SalvageSC.REFUSE_KEYS.length == 5;
         // a Quantum chestplate with two chips: the chips back whole, then 25..35% of its parts (at least one)
         ItemStack chest = new ItemStack(com.sc.init.ModItems.ARMOR.get(com.sc.util.ArmorSuit.QUANTUM)[1]);
         com.sc.item.ItemArmorSC.chipsTag(chest).setInteger(com.sc.util.ChipType.SENSOR.name(), 2);
@@ -762,7 +776,41 @@ final class SelfTestIdeasSC {
         for (ItemStack s : com.sc.item.SalvageSC.inputsOf(new ItemStack(chest.getItem()))) {
             partMax += com.sc.item.SalvageSC.refusal(s) == com.sc.item.SalvageSC.R_NOTHING ? s.stackSize : 0;
         }
-        boolean own = chips == 2 && parts >= 1 && parts <= Math.max(1, (int) Math.floor(partMax * com.sc.item.SalvageSC.SHARE_MAX));
+        boolean own = chips == 2 && shareFits(parts, partMax);
+        // БР-1: every one's own salvageable thing of the mod (meta 0; the ПЭ-1's basic) - 25..35% of its whole recipe, to a whole part
+        StringBuilder off = new StringBuilder();
+        int checked = 0;
+        for (Object key : net.minecraft.item.Item.itemRegistry.getKeys()) {
+            String id = key.toString();
+            if (!id.startsWith(com.sc.Reference.MODID + ":")) {
+                continue;
+            }
+            net.minecraft.item.Item it = (net.minecraft.item.Item) net.minecraft.item.Item.itemRegistry.getObject(id);
+            if (it == null || it == trophy) {
+                continue;
+            }
+            ItemStack s = new ItemStack(it, 1, 0);
+            if (com.sc.emp.ItemEmpGunSC.isGun(s)) {
+                s = new ItemStack(it, 1, com.sc.emp.ItemEmpGunSC.META_BASIC);
+            }
+            if (com.sc.item.SalvageSC.refusal(s) != com.sc.item.SalvageSC.OK) {
+                continue;
+            }
+            int sum = 0, out = 0;
+            for (ItemStack side : com.sc.item.SalvageSC.sides(s)) {
+                sum += side.stackSize;
+            }
+            if (sum == 0) {
+                continue;                                          // no recipe: nothing to give
+            }
+            for (ItemStack o : com.sc.item.SalvageSC.parts(s)) {
+                out += o.stackSize;
+            }
+            checked++;
+            if (!shareFits(out, sum)) {
+                off.append(' ').append(id).append(':').append(out).append('/').append(sum);
+            }
+        }
         // every trophy meta but the Singular ones: no better than restoring it
         StringBuilder bad = new StringBuilder();
         int salvaged = 0;
@@ -794,11 +842,13 @@ final class SelfTestIdeasSC {
                 && !new com.sc.tileentity.TileEntitySingularStationSC().salvages()
                 && back.isItemValidForSlot(8, new ItemStack(trophy, 1, 0)) && !back.isItemValidForSlot(8, new ItemStack(net.minecraft.init.Blocks.stone));
         String l = lang("sc.salvage.slot", "sc.salvage.slot.tip", "sc.salvage.btn", "sc.salvage.confirm", "sc.salvage.preview", "sc.salvage.done",
-                "sc.salvage.refuse.nothing", "sc.salvage.refuse.singular", "sc.salvage.refuse.noEu", "sc.tooltip.trophy.salvage",
+                "sc.salvage.refuse.nothing", "sc.salvage.refuse.singular", "sc.salvage.refuse.ownSingular", "sc.salvage.refuse.pe1m",
+                "sc.salvage.refuse.noRoom", "sc.salvage.refuse.noEu", "sc.tooltip.trophy.salvage",
                 "sc.manual.armor.station.salvage");
-        check(refusals && own && bad.length() == 0 && share && slot && l.isEmpty(), "ОМ-6 salvage: the refusals (Singular trophy / piece, ПЭ-1М, "
-                + "stone, a Nano helmet) " + refusals + ", a Quantum chestplate with 2 chips - the chips whole + " + parts + " of " + partMax + " parts "
-                + own + ", " + salvaged + " trophy metas no better than restoring" + (bad.length() == 0 ? "" : " - BAD:" + bad) + ", the share "
+        check(refusals && own && off.length() == 0 && bad.length() == 0 && share && slot && l.isEmpty(), "ОМ-6 salvage: the refusals (Singular "
+                + "trophy / own piece, own ПЭ-1М, stone, a Nano helmet; БР-2 the slot takes the refused ones) " + refusals + ", a Quantum chestplate "
+                + "with 2 chips - the chips whole + " + parts + " of " + partMax + " parts " + own + ", БР-1 " + checked + " own things at 25..35% of "
+                + "the recipe" + (off.length() == 0 ? "" : " - OFF:" + off) + ", " + salvaged + " trophy metas no better than restoring" + (bad.length() == 0 ? "" : " - BAD:" + bad) + ", the share "
                 + share + ", the station's slot 8 (an older station empty, not the Singular station's) " + slot + (l.isEmpty() ? "" : " - LANG:" + l));
     }
 
@@ -942,5 +992,97 @@ final class SelfTestIdeasSC {
                 + "SV storage refused " + empty + ", the Armour Station an empty-tank CarryRecipe " + station + ", the ports' IU packets, the "
                 + "tooltip's count, the cells x storageCapacity " + ports + ", no paste repair over 8 " + paste + ", the diamond head's third "
                 + "for 8 " + head + (l.isEmpty() ? "" : " - LANG:" + l));
+    }
+
+    /**
+     * The fixes of the audit of 2026-11-04 (ПС-1/ПС-4, КР-3, МШ-4, ЭН-1/ЭН-3, ПМ-2) and their lang keys. МБ-4 (EntityWantedSC.factionLoot)
+     * needs a live mob - a world -, not checked here.
+     */
+    private static void audit1104b() {
+        String l = lang("sc.raid.deposit.void", "sc.raid.lost.called", "sc.alarm.expired", "sc.manual.world.raids.alarm.2", "sc.cmd.playerOnly",
+                "sc.gen.port.afterCompress", "sc.dataport.info", "sc.gui.euv.nomask", "sc.empgui.module.burnConfirm", "sc.emp.module.burnt");
+        // ПС-1 / ПС-4: the call's term, the deposit's lines
+        boolean alarm = !RaidAlarmSC.expired(0L, 2L) && RaidAlarmSC.expired(0L, 3L)
+                && "sc.raid.deposit.void".equals(RaidAlarmSC.backKey(RaidAlarmSC.BACK_VOID))
+                && "sc.alarm.expired".equals(RaidAlarmSC.backKey(RaidAlarmSC.BACK_EXPIRED));
+        // КР-3: the quarry's trash module - the Substrate's rock and end stone, not the Monocrystal, the traces, the brick, an ore
+        String trash;
+        net.minecraft.block.Block rock = com.sc.dim.SubstrateBlocksSC.rock;
+        boolean endStone = com.sc.tileentity.TileEntityQuarrySC.trash(new ItemStack(net.minecraft.init.Blocks.end_stone))
+                && !com.sc.tileentity.TileEntityQuarrySC.trash(new ItemStack(net.minecraft.init.Blocks.diamond_ore))
+                && !com.sc.tileentity.TileEntityQuarrySC.trash(null);
+        if (rock == null) {
+            trash = endStone ? "ok (the Substrate's rock not registered)" : "BAD";
+        } else {
+            boolean yes = true, no = true;
+            for (int m : new int[]{com.sc.dim.SubstrateBlocksSC.CRYSTALLITE, com.sc.dim.SubstrateBlocksSC.OXIDE_VIOLET, com.sc.dim.SubstrateBlocksSC.OXIDE_BLUE,
+                    com.sc.dim.SubstrateBlocksSC.OXIDE_GOLD, com.sc.dim.SubstrateBlocksSC.OXIDE_GREEN}) {
+                yes &= com.sc.tileentity.TileEntityQuarrySC.trash(new ItemStack(rock, 1, m));
+            }
+            for (int m : new int[]{com.sc.dim.SubstrateBlocksSC.MONOCRYSTAL, com.sc.dim.SubstrateBlocksSC.COPPER_TRACE,
+                    com.sc.dim.SubstrateBlocksSC.SETTLEMENT_BRICK}) {
+                no &= !com.sc.tileentity.TileEntityQuarrySC.trash(new ItemStack(rock, 1, m));
+            }
+            trash = (yes && no && endStone ? "ok" : "BAD") + " (crystallite/oxides " + yes + ", not monocrystal/trace/brick " + no
+                    + ", end stone yes / diamond ore no " + endStone + ")";
+        }
+        // МШ-4: the EUV mask at the Station EV - an unworn photomask only
+        String mask = "BAD (no recipe)";
+        ItemStack euv = new ItemStack(com.sc.init.ModItems.TOOLS.get(com.sc.util.SCToolType.EUV_MASK));
+        for (com.sc.machine.MachineRecipe r : com.sc.machine.RecipeRegistry.recipesFor(com.sc.machine.MachineType.UPGRADE_STATION_EV)) {
+            boolean makes = false;
+            for (ItemStack o : r.outputs) {
+                makes |= o != null && o.getItem() == euv.getItem();
+            }
+            if (!makes) {
+                continue;
+            }
+            ItemStack[] fresh = new ItemStack[r.inputs.length], worn = new ItemStack[r.inputs.length];
+            boolean tool = false;
+            for (int i = 0; i < r.inputs.length; i++) {
+                fresh[i] = r.inputs[i] == null ? null : r.inputs[i].copy();
+                worn[i] = r.inputs[i] == null ? null : r.inputs[i].copy();
+                if (worn[i] != null && worn[i].getItem() instanceof com.sc.item.ItemToolSC) {
+                    fresh[i].setItemDamage(0);
+                    worn[i].setItemDamage(1);
+                    tool = true;
+                }
+            }
+            boolean okFresh = r.matches(fresh, null, null), okWorn = r.matches(worn, null, null);
+            mask = (r.needsFreshTools() && tool && okFresh && !okWorn ? "ok" : "BAD") + " (freshTools " + r.needsFreshTools() + ", a photomask among the"
+                    + " inputs " + tool + ", damage 0 matches " + okFresh + ", damage 1 matches " + okWorn + ")";
+            break;
+        }
+        // ЭН-3: the ports' rates; ЭН-1: a charged OUT port's item keeps its charge and mode
+        com.sc.energy.Tier hv = com.sc.energy.Tier.HV;
+        boolean rates = com.sc.tileentity.TileEntityEnergyBankPortSC.inRate(hv) == com.sc.energy.EnergyBankMathSC.portRate(hv)
+                && com.sc.tileentity.TileEntityEnergyBankPortSC.outRate(hv) == (long) hv.getVoltage() * com.sc.tileentity.TileEntityEnergyBankPortSC.outPackets()
+                && com.sc.tileentity.TileEntityEnergyBankPortSC.outRate(null) == 0L;
+        com.sc.tileentity.TileEntityEnergyBankPortSC port = new com.sc.tileentity.TileEntityEnergyBankPortSC(hv);
+        port.toggleOut();
+        int charge = Math.max(1, port.getMaxEnergyStored() / 2);
+        port.setEnergyStoredClient(charge);
+        net.minecraft.nbt.NBTTagCompound item = port.writeToItem();
+        com.sc.tileentity.TileEntityEnergyBankPortSC back = new com.sc.tileentity.TileEntityEnergyBankPortSC(hv);
+        back.readFromItem(item);
+        boolean carry = item != null && back.isOut() && back.getEnergyStored() == charge
+                && new com.sc.tileentity.TileEntityEnergyBankPortSC(hv).writeToItem() == null;
+        // ПМ-2: a lost defence's tile keeps «lost» through its NBT
+        com.sc.tileentity.TileEntityRelaySC relay = new com.sc.tileentity.TileEntityRelaySC();
+        relay.setUp(P1.toString(), 100L);
+        relay.markLost();
+        net.minecraft.nbt.NBTTagCompound rt = new net.minecraft.nbt.NBTTagCompound();
+        relay.writeToNBT(rt);
+        com.sc.tileentity.TileEntityRelaySC relay2 = new com.sc.tileentity.TileEntityRelaySC();
+        relay2.readFromNBT(rt);
+        net.minecraft.nbt.NBTTagCompound none = new net.minecraft.nbt.NBTTagCompound();
+        new com.sc.tileentity.TileEntityRelaySC().writeToNBT(none);
+        com.sc.tileentity.TileEntityRelaySC relay3 = new com.sc.tileentity.TileEntityRelaySC();
+        relay3.readFromNBT(none);
+        boolean lost = relay2.lost() && !relay3.lost();
+        check(alarm && trash.startsWith("ok") && mask.startsWith("ok") && rates && carry && lost && l.isEmpty(), "audit 2026-11-04 (2): ПС-1 a call's term"
+                + " 3 days, ПС-4 / ПС-1 the deposit's lines " + alarm + ", КР-3 the trash module " + trash + ", МШ-4 the EUV mask " + mask
+                + ", ЭН-3 the ports' inRate / outRate " + rates + ", ЭН-1 a charged OUT port's item (" + charge + " EU) back whole " + carry
+                + ", ПМ-2 a Relay's lost after its NBT " + lost + (l.isEmpty() ? "" : " - LANG:" + l));
     }
 }

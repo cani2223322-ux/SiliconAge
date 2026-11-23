@@ -863,12 +863,13 @@ public final class WorldTestCombatSC {
                 }
             });
         }
-        steps.add(new Step(45, "the Repairer") {
+        steps.add(new Step(65, "the Repairer") {                   // ИГ-1 А: 3 s, not 2 - a second's margin for its first beat
             @Override
             void run() {
                 float got = patient.mobArmor().reserve - 20F, own = repairer.mobArmor().reserve - 20F;
-                print(got >= EliteModSC.REPAIR_UNITS - 0.01F && own < 0.01F, "the elites (ПС-21): «Ремонтник» - its neighbour 3 blocks off got " + n(got)
-                        + " units in 2 s (+" + n(EliteModSC.REPAIR_UNITS) + "/s), itself " + n(own) + " (0)");
+                print(got >= EliteModSC.REPAIR_UNITS - 0.01F && own < 0.01F, "the elites (ПС-21): «Ремонтник» at " + where(repairer) + (repairer.isDead
+                        ? " (dead)" : "") + " - its neighbour at " + where(patient) + (patient.isDead ? " (dead)" : "") + ", " + n(repairer.getDistanceToEntity(patient))
+                        + " off, got " + n(got) + " units in 3 s (+" + n(EliteModSC.REPAIR_UNITS) + "/s, at least one beat), itself " + n(own) + " (0)");
             }
         });
         steps.add(new Step(151, "the Commander") {
@@ -998,6 +999,10 @@ public final class WorldTestCombatSC {
         final int quantumMax = (int) num("com.sc.mob.SpawnRulesSC", "QUANTUM_NEAR_MAX", 2F), eliteMax = (int) num("com.sc.mob.SpawnRulesSC", "ELITE_MAX", 1F);
         final int eliteRadius = (int) num("com.sc.mob.SpawnRulesSC", "ELITE_RADIUS", 128F);
         final int[] most = new int[2], spawned = new int[2];
+        // ИГ-1 А: the elites' cap as the director counts it - a cube of +-ELITE_RADIUS round the group's point (the first member made by a
+        // try), the elites already there before it; each elite made - its point, its try, how many stood in its cube
+        final java.util.Map<Entity, Integer> eliteTry = new java.util.HashMap<Entity, Integer>();
+        final StringBuilder eliteLog = new StringBuilder(), eliteBad = new StringBuilder();
         for (int i = 0; i < 2 * SERIES; i++) {
             final int k = i;
             steps.add(new Step(10 + i, "the spawn caps") {
@@ -1006,6 +1011,9 @@ public final class WorldTestCombatSC {
                     boolean node = k < SERIES;
                     int x = node ? nx : kx, z = node ? nz : kz;
                     anchor.setLocationAndAngles(x + 0.5, ground(x, z), z + 0.5, 0F, 0F);
+                    if (!node && k > SERIES) {
+                        eliteCube(k - SERIES - 1, eliteRadius, eliteMax, eliteTry, eliteLog, eliteBad);    // ИГ-1 А: before the rest is cleared
+                    }
                     // what the last try made: keep the Quantum tier (at the Node) / the elites (in the canyon), the rest away - the caps alone stop it
                     int kept = 0;
                     for (Object o : new ArrayList<Object>(w.loadedEntityList)) {
@@ -1028,11 +1036,16 @@ public final class WorldTestCombatSC {
                         }
                     }
                     most[node ? 0 : 1] = Math.max(most[node ? 0 : 1], kept);
-                    if (k == SERIES - 1 || k == 2 * SERIES - 1) {
-                        print(most[node ? 0 : 1] <= (node ? quantumMax : eliteMax), "the spawn caps (SpawnDirectorSC, ПС-7): " + SERIES + " tries " + (node
-                                ? "at a Dead Node - the Quantum tier within " + SpawnRulesSC.NEAR_RADIUS + " at most " + most[0] + " (" + quantumMax + "), "
-                                + spawned[0] + " of them made"
-                                : "in a canyon - elites within " + eliteRadius + " at most " + most[1] + " (" + eliteMax + "), " + spawned[1] + " made"));
+                    if (k == SERIES - 1) {
+                        print(most[0] <= quantumMax, "the spawn caps (SpawnDirectorSC, ПС-7): " + SERIES + " tries at a Dead Node (" + nx + ", " + nz
+                                + ") - the Quantum tier within " + SpawnRulesSC.NEAR_RADIUS + " at most " + most[0] + " (" + quantumMax + "), " + spawned[0]
+                                + " of them made");
+                    }
+                    if (k == 2 * SERIES - 1) {
+                        print(eliteBad.length() == 0, "the spawn caps (SpawnDirectorSC, ПС-7): " + SERIES + " tries in a canyon (" + kx + ", " + kz
+                                + ") - every elite made had fewer than " + eliteMax + " other elites in the director's cube +-" + eliteRadius
+                                + " round its group's point; within " + eliteRadius + " of the anchor at most " + most[1] + ", " + spawned[1] + " made"
+                                + (eliteLog.length() == 0 ? "" : "; made:" + eliteLog) + (eliteBad.length() == 0 ? "" : " - OVER:" + eliteBad));
                     }
                     if (k < 2 * SERIES - 1) {
                         SpawnDirectorSC.tryGroup(w, anchor);
@@ -1040,6 +1053,67 @@ public final class WorldTestCombatSC {
                 }
             });
         }
+    }
+
+    /**
+     * ИГ-1 А: the elites the last try (`tryNo`) made - each is checked against the director's own count (SpawnDirectorSC.near(spot,
+     * ELITE_RADIUS, F_ELITE): a cube of +-r round the group's point - here the first new hostile native's place) of the elites that stood
+     * there before it (any source: an earlier try's, a native's of the world); `max` or more - over the cap. Logged: the place and the
+     * source of each one made, of each one counted.
+     */
+    private void eliteCube(int tryNo, int r, int max, java.util.Map<Entity, Integer> eliteTry, StringBuilder log, StringBuilder bad) {
+        List<Entity> before = new ArrayList<Entity>(), fresh = new ArrayList<Entity>();
+        double[] point = null;
+        for (Object o : new ArrayList<Object>(w.loadedEntityList)) {
+            if (!(o instanceof Entity) || ((Entity) o).isDead || !com.sc.mob.MobCombatSC.hostileNative((Entity) o)) {
+                continue;
+            }
+            Entity e = (Entity) o;
+            boolean isNew = !eliteTry.containsKey(e) && e.ticksExisted <= 2;
+            if (isNew && point == null) {
+                point = new double[]{e.posX, e.posY, e.posZ};
+            }
+            if (!(e instanceof ICensusSC) || !((ICensusSC) e).censusCounts() || !((ICensusSC) e).censusElite()) {
+                continue;
+            }
+            if (eliteTry.containsKey(e) || !isNew) {
+                before.add(e);
+                if (!eliteTry.containsKey(e)) {
+                    eliteTry.put(e, Integer.valueOf(-1));             // a native the world had (not a try's)
+                }
+            } else {
+                fresh.add(e);
+            }
+        }
+        for (Entity e : fresh) {
+            double[] at = point == null ? new double[]{e.posX, e.posY, e.posZ} : point;
+            StringBuilder who = new StringBuilder();
+            int n = 0;
+            for (Entity o : before) {
+                if (Math.abs(o.posX - at[0]) <= r && Math.abs(o.posY - at[1]) <= r && Math.abs(o.posZ - at[2]) <= r) {
+                    n++;
+                    who.append(' ').append(where(o)).append(" (").append(source(eliteTry.get(o))).append(')');
+                }
+            }
+            if (log.length() < 1500) {
+                log.append(" [").append(e.getClass().getSimpleName()).append(' ').append(where(e)).append(", try ").append(tryNo).append(", group at ")
+                        .append((int) Math.floor(at[0])).append(' ').append((int) Math.floor(at[1])).append(' ').append((int) Math.floor(at[2]))
+                        .append(", ").append(n).append(" in its cube").append(who).append(']');
+            }
+            if (n >= max) {
+                bad.append(" [").append(where(e)).append(" try ").append(tryNo).append(": ").append(n).append(who).append(']');
+            }
+            eliteTry.put(e, Integer.valueOf(tryNo));
+            before.add(e);                                          // the next of the same group counts it (Group.elites goes up)
+        }
+    }
+
+    private static String where(Entity e) {
+        return (int) Math.floor(e.posX) + " " + (int) Math.floor(e.posY) + " " + (int) Math.floor(e.posZ);
+    }
+
+    private static String source(Integer tryNo) {
+        return tryNo == null || tryNo.intValue() < 0 ? "the world's" : "try " + tryNo;
     }
 
     /** A settlement's site within 200 blocks of (x, z) (SettlementLayoutSC.siteNear). */

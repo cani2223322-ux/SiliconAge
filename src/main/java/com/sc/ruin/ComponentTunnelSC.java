@@ -17,14 +17,17 @@ import net.minecraft.world.gen.structure.StructureBoundingBox;
 /**
  * ПД-8 (docs/plan-ideas-2026-10-26.md, «Тоннели под плато», ★ A): one segment of a copper busbar tunnel - "SCSi14TunSeg" - at most
  * TunnelLayoutSC.SEGMENT blocks of it along its axis: the floor of ruin metal (the block one stands on at TunnelLayoutSC.floorAt - the
- * ramps near the ends), WIDTH x HEIGHT of air over it, the walls and the ceiling a block of Copper Trace (a Trace Node - the light -
- * every NODE_EVERY); every CHEST_EVERY a niche in a wall: a chest of RuinLootSC.tunnelChest or, MIMIC_PCT of them, a mimic waiting in
+ * ramps near the ends), WIDTH x HEIGHT of air over it, the walls and the ceiling ruin metal with a stripe of Copper Trace along each
+ * wall (STRIPE; a Trace Node - the light - every NODE_EVERY, in the walls and the ceiling); every CHEST_EVERY a niche in a wall: a chest of RuinLootSC.tunnelChest or, MIMIC_PCT of them, a mimic waiting in
  * it. An end a camp is near stays shut (a Trace wall: no opening). Only inside the populate window, by the pure layout (no cascade).
  */
 public class ComponentTunnelSC extends ComponentRuinSC {
 
     /** A Trace Node in the walls this often (blocks along). */
     public static final int NODE_EVERY = 8;
+    /** ПМ-1 А: the walls and the ceiling are ruin metal; Copper Trace is only one stripe along each wall this high over the floor
+     * (the wall Trace Nodes in it) and the ceiling nodes - 2 Trace a block along, not 15. */
+    public static final int STRIPE = 2;
 
     /** The cell, the axis, the segment's run [t0..t1] along it, the line across. */
     protected int cellX, cellZ, t0, t1, across;
@@ -102,13 +105,19 @@ public class ComponentTunnelSC extends ComponentRuinSC {
                 boolean wall = Math.abs(c) == TunnelLayoutSC.WALL;
                 ruin(w, win, x, f, z, BlockRuinSC.RUIN_METAL);  // the floor
                 for (int y = f + 1; y <= f + TunnelLayoutSC.HEIGHT; y++) {
-                    if (wall || shut) {
-                        rock(w, win, x, y, z, node && wall && y == f + 2 ? SubstrateBlocksSC.TRACE_NODE : SubstrateBlocksSC.COPPER_TRACE);
+                    if (wall && y == f + STRIPE) {
+                        rock(w, win, x, y, z, node ? SubstrateBlocksSC.TRACE_NODE : SubstrateBlocksSC.COPPER_TRACE);  // the busbar stripe
+                    } else if (wall || shut) {
+                        ruin(w, win, x, y, z, BlockRuinSC.RUIN_METAL);
                     } else {
                         air(w, win, x, y, z);
                     }
                 }
-                rock(w, win, x, f + TunnelLayoutSC.HEIGHT + 1, z, node && c == 0 ? SubstrateBlocksSC.TRACE_NODE : SubstrateBlocksSC.COPPER_TRACE);
+                if (node && c == 0) {
+                    rock(w, win, x, f + TunnelLayoutSC.HEIGHT + 1, z, SubstrateBlocksSC.TRACE_NODE);    // the light in the ceiling
+                } else {
+                    ruin(w, win, x, f + TunnelLayoutSC.HEIGHT + 1, z, BlockRuinSC.RUIN_METAL);
+                }
             }
             niche(w, win, e, t, f);
         }

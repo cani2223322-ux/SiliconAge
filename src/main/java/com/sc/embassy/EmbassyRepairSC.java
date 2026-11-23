@@ -45,7 +45,8 @@ import net.minecraftforge.common.util.FakePlayer;
  * <li>the approach funnels («Лётное поле», the review's): past the square nobody keeps the land, so the pass never runs there - but each
  * funnel window is cleared of growth ONCE more (settle: the funnel pieces only, over the 1:20 plane) as soon as every chunk round it
  * is populated: other mods' trees that don't keep to their chunk (IC2's rubber trees, Thaumcraft's great trees) grow into a window
- * built before their own chunk was; then never again (EXTRA's K_SETTLED - the land is the players');</li>
+ * built before their own chunk was; then never again (EXTRA's K_SETTLED - the land is the players'); ЛП-6 of the audit 2026-11-04:
+ * only within EmbassyAirfieldSC.FUNNEL_DAYS of the record's making (later - K_SETTLED -1 at once);</li>
  * <li>the core itself gone (an AE2 meteor's crater sets every block but bedrock to air, the core's tile with it - its second gone
  * too): the Overworld's own tick (onWorldTick, FML's bus - SCMod registers INSTANCE) looks at every embassy record whose core's chunk
  * is loaded once a second and runs its Heart's window when the core block or its tile isn't there (heal: the Heart's piece puts the
@@ -64,12 +65,18 @@ public final class EmbassyRepairSC {
     public static final String EXTRA = "G";
     /** EXTRA's keys: the next window's index (0: a pass not begun), the world time the last pass ended. */
     public static final String K_NEXT = "w", K_PASS = "p";
-    /** EXTRA's key (the review's): the funnel windows settled (funnelWindows' indexes as bits of a long - at most 64 windows; -1: all). */
-    public static final String K_SETTLED = "f";
+    /**
+     * EXTRA's key (the review's): the funnel windows settled (funnelWindows' indexes as bits of a long - up to 64 windows; -1: all, or
+     * ЛП-6 of the audit 2026-11-04: the field past EmbassyAirfieldSC.FUNNEL_DAYS - never again). K_SETTLED_MORE (ЛП-2's long funnels: more
+     * than 64 windows) - one byte a window (1 settled) instead of the long's bits; "f" is then only ever -1.
+     */
+    public static final String K_SETTLED = "f", K_SETTLED_MORE = "fb";
     /** settle: the chunks this far round a funnel window's own (every populate that can still put growth into it) must be populated. */
     public static final int SETTLE_AROUND = 1;
     /** Windows a second looks at most (the not ready ones are passed over cheaply). */
     public static final int LOOK = 8;
+    /** ЛП-2: a field's funnel windows at most (two long funnels: about 2 x 19 x 3). */
+    public static final int MAX_FUNNEL_WINDOWS = 256;
 
     /** Record id -> the world time its last window was looked at (transient). */
     private static final Map<Integer, Long> LAST = new HashMap<Integer, Long>();
@@ -268,16 +275,18 @@ public final class EmbassyRepairSC {
     }
 
     /**
-     * The review's: record `s`'s approach funnels' windows ({minX, minZ} of populate's grid, the ones meeting Field.funnels; x then z
-     * order; at most 64 - settle's bits). Empty: no field, no funnels (SHORT, HELI). Pure.
+     * The review's: record `s`'s approach funnels' windows ({minX, minZ} of populate's grid, the ones meeting Field.funnels; each funnel
+     * in x then z order; at most 64 a version 1 field - settle's long, then K_SETTLED_MORE's bytes: ЛП-2's long funnels, at most
+     * MAX_FUNNEL_WINDOWS). Empty: no field, no funnels (SHORT, HELI). Pure.
      */
     public static List<int[]> funnelWindows(SettlementRegistrySC.Settlement s) {
         List<int[]> out = new ArrayList<int[]>();
         EmbassyAirfieldSC.Field f = EmbassyAirfieldSC.fieldOf(s);
+        int cap = f == null || f.version < EmbassyAirfieldSC.LONG_FUNNELS ? 64 : MAX_FUNNEL_WINDOWS;    // a version 1 field: its windows as before
         for (int i = 0; f != null && i < f.funnels.length; i++) {
             int[] b = f.world(f.funnels[i]);
             for (int wx = windowOf(b[0]); wx <= b[2]; wx += 16) {
-                for (int wz = windowOf(b[1]); wz <= b[3] && out.size() < 64; wz += 16) {
+                for (int wz = windowOf(b[1]); wz <= b[3] && out.size() < cap; wz += 16) {
                     boolean twice = false;
                     for (int[] o : out) {
                         twice |= o[0] == wx && o[1] == wz;
@@ -305,6 +314,16 @@ public final class EmbassyRepairSC {
         if (wins.isEmpty()) {
             return false;
         }
+        if (!EmbassyAirfieldSC.funnelsOpen(s.madeAt, w.getTotalWorldTime())) {
+            g.setLong(K_SETTLED, -1L);                          // ЛП-6: FUNNEL_DAYS past the record's making - never again
+            g.removeTag(K_SETTLED_MORE);
+            s.extra.setTag(EXTRA, g);
+            r.markDirty();
+            return false;
+        }
+        if (wins.size() > 64) {
+            return settleMore(w, r, s, st, g, wins);
+        }
         long done = g.getLong(K_SETTLED), all = wins.size() >= 64 ? -1L : (1L << wins.size()) - 1L;
         int looked = 0;
         for (int i = 0; i < wins.size() && looked < LOOK; i++) {
@@ -319,6 +338,40 @@ public final class EmbassyRepairSC {
             runFunnels(w, st, win);
             done |= 1L << i;
             g.setLong(K_SETTLED, (done & all) == all ? -1L : done);     // all of them: -1, never looked at again
+            s.extra.setTag(EXTRA, g);
+            r.markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    /** settle of a field with more than 64 funnel windows (ЛП-2's long funnels): K_SETTLED_MORE's bytes, K_SETTLED -1 once all are done. */
+    private static boolean settleMore(World w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s, StructureEmbassyStartSC st, NBTTagCompound g,
+            List<int[]> wins) {
+        byte[] old = g.getByteArray(K_SETTLED_MORE), done = new byte[wins.size()];
+        System.arraycopy(old, 0, done, 0, Math.min(old.length, done.length));
+        int looked = 0;
+        for (int i = 0; i < wins.size() && looked < LOOK; i++) {
+            if (done[i] != 0) {
+                continue;
+            }
+            looked++;
+            int[] win = wins.get(i);
+            if (!aroundPopulated(w, win) || !ready(w, win, false)) {
+                continue;
+            }
+            runFunnels(w, st, win);
+            done[i] = 1;
+            boolean all = true;
+            for (byte b : done) {
+                all &= b != 0;
+            }
+            if (all) {
+                g.setLong(K_SETTLED, -1L);                      // all of them: never looked at again
+                g.removeTag(K_SETTLED_MORE);
+            } else {
+                g.setByteArray(K_SETTLED_MORE, done);
+            }
             s.extra.setTag(EXTRA, g);
             r.markDirty();
             return true;

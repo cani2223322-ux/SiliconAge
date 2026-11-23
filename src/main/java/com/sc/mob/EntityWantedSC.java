@@ -1,5 +1,6 @@
 package com.sc.mob;
 
+import java.util.List;
 import java.util.Random;
 
 import com.sc.util.ArmorSuit;
@@ -8,6 +9,7 @@ import com.sc.util.WeaponType;
 
 import net.minecraft.entity.IEntityLivingData;
 import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 
@@ -41,6 +43,8 @@ public class EntityWantedSC extends EntityTrooperSC {
     public static final float RESERVE_MIN = 120F, RESERVE_MAX = 160F;
     /** How often it asks its record whether it is still the one (ticks). */
     public static final int CHECK_TICKS = 20;
+    /** МБ-4 А: its armour's scrap (factionLoot), always. TODO(balance) */
+    public static final int SCRAP_MIN = 1, SCRAP_MAX = 2;
 
     private long wantedId;
     private EliteModSC mod2;
@@ -122,6 +126,17 @@ public class EntityWantedSC extends EntityTrooperSC {
         super.onLivingUpdate();
         if (!worldObj.isRemote && !isDead && (ticksExisted == 1 || ticksExisted % CHECK_TICKS == 0) && !WantedSC.current(this)) {
             WantedSC.leave(this);                               // a stale copy, or the record took it back - gone, no death
+        }
+    }
+
+    /** МБ-4 А: the scrap of the suit it wears - Quantum or Exo Armour Scrap, SCRAP_MIN..SCRAP_MAX always (as the Executioner's). */
+    @Override
+    public void factionLoot(List<ItemStack> out, Random rand) {
+        ArmorSuit s = mobArmor().suit();
+        ItemStack scrap = MobItemsSC.loot(s == ArmorSuit.EXO ? ItemCombatLootSC.LootKind.EXO_SCRAP : ItemCombatLootSC.LootKind.QUANTUM_SCRAP,
+                SCRAP_MIN + rand.nextInt(SCRAP_MAX - SCRAP_MIN + 1));
+        if (scrap != null) {
+            out.add(scrap);
         }
     }
 

@@ -551,11 +551,16 @@ public final class WorldTestEmbassySC {
         // the floor: 64 columns of the level disc - solid at floorY, nothing lower on top
         Random r = new Random(seed ^ 0xF6F100L);
         int floorOk = 0;
+        StringBuilder badAt = new StringBuilder();                      // ИГ-1 А: where each counter went wrong (the first few)
         for (int i = 0; i < 64; i++) {
             double a = r.nextDouble() * 2D * Math.PI, d = Math.sqrt(r.nextDouble()) * (plan.levelRadius - 1);
             int x = plan.coreX + (int) Math.round(Math.cos(a) * d), z = plan.coreZ + (int) Math.round(Math.sin(a) * d);
             Block b = w.getBlock(x, plan.floorY, z);
-            floorOk += b.getMaterial().isSolid() && w.getHeightValue(x, z) - 1 >= plan.floorY ? 1 : 0;
+            boolean ok = b.getMaterial().isSolid() && w.getHeightValue(x, z) - 1 >= plan.floorY;
+            floorOk += ok ? 1 : 0;
+            if (!ok) {
+                note(badAt, "floor", x, w.getHeightValue(x, z) - 1, z, Block.blockRegistry.getNameForObject(b));
+            }
         }
         // the blend band: along 16 rays from the level disc's edge out, no step back by more than 2
         int against = 0;
@@ -570,6 +575,8 @@ public final class WorldTestEmbassySC {
             for (int d = 1; d < tops.length; d++) {
                 if (sign != 0 && (tops[d] - tops[d - 1]) * sign < -2 || sign == 0 && Math.abs(tops[d] - tops[d - 1]) > 2) {
                     against++;
+                    note(badAt, "blend", plan.coreX + (int) Math.round(Math.cos(a) * (plan.levelRadius + d)), tops[d],
+                            plan.coreZ + (int) Math.round(Math.sin(a) * (plan.levelRadius + d)), tops[d - 1] + " -> " + tops[d]);
                     break;
                 }
             }
@@ -594,8 +601,10 @@ public final class WorldTestEmbassySC {
                     Block b = ch.getBlock(x & 15, y, z & 15);
                     if (b == Blocks.log || b == Blocks.log2 || b == Blocks.planks || b == Blocks.wooden_slab || b == Blocks.double_wooden_slab) {
                         wood++;
+                        note(badAt, "wood", x, y, z, Block.blockRegistry.getNameForObject(b));
                     } else if ((b == Blocks.leaves || b == Blocks.leaves2) && !inGreenhouse) {
                         leaves++;
+                        note(badAt, "leaves", x, y, z, Block.blockRegistry.getNameForObject(b));
                     }
                 }
             }
@@ -616,7 +625,20 @@ public final class WorldTestEmbassySC {
                 + " record (EMBASSY, zone 13, " + rec.slots.size() + " slots of 30..34, ring / vokzal / office) " + record + "; the floor at Y " + plan.floorY + " in "
                 + floorOk + " of 64 columns of the level disc; the blend band steps back on " + against + " of 16 rays (0); logs / planks in the cylinder "
                 + wood + ", leaves outside the greenhouse " + leaves + " (0 / 0); the core and its TE of record " + rec.id + " " + coreOk + ", the ring's TE "
-                + ringOk + ", the beacon on the record's dock " + beacon + ", the Vokzal outside the dome " + outside);
+                + ringOk + ", the beacon on the record's dock " + beacon + ", the Vokzal outside the dome " + outside + "; the city at " + rec.x + " " + rec.y
+                + " " + rec.z + " (radius " + rec.radius + ", level disc " + plan.levelRadius + ", dock " + rec.dockX + " " + rec.dockY + " " + rec.dockZ + ")"
+                + (badAt.length() == 0 ? "" : " - AT:" + badAt));
+    }
+
+    /** ИГ-1 А: one place of a counter for the line (at most 4 a kind, 24 in all). */
+    private static void note(StringBuilder sb, String kind, int x, int y, int z, String what) {
+        int n = 0;
+        for (int i = sb.indexOf(" " + kind + "@"); i >= 0; i = sb.indexOf(" " + kind + "@", i + 1)) {
+            n++;
+        }
+        if (n < 4 && sb.length() < 1200) {
+            sb.append(' ').append(kind).append('@').append(x).append(',').append(y).append(',').append(z).append('(').append(what).append(')');
+        }
     }
 
     /**
@@ -823,6 +845,7 @@ public final class WorldTestEmbassySC {
                     Block b = ch.getBlock(x & 15, y, z & 15);
                     if ((b == Blocks.log || b == Blocks.log2 || b == Blocks.leaves || b == Blocks.leaves2) && !inGreenhouse) {
                         trees++;
+                        note(where, "tree", x, y, z, Block.blockRegistry.getNameForObject(b));
                     } else if (b == Blocks.mob_spawner) {
                         TileEntity te = ch.getTileEntityUnsafe(x & 15, y, z & 15);
                         String mob = te instanceof TileEntityMobSpawner ? ((TileEntityMobSpawner) te).func_145881_a().getEntityNameToSpawn() : "?";
@@ -835,13 +858,14 @@ public final class WorldTestEmbassySC {
                     } else if (d2 <= l2 && y >= plan.floorY - SettlementSC.FOUNDATION && (b == Blocks.water || b == Blocks.flowing_water || b == Blocks.lava
                             || b == Blocks.flowing_lava) && !inLot(lots, x, z)) {
                         water++;
+                        note(where, "liquid", x, y, z, Block.blockRegistry.getNameForObject(b));
                     }
                 }
             }
         }
         print(trees == 0 && spawners == 0 && water == 0, "bans (ПЕ-6): in the area (radius " + area + ") vanilla trees' logs / leaves " + trees + ", dungeon"
                 + " spawners " + spawners + where + ", water / lava on the level ground " + water + " (0 / 0 / 0); mineshafts' spawners deep under it "
-                + mineshafts + " (not banned)");
+                + mineshafts + " (not banned); the area round " + plan.coreX + " " + plan.floorY + " " + plan.coreZ);
     }
 
     // ------------------------------------------------------------------ 7. the roster (ПЖ-11..ПЖ-14, ПГ-21, ПП-14)
@@ -1519,7 +1543,7 @@ public final class WorldTestEmbassySC {
         final List<int[]> first = new ArrayList<int[]>();
 
         public void markBlockForUpdate(int x, int y, int z) {
-            if (n++ < 8) {
+            if (n++ < 40) {
                 first.add(new int[]{x, y, z});
             }
         }

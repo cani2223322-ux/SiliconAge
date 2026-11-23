@@ -48,11 +48,16 @@ public class ComponentEmbHelipadSC extends ComponentEmbAirSC {
         }
         int[] col = f.columns[f.columns.length - 1];
         for (int da = -1; da <= 1; da++) {
-            surface(w, in, col[0] + da, 0, col[1], da == 0 ? BlockAirfieldSC.MARK_YELLOW : BlockAirfieldSC.APRON);
+            surface(w, in, col[0] + da, 0, col[1], columnMeta(da));
         }
         int dq = ComponentEmbAirKitSC.toward(col[1], Math.max(h[1], Math.min(h[3], col[1])));
         int da = dq != 0 ? 0 : ComponentEmbAirKitSC.toward(col[0], Math.max(h[0], Math.min(h[2], col[0])));
         machineq(w, in, col[0], EmbassyAirfieldSC.COLUMN_DY, col[1], BlockShowcase2SC.SERVICE_COLUMN, da, dq);
+    }
+
+    /** The column's concrete step at `da` (-1..1) along a: the yellow cell under the column, concrete either side. Pure. */
+    static int columnMeta(int da) {
+        return da == 0 ? BlockAirfieldSC.MARK_YELLOW : BlockAirfieldSC.APRON;
     }
 
     /** The helipad's meta at (a, q) of `h`: the edge's lights, the circle, the «Н», concrete. Pure. */

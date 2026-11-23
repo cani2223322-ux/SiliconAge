@@ -3,7 +3,9 @@ package com.sc.bridge;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.ChatComponentTranslation;
+import net.minecraftforge.common.util.FakePlayer;
 
 /**
  * /scbridge accept|decline <id> - what the chat's [Принять] / [Отклонить] of a bridge consent request run
@@ -28,12 +30,16 @@ public class CommandBridgeSC extends CommandBase {
 
     @Override
     public boolean canCommandSenderUseCommand(ICommandSender sender) {
-        return sender instanceof EntityPlayer;
+        return true;                                            // ИГ-3: the console / a command block get our own answer, not vanilla's
     }
 
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
-        if (!(sender instanceof EntityPlayer) || args.length != 2 || !("accept".equals(args[0]) || "decline".equals(args[0]))) {
+        if (!(sender instanceof EntityPlayerMP) || sender instanceof FakePlayer) {
+            sender.addChatMessage(new ChatComponentTranslation("sc.cmd.playerOnly"));     // cut off before anything touches a player
+            return;
+        }
+        if (args == null || args.length != 2 || !("accept".equals(args[0]) || "decline".equals(args[0]))) {
             sender.addChatMessage(new ChatComponentTranslation("sc.bridge.consent.usage"));
             return;
         }

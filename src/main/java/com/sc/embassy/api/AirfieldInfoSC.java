@@ -43,8 +43,13 @@ public final class AirfieldInfoSC {
     public final String numberLow, numberHigh;
     /** FULL: the ends whose approach passed the land check may have an ILS (the add-on's CAT III only there); SHORT / HELI: false. */
     public final boolean ilsLow, ilsHigh;
-    /** The embassy's air defence zone: this far across from the core, any height (EmbassyAirRulesSC.AD_RADIUS). TODO(balance) */
+    /** The embassy's air defence circle: this far across from the core, any height (EmbassyAirRulesSC.AD_RADIUS; ЛП-1: the warning's). TODO(balance) */
     public final int adRadius;
+    /**
+     * ЛП-1 (the audit 2026-11-04): the half side of the square across from the core the guns fire over (about 145) - with the approach
+     * corridors, inside adRadius (inFireZone; EmbassyAirApiSC.adZoneAt asks it, the players' bases left out).
+     */
+    public final int adFireHalf;
 
     private final EmbassyAirfieldSC.Field f;
 
@@ -74,6 +79,7 @@ public final class AirfieldInfoSC {
         ilsLow = kind == FULL && (f.ils & EmbassyAirfieldSC.ILS_LOW) != 0;
         ilsHigh = kind == FULL && (f.ils & EmbassyAirfieldSC.ILS_HIGH) != 0;
         adRadius = EmbassyAirfieldSC.AD_RADIUS;
+        adFireHalf = f.fireHalf();
     }
 
     /** «Посольство „Тантал-1“» - translated by each client. */
@@ -254,6 +260,14 @@ public final class AirfieldInfoSC {
      */
     public boolean inAdZone(double x, double z) {
         return f.inAdZone(x, z);
+    }
+
+    /**
+     * ЛП-1: (x, z) is where the guns may fire (any height): inside the circle, over the embassy's square (adFireHalf) or an approach
+     * corridor - the bare zone: EmbassyAirApiSC.adZoneAt also leaves out the players' bases. The rest of the circle only warns.
+     */
+    public boolean inFireZone(double x, double z) {
+        return f.inFireZone(x, z);
     }
 
     // ------------------------------------------------------------------ pure questions of a column

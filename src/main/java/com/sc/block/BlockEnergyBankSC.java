@@ -39,7 +39,8 @@ import net.minecraft.world.World;
  * Fixed (the coordinator's): the class, the registry name "energyBank" (IdeaBlocksSC), the metas, the tiles, the controller's screen id.
  * ОМ-7's: the icons (energyBank_<name>; tools/gen_energybank_tex.py), the glass (a cut-out texture: not an opaque cube, no light kept
  * by the glass meta, the faces between bank blocks not drawn), the port's wrench click, the controller's drop with its charge (NBT
- * TileEntityEnergyBankSC.NBT {eu}), the comparator at the controller.
+ * TileEntityEnergyBankSC.NBT {eu}), the comparator at the controller. ЭН-1: a port's drop carries its charge and mode (NBT
+ * TileEntityEnergyBankPortSC.ITEM_NBT {eu, out}); every bank block comes off with the wrench's dismantle (ItemWrenchSC.dismantlable).
  */
 public class BlockEnergyBankSC extends Block {
 
@@ -190,11 +191,21 @@ public class BlockEnergyBankSC extends Block {
         if (te instanceof TileEntityEnergyBankSC && stack.hasTagCompound() && stack.getTagCompound().hasKey(TileEntityEnergyBankSC.NBT)) {
             ((TileEntityEnergyBankSC) te).setEnergyFromItem(stack.getTagCompound().getCompoundTag(TileEntityEnergyBankSC.NBT).getLong("eu"));
         }
+        if (!world.isRemote && te instanceof TileEntityEnergyBankPortSC && stack.hasTagCompound()
+                && stack.getTagCompound().hasKey(TileEntityEnergyBankPortSC.ITEM_NBT)) {       // ЭН-1: a port's charge and mode
+            ((TileEntityEnergyBankPortSC) te).readFromItem(stack.getTagCompound().getCompoundTag(TileEntityEnergyBankPortSC.ITEM_NBT));
+            world.markBlockForUpdate(x, y, z);
+        }
+    }
+
+    /** ЭН-1: the blocks whose item carries their tile's data - the controller (its charge), a port (its charge and mode). */
+    private static boolean keepsData(int meta) {
+        return meta == CONTROLLER || isPort(meta);
     }
 
     @Override
     public boolean removedByPlayer(World world, EntityPlayer player, int x, int y, int z, boolean willHarvest) {
-        if (willHarvest && world.getBlockMetadata(x, y, z) == CONTROLLER) {
+        if (willHarvest && keepsData(world.getBlockMetadata(x, y, z))) {
             return true;              // harvestBlock drops (reading the tile) and then removes the block
         }
         return super.removedByPlayer(world, player, x, y, z, willHarvest);
@@ -203,22 +214,30 @@ public class BlockEnergyBankSC extends Block {
     @Override
     public void harvestBlock(World world, EntityPlayer player, int x, int y, int z, int meta) {
         super.harvestBlock(world, player, x, y, z, meta);
-        if (meta == CONTROLLER) {
+        if (keepsData(meta)) {
             world.setBlockToAir(x, y, z);
         }
     }
 
-    /** An explosion drops the controller whole - its charge rides in the item. */
+    /** An explosion drops the controller and a port whole - their charge rides in the item. */
     @Override
     public void dropBlockAsItemWithChance(World world, int x, int y, int z, int meta, float chance, int fortune) {
-        super.dropBlockAsItemWithChance(world, x, y, z, meta, meta == CONTROLLER ? 1.0F : chance, fortune);
+        super.dropBlockAsItemWithChance(world, x, y, z, meta, keepsData(meta) ? 1.0F : chance, fortune);
     }
 
     @Override
     public ArrayList<ItemStack> getDrops(World world, int x, int y, int z, int meta, int fortune) {
         ArrayList<ItemStack> drops = new ArrayList<ItemStack>();
         ItemStack stack = new ItemStack(this, 1, meta);
-        TileEntity te = meta == CONTROLLER ? world.getTileEntity(x, y, z) : null;
+        TileEntity te = keepsData(meta) ? world.getTileEntity(x, y, z) : null;
+        if (te instanceof TileEntityEnergyBankPortSC) {
+            NBTTagCompound t = ((TileEntityEnergyBankPortSC) te).writeToItem();        // ЭН-1: null - empty and IN, stacks with new ones
+            if (t != null) {
+                NBTTagCompound root = new NBTTagCompound();
+                root.setTag(TileEntityEnergyBankPortSC.ITEM_NBT, t);
+                stack.setTagCompound(root);
+            }
+        }
         if (te instanceof TileEntityEnergyBankSC && ((TileEntityEnergyBankSC) te).energy() > 0) {
             NBTTagCompound root = new NBTTagCompound(), t = new NBTTagCompound();
             t.setLong("eu", ((TileEntityEnergyBankSC) te).energy());

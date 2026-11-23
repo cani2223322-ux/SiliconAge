@@ -521,12 +521,14 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
     /**
      * Э-1: what touched each side when last looked at (server only, not saved: the first look after
      * loading always counts as a change). Only a tile can connect (connectorAt / linksTo / the energy
-     * net all go by the tile), so a side is: its tile (by identity), and with a tile its block, meta and
-     * - an energy tile - which ways that face takes / gives energy.
+     * net all go by the tile), so a side is: its tile (by identity); for our energy tiles and bundles
+     * also its block, meta and which ways that face takes / gives energy; for any other tile (МС-1)
+     * its class and what it offers this side (inventory + slots, fluid, IC2 energy) - not block / meta.
      */
     private TileEntity[] seenTile;
     private final Object[] seenBlock = new Object[6];
     private final int[] seenBits = new int[6];
+    private final int[][] seenSlots = new int[6][];
 
     /** Whether anything a connection depends on changed around us since the last call (and remembers it). */
     public boolean neighboursChanged() {
@@ -543,22 +545,42 @@ public class TileEntityConduitBundleSC extends TileEntity implements IFluidHandl
             }
             Object block = null;
             int bits = 0;
+            int[] slots = null;
             if (te != null) {
-                block = worldObj.getBlock(x, y, z);
-                bits = worldObj.getBlockMetadata(x, y, z) & 0xFFFF;
-                if (te instanceof TileEntityEnergyBase) {
-                    TileEntityEnergyBase e = (TileEntityEnergyBase) te;
-                    ForgeDirection face = dir.getOpposite();
-                    bits |= (e.acceptsFrom(face) ? 1 << 16 : 0) | (e.isOutputFace(face) ? 1 << 17 : 0)
-                            | (e.isEnergySink() ? 1 << 18 : 0) | (e.isEnergySource() ? 1 << 19 : 0);
+                ForgeDirection face = dir.getOpposite();
+                if (te instanceof TileEntityEnergyBase || te instanceof TileEntityConduitBundleSC) {
+                    block = worldObj.getBlock(x, y, z);
+                    bits = worldObj.getBlockMetadata(x, y, z) & 0xFFFF;
+                    if (te instanceof TileEntityEnergyBase) {
+                        TileEntityEnergyBase e = (TileEntityEnergyBase) te;
+                        bits |= (e.acceptsFrom(face) ? 1 << 16 : 0) | (e.isOutputFace(face) ? 1 << 17 : 0)
+                                | (e.isEnergySink() ? 1 << 18 : 0) | (e.isEnergySource() ? 1 << 19 : 0);
+                    }
+                } else {
+                    // МС-1: any other tile - a furnace lighting up swaps its block (lit_furnace) but keeps the
+                    // tile, so go by the tile's kind and what it offers to this side, not the block / meta
+                    block = te.getClass();
+                    bits = (te instanceof IInventory ? 1 << 20 : 0) | (te instanceof IFluidHandler ? 1 << 21 : 0)
+                            | (isIc2EnergyTile(te) ? 1 << 22 : 0);
+                    if (te instanceof ISidedInventory) {
+                        slots = ((ISidedInventory) te).getAccessibleSlotsFromSide(face.ordinal());
+                        if (slots != null) {
+                            slots = slots.clone();
+                        }
+                        bits |= slots == null ? 1 << 23 : 0;
+                    } else if (te instanceof IInventory) {
+                        bits |= (((IInventory) te).getSizeInventory() & 0xFFFF);
+                    }
                 }
             }
-            if (seenTile[i] != te || seenBlock[i] != block || seenBits[i] != bits) {
+            if (seenTile[i] != te || seenBlock[i] != block || seenBits[i] != bits
+                    || !java.util.Arrays.equals(seenSlots[i], slots)) {
                 changed = true;
             }
             seenTile[i] = te;
             seenBlock[i] = block;
             seenBits[i] = bits;
+            seenSlots[i] = slots;
         }
         return changed;
     }

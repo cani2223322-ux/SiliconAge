@@ -48,6 +48,10 @@ public class WailaSC implements IWailaDataProvider {
             registrar.registerBodyProvider(provider, c);
             registrar.registerNBTProvider(provider, c);
         }
+        for (Class<?> c : new Class<?>[]{com.sc.tileentity.TileEntityEnergyBankSC.class, com.sc.tileentity.TileEntityDataPortSC.class}) {
+            registrar.registerBodyProvider(provider, c);              // СТ-3: the bank's controller; ГН-2: the Data Port
+            registrar.registerNBTProvider(provider, c);
+        }
         WailaEntitySC.register(registrar);                          // Подложка Ф3: the Substrate's creatures (ПИ-1)
     }
 
@@ -77,6 +81,35 @@ public class WailaSC implements IWailaDataProvider {
                         com.sc.settle.npc.NpcNamesSC.name(t.getInteger("scSettleName"))).getUnformattedText();
                 tip.add(Lang.tr("sc.waila.settle.core", name, Lang.tr(sizes[size].langKey())));
             }
+            return tip;
+        }
+        if (t.hasKey("scBankEu")) {                                  // СТ-3: the Energy Bank's controller - the screen's lines
+            int size = t.getInteger("scBankSize");
+            if (size > 0) {
+                tip.add(Lang.tr("sc.gui.bank.charge", num(t.getLong("scBankEu")), num(t.getLong("scBankCap"))));
+                tip.add(Lang.tr("sc.gui.bank.size", size, size, size));
+            } else {
+                if (t.getLong("scBankEu") > 0) {
+                    tip.add(Lang.tr("sc.tooltip.energyBank.stored", num(t.getLong("scBankEu"))));
+                }
+                int r = t.getInteger("scBankBad");
+                String why = r > 0 && r < com.sc.energy.EnergyBankMathSC.REASON_KEYS.length
+                        ? Lang.tr("sc.gui.bank.reason." + com.sc.energy.EnergyBankMathSC.REASON_KEYS[r]) : "?";
+                int[] at = t.getIntArray("scBankBadAt");
+                tip.add("§c" + (at.length == 3 ? Lang.tr("sc.gui.bank.unformed", why, at[0], at[1], at[2])
+                        : Lang.tr("sc.gui.bank.unformed", why, "?", "?", "?")));
+            }
+        }
+        if (t.hasKey("scBankOut")) {                                 // СТ-3: a bank port's mode
+            tip.add(Lang.tr(t.getBoolean("scBankOut") ? "sc.bank.port.out" : "sc.bank.port.in"));
+        }
+        if (t.hasKey("scDpMode")) {                                  // ГН-2: the Data Port - its mode, its reactor, the signal
+            String mode = Lang.tr(t.getInteger("scDpMode") == com.sc.tileentity.TileEntityDataPortSC.PERMIT
+                    ? "sc.dataport.name.permit" : "sc.dataport.name.stop");
+            int[] at = t.getIntArray("scDpAt");
+            tip.add(Lang.tr("sc.dataport.info", mode, at.length == 3 ? Lang.tr("sc.dataport.info.at", at[0], at[1], at[2])
+                    : Lang.tr("sc.dataport.info.nowhere")));
+            tip.add(Lang.tr(t.getBoolean("scDpPower") ? "sc.waila.dataport.signal.on" : "sc.waila.dataport.signal.off"));
             return tip;
         }
         if (t.hasKey("scIgnition")) {
@@ -562,7 +595,38 @@ public class WailaSC implements IWailaDataProvider {
         if (te instanceof com.sc.tileentity.TileEntitySettlementCoreSC) {
             settlementCore((com.sc.tileentity.TileEntitySettlementCoreSC) te, tag);
         }
+        if (te instanceof com.sc.tileentity.TileEntityEnergyBankSC) {   // СТ-3
+            com.sc.tileentity.TileEntityEnergyBankSC b = (com.sc.tileentity.TileEntityEnergyBankSC) te;
+            tag.setLong("scBankEu", b.energy());
+            tag.setLong("scBankCap", b.capacity());
+            tag.setInteger("scBankSize", b.formed() ? b.size() : 0);
+            if (!b.formed()) {
+                tag.setInteger("scBankBad", b.badReason());
+                int[] at = b.badAt();
+                if (at != null && at.length == 3) {
+                    tag.setIntArray("scBankBadAt", at);
+                }
+            }
+        }
+        if (te instanceof com.sc.tileentity.TileEntityEnergyBankPortSC) {   // СТ-3
+            tag.setBoolean("scBankOut", ((com.sc.tileentity.TileEntityEnergyBankPortSC) te).isOut());
+        }
+        if (te instanceof com.sc.tileentity.TileEntityDataPortSC) {       // ГН-2
+            com.sc.tileentity.TileEntityDataPortSC dp = (com.sc.tileentity.TileEntityDataPortSC) te;
+            tag.setInteger("scDpMode", dp.mode());
+            int[] at = dp.boundAt();
+            if (at != null) {
+                tag.setIntArray("scDpAt", at);
+            }
+            tag.setBoolean("scDpPower", dp.powered());
+        }
         return tag;
+    }
+
+    /** СТ-3: "4 000 000 000" in Russian, "4,000,000,000" in English (as the bank's screen). */
+    private static String num(long v) {
+        String s = com.sc.bridge.BridgeMathSC.group(v);
+        return "ru".equals(Lang.trOr("sc.book.lang", "en")) ? s : s.replace(' ', ',');
     }
 
     /**

@@ -37,7 +37,7 @@ import net.minecraftforge.event.world.WorldEvent;
  * every RUN_TICKS) and Forge's (EntityJoinWorldEvent: a raider of a raid that is over - a restart, a chunk unloaded meanwhile -
  * is an ordinary mob again; WorldEvent.Unload: the Substrate unloaded under a raid - it is lost). Per settlement in its registry record's extra "R" (EXTRA): the last night rolled, the last raid's
  * day, the trade closed until (world time); the running raid itself only in memory (RaidRunSC; a restart ends it - nothing is
- * simulated). The raiders carry NBT RAIDER_NBT = the settlement's id in getEntityData (they stay while it runs: func_110163_bv)
+ * simulated; ПС-3: a called raid's call stays at the settlement, so after a restart it waits for a night again). The raiders carry NBT RAIDER_NBT = the settlement's id in getEntityData (they stay while it runs: func_110163_bv)
  * and are «born in Si-14» (SpawnDirectorSC.spawnAt).
  * <ul>
  * <li>when (ПН-1, RaidRulesSC.mayRoll): the rule dimension.raids, not Peaceful (its mobs remove themselves: no fight, no
@@ -163,7 +163,26 @@ public final class RaidSC {
             }
         }
         if (total % CHECK_TICKS == 0L) {
+            maintainCalls(w);
             checks(w);
+        }
+    }
+
+    /**
+     * ПС-1 / ПС-3: the calls waiting at `w`'s settlements (loaded or not, any time of day, the rules on or off) - past their term taken off
+     * with the deposit back, a stopped server's RUN mark cleared (RaidAlarmSC.maintain).
+     */
+    private static void maintainCalls(WorldServer w) {
+        SettlementRegistrySC r = SettlementRegistrySC.get(w);
+        if (r == null) {
+            return;
+        }
+        int dim = w.provider.dimensionId;
+        long today = SettlementSC.day(w);
+        for (SettlementRegistrySC.Settlement s : new ArrayList<SettlementRegistrySC.Settlement>(r.all())) {
+            if (s.dim == dim && RaidAlarmSC.pendingBy(s) != null) {
+                RaidAlarmSC.maintain(r, s, today);
+            }
         }
     }
 
@@ -205,7 +224,8 @@ public final class RaidSC {
 
     /**
      * ПД-3: the call waiting at `s` (RaidAlarmSC) begins when its buyer defends it (the night is the caller's to ask): no roll, no
-     * cooldown; the call is taken off. The rule dimension.raidAlarms off - it waits. @return the called raid began
+     * cooldown; ПС-3: the call stays, marked RUN, till its raid ends (RaidRunSC.endCall) - a server stopped mid-raid leaves it waiting
+     * again with its deposit. The rule dimension.raidAlarms off - it waits. @return the called raid began
      */
     private static boolean called(WorldServer w, SettlementRegistrySC r, SettlementRegistrySC.Settlement s) {
         UUID by = RaidAlarmSC.pendingBy(s);
@@ -217,7 +237,7 @@ public final class RaidSC {
             EntityPlayer p = (EntityPlayer) o;
             if (by.equals(p.getUniqueID()) && defends(w, r, s, p, reach)) {
                 int kind = RaidAlarmSC.pendingKind(s);
-                RaidAlarmSC.clear(s);
+                RaidAlarmSC.markRunning(s);                     // ПС-3: kept till the raid ends, not taken off at its start
                 r.markDirty();
                 com.sc.hazard.EmpStormSC.tell(p, net.minecraft.util.EnumChatFormatting.RED, "sc.alarm.begins", SettlementSC.displayName(s));
                 begin(w, r, s, p, kind == RaidAlarmSC.KIND_HEAVY ? RaidAlarmSC.KIND_HEAVY : RaidAlarmSC.KIND_ALARM, true);

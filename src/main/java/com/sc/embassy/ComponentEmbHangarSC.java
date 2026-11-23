@@ -53,8 +53,7 @@ public class ComponentEmbHangarSC extends ComponentEmbAirSC {
             for (int q = c[1]; q <= c[3]; q++) {
                 int u = a - h[0], v = q - h[1];
                 boolean gate = u == len, side = v == 0 || v == wid, back = u == 0;
-                boolean line = v == mid && u > STOP_U || u == STOP_U && Math.abs(v - mid) <= STOP_HALF;
-                surface(w, in, a, 0, q, line ? BlockAirfieldSC.MARK_YELLOW : BlockAirfieldSC.APRON);
+                surface(w, in, a, 0, q, meta(h, a, q));
                 for (int dy = 1; dy < roof; dy++) {
                     if (gate || !side && !back) {
                         airq(w, in, a, dy, q);
@@ -73,5 +72,12 @@ public class ComponentEmbHangarSC extends ComponentEmbAirSC {
                 atq(w, in, a, roof, q, decor, lamp ? BlockSettlementDecorSC.NODE : BlockSettlementDecorSC.STEEL);
             }
         }
+    }
+
+    /** The hangar `h`'s floor at (a, q): the yellow line in from the gate to the stop bar, concrete elsewhere. Pure. */
+    static int meta(int[] h, int a, int q) {
+        int u = a - h[0], v = q - h[1], mid = (h[3] - h[1]) / 2;
+        boolean line = v == mid && u > STOP_U || u == STOP_U && Math.abs(v - mid) <= STOP_HALF;
+        return line ? BlockAirfieldSC.MARK_YELLOW : BlockAirfieldSC.APRON;
     }
 }

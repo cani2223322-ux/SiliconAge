@@ -59,7 +59,10 @@ public class ContainerArmorStationSC extends Container {
         }
     }
 
-    /** ОМ-6: the salvage slot - a trophy, one's own old piece, blade, drill or gun (SalvageSC.refusal OK), one at a time. */
+    /**
+     * ОМ-6: the salvage slot - a trophy, one's own piece, blade, drill, weapon or gun, one at a time. БР-2: also what isn't salvaged
+     * (SalvageSC.accepts), so the slot's tooltip can say why; the button stays grey for it.
+     */
     public static class SlotSalvage extends Slot {
         public SlotSalvage(IInventory inv, int index, int x, int y) {
             super(inv, index, x, y);
@@ -67,7 +70,7 @@ public class ContainerArmorStationSC extends Container {
 
         @Override
         public boolean isItemValid(ItemStack stack) {
-            return com.sc.item.SalvageSC.refusal(stack) == com.sc.item.SalvageSC.OK;
+            return com.sc.item.SalvageSC.accepts(stack);
         }
 
         @Override
@@ -198,7 +201,7 @@ public class ContainerArmorStationSC extends Container {
                 return null;
             }
         } else if (salvage != null && !salvage.getHasStack() && !(original.getItem() instanceof com.sc.item.ItemArmorSC)
-                && salvage.isItemValid(original)) {
+                && com.sc.item.SalvageSC.refusal(original) == com.sc.item.SalvageSC.OK) {   // БР-2: shift-click - only what is salvaged
             salvage.putStack(original.splitStack(1));           // ОМ-6: a trophy, a blade, a drill, a gun - into the salvage slot
         } else if (TileEntityArmorStationSC.acceptsModule(original)
                 && SlotMergeSC.mergeValid(inventorySlots, original, TileEntityArmorStationSC.FIRST_UPGRADE_SLOT, own)) {

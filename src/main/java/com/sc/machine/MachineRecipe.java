@@ -37,6 +37,12 @@ public class MachineRecipe {
     public final ItemStack[] byproducts;
     public final float[] byproductChances;
 
+    /**
+     * МШ-4 (audit 2026-11-04): a tool among the inputs must be unworn (damage 0) - the photomask the Upgrade Station EV turns into a
+     * whole EUV mask. Set by freshTools() at registration; other recipes keep taking a worn tool.
+     */
+    private boolean freshTools;
+
     private static final ItemStack[] NO_BYPRODUCTS = new ItemStack[0];
     private static final float[] NO_CHANCES = new float[0];
 
@@ -63,6 +69,22 @@ public class MachineRecipe {
         this.defectChance = defectChance;
         this.byproducts = byproducts;
         this.byproductChances = byproductChances;
+    }
+
+    /** МШ-4: this recipe takes only unworn tools (see freshTools); returns itself for registration in one line. */
+    public MachineRecipe freshTools() {
+        freshTools = true;
+        return this;
+    }
+
+    /** МШ-4: whether this recipe takes only unworn tools. */
+    public boolean needsFreshTools() {
+        return freshTools;
+    }
+
+    /** МШ-4: a worn tool where this recipe wants an unworn one. */
+    private boolean wornTool(ItemStack provided) {
+        return freshTools && provided != null && provided.getItem() instanceof com.sc.item.ItemToolSC && provided.getItemDamage() != 0;
     }
 
     /**
@@ -167,7 +189,7 @@ public class MachineRecipe {
                 continue;
             }
             ItemStack provided = providedInputs[i];
-            if (provided == null || provided.stackSize < required.stackSize) {
+            if (provided == null || provided.stackSize < required.stackSize || wornTool(provided)) {
                 continue;
             }
             if (sameItem(provided, required) || inputName(r) != null && inputName(r).equals(slotNames.name(i))) {
@@ -184,7 +206,7 @@ public class MachineRecipe {
      */
     public boolean inputMatches(int r, ItemStack provided) {
         ItemStack required = inputs[r];
-        return provided != null && provided.stackSize >= required.stackSize
+        return provided != null && provided.stackSize >= required.stackSize && !wornTool(provided)
                 && isSameIngredient(provided, sameItem(provided, required) ? null : com.sc.init.OreRecipes.sharedName(provided), required,
                 inputName(r));
     }

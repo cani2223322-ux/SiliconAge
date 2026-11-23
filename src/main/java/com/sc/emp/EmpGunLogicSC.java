@@ -263,6 +263,17 @@ public final class EmpGunLogicSC {
         say(p, "sc.emp.module.installed", moduleName(m));
     }
 
+    /**
+     * ОР-1, pure: EU that taking module `m` out of `gun` burns - for Capacity the charge over the smaller buffer (EmpMathSC.BUFFER), else 0.
+     * The K menu's «Снять» asks again first when it is above 0.
+     */
+    public static int burnOnRemove(ItemStack gun, EmpModule m) {
+        if (m != EmpModule.CAPACITY || !ItemEmpGunSC.hasModule(gun, m)) {
+            return 0;
+        }
+        return Math.max(0, ItemEmpGunSC.chargeOf(gun) - EmpMathSC.capacity(false));
+    }
+
     /** Server: take module `m` out of the gun into the inventory (or drop it). */
     public static void removeModule(EntityPlayerMP p, ItemStack gun, EmpModule m) {
         if (m == null || !ItemEmpGunSC.isGun(gun)) {
@@ -273,7 +284,11 @@ public final class EmpGunLogicSC {
             return;
         }
         cancelCharge(p, gun, false);
+        int burnt = burnOnRemove(gun, m);
         ItemEmpGunSC.setModule(gun, m, false);                  // Capacity: setModule cuts the charge to the smaller buffer
+        if (burnt > 0) {
+            say(p, "sc.emp.module.burnt", burnt);               // ОР-1: the K menu asked first
+        }
         ItemStack out = new ItemStack(com.sc.init.ModItems.empModule, 1, m.ordinal());
         if (!p.inventory.addItemStackToInventory(out) && out.stackSize > 0) {
             p.dropPlayerItemWithRandomChoice(out, false);

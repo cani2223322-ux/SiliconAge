@@ -1949,7 +1949,8 @@ public class TileEntityBridgeControllerSC extends TileEntity {
     }
 
     /** МС-1, ПВ-6: a price times `mul` (energy and gases; whatever was 0 stays 0) - plan() and previewCost alike. */
-    private static void scaleCost(BridgeMathSC.Cost k, float mul) {
+    /** Scales a cost by a price multiplier (the plan; МС-2: the manual's price table too). */
+    public static void scaleCost(BridgeMathSC.Cost k, float mul) {
         if (mul != 1F) {
             k.eu = k.eu > 0 ? com.sc.util.ConfigSC.scale(k.eu, mul) : 0;
             k.sm = k.sm > 0 ? com.sc.util.ConfigSC.scale(k.sm, mul, 1) : 0;
@@ -2802,11 +2803,7 @@ public class TileEntityBridgeControllerSC extends TileEntity {
         if (!remoteMode) {
             return;
         }
-        if (!drawAny(BridgeMathSC.REMOTE_MODE_EU)) {
-            setRemoteMode(false);
-            log(new BridgeMsgSC("sc.bridge.journal.remoteOff"), "", true);
-            return;
-        }
+        // МС-4: the ticket first - no ticket (Forge's limit for the mod is used up), no mode and no EU taken
         if (ticketR == null && worldObj instanceof WorldServer) {
             ticketR = ForgeChunkManager.requestTicket(com.sc.SCMod.instance, worldObj, ForgeChunkManager.Type.NORMAL);
             if (ticketR != null) {
@@ -2817,7 +2814,15 @@ public class TileEntityBridgeControllerSC extends TileEntity {
                 d.setInteger("z", zCoord);
                 d.setInteger("dim", ownDim());
                 ForgeChunkManager.forceChunk(ticketR, new ChunkCoordIntPair(xCoord >> 4, zCoord >> 4));
+            } else {
+                setRemoteMode(false);
+                log(new BridgeMsgSC("sc.bridge.journal.remoteNoTicket"), "", true);
+                return;
             }
+        }
+        if (!drawAny(BridgeMathSC.REMOTE_MODE_EU)) {
+            setRemoteMode(false);
+            log(new BridgeMsgSC("sc.bridge.journal.remoteOff"), "", true);
         }
     }
 

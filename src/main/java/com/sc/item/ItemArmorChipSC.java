@@ -264,26 +264,49 @@ public class ItemArmorChipSC extends Item {
         return true;
     }
 
-    /** СТ-4: how many more empty inventory slots these stacks need (0 - they all fit, partly onto stacks already there). */
-    private static int slotsShort(EntityPlayer player, java.util.List<ItemStack> stacks) {
+    /**
+     * СТ-4: how many more empty inventory slots these stacks need (0 - they all fit, partly onto stacks already there). ОР-2: public -
+     * the station's salvage checks the same way; counts each stack's whole size (what tops up the stacks there, the rest - new slots).
+     */
+    public static int slotsShort(EntityPlayer player, java.util.List<ItemStack> stacks) {
         ItemStack[] inv = player.inventory.mainInventory;
+        int limit = player.inventory.getInventoryStackLimit();
+        int[] size = new int[inv.length];
+        ItemStack[] kind = new ItemStack[inv.length];
         int empty = 0;
-        for (ItemStack s : inv) {
-            if (s == null) {
-                empty++;
-            }
+        for (int i = 0; i < inv.length; i++) {
+            kind[i] = inv[i];
+            size[i] = inv[i] == null ? 0 : inv[i].stackSize;
+            empty += inv[i] == null ? 1 : 0;
         }
         int need = 0;
         for (ItemStack c : stacks) {
-            boolean merges = false;
-            for (ItemStack s : inv) {
-                if (s != null && s.isItemEqual(c) && ItemStack.areItemStackTagsEqual(s, c)
-                        && s.stackSize < Math.min(s.getMaxStackSize(), player.inventory.getInventoryStackLimit())) {
-                    merges = true;
-                    break;
+            if (c == null || c.getItem() == null) {
+                continue;
+            }
+            int max = Math.max(1, Math.min(c.getMaxStackSize(), limit));
+            int left = c.stackSize;
+            for (int i = 0; i < inv.length && left > 0; i++) {
+                ItemStack s = kind[i];
+                if (s != null && c.isStackable() && s.isItemEqual(c) && ItemStack.areItemStackTagsEqual(s, c) && size[i] < max) {
+                    int n = Math.min(left, max - size[i]);
+                    size[i] += n;
+                    left -= n;
                 }
             }
-            need += merges ? 0 : 1;
+            while (left > 0) {
+                int n = Math.min(left, max);
+                left -= n;
+                need++;
+                // the new stack takes a free slot of the copy (when there is one) and may take the next stacks' top-up
+                for (int i = 0; i < inv.length; i++) {
+                    if (kind[i] == null) {
+                        kind[i] = c;
+                        size[i] = n;
+                        break;
+                    }
+                }
+            }
         }
         return Math.max(0, need - empty);
     }

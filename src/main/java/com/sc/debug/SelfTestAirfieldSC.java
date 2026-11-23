@@ -11,6 +11,7 @@ import java.util.Map;
 import com.sc.block.BlockAirfieldSC;
 import com.sc.block.BlockShowcase2SC;
 import com.sc.dim.SubstrateConfigSC;
+import com.sc.embassy.ComponentEmbAirSC;
 import com.sc.embassy.EmbassyAirDefenceSC;
 import com.sc.embassy.EmbassyAirRulesSC;
 import com.sc.embassy.EmbassyAirServiceSC;
@@ -291,8 +292,16 @@ final class SelfTestAirfieldSC {
                             && !f.neutral(f.x(0, -(r + 60)), f.z(0, -(r + 60))) && !f.neutral(f.x(f.thresholdHigh + 320, f.axis), f.z(f.thresholdHigh + 320, f.axis));
                     double cx = f.coreX + 0.5D, cz = f.coreZ + 0.5D;
                     boolean ad = f.inAdZone(cx + 255D, cz) && f.inAdZone(cx, cz - 255D) && !f.inAdZone(cx + 257D, cz) && !f.inAdZone(cx + 182D, cz + 182D);
-                    if (!neutral || !ad) {
-                        note(bad, at + "neutral " + neutral + " AD " + ad);
+                    // ЛП-1 (the audit 2026-11-04): the guns fire over the square (fireHalf) and the corridors only, inside the circle
+                    int h = f.fireHalf(), ca = f.thresholdLow - 100;
+                    boolean fire = h == r + EmbassyLayoutSC.LEVEL_OUT + EmbassyLayoutSC.BLEND + EmbassyAirRulesSC.AD_FIRE_MARGIN
+                            && f.inFireZone(cx, cz) && f.inFireZone(cx + h, cz - h) && !f.inFireZone(cx + h + 2D, cz)
+                            && f.inAdZone(cx + h + 2D, cz)                                              // the ring: the warning only
+                            && f.inFireZone(f.x(ca, f.axis) + 0.5D, f.z(ca, f.axis) + 0.5D)               // a corridor past the square
+                            && !f.inFireZone(f.x(0, -(r + 60)) + 0.5D, f.z(0, -(r + 60)) + 0.5D)
+                            && !f.inFireZone(f.x(f.thresholdLow - 290, f.axis) + 0.5D, f.z(f.thresholdLow - 290, f.axis) + 0.5D);   // past the circle
+                    if (!neutral || !ad || !fire) {
+                        note(bad, at + "neutral " + neutral + " AD " + ad + " fire " + fire);
                     }
                 }
             }
@@ -562,7 +571,7 @@ final class SelfTestAirfieldSC {
         lb.setIntArray(EmbassyAirRulesSC.LANDED, new int[]{3, 7});
         pr.extra.setTag(EmbassyAirRulesSC.LOGBOOK, lb);
         boolean landed = landedNone && EmbassyAirServiceSC.landed(pr, 7) && EmbassyAirServiceSC.landed(pr, 3) && !EmbassyAirServiceSC.landed(pr, 5);
-        boolean numbers = EmbassyAirRulesSC.AD_RADIUS == 256 && EmbassyAirRulesSC.WARN_SECONDS == 10 && EmbassyAirRulesSC.PASS_SECONDS == 60
+        boolean numbers = EmbassyAirRulesSC.AD_RADIUS == 256 && EmbassyAirRulesSC.AD_FIRE_MARGIN == 10 && EmbassyAirRulesSC.WARN_SECONDS == 10 && EmbassyAirRulesSC.PASS_SECONDS == 60
                 && EmbassyAirRulesSC.ESCORT_RANGE == 64 && EmbassyAirRulesSC.PER_DAY[gas] == 16000 && EmbassyAirRulesSC.UNIT[gas] == 4000
                 && EmbassyAirRulesSC.COLUMN_GASES.length == 2;
         check(lengths && keys && bad.length() == 0 && units && admit && pass && book && landed && numbers, "services' rules (§7.1, ЛП-10..ЛП-16): the"
@@ -570,7 +579,7 @@ final class SelfTestAirfieldSC {
                 + " caps; the emergency one only «Чужак» / «Нарушитель», once a day), the units rounded up " + units + ", the prices at every level"
                 + " (base x units x PRICE x the spread, up; free 0); admitted from «Знакомый», never the «Враг» " + admit + "; one 7700 pass a day, one"
                 + " warning a day (" + warn + "), no price wrapped past 2^31 (" + huge + ") " + pass
-                + "; the logbook's 2 chips under the day's 64, +5 " + book + "; landed " + landed + "; AD 256 / 10 s / 60 s / 64, gases 16 000 mB " + numbers + bad);
+                + "; the logbook's 2 chips under the day's 64, +5 " + book + "; landed " + landed + "; AD 256 (the fire: the square + 10) / 10 s / 60 s / 64, gases 16 000 mB " + numbers + bad);
     }
 
     // ------------------------------------------------------------------ 7. the API (§5)
@@ -585,7 +594,8 @@ final class SelfTestAirfieldSC {
                 && EmbassyAirApiSC.PASS_ADMITTED == EmbassyAirDefenceSC.PASS_ADMITTED && EmbassyAirApiSC.AD_WARN == EmbassyAirDefenceSC.AD_WARN
                 && EmbassyAirApiSC.AD_FIRE == EmbassyAirDefenceSC.AD_FIRE && EmbassyAirApiSC.AD_PASS == EmbassyAirDefenceSC.AD_PASS
                 && EmbassyAirApiSC.AD_PASS_USED == EmbassyAirDefenceSC.AD_PASS_USED && EmbassyAirApiSC.AD_PASS_OVER == EmbassyAirDefenceSC.AD_PASS_OVER
-                && EmbassyAirApiSC.AD_LEFT == EmbassyAirDefenceSC.AD_LEFT && EmbassyAirDefenceSC.AD_KEYS.length == EmbassyAirDefenceSC.AD_LEFT + 1
+                && EmbassyAirApiSC.AD_LEFT == EmbassyAirDefenceSC.AD_LEFT && EmbassyAirApiSC.AD_NEAR == EmbassyAirDefenceSC.AD_NEAR && EmbassyAirDefenceSC.AD_NEAR == 6
+                && EmbassyAirDefenceSC.AD_KEYS.length == EmbassyAirDefenceSC.AD_NEAR + 1
                 && EmbassyAirApiSC.adRadius() == EmbassyAirRulesSC.AD_RADIUS && EmbassyAirApiSC.warnSeconds() == EmbassyAirRulesSC.WARN_SECONDS
                 && EmbassyAirfieldSC.ADDON.equals(EmbassyAirApiSC.ADDON_MODID) && "SiliconAgeVehicles".equals(EmbassyAirApiSC.ADDON_MODID)
                 && AirfieldInfoSC.FULL == EmbassyAirfieldSC.FULL && AirfieldInfoSC.SHORT == EmbassyAirfieldSC.SHORT && AirfieldInfoSC.HELI == EmbassyAirfieldSC.HELI;
@@ -748,6 +758,80 @@ final class SelfTestAirfieldSC {
         check(order && lotKinds && bad.length() == 0, "pieces (§2.2, ЛП-5): EmbassyPiecesSC.NAMES - the 12 of Ф6, then Runway .. AirDefence " + order
                 + "; their classes (StructureComponent, no-argument constructor); " + registered + "; LOT_RUNWAY 14 .. LOT_AIR_DEFENCE 20 " + lotKinds
                 + "; the field's lots HELI / SHORT / FULL " + counts + " (6 / 7 / 12), never in Plan.lots, one piece each after the city's" + bad);
+        floors();
+    }
+
+    /**
+     * The pieces' floors agree (WorldTestEmbassySC's second «Достройка» sets 0 blocks): ComponentEmbAirSC.floors - the runway's, the
+     * apron's, the hangar's and the helipad's dy 0 cells - no piece puts two metas in one cell, every cell in its piece's lot, and any
+     * two pieces put the same meta in every cell they share; every kind, r 88..96, the 4 gates x 2 sides.
+     */
+    private static void floors() {
+        String[] piece = {"runway", "apron", "hangar", "helipad"};
+        int[] lotKind = {EmbassyLayoutSC.LOT_RUNWAY, EmbassyLayoutSC.LOT_APRON, EmbassyLayoutSC.LOT_HANGAR, EmbassyLayoutSC.LOT_HELIPAD};
+        StringBuilder bad = new StringBuilder();
+        int fields = 0, cells = 0, shared = 0;
+        for (int kind : KINDS) {
+            for (int r = R_MIN; r <= R_MAX; r++) {
+                for (int g = 0; g < 4; g++) {
+                    for (int side = -1; side <= 1; side += 2) {
+                        EmbassyAirfieldSC.Field f = field(g, kind, side, r);
+                        String at = EmbassyAirfieldSC.KIND_KEYS[kind] + " r" + r + " g" + g + " s" + side + ": ";
+                        List<Map<Long, Integer>> maps = ComponentEmbAirSC.floors(f);
+                        List<SettlementLayoutSC.Lot> lots = f.lots();
+                        fields++;
+                        for (int i = 0; i < maps.size(); i++) {
+                            Map<Long, Integer> m = maps.get(i);
+                            if (m == null) {
+                                continue;
+                            }
+                            SettlementLayoutSC.Lot lot = null;
+                            for (SettlementLayoutSC.Lot l : lots) {
+                                if (l.kind == lotKind[i]) {
+                                    lot = l;
+                                }
+                            }
+                            if (lot == null) {
+                                note(bad, at + piece[i] + " has a floor, no lot");
+                            }
+                            boolean clash = false, out = false;
+                            for (Map.Entry<Long, Integer> e : m.entrySet()) {
+                                long k = e.getKey().longValue();
+                                int a = (int) (k >> 32), q = (int) k, meta = e.getValue().intValue();
+                                cells++;
+                                if (meta == ComponentEmbAirSC.FLOOR_CLASH && !clash) {
+                                    clash = true;
+                                    note(bad, at + piece[i] + " puts two metas at " + a + "," + q);
+                                }
+                                int x = f.x(a, q), z = f.z(a, q);
+                                if (lot != null && !out && (x < lot.x0 || x > lot.x1 || z < lot.z0 || z > lot.z1)) {
+                                    out = true;
+                                    note(bad, at + piece[i] + "'s cell " + a + "," + q + " past its lot");
+                                }
+                                for (int j = i + 1; j < maps.size(); j++) {
+                                    Map<Long, Integer> o = maps.get(j);
+                                    Integer other = o == null ? null : o.get(e.getKey());
+                                    if (other == null) {
+                                        continue;
+                                    }
+                                    shared++;
+                                    if (other.intValue() != meta) {
+                                        note(bad, at + piece[i] + " " + name(meta) + " / " + piece[j] + " " + name(other.intValue()) + " at " + a + "," + q);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        check(bad.length() == 0 && fields > 0 && cells > 0, "the pieces' floors (ПЕ-9, WorldTestEmbassySC's second «Достройка» - 0 blocks): " + cells
+                + " cells of the runway, apron, hangar and helipad on " + fields + " fields (every kind, r " + R_MIN + ".." + R_MAX + ", 4 gates x 2"
+                + " sides) - none put twice by its piece, none past its lot, " + shared + " shared by two pieces, the same meta in each" + bad);
+    }
+
+    private static String name(int meta) {
+        return meta >= 0 && meta < BlockAirfieldSC.NAMES.length ? BlockAirfieldSC.NAMES[meta] : String.valueOf(meta);
     }
 
     // ------------------------------------------------------------------ 9. the metas (§2.2)
@@ -896,7 +980,7 @@ final class SelfTestAirfieldSC {
                 }
             }
         }
-        boolean funnels = !fw.isEmpty() && fw.size() <= 64 && outside == 0 && twice == 0 && com.sc.embassy.EmbassyRepairSC.funnelWindows(old).isEmpty();
+        boolean funnels = !fw.isEmpty() && fw.size() <= com.sc.embassy.EmbassyRepairSC.MAX_FUNNEL_WINDOWS && outside == 0 && twice == 0 && com.sc.embassy.EmbassyRepairSC.funnelWindows(old).isEmpty();
         check(covers && oldReach && inBelt && index && overlap && roster && funnels, "registry (§0.1): a FULL record's reach() covers its zoneBox "
                 + Arrays.toString(zone) + " " + covers + "; a record without \"X\" - no field, no airfield box, its reach the belt and the dock's zone as"
                 + " before " + oldReach + "; inBelt / inAirfield on the runway and the helipad, not past the far end nor at the old one's same cells "
@@ -1116,8 +1200,26 @@ final class SelfTestAirfieldSC {
             count.invoke(null, ft, Integer.valueOf(i < 31 ? forest : plain));
             count.invoke(null, h2, Integer.valueOf(i < 21 ? hilly : plain));
         }
+        // ЛП-3 (the audit 2026-11-04): the forest forbids no approach any more (the ILS end's long funnel clears it)
         rules &= level.invoke(null, ht) != null && approach.invoke(null, ht) == null && approach.invoke(null, h2) != null
-                && level.invoke(null, ft) == null && approach.invoke(null, ft) != null;
+                && level.invoke(null, ft) == null && approach.invoke(null, ft) == null;
+        // ЛП-2: a hilly sample over the 1:20 plane takes the end's ILS (ilsProblem by T_PIERCED); the plains and the forests never pierce
+        int[] pt = t.clone();
+        pt[com.sc.embassy.EmbassyAirSiteSC.T_PIERCED] = 1;
+        boolean pierce = com.sc.embassy.EmbassyAirSiteSC.pierces(hilly, 0.45F, 0.3F, 67, 190) && !com.sc.embassy.EmbassyAirSiteSC.pierces(hilly, 0.45F, 0.3F, 67, 400)
+                && !com.sc.embassy.EmbassyAirSiteSC.pierces(plain, 0.1F, 0.05F, 67, 0) && !com.sc.embassy.EmbassyAirSiteSC.pierces(forest, 0.1F, 0.2F, 67, 0)
+                && com.sc.embassy.EmbassyAirSiteSC.ilsProblem(t) == null && com.sc.embassy.EmbassyAirSiteSC.ilsProblem(pt) != null;
+        // ЛП-2: the funnels - an ILS end of a version 2 decision FUNNEL_ILS_OUT past its threshold, an end without one / a version 1 field +-FUNNEL_A
+        EmbassyAirfieldSC.Field lf = field(1, full, 1, 92);
+        EmbassyAirfieldSC.Field hf = EmbassyAirfieldSC.Field.of(1000, -2000, 92, 64, 1, full, 1, hi, EmbassyAirfieldSC.LONG_FUNNELS);
+        EmbassyAirfieldSC.Field v1 = EmbassyAirfieldSC.Field.of(1000, -2000, 92, 64, 1, full, 1, lo | hi, 1);
+        boolean longF = lf.funnels[0][0] == lf.thresholdLow - EmbassyAirfieldSC.FUNNEL_ILS_OUT && lf.funnels[1][2] == lf.thresholdHigh + EmbassyAirfieldSC.FUNNEL_ILS_OUT
+                && hf.funnels[0][0] == -EmbassyAirfieldSC.FUNNEL_A && hf.funnels[1][2] == hf.thresholdHigh + EmbassyAirfieldSC.FUNNEL_ILS_OUT
+                && v1.funnels[0][0] == -EmbassyAirfieldSC.FUNNEL_A && v1.funnels[1][2] == EmbassyAirfieldSC.FUNNEL_A
+                && EmbassyAirfieldSC.FUNNEL_REACH == lf.funnels[1][2] && EmbassyAirfieldSC.VERSION >= EmbassyAirfieldSC.LONG_FUNNELS
+                && EmbassyAirfieldSC.funnelsOpen(0L, EmbassyAirfieldSC.FUNNEL_DAYS * 24000L) && !EmbassyAirfieldSC.funnelsOpen(0L, EmbassyAirfieldSC.FUNNEL_DAYS * 24000L + 1L)
+                && !EmbassyAirfieldSC.funnelsOpen(500L, 100L);
+        rules &= pierce && longF;
         // the tallies on a synthetic WorldChunkManager (no world, no chunk): all plains - FULL's ground and approaches fit; all ocean - not the
         // ground, an approach yes (water under it); all mountains - neither
         EmbassyAirfieldSC.Field f = field(1, full, 1, 92);
@@ -1125,18 +1227,22 @@ final class SelfTestAirfieldSC {
         int[] ap = (int[]) approachTally.invoke(null, new Synthetic(BiomeGenBase.plains), f, Integer.valueOf(0));
         int[] aw = (int[]) approachTally.invoke(null, new Synthetic(BiomeGenBase.ocean), f, Integer.valueOf(1));
         int[] am = (int[]) approachTally.invoke(null, new Synthetic(BiomeGenBase.extremeHills), f, Integer.valueOf(1));
+        int[] ah = (int[]) approachTally.invoke(null, new Synthetic(BiomeGenBase.forestHills), f, Integer.valueOf(0));
         boolean synthetic = lp[0] > 0 && level.invoke(null, lp) == null && level.invoke(null, lw) != null && ap[0] > 0 && approach.invoke(null, ap) == null
-                && approach.invoke(null, aw) == null && approach.invoke(null, am) != null;
+                && approach.invoke(null, aw) == null && approach.invoke(null, am) != null
+                && com.sc.embassy.EmbassyAirSiteSC.ilsProblem(ap) == null && com.sc.embassy.EmbassyAirSiteSC.ilsProblem(ah) != null;   // ЛП-2
         check(bad.length() == 0 && simple && rules && synthetic, "package G (§3.2): decide on " + cases.length + " synthetic answers (FULL on the seed's"
                 + " side, the other one, SHORT; an end's ILS bit off for its bad approach or its funnel on disk)" + bad + "; fullFits / fullIls " + simple
-                + "; the tallies' rules (water - the ground only, hills > " + EmbassySiteSC.EDGE_PCT + "% on the ground / > 20% in an approach, forest > 30%"
-                + " in an approach) " + rules + "; on a synthetic WorldChunkManager - plains fit, ocean only under an approach, mountains nowhere (" + lp[0]
-                + " / " + ap[0] + " samples) " + synthetic);
+                + "; the tallies' rules (water - the ground only, hills > " + EmbassySiteSC.EDGE_PCT + "% on the ground / > 20% in an approach, the"
+                + " forest - nowhere (ЛП-3); a hill over the 1:20 plane - no ILS, the long ILS funnels, FUNNEL_DAYS (ЛП-2, ЛП-6)) " + rules
+                + "; on a synthetic WorldChunkManager - plains fit, ocean only under an approach, mountains nowhere, wooded hills pierce the ILS plane ("
+                + lp[0] + " / " + ap[0] + " samples) " + synthetic);
         try {
             int[] m = fullShare();
             System.out.println("[SC-TEST] INFO airfield: the FULL share (TODO(balance), the plan's target >= 60 %) on the " + SEEDS.length + " seeds'"
                     + " biome layers, " + m[0] + " sites - these rules (the ground's hills <= " + EmbassySiteSC.EDGE_PCT + " %, an approach's <= 20 %,"
-                    + " water under it) " + pct(m[1], m[0]) + " (both ILS ends " + pct(m[2], m[0]) + "); the plan's first rules (10 %, no water) "
+                    + " water under it, its forest any - ЛП-3) " + pct(m[1], m[0]) + " (both ILS ends - no hill over either 1:20 plane - "
+                    + pct(m[2], m[0]) + "); the plan's first rules (10 %, no water) "
                     + pct(m[3], m[0]) + "; the ground's hills <= 20 % too " + pct(m[4], m[0]) + "; no FULL on the seed's side - why: " + WHY);
         } catch (Throwable ex) {
             System.out.println("[SC-TEST] INFO airfield: the FULL share not measured - " + ex);

@@ -55,6 +55,42 @@ public class TileEntityEnergyBankPortSC extends TileEntityEnergyBase implements 
         return out;
     }
 
+    /** ЭН-1 (the item's tag, BlockEnergyBankSC.getDrops): {eu, out} - the buffer's charge and the mode a broken port carries. */
+    public static final String ITEM_NBT = "scBankPortItem";
+
+    /** ЭН-1: what the item carries - null when there is nothing to keep (empty and IN, as a new port). */
+    public NBTTagCompound writeToItem() {
+        if (getEnergyStored() <= 0 && !out) {
+            return null;
+        }
+        NBTTagCompound t = new NBTTagCompound();
+        t.setInteger("eu", getEnergyStored());
+        t.setBoolean("out", out);
+        return t;
+    }
+
+    /** ЭН-1 (the placed port's item): its mode and charge back (the charge capped to the buffer). */
+    public void readFromItem(NBTTagCompound t) {
+        if (t == null) {
+            return;
+        }
+        if (t.getBoolean("out") != out) {
+            toggleOut();
+        }
+        restoreEnergy(Math.min(t.getInteger("eu"), getMaxEnergyStored()));
+        markDirty();
+    }
+
+    /** ЭН-3: what an IN port takes a tick at most - the controller empties its buffer by portRate, under any energy net. */
+    public static long inRate(Tier t) {
+        return EnergyBankMathSC.portRate(t);
+    }
+
+    /** ЭН-3: what an OUT port sends a tick at most (IC2 without Industrial Upgrade: one packet - outPackets()). */
+    public static long outRate(Tier t) {
+        return t == null ? 0L : (long) t.getVoltage() * outPackets();
+    }
+
     /** ОМ-7 (the controller's scan): the port is in the cube of the controller at (x, y, z). */
     public void bind(int x, int y, int z) {
         if (!bound || cx != x || cy != y || cz != z) {

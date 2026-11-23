@@ -250,7 +250,7 @@ public class CommandEmbassySC extends CommandBase {
             return;
         }
         sender.addChatMessage(new ChatComponentTranslation("sc.cmd.embassy.airfield.head", name, s.id, kindName(f.kind), side(f.side),
-                EmbassyAirfieldSC.icao(s.nameElement, s.nameNumber), f.version));
+                EmbassyAirfieldSC.icaoShown(reg, s), f.version));          // ЛП-5: unique the add-on's way
         if (f.runway != null) {
             sender.addChatMessage(new ChatComponentTranslation("sc.cmd.embassy.airfield.runway", numbers(f.gateDir), f.endHigh - f.endLow + 1,
                     f.runway[3] - f.runway[1] + 1, xz(f.block(f.endLow, f.axis, 0)), xz(f.block(f.endHigh, f.axis, 0)), ilsEnds(f.gateDir, f.ils)));
@@ -265,8 +265,9 @@ public class CommandEmbassySC extends CommandBase {
             int[] b = f.aaBlock(i);
             posts.append(i == 0 ? "" : "; ").append(b[0]).append(' ').append(b[1]).append(' ').append(b[2]);
         }
+        // ЛП-1 (the audit 2026-11-04): the 6th - the square the guns fire over (and the corridors); the rest of the circle only warns
         sender.addChatMessage(new ChatComponentTranslation("sc.cmd.embassy.airfield.ad", EmbassyAirfieldSC.AD_RADIUS, f.coreX, f.coreZ,
-                f.aaPosts.length, posts.toString()));
+                f.aaPosts.length, posts.toString(), f.fireHalf()));
         sender.addChatMessage(new ChatComponentTranslation("sc.cmd.embassy.airfield.rev", EmbassyAirfieldSC.revision(), EmbassyAirApiSC.API_VERSION));
     }
 

@@ -1,5 +1,10 @@
 package com.sc.embassy;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import com.sc.settle.SettlementBlocksSC;
 import com.sc.settle.gen.SettlementLayoutSC;
 
@@ -112,6 +117,86 @@ public abstract class ComponentEmbAirSC extends ComponentEmbFrameSC {
     protected TileEntity tileq(World w, int a, int dy, int q) {
         int y = floorY + dy;
         return y < 0 || y > 255 ? null : w.getTileEntity(fx(a, q * side), y, fz(a, q * side));
+    }
+
+    // ------------------------------------------------------------------ the floor's plan (the self-test's)
+
+    /** floors(): a cell one piece itself puts two different metas in. */
+    public static final int FLOOR_CLASH = -2;
+
+    /**
+     * The self-test's (SelfTestAirfieldSC): the floor (dy 0, EmbassyBlocksSC.airfield) the airfield's pieces put on field `f` - one map
+     * a piece, in build order (the runway, the apron, the hangar, the helipad; null - the field has none), {ComponentEmbAirKitSC.key(a, q)
+     * -> BlockAirfieldSC meta}, the very cells and metas of their buildField (the same pure helpers); FLOOR_CLASH - the piece puts two in
+     * one cell. Two pieces must agree on every cell they share: else each «Достройка» puts one, then the other. Pure.
+     */
+    public static List<Map<Long, Integer>> floors(EmbassyAirfieldSC.Field f) {
+        List<Map<Long, Integer>> out = new ArrayList<Map<Long, Integer>>();
+        Map<Long, Integer> m = null;
+        if (f.runway != null) {
+            m = new HashMap<Long, Integer>();
+            Map<Long, Integer> lights = ComponentEmbAirKitSC.lights(f);
+            int[] r = ComponentEmbRunwaySC.paved(f);
+            for (int a = r[0]; a <= r[2]; a++) {
+                for (int q = r[1]; q <= r[3]; q++) {
+                    int meta = ComponentEmbRunwaySC.meta(f, lights, a, q);
+                    if (meta >= 0) {
+                        floor(m, a, q, meta);
+                    }
+                }
+            }
+            if (f.windsock != null) {
+                for (int da = -1; da <= 1; da++) {
+                    for (int dq = -1; dq <= 1; dq++) {
+                        floor(m, f.windsock[0] + da, f.windsock[1] + dq, ComponentEmbRunwaySC.windsockMeta(da, dq));
+                    }
+                }
+            }
+        }
+        out.add(m);
+        m = null;
+        if (f.apron != null) {
+            m = new HashMap<Long, Integer>();
+            for (int a = f.apron[0]; a <= f.apron[2]; a++) {
+                for (int q = f.apron[1]; q <= f.apron[3]; q++) {
+                    floor(m, a, q, ComponentEmbApronSC.meta(f, a, q));
+                }
+            }
+        }
+        out.add(m);
+        m = null;
+        if (f.hangar != null) {
+            m = new HashMap<Long, Integer>();
+            for (int a = f.hangar[0]; a <= f.hangar[2]; a++) {
+                for (int q = f.hangar[1]; q <= f.hangar[3]; q++) {
+                    floor(m, a, q, ComponentEmbHangarSC.meta(f.hangar, a, q));
+                }
+            }
+        }
+        out.add(m);
+        m = null;
+        if (f.helipad != null) {
+            m = new HashMap<Long, Integer>();
+            int[] h = f.helipad, col = f.columns[f.columns.length - 1];
+            for (int a = h[0]; a <= h[2]; a++) {
+                for (int q = h[1]; q <= h[3]; q++) {
+                    floor(m, a, q, ComponentEmbHelipadSC.meta(h, a, q));
+                }
+            }
+            for (int da = -1; da <= 1; da++) {
+                floor(m, col[0] + da, col[1], ComponentEmbHelipadSC.columnMeta(da));
+            }
+        }
+        out.add(m);
+        return out;
+    }
+
+    private static void floor(Map<Long, Integer> m, int a, int q, int meta) {
+        Long k = Long.valueOf(ComponentEmbAirKitSC.key(a, q));
+        Integer was = m.put(k, Integer.valueOf(meta));
+        if (was != null && was.intValue() != meta) {
+            m.put(k, Integer.valueOf(FLOOR_CLASH));
+        }
     }
 
     /** The settlements' unbreakable trim (BlockSettlementDecorSC) is there to build with (a test world without it: nothing). */

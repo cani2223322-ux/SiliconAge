@@ -1961,6 +1961,8 @@ public final class BookWorldSC {
         e.add(BookEl.para(Lang.tr("sc.manual.world.raids.alarm", levelName(com.sc.hazard.RaidAlarmSC.ALARM_LEVEL), com.sc.hazard.RaidAlarmSC.ALARM_DAYS,
                 levelName(com.sc.hazard.RaidAlarmSC.HEAVY_LEVEL), com.sc.hazard.RaidAlarmSC.HEAVY_DAYS, com.sc.hazard.RaidAlarmSC.DEPOSIT,
                 multiplier(com.sc.hazard.RaidAlarmSC.HEAVY_MUL))));
+        // ПС-1..ПС-3 (docs/audit-2026-11-04-nedorabotki.md): the call's term, a called raid lost, a restart mid-raid
+        e.add(BookEl.para(Lang.tr("sc.manual.world.raids.alarm.2", com.sc.hazard.RaidAlarmSC.TERM_DAYS)));
         if (!com.sc.dim.SubstrateConfigSC.raidAlarms) {
             e.add(BookEl.warn(Lang.tr("sc.alarm.refuse.off")));
         }

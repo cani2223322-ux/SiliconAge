@@ -52,8 +52,8 @@ final class AirTabSC {
     boolean has;
     /** The hook's button («Обслуживание») is shown. */
     boolean act;
-    private int kind, nameCode, lore, level, pass, passTicks, adRadius, warnSecs, passSecs, admitLevel, bookChips, bookTrust;
-    private int gasPrice, gasLeft, gasUnit, gasCap, gasCode, gasLevel;
+    private int kind, nameCode, lore, level, pass, passTicks, adRadius, adFire, warnSecs, passSecs, admitLevel, bookChips, bookTrust;
+    private int gasPrice, gasVolume, gasLeft, gasUnit, gasCap, gasCode, gasLevel;
     private boolean adm, book;
     private String icao = "", rl = "", rh = "", atis;
     private final List<String> rows = new ArrayList<String>();
@@ -116,12 +116,14 @@ final class AirTabSC {
         book = s.getBoolean("book");
         NBTTagCompound g = s.getCompoundTag("gas");
         gasPrice = g.getInteger("p");
+        gasVolume = g.hasKey("v") ? g.getInteger("v") : g.getInteger("u");     // ЛП-4: the price is of this volume (the whole left today)
         gasLeft = g.getInteger("l");
         gasUnit = g.getInteger("u");
         gasCap = g.getInteger("d");
         gasCode = g.getByte("c");
         gasLevel = g.hasKey("m") ? g.getByte("m") : ReputationSC.ACQUAINTANCE;
         adRadius = s.getInteger("ad");
+        adFire = s.hasKey("af") ? s.getInteger("af") : adRadius;          // ЛП-1: the square the guns fire over
         warnSecs = s.getInteger("ws");
         passSecs = s.getInteger("ps");
         admitLevel = s.hasKey("al") ? s.getByte("al") : ReputationSC.ACQUAINTANCE;
@@ -196,7 +198,7 @@ final class AirTabSC {
         } else {
             l.add(new Entry(Lang.tr("sc.airfield.tab.lore.open"), GuiHoloSC.OK));
             if (!adm) {                                     // the add-on's guns are real: say it before anything else
-                l.add(new Entry(Lang.tr("sc.airfield.tab.ad.no.tip", adRadius, warnSecs), GuiHoloSC.BAD));
+                l.add(new Entry(Lang.tr("sc.airfield.tab.ad.no.tip", adRadius, warnSecs, adFire), GuiHoloSC.BAD));
                 l.add(new Entry(Lang.tr("sc.airfield.tab.ad.how", levelName(admitLevel)), GuiHoloSC.WARN));
             }
         }
@@ -263,7 +265,7 @@ final class AirTabSC {
         if (adm) {
             tip.add(Lang.tr("sc.airfield.tab.ad.yes.tip", levelName(admitLevel)));
         } else {
-            tip.add(Lang.tr("sc.airfield.tab.ad.no.tip", adRadius, warnSecs));
+            tip.add(Lang.tr("sc.airfield.tab.ad.no.tip", adRadius, warnSecs, adFire));
             tip.add(Lang.tr("sc.airfield.tab.ad.how", levelName(admitLevel)));
             tip.add(Lang.tr("sc.airfield.tab.ad.cover"));
             tip.add(Lang.tr("sc.airfield.tab.ad.never"));
@@ -296,14 +298,17 @@ final class AirTabSC {
                 tip, x, y, w, bottom, ox, oy);
         // §7.2: the column's armour gases for this player
         tip = new ArrayList<String>();
-        tip.add(Lang.tr("sc.airfield.tab.gas.tip", gasPrice, gasUnit, Math.max(0, gasLeft)));
+        // ЛП-4 (the audit 2026-11-04): the price of the whole volume left today - the column rounds once over the whole fill
+        tip.add(Lang.tr("sc.airfield.tab.gas.tip", gasVolume, gasPrice, gasUnit));
         boolean open = gasCode == EmbassyAirRulesSC.PAY_OK;
         if (gasCode == EmbassyAirRulesSC.PAY_LIMIT) {
             tip.add(Lang.tr("sc.airfield.tab.gas.limit", gasCap));
+        } else if (gasCode == EmbassyAirRulesSC.PAY_ENEMY) {
+            tip.add(Lang.tr("sc.airfield.tab.gas.enemy"));      // its «Враг»: not a matter of the level
         } else if (!open) {
             tip.add(Lang.tr("sc.airfield.tab.gas.level", levelName(gasLevel)));
         }
-        line(f, open ? Lang.tr("sc.airfield.tab.gas", gasPrice) : Lang.tr("sc.airfield.tab.gas.closed"), open ? GuiHoloSC.VALUE : GuiHoloSC.IDLE,
+        line(f, open ? Lang.tr("sc.airfield.tab.gas", gasVolume, gasPrice) : Lang.tr("sc.airfield.tab.gas.closed"), open ? GuiHoloSC.VALUE : GuiHoloSC.IDLE,
                 tip, x, y, w, bottom, ox, oy);
         GL11.glColor4f(1F, 1F, 1F, 1F);
     }

@@ -68,7 +68,7 @@ public final class WorldTestEmbassyFlySC {
     /** Blocks a tick (creative flight sprinting is about 1.1, a gravitation chestplate's 2 and more), the flight's height. */
     static final double SPEED = 1.6D, Y = 110D;
     /** The flight starts this far from the core (past the reach a start is made at: the view + MapGenEmbassySC.RANGE) and ends this far past it. */
-    static final int FROM = 30 * 16, PAST = 14 * 16;
+    static final int FROM = (10 + com.sc.embassy.MapGenEmbassySC.RANGE + 4) * 16, PAST = 14 * 16;   // past the view and the start's RANGE (ЛП-2: 26 chunks)
     /** Ticks after the flight before the verdict; the longest the whole test may take; a load this soon after an unload is "again". */
     static final int SETTLE = 200, TIMEOUT = 30000, AGAIN = 2400;
     /** Its share of the server thread this mod may take while the flyer makes fresh land through an embassy (%). TODO(balance) */

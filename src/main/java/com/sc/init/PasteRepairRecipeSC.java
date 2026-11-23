@@ -30,7 +30,10 @@ public class PasteRepairRecipeSC implements IRecipe {
     /** A repair gives back this share of the maximum; at most this many repairs a tool. TODO(balance) */
     public static final float REPAIR_SHARE = 0.25F;
     public static final int MAX_REPAIRS = 3;
-    /** A repair never takes more pastes than this - the grid's 9 less the tool (the diamond head's third: 3 x 3 = 9 -> 8). */
+    /**
+     * A repair never takes more pastes than this - the grid's 9 less the tool (the diamond head's third: 3 x 3 = 9 -> 8). КР-4 (audit
+     * 2026-11-04, the user's choice А): the diamond head's third repair stays at 8 pastes, not dearer than its second's 6 by the full step.
+     */
     public static final int MAX_PASTES = 8;
     /** The tools the paste mends (ItemToolSC types; the drill heads with a life besides). */
     public static final SCToolType[] TOOLS = {SCToolType.PHOTOMASK, SCToolType.SPUTTER_TARGET_COPPER, SCToolType.SPUTTER_TARGET_ALUMINIUM,

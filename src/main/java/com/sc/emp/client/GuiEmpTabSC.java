@@ -56,6 +56,10 @@ public final class GuiEmpTabSC {
 
     // ---- the tab's layout (init) ----
     private int lx, lw, rx, rw, pitch, btnH, modesY, settingsY, readoutY, modulesY, modPitch, targetY, footY, keyX, keyW;
+    // ---- ОР-1: «Снять» Capacity over the smaller buffer - the first click arms it (the module's ordinal, -1: none), the second within ARM_MS takes it out ----
+    private static final long ARM_MS = 2000L;
+    private int armedModule = -1;
+    private long armedAt;
     // ---- the armour line (initArmourLine), y -1: none ----
     private int armX, armY = -1, armW, rebootW;
 
@@ -165,7 +169,9 @@ public final class GuiEmpTabSC {
                 String name = Lang.tr("sc.empgui.mod." + m.key());
                 if (ItemEmpGunSC.hasModule(gun, m)) {
                     b.enabled = true;
-                    b.displayString = "§a" + Lang.tr("sc.empgui.module.remove", name);
+                    int burn = com.sc.emp.EmpGunLogicSC.burnOnRemove(gun, m);
+                    b.displayString = burn > 0 && armed(m) ? "§c" + Lang.tr("sc.empgui.module.burnConfirm", burn)
+                            : "§a" + Lang.tr("sc.empgui.module.remove", name);
                 } else if (moduleSlot(p, m) >= 0) {
                     b.enabled = true;
                     b.displayString = "§e" + Lang.tr("sc.empgui.module.install", name);
@@ -218,6 +224,12 @@ public final class GuiEmpTabSC {
         } else if (b.id >= ID_MODULE && b.id < ID_MODULE + EmpModule.values().length) {
             EmpModule m = EmpModule.of(b.id - ID_MODULE);           // the inventory changes: the server does it and sends it back
             if (ItemEmpGunSC.hasModule(gun, m)) {
+                if (com.sc.emp.EmpGunLogicSC.burnOnRemove(gun, m) > 0 && !armed(m)) {
+                    armedModule = m.ordinal();                     // ОР-1: «Сгорит N EU - нажмите ещё раз»
+                    armedAt = System.currentTimeMillis();
+                    return;
+                }
+                armedModule = -1;
                 EmpNetSC.send(EmpNetSC.MODULE_REMOVE, m.ordinal(), 0);
             } else {
                 int slot = moduleSlot(Minecraft.getMinecraft().thePlayer, m);
@@ -226,6 +238,11 @@ public final class GuiEmpTabSC {
                 }
             }
         }
+    }
+
+    /** ОР-1: the «Снять» of module `m` was clicked once within ARM_MS. */
+    private boolean armed(EmpModule m) {
+        return armedModule == m.ordinal() && System.currentTimeMillis() - armedAt <= ARM_MS;
     }
 
     /** Pure: the receiver at `pos` one place up (the first goes to the end). */

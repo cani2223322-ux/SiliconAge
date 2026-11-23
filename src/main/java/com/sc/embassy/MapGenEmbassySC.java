@@ -22,7 +22,7 @@ import net.minecraft.world.gen.structure.StructureStart;
 /**
  * PACKAGE G (docs/plan-substrate-tech-f6.md §5.3, rules ПЕ-1, ПЕ-4, ПЕ-8, ПК-27): the embassies as a vanilla structure of the Overworld
  * - a copy of MapGenSettlementSC's ways under the names EmbassySC.START_NAME "SCOwEmbassy" / "SCOwEmb*" (the data in the Overworld's
- * data/SCOwEmbassy.dat). range = RANGE (10 chunks: a footprint reaches 9 - EmbassyLayoutSC.REACH_MAX - so a start is always made
+ * data/SCOwEmbassy.dat). range = RANGE (26 chunks since ЛП-2 of the audit 2026-11-04 - the long funnels; a footprint reaches 9 - EmbassyLayoutSC.REACH_MAX - so a start is always made
  * before the first chunk of its footprint). One instance a server's Overworld: EmbassySC.mapGen(world).
  * <ul>
  * <li>EmbassyWorldGenSC calls func_151539_a(provider, world, cx, cz, null) first thing in every Overworld chunk's
@@ -44,12 +44,21 @@ import net.minecraft.world.gen.structure.StructureStart;
  * «Лётное поле посольства» (docs/plan-embassy-airfield-core.md §4.1, the coordinator's): a NEW record's airfield is decided in
  * getStructureStart (EmbassyAirfieldSC.decideFor - embassy.airfield and the land), its plan carries it (the pieces of the field come
  * with EmbassyPiecesSC.pieces, the ground piece keeps it as "Air"), the record keeps it as "X"; a record already there keeps its own
- * (renew keeps "X"). RANGE stays 10: the field's funnels reach FUNNEL_A (150) along the street - still within 10 chunks of the core's.
+ * (renew keeps "X"). RANGE: the field's funnels reach FUNNEL_REACH (380, ЛП-2) along the street - within RANGE chunks of the core's.
  */
 public class MapGenEmbassySC extends MapGenStructure {
 
-    /** Chunks round each chunk made that are asked for a start (a footprint reaches 9). */
-    public static final int RANGE = 10;
+    /**
+     * Chunks round each chunk made that are asked for a start: a footprint reaches 9, an ILS end's long approach funnel (ЛП-2 of the audit
+     * 2026-11-04: EmbassyAirfieldSC.FUNNEL_REACH, 380 along the street) 24 - the start is made before the first chunk of its funnels
+     * (was 10; canSpawnStructureAtCoords asks a region's candidates' chunks first, cheaply, for the six times as many chunks).
+     */
+    public static final int RANGE = (EmbassyAirfieldSC.FUNNEL_REACH + EmbassyAirfieldSC.FUNNEL_HALF) / 16 + 2;
+
+    /** canSpawnStructureAtCoords' look-up: the last region asked (world seed, grid, rx, rz) and its candidates' chunks. */
+    private long candSeed;
+    private int candGrid, candRx = Integer.MIN_VALUE, candRz = Integer.MIN_VALUE;
+    private final int[] candChunks = new int[EmbassySiteSC.CANDIDATES * 2];
 
     public MapGenEmbassySC() {
         range = RANGE;
@@ -62,7 +71,37 @@ public class MapGenEmbassySC extends MapGenStructure {
 
     @Override
     protected boolean canSpawnStructureAtCoords(int cx, int cz) {
-        return worldObj != null && SettlementSC.embassiesGenerate() && EmbassySiteSC.siteAtChunk(worldObj, cx, cz) != null;
+        return worldObj != null && SettlementSC.embassiesGenerate() && mayHold(worldObj, cx, cz) && EmbassySiteSC.siteAtChunk(worldObj, cx, cz) != null;
+    }
+
+    /**
+     * Chunk (cx, cz) can hold an embassy's core at all (siteAtChunk's own first steps, cheaply): it is a candidate's chunk of its region,
+     * or the guaranteed embassy's. Server thread.
+     */
+    private boolean mayHold(World w, int cx, int cz) {
+        if (!EmbassySiteSC.worldFits(w)) {
+            return false;
+        }
+        long seed = w.getSeed();
+        int grid = EmbassySiteSC.grid(), rx = EmbassySiteSC.region(cx << 4, grid), rz = EmbassySiteSC.region(cz << 4, grid);
+        if (seed != candSeed || grid != candGrid || rx != candRx || rz != candRz) {
+            int[][] c = EmbassySiteSC.candidates(seed, rx, rz, grid);
+            for (int i = 0; i < EmbassySiteSC.CANDIDATES; i++) {
+                candChunks[2 * i] = i < c.length ? c[i][0] >> 4 : Integer.MIN_VALUE;
+                candChunks[2 * i + 1] = i < c.length ? c[i][1] >> 4 : Integer.MIN_VALUE;
+            }
+            candSeed = seed;
+            candGrid = grid;
+            candRx = rx;
+            candRz = rz;
+        }
+        for (int i = 0; i < EmbassySiteSC.CANDIDATES; i++) {
+            if (candChunks[2 * i] == cx && candChunks[2 * i + 1] == cz) {
+                return true;
+            }
+        }
+        EmbassySiteSC.Site g = EmbassySiteSC.guaranteed(w);
+        return g != null && g.chunkX() == cx && g.chunkZ() == cz;
     }
 
     @Override
@@ -219,13 +258,13 @@ public class MapGenEmbassySC extends MapGenStructure {
 
     /**
      * A built embassy's box (its start made and not empty) holds column (x, z), `margin` round it - the populate / decorate bans and
-     * the «Достройка» ask it. Only the embassies within REACH_MAX (an airfield's funnels: FUNNEL_A) + margin of the column can (their
+     * the «Достройка» ask it. Only the embassies within REACH_MAX (an airfield's funnels: FUNNEL_REACH; a piece of it must meet the column - piecesMeet) + margin of the column can (their
      * starts' chunks). Server.
      */
     public boolean covers(World w, int x, int z, int margin) {
         ensureLoaded(w);
-        // the airfield's approach funnels reach EmbassyAirfieldSC.FUNNEL_A past the core along the street (the box grows with them)
-        int reach = Math.max(EmbassyLayoutSC.REACH_MAX, EmbassyAirfieldSC.FUNNEL_A) + margin;
+        // the airfield's approach funnels reach EmbassyAirfieldSC.FUNNEL_REACH past the core along the street (the box grows with them)
+        int reach = Math.max(EmbassyLayoutSC.REACH_MAX, EmbassyAirfieldSC.FUNNEL_REACH) + margin;
         for (Object o : structureMap.values()) {
             if (!(o instanceof StructureStart) || !((StructureStart) o).isSizeableStructure()) {
                 continue;
@@ -233,7 +272,20 @@ public class MapGenEmbassySC extends MapGenStructure {
             StructureStart st = (StructureStart) o;
             int cx = (st.func_143019_e() << 4) + 8, cz = (st.func_143018_f() << 4) + 8;
             if (Math.abs(cx - x) <= reach + 16 && Math.abs(cz - z) <= reach + 16
-                    && st.getBoundingBox().intersectsWith(x - margin, z - margin, x + margin, z + margin)) {
+                    && st.getBoundingBox().intersectsWith(x - margin, z - margin, x + margin, z + margin) && piecesMeet(st, x, z, margin)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Some piece of start `st` meets the columns (x, z) +- `margin` (ЛП-2 of the audit 2026-11-04: the long funnels stretch the start's
+     * box to +-380 along the street - its strips beside them are not the embassy's; risk 4 of docs/plan-embassy-airfield-core.md).
+     */
+    private static boolean piecesMeet(StructureStart st, int x, int z, int margin) {
+        for (Object c : st.getComponents()) {
+            if (c instanceof StructureComponent && ((StructureComponent) c).getBoundingBox().intersectsWith(x - margin, z - margin, x + margin, z + margin)) {
                 return true;
             }
         }

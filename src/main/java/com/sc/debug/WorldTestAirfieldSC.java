@@ -676,7 +676,8 @@ public final class WorldTestAirfieldSC {
         print(f.posts != null && posted == f.posts.length, "posts on the field (package G, ЛП-18): " + posted + " of " + (f.posts == null ? 0 : f.posts.length)
                 + " (two Sentries, the second Gas Engineer) on Field.posts" + off);
         // ЛП-3, §4.4 (the integrator's): the approach funnels - no growth over the 1:FUNNEL_SLOPE plane (the Funnel piece), no vanilla tree
-        // in them at all (covers(): the start's box reaches FUNNEL_A, Decorate's TREE / BIG_SHROOM banned there)
+        // in them at all (covers(): a piece of the start meets the column - piecesMeet; an end with an ILS of version 2 out to FUNNEL_ILS_OUT
+        // past its threshold, FUNNEL_REACH along the street, an end without one to FUNNEL_A; Decorate's TREE / BIG_SHROOM banned there)
         int over = 0, vanilla = 0, cols = 0;
         int[] vanillaOf = new int[f.funnels.length];
         for (int v = 0; v < f.funnels.length; v++) {
@@ -700,7 +701,9 @@ public final class WorldTestAirfieldSC {
         }
         print(f.funnels.length == 2 && over == 0 && vanilla == 0, "approach funnels (ЛП-3, §4.4): " + f.funnels.length + " funnels, " + cols + " columns - growth"
                 + " over the 1:" + EmbassyAirfieldSC.FUNNEL_SLOPE + " plane " + over + " (0), vanilla logs / leaves in the funnels made with the start "
-                + vanilla + " (0: covers() bans Decorate's trees out to " + EmbassyAirfieldSC.FUNNEL_A + "); by funnel " + Arrays.toString(vanillaOf)
+                + vanilla + " (0: covers() - the start's pieces - bans Decorate's trees in the funnels: " + EmbassyAirfieldSC.FUNNEL_A + " without an ILS, "
+                + EmbassyAirfieldSC.FUNNEL_ILS_OUT + " past the threshold with one, " + EmbassyAirfieldSC.FUNNEL_REACH + " along the street at most); by funnel "
+                + Arrays.toString(vanillaOf)
                 + ", on disk before the start " + Arrays.toString(funnelOnDisk) + " (their land as it was), the ILS bits " + f.ils);
         // ЛП-18 (the integrator's, the review's): the field's Sentries keep their posts day and night, their OWN leash reaches them (the rest of
         // the guard keeps the belt's); the census's reach (RosterSC.reach) of every slot holds its post - a guard's its leash, a Tuner's post
@@ -828,10 +831,24 @@ public final class WorldTestAirfieldSC {
         boolean where = info != null && at != null && at.id == rec.id && Arrays.equals(info.runwayBox(), f.world(f.runway))
                 && EmbassyAirApiSC.domeAt(w, rec.x + 0.5D, rec.z + 0.5D) == rec.id && EmbassyAirApiSC.domeAt(w, rx + 0.5D, rz + 0.5D) == -1
                 && EmbassyAirApiSC.neutralAt(w, rx + 0.5D, 200D, rz + 0.5D) && !EmbassyAirApiSC.neutralAt(w, rec.x + 5000.5D, 90D, rec.z + 0.5D)
-                && EmbassyAirApiSC.adZoneAt(w, rec.x + 200.5D, rec.z + 0.5D) == rec.id && EmbassyAirApiSC.revision(w) > 0
+                && EmbassyAirApiSC.adZoneAt(w, rec.x + 100.5D, rec.z + 0.5D) == rec.id && EmbassyAirApiSC.revision(w) > 0
                 && EmbassyAirApiSC.isRunwaySurface(w.getBlock(rx, f.floorY, rz), w.getBlockMetadata(rx, f.floorY, rz))
                 && !EmbassyAirApiSC.isRunwaySurface(w.getBlock(rx, f.floorY + 1, rz), w.getBlockMetadata(rx, f.floorY + 1, rz));
         String icao = info == null ? "-" : info.icao + " " + info.numberLow + "/" + info.numberHigh;
+        // ЛП-1: the guns fire over the square (fireHalf) and the corridors only - 200 off the core is the warning ring in every direction,
+        // the fire zone in none but an approach corridor's (at least one of the four is off the corridors)
+        int ringWarn = 0, ringQuiet = 0;
+        StringBuilder ringAt = new StringBuilder();
+        for (int[] d : new int[][]{{200, 0}, {-200, 0}, {0, 200}, {0, -200}}) {
+            double qx = rec.x + d[0] + 0.5D, qz = rec.z + d[1] + 0.5D;
+            int warnId = EmbassyAirApiSC.adWarnZoneAt(w, qx, qz), fireId = EmbassyAirApiSC.adZoneAt(w, qx, qz);
+            ringWarn += warnId == rec.id ? 1 : 0;
+            ringQuiet += fireId == -1 ? 1 : 0;
+            ringAt.append(' ').append(d[0]).append('/').append(d[1]).append(":warn ").append(warnId).append(",fire ").append(fireId);
+        }
+        boolean ring = ringWarn == 4 && ringQuiet >= 1;
+        where &= ring;
+        icao += "; the ring at 200 (fireHalf " + f.fireHalf() + "):" + ringAt + " - warned 4/4, quiet >= 1 " + ring;
         // a FakePlayer is never served
         boolean fakeOff = EmbassyAirApiSC.quote(fake, rec.id, "charge", 1, false) == -EmbassyAirApiSC.PAY_NO_FIELD
                 && EmbassyAirApiSC.pay(fake, rec.id, "charge", 1, false) == EmbassyAirApiSC.PAY_NO_FIELD && !EmbassyAirApiSC.firstLanding(fake, rec.id)
@@ -1070,7 +1087,7 @@ public final class WorldTestAirfieldSC {
         dealer(p, 150);
         NBTTagCompound s = EmbassyAirServerSC.state(p, t);
         boolean addon = EmbassyAirApiSC.hook() != null;                   // the review's: the add-on's hook (0.1.0 registers none), not the mod
-        String want = EmbassyAirfieldSC.icao(rec.nameElement, rec.nameNumber);
+        String want = EmbassyAirfieldSC.icaoShown(reg, rec);                // ЛП-5: the code the tab shows (unique among the fields)
         boolean ok = s != null && s.getInteger("id") == rec.id && s.getInteger("k") == EmbassyAirfieldSC.FULL && want.equals(s.getString("icao"))
                 && s.getInteger("lore") == (addon ? 1 : 0) && s.getBoolean("adm") && s.getInteger("lvl") == com.sc.settle.ReputationSC.ACQUAINTANCE
                 && s.getInteger("pass") == 0 && s.hasKey("rl") && s.hasKey("rh") && s.hasKey("gas");
@@ -1152,7 +1169,7 @@ public final class WorldTestAirfieldSC {
             }
         }
         List<String> oldSaid = old == null ? new ArrayList<String>() : said(p, cmd, err, "airfield", String.valueOf(old.id));
-        String icao = EmbassyAirfieldSC.icao(rec.nameElement, rec.nameNumber);
+        String icao = EmbassyAirfieldSC.icaoShown(reg, rec);                // ЛП-5: the code /scembassy shows
         int airLines = 0, raw = 0;
         boolean share = false;
         List<String> all = new ArrayList<String>(list);

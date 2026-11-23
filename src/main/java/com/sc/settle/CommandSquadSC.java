@@ -14,7 +14,7 @@ import net.minecraftforge.common.util.FakePlayer;
 
 /**
  * ПД-2 (docs/plan-ideas-2026-10-26.md): «/scsquad accept|decline <name>» - the [Принять] / [Отклонить] of a squad invitation (the chat line
- * SquadSC sends after a Credit Chip's click), «/scsquad leave», «/scsquad list». Any player (level 0), never the console. Registered by
+ * SquadSC sends after a Credit Chip's click), «/scsquad leave», «/scsquad list». Any player (level 0); the console / a command block - sc.cmd.playerOnly (ИГ-3). Registered by
  * SCMod.serverStarting (the coordinator's); the body is ПД-2's (SquadSC does the work).
  */
 public class CommandSquadSC extends CommandBase {
@@ -38,12 +38,16 @@ public class CommandSquadSC extends CommandBase {
 
     @Override
     public boolean canCommandSenderUseCommand(ICommandSender sender) {
-        return sender instanceof EntityPlayer;
+        return true;                                            // ИГ-3: the console / a command block get our own answer, not vanilla's
     }
 
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
-        if (!(sender instanceof EntityPlayerMP) || sender instanceof FakePlayer || args == null || args.length == 0) {
+        if (!(sender instanceof EntityPlayerMP) || sender instanceof FakePlayer) {
+            sender.addChatMessage(new ChatComponentTranslation("sc.cmd.playerOnly").setChatStyle(new ChatStyle().setColor(EnumChatFormatting.GRAY)));
+            return;
+        }
+        if (args == null || args.length == 0) {
             usage(sender);
             return;
         }

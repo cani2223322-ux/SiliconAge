@@ -20,6 +20,9 @@ public class TileEntityRelaySC extends TileEntity {
     /** ПД-7 (the review's fix, appended NBT: wave, held, hp): the defence's last wave (-1 none yet), the ticks held, the Relay's HP (-1 full). */
     protected int wave = -1, hp = -1;
     protected long held;
+    /** ПМ-2 А (appended NBT "lost"): a defence set up here was lost (abandoned) - a right click always begins afresh, whatever the crossings'
+     * pauses kept. Old tiles: false (the crossing's pause decides as before). */
+    protected boolean lost;
 
     public int postId() {
         return postId;
@@ -32,7 +35,21 @@ public class TileEntityRelaySC extends TileEntity {
         wave = -1;
         held = 0L;
         hp = -1;
+        lost = false;
         markDirty();
+    }
+
+    /** ПМ-2 А (RelayPostSC): the defence set up here was lost - its saved progress is void. */
+    public void markLost() {
+        if (!lost) {
+            lost = true;
+            markDirty();
+        }
+    }
+
+    /** A defence set up here was lost since its set-up (never resumed). */
+    public boolean lost() {
+        return lost;
     }
 
     /** ПД-7 (RelayPostSC, every step of the defence): how far it got - a restart pauses it here, a right click goes on. */
@@ -91,6 +108,7 @@ public class TileEntityRelaySC extends TileEntity {
         t.setInteger("wave", wave);
         t.setLong("held", held);
         t.setInteger("hp", hp);
+        t.setBoolean("lost", lost);
         nbt.setTag(NBT, t);
     }
 
@@ -104,5 +122,6 @@ public class TileEntityRelaySC extends TileEntity {
         wave = t.hasKey("wave") ? t.getInteger("wave") : -1;
         held = t.getLong("held");
         hp = t.hasKey("hp") ? t.getInteger("hp") : -1;
+        lost = t.getBoolean("lost");
     }
 }

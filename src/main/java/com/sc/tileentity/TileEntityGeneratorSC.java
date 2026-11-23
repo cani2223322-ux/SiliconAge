@@ -989,8 +989,13 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** ОМ-5 (a Data Port's STOP pulse, a PERMIT port losing its signal): the emergency soft stop - the «Allow lighting» latch is the screen's. */
     public void portStop() {
+        portStop(true);
+    }
+
+    /** ГН-1: `pulse` - a STOP port's pulse (kept for the end of a Singular Reactor's compression), else a PERMIT port without its signal. */
+    public void portStop(boolean pulse) {
         if (singular()) {
-            getSingular().portStop();
+            getSingular().portStop(pulse);
             return;
         }
         if (ignited) {

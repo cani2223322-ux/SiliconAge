@@ -499,9 +499,38 @@ public class SingularReactorSC {
         return portStopped;
     }
 
-    /** ОМ-5: a Data Port's emergency stop - the charge / compression cancelled, a running hole eaten (the "Stop" button's); else nothing. */
+    /**
+     * ГН-1: a STOP port's pulse during the compression - the hole starts draining as soon as it is born (saved: "PortStopPend"); the
+     * compression itself is never cut short by a port. Told once per compression (not saved).
+     */
+    private boolean portStopPending, portCompressTold;
+
+    /** ГН-1: a stop asked for during the compression is waiting for the hole to be born. */
+    public boolean isPortStopPending() {
+        return portStopPending;
+    }
+
+    /** ОМ-5: a Data Port's emergency stop (the "Stop" button's) - the charge cancelled, a running hole eaten; else nothing. */
     public void portStop() {
-        if (phase != PHASE_CHARGE && phase != PHASE_COMPRESS && phase != PHASE_RUN) {
+        portStop(true);
+    }
+
+    /**
+     * ГН-1: `pulse` - a STOP port's pulse, else a PERMIT port without its signal. The compression goes on to its end (the capsule, the
+     * deuterium and the charge are spent by then): a pulse is kept, a missing permit is looked at again when the hole is born - then it
+     * starts draining at once.
+     */
+    public void portStop(boolean pulse) {
+        if (phase == PHASE_COMPRESS) {
+            portStopPending |= pulse;
+            if (!portCompressTold) {
+                portCompressTold = true;
+                g.tellNearSC("sc.gen.port.afterCompress");
+            }
+            g.markDirty();
+            return;
+        }
+        if (phase != PHASE_CHARGE && phase != PHASE_RUN) {
             return;
         }
         stop();
@@ -566,6 +595,8 @@ public class SingularReactorSC {
             return false;
         }
         portStopped = false;
+        portStopPending = false;
+        portCompressTold = false;
         phase = PHASE_CHARGE;
         phaseTicks = 0;
         g.markDirty();
@@ -587,6 +618,7 @@ public class SingularReactorSC {
             case PHASE_COMPRESS:
                 returnCharge();
                 phase = PHASE_IDLE;
+                portStopPending = false;
                 break;
             case PHASE_RUN:
                 phase = PHASE_DRAIN;
@@ -700,6 +732,7 @@ public class SingularReactorSC {
             g.tellNearSC(!ready ? "sc.chat.sing.abort.build" : "sc.chat.sing.abort.he");
             returnCharge();
             phase = PHASE_IDLE;
+            portStopPending = false;
             event = EVENT_SOFT;
             g.setStatusSC(GeneratorStatus.SOFT_STOP);
             g.markDirty();
@@ -722,6 +755,13 @@ public class SingularReactorSC {
         g.tellNearSC("sc.chat.sing.born");
         sound("random.explode", 1.2F, 0.3F);
         g.markDirty();
+        if (portStopPending || !g.ignitionAllowedByPorts()) {
+            // ГН-1: a port asked for the stop while it compressed (a STOP pulse kept, or a PERMIT port still without its signal)
+            portStopPending = false;
+            stop();                                                 // RUN -> DRAIN: the hole starts draining at once
+            portStopped = true;
+            g.tellNearSC("sc.gen.port.stopped");
+        }
         return 0;
     }
 
@@ -1316,6 +1356,9 @@ public class SingularReactorSC {
         if (smStored > 0) {
             t.setInteger("SmStored", smStored);
         }
+        if (portStopPending) {
+            t.setBoolean("PortStopPend", true);                     // ГН-1 (old worlds: none waiting)
+        }
         NBTTagCompound mem = new NBTTagCompound();
         for (int i = 0; i < WALL_CELLS; i++) {
             if (portMem[i] != null) {
@@ -1344,6 +1387,7 @@ public class SingularReactorSC {
         dDebt = t.getDouble("DDebt");
         warnedAt = t.hasKey("WarnedAt") ? t.getInteger("WarnedAt") : 100;
         smStored = Math.max(0, Math.min(SM_TANK, t.getInteger("SmStored")));
+        portStopPending = phase == PHASE_COMPRESS && t.getBoolean("PortStopPend");
         NBTTagCompound mem = t.getCompoundTag("PortMem");
         for (int i = 0; i < WALL_CELLS; i++) {
             portMem[i] = mem.hasKey("w" + i) ? mem.getString("w" + i) : null;

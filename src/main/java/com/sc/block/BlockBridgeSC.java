@@ -182,6 +182,21 @@ public class BlockBridgeSC extends Block {
         }
     }
 
+    /** МС-3: an empty bucket / cell, or a tank-in-an-item with nothing in it - it could only take gas out. */
+    private static boolean emptyContainer(ItemStack held) {
+        if (held == null) {
+            return false;
+        }
+        if (net.minecraftforge.fluids.FluidContainerRegistry.isEmptyContainer(held)) {
+            return true;
+        }
+        if (held.getItem() instanceof net.minecraftforge.fluids.IFluidContainerItem) {
+            net.minecraftforge.fluids.FluidStack f = ((net.minecraftforge.fluids.IFluidContainerItem) held.getItem()).getFluid(held);
+            return f == null || f.amount <= 0;
+        }
+        return false;
+    }
+
     @Override
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int side, float hx, float hy, float hz) {
         int meta = world.getBlockMetadata(x, y, z);
@@ -197,6 +212,9 @@ public class BlockBridgeSC extends Block {
                     // МС-2: strangers only pour in (a full bucket / cell) - an empty or tank-like container would drain the tanks
                     player.addChatComponentMessage(new com.sc.bridge.BridgeMsgSC("sc.bridge.refuse.access",
                             ((TileEntityBridgeControllerSC) ct).getOwner()).chat());
+                } else if (ct instanceof TileEntityBridgeControllerSC && !((TileEntityBridgeControllerSC) ct).isGasOut() && emptyContainer(held)) {
+                    // МС-3: «Выдача газов: нет» closes the hand too - say so, not «the output tanks are empty»
+                    player.addChatComponentMessage(new net.minecraft.util.ChatComponentTranslation("sc.bridge.gasout.hand"));
                 } else {
                     com.sc.util.FluidHandSC.use(world, x, y, z, player, (TileEntityBridgeGasPortSC) te, held);
                 }

@@ -16,10 +16,11 @@ import net.minecraftforge.common.BiomeDictionary;
  * <ol>
  * <li>FULL on the side by the seed (EmbassyAirfieldSC.sideOf): the field's level rectangles (Field.level) + 16 and each end's approach out
  * to FUNNEL_A + 150 (300 past the threshold) along the axis, FUNNEL_HALF + 5 across: no OCEAN, BEACH, SWAMP, MOUNTAIN type; rootHeight
- * under EmbassySiteSC.EDGE_ROOT; HILLS at most EDGE_PCT %; heightVariation under SHATTERED_VAR; in an approach FOREST at most
- * APPROACH_FOREST_PCT % (the review's: an approach may cross water and hold APPROACH_HILLS_PCT % of hills). An end whose approach fails - or whose funnel's chunks lie on disk already (EmbassySiteSC.chunkOnDisk, as
- * explored(): its growth could not be cleared) - has no ILS (its bit off: a visual approach only); both ends failing the biome rules -
- * no FULL on that side;</li>
+ * under EmbassySiteSC.EDGE_ROOT; HILLS at most EDGE_PCT %; heightVariation under SHATTERED_VAR (the review's: an approach may cross
+ * water and hold APPROACH_HILLS_PCT % of hills; ЛП-3 of the audit 2026-11-04: its FOREST forbids nothing - an ILS end's long funnel
+ * clears it, ЛП-2). An end whose approach fails - or whose hilly land stands over its 1:20 plane (ЛП-2: pierces), or whose funnel's
+ * chunks lie on disk already (EmbassySiteSC.chunkOnDisk, as explored(): its growth could not be cleared) - has no ILS (its bit off: a
+ * visual approach only); both ends failing the biome rules - no FULL on that side;</li>
  * <li>FULL on the other side (the same rules);</li>
  * <li>SHORT - inside today's level disc (always fits the land the embassy got): a runway 90 x 7, the helipad;</li>
  * <li>HELI - never needed by the rules above (SHORT always fits); kept for a later rule.</li>
@@ -39,8 +40,18 @@ import net.minecraftforge.common.BiomeDictionary;
  */
 public final class EmbassyAirSiteSC {
 
-    /** An approach may hold this much FOREST (the trees over the glide path past a = +-FUNNEL_A). TODO(balance) */
-    public static final int APPROACH_FOREST_PCT = 30;
+    /**
+     * An approach may hold this much FOREST (%; -1: any). ЛП-3 of the audit 2026-11-04 (the user's choice Б, with ЛП-2 А): the forest
+     * never forbids FULL - an ILS end's funnel clears its growth over the glide path out to FUNNEL_ILS_OUT past the threshold, the
+     * forest under it does not matter (an end whose funnel is on disk already loses its ILS, as before).
+     */
+    public static final int APPROACH_FOREST_PCT = -1;
+    /**
+     * ЛП-2 (the audit 2026-11-04): a hilly sample (F_HILLY) of an approach's corridor stands over the 1:FUNNEL_SLOPE plane from its
+     * threshold - that end has no ILS (pierces): its land's top is guessed from the biome's heights, FLOOR_BASE + FLOOR_K x
+     * (rootHeight + PIERCE_VAR x heightVariation) (EmbassyLayoutSC's floor rule, the hills' variation on top). TODO(balance)
+     */
+    public static final float PIERCE_VAR = 1.0F;
     /** The approach's check reaches this far past the threshold (the neutral corridor's length). */
     public static final int APPROACH_OUT = EmbassyAirfieldSC.NEUTRAL_OUT;
     /** The level rectangles' check reaches this far past them (EmbassySiteSC.BAND_NEAR: the blend band's land must not stand as a wall). */
@@ -58,8 +69,14 @@ public final class EmbassyAirSiteSC {
 
     /** A sample's facts (flags): water (OCEAN, BEACH, SWAMP), MOUNTAIN, a plateau, shattered land, hilly, FOREST. */
     public static final int F_WATER = 1, F_MOUNTAIN = 2, F_HIGH = 4, F_SHATTERED = 8, F_HILLY = 16, F_FOREST = 32;
-    /** A tally's counts (count): the samples, then one count a flag in F_*'s order. */
-    public static final int T_SAMPLES = 0, T_WATER = 1, T_MOUNTAIN = 2, T_HIGH = 3, T_SHATTERED = 4, T_HILLY = 5, T_FOREST = 6, T_SIZE = 7;
+    /** The flags' count (F_*). */
+    public static final int F_COUNT = 6;
+    /**
+     * A tally's counts (count): the samples, then one count a flag in F_*'s order; T_PIERCED (ЛП-2) - an approach's hilly samples over
+     * its 1:20 plane (approachTally only; pierces).
+     */
+    public static final int T_SAMPLES = 0, T_WATER = 1, T_MOUNTAIN = 2, T_HIGH = 3, T_SHATTERED = 4, T_HILLY = 5, T_FOREST = 6, T_PIERCED = 7,
+            T_SIZE = 8;
     /** The ends (Field.approaches / funnels index; EmbassyAirfieldSC.ILS_LOW / ILS_HIGH): the -a end's, the +a end's. */
     public static final int END_LOW = 0, END_HIGH = 1;
 
@@ -94,14 +111,17 @@ public final class EmbassyAirSiteSC {
             if (levelProblem(levelTally(m, f)) != null) {
                 continue;                                       // the field's own ground doesn't fit: no FULL on this side
             }
-            boolean low = approachProblem(approachTally(m, f, END_LOW)) == null;
-            boolean high = approachProblem(approachTally(m, f, END_HIGH)) == null;
+            int[] tl = approachTally(m, f, END_LOW), th = approachTally(m, f, END_HIGH);
+            boolean low = approachProblem(tl) == null;
+            boolean high = approachProblem(th) == null;
             if (!fullFits(true, low, high)) {
                 continue;                                       // both approaches bad: no FULL on this side
             }
-            boolean lowDisk = low && ws != null && funnelOnDisk(ws, f, END_LOW);
-            boolean highDisk = high && ws != null && funnelOnDisk(ws, f, END_HIGH);
-            return new int[]{EmbassyAirfieldSC.FULL, f.side, fullIls(low, high, lowDisk, highDisk)};
+            // ЛП-2: a hill over an end's 1:20 plane takes its ILS (the long funnel clears growth, never the land); ЛП-3: the forest - nothing
+            boolean lowIls = low && ilsProblem(tl) == null, highIls = high && ilsProblem(th) == null;
+            boolean lowDisk = lowIls && ws != null && funnelOnDisk(ws, f, END_LOW);
+            boolean highDisk = highIls && ws != null && funnelOnDisk(ws, f, END_HIGH);
+            return new int[]{EmbassyAirfieldSC.FULL, f.side, fullIls(lowIls, highIls, lowDisk, highDisk)};
         }
         return new int[]{EmbassyAirfieldSC.SHORT, first, 0};
     }
@@ -160,7 +180,7 @@ public final class EmbassyAirSiteSC {
     /** One sample of facts `flags` into tally `t`. Pure. */
     public static void count(int[] t, int flags) {
         t[T_SAMPLES]++;
-        for (int i = 0; i < T_SIZE - 1; i++) {
+        for (int i = 0; i < F_COUNT; i++) {
             t[T_WATER + i] += (flags & (1 << i)) != 0 ? 1 : 0;
         }
     }
@@ -170,9 +190,33 @@ public final class EmbassyAirSiteSC {
         return problem(t, true, LEVEL_HILLS_PCT, -1);
     }
 
-    /** What breaks the rules of an approach's tally (null: it fits): the level rules and FOREST at most APPROACH_FOREST_PCT %. Pure. */
+    /**
+     * What breaks the rules of an approach's tally (null: it fits - FULL may stand with this end): the level rules, water allowed, hills at
+     * most APPROACH_HILLS_PCT % (ЛП-3: the forest no more - APPROACH_FOREST_PCT -1). Pure.
+     */
     public static String approachProblem(int[] t) {
         return problem(t, !APPROACH_WATER, APPROACH_HILLS_PCT, APPROACH_FOREST_PCT);
+    }
+
+    /**
+     * ЛП-2: what takes a fitting approach's ILS away (null: none) - a hill over its 1:20 plane (T_PIERCED: the long funnel clears only
+     * growth, never the land). Pure.
+     */
+    public static String ilsProblem(int[] t) {
+        return t.length > T_PIERCED && t[T_PIERCED] > 0 ? "hills over the 1:" + EmbassyAirfieldSC.FUNNEL_SLOPE + " plane x" + t[T_PIERCED] : null;
+    }
+
+    /**
+     * ЛП-2: a sample of facts `flags` and heights (`rootHeight`, `heightVariation`) `dist` blocks past the threshold (along the axis) stands
+     * over the 1:FUNNEL_SLOPE plane from a floor at `floorY`: hilly only (the plains' and the forests' few blocks stay under it - the
+     * plane is 2 and more over the floor past the level shape), its top guessed as the class comment of PIERCE_VAR says. Pure.
+     */
+    public static boolean pierces(int flags, float rootHeight, float heightVariation, int floorY, int dist) {
+        if ((flags & F_HILLY) == 0) {
+            return false;
+        }
+        double top = EmbassyLayoutSC.FLOOR_BASE + EmbassyLayoutSC.FLOOR_K * (rootHeight + PIERCE_VAR * heightVariation);
+        return top > floorY + Math.max(0, dist) / (double) EmbassyAirfieldSC.FUNNEL_SLOPE;
     }
 
     /** A tally against the rules: no water (`noWater`), mountain, plateau or shattered sample; hilly at most `hillsPct` %, FOREST `forestPct` % (-1: any). */
@@ -221,19 +265,22 @@ public final class EmbassyAirSiteSC {
         for (int i = 0; i < boxes.length; i++) {
             boxes[i] = f.world(EmbassyAirfieldSC.grow(f.level[i], LEVEL_MARGIN));
         }
-        return read(m, f, boxes, f.radius + EmbassyLayoutSC.LEVEL_OUT - EmbassySiteSC.EDGE_IN, false);
+        return read(m, f, boxes, f.radius + EmbassyLayoutSC.LEVEL_OUT - EmbassySiteSC.EDGE_IN, false, -1);
     }
 
-    /** The tally of field `f`'s approach `end` (END_LOW / END_HIGH: Field.approaches), off its level shape. Server thread. */
+    /**
+     * The tally of field `f`'s approach `end` (END_LOW / END_HIGH: Field.approaches), off its level shape - with T_PIERCED (ЛП-2: its
+     * hilly samples over the 1:20 plane from that end's threshold). Server thread.
+     */
     public static int[] approachTally(WorldChunkManager m, EmbassyAirfieldSC.Field f, int end) {
-        return read(m, f, new int[][]{f.world(f.approaches[end])}, 0, true);
+        return read(m, f, new int[][]{f.world(f.approaches[end])}, 0, true, end);
     }
 
     /**
      * The samples of the world boxes `boxes` ({minX, minZ, maxX, maxZ}) - one read of their union - into a tally: past `rim` from the
-     * core (0: every one), off the level shape (`offShape`). Server thread.
+     * core (0: every one), off the level shape (`offShape`); `end` >= 0 - T_PIERCED counted against that end's plane. Server thread.
      */
-    private static int[] read(WorldChunkManager m, EmbassyAirfieldSC.Field f, int[][] boxes, int rim, boolean offShape) {
+    private static int[] read(WorldChunkManager m, EmbassyAirfieldSC.Field f, int[][] boxes, int rim, boolean offShape, int end) {
         int[] t = tally();
         if (boxes.length == 0) {
             return t;
@@ -259,7 +306,12 @@ public final class EmbassyAirSiteSC {
                 if (rim > 0 && dx * dx + dz * dz < rim2 || offShape && f.onShape(x, z)) {
                     continue;
                 }
-                count(t, flagsOf(g));
+                int fl = flagsOf(g);
+                count(t, fl);
+                if (end >= 0) {
+                    int a = f.frame(x, z)[0], dist = end == END_LOW ? f.thresholdLow - a : a - f.thresholdHigh;
+                    t[T_PIERCED] += pierces(fl, g.rootHeight, g.heightVariation, f.floorY, dist) ? 1 : 0;
+                }
             }
         }
         return t;

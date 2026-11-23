@@ -32,7 +32,7 @@ import net.minecraftforge.common.util.FakePlayer;
  * hook (no add-on, or one that registers none - 0.1.0; «Поле законсервировано, бортов с Пробоя не было», «Связи с бортами нет со времён
  * Пробоя») / 1 - with it («Поле открыто для машин
  * зелёного мира»), adm: the player admitted by the air defence, lvl: his level, pass: his 7700 pass state (0 none today, 1 running, 2 used),
- * book: his «Лётная книжка» here (landed), gas: the column's armour gases price a 4 000 mB and the mB left today, rows: the hook's lines
+ * book: his «Лётная книжка» here (landed), gas: the column's armour gases price of the whole volume left today (ЛП-4) and the mB left, rows: the hook's lines
  * as IChatComponent JSON (IChatComponent.Serializer, at most EmbassyAirApiSC.TAB_ROWS), atis: the hook's ATIS line JSON (or none), act:
  * the hook's action button shown}; AIR_RESULT {tuner, ok, key: a lang key, args} after an AIR_DO. AIR_DO {act} - the hook's
  * tabAction(p, field, act); AIR_REFRESH {} - the state again. Never sent to a FakePlayer (SettleNetSC.send).
@@ -40,7 +40,7 @@ import net.minecraftforge.common.util.FakePlayer;
  * Fixed (the coordinator's): the class, the signatures, the message kinds. The bodies are package T's.
  * <p>
  * T's details: AIR_STATE also carries n (the embassy's name code - NpcNamesSC.code: the tab's «Лётное поле „Тантал-1“»), pt (a running
- * pass's ticks left - the screen counts them down and asks again at 0), gas {p: chips a UNIT, l: mB left today, u: the UNIT, d: the day's
+ * pass's ticks left - the screen counts them down and asks again at 0), gas {p: chips for v mB (ЛП-4: the whole volume left today), v, l: mB left today, u: the UNIT, d: the day's
  * cap, c: EmbassyAirRulesSC.refusal of a single mB now - PAY_LEVEL: the column serves from «Знакомый», PAY_LIMIT: the day's cap reached,
  * m: the level it serves from}, and the numbers its lines quote (ad: the zone's radius, ws: the warning's seconds, ps: a pass's seconds,
  * al: the level that admits, bc / bt: the logbook's chips and «Доверие»). rows / atis are the hook's for a real player only (the world
@@ -143,7 +143,7 @@ public final class EmbassyAirServerSC {
         n.setInteger("id", s.id);
         n.setInteger("n", NpcNamesSC.code(s.nameElement, s.nameNumber));
         n.setByte("k", (byte) f.kind);
-        n.setString("icao", f.icao == null ? "" : f.icao);
+        n.setString("icao", EmbassyAirfieldSC.icaoShown(reg, s));        // ЛП-5: unique the add-on's way (computed, never saved)
         n.setString("rl", f.numberLow == null ? "" : f.numberLow);
         n.setString("rh", f.numberHigh == null ? "" : f.numberHigh);
         n.setByte("lore", (byte) (EmbassyAirApiSC.hook() != null ? 1 : 0));    // the review's: its hook (add-on 0.1.0 registers none)
@@ -159,6 +159,7 @@ public final class EmbassyAirServerSC {
         n.setBoolean("book", EmbassyAirServiceSC.landed(rec, s.id));
         n.setTag("gas", gas(s, l, level, enemy, today));
         n.setInteger("ad", EmbassyAirRulesSC.AD_RADIUS);
+        n.setInteger("af", f.adFireHalf);                       // ЛП-1: the guns fire over this square (and the corridors) only
         n.setInteger("ws", EmbassyAirRulesSC.WARN_SECONDS);
         n.setInteger("ps", EmbassyAirRulesSC.PASS_SECONDS);
         n.setByte("al", (byte) EmbassyAirRulesSC.ADMIT_LEVEL);
@@ -174,13 +175,19 @@ public final class EmbassyAirServerSC {
         return n;
     }
 
-    /** The core's column (§7.2): a UNIT of the armour's gases priced for this player, the mB left today, why it would refuse now. */
+    /**
+     * The core's column (§7.2): the armour's gases priced for this player - ЛП-4 of the audit 2026-11-04: the price of the whole volume
+     * left today ("v" mB, "p" chips: the column rounds once over the whole fill, as here - a UNIT's price x 4 would say more), the mB left
+     * today, why it would refuse now (PAY_ENEMY - the tab's own line).
+     */
     private static NBTTagCompound gas(SettlementRegistrySC.Settlement s, SettlementRegistrySC.LocalRec l, int level, boolean enemy, long today) {
         int sv = EmbassyAirRulesSC.S_ARMOUR_GAS, unit = EmbassyAirRulesSC.UNIT[sv], cap = EmbassyAirRulesSC.PER_DAY[sv];
         int used = l == null || l.day != today ? 0 : l.count(EmbassyAirRulesSC.COUNT_PREFIX + EmbassyAirRulesSC.SERVICE_KEYS[sv]);
+        int left = cap > 0 ? Math.max(0, cap - used) : -1, volume = left >= 0 ? left : unit;
         NBTTagCompound g = new NBTTagCompound();
-        g.setInteger("p", EmbassyAirRulesSC.price(sv, level, s.seed, unit, false));
-        g.setInteger("l", cap > 0 ? Math.max(0, cap - used) : -1);
+        g.setInteger("p", EmbassyAirRulesSC.price(sv, level, s.seed, volume, false));
+        g.setInteger("v", volume);
+        g.setInteger("l", left);
         g.setInteger("u", unit);
         g.setInteger("d", cap);
         g.setByte("c", (byte) EmbassyAirRulesSC.refusal(sv, level, enemy, 1, used));

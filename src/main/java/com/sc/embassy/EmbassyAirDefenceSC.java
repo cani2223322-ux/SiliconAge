@@ -32,7 +32,9 @@ import net.minecraftforge.common.util.FakePlayer;
  * after it today: PASS_USED;</li>
  * <li><b>the warning</b> (the review's): one a player an embassy a game day (LocalRec.extra LEDGER "X" {w: its day, e: the world time
  * its WARN_SECONDS end}) - back into the zone after it, the same day: no new seconds, the fire at once (requestWarn);</li>
- * <li><b>a player's base</b> (the review's): no fire over it (EmbassyAirfieldSC.playerBaseAt) - holdFire, EmbassyAirApiSC.adZoneAt.</li>
+ * <li><b>a player's base</b> (the review's): no fire over it (EmbassyAirfieldSC.playerBaseAt) - holdFire, EmbassyAirApiSC.adZoneAt;</li>
+ * <li><b>where</b> (ЛП-1 of the audit 2026-11-04): the guns fire only over the embassy's square and its approach corridors
+ * (EmbassyAirfieldSC.Field.inFireZone - adZoneAt); the rest of the AD_RADIUS circle only hears AD_NEAR (adWarnZoneAt).</li>
  * </ul>
  * The chat lines (EmbassyAirApiSC.AD_*) are the core's lang (sc.airfield.ad.<AD_KEYS>): the add-on shows the same text in its radio.
  */
@@ -42,7 +44,9 @@ public final class EmbassyAirDefenceSC {
     public static final int PASS_GRANTED = 0, PASS_RUNNING = 1, PASS_USED = 2, PASS_NO_FIELD = 3, PASS_ADMITTED = 4;
     /** The chat lines (EmbassyAirApiSC.AD_* - the same numbers; append only) and their lang keys sc.airfield.ad.<key>. */
     public static final int AD_WARN = 0, AD_FIRE = 1, AD_PASS = 2, AD_PASS_USED = 3, AD_PASS_OVER = 4, AD_LEFT = 5;
-    public static final String[] AD_KEYS = {"warn", "fire", "pass", "passUsed", "passOver", "left"};
+    /** ЛП-1 (the audit 2026-11-04): «вы приближаетесь к зоне ПВО» - in the circle (EmbassyAirApiSC.adWarnZoneAt), not yet where the guns fire. */
+    public static final int AD_NEAR = 6;
+    public static final String[] AD_KEYS = {"warn", "fire", "pass", "passUsed", "passOver", "left", "near"};
 
     private EmbassyAirDefenceSC() {
     }

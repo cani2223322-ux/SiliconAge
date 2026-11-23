@@ -238,7 +238,9 @@ final class BookEmbassySC {
         // the embassy's air defence (ЛП-9, ЛП-13..ЛП-15): the zone, the admission, the warning, the cover, 7700
         String admit = BookWorldSC.levelName(EmbassyAirRulesSC.ADMIT_LEVEL);
         e.add(BookEl.head(Lang.tr(k + ".adhead"), gun));
-        e.addAll(BookContent.paras(k + ".ad", new Object[]{EmbassyAirfieldSC.AA_POSTS, EmbassyAirRulesSC.AD_RADIUS, admit},
+        // ЛП-1 (the audit 2026-11-04): the 4th - the square the guns fire over (the widest embassy's: REACH_MAX + the margin, 145)
+        e.addAll(BookContent.paras(k + ".ad", new Object[]{EmbassyAirfieldSC.AA_POSTS, EmbassyAirRulesSC.AD_RADIUS, admit,
+                com.sc.embassy.EmbassyLayoutSC.REACH_MAX + EmbassyAirRulesSC.AD_FIRE_MARGIN},
                 new Object[]{EmbassyAirRulesSC.WARN_SECONDS, EmbassyAirRulesSC.ESCORT_RANGE}, new Object[]{admit},
                 new Object[]{EmbassyAirRulesSC.PASS_SECONDS}));
         e.add(BookEl.item(gun, name(gun, "tile.siliconage.showcase2.aaPost.name"), Lang.tr(k + ".aapost")));

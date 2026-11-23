@@ -1928,6 +1928,16 @@ public final class BookContent {
 
     /** A block of prose stored as key.1, key.2, ... */
     /** ОМ-1: a multiplier as the handbook writes it («2», «1,5», «0,5» - the client's decimal mark). */
+    /** EU in millions to one decimal: 200000000 - "200", 6600000 - "6.6" ("6,6" in Russian). */
+    static String millions(double eu) {
+        return number(Math.round(eu / 100000D) / 10F);
+    }
+
+    /** A number to one decimal: 10 - "10", 2.5 - "2.5" ("2,5" in Russian). */
+    static String tenths(float v) {
+        return number(Math.round(v * 10F) / 10F);
+    }
+
     static String multiplier(float m) {
         String s = m == Math.round(m) ? String.valueOf(Math.round(m)) : String.valueOf(m);
         String mark = Lang.trOr("sc.num.decimal", ".");
@@ -2075,7 +2085,8 @@ public final class BookContent {
         parts.add(space);
         parts.add(coord);
         parts.add(link);
-        b.add(BookEl.title(Lang.tr("sc.manual.bridge.title"))).add(BookEl.items(parts)).addAll(paras("sc.manual.bridge.about"));
+        b.add(BookEl.title(Lang.tr("sc.manual.bridge.title"))).add(BookEl.items(parts)).addAll(paras("sc.manual.bridge.about"))
+                .add(BookEl.para(Lang.tr("sc.manual.bridge.blastproof")));   // МС-5
         b.add(BookEl.head(Lang.tr("sc.manual.bridge.groundhead"))).add(BookEl.image("bridge_ground", 300, 194))
                 .add(BookEl.layers(bridgeLayers(5), new String[]{Lang.tr("sc.manual.bridge.front")}))
                 .addAll(paras("sc.manual.bridge.ground", null, null, new Object[]{com.sc.bridge.BridgeStructureSC.SIDE_CLEAR, BridgeMathSC.MAX_STABILISERS,
@@ -2098,19 +2109,29 @@ public final class BookContent {
         BridgeMathSC.Cost g = BridgeMathSC.cost(BridgeMathSC.GROUND, new long[]{0}, false, false, 0);
         BridgeMathSC.Cost s = BridgeMathSC.cost(BridgeMathSC.SPACE, new long[]{0}, false, false, 0);
         BridgeMathSC.Cost sa = BridgeMathSC.cost(BridgeMathSC.SPACE, new long[]{0}, false, true, 0);
+        // МС-2: the server's bridge.costMultiplier (synced to the client), as the controller's plan scales it
+        float costMul = com.sc.util.ConfigSC.bridgeCostMultiplier;
+        com.sc.tileentity.TileEntityBridgeControllerSC.scaleCost(g, costMul);
+        com.sc.tileentity.TileEntityBridgeControllerSC.scaleCost(s, costMul);
+        com.sc.tileentity.TileEntityBridgeControllerSC.scaleCost(sa, costMul);
         BookEl t = BookEl.table("", Lang.tr("sc.manual.bridge.t.ground"), Lang.tr("sc.manual.bridge.t.space"));
         String m = Lang.tr("sc.bridge.unit.m");
-        t.row(null, Lang.tr("sc.manual.bridge.t.burst"), Lang.tr("sc.manual.bridge.t.burstg", g.eu / 1000000, BridgeMathSC.GROUND_PER_1000 / 1000000),
-                Lang.tr("sc.manual.bridge.t.bursts", sa.eu / 1000000, s.eu / 1000000));
-        t.row(null, Lang.tr("sc.bridge.res.gas.singular_matter"), Lang.tr("sc.manual.bridge.t.smg", g.sm), Lang.tr("sc.manual.bridge.t.sms", s.sm, sa.sm));
+        t.row(null, Lang.tr("sc.manual.bridge.t.burst"), Lang.tr("sc.manual.bridge.t.burstg", millions(g.eu), millions(BridgeMathSC.GROUND_PER_1000 * (double) costMul)),
+                Lang.tr("sc.manual.bridge.t.bursts", millions(sa.eu), millions(s.eu)));
+        t.row(null, Lang.tr("sc.bridge.res.gas.singular_matter"), Lang.tr("sc.manual.bridge.t.smg", g.sm, tenths(10 * costMul)),
+                Lang.tr("sc.manual.bridge.t.sms", s.sm, sa.sm));
         t.row(null, Lang.tr("sc.bridge.res.gas.deuterium"), String.valueOf(g.d), String.valueOf(s.d));
-        t.row(null, Lang.tr("sc.bridge.res.gas.krypton"), Lang.tr("sc.manual.bridge.t.krg", g.kr), Lang.tr("sc.manual.bridge.t.krs", s.kr, sa.kr));
+        t.row(null, Lang.tr("sc.bridge.res.gas.krypton"), Lang.tr("sc.manual.bridge.t.krg", g.kr, tenths(5 * costMul)),
+                Lang.tr("sc.manual.bridge.t.krs", s.kr, sa.kr));
         t.row(null, Lang.tr("sc.bridge.res.gas.argon"), String.valueOf(g.ar), String.valueOf(s.ar));
         t.row(null, Lang.tr("sc.manual.bridge.t.hold"), BridgeMathSC.group(g.holdEu) + " EU/t", BridgeMathSC.group(s.holdEu) + " EU/t");
         t.row(null, Lang.tr("sc.manual.bridge.t.gases"), Lang.tr("sc.manual.bridge.t.gasesg", g.heSec, g.arSec), Lang.tr("sc.manual.bridge.t.gasess", s.heSec, s.arSec, s.d2oSec));
         t.row(null, Lang.tr("sc.manual.bridge.t.life"), Lang.tr("sc.manual.bridge.t.lifev", g.lifeTicks / 20, g.lifeTicks / 10),
                 Lang.tr("sc.manual.bridge.t.lifev", s.lifeTicks / 20, s.lifeTicks / 10));
         r.add(t);
+        if (costMul != 1F) {
+            r.add(BookEl.dim(Lang.tr("sc.manual.bridge.t.mul", BookWorldSC.multiplier(costMul))));
+        }
         StringBuilder tanks = new StringBuilder();
         for (int i = 0; i < BridgeMathSC.GASES.length; i++) {
             tanks.append(i > 0 ? ", " : "").append(Lang.tr("sc.bridge.res.gas." + BridgeMathSC.GASES[i].key())).append(' ')

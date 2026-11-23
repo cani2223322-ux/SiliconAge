@@ -85,7 +85,7 @@ public final class ModRecipesIdeasSC {
     public static final float OM2_TANTALUM_CHANCE = 0.25F;
     /** ОМ-2: the argon out of one Plasma Condensate (mB). */
     public static final int OM2_ARGON = 500;
-    /** ОМ-3 (TODO(balance)): the Chemical Reactor 4 Zirconium Dust + 500 mB chlorine -> 500 mB chlorides, 300 ticks; the Refinery 4000 mB
+    /** ОМ-3 (МШ-5, audit 2026-11-04: the price confirmed - hafnium is a rare material): the Chemical Reactor 4 Zirconium Dust + 500 mB chlorine -> 500 mB chlorides, 300 ticks; the Refinery 4000 mB
      * chlorides -> 8 Zirconium Dust, a small pile of hafnium, 2000 mB chlorine, 1200 ticks. */
     public static final int OM3_ZR_IN = 4, OM3_CL_IN = 500, OM3_CHLORIDES = 500, OM3_REACTOR_TICKS = 300, OM3_SPLIT = 4000, OM3_ZR_OUT = 8,
             OM3_CL_OUT = 2000, OM3_REFINERY_TICKS = 1200;
@@ -134,7 +134,7 @@ public final class ModRecipesIdeasSC {
     }
 
     /**
-     * ОМ-3: hafnium out of spare zirconium (TODO(balance)) - the Chemical Reactor (MV): 4 Zirconium Dust + 500 mB chlorine -> 500 mB of the
+     * ОМ-3: hafnium out of spare zirconium (the price confirmed, МШ-5 of audit 2026-11-04) - the Chemical Reactor (MV): 4 Zirconium Dust + 500 mB chlorine -> 500 mB of the
      * chlorides (zrcl4, corrosive - PTFE pipes); the Refinery (HV): 4000 mB of chlorides -> 8 Zirconium Dust, a small pile of Hafnium Dust,
      * 2000 mB chlorine. Net: 24 Zirconium Dust and 2000 mB chlorine a small pile - slower than the Metallurgist's.
      */
@@ -190,7 +190,7 @@ public final class ModRecipesIdeasSC {
         if (chamber != null) {
             RecipeRegistry.register(new MachineRecipe(MachineType.UPGRADE_STATION_EV, new ItemStack[]{new ItemStack(ModItems.TOOLS.get(SCToolType.PHOTOMASK)),
                     n(ModItems.ingot.stackOf(com.sc.util.Material.TUNGSTEN), 4), new ItemStack(chamber, 2)},      // 3 slots (TileEntityMachineSC.INPUT_SLOTS)
-                    null, null, new ItemStack[]{mask}, null, null, OM4_STATION_TICKS, 0f));
+                    null, null, new ItemStack[]{mask}, null, null, OM4_STATION_TICKS, 0f).freshTools());   // МШ-4: an unworn photomask only
         }
         if (ModFluids.krypton != null) {
             RecipeRegistry.register(new MachineRecipe(MachineType.EUV_LITHOGRAPH, new ItemStack[]{si(com.sc.util.SiliconMaterial.METALLIZED_WAFER, 1), mask.copy()},

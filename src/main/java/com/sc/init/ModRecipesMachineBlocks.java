@@ -119,15 +119,17 @@ public final class ModRecipesMachineBlocks {
     }
 
     /**
-     * QV, ОМ-4 (TODO(balance): not in the plan - provisional, the user decides): the EUV Lithograph - the EV Stepper
-     * wrapped in quantum cable, Controllers and focusing lenses. No Processor (the Lithograph makes them - a loop) and
-     * no EUV mask (a worn tool, a shaped recipe would eat it whole).
+     * QV, ОМ-4 (МШ-3, audit 2026-11-04, the user's choice Б: dearer, as the other QV blocks): the EUV Lithograph - the EV Stepper
+     * wrapped in quantum cable, Controllers and focusing lenses, on the IV-QV transformer (the QV blocks' mark) between two
+     * W-Ti plates. No Processor (the Lithograph makes them - a loop) and no EUV mask (a worn tool, a shaped recipe would eat it whole).
      */
     private static void registerQV() {
         OreRecipes.shaped(block(MachineType.EUV_LITHOGRAPH), new Object[]{
-                "QKQ", "LXL", "QKQ",
+                "QKQ", "LXL", "WTW",
                 'Q', cable(CableType.QUANTUM), 'K', ModItems.siliconMaterial.stackOf(SiliconMaterial.CONTROLLER),
-                'L', new ItemStack(ModItems.component("focusLens")), 'X', block(MachineType.STEPPER_EV)});
+                'L', new ItemStack(ModItems.component("focusLens")), 'X', block(MachineType.STEPPER_EV),
+                'W', new ItemStack(ModItems.component("wTiPlate")),
+                'T', new ItemStack(ModBlocks.transformerSC, 1, 4)});           // IV-QV (the transformer's meta is its low tier)
     }
 
     /**

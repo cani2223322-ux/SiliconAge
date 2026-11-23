@@ -65,6 +65,7 @@ public class EntityLinemanSC extends EntityArmoredMobSC implements IFactionLootS
         tasks.addTask(7, new EntityAILookIdle(this));
         targetTasks.addTask(1, new EntityAIHurtByTarget(this, true));      // the pair answers together
         targetTasks.addTask(2, new EntityAINearestAttackableTarget(this, EntityPlayer.class, 0, true));
+        targetTasks.addTask(3, new com.sc.mob.ai.EntityAITargetGathererSC(this, com.sc.settle.GathererSC.MOB_REACH));   // МБ-1 А
     }
 
     @Override

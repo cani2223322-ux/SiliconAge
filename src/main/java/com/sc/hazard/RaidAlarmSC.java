@@ -20,13 +20,21 @@ import net.minecraftforge.common.util.FakePlayer;
  * .OUT_ALARM): «Тревога» from «Знакомый» (one a player every ALARM_DAYS), «Тяжёлая ночь» from «Свой» (every HEAVY_DAYS: a fourth wave -
  * the Exo Executioner and a Commander Trooper -, the reward x HEAVY_MUL). The DEPOSIT is paid as the deal; the raid begins the first
  * night the buyer defends that settlement (RaidSC.checks - no roll, no cooldown of the settlement's); won - the deposit back with the
- * usual reward (to the buyer by UUID even if he died in it or stepped off: returnDeposit, owed until his respawn / login); lost - the deposit burns and the trade closes for a day (as any lost raid). After the fight a summary line: the waves,
+ * usual reward (to the buyer by UUID even if he died in it or stepped off: returnDeposit, owed until his respawn / login); lost - the deposit burns
+ * and the buyer's own cooldown of the kind grows a day (ПС-2: the settlement's trade stays open - a called raid closes it for nobody).
+ * After the fight a summary line: the waves,
  * the time, how many raiders each defender killed. Kept: the settlement's pending call (Settlement.extra EXTRA {by: UUID, k: KIND_*, d:
  * the day it was called}) and the player's last days (PlayerRec.extra EXTRA {a: alarm day, h: heavy day}).
  * <p>
  * «Тяжёлая ночь» is sold only where a Captain serves (SettlementSizeSC.captain: a City always, a Settlement by its seed) - R_CAPTAIN;
  * never at an embassy or a relay post (R_SIZE). While a call waits, the same deal's line at that Elder takes it back (cancel: the
- * deposit back, the player's day kept - no calling twice in a row by it). The call has no term: it waits for its night.
+ * deposit back, the player's day kept - no calling twice in a row by it).
+ * <p>
+ * ПС-1: the call waits TERM_DAYS days at most (from its day DAY): then it is taken off, the deposit back to the buyer (now, or owed till
+ * his login - OWED_EXPIRED) with sc.alarm.expired. ПС-3: a begun call stays at the settlement marked RUN («the raid is on») until its raid
+ * ends (RaidRunSC.endCall); a RUN mark without a raid in memory (the server stopped mid-raid) - the call waits again, its deposit in it,
+ * its term from that day (maintain). ПС-4: a called raid called off (no room at the gate, Peaceful) - its own line sc.raid.deposit.void.
+ * The saves' format: old calls / owed deposits read as before; RUN, OWED_VOID, OWED_EXPIRED are new keys beside the old ones.
  * <p>
  * Fixed (the coordinator's): the class, the kinds, the keys, the numbers' names, the signatures. Bodies and TODO(balance) - ПД-3's.
  */
@@ -37,6 +45,13 @@ public final class RaidAlarmSC {
     public static final String EXTRA = "A", BY = "by", KIND = "k", DAY = "d", LAST_ALARM = "a", LAST_HEAVY = "h";
     /** ПД-3 (the review's fix, appended): PlayerRec.extra EXTRA - the deposits owed to a buyer not online and alive at his raid's win. */
     public static final String OWED = "o";
+    /** ПС-3: Settlement.extra EXTRA - the call's raid has begun (kept till it ends). ПС-4 / ПС-1: PlayerRec.extra EXTRA - the deposits owed of
+     *  called raids called off, of calls expired (each paid with its own line). */
+    public static final String RUN = "run", OWED_VOID = "ov", OWED_EXPIRED = "ox";
+    /** ПС-1: the days a call waits for its night at most. TODO(balance) */
+    public static final int TERM_DAYS = 3;
+    /** returnDeposit's reasons: a raid won, called off, a call expired. */
+    public static final int BACK_WON = 0, BACK_VOID = 1, BACK_EXPIRED = 2;
     /** The deposit (Credit Chips); the days between two calls of a player; the heavy night's reward multiplier. TODO(balance) */
     public static final int DEPOSIT = 8, ALARM_DAYS = 2, HEAVY_DAYS = 3;
     public static final float HEAVY_MUL = 1.5F;
@@ -60,6 +75,11 @@ public final class RaidAlarmSC {
     /** Pure: the days left until due (0 - due now). */
     public static int daysLeft(int kind, long lastDay, long today) {
         return due(kind, lastDay, today) ? 0 : (int) ((kind == KIND_HEAVY ? HEAVY_DAYS : ALARM_DAYS) - (today - lastDay));
+    }
+
+    /** Pure (ПС-1): a call made on `calledDay` is past its term on `today`. */
+    public static boolean expired(long calledDay, long today) {
+        return today - calledDay >= TERM_DAYS;
     }
 
     /** Pure: the kind a deal's key calls (TradeTableSC.ELDER_ALARM / ELDER_HEAVY_NIGHT), 0 - not an alarm. */
@@ -92,10 +112,54 @@ public final class RaidAlarmSC {
         return pendingBy(s) == null ? 0 : s.extra.getCompoundTag(EXTRA).getInteger(KIND);
     }
 
-    /** `player`'s call of `kind` waits at `s` (the deal's line takes it back). */
+    /** `player`'s call of `kind` waits at `s` (the deal's line takes it back) - not while its raid is on (ПС-3). */
     public static boolean pendingBy(SettlementRegistrySC.Settlement s, UUID player, int kind) {
         UUID by = pendingBy(s);
-        return by != null && by.equals(player) && pendingKind(s) == kind;
+        return by != null && by.equals(player) && pendingKind(s) == kind && !runningCall(s);
+    }
+
+    /** ПС-3: the call at `s` has begun and its raid runs now (a RUN mark left by a stopped server is not - the call waits again). */
+    public static boolean runningCall(SettlementRegistrySC.Settlement s) {
+        return pendingBy(s) != null && s.extra.getCompoundTag(EXTRA).getBoolean(RUN) && RaidSC.running(s.id);
+    }
+
+    /** ПС-3 (RaidSC.called): the call at `s` has begun - kept, marked RUN, till its raid ends. */
+    static void markRunning(SettlementRegistrySC.Settlement s) {
+        if (pendingBy(s) != null) {
+            NBTTagCompound a = s.extra.getCompoundTag(EXTRA);
+            a.setBoolean(RUN, true);
+            s.extra.setTag(EXTRA, a);
+        }
+    }
+
+    /**
+     * Server (RaidSC's tick, refusal): the call at `s` looked after - a RUN mark with no raid in memory (the server stopped mid-raid, ПС-3):
+     * the call waits again, its term from `today`; a waiting call past its term (ПС-1): taken off, the deposit back to its buyer
+     * (sc.alarm.expired, now or at his login). @return the call was taken off
+     */
+    public static boolean maintain(SettlementRegistrySC reg, SettlementRegistrySC.Settlement s, long today) {
+        UUID by = pendingBy(s);
+        if (reg == null || by == null) {
+            return false;
+        }
+        NBTTagCompound a = s.extra.getCompoundTag(EXTRA);
+        if (a.getBoolean(RUN)) {
+            if (RaidSC.running(s.id)) {
+                return false;                                   // its raid is on: no term while it runs
+            }
+            a.removeTag(RUN);
+            a.setLong(DAY, today);
+            s.extra.setTag(EXTRA, a);
+            reg.markDirty();
+            return false;
+        }
+        if (!expired(a.getLong(DAY), today)) {
+            return false;
+        }
+        clear(s);
+        reg.markDirty();
+        returnDeposit(reg, by, BACK_EXPIRED);
+        return true;
     }
 
     /** The call at `s` is gone (begun, or taken back). */
@@ -135,6 +199,7 @@ public final class RaidAlarmSC {
         if (RaidSC.running(s.id)) {
             return R_RUNNING;
         }
+        maintain(reg, s, SettlementSC.day(p.worldObj));     // ПС-1 / ПС-3: an expired call off, a stopped raid's call waiting again
         if (pendingBy(s) != null) {
             return R_PENDING;
         }
@@ -175,7 +240,7 @@ public final class RaidAlarmSC {
      */
     public static boolean cancel(EntityPlayer p, SettlementRegistrySC.Settlement s, int kind) {
         if (p == null || !pendingBy(s, p.getUniqueID(), kind)) {
-            return false;
+            return false;                                       // ПС-3: not while its raid is on (pendingBy)
         }
         clear(s);
         SettlementRegistrySC reg = SettlementRegistrySC.get(p.worldObj);
@@ -189,11 +254,17 @@ public final class RaidAlarmSC {
         return true;
     }
 
-    /**
-     * Server (RaidRunSC, a called raid won or called off): the deposit back to `buyer` wherever he is - online and alive: into his inventory (outside the
-     * day's 64); dead or offline: owed (OWED), paid at his next respawn or login (payOwed). Only a loss burns it.
-     */
+    /** Server (RaidRunSC, a called raid won): returnDeposit(reg, buyer, BACK_WON). */
     public static void returnDeposit(SettlementRegistrySC reg, UUID buyer) {
+        returnDeposit(reg, buyer, BACK_WON);
+    }
+
+    /**
+     * Server (RaidRunSC, a called raid won or called off; maintain, a call expired): the deposit back to `buyer` wherever he is - online and
+     * alive: into his inventory (outside the day's 64); dead or offline: owed (OWED / OWED_VOID / OWED_EXPIRED by `why`), paid at his next
+     * respawn or login (payOwed). Only a loss burns it. `why` - BACK_* (the line: won, didn't take place, expired).
+     */
+    public static void returnDeposit(SettlementRegistrySC reg, UUID buyer, int why) {
         if (reg == null || buyer == null) {
             return;
         }
@@ -201,14 +272,34 @@ public final class RaidAlarmSC {
         if (p != null && p.isEntityAlive()) {
             TradeServerSC.giveChips(p, DEPOSIT);
             p.inventoryContainer.detectAndSendChanges();
-            EmpStormSC.tell(p, EnumChatFormatting.AQUA, "sc.raid.deposit.owed", String.valueOf(DEPOSIT));
+            tellBack(p, why, DEPOSIT);
             return;
         }
         SettlementRegistrySC.PlayerRec rec = reg.player(buyer);
         NBTTagCompound a = rec.extra.getCompoundTag(EXTRA);
-        a.setInteger(OWED, a.getInteger(OWED) + DEPOSIT);
+        String k = owedKey(why);
+        a.setInteger(k, a.getInteger(k) + DEPOSIT);
         rec.extra.setTag(EXTRA, a);
         reg.markDirty();
+    }
+
+    /** The PlayerRec.extra EXTRA key the deposits owed for `why` are kept in. */
+    private static String owedKey(int why) {
+        return why == BACK_VOID ? OWED_VOID : why == BACK_EXPIRED ? OWED_EXPIRED : OWED;
+    }
+
+    /** Pure: the line of a deposit back for `why` (BACK_*). */
+    public static String backKey(int why) {
+        return why == BACK_VOID ? "sc.raid.deposit.void" : why == BACK_EXPIRED ? "sc.alarm.expired" : "sc.raid.deposit.owed";
+    }
+
+    /** The line of a deposit back (sc.alarm.expired: the term's days, then the chips; the others: the chips). */
+    static void tellBack(EntityPlayer p, int why, int chips) {
+        if (why == BACK_EXPIRED) {
+            EmpStormSC.tell(p, EnumChatFormatting.AQUA, backKey(why), String.valueOf(TERM_DAYS), String.valueOf(chips));
+        } else {
+            EmpStormSC.tell(p, EnumChatFormatting.AQUA, backKey(why), String.valueOf(chips));
+        }
     }
 
     /** Server (RaidSC: a login, a respawn): the deposits owed to `p` (OWED) into his inventory. @return there were some */
@@ -222,16 +313,41 @@ public final class RaidAlarmSC {
             return false;
         }
         NBTTagCompound a = rec.extra.getCompoundTag(EXTRA);
-        int owed = a.getInteger(OWED);
-        if (owed <= 0) {
-            return false;
+        boolean paid = false;
+        int[] whys = {BACK_WON, BACK_VOID, BACK_EXPIRED};
+        for (int why : whys) {
+            String k = owedKey(why);
+            int owed = a.getInteger(k);
+            if (owed <= 0) {
+                continue;
+            }
+            a.removeTag(k);
+            reg.markDirty();
+            TradeServerSC.giveChips(p, owed);
+            tellBack(p, why, owed);
+            paid = true;
         }
-        a.removeTag(OWED);
+        if (paid) {
+            p.inventoryContainer.detectAndSendChanges();
+        }
+        return paid;
+    }
+
+    /**
+     * ПС-2 (RaidRunSC.lose, a called raid lost): the buyer's cooldown of `kind` a day longer - his last day of it moved to a day past
+     * max(it, today). No trade closed for anyone.
+     */
+    static void lostCooldown(SettlementRegistrySC reg, UUID buyer, int kind, long today) {
+        if (reg == null || buyer == null) {
+            return;
+        }
+        SettlementRegistrySC.PlayerRec rec = reg.player(buyer);
+        NBTTagCompound mine = rec.extra.getCompoundTag(EXTRA);
+        String k = kind == KIND_HEAVY ? LAST_HEAVY : LAST_ALARM;
+        long last = mine.hasKey(k) ? mine.getLong(k) : today;
+        mine.setLong(k, Math.max(last, today) + 1L);
+        rec.extra.setTag(EXTRA, mine);
         reg.markDirty();
-        TradeServerSC.giveChips(p, owed);
-        p.inventoryContainer.detectAndSendChanges();
-        EmpStormSC.tell(p, EnumChatFormatting.AQUA, "sc.raid.deposit.owed", String.valueOf(owed));
-        return true;
     }
 
     /** The real player `id` online (any world), or null. */

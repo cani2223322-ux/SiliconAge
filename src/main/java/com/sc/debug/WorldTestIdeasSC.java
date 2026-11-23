@@ -14,13 +14,13 @@ public final class WorldTestIdeasSC {
 
     public static void register() {
         cpw.mods.fml.common.eventhandler.EventBus bus = FMLCommonHandler.instance().bus();
-        // ПД-1: bus.register(new WorldTestContractsSC());
-        // ПД-2: bus.register(new WorldTestSquadSC());
+        bus.register(new WorldTestContractsSC());          // ПД-1 (ИГ-2 А, audit 2026-11-04)
+        bus.register(new WorldTestSquadSC());              // ПД-2 (ИГ-2 А)
         // ПД-3: bus.register(new WorldTestAlarmSC());
         // ПД-4: bus.register(new WorldTestWantedSC());
         // ПД-5: bus.register(new WorldTestGatherersSC());
         // ПД-6: bus.register(new WorldTestProtocolsSC());
-        // ПД-7: bus.register(new WorldTestRelaySC());
+        bus.register(new WorldTestRelaySC());              // ПД-7 (ИГ-2 А)
         // ПД-8: bus.register(new WorldTestTunnelsSC());
         // ОМ-1: bus.register(new WorldTestRigSubstrateSC());
         bus.register(new WorldTestComparatorSC());         // ОМ-5

@@ -870,7 +870,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
     @Override
     public boolean isItemValidForSlot(int slot, ItemStack stack) {
         if (slot == SALVAGE_SLOT) {
-            return com.sc.item.SalvageSC.refusal(stack) == com.sc.item.SalvageSC.OK;    // ОМ-6
+            return com.sc.item.SalvageSC.accepts(stack);    // ОМ-6, БР-2: the refused ones too - the tooltip says why
         }
         return fits(slot, stack);
     }
@@ -879,8 +879,9 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
 
     /**
      * ОМ-6 (the screen's «Разобрать», ContainerArmorStationSC.BTN_SALVAGE): the salvage slot's thing broken up - SalvageSC.result into
-     * the player's inventory (what doesn't fit at the feet), SalvageSC.STATION_EU off the buffer; refused for another's private field,
-     * a thing that isn't salvaged, too little EU (the chat says why). Server. @return true when done
+     * the player's inventory, SalvageSC.STATION_EU off the buffer; refused for another's private field, a thing that isn't salvaged, too
+     * little EU, ОР-2: too little room in the inventory (ItemArmorChipSC.slotsShort - as the chips' removal; nothing is taken then; the
+     * chat says why). Server. @return true when done
      */
     public boolean salvage(EntityPlayer player) {
         if (!salvages() || worldObj == null || worldObj.isRemote || player == null || salvage == null) {
@@ -902,6 +903,11 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
             return false;
         }
         List<ItemStack> out = com.sc.item.SalvageSC.result(salvage);
+        int shortOf = com.sc.item.ItemArmorChipSC.slotsShort(player, out);
+        if (shortOf > 0) {
+            sayTo(player, net.minecraft.util.EnumChatFormatting.RED, "sc.salvage.refuse.noRoom", shortOf);   // ОР-2: nothing taken
+            return false;
+        }
         String name = salvage.getDisplayName();
         extractForItemCharging(eu);
         salvage = null;
@@ -910,7 +916,7 @@ public class TileEntityArmorStationSC extends TileEntityEnergyBase implements IS
         for (ItemStack s : out) {
             n += s.stackSize;
             if (!player.inventory.addItemStackToInventory(s) && s.stackSize > 0) {
-                player.dropPlayerItemWithRandomChoice(s, false);
+                player.dropPlayerItemWithRandomChoice(s, false);    // not expected after slotsShort - a last resort
             }
         }
         player.inventory.markDirty();

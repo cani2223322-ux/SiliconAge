@@ -613,6 +613,15 @@ public final class WorldTestWildSC {
         boolean hurt = bare.getHealth() < bareHp;
         boolean source = crack instanceof TileEntityArcCrackSC && ((TileEntityArcCrackSC) crack).isEnergySource() && !((TileEntityArcCrackSC) crack).canItemCharge(suited);
         float rad = RadiationSC.levelAt(rtgPlayer);
+        // ИГ-1 А: the RTG's own share 3 off by distance (RadiationSC.atDistance, as fromSources counts it) on top of the background where
+        // the player stands (the Oxide Fields' and the pillar's - seed-dependent); x radiation.multiplier. One RTG gives ~0.75 - not >= 1.
+        double rdx = rtgPlayer.posX - (fx + 0.5D), rdy = rtgPlayer.posY + 1.0D - (fy + 0.5D), rdz = rtgPlayer.posZ - (fz + 24 + 0.5D);
+        float rtgShare = RadiationSC.atDistance(com.sc.dim.SubstrateRadiationSC.rtgLevel(), com.sc.dim.SubstrateRadiationSC.RTG_RADIUS,
+                Math.sqrt(rdx * rdx + rdy * rdy + rdz * rdz));
+        float radMul = com.sc.util.ConfigSC.radiationMultiplier;
+        float radBg = com.sc.dim.SubstrateRadiationSC.background(rtgPlayer) * radMul;
+        float radWant = Math.min(RadiationSC.MAX_LEVEL, rtgShare * radMul * 0.9F + radBg);
+        boolean rtgOk = rtgShare <= 0F || radMul <= 0F ? rad >= radBg - 0.01F : rad >= radWant - 0.01F && rad > radBg;
         // the monocrystal (ПМ-16): Metallurgical Silicon, never the purification chain skipped
         List<ItemStack> drops = SubstrateBlocksSC.rock == null ? new ArrayList<ItemStack>()
                 : SubstrateBlocksSC.rock.getDrops(w, fx, fy, fz, SubstrateBlocksSC.MONOCRYSTAL, 0);
@@ -622,10 +631,11 @@ public final class WorldTestWildSC {
             mgSi += s != null && s.getItem() == mg.getItem() && s.getItemDamage() == mg.getItemDamage() ? s.stackSize : 0;
         }
         boolean geode = mgSi >= 1 && mgSi <= 3;
-        print(helium && drained && hurt && source && rad >= 1F && geode, "vents (ПА-4..ПА-7, ПМ-16): the fumarole gave the tank " + mb + " mB of liquid helium in "
+        print(helium && drained && hurt && source && rtgOk && geode, "vents (ПА-4..ПА-7, ПМ-16): the fumarole gave the tank " + mb + " mB of liquid helium in "
                 + secs + " s (" + TileEntitySubstrateVentSC.HELIUM_MB_MIN + ".." + TileEntitySubstrateVentSC.HELIUM_MB_MAX + " a second) " + helium + "; the crack:"
                 + " a Nano suit within " + TileEntityArcCrackSC.HAZARD_RADIUS + " lost " + n(lostPct) + "% (" + n(wantPct) + ") " + drained + ", a bare player hurt "
-                + hurt + ", an energy source that charges no item " + source + "; the RTG's radiation 3 off " + n(rad) + " (>= 1); the monocrystal gives "
+                + hurt + ", an energy source that charges no item " + source + "; the RTG's radiation 3 off " + n(rad) + " (the RTG's " + n(rtgShare) + " + the background " + n(radBg) + ": >= " + n(radWant)
+                + " and over the background) at " + fx + " " + fy + " " + (fz + 24) + " " + rtgOk + "; the monocrystal gives "
                 + mgSi + " Metallurgical Silicon (1..3) " + geode);
         // the gate's shower: one wash a second (TileEntityShowcaseSC.TICK), a FakePlayer's dose has no decay of its own
         float dose = showered == null ? -1F : RadiationSC.doseOf(showered);
