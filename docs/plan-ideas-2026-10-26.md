@@ -8,7 +8,7 @@
 
 - Minecraft 1.7.10, Forge 10.13.4.1614, исходники уровня Java 6: без лямбд, `<>`, try-with-resources и `switch` по строкам; имена MCP. Стиль — как в соседнем коде (английские комментарии и javadoc, коды пунктов в комментариях: `ПД-3`, `ОМ-5`, `TODO(balance)`).
 - Никогда не вызывать методы `@SideOnly(CLIENT)` из общего/серверного кода; FakePlayer пакетов не получает (не слать ему ничего, не давать ему наград, не считать защитником).
-- Аддон `C:/Users/Aleksandr/Documents/MineMod/SiliconAgeVehicles` не трогать. Файлы не удалять. Папку `.minecraft` и `javaw` пользователя не трогать. Не коммитить. `runServer` не запускать.
+- Аддон `D:/AI/Claude/MineMod/SiliconAgeVehicles` не трогать. Файлы не удалять. Папку `.minecraft` и `javaw` пользователя не трогать. Не коммитить. `runServer` не запускать.
 - lang-файлы `ru_RU.lang` / `en_US.lang` — CRLF, UTF-8; кавычки в значениях: ru „…“, en “…”; никаких символов расширенной таблицы FontRenderer (« » × ± · ° — вместо них x, +/-, •, ˚, тире — « - »); одинаковое число и порядок `%s` в ru и en (SelfTestSC.langQuotes / langFontTable). Ключи присылаются списком «ключ = ru | en» — в lang-файлы их вносит тот, кто сводит работу.
 - Каждый новый предмет/блок: подсказка TooltipSC сразу (краткая строка всегда, описание за Shift, «как получить/управление» за Ctrl — `TooltipSC.more` / `wrap`), текстура (свой скрипт Python в `tools/`, в стиле мода — палитры и приёмы соседних `gen_*_tex.py`, превью `*_preview.png`), запись NEI «Как получить» (`ObtainHandlerSC.ideaPage`) или скрытие в NEI (`NEISiliconAgeConfig.hideIdeaBlocks`), упоминание в справочнике.
 - Рецепты — только ванильные предметы и предметы мода. Новые рецепты — только в своём методе `init/ModRecipesIdeasSC` (pd6/om2/om3/om4/om5/om7).
@@ -16,8 +16,8 @@
 - Новые ключи конфига — уже добавлены координатором (см. ниже); новых не заводить, без нужды — через координатора.
 - Мультиплеер (LAN, двое): у каждого игрока свои записи по UUID; на клиенте UUID локального игрока может не совпадать с серверным — решения принимает сервер, клиент получает ответ; ничего клиентского не вызывать на сервере.
 - Генерация мира — без каскада: строить только в окне populate (MapGenStructure-старт, все куски в пределах 8 чанков от чанка старта), «старая» земля (чанк площади уже на диске) — пустой старт (`StructureRuinStartSC.explored`).
-- Сборка: `T=/c/Users/Aleksandr/Documents/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd C:/Users/Aleksandr/Documents/MineMod/SiliconAge; gradle clean build --offline -q` («Read timed out»/404 — не ошибка). Проверка реобфускации: `unzip -p build/libs/SiliconAge-0.2.3.jar com/sc/block/BlockOreSC.class | grep -a -c field_151576_e` = 1.
-- Резервная копия до правок есть: `C:/Users/Aleksandr/Documents/MineMod/backups/2026-10-26_1204_before-ideas-pd-om/` (jar, src, build.gradle).
+- Сборка: `T=/d/AI/Claude/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd D:/AI/Claude/MineMod/SiliconAge; gradle clean build --offline -q` («Read timed out»/404 — не ошибка). Проверка реобфускации: `unzip -p build/libs/SiliconAge-0.2.3.jar com/sc/block/BlockOreSC.class | grep -a -c field_151576_e` = 1.
+- Резервная копия до правок есть: `D:/AI/Claude/MineMod/backups/2026-10-26_1204_before-ideas-pd-om/` (jar, src, build.gradle).
 - CHANGELOG.md («Unreleased»), SESSIONS.md и lang-файлы ведёт тот, кто сводит работу; в списках файлов ниже их нет.
 - Свои самотесты — только в своём методе `debug/SelfTestIdeasSC` (pd1 … om7); свой мировой тест — свой новый класс `debug/WorldTest<…>SC` и одна строка в своём слоте `debug/WorldTestIdeasSC.register()`. Место мировых тестов: Верхний мир — X = 4000 + 100·k (k — номер пункта по порядку: ПД-1 = 1 … ПД-8 = 8, ОМ-1 = 9 … ОМ-7 = 15), Y 200, Z 0; Подложка (DIM-1414) — регион X = 20000 + 1024·k, Z = 20000 (свои ячейки, свой перекрёсток).
 

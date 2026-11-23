@@ -4,7 +4,7 @@
 Здесь — архитектура Ф2 под существующий код и разбивка на 6 параллельных пакетов (S, C, N, T, B, D) с **непересекающимися файлами**.
 Java 6 (без лямбд, diamond, try-with-resources, switch по String, без API Java 7+), MCP-имена, Forge 1.7.10-10.13.4.1614.
 Сборка:
-`T=/c/Users/Aleksandr/Documents/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd /c/Users/Aleksandr/Documents/MineMod/SiliconAge; gradle clean build --offline -q`
+`T=/d/AI/Claude/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd /d/AI/Claude/MineMod/SiliconAge; gradle clean build --offline -q`
 Строки «Read timed out» и 404 безвредны. runServer не запускать, сборка — всегда clean build. Проверка reobf: `unzip -p build/libs/SiliconAge-0.2.1.jar com/sc/block/BlockOreSC.class | grep -a -c field_151576_e` печатает 1. Каждый пакет обязан собираться сам по себе поверх ядра.
 
 ## 0. Ядро (уже написано, собирается)

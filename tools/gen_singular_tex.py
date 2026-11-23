@@ -33,7 +33,7 @@ from PIL import Image
 
 ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
 ONLY = [k for a in sys.argv[1:] if a.startswith('--only=') for k in a[len('--only='):].split(',') if k]
-PROJECT = ARGS[0] if len(ARGS) > 0 else 'C:/Users/Aleksandr/Documents/MineMod/SiliconAge'
+PROJECT = ARGS[0] if len(ARGS) > 0 else 'D:/AI/Claude/MineMod/SiliconAge'
 PREVIEW = ARGS[1] if len(ARGS) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'singular_tex_preview.png')
 TEX = os.path.join(PROJECT, 'src', 'main', 'resources', 'assets', 'siliconage', 'textures')
 

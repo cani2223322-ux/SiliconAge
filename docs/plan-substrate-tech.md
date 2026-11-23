@@ -4,7 +4,7 @@
 Здесь — архитектура Ф1 под существующий код и разбивка оставшейся работы на 5 параллельных пакетов (W, A, M, E, D) с **непересекающимися файлами**.
 Java 6 (без лямбд, diamond, try-with-resources, switch по String, без API Java 7+ вроде `Math.floorMod`, `Objects`, `String.join`), MCP-имена, Forge 1.7.10-10.13.4.1614.
 Сборка:
-`T=/c/Users/Aleksandr/Documents/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd /c/Users/Aleksandr/Documents/MineMod/SiliconAge; gradle clean build --offline -q`
+`T=/d/AI/Claude/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd /d/AI/Claude/MineMod/SiliconAge; gradle clean build --offline -q`
 Строки «Read timed out» и 404 безвредны. runServer не запускать, сборка — всегда clean build. Каждый пакет обязан собираться сам по себе поверх ядра.
 
 ## 0. Ядро (уже написано, собирается)

@@ -370,7 +370,7 @@ IMC не подходит: здесь нужны запросы во время 
 
 ## Что проверено в коде
 
-**Ядро, `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\`:**
+**Ядро, `D:\AI\Claude\MineMod\SiliconAge\`:**
 - `src\main\java\com\sc\embassy\EmbassyLayoutSC.java`:
   - VOKZAL_OUT 18, VOKZAL_HALF 12, RING_BACK 6, DOCK_ZONE 13, LEVEL_OUT 31, BLEND 8, REACH_MAX 135;
   - `gateDir` по сиду; `levelPast` — круг;
@@ -411,7 +411,7 @@ IMC не подходит: здесь нужны запросы во время 
 - `src\main\java\com\sc\compat\`.
 - docs: `docs\idea-embassy-substrate.md` (решения §14), `docs\idea-improvements-2026-10-26.md` (СВ-1, СВ-2, СВ-5 — не сделаны), `docs\plan-ideas-2026-10-26.md`, `docs\plan-armor-gases.md`, `CHANGELOG.md`.
 
-**Аддон, `C:\Users\Aleksandr\Documents\MineMod\SiliconAgeVehicles\`:**
+**Аддон, `D:\AI\Claude\MineMod\SiliconAgeVehicles\`:**
 - `build.gradle` — классы ядра только при сборке.
 - `src\main\java\com\sva\ReferenceSVA.java` — MODID, `CORE_DEP` `[0.2.0,)`.
 - `src\main\java\com\sva\vehicle\RunwayMath.java` — SCAN 96, MIN_LEN 12, MAX_BLOCKS 8192, рамка по осям.

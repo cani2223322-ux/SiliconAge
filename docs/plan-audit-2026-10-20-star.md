@@ -6,13 +6,13 @@
 
 - Minecraft 1.7.10, Forge 10.13.4.1614, исходники на уровне Java 6: без лямбд, `<>`, try-with-resources и `switch` по строкам; имена MCP. Стиль — как в соседнем коде (английские комментарии, `TODO(...)`, коды пунктов в комментариях).
 - Никогда не вызывать методы `@SideOnly(CLIENT)` из общего/серверного кода; FakePlayer не получает пакеты (не слать ему сообщений-пакетов).
-- Аддон `C:/Users/Aleksandr/Documents/MineMod/SiliconAgeVehicles` не трогать. Файлы не удалять. Папку `.minecraft` и `javaw` пользователя не трогать.
+- Аддон `D:/AI/Claude/MineMod/SiliconAgeVehicles` не трогать. Файлы не удалять. Папку `.minecraft` и `javaw` пользователя не трогать.
 - lang-файлы `ru_RU.lang` / `en_US.lang` — CRLF; кавычки в значениях: ru „…“, en “…” (или уже принятые в строке ASCII), никогда « » (SelfTestSC.langQuotes). Одинаковое число и порядок аргументов в ru и en. Новые ключи — в оба файла, рядом с родственными.
 - У каждого нового предмета/блока — подсказка TooltipSC сразу (в этом плане новых предметов нет). Рецепты — только ванильные предметы и предметы мода.
 - NBT, meta, enum — только дописывать (старые миры должны читаться): новый ключ NBT с разумным значением при отсутствии; новые константы enum/кодов — в конец.
 - Новые настройки конфига — только через координатора (ConfigSC / SubstrateConfigSC / ConfigSyncSC уже правлены, см. ниже), с ru/en комментариями.
-- Не коммитить. Резервная копия до правок уже есть: `C:/Users/Aleksandr/Documents/MineMod/backups/2026-10-21_2205_before-audit-20261020-star/` (jar, src, build.gradle).
-- Сборка: `T=/c/Users/Aleksandr/Documents/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd C:/Users/Aleksandr/Documents/MineMod/SiliconAge; gradle clean build --offline -q` («Read timed out»/404 — не ошибка; runServer не запускать). Проверка реобфускации: `unzip -p build/libs/SiliconAge-0.2.2.jar com/sc/block/BlockOreSC.class | grep -a -c field_151576_e` = 1.
+- Не коммитить. Резервная копия до правок уже есть: `D:/AI/Claude/MineMod/backups/2026-10-21_2205_before-audit-20261020-star/` (jar, src, build.gradle).
+- Сборка: `T=/d/AI/Claude/MineMod/.build-tools; export JAVA_HOME=$T/jdk8/jdk8u504-b01 PATH=$T/jdk8/jdk8u504-b01/bin:$T/gradle/gradle-2.14/bin:$PATH; cd D:/AI/Claude/MineMod/SiliconAge; gradle clean build --offline -q` («Read timed out»/404 — не ошибка; runServer не запускать). Проверка реобфускации: `unzip -p build/libs/SiliconAge-0.2.2.jar com/sc/block/BlockOreSC.class | grep -a -c field_151576_e` = 1.
 - Пользователь играет по LAN с другом: проверки владельца и «чужого» игрока — с этим в виду (на клиенте UUID локального игрока может не совпадать с серверным — сравнивать по имени или брать ответ сервера).
 - CHANGELOG.md («Unreleased») и SESSIONS.md ведёт тот, кто сводит работу; в списках файлов ниже они и lang-файлы не перечислены.
 
@@ -1572,7 +1572,7 @@ manual/BookContent.safety (~стр. 1612-1640) и статья радиозащ�
 
 1. Новый tools/check_lang_unused.py (Python 3, без зависимостей; запуск python -I tools/check_lang_unused.py из корня проекта): собрать ключи ru_RU и en_US; собрать строковые литералы из src/main/java (и, для страховки, из аддона SiliconAgeVehicles — только чтение, путь ../SiliconAgeVehicles/src, если есть); ключ «используется», если встречается литералом целиком или его префикс до любой точки встречается литералом, оканчивающимся точкой/конкатенацией (`"sc.quarrygui.tab." + …`, `"sc.battery.mode." + mode`, `Lang.trOr(...)`, paras(base) → base.N, ключи сущностей/предметов/блоков item.*, tile.*, entity.*, key.*, itemGroup.*, death.* и т. п. — по шаблонам). Вывод — список неиспользуемых по группам (префикс до второй точки) и число.
 2. Пройти группы вручную (сверить с кодом: sc.gui.field.*, sc.storage.gui.stored, sc.fieldgui.color, sc.wrench.tip.*, sc.gui.big.stability, sc.quarrygui.ores, sc.singStation.line.progress, sc.netview.hidden и др.; sc.quarrygui.tab.* — нужны). В скрипте — список исключений для ключей, собираемых нестандартно.
-3. Резервная копия обоих lang-файлов в C:/Users/Aleksandr/Documents/MineMod/backups/<ГГГГ-ММ-ДД_ЧЧММ>_before-lang-unused/ ; затем удалить подтверждённые строки из обоих файлов одним проходом скрипта (опция --apply со списком), сохранив CRLF, UTF-8 без BOM и порядок остальных строк. Сами файлы не удалять.
+3. Резервная копия обоих lang-файлов в D:/AI/Claude/MineMod/backups/<ГГГГ-ММ-ДД_ЧЧММ>_before-lang-unused/ ; затем удалить подтверждённые строки из обоих файлов одним проходом скрипта (опция --apply со списком), сохранив CRLF, UTF-8 без BOM и порядок остальных строк. Сами файлы не удалять.
 4. tools/check_settle_lang.py — не трогать (или вызвать из нового).
 
 **Файлы:** `tools/check_lang_unused.py (новый)`

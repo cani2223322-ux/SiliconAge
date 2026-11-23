@@ -1,7 +1,7 @@
 # Промт: проверка мода на баги и недоработки
 
 ```text
-Проверь мод Silicon Age (C:\Users\Aleksandr\Documents\MineMod\SiliconAge, Minecraft 1.7.10, Forge 10.13.4.1614) на баги и недоработки.
+Проверь мод Silicon Age (D:\AI\Claude\MineMod\SiliconAge, Minecraft 1.7.10, Forge 10.13.4.1614) на баги и недоработки.
 
 ПОДГОТОВКА
 1. Прочитай SESSIONS.md (C:\Users\Aleksandr\Documents\Claude\SESSIONS.md) — записи про Silicon Age, особенно «полная проверка мода на баги» и «Не исправлено». Уже известные недоработки не дублируй, только отметь, если они ещё актуальны (и для них тоже предложи варианты решения).

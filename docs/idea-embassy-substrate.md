@@ -283,33 +283,33 @@
 10. **Обратный путь — РЕШЕНО (2026-10-19):** назад — только в посольство вылета, в другое знакомое посольство — с «Своего» за 40 КЧ; лимит 2 рейса в сутки на туда и назад вместе. Посадка на обратный рейс — только у поселений с причалом: Посёлки, Города и «Первый причал» (Посты — нет). Ранее: рейсы туда и назад. Уточнить: ★ назад — только в посольство вылета (в другое — с «Своего» за 40 КЧ) и билет «туда-обратно» со скидкой; ★ Диспетчер у причалов Посёлков и Городов. Вариант: обратный рейс из любого поселения, включая Посты.
 
 ## C. Что проверено в коде
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementSC.java` — гейт `substrate()` (стр. 143), `refusesBridgeEnd`, `DOCK_ZONE` = 5, `BELT`, `RESPAWN_CLEAR`, `day()`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementRegistrySC.java` — глобальный mapStorage, `key(dim, …)`, `reach()`, `inDockZone`, `first(dim)`, `nearestDocks`, `overlapping`, `PlayerRec.globalCounts`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\gen\MapGenSettlementSC.java` — `explored()` проверяет и загруженные чанки, и диск; запись создаётся вместе со стартом.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\gen\SettlementLayoutSC.java` — `site(…, 0, 0)` даёт «Первый», `floorY` по `SubstrateTerrainSC`, `sizeOf` и `SIZE_WEIGHTS`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\gen\ComponentSettlementSC.java` и `ComponentSetHeartSC.java` / `ComponentSetHouseSC.java` / `ComponentSetStreetSC.java` / `ComponentSetGateSC.java` — блоки `SubstrateBlocksSC.rock`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\npc\ai\NpcLinkSC.java` — `exiled`, стр. 76.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\tileentity\TileEntitySettlementCoreSC.java` — `settlementTick` (стр. 235), `FLAGS`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementProtectSC.java` — `onDetonate` (стр. 368), `onCheckSpawn`, `onInteract`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\ShieldEventHandler.java` — `isMechanism` (кровати).
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\ReputationSC.java` — уровни, `PRICE`, `give`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementSizeSC.java` и `NpcKindSC.java`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\trade\TradeTableSC.java` — `GAS_HELIUM` / `GAS_DEUTERIUM` продаются, ванильных предметов нет; `TradeRulesSC.java` — 64 КЧ включая контракты; `TradeServerSC.java`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\travel\TravelEventsSC.java` — `destination` по `NBT_FROM`; `TravelRulesSC.java`; `ItemSettlementMapSC.java` (стр. 52–59).
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\RosterSC.java` — Пропуск, `knownDocks`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\bridge\BridgeTeleportSC.java` — `grantArrival(VIA_BRIDGE)`; `BridgeMathSC.java` — `cost`, `adjust`, `SPACE_LIFE_S`, `COOL_S`; `BridgeSoftLandSC.java`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\hazard\BridgeEchoSC.java` — `crossed`, `sheltered`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\tileentity\TileEntityBridgeControllerSC.java` — `si14Targets` (фильтр по Подложке), `famInfo`, `scaleCost`, `dockAt`.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\dim\SubstrateEntrySC.java`, `EntryRulesSC.java`, `SafeSpotSC.java` (`privateRefusing`), `TeleportQueueSC.java`, `SubstrateConfigSC.java`, `ChunkProviderSubstrateSC.java` (заметка о хуке GalaxySpace).
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\hazard\RaidSC.java`, `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\settle\caravan\CaravanSC.java`, `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\hazard\EmpStormSC.java` — фильтры по dim и по Подложке.
-- `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\ruin\ItemRuinFinderSC.java` — образец Пеленгатора; `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\src\main\java\com\sc\tileentity\FieldShapeSC.java` — `MAX_RANGE` 256.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementSC.java` — гейт `substrate()` (стр. 143), `refusesBridgeEnd`, `DOCK_ZONE` = 5, `BELT`, `RESPAWN_CLEAR`, `day()`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementRegistrySC.java` — глобальный mapStorage, `key(dim, …)`, `reach()`, `inDockZone`, `first(dim)`, `nearestDocks`, `overlapping`, `PlayerRec.globalCounts`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\gen\MapGenSettlementSC.java` — `explored()` проверяет и загруженные чанки, и диск; запись создаётся вместе со стартом.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\gen\SettlementLayoutSC.java` — `site(…, 0, 0)` даёт «Первый», `floorY` по `SubstrateTerrainSC`, `sizeOf` и `SIZE_WEIGHTS`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\gen\ComponentSettlementSC.java` и `ComponentSetHeartSC.java` / `ComponentSetHouseSC.java` / `ComponentSetStreetSC.java` / `ComponentSetGateSC.java` — блоки `SubstrateBlocksSC.rock`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\npc\ai\NpcLinkSC.java` — `exiled`, стр. 76.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\tileentity\TileEntitySettlementCoreSC.java` — `settlementTick` (стр. 235), `FLAGS`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementProtectSC.java` — `onDetonate` (стр. 368), `onCheckSpawn`, `onInteract`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\ShieldEventHandler.java` — `isMechanism` (кровати).
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\ReputationSC.java` — уровни, `PRICE`, `give`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\SettlementSizeSC.java` и `NpcKindSC.java`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\trade\TradeTableSC.java` — `GAS_HELIUM` / `GAS_DEUTERIUM` продаются, ванильных предметов нет; `TradeRulesSC.java` — 64 КЧ включая контракты; `TradeServerSC.java`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\travel\TravelEventsSC.java` — `destination` по `NBT_FROM`; `TravelRulesSC.java`; `ItemSettlementMapSC.java` (стр. 52–59).
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\RosterSC.java` — Пропуск, `knownDocks`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\bridge\BridgeTeleportSC.java` — `grantArrival(VIA_BRIDGE)`; `BridgeMathSC.java` — `cost`, `adjust`, `SPACE_LIFE_S`, `COOL_S`; `BridgeSoftLandSC.java`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\hazard\BridgeEchoSC.java` — `crossed`, `sheltered`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\tileentity\TileEntityBridgeControllerSC.java` — `si14Targets` (фильтр по Подложке), `famInfo`, `scaleCost`, `dockAt`.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\dim\SubstrateEntrySC.java`, `EntryRulesSC.java`, `SafeSpotSC.java` (`privateRefusing`), `TeleportQueueSC.java`, `SubstrateConfigSC.java`, `ChunkProviderSubstrateSC.java` (заметка о хуке GalaxySpace).
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\hazard\RaidSC.java`, `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\settle\caravan\CaravanSC.java`, `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\hazard\EmpStormSC.java` — фильтры по dim и по Подложке.
+- `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\ruin\ItemRuinFinderSC.java` — образец Пеленгатора; `D:\AI\Claude\MineMod\SiliconAge\src\main\java\com\sc\tileentity\FieldShapeSC.java` — `MAX_RANGE` 256.
 - Байткод Forge 1614 (`~/.gradle/caches/.../forgeBin-1.7.10-10.13.4.1614-1.7.10.jar`):
   - поля и конструкторы `ReplaceBiomeBlocks`;
   - его вызов из `ChunkProviderGenerate` и `ChunkProviderHell`;
   - `MapGenBase.range`;
   - типы событий Populate и Decorate;
   - соли `MapGenVillage` и `MapGenScatteredFeature`.
-- Документы: `C:\Users\Aleksandr\Documents\MineMod\SiliconAge\docs\plan-substrate.md` (ПО-5, ПО-7, ПО-8, ПД-5, ПД-6, ПВ-13, ПЛ-1, ПЛ-8, ПМ-7), `idea-dimension-substrate.md`, `plan-substrate-tech-f2.md`.
+- Документы: `D:\AI\Claude\MineMod\SiliconAge\docs\plan-substrate.md` (ПО-5, ПО-7, ПО-8, ПД-5, ПД-6, ПВ-13, ПЛ-1, ПЛ-8, ПМ-7), `idea-dimension-substrate.md`, `plan-substrate-tech-f2.md`.
 - Конфиги:
   - `C:\Users\Aleksandr\AppData\Roaming\.minecraft\config\SiliconAge.cfg` — `strictEntry`, `requireSignal`, `bridgeCostMultiplier` 0.5, `respawnDimension` 0, `crossDimension`;
   - `Thaumcraft.cfg`, `AppliedEnergistics2\AppliedEnergistics2.cfg`, `Galacticraft\core.conf`;
