@@ -6,8 +6,12 @@ Changes not yet released collect under "Unreleased"; at the next release it beco
 ## Не выпущено / Unreleased
 
 ### Русский
+- Подсказки ПЭ-пушки, брони, клинка, бура, оружия и ключа: при зажатых Shift и Ctrl видны обе страницы (раньше — только Ctrl); строка-сводка видна всегда; на каждой странице есть подсказка про другую клавишу.
+- Список функций в подсказках: длинное название больше не сдвигает вторую колонку и не вылезает за ширину — такая пара выводится в две строки.
 
 ### English
+- Tooltips of the EMP gun, armour, blade, drill, weapons and wrench: holding Shift and Ctrl shows both pages (it showed only Ctrl); the summary line is always shown; each page hints at the other key.
+- Function lists in tooltips: a long name no longer shifts the second column or runs past the width — such a pair goes on two lines.
 
 ## 0.2.4-beta — 2026-11-23
 

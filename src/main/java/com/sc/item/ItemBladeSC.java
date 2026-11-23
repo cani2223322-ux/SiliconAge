@@ -329,55 +329,56 @@ public class ItemBladeSC extends Item implements ic2.api.item.ISpecialElectricIt
         if (sing) {
             singularSummary(stack, list);
         }
-        switch (com.sc.util.TooltipSC.page()) {
-            case 1: {
-                java.util.List<String> names = new java.util.ArrayList<String>();
-                java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
-                int total = 0, lit = 0, locked = 0;
-                for (BladeFeature f : BladeFeature.values()) {
-                    if (f == BladeFeature.BLADE || !f.availableIn(type)) {
-                        continue;
-                    }
-                    if (!BladeLogicSC.unlocked(player, stack, f)) {
-                        locked++;                           // Singular: opens at a higher level
-                        continue;
-                    }
-                    total++;
-                    lit += isEnabled(stack, f) ? 1 : 0;
-                    if (f == BladeFeature.LOOTING && isEnabled(stack, f)) {
-                        continue;                           // the game's own "Looting V" line says it
-                    }
-                    names.add(Lang.tr("sc.bladefn." + f.key()));
-                    on.add(isEnabled(stack, f));
+        boolean s = com.sc.util.TooltipSC.shift(), c = com.sc.util.TooltipSC.ctrl();
+        if (s) {
+            java.util.List<String> names = new java.util.ArrayList<String>();
+            java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
+            int total = 0, lit = 0, locked = 0;
+            for (BladeFeature f : BladeFeature.values()) {
+                if (f == BladeFeature.BLADE || !f.availableIn(type)) {
+                    continue;
                 }
-                list.add(Lang.tr("sc.tooltip.functions", lit, total));
-                com.sc.util.TooltipSC.pairs(list, names, on);
-                if (locked > 0) {
-                    list.add("\u00a78" + Lang.tr("sc.tooltip.tool.sing.locked", locked));
+                if (!BladeLogicSC.unlocked(player, stack, f)) {
+                    locked++;                           // Singular: opens at a higher level
+                    continue;
                 }
-                list.add("\u00a77" + Lang.tr("sc.tooltip.blade.stats", type.euPerHit, type.idlePerSecond, type.chargeTier.name()));
-                if (sing) {
-                    BladeForm form = BladeSingularSC.effectiveForm(player, stack);
-                    list.add("\u00a7d" + Lang.tr("sc.tooltip.tool.sing.formattack", Lang.tr(form.langKey()),
-                            Lang.tr(BladeFeature.formAttackKey(form))));
-                    singularDetails(list, true);
-                    int b = ToolLevelSC.branchOf(stack);
-                    if (b != ToolLevelSC.BRANCH_NONE) {        // as the drill: what the chosen branch gives
-                        com.sc.util.TooltipSC.wrap(list, Lang.tr(ToolLevelSC.branchLangKey(stack, b) + ".desc"), "\u00a77");
-                    }
+                total++;
+                lit += isEnabled(stack, f) ? 1 : 0;
+                if (f == BladeFeature.LOOTING && isEnabled(stack, f)) {
+                    continue;                           // the game's own "Looting V" line says it
                 }
-                com.sc.util.TooltipSC.hintCtrl(list);
-                break;
+                names.add(Lang.tr("sc.bladefn." + f.key()));
+                on.add(isEnabled(stack, f));
             }
-            case 2:
-                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.blade.howto", type.chargeTier.name()), "\u00a77");
-                if (sing) {
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.blade.keys"), "\u00a7d");
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.station"), "\u00a77");
+            list.add(Lang.tr("sc.tooltip.functions", lit, total));
+            com.sc.util.TooltipSC.pairs(list, names, on);
+            if (locked > 0) {
+                list.add("\u00a78" + Lang.tr("sc.tooltip.tool.sing.locked", locked));
+            }
+            list.add("\u00a77" + Lang.tr("sc.tooltip.blade.stats", type.euPerHit, type.idlePerSecond, type.chargeTier.name()));
+            if (sing) {
+                BladeForm form = BladeSingularSC.effectiveForm(player, stack);
+                list.add("\u00a7d" + Lang.tr("sc.tooltip.tool.sing.formattack", Lang.tr(form.langKey()),
+                        Lang.tr(BladeFeature.formAttackKey(form))));
+                singularDetails(list, true);
+                int b = ToolLevelSC.branchOf(stack);
+                if (b != ToolLevelSC.BRANCH_NONE) {        // as the drill: what the chosen branch gives
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr(ToolLevelSC.branchLangKey(stack, b) + ".desc"), "\u00a77");
                 }
-                break;
-            default:
-                com.sc.util.TooltipSC.hintShift(list);
+            }
+        }
+        if (c) {
+            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.blade.howto", type.chargeTier.name()), "\u00a77");
+            if (sing) {
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.blade.keys"), "\u00a7d");
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.station"), "\u00a77");
+            }
+        }
+        if (!s) {
+            com.sc.util.TooltipSC.hintShift(list);
+        }
+        if (!c) {
+            com.sc.util.TooltipSC.hintCtrl(list);
         }
     }
 

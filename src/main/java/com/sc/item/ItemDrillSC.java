@@ -338,62 +338,63 @@ public class ItemDrillSC extends Item implements ic2.api.item.ISpecialElectricIt
                 list.add("\u00a77" + Lang.tr("sc.tooltip.drill.sing.crumbs", crumbProgress(stack), ItemSingularCrumbSC.CRUMB_BLOCKS));
             }
         }
-        switch (com.sc.util.TooltipSC.page()) {
-            case 1: {
-                java.util.List<String> names = new java.util.ArrayList<String>();
-                java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
-                int lit = 0;
-                java.util.List<String> locked = new java.util.ArrayList<String>();
-                for (DrillFeature f : DrillFeature.values()) {
-                    if (!f.availableIn(type)) {
-                        continue;
-                    }
-                    if (!DrillLogicSC.unlocked(player, stack, f)) {      // not opened by the Singular level yet
-                        locked.add(Lang.tr("sc.tooltip.drill.sing.lockitem", Lang.tr("sc.drillfn." + f.key()), f.singLevel()));
-                        continue;
-                    }
-                    boolean fnOn = DrillLogicSC.on(player, stack, f);
-                    names.add(Lang.tr("sc.drillfn." + f.key()));
-                    on.add(fnOn);
-                    lit += fnOn ? 1 : 0;
+        boolean s = com.sc.util.TooltipSC.shift(), c = com.sc.util.TooltipSC.ctrl();
+        if (s) {
+            java.util.List<String> names = new java.util.ArrayList<String>();
+            java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
+            int lit = 0;
+            java.util.List<String> locked = new java.util.ArrayList<String>();
+            for (DrillFeature f : DrillFeature.values()) {
+                if (!f.availableIn(type)) {
+                    continue;
                 }
-                list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
-                com.sc.util.TooltipSC.pairs(list, names, on);
-                if (!locked.isEmpty()) {
-                    StringBuilder sb = new StringBuilder();
-                    for (String l : locked) {
-                        sb.append(sb.length() > 0 ? ", " : "").append(l);
-                    }
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.locked", sb.toString()), "\u00a78");
+                if (!DrillLogicSC.unlocked(player, stack, f)) {      // not opened by the Singular level yet
+                    locked.add(Lang.tr("sc.tooltip.drill.sing.lockitem", Lang.tr("sc.drillfn." + f.key()), f.singLevel()));
+                    continue;
                 }
-                list.add("\u00a77" + Lang.tr("sc.tooltip.drill.stats", type.euPerBlock, type.harvestLevel));
-                if (DrillFeature.AUTOSMELT.availableIn(type)) {
-                    list.add("\u00a77" + Lang.tr("sc.tooltip.drill.smeltnoxp"));   // a furnace's XP isn't given
-                }
-                if (sing) {
-                    ItemBladeSC.singularDetails(list, false);
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.hole", DrillFeature.HOLE_BLOCKS_PER_MB,
-                            DrillFeature.BLACK_HOLE.cooldownTicks() / 20), "\u00a7d");
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.crumbinfo", ItemSingularCrumbSC.CRUMB_BLOCKS,
-                            ItemSingularCrumbSC.ORE_MUL, DrillFeature.BLOCKS_PER_POINT, ItemSingularCrumbSC.STONE_DIV), "\u00a77");
-                    int b = ToolLevelSC.branchOf(stack);
-                    if (b != ToolLevelSC.BRANCH_NONE) {
-                        com.sc.util.TooltipSC.wrap(list, Lang.tr(ToolLevelSC.branchLangKey(stack, b) + ".desc"), "\u00a77");
-                    }
-                }
-                com.sc.util.TooltipSC.hintCtrl(list);
-                break;
+                boolean fnOn = DrillLogicSC.on(player, stack, f);
+                names.add(Lang.tr("sc.drillfn." + f.key()));
+                on.add(fnOn);
+                lit += fnOn ? 1 : 0;
             }
-            case 2:
-                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.howto", type.chargeTier.name()), "\u00a77");
-                if (sing) {
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.drill.keys"), "\u00a7d");
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.controls"), "\u00a7d");
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.station"), "\u00a77");
+            list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
+            com.sc.util.TooltipSC.pairs(list, names, on);
+            if (!locked.isEmpty()) {
+                StringBuilder sb = new StringBuilder();
+                for (String l : locked) {
+                    sb.append(sb.length() > 0 ? ", " : "").append(l);
                 }
-                break;
-            default:
-                com.sc.util.TooltipSC.hintShift(list);
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.locked", sb.toString()), "\u00a78");
+            }
+            list.add("\u00a77" + Lang.tr("sc.tooltip.drill.stats", type.euPerBlock, type.harvestLevel));
+            if (DrillFeature.AUTOSMELT.availableIn(type)) {
+                list.add("\u00a77" + Lang.tr("sc.tooltip.drill.smeltnoxp"));   // a furnace's XP isn't given
+            }
+            if (sing) {
+                ItemBladeSC.singularDetails(list, false);
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.hole", DrillFeature.HOLE_BLOCKS_PER_MB,
+                        DrillFeature.BLACK_HOLE.cooldownTicks() / 20), "\u00a7d");
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.crumbinfo", ItemSingularCrumbSC.CRUMB_BLOCKS,
+                        ItemSingularCrumbSC.ORE_MUL, DrillFeature.BLOCKS_PER_POINT, ItemSingularCrumbSC.STONE_DIV), "\u00a77");
+                int b = ToolLevelSC.branchOf(stack);
+                if (b != ToolLevelSC.BRANCH_NONE) {
+                    com.sc.util.TooltipSC.wrap(list, Lang.tr(ToolLevelSC.branchLangKey(stack, b) + ".desc"), "\u00a77");
+                }
+            }
+        }
+        if (c) {
+            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.howto", type.chargeTier.name()), "\u00a77");
+            if (sing) {
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.drill.keys"), "\u00a7d");
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.drill.sing.controls"), "\u00a7d");
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.tool.sing.station"), "\u00a77");
+            }
+        }
+        if (!s) {
+            com.sc.util.TooltipSC.hintShift(list);
+        }
+        if (!c) {
+            com.sc.util.TooltipSC.hintCtrl(list);
         }
     }
 

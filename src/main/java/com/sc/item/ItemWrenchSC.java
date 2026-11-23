@@ -656,35 +656,36 @@ public class ItemWrenchSC extends Item implements ic2.api.item.ISpecialElectricI
         if (data != null && data.hasKey("Kind")) {
             list.add("§b" + Lang.tr("sc.wrench.holding", Lang.tr("sc.wrench.kind." + data.getString("Kind"))));
         }
-        switch (com.sc.util.TooltipSC.page()) {
-            case 1: {
-                String[] fns = {"rotate", "wires", "netview", "dismantle", "remote", "copy"};
-                boolean[] has = {true, true, true, tier.modes() > 1, tier == Tier.QUANTUM, tier == Tier.QUANTUM};
-                java.util.List<String> names = new java.util.ArrayList<String>();
-                java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
-                int n = 0;
-                for (int i = 0; i < fns.length; i++) {
-                    names.add(Lang.tr("sc.wrench.fn." + fns[i]));
-                    on.add(has[i]);
-                    n += has[i] ? 1 : 0;
-                }
-                list.add(Lang.tr("sc.tooltip.wrench.functions", n, fns.length));
-                com.sc.util.TooltipSC.pairs(list, names, on);
-                if (tier.maxCharge > 0) {
-                    list.add("§7" + Lang.tr("sc.tooltip.wrench.stats", tier.dismantleCost, 2 * tier.dismantleCost, tier.chargeTier.name()));
-                }
-                com.sc.util.TooltipSC.hintCtrl(list);
-                break;
+        boolean s = com.sc.util.TooltipSC.shift(), c = com.sc.util.TooltipSC.ctrl();
+        if (s) {
+            String[] fns = {"rotate", "wires", "netview", "dismantle", "remote", "copy"};
+            boolean[] has = {true, true, true, tier.modes() > 1, tier == Tier.QUANTUM, tier == Tier.QUANTUM};
+            java.util.List<String> names = new java.util.ArrayList<String>();
+            java.util.List<Boolean> on = new java.util.ArrayList<Boolean>();
+            int n = 0;
+            for (int i = 0; i < fns.length; i++) {
+                names.add(Lang.tr("sc.wrench.fn." + fns[i]));
+                on.add(has[i]);
+                n += has[i] ? 1 : 0;
             }
-            case 2:
-                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.howto." + tier.name().toLowerCase(java.util.Locale.ROOT)), "§7");
-                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.netview"), "§7");
-                if (tier.maxCharge > 0) {
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.charging", tier.chargeTier.name()), "§7");
-                }
-                break;
-            default:
-                com.sc.util.TooltipSC.hintShift(list);
+            list.add(Lang.tr("sc.tooltip.wrench.functions", n, fns.length));
+            com.sc.util.TooltipSC.pairs(list, names, on);
+            if (tier.maxCharge > 0) {
+                list.add("§7" + Lang.tr("sc.tooltip.wrench.stats", tier.dismantleCost, 2 * tier.dismantleCost, tier.chargeTier.name()));
+            }
+        }
+        if (c) {
+            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.howto." + tier.name().toLowerCase(java.util.Locale.ROOT)), "§7");
+            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.netview"), "§7");
+            if (tier.maxCharge > 0) {
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.wrench.charging", tier.chargeTier.name()), "§7");
+            }
+        }
+        if (!s) {
+            com.sc.util.TooltipSC.hintShift(list);
+        }
+        if (!c) {
+            com.sc.util.TooltipSC.hintCtrl(list);
         }
     }
 

@@ -32,23 +32,25 @@ public final class EmpTooltipSC {
         if (!ConfigSC.empEnabled) {
             list.add("§c" + Lang.tr("sc.emp.refuse.4"));
         }
-        switch (TooltipSC.page()) {
-            case 1:
-                details(stack, list, upgraded);
-                TooltipSC.hintCtrl(list);
-                break;
-            case 2:
-                TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.howto"), "§7");
-                TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.charge", EmpMathSC.CHARGE_TIER.name()), "§7");
-                TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.recipe"), "§8");
-                if (!upgraded) {
-                    TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.upgrade"), "§d");
-                }
-                TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.defense"), "§7");
-                break;
-            default:
-                TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.summary"), "§7");
-                TooltipSC.hintShift(list);
+        boolean s = TooltipSC.shift(), c = TooltipSC.ctrl();
+        TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.summary"), "§7");    // the summary on every page
+        if (s) {
+            details(stack, list, upgraded);
+        }
+        if (c) {
+            TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.howto"), "§7");
+            TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.charge", EmpMathSC.CHARGE_TIER.name()), "§7");
+            TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.recipe"), "§8");
+            if (!upgraded) {
+                TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.upgrade"), "§d");
+            }
+            TooltipSC.wrap(list, Lang.tr("sc.tooltip.emp.defense"), "§7");
+        }
+        if (!s) {
+            TooltipSC.hintShift(list);
+        }
+        if (!c) {
+            TooltipSC.hintCtrl(list);
         }
     }
 

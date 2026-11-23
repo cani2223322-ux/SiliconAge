@@ -124,17 +124,19 @@ public class ItemWeaponSC extends Item implements ic2.api.item.ISpecialElectricI
     @Override
     public void addInformation(ItemStack stack, EntityPlayer player, List list, boolean advanced) {
         list.add(Lang.tr("sc.tooltip.weapon.charge", getCharge(stack), type.tier.getBuffer()));
-        switch (com.sc.util.TooltipSC.page()) {
-            case 1:
-                list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.stats", type.damagePerHit, type.shotsPerUse, type.range, reloadSeconds(type)));
-                list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.shots", type.euPerShot, getCharge(stack) / type.euPerShot, type.tier.name()));
-                com.sc.util.TooltipSC.hintCtrl(list);
-                break;
-            case 2:
-                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.weapon.use", type.tier.name()), "\u00a77");
-                break;
-            default:
-                com.sc.util.TooltipSC.hintShift(list);
+        boolean s = com.sc.util.TooltipSC.shift(), c = com.sc.util.TooltipSC.ctrl();
+        if (s) {
+            list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.stats", type.damagePerHit, type.shotsPerUse, type.range, reloadSeconds(type)));
+            list.add("\u00a77" + Lang.tr("sc.tooltip.weapon.shots", type.euPerShot, getCharge(stack) / type.euPerShot, type.tier.name()));
+        }
+        if (c) {
+            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.weapon.use", type.tier.name()), "\u00a77");
+        }
+        if (!s) {
+            com.sc.util.TooltipSC.hintShift(list);
+        }
+        if (!c) {
+            com.sc.util.TooltipSC.hintCtrl(list);
         }
     }
 

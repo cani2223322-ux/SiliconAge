@@ -27,7 +27,10 @@ public final class TooltipSC {
         return Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) || Keyboard.isKeyDown(Keyboard.KEY_RCONTROL);
     }
 
-    /** Which part to show: 0 the summary (+ hints), 1 the details (Shift), 2 the controls (Ctrl). */
+    /**
+     * Which single page is held: 2 Ctrl, 1 Shift, 0 none (Ctrl wins). Tooltips show both pages
+     * when both keys are held - use shift() / ctrl() for that.
+     */
     public static int page() {
         return ctrl() ? 2 : shift() ? 1 : 0;
     }
@@ -94,17 +97,30 @@ public final class TooltipSC {
         }
     }
 
-    /** Items two to a line ("+ name" green when on, "- name" grey when off). */
+    /**
+     * Items two to a line ("+ name" green when on, "- name" grey when off), the second one at
+     * column 22; a pair whose first name is too long for that, or that would not fit in WIDTH,
+     * goes on two lines.
+     */
     public static void pairs(List list, List<String> names, List<Boolean> on) {
         for (int i = 0; i < names.size(); i += 2) {
             String a = mark(names.get(i), on.get(i));
             if (i + 1 < names.size()) {
-                int pad = Math.max(1, 20 - visibleLength(names.get(i)));
-                StringBuilder sp = new StringBuilder();
-                for (int k = 0; k < pad; k++) {
-                    sp.append(' ');
+                String b = mark(names.get(i + 1), on.get(i + 1));
+                int first = visibleLength(names.get(i));
+                if (first <= 19) {
+                    StringBuilder line = new StringBuilder(a);
+                    for (int k = first; k < 20; k++) {
+                        line.append(' ');
+                    }
+                    line.append(b);
+                    if (visibleLength(line.toString()) <= WIDTH) {
+                        list.add(line.toString());
+                        continue;
+                    }
                 }
-                list.add(a + sp + mark(names.get(i + 1), on.get(i + 1)));
+                list.add(a);
+                list.add(b);
             } else {
                 list.add(a);
             }

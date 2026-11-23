@@ -355,45 +355,46 @@ public class ItemArmorSC extends ItemArmor implements ISpecialArmor, ic2.api.ite
                 lit += isEnabled(stack, f) ? 1 : 0;
             }
         }
-        switch (com.sc.util.TooltipSC.page()) {
-            case 1:
-                list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
-                com.sc.util.TooltipSC.pairs(list, names, on);
-                if (armorType == 1) {                           // БР-1: which chips are in, and their tiers
-                    java.util.List<String> chips = ItemArmorChipSC.installedNames(stack);
-                    StringBuilder sb = new StringBuilder();
-                    for (String c : chips) {
-                        sb.append(sb.length() > 0 ? ", " : "").append(c);
-                    }
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.chips",
-                            chips.isEmpty() ? Lang.tr("sc.tooltip.armor.chips.none") : sb.toString()), "§7");
+        boolean s = com.sc.util.TooltipSC.shift(), c = com.sc.util.TooltipSC.ctrl();
+        list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));    // the summary is on every page
+        if (s) {
+            com.sc.util.TooltipSC.pairs(list, names, on);
+            if (armorType == 1) {                           // БР-1: which chips are in, and their tiers
+                java.util.List<String> chips = ItemArmorChipSC.installedNames(stack);
+                StringBuilder sb = new StringBuilder();
+                for (String chip : chips) {
+                    sb.append(sb.length() > 0 ? ", " : "").append(chip);
                 }
-                gasLines(stack, list);
-                if (suit == ArmorSuit.SINGULAR) {               // K10: the Exo functions on less gas; stage 3: the level
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.legacy",
-                            Math.round((1F - com.sc.util.ArmorGasSC.SINGULAR_GAS_MUL) * 100)), "\u00a7d");
-                    levelLines(stack, player, list);
-                }
-                if (ArmorLogicSC.strict(suit)) {
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.strict"), "§6");
-                    // С-3: the helium loop is in the chestplate - a piece worn without one is always in emergency mode
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr(armorType == 1 ? "sc.tooltip.armor.loop.chest" : "sc.tooltip.armor.loop"), "§7");
-                }
-                com.sc.util.TooltipSC.hintCtrl(list);
-                break;
-            case 2:
-                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.howto", suit.chargeTier.name())
-                        + " " + Lang.tr("sc.tooltip.armor.keys"), "\u00a77");
-                if (suit.hasSchemes()) {
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.more"), "\u00a77");
-                }
-                if (suit == ArmorSuit.EXO) {                     // \u0411-1: the way to the Singular suit
-                    com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.exo.convert"), "\u00a7d");
-                }
-                break;
-            default:
-                list.add(Lang.tr("sc.tooltip.functions", lit, names.size()));
-                com.sc.util.TooltipSC.hintShift(list);
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.chips",
+                        chips.isEmpty() ? Lang.tr("sc.tooltip.armor.chips.none") : sb.toString()), "§7");
+            }
+            gasLines(stack, list);
+            if (suit == ArmorSuit.SINGULAR) {               // K10: the Exo functions on less gas; stage 3: the level
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.legacy",
+                        Math.round((1F - com.sc.util.ArmorGasSC.SINGULAR_GAS_MUL) * 100)), "\u00a7d");
+                levelLines(stack, player, list);
+            }
+            if (ArmorLogicSC.strict(suit)) {
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.strict"), "§6");
+                // С-3: the helium loop is in the chestplate - a piece worn without one is always in emergency mode
+                com.sc.util.TooltipSC.wrap(list, Lang.tr(armorType == 1 ? "sc.tooltip.armor.loop.chest" : "sc.tooltip.armor.loop"), "§7");
+            }
+        }
+        if (c) {
+            com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.howto", suit.chargeTier.name())
+                    + " " + Lang.tr("sc.tooltip.armor.keys"), "\u00a77");
+            if (suit.hasSchemes()) {
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.singular.more"), "\u00a77");
+            }
+            if (suit == ArmorSuit.EXO) {                     // \u0411-1: the way to the Singular suit
+                com.sc.util.TooltipSC.wrap(list, Lang.tr("sc.tooltip.armor.exo.convert"), "\u00a7d");
+            }
+        }
+        if (!s) {
+            com.sc.util.TooltipSC.hintShift(list);
+        }
+        if (!c) {
+            com.sc.util.TooltipSC.hintCtrl(list);
         }
     }
 
