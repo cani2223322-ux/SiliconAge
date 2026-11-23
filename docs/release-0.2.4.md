@@ -60,7 +60,7 @@
 *Things to do in the Substrate*
 - **The Elder's contract board:** 3 common contracts, 1 local one (the Ridges, the Oxide Fields, a Dead Node), a Tuners' order and a weekly Big order; new goals - Troopers, hostiles in an EMP storm, camp safes, Signal caches, an urgent dispatch before sunset.
 - **Squads of up to 4 players** (`/scsquad`, a Credit Chip click on a friend or one scoreboard team): a kill counts for everyone who dealt 10% of the damage; a mate's death mark is a bridge and rescue flight target.
-- **A raid called for an 8-chip deposit:** "Alarm" (from Acquaintance) and "Heavy Night" (from Own) - a fourth wave with an Exo Executioner and a Commander Trooper, the reward x1.5; a summary in the chat after the raid.
+- **A raid called for an 8-chip deposit:** "Alarm" (from Acquaintance) and "Heavy Night" (from Trusted) - a fourth wave with an Exo Executioner and a Commander Trooper, the reward x1.5; a summary in the chat after the raid.
 - **Wanted:** once a week a City's Captain posts a named Renegade in Quantum or Exo armour; the bounty is chips, Trust and a Wanted Token.
 - **Gatherers** walk out to the druses and fumaroles by day, Linemen and Marauders hunt them; a rescue gives Trust and a gift.
 - **Breach Protocols:** up to 3 handicap cards for the Warden fight, each gives Crumbs and trophy chance, all three - the "Breach" paint scheme.
