@@ -131,17 +131,32 @@ public final class SettleNetSC {
         }
     }
 
+    /**
+     * Queued like EmpNetSC's / ArmorNetSC's (BladeSingularSC.queueTask: capped per player, run on the next server tick) - the
+     * trade, flight and airfield handlers read and change inventories and the registries, which belong to the server thread
+     * (review 2026-11-25, Н1: run straight on the network thread they could race a window click).
+     */
     public static class ToServerHandler implements IMessageHandler<ToServer, IMessage> {
         @Override
         public IMessage onMessage(ToServer msg, MessageContext ctx) {
-            EntityPlayerMP p = ctx.getServerHandler().playerEntity;
-            if (p != null && (msg.kind == FLIGHT_DO || msg.kind == FLIGHT_REFRESH)) {
-                com.sc.embassy.FlightServerSC.onMessage(p, msg.kind, msg.data);   // Ф6: the flights (package R)
-            } else if (p != null && (msg.kind == AIR_DO || msg.kind == AIR_REFRESH)) {
-                com.sc.embassy.EmbassyAirServerSC.onMessage(p, msg.kind, msg.data);   // «Лётное поле» (package T)
-            } else if (p != null) {
-                com.sc.settle.trade.TradeServerSC.onMessage(p, msg.kind, msg.data);
+            final EntityPlayerMP p = ctx.getServerHandler().playerEntity;
+            if (p == null) {
+                return null;
             }
+            final int kind = msg.kind;
+            final NBTTagCompound data = msg.data;
+            com.sc.item.BladeSingularSC.queueTask(p, new Runnable() {
+                @Override
+                public void run() {
+                    if (kind == FLIGHT_DO || kind == FLIGHT_REFRESH) {
+                        com.sc.embassy.FlightServerSC.onMessage(p, kind, data);   // Ф6: the flights (package R)
+                    } else if (kind == AIR_DO || kind == AIR_REFRESH) {
+                        com.sc.embassy.EmbassyAirServerSC.onMessage(p, kind, data);   // «Лётное поле» (package T)
+                    } else {
+                        com.sc.settle.trade.TradeServerSC.onMessage(p, kind, data);
+                    }
+                }
+            });
             return null;
         }
     }

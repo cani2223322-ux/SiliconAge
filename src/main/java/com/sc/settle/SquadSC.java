@@ -15,6 +15,7 @@ import java.util.UUID;
 import com.sc.dim.SubstrateConfigSC;
 import com.sc.mob.MobDropsSC;
 import com.sc.mob.MobEventsSC;
+import com.sc.util.PlayerMsgSC;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.PlayerEvent;
@@ -202,7 +203,7 @@ public final class SquadSC {
 
     /** Server: the name of player `id` - online, else the one his squad record keeps (Q.n); "?" unknown. */
     public static String nameOf(UUID id) {
-        EntityPlayerMP p = player(id);
+        EntityPlayerMP p = PlayerMsgSC.online(id);
         if (p != null) {
             return p.getCommandSenderName();
         }
@@ -256,7 +257,7 @@ public final class SquadSC {
     public static boolean invite(EntityPlayerMP from, EntityPlayerMP to) {
         SettlementRegistrySC reg = SettlementRegistrySC.get(from.worldObj);
         if (reg == null || !SubstrateConfigSC.squads) {
-            tell(from, EnumChatFormatting.GRAY, "sc.squad.off");
+            PlayerMsgSC.tell(from, EnumChatFormatting.GRAY, "sc.squad.off");
             return false;
         }
         long s = squadOf(reg.playerIfAny(from.getUniqueID()));
@@ -264,7 +265,7 @@ public final class SquadSC {
             return false;                                       // one squad already
         }
         if (s != 0L && !room(membersOf(reg, s, null).size())) {
-            tell(from, EnumChatFormatting.RED, "sc.squad.full", String.valueOf(MAX));
+            PlayerMsgSC.tell(from, EnumChatFormatting.RED, "sc.squad.full", String.valueOf(MAX));
             return false;
         }
         long now = from.worldObj.getTotalWorldTime();
@@ -276,7 +277,7 @@ public final class SquadSC {
         IChatComponent no = button("sc.squad.decline", "/scsquad decline " + name, EnumChatFormatting.RED);
         to.addChatComponentMessage(new ChatComponentTranslation("sc.squad.invite.got", name, yes, no)
                 .setChatStyle(new ChatStyle().setColor(EnumChatFormatting.AQUA)));
-        tell(from, EnumChatFormatting.DARK_AQUA, "sc.squad.invite.sent", to.getCommandSenderName());
+        PlayerMsgSC.tell(from, EnumChatFormatting.DARK_AQUA, "sc.squad.invite.sent", to.getCommandSenderName());
         return true;
     }
 
@@ -290,13 +291,13 @@ public final class SquadSC {
     public static void accept(EntityPlayerMP p, String fromName) {
         SettlementRegistrySC reg = SettlementRegistrySC.get(p.worldObj);
         if (reg == null || !SubstrateConfigSC.squads) {
-            tell(p, EnumChatFormatting.GRAY, "sc.squad.off");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.squad.off");
             return;
         }
         Invite inv = take(p.getUniqueID(), fromName);
         long now = p.worldObj.getTotalWorldTime();
         if (inv == null || !inviteOpen(inv.until, now)) {
-            tell(p, EnumChatFormatting.GRAY, "sc.squad.expired");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.squad.expired");
             return;
         }
         join(reg, inv.from, inv.fromName, p.getUniqueID(), p.getCommandSenderName(), now);
@@ -313,9 +314,9 @@ public final class SquadSC {
             return true;
         }
         if (s != 0L && !room(membersOf(reg, s, null).size())) {
-            EntityPlayerMP p = player(who);
+            EntityPlayerMP p = PlayerMsgSC.online(who);
             if (p != null) {
-                tell(p, EnumChatFormatting.RED, "sc.squad.full", String.valueOf(MAX));
+                PlayerMsgSC.tell(p, EnumChatFormatting.RED, "sc.squad.full", String.valueOf(MAX));
             }
             return false;
         }
@@ -331,7 +332,7 @@ public final class SquadSC {
         write(w, s, now, whoName);
         reg.markDirty();
         for (EntityPlayerMP m : onlineOf(reg, s)) {
-            tell(m, EnumChatFormatting.AQUA, "sc.squad.joined", whoName);
+            PlayerMsgSC.tell(m, EnumChatFormatting.AQUA, "sc.squad.joined", whoName);
         }
         return true;
     }
@@ -348,12 +349,12 @@ public final class SquadSC {
     public static void decline(EntityPlayerMP p, String fromName) {
         Invite inv = take(p.getUniqueID(), fromName);
         if (inv == null) {
-            tell(p, EnumChatFormatting.GRAY, "sc.squad.expired");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.squad.expired");
             return;
         }
-        EntityPlayerMP from = player(inv.from);
+        EntityPlayerMP from = PlayerMsgSC.online(inv.from);
         if (from != null) {
-            tell(from, EnumChatFormatting.GRAY, "sc.squad.declined", p.getCommandSenderName());
+            PlayerMsgSC.tell(from, EnumChatFormatting.GRAY, "sc.squad.declined", p.getCommandSenderName());
         }
     }
 
@@ -387,7 +388,7 @@ public final class SquadSC {
         }
         reg.markDirty();
         for (EntityPlayerMP m : told) {
-            tell(m, EnumChatFormatting.GRAY, "sc.squad.left", whoName);
+            PlayerMsgSC.tell(m, EnumChatFormatting.GRAY, "sc.squad.left", whoName);
         }
         return true;
     }
@@ -397,13 +398,13 @@ public final class SquadSC {
         SettlementRegistrySC reg = SettlementRegistrySC.get(p.worldObj);
         long s = reg == null ? 0L : squadOf(reg.playerIfAny(p.getUniqueID()));
         if (s == 0L) {
-            tell(p, EnumChatFormatting.GRAY, SubstrateConfigSC.squads ? "sc.squad.none" : "sc.squad.off");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, SubstrateConfigSC.squads ? "sc.squad.none" : "sc.squad.off");
             return;
         }
         List<UUID> all = membersOf(reg, s, null);
-        tell(p, EnumChatFormatting.AQUA, "sc.squad.list.head", String.valueOf(all.size()));
+        PlayerMsgSC.tell(p, EnumChatFormatting.AQUA, "sc.squad.list.head", String.valueOf(all.size()));
         for (UUID u : all) {
-            EntityPlayerMP m = player(u);
+            EntityPlayerMP m = PlayerMsgSC.online(u);
             IChatComponent status;
             if (m == null) {
                 status = new ChatComponentTranslation("sc.squad.list.offline");
@@ -477,31 +478,14 @@ public final class SquadSC {
         return out;
     }
 
-    /** The online player `id`, or null. */
-    public static EntityPlayerMP player(UUID id) {
-        if (id == null) {
-            return null;
-        }
-        for (EntityPlayerMP p : online()) {
-            if (id.equals(p.getUniqueID())) {
-                return p;
-            }
-        }
-        return null;
-    }
-
     private static List<EntityPlayerMP> onlineOf(SettlementRegistrySC reg, long s) {
         List<EntityPlayerMP> out = new ArrayList<EntityPlayerMP>();
         for (UUID u : membersOf(reg, s, null)) {
-            EntityPlayerMP p = player(u);
+            EntityPlayerMP p = PlayerMsgSC.online(u);
             if (p != null) {
                 out.add(p);
             }
         }
         return out;
-    }
-
-    static void tell(EntityPlayer p, EnumChatFormatting colour, String key, Object... args) {
-        p.addChatComponentMessage(new ChatComponentTranslation(key, args).setChatStyle(new ChatStyle().setColor(colour)));
     }
 }

@@ -38,10 +38,11 @@ public class MachineRecipe {
     public final float[] byproductChances;
 
     /**
-     * МШ-4 (audit 2026-11-04): a tool among the inputs must be unworn (damage 0) - the photomask the Upgrade Station EV turns into a
-     * whole EUV mask. Set by freshTools() at registration; other recipes keep taking a worn tool.
+     * МШ-4 (audit 2026-11-04) / ОМ-4: the tools among the inputs are blanks - the photomask the Upgrade Station EV turns into a whole
+     * EUV mask: they must be unworn (damage 0) and are used up whole instead of worn by one use. Set by consumesTools() at
+     * registration; other recipes keep taking a worn tool and wearing it.
      */
-    private boolean freshTools;
+    private boolean toolBlanks;
 
     private static final ItemStack[] NO_BYPRODUCTS = new ItemStack[0];
     private static final float[] NO_CHANCES = new float[0];
@@ -71,20 +72,25 @@ public class MachineRecipe {
         this.byproductChances = byproductChances;
     }
 
-    /** МШ-4: this recipe takes only unworn tools (see freshTools); returns itself for registration in one line. */
-    public MachineRecipe freshTools() {
-        freshTools = true;
+    /** МШ-4 / ОМ-4: this recipe's tool inputs are blanks (see toolBlanks); returns itself for registration in one line. */
+    public MachineRecipe consumesTools() {
+        toolBlanks = true;
         return this;
     }
 
-    /** МШ-4: whether this recipe takes only unworn tools. */
+    /** ОМ-4: whether this recipe uses its tool inputs up whole (TileEntityMachineSC.consumeInputs) instead of wearing them. */
+    public boolean consumesToolsWhole() {
+        return toolBlanks;
+    }
+
+    /** МШ-4: whether this recipe takes only unworn tools - its blanks (the same flag as consumesToolsWhole). */
     public boolean needsFreshTools() {
-        return freshTools;
+        return toolBlanks;
     }
 
     /** МШ-4: a worn tool where this recipe wants an unworn one. */
     private boolean wornTool(ItemStack provided) {
-        return freshTools && provided != null && provided.getItem() instanceof com.sc.item.ItemToolSC && provided.getItemDamage() != 0;
+        return toolBlanks && provided != null && provided.getItem() instanceof com.sc.item.ItemToolSC && provided.getItemDamage() != 0;
     }
 
     /**

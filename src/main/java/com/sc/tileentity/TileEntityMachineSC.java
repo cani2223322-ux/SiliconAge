@@ -1487,8 +1487,8 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 // Only the mod's tools (moulds, blades, photomask...) wear instead of being used up.
                 // Checking isDamageable() also caught suit pieces: the Upgrade Station only nicked
                 // the input armour and ran again - endless Quantum/Exo pieces (chips copied too).
-                // ОМ-4: a tool made from a tool (the photomask -> the EUV mask) is used up, not worn.
-                if (stack.getItem() instanceof com.sc.item.ItemToolSC && !madeFromTool(recipe, stack)) {
+                // ОМ-4: a recipe whose tools are blanks (the photomask -> the EUV mask) uses them up, not wears them.
+                if (stack.getItem() instanceof com.sc.item.ItemToolSC && !recipe.consumesToolsWhole()) {
                     // A tool (§13.5) - damage it by 1 use instead of consuming the stack.
                     int newDamage = stack.getItemDamage() + 1;
                     if (newDamage >= stack.getItem().getMaxDamage(stack)) {
@@ -1505,13 +1505,6 @@ public class TileEntityMachineSC extends TileEntityEnergyBase implements ISidedI
                 break;
             }
         }
-    }
-
-    /** ОМ-4: the photomask going into a tool (the EUV mask) - that input is the new tool's blank, not a worn tool. */
-    private static boolean madeFromTool(MachineRecipe recipe, ItemStack tool) {
-        return ((com.sc.item.ItemToolSC) tool.getItem()).getType() == com.sc.util.SCToolType.PHOTOMASK
-                && recipe.outputs != null && recipe.outputs.length > 0 && recipe.outputs[0] != null
-                && recipe.outputs[0].getItem() instanceof com.sc.item.ItemToolSC;
     }
 
     private boolean hasRoomForOutput(MachineRecipe recipe) {

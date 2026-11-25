@@ -345,11 +345,6 @@ public final class TradeTableSC {
                 TradeOfferSC.UNLIMITED, false, 1);
     }
 
-    /** ПД-4: the restoring service `key` is paid with Wanted Tokens (one of the twins). */
-    public static boolean tokenRestore(String key) {
-        return key != null && key.startsWith("armRestoreTokens");
-    }
-
     /**
      * One of the Armourer's restoring services (ПТ-12): a trophy of `group` at `tier` + his chips + the parts -> the real
      * item (TrophyRestoreSC: the same parts the station takes); no limit (TradeOfferSC.UNLIMITED, TODO(balance)). Its parts

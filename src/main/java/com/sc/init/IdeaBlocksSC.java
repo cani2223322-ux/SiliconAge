@@ -30,7 +30,7 @@ public final class IdeaBlocksSC {
         GameRegistry.registerBlock(relay, com.sc.block.ItemBlockRelaySC.class, "relay");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityRelaySC.class, "SiliconAge.relay");
         dataPort = new com.sc.block.BlockDataPortSC();
-        GameRegistry.registerBlock(dataPort, "dataPort");
+        GameRegistry.registerBlock(dataPort, com.sc.block.ItemBlockDataPortSC.class, "dataPort");
         GameRegistry.registerTileEntity(com.sc.tileentity.TileEntityDataPortSC.class, "SiliconAge.dataPort");
         energyBank = new com.sc.block.BlockEnergyBankSC();
         GameRegistry.registerBlock(energyBank, com.sc.block.ItemBlockEnergyBankSC.class, "energyBank");

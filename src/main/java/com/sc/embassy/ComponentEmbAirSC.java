@@ -10,7 +10,6 @@ import com.sc.settle.gen.SettlementLayoutSC;
 
 import net.minecraft.block.Block;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraft.world.gen.structure.StructureBoundingBox;
 
@@ -111,12 +110,6 @@ public abstract class ComponentEmbAirSC extends ComponentEmbFrameSC {
     /** The world direction (NORTH..WEST) of a step (da, dq) of the field's frame. */
     protected int dirOfq(int da, int dq) {
         return dirOf(da, dq * side);
-    }
-
-    /** The tile at (a, floor + dy, q) (null: none, outside the world). */
-    protected TileEntity tileq(World w, int a, int dy, int q) {
-        int y = floorY + dy;
-        return y < 0 || y > 255 ? null : w.getTileEntity(fx(a, q * side), y, fz(a, q * side));
     }
 
     // ------------------------------------------------------------------ the floor's plan (the self-test's)

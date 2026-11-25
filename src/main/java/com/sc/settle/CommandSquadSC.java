@@ -3,6 +3,8 @@ package com.sc.settle;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.sc.util.PlayerMsgSC;
+
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
 import net.minecraft.entity.player.EntityPlayer;
@@ -61,7 +63,7 @@ public class CommandSquadSC extends CommandBase {
         } else if ("leave".equalsIgnoreCase(sub)) {
             SettlementRegistrySC reg = SettlementRegistrySC.get(p.worldObj);
             if (reg == null || !SquadSC.leave(reg, p.getUniqueID(), p.getCommandSenderName())) {
-                SquadSC.tell(p, EnumChatFormatting.GRAY, "sc.squad.none");
+                PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.squad.none");
             }
         } else if ("list".equalsIgnoreCase(sub)) {
             SquadSC.list(p);

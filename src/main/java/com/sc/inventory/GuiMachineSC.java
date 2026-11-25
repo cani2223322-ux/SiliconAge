@@ -81,6 +81,11 @@ public class GuiMachineSC extends GuiContainer {
     private final boolean roll;
     /** The Upgrade Stations: the tier ladder (Nano > Quantum > Exo, or chip I > II > III), the bench, what goes in and out. */
     private final boolean station;
+    /**
+     * The recipes the slots make, resolved once per frame (and per screen tick) by refreshRecipes: the Upgrade Station's
+     * (findItemRecipe) and the Centrifuge's (findCentRecipe); null on the other screens.
+     */
+    private com.sc.machine.MachineRecipe stationRecipe, centRecipeNow;
     /** The Kiln: its five products as badges, the kiln wide, the firing curve under it with its stages. */
     private final boolean kiln;
     /** The Fluid Cell Filler: its two fluids as badges, the filler, a row of the capsules the tank still fills. */
@@ -232,6 +237,7 @@ public class GuiMachineSC extends GuiContainer {
     @Override
     public void updateScreen() {
         super.updateScreen();
+        refreshRecipes();
         if (smelter) {
             for (Object o : buttonList) {
                 net.minecraft.client.gui.GuiButton b = (net.minecraft.client.gui.GuiButton) o;
@@ -399,6 +405,22 @@ public class GuiMachineSC extends GuiContainer {
      * (a station's helium recipe shown before the helium is in). Null none.
      */
     private com.sc.machine.MachineRecipe itemRecipe() {
+        return stationRecipe;
+    }
+
+    /** The Centrifuge's recipe as resolved this frame (see findCentRecipe). */
+    private com.sc.machine.MachineRecipe centRecipe() {
+        return centRecipeNow;
+    }
+
+    /** Resolves the screen's recipe once - the station's and the centrifuge's helpers read it instead of searching again. */
+    private void refreshRecipes() {
+        stationRecipe = station ? findItemRecipe() : null;
+        centRecipeNow = cent ? findCentRecipe() : null;
+    }
+
+    /** The search behind itemRecipe(). */
+    private com.sc.machine.MachineRecipe findItemRecipe() {
         net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
         boolean any = false;
         for (int i = 0; i < in.length; i++) {
@@ -1631,13 +1653,11 @@ public class GuiMachineSC extends GuiContainer {
     private int[] stationLadder() {
         com.sc.machine.MachineType type = machine.getMachineType();
         int stationTier = type == com.sc.machine.MachineType.UPGRADE_STATION_MV ? 0 : type == com.sc.machine.MachineType.UPGRADE_STATION_HV ? 1 : 2;
-        net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
         boolean any = false;
-        for (int i = 0; i < in.length; i++) {
-            in[i] = machine.getStackInSlot(i);
-            any |= in[i] != null;
+        for (int i = 0; i < TileEntityMachineSC.INPUT_SLOTS && !any; i++) {
+            any = machine.getStackInSlot(i) != null;
         }
-        com.sc.machine.MachineRecipe r = any ? itemRecipe() : null;
+        com.sc.machine.MachineRecipe r = itemRecipe();                // null with the slots empty
         net.minecraft.item.ItemStack out = r == null || r.outputs.length == 0 ? null : r.outputs[0];
         int kind = 0, step = -1;
         if (out != null && out.getItem() instanceof com.sc.item.ItemArmorChipSC) {
@@ -1767,7 +1787,7 @@ public class GuiMachineSC extends GuiContainer {
     }
 
     /** The Centrifuge's recipe: the one its input makes, or null (nothing to separate). */
-    private com.sc.machine.MachineRecipe centRecipe() {
+    private com.sc.machine.MachineRecipe findCentRecipe() {
         net.minecraft.item.ItemStack[] in = new net.minecraft.item.ItemStack[TileEntityMachineSC.INPUT_SLOTS];
         for (int i = 0; i < in.length; i++) {
             in[i] = machine.getStackInSlot(i);
@@ -2152,6 +2172,7 @@ public class GuiMachineSC extends GuiContainer {
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         TextFitSC.beginFrame();
+        refreshRecipes();
         super.drawScreen(mouseX, mouseY, partialTicks);
         List<String> tooltip = tooltipAt(mouseX - guiLeft, mouseY - guiTop);
         if (tooltip == null) {

@@ -174,13 +174,40 @@ public class BlockEnergyBankSC extends Block {
         return true;
     }
 
-    /** A port: a bank block put or taken away next to it - its shut faces (TileEntityEnergyBankPortSC) looked at again. */
+    /**
+     * A port: a bank block put or taken away next to it - its shut faces (TileEntityEnergyBankPortSC) looked at again. A bank block next
+     * to it changed (its meta, say): the controllers near rescan (a put / broken one tells them itself - onBlockAdded, breakBlock).
+     */
     @Override
     public void onNeighborBlockChange(World world, int x, int y, int z, Block neighbour) {
-        TileEntity te = world.isRemote || !isPort(world.getBlockMetadata(x, y, z)) ? null : world.getTileEntity(x, y, z);
+        if (world.isRemote) {
+            return;
+        }
+        if (neighbour == this) {
+            TileEntityEnergyBankSC.markNear(world, x, y, z);
+        }
+        TileEntity te = !isPort(world.getBlockMetadata(x, y, z)) ? null : world.getTileEntity(x, y, z);
         if (te instanceof TileEntityEnergyBankPortSC) {
             ((TileEntityEnergyBankPortSC) te).neighbourChanged();
         }
+    }
+
+    /** A bank block put: the controllers near rescan at once (the scan is event-driven - TileEntityEnergyBankSC). */
+    @Override
+    public void onBlockAdded(World world, int x, int y, int z) {
+        super.onBlockAdded(world, x, y, z);
+        if (!world.isRemote) {
+            TileEntityEnergyBankSC.markNear(world, x, y, z);
+        }
+    }
+
+    /** A bank block gone (broken, blown up, replaced): the controllers near rescan at once - a bank missing it unforms. */
+    @Override
+    public void breakBlock(World world, int x, int y, int z, Block block, int meta) {
+        if (!world.isRemote) {
+            TileEntityEnergyBankSC.markNear(world, x, y, z);
+        }
+        super.breakBlock(world, x, y, z, block, meta);
     }
 
     // ------------------------------------------------------------------ the controller's charge rides in its item

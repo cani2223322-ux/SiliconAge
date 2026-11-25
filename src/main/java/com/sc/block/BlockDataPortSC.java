@@ -28,7 +28,7 @@ import net.minecraft.world.World;
  * <p>
  * Fixed (the coordinator's): the class, the registry name "dataPort" (IdeaBlocksSC), the tile. ОМ-5's: everything it does, the icons
  * (dataPort - the top and bottom, dataPort_side - the panel with the socket and the STOP / PERMIT lamps; tools/gen_dataport_tex.py),
- * the recipe (ModRecipesIdeasSC.om5), the tooltip (client.DataPortTooltipSC - the block has the default ItemBlock).
+ * the recipe (ModRecipesIdeasSC.om5), the tooltip (ItemBlockDataPortSC).
  */
 public class BlockDataPortSC extends Block {
 
@@ -44,9 +44,6 @@ public class BlockDataPortSC extends Block {
         setResistance(30F);
         setStepSound(soundTypeMetal);
         setHarvestLevel("pickaxe", 1);
-        if (cpw.mods.fml.common.FMLCommonHandler.instance().getSide().isClient()) {
-            com.sc.client.DataPortTooltipSC.register();          // the tooltip (ОМ-5): the default ItemBlock has none
-        }
     }
 
     @Override

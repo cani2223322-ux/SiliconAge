@@ -191,18 +191,6 @@ public final class ContractEventsSC {
         return true;
     }
 
-    /** For the world test: `p` stood on the plaza of crossing (i, j) its full time now (the step as the tick gives it). */
-    public static boolean readingsNow(EntityPlayer p, int i, int j) {
-        SettlementRegistrySC reg = p == null || p.worldObj.isRemote ? null : SettlementRegistrySC.get(p.worldObj);
-        SettlementRegistrySC.PlayerRec rec = reg == null ? null : reg.playerIfAny(p.getUniqueID());
-        SettlementRegistrySC.ContractRec open = rec == null ? null : openReadings(rec);
-        if (open == null || !readingsStep(open, i, j)) {
-            return false;
-        }
-        reg.markDirty();
-        return true;
-    }
-
     private static void forget(UUID id) {
         synchronized (ON_PLAZA) {
             ON_PLAZA.remove(id);

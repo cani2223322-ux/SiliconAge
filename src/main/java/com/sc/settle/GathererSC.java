@@ -19,6 +19,7 @@ import com.sc.ruin.ItemRuinFinderSC;
 import com.sc.settle.npc.EntityGathererSC;
 import com.sc.settle.npc.NpcNamesSC;
 import com.sc.util.Material;
+import com.sc.util.PlayerMsgSC;
 
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -29,18 +30,15 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.monster.IMob;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.EnumDifficulty;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
-import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -79,8 +77,8 @@ public final class GathererSC {
     public static final int SPOT_TRIES = 200, SPOT_FROM = 8, SPOT_DEPTH = 3;
     /** ПД-5: no player within NEAR this long - the Gatherer goes home at once (leaves); the call for help at most this often. */
     public static final int ALONE_TICKS = 400, CALL_TICKS = 200;
-    /** ПД-5: the rescue - the attackers dead or this far for SAFE_TICKS; the players this near are thanked. */
-    public static final int SAFE_REACH = 24, SAFE_TICKS = 100, SAVED_REACH = 32;
+    /** ПД-5: the rescue - the attackers dead or this far for SAFE_TICKS. */
+    public static final int SAFE_REACH = 24, SAFE_TICKS = 100;
     /** ПД-5: a hostile this near makes it run home. */
     public static final int DANGER = 12;
     /**
@@ -208,7 +206,7 @@ public final class GathererSC {
         long now = w.getTotalWorldTime();
         for (Object o : w.playerEntities) {
             EntityPlayer p = (EntityPlayer) o;
-            if (!real(p) || p.capabilities.isCreativeMode || !p.isEntityAlive()) {
+            if (!PlayerMsgSC.isReal(p) || p.capabilities.isCreativeMode || !p.isEntityAlive()) {
                 continue;
             }
             SettlementRegistrySC.LocalRec l = s == null ? null : s.localIfAny(p.getUniqueID());
@@ -419,8 +417,8 @@ public final class GathererSC {
         for (Object p : g.worldObj.playerEntities) {
             EntityPlayer pl = (EntityPlayer) p;
             double dx = g.posX - pl.posX, dz = g.posZ - pl.posZ;
-            if (real(pl) && dx * dx + dz * dz <= (double) NEAR * NEAR) {
-                tell(pl, EnumChatFormatting.RED, "sc.gatherer.call", name,
+            if (PlayerMsgSC.isReal(pl) && dx * dx + dz * dz <= (double) NEAR * NEAR) {
+                PlayerMsgSC.tell(pl, EnumChatFormatting.RED, "sc.gatherer.call", name,
                         new ChatComponentTranslation("sc.finder.dir." + ItemRuinFinderSC.DIRS[ItemRuinFinderSC.direction((int) dx, (int) dz)]),
                         String.valueOf((int) Math.round(Math.sqrt(dx * dx + dz * dz))));
             }
@@ -490,7 +488,7 @@ public final class GathererSC {
         }
         for (Object p : w.playerEntities) {
             EntityPlayer pl = (EntityPlayer) p;
-            if (!real(pl) || pl.capabilities.isCreativeMode || !helpers.contains(pl.getUniqueID())) {
+            if (!PlayerMsgSC.isReal(pl) || pl.capabilities.isCreativeMode || !helpers.contains(pl.getUniqueID())) {
                 continue;
             }
             SettlementRegistrySC.LocalRec l = s.localIfAny(pl.getUniqueID());
@@ -508,9 +506,9 @@ public final class GathererSC {
                         pl.dropPlayerItemWithRandomChoice(gift, false);
                     }
                 }
-                tell(pl, EnumChatFormatting.GREEN, "sc.gatherer.saved", name, ReputationSC.signed(got), what);
+                PlayerMsgSC.tell(pl, EnumChatFormatting.GREEN, "sc.gatherer.saved", name, ReputationSC.signed(got), what);
             } else {
-                tell(pl, EnumChatFormatting.GRAY, "sc.gatherer.savedToday", name);
+                PlayerMsgSC.tell(pl, EnumChatFormatting.GRAY, "sc.gatherer.savedToday", name);
             }
         }
         if (due && anyone) {
@@ -575,8 +573,8 @@ public final class GathererSC {
         IChatComponent name = NpcNamesSC.name(g.nameCode());
         for (Object p : g.worldObj.playerEntities) {
             EntityPlayer pl = (EntityPlayer) p;
-            if (real(pl) && pl.getDistanceSqToEntity(g) <= (double) NEAR * NEAR) {
-                tell(pl, EnumChatFormatting.DARK_RED, "sc.gatherer.died", name);
+            if (PlayerMsgSC.isReal(pl) && pl.getDistanceSqToEntity(g) <= (double) NEAR * NEAR) {
+                PlayerMsgSC.tell(pl, EnumChatFormatting.DARK_RED, "sc.gatherer.died", name);
             }
         }
         done(g.outingId());
@@ -586,7 +584,7 @@ public final class GathererSC {
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void onHurt(LivingHurtEvent e) {
         if (e.isCanceled() || e.entityLiving == null || e.entityLiving.worldObj.isRemote || e.entityLiving instanceof EntityGathererSC
-                || e.source == null || !real(e.source.getEntity())) {
+                || e.source == null || !PlayerMsgSC.isReal(e.source.getEntity())) {
             return;
         }
         Outing o = attackedBy(e.entityLiving);
@@ -613,7 +611,7 @@ public final class GathererSC {
 
     /** `by` (a real player) one of `o`'s rescuers. Under OUTINGS. */
     private static void helper(Outing o, Entity by) {
-        if (real(by) && !o.helpers.contains(by.getUniqueID())) {
+        if (PlayerMsgSC.isReal(by) && !o.helpers.contains(by.getUniqueID())) {
             o.helpers.add(by.getUniqueID());
         }
     }
@@ -625,26 +623,15 @@ public final class GathererSC {
         }
     }
 
-    // ================================================================== the world test's hooks
-
-    /** The world test: one Gatherer out of `s` now (the time, the players not asked). */
-    public static EntityGathererSC sendNow(WorldServer w, SettlementRegistrySC.Settlement s) {
-        SettlementRegistrySC r = SettlementRegistrySC.get(w);
-        return r == null ? null : send(w, r, s);
-    }
-
-    /** The world test: the rescue's watch now. */
-    public static void watchNow(WorldServer w) {
-        watch(w);
-    }
-
-    // ================================================================== helpers
-
-    private static boolean real(Object o) {
-        return o instanceof EntityPlayerMP && !(o instanceof FakePlayer);
-    }
-
-    private static void tell(EntityPlayer p, EnumChatFormatting colour, String key, Object... args) {
-        p.addChatComponentMessage(new ChatComponentTranslation(key, args).setChatStyle(new ChatStyle().setColor(colour)));
+    /** Any Gatherer out in dimension `dim` (EntityAITargetGathererSC's cheap check before its search). */
+    public static boolean anyOuting(int dim) {
+        synchronized (OUTINGS) {
+            for (Outing o : OUTINGS.values()) {
+                if (o.dim == dim) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

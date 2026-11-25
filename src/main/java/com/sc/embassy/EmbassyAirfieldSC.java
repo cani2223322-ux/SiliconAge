@@ -616,11 +616,6 @@ public final class EmbassyAirfieldSC {
             return d == null || d.length < 4 ? null : of(p.coreX, p.coreZ, p.radius, p.floorY, p.gateDir, d[0], d[1], d[2], d[3]);
         }
 
-        /** The numbers the pieces keep in their NBT ("EmbAir": kind, side, ils, version - the frame is ComponentEmbFrameSC's). */
-        public int[] airInts() {
-            return new int[]{kind, side, ils, version};
-        }
-
         // -------------------------------------------------------------- the frame
 
         /** The world X / Z of frame cell (a, q). */

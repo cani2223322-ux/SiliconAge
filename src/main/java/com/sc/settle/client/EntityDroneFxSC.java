@@ -22,6 +22,8 @@ import net.minecraft.world.World;
 public class EntityDroneFxSC extends EntityFX {
 
     public static final ResourceLocation TEXTURE = new ResourceLocation(Reference.ASSETS, "textures/particles/tunerDrone.png");
+    /** EffectRenderer's batch texture, bound again after an own-texture quad (drawOwn). */
+    private static final ResourceLocation PARTICLES = new ResourceLocation("textures/particle/particles.png");
     /** Its life (ticks); the hover over the showcase (blocks). */
     public static final int LIFE = 600;
     public static final double HOVER_MIN = 3D, HOVER_MAX = 5D;
@@ -113,7 +115,7 @@ public class EntityDroneFxSC extends EntityFX {
         t.addVertexWithUV(x + rx * size - ryz * size, y - rz * size, z + rxy * size - rxz * size, u0, v1);
         t.draw();
         GL11.glAlphaFunc(GL11.GL_GREATER, 0.1F);
-        Minecraft.getMinecraft().getTextureManager().bindTexture(new ResourceLocation("textures/particle/particles.png"));
+        Minecraft.getMinecraft().getTextureManager().bindTexture(PARTICLES);
         t.startDrawingQuads();
     }
 }

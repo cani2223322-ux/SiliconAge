@@ -926,29 +926,24 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     }
 
     /**
-     * ОМ-5 (the scans - the Tokamak XV's 7x7x3, the Singular Reactor's 7x7x5): every Data Port in the build's shell (its walls, cap and floor)
-     * is told it belongs here (TileEntityDataPortSC.bind) and listed. `dyMin..dyMax` - the build's layers round this block.
+     * ОМ-5 (the scans - the Tokamak XV's 7x7x3, the Singular Reactor's 7x7x5): every Data Port the scan found in the build's shell (its
+     * walls, cap and floor - noted by notePortSC as it walked them) is told it belongs here (TileEntityDataPortSC.bind) and listed.
      */
-    public void bindPortsSC(int dyMin, int dyMax) {
+    public void bindPortsSC(java.util.List<int[]> found) {
         dataPorts.clear();
-        if (com.sc.init.IdeaBlocksSC.dataPort == null) {
-            return;
-        }
-        for (int dy = dyMin; dy <= dyMax; dy++) {
-            for (int dz = -3; dz <= 3; dz++) {
-                for (int dx = -3; dx <= 3; dx++) {
-                    boolean shell = dy == dyMin || dy == dyMax || Math.abs(dx) == 3 || Math.abs(dz) == 3;
-                    int x = xCoord + dx, y = yCoord + dy, z = zCoord + dz;
-                    if (!shell || worldObj.getBlock(x, y, z) != com.sc.init.IdeaBlocksSC.dataPort) {
-                        continue;
-                    }
-                    net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(x, y, z);
-                    if (te instanceof TileEntityDataPortSC) {
-                        ((TileEntityDataPortSC) te).bind(xCoord, yCoord, zCoord);
-                        dataPorts.add(new int[]{x, y, z});
-                    }
-                }
+        for (int[] p : found) {
+            net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
+            if (te instanceof TileEntityDataPortSC) {
+                ((TileEntityDataPortSC) te).bind(xCoord, yCoord, zCoord);
+                dataPorts.add(p);
             }
+        }
+    }
+
+    /** ОМ-5 (the scans): a shell block at (x, y, z) that is a Data Port goes into `found` (bound by bindPortsSC once the scan is done). */
+    public static void notePortSC(net.minecraft.world.World w, java.util.List<int[]> found, int x, int y, int z) {
+        if (com.sc.init.IdeaBlocksSC.dataPort != null && w.getBlock(x, y, z) == com.sc.init.IdeaBlocksSC.dataPort) {
+            found.add(new int[]{x, y, z});
         }
     }
 
@@ -964,6 +959,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
 
     /** ОМ-5: lighting is allowed by the ports - every PERMIT port of the build powered (none in PERMIT: yes). Server. */
     public boolean ignitionAllowedByPorts() {
+        if (dataPorts.isEmpty()) {
+            return true;                                        // no ports: nothing to look up (asked every tick while unlit)
+        }
         for (int[] p : dataPorts) {
             net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
             if (te instanceof TileEntityDataPortSC && ((TileEntityDataPortSC) te).mode() == TileEntityDataPortSC.PERMIT
@@ -1076,12 +1074,16 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         long top = 0, bottomMask = 0;
         tankPorts.clear();
         storePorts.clear();
+        java.util.List<int[]> found = new java.util.ArrayList<int[]>();   // ОМ-5: the Data Ports in its shell
         for (int dz = -3; dz <= 3; dz++) {
             for (int dx = -3; dx <= 3; dx++) {
                 for (int dy = -1; dy <= 1; dy += 2) {                 // cap and floor
                     if (!isShell(x0 + dx, y0 + dy, z0 + dz)) {
                         caps++;
-                    } else if (dy > 0) {
+                        continue;
+                    }
+                    notePortSC(worldObj, found, x0 + dx, y0 + dy, z0 + dz);   // ОМ-5
+                    if (dy > 0) {
                         top |= 1L << ((dz + 3) * 7 + dx + 3);
                     } else {
                         bottomMask |= 1L << ((dz + 3) * 7 + dx + 3);
@@ -1103,6 +1105,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
                 if (isShell(x, y0, z)) {
                     walls |= 1 << w;
                     portMem[w] = null;
+                    notePortSC(worldObj, found, x, y0, z);           // ОМ-5
                 } else if ((te instanceof TileEntityTankSC || te instanceof TileEntityEnergyStorageSC && !(te instanceof TileEntityChargePadSC))
                         && portHeldByOther(x, y0, z)) {
                     taken = true;                                   // another XV's port: a gap in this wall
@@ -1187,7 +1190,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
         extraPort = extra;
         holdPorts();
         nearBuild = !ignited && otherBuildNear(worldObj, x0, y0, z0, 1, this);   // checked for the lighting only
-        bindPortsSC(-1, 1);                                     // ОМ-5: the Data Ports in its shell
+        bindPortsSC(found);                                     // ОМ-5: the Data Ports in its shell
         bigReady = coils == 0xFFFFFF && walls == 0xFFFFFF && caps == 0 && stores > 0 && weak == 0;
         for (int i = 0; i < 4; i++) {
             portFluid[i] = portAmount(PORT_FLUIDS[i]);

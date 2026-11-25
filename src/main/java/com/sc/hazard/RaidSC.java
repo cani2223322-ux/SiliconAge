@@ -102,18 +102,6 @@ public final class RaidSC {
         return begin(w, r, s, by, kind, kind != 0) != null;
     }
 
-    /** The world test: the kills of the running raid on `id` by `player` (-1 none running). */
-    public static int killsBy(int id, UUID player) {
-        RaidRunSC run = RUNS.get(Integer.valueOf(id));
-        return run == null ? -1 : run.kills(player);
-    }
-
-    /** The world test: the running raid on `id` checks its called night now (as checks would; the night not asked). @return it began */
-    public static boolean callNow(WorldServer w, SettlementRegistrySC.Settlement s) {
-        SettlementRegistrySC r = w == null ? null : SettlementRegistrySC.get(w);
-        return r != null && s != null && !running(s.id) && called(w, r, s);
-    }
-
     /** The world test: the raiders of the running raid on `id` still alive and loaded, -1 none running. */
     public static int raidersLeft(int id) {
         RaidRunSC run = RUNS.get(Integer.valueOf(id));

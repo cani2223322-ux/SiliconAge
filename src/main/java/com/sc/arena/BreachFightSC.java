@@ -13,13 +13,13 @@ import com.sc.mob.EntityBreakdownWardenSC;
 import com.sc.mob.EntityEclipseSC;
 import com.sc.mob.WardenFightSC;
 import com.sc.mob.WardenRulesSC;
+import com.sc.util.PlayerMsgSC;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.world.WorldServer;
@@ -102,11 +102,11 @@ public final class BreachFightSC {
             return false;
         }
         if (!SubstrateConfigSC.breachProtocols) {
-            tell(p, EnumChatFormatting.GRAY, "sc.protocol.refuse.off");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.protocol.refuse.off");
             return true;
         }
         if (a.state == ArenaDataSC.FIGHT || ArenaWorldSC.counting(a) || a.state == ArenaDataSC.EMPTY) {
-            tell(p, EnumChatFormatting.YELLOW, "sc.protocol.refuse.busy");
+            PlayerMsgSC.tell(p, EnumChatFormatting.YELLOW, "sc.protocol.refuse.busy");
             return true;
         }
         int pr = held.getItemDamage(), m = mask(a), bit = BreachProtocolsSC.bit(pr);
@@ -114,18 +114,18 @@ public final class BreachFightSC {
             return true;
         }
         if ((m & bit) != 0) {
-            tell(p, EnumChatFormatting.GRAY, "sc.protocol.refuse.same");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.protocol.refuse.same");
             return true;
         }
         int next = m | bit;
         if (BreachProtocolsSC.count(next) > BreachProtocolsSC.MAX) {
-            tell(p, EnumChatFormatting.RED, "sc.protocol.refuse.max", String.valueOf(BreachProtocolsSC.MAX));
+            PlayerMsgSC.tell(p, EnumChatFormatting.RED, "sc.protocol.refuse.max", String.valueOf(BreachProtocolsSC.MAX));
             return true;
         }
         if (!BreachProtocolsSC.allowed(next)) {
             int[] pair = BreachProtocolsSC.forbiddenPair(next);
             int other = pair == null ? firstOf(m) : pair[0] == pr ? pair[1] : pair[0];
-            tell(p, EnumChatFormatting.RED, "sc.protocol.refuse.pair", name(pr), name(other));
+            PlayerMsgSC.tell(p, EnumChatFormatting.RED, "sc.protocol.refuse.pair", name(pr), name(other));
             return true;
         }
         if (!p.capabilities.isCreativeMode) {
@@ -142,7 +142,7 @@ public final class BreachFightSC {
         if (d != null) {
             d.markDirty();
         }
-        tell(p, EnumChatFormatting.LIGHT_PURPLE, "sc.protocol.inserted", name(pr), String.valueOf(BreachProtocolsSC.count(next)),
+        PlayerMsgSC.tell(p, EnumChatFormatting.LIGHT_PURPLE, "sc.protocol.inserted", name(pr), String.valueOf(BreachProtocolsSC.count(next)),
                 String.valueOf(BreachProtocolsSC.MAX));
         int x = a.x + ArenaLayoutSC.CONSOLE_DX, y = a.floorY + 1, z = a.z + ArenaLayoutSC.CONSOLE_DZ;
         w.playSoundEffect(x + 0.5D, y + 0.5D, z + 0.5D, "random.click", 0.6F, 0.6F);
@@ -177,7 +177,7 @@ public final class BreachFightSC {
         if (!(p instanceof FakePlayer)) {
             p.inventoryContainer.detectAndSendChanges();
         }
-        tell(p, EnumChatFormatting.GRAY, "sc.protocol.removed", names);
+        PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.protocol.removed", names);
         console(w, a);
     }
 
@@ -263,7 +263,7 @@ public final class BreachFightSC {
             for (Object o : w.playerEntities) {
                 EntityPlayer p = (EntityPlayer) o;
                 if (p.getDistanceSq(a.x, a.floorY, a.z) <= (double) ArenaWorldSC.TELL_RADIUS * ArenaWorldSC.TELL_RADIUS) {
-                    tell(p, EnumChatFormatting.DARK_PURPLE, "sc.tooltip.breachProtocol.eclipseShadow");
+                    PlayerMsgSC.tell(p, EnumChatFormatting.DARK_PURPLE, "sc.tooltip.breachProtocol.eclipseShadow");
                 }
             }
         }
@@ -287,12 +287,5 @@ public final class BreachFightSC {
     /** The protocol's short name in the reader's language (sc.protocol.<key>: «Глухие катушки»). */
     static IChatComponent name(int p) {
         return new ChatComponentTranslation("sc.protocol." + BreachProtocolsSC.keyOf(p));
-    }
-
-    private static void tell(EntityPlayer p, EnumChatFormatting colour, String key, Object... args) {
-        if (p == null || p instanceof FakePlayer) {
-            return;
-        }
-        p.addChatComponentMessage(new ChatComponentTranslation(key, args).setChatStyle(new ChatStyle().setColor(colour)));
     }
 }

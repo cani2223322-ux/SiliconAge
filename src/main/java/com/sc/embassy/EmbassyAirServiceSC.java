@@ -13,6 +13,7 @@ import com.sc.settle.SettlementRegistrySC;
 import com.sc.settle.SettlementSC;
 import com.sc.settle.trade.TradeServerSC;
 import com.sc.util.ArmorGasSC;
+import com.sc.util.PlayerMsgSC;
 
 import cpw.mods.fml.common.FMLLog;
 import net.minecraft.entity.player.EntityPlayer;
@@ -20,11 +21,9 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.world.World;
-import net.minecraftforge.common.util.FakePlayer;
 
 /**
  * PACKAGE R (docs/plan-embassy-airfield-core.md §7, rules ЛП-10..ЛП-12, ЛП-16): the airfield's services on the server - the «Колонка
@@ -95,7 +94,7 @@ public final class EmbassyAirServiceSC {
 
     /** A «Колонка обслуживания» at (x, y, z) right-clicked by `p` (the server; the block answers true itself). */
     public static void useColumn(World w, int x, int y, int z, EntityPlayer p) {
-        if (w == null || w.isRemote || !real(p) || p.worldObj != w) {
+        if (w == null || w.isRemote || !PlayerMsgSC.isReal(p) || p.worldObj != w) {
             return;
         }
         EntityPlayerMP mp = (EntityPlayerMP) p;
@@ -111,7 +110,7 @@ public final class EmbassyAirServiceSC {
         int i = f == null ? -1 : columnIndex(f, x, y, z);
         if (i < 0) {
             c.at = -1L;                                         // a column put anywhere else (a creative copy): it serves nothing
-            tell(mp, EnumChatFormatting.GRAY, "sc.airfield.column.offline");
+            PlayerMsgSC.tell(mp, EnumChatFormatting.GRAY, "sc.airfield.column.offline");
             return;
         }
         IEmbassyAirHookSC h = EmbassyAirApiSC.hook();
@@ -168,14 +167,14 @@ public final class EmbassyAirServiceSC {
                 && c.x == x && c.y == y && c.z == z && c.id == s.id && c.price == q.price;
         if (!confirm) {
             c.at = -1L;
-            tell(p, EnumChatFormatting.AQUA, "sc.airfield.column.quote", parts(q.fill), String.valueOf(q.price));
+            PlayerMsgSC.tell(p, EnumChatFormatting.AQUA, "sc.airfield.column.quote", parts(q.fill), String.valueOf(q.price));
             if (q.capped) {
-                tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.capped",
+                PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.capped",
                         String.valueOf(EmbassyAirRulesSC.PER_DAY[EmbassyAirRulesSC.S_ARMOUR_GAS]));
             }
             int held = TradeServerSC.chipsHeld(p);
             if (held < q.price) {
-                tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.chips", String.valueOf(q.price), String.valueOf(held));
+                PlayerMsgSC.tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.chips", String.valueOf(q.price), String.valueOf(held));
                 return;
             }
             c.at = now;
@@ -185,13 +184,13 @@ public final class EmbassyAirServiceSC {
             c.z = z;
             c.id = s.id;
             c.price = q.price;
-            tell(p, EnumChatFormatting.GRAY, sneak ? "sc.airfield.column.againSneak" : "sc.airfield.column.again",
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, sneak ? "sc.airfield.column.againSneak" : "sc.airfield.column.again",
                     String.valueOf(EmbassyAirRulesSC.COLUMN_CONFIRM_TICKS / 20));
             return;
         }
         c.at = -1L;
         if (!TradeServerSC.takeChips(p, q.price)) {
-            tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.chips", String.valueOf(q.price), String.valueOf(TradeServerSC.chipsHeld(p)));
+            PlayerMsgSC.tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.chips", String.valueOf(q.price), String.valueOf(TradeServerSC.chipsHeld(p)));
             return;
         }
         int[] put = new int[q.fill.length];
@@ -206,14 +205,14 @@ public final class EmbassyAirServiceSC {
         }
         p.inventory.markDirty();
         if (total <= 0) {
-            tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.full");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.full");
             return;
         }
         SettlementRegistrySC.LocalRec l = s.local(p.getUniqueID());
         l.rollDay(SettlementSC.day(w));
         l.addCount(countKey(EmbassyAirRulesSC.S_ARMOUR_GAS), total);
         r.markDirty();
-        tell(p, EnumChatFormatting.GREEN, "sc.airfield.column.paid", parts(put), String.valueOf(owed));
+        PlayerMsgSC.tell(p, EnumChatFormatting.GREEN, "sc.airfield.column.paid", parts(put), String.valueOf(owed));
     }
 
     /**
@@ -281,24 +280,24 @@ public final class EmbassyAirServiceSC {
         int svc = EmbassyAirRulesSC.S_ARMOUR_GAS;
         switch (q.why) {
             case EmbassyAirRulesSC.PAY_ENEMY:
-                tell(p, EnumChatFormatting.RED, "sc.airfield.column.enemy", SettlementSC.displayName(s));
+                PlayerMsgSC.tell(p, EnumChatFormatting.RED, "sc.airfield.column.enemy", SettlementSC.displayName(s));
                 break;
             case EmbassyAirRulesSC.PAY_LEVEL:
-                tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.level",
+                PlayerMsgSC.tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.level",
                         new ChatComponentTranslation(ReputationSC.levelKey(EmbassyAirRulesSC.MIN_LEVEL[svc])),
                         new ChatComponentTranslation(ReputationSC.levelKey(q.level)));
                 break;
             case EmbassyAirRulesSC.PAY_LIMIT:
-                tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.limit", String.valueOf(EmbassyAirRulesSC.PER_DAY[svc]));
+                PlayerMsgSC.tell(p, EnumChatFormatting.GOLD, "sc.airfield.column.limit", String.valueOf(EmbassyAirRulesSC.PER_DAY[svc]));
                 break;
             case NO_TANKS:
-                tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.noArmour", names());
+                PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.noArmour", names());
                 break;
             case FULL:
-                tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.full");
+                PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.full");
                 break;
             default:
-                tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.offline");
+                PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.airfield.column.offline");
                 break;
         }
     }
@@ -384,7 +383,7 @@ public final class EmbassyAirServiceSC {
      * within the day's FREE_TOWS, the charts within FREE_CHARTS ever at this embassy -, then PAY_CHIPS (fewer held). Nothing changes.
      */
     private static int[] charge(EntityPlayer p, SettlementRegistrySC.Settlement s, int service, long amount, boolean free) {
-        if (!real(p) || s == null || p.worldObj.provider.dimensionId != s.dim || EmbassyAirfieldSC.fieldOf(s) == null
+        if (!PlayerMsgSC.isReal(p) || s == null || p.worldObj.provider.dimensionId != s.dim || EmbassyAirfieldSC.fieldOf(s) == null
                 || SettlementRegistrySC.get(p.worldObj) == null) {
             return new int[]{EmbassyAirRulesSC.PAY_NO_FIELD, 0};
         }
@@ -419,7 +418,7 @@ public final class EmbassyAirServiceSC {
 
     /** The «Лётная книжка»: `p`'s first landing at `s` rewarded (true) - once an embassy a player; never to its «Враг» (not written). Server. */
     public static boolean firstLanding(EntityPlayer p, SettlementRegistrySC.Settlement s) {
-        if (!real(p) || s == null || p.worldObj.provider.dimensionId != s.dim || EmbassyAirfieldSC.fieldOf(s) == null) {
+        if (!PlayerMsgSC.isReal(p) || s == null || p.worldObj.provider.dimensionId != s.dim || EmbassyAirfieldSC.fieldOf(s) == null) {
             return false;
         }
         World w = p.worldObj;
@@ -451,9 +450,9 @@ public final class EmbassyAirServiceSC {
         int got = ReputationSC.give(rec, EmbassyAirRulesSC.LOGBOOK_TRUST, ReputationSC.SRC_AIR, day, ReputationSC.ceiling(s));
         r.markDirty();
         if (n > 0) {
-            tell(p, EnumChatFormatting.AQUA, "sc.airfield.logbook.first", SettlementSC.displayName(s), String.valueOf(n), ReputationSC.signed(got));
+            PlayerMsgSC.tell(p, EnumChatFormatting.AQUA, "sc.airfield.logbook.first", SettlementSC.displayName(s), String.valueOf(n), ReputationSC.signed(got));
         } else {
-            tell(p, EnumChatFormatting.AQUA, "sc.airfield.logbook.capped", SettlementSC.displayName(s), ReputationSC.signed(got));
+            PlayerMsgSC.tell(p, EnumChatFormatting.AQUA, "sc.airfield.logbook.capped", SettlementSC.displayName(s), ReputationSC.signed(got));
         }
         return true;
     }
@@ -488,17 +487,6 @@ public final class EmbassyAirServiceSC {
         return p == null || s == null || p.worldObj == null ? 0L : usedToday(s.localIfAny(p.getUniqueID()), SettlementSC.day(p.worldObj), service);
     }
 
-    /** The armour's gases (mB) `p` may still have from the columns of `s` today (0 .. PER_DAY). Server. */
-    public static int armourGasLeft(EntityPlayer p, SettlementRegistrySC.Settlement s) {
-        int perDay = EmbassyAirRulesSC.PER_DAY[EmbassyAirRulesSC.S_ARMOUR_GAS];
-        return (int) Math.max(0L, perDay - usedToday(p, s, EmbassyAirRulesSC.S_ARMOUR_GAS));
-    }
-
-    /** The chips `mb` of the armour's gases cost `p` at `s` (his level, its spread; no refusal checked). Server. */
-    public static int armourGasPrice(EntityPlayer p, SettlementRegistrySC.Settlement s, int mb) {
-        return s == null ? 0 : EmbassyAirRulesSC.price(EmbassyAirRulesSC.S_ARMOUR_GAS, level(p, s), s.seed, mb, false);
-    }
-
     // ================================================================== memory
 
     /** Server stopped / a player logged out (null: all): the pending column quotes go. */
@@ -530,12 +518,6 @@ public final class EmbassyAirServiceSC {
         }
     }
 
-    /** A real, connected player on the server (a FakePlayer pays nothing, gets nothing, receives no line). */
-    private static boolean real(EntityPlayer p) {
-        return p instanceof EntityPlayerMP && !(p instanceof FakePlayer) && p.worldObj != null && !p.worldObj.isRemote
-                && ((EntityPlayerMP) p).playerNetServerHandler != null;
-    }
-
     private static int level(EntityPlayer p, SettlementRegistrySC.Settlement s, boolean enemy) {
         SettlementRegistrySC r = SettlementRegistrySC.get(p.worldObj);
         SettlementRegistrySC.PlayerRec pr = r == null ? null : r.playerIfAny(p.getUniqueID());
@@ -554,14 +536,5 @@ public final class EmbassyAirServiceSC {
     /** LocalRec.counts' key of `service`: "air.<key>". */
     private static String countKey(int service) {
         return EmbassyAirRulesSC.COUNT_PREFIX + EmbassyAirRulesSC.SERVICE_KEYS[service];
-    }
-
-    private static void tell(EntityPlayer p, EnumChatFormatting colour, String key, Object... args) {
-        if (!real(p)) {
-            return;
-        }
-        ChatComponentTranslation m = new ChatComponentTranslation(key, args);
-        m.setChatStyle(new ChatStyle().setColor(colour));
-        p.addChatComponentMessage(m);
     }
 }

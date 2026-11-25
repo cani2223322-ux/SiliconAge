@@ -26,7 +26,8 @@ public class EntityAITargetGathererSC extends EntityAITarget {
 
     @Override
     public boolean shouldExecute() {
-        if (taskOwner.worldObj.isRemote || taskOwner.getAttackTarget() != null || taskOwner.getRNG().nextInt(10) != 0) {
+        if (taskOwner.worldObj.isRemote || taskOwner.getAttackTarget() != null || taskOwner.getRNG().nextInt(10) != 0
+                || !GathererSC.anyOuting(taskOwner.worldObj.provider.dimensionId)) {
             return false;
         }
         List<?> l = taskOwner.worldObj.getEntitiesWithinAABB(EntityGathererSC.class, taskOwner.boundingBox.expand(reach, 4D, reach));

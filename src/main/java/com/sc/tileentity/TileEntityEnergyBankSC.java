@@ -12,8 +12,9 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.Facing;
 
 /**
- * ОМ-7 (docs/plan-ideas-2026-10-26.md): the Energy Bank's controller - the structure (its side, the cells, the ports - scanned once a
- * second, a part missing: the bank stands «разобран», nothing lost: the energy stays in the controller's NBT, capped to what the cells
+ * ОМ-7 (docs/plan-ideas-2026-10-26.md): the Energy Bank's controller - the structure (its side, the cells, the ports - scanned when a
+ * bank block near it changes (BlockEnergyBankSC -> markNear), every SCAN_SAFETY ticks to be sure, every SCAN_EVERY while a chunk of a
+ * try isn't loaded; a part missing: the bank stands «разобран», nothing lost: the energy stays in the controller's NBT, capped to what the cells
  * hold when it forms again), the energy (a long), the inflow / outflow history (EnergyBankMathSC.HISTORY seconds). NBT "scBank" {eu: long,
  * cap: long, size} - fixed by the coordinator; the rest is ОМ-7's. A comparator reads its charge (IComparatorSC).
  * <p>
@@ -29,8 +30,33 @@ import net.minecraft.util.Facing;
 public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.IComparatorSC {
 
     public static final String NBT = "scBank";
-    /** The scan's period, ticks. */
+    /** The scan's period while a try waits on an unloaded chunk, ticks. */
     public static final int SCAN_EVERY = 20;
+    /** The safety rescan's period, ticks (the scan is otherwise event-driven: markStructureDirty). */
+    public static final int SCAN_SAFETY = 600;
+    /** A dirty controller rescans at most this often, ticks (many blocks changed at once: one scan for them). */
+    public static final int SCAN_MIN_GAP = 4;
+
+    /** The server's loaded controllers (weak: a lost one never leaks) - BlockEnergyBankSC marks those near a changed block dirty. */
+    private static final java.util.Set<TileEntityEnergyBankSC> LOADED =
+            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<TileEntityEnergyBankSC, Boolean>());
+
+    /**
+     * BlockEnergyBankSC (server): a bank block at (x, y, z) put, taken away or changed - every loaded controller of `world` whose cube
+     * could hold it (within SIZE_MAX - 1 on each axis) rescans.
+     */
+    public static void markNear(net.minecraft.world.World world, int x, int y, int z) {
+        if (world == null || world.isRemote || LOADED.isEmpty()) {
+            return;
+        }
+        int r = EnergyBankMathSC.SIZE_MAX - 1;
+        for (TileEntityEnergyBankSC c : LOADED) {
+            if (c.worldObj == world && !c.isInvalid() && Math.abs(c.xCoord - x) <= r && Math.abs(c.yCoord - y) <= r
+                    && Math.abs(c.zCoord - z) <= r) {
+                c.markStructureDirty();
+            }
+        }
+    }
 
     /** The EU held and the capacity (the cells of the last good scan), the cube's side (0: not formed). */
     protected long energy, capacity;
@@ -44,7 +70,12 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
     private final List<int[]> ports = new ArrayList<int[]>();
     /** Not formed: the reason (EnergyBankMathSC.R_*) and its block. */
     private int badReason = EnergyBankMathSC.R_SIZE, badX, badY, badZ;
-    private boolean scanned;
+    /** Not saved: a block of the cube may have changed - rescan (true after a load / validate). */
+    private transient boolean dirty = true;
+    /** The last scan waited on an unloaded chunk: rescanned every SCAN_EVERY until it doesn't. */
+    private transient boolean waiting;
+    private transient long lastScan = Long.MIN_VALUE / 2;
+    private transient boolean registered;
 
     // ---- the flow
     private long secIn, secOut;
@@ -140,10 +171,16 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
         if (worldObj == null || worldObj.isRemote) {
             return;
         }
+        if (!registered) {
+            registered = true;
+            LOADED.add(this);
+        }
         long t = worldObj.getTotalWorldTime();
-        if (!scanned || (t + (xCoord & 15)) % SCAN_EVERY == 0) {
-            scanned = true;
-            scan();
+        long phase = t + (xCoord & 15);
+        if (dirty && t - lastScan >= SCAN_MIN_GAP || waiting && phase % SCAN_EVERY == 0 || phase % SCAN_SAFETY == 0) {
+            dirty = false;
+            lastScan = t;
+            waiting = scan();
         }
         if (formed()) {
             move();
@@ -236,18 +273,21 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
         return EnergyBankMathSC.check(n, k);
     }
 
-    /** Once a second: the last good cube first, then every try round the controller (see the class). */
-    private void scan() {
+    /**
+     * When dirty (a bank block near changed), every SCAN_SAFETY ticks, every SCAN_EVERY while waiting: the last good cube first, then
+     * every try round the controller (see the class). @return a try waited on an unloaded chunk (scanned again soon)
+     */
+    private boolean scan() {
         WorldKinds[] keep = new WorldKinds[1];
         boolean oldBroken = false;                              // the last cube is loaded and no longer good
         if (size > 0) {
             int c = tryCube(size, ox, oy, oz, keep);
             if (c == UNLOADED) {
-                return;                                         // part of it unloaded: the bank stays as it was
+                return true;                                    // part of it unloaded: the bank stays as it was
             }
             if (c == EnergyBankMathSC.OK) {
                 form(keep[0]);
-                return;
+                return false;
             }
             oldBroken = true;
         }
@@ -279,7 +319,7 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
                         }
                         if (c == EnergyBankMathSC.OK) {
                             form(keep[0]);
-                            return;
+                            return false;
                         }
                         int i = EnergyBankMathSC.badIndex(c);
                         if (i > bestIndex) {
@@ -292,10 +332,42 @@ public class TileEntityEnergyBankSC extends TileEntity implements com.sc.energy.
             }
         }
         if (unloaded && !oldBroken) {
-            return;                                             // nothing formed, but a try is unloaded: the bank stays as it was
+            return true;                                        // nothing formed, but a try is unloaded: the bank stays as it was
                                                                 // (a broken old cube unforms: its capacity and ports mustn't stay)
         }
         unform(EnergyBankMathSC.badReason(bestCode), bestAt);
+        return unloaded;                                        // unformed, but an unloaded try may still form it once it loads
+    }
+
+    /** A block of the cube (or of a cube it may form) changed: rescan (BlockEnergyBankSC, markNear). */
+    public void markStructureDirty() {
+        dirty = true;
+    }
+
+    @Override
+    public void validate() {
+        super.validate();
+        dirty = true;                                           // a new / loaded / moved controller scans at once
+    }
+
+    @Override
+    public void invalidate() {
+        super.invalidate();
+        unregister();
+    }
+
+    @Override
+    public void onChunkUnload() {
+        super.onChunkUnload();
+        unregister();
+    }
+
+    /** Out of LOADED - only a server's controller ever joins it (the client's never touches the set from its thread). */
+    private void unregister() {
+        if (registered) {
+            LOADED.remove(this);
+            registered = false;
+        }
     }
 
     /**

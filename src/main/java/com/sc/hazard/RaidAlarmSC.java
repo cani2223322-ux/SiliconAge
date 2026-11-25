@@ -8,6 +8,7 @@ import com.sc.settle.SettlementRegistrySC;
 import com.sc.settle.SettlementSC;
 import com.sc.settle.trade.TradeServerSC;
 import com.sc.settle.trade.TradeTableSC;
+import com.sc.util.PlayerMsgSC;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -268,7 +269,7 @@ public final class RaidAlarmSC {
         if (reg == null || buyer == null) {
             return;
         }
-        EntityPlayerMP p = online(buyer);
+        EntityPlayerMP p = PlayerMsgSC.online(buyer);
         if (p != null && p.isEntityAlive()) {
             TradeServerSC.giveChips(p, DEPOSIT);
             p.inventoryContainer.detectAndSendChanges();
@@ -348,20 +349,6 @@ public final class RaidAlarmSC {
         mine.setLong(k, Math.max(last, today) + 1L);
         rec.extra.setTag(EXTRA, mine);
         reg.markDirty();
-    }
-
-    /** The real player `id` online (any world), or null. */
-    private static EntityPlayerMP online(UUID id) {
-        net.minecraft.server.MinecraftServer srv = net.minecraft.server.MinecraftServer.getServer();
-        if (id == null || srv == null || srv.getConfigurationManager() == null) {
-            return null;
-        }
-        for (Object o : srv.getConfigurationManager().playerEntityList) {
-            if (o instanceof EntityPlayerMP && !(o instanceof FakePlayer) && id.equals(((EntityPlayerMP) o).getUniqueID())) {
-                return (EntityPlayerMP) o;
-            }
-        }
-        return null;
     }
 
     /** Server stopped. */

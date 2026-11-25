@@ -149,11 +149,6 @@ public final class ContractTableSC {
             return bundle == null ? new TradeOfferSC.Ingredient[0] : bundle.clone();
         }
 
-        /** ПД-1: a goal counted by a kill (EconomyEventsSC.killCounts). */
-        public boolean killGoal() {
-            return goal == KILL || goal == SUPPRESS_KILL || goal == STORM_KILL;
-        }
-
         /** DELIVER / CARGO: what the Elder takes (one side of a deal - TradeOfferSC.Ingredient's strict match); null for the rest. */
         public TradeOfferSC.Ingredient handIn() {
             if (goal != DELIVER && goal != CARGO) {

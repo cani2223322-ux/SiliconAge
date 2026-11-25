@@ -505,11 +505,6 @@ public class SingularReactorSC {
      */
     private boolean portStopPending, portCompressTold;
 
-    /** ГН-1: a stop asked for during the compression is waiting for the hole to be born. */
-    public boolean isPortStopPending() {
-        return portStopPending;
-    }
-
     /** ОМ-5: a Data Port's emergency stop (the "Stop" button's) - the charge cancelled, a running hole eaten; else nothing. */
     public void portStop() {
         portStop(true);
@@ -1094,6 +1089,7 @@ public class SingularReactorSC {
         tankPorts.clear();
         storePorts.clear();
         smPorts.clear();
+        List<int[]> dataPorts = new ArrayList<int[]>();             // ОМ-5: the Data Ports in its shell
         int caps = 0, coilBits = 0, nTanks = 0, nStores = 0, nWeak = 0, free = 0;
         long top = 0, bottom = 0;
         int[] wl = new int[3], pt = new int[3], jk = new int[3], cap3 = new int[3], cnt3 = new int[3];
@@ -1104,7 +1100,10 @@ public class SingularReactorSC {
                 for (int dy = -2; dy <= 2; dy += 4) {
                     if (!isShell(w, x0 + dx, y0 + dy, z0 + dz)) {
                         caps++;
-                    } else if (dy > 0) {
+                        continue;
+                    }
+                    TileEntityGeneratorSC.notePortSC(w, dataPorts, x0 + dx, y0 + dy, z0 + dz);   // ОМ-5
+                    if (dy > 0) {
                         top |= 1L << ((dz + 3) * 7 + dx + 3);
                     } else {
                         bottom |= 1L << ((dz + 3) * 7 + dx + 3);
@@ -1139,6 +1138,7 @@ public class SingularReactorSC {
                     if (isShell(w, x, y, z)) {
                         wl[l] |= 1 << wi;
                         portMem[cell] = null;
+                        TileEntityGeneratorSC.notePortSC(w, dataPorts, x, y, z);   // ОМ-5
                     } else if ((te instanceof TileEntityTankSC || store) && g.portHeldByOtherSC(x, y, z)) {
                         taken = true;                                 // another build's port: a gap here
                         portMem[cell] = null;
@@ -1219,7 +1219,7 @@ public class SingularReactorSC {
         for (int i = 0; i < 3; i++) {
             portFluid[i] = g.portAmountSC(GASES[i]);
         }
-        g.bindPortsSC(-2, 2);                                   // ОМ-5: the Data Ports in its shell
+        g.bindPortsSC(dataPorts);                               // ОМ-5: the Data Ports in its shell
         portNoPermit = phase == PHASE_IDLE && !g.ignitionAllowedByPorts();
     }
 

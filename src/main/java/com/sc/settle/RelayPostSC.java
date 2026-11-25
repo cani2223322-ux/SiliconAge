@@ -27,6 +27,7 @@ import com.sc.settle.npc.NpcNamesSC;
 import com.sc.settle.npc.ai.NpcNavSC;
 import com.sc.tileentity.TileEntityRelaySC;
 import com.sc.tileentity.TileEntitySettlementCoreSC;
+import com.sc.util.PlayerMsgSC;
 
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -46,8 +47,6 @@ import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
@@ -353,7 +352,7 @@ public final class RelayPostSC {
         if (why[0] != null) {
             e.setCanceled(true);
             if (e.player != null && !(e.player instanceof FakePlayer)) {
-                tell(e.player, EnumChatFormatting.RED, why[0], argOf(why), String.valueOf(RelayRulesSC.SETTLEMENT_GAP));
+                PlayerMsgSC.tell(e.player, EnumChatFormatting.RED, why[0], argOf(why), String.valueOf(RelayRulesSC.SETTLEMENT_GAP));
             }
             return;
         }
@@ -368,7 +367,7 @@ public final class RelayPostSC {
         String[] why = refusalWhy(w, p, x, y, z);
         if (why[0] != null) {
             if (p != null && !(p instanceof FakePlayer)) {
-                tell(p, EnumChatFormatting.RED, why[0], argOf(why), String.valueOf(RelayRulesSC.SETTLEMENT_GAP));
+                PlayerMsgSC.tell(p, EnumChatFormatting.RED, why[0], argOf(why), String.valueOf(RelayRulesSC.SETTLEMENT_GAP));
             }
             return true;
         }
@@ -422,7 +421,7 @@ public final class RelayPostSC {
         if (e.world != null && !e.world.isRemote && e.block == IdeaBlocksSC.relay && e.blockMetadata == BlockRelaySC.RELAY && defending(e.x, e.y, e.z)) {
             e.setCanceled(true);
             if (e.getPlayer() != null && !(e.getPlayer() instanceof FakePlayer)) {
-                tell(e.getPlayer(), EnumChatFormatting.YELLOW, "sc.relay.refuse.busy");
+                PlayerMsgSC.tell(e.getPlayer(), EnumChatFormatting.YELLOW, "sc.relay.refuse.busy");
             }
         }
     }
@@ -845,7 +844,7 @@ public final class RelayPostSC {
             int got = ReputationSC.give(rec, RelayRulesSC.HELD_REP, ReputationSC.SRC_RELAY, day);
             rec.knownDocks.add(Integer.valueOf(s.id));
             if (p != null && got >= 0) {
-                tell(p, EnumChatFormatting.GREEN, "sc.relay.built", NpcNamesSC.name(code), String.valueOf(d.x), String.valueOf(d.z));
+                PlayerMsgSC.tell(p, EnumChatFormatting.GREEN, "sc.relay.built", NpcNamesSC.name(code), String.valueOf(d.x), String.valueOf(d.z));
             }
         }
         r.markDirty();
@@ -894,7 +893,7 @@ public final class RelayPostSC {
         }
         for (Object o : w.playerEntities) {
             if (o instanceof EntityPlayerMP && !(o instanceof FakePlayer)) {
-                tell((EntityPlayer) o, EnumChatFormatting.RED, "sc.relay.destroyed", NpcNamesSC.name(NpcNamesSC.code(s.nameElement, s.nameNumber)));
+                PlayerMsgSC.tell((EntityPlayer) o, EnumChatFormatting.RED, "sc.relay.destroyed", NpcNamesSC.name(NpcNamesSC.code(s.nameElement, s.nameNumber)));
             }
         }
     }
@@ -1018,14 +1017,8 @@ public final class RelayPostSC {
         for (Object o : w.playerEntities) {
             EntityPlayer p = (EntityPlayer) o;
             if (p.getDistanceSq(d.x + 0.5D, d.y, d.z + 0.5D) <= r * r) {
-                tell(p, colour, key, args);
+                PlayerMsgSC.tell(p, colour, key, args);
             }
-        }
-    }
-
-    private static void tell(EntityPlayer p, EnumChatFormatting colour, String key, Object... args) {
-        if (p instanceof EntityPlayerMP && !(p instanceof FakePlayer)) {
-            p.addChatComponentMessage(new ChatComponentTranslation(key, args).setChatStyle(new ChatStyle().setColor(colour)));
         }
     }
 }

@@ -22,6 +22,7 @@ import com.sc.settle.SettlementSizeSC;
 import com.sc.settle.npc.NpcNamesSC;
 import com.sc.settle.npc.ai.NpcNavSC;
 import com.sc.util.ArmorSuit;
+import com.sc.util.PlayerMsgSC;
 
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -32,19 +33,16 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.nbt.NBTTagString;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 import net.minecraft.util.MathHelper;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
-import net.minecraftforge.common.util.FakePlayer;
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 
@@ -111,12 +109,12 @@ public final class WantedSC {
         World w = substrate(p.worldObj);
         RareRegistrySC.Rec r = rec(w);
         if (r == null || !active(w)) {
-            tell(p, EnumChatFormatting.GRAY, "sc.wanted.none");
+            PlayerMsgSC.tell(p, EnumChatFormatting.GRAY, "sc.wanted.none");
             return false;
         }
         int s = WantedRulesSC.HINT_SPREAD;
         int x = r.extra.getInteger(SX) + RAND.nextInt(2 * s + 1) - s, z = r.extra.getInteger(SZ) + RAND.nextInt(2 * s + 1) - s;
-        tell(p, EnumChatFormatting.GOLD, "sc.wanted.hint", fullName(r), String.valueOf(x), String.valueOf(z), String.valueOf(s),
+        PlayerMsgSC.tell(p, EnumChatFormatting.GOLD, "sc.wanted.hint", fullName(r), String.valueOf(x), String.valueOf(z), String.valueOf(s),
                 String.valueOf(WantedRulesSC.minutesAgo(r.extra.getLong(SD), w.getTotalWorldTime())));
         return true;
     }
@@ -228,7 +226,7 @@ public final class WantedSC {
             if (busy) {
                 break;
             }
-            busy = real(p) && !p.capabilities.isCreativeMode && p.isEntityAlive() && p.getDistanceSqToEntity(e) <= reach * reach;
+            busy = PlayerMsgSC.isReal(p) && !p.capabilities.isCreativeMode && p.isEntityAlive() && p.getDistanceSqToEntity(e) <= reach * reach;
         }
         if (!busy) {
             return false;
@@ -306,8 +304,8 @@ public final class WantedSC {
         reg.markDirty();
         int far = (int) Math.round(Math.sqrt(city.distSq(at[0] + 0.5D, at[1] + 0.5D)));
         for (Object o : w.playerEntities) {
-            if (real(o)) {
-                tell((EntityPlayer) o, EnumChatFormatting.GOLD, "sc.wanted.posted", captainName(city), fullName(r), String.valueOf(far),
+            if (PlayerMsgSC.isReal(o)) {
+                PlayerMsgSC.tell((EntityPlayer) o, EnumChatFormatting.GOLD, "sc.wanted.posted", captainName(city), fullName(r), String.valueOf(far),
                         NpcNamesSC.name(NpcNamesSC.code(city.nameElement, city.nameNumber)));
             }
         }
@@ -372,7 +370,7 @@ public final class WantedSC {
         for (Object o : w.playerEntities) {
             EntityPlayer p = (EntityPlayer) o;
             double dx = p.posX - x, dz = p.posZ - z;
-            if (real(p) && !p.capabilities.isCreativeMode && p.isEntityAlive() && dx * dx + dz * dz <= n * n) {
+            if (PlayerMsgSC.isReal(p) && !p.capabilities.isCreativeMode && p.isEntityAlive() && dx * dx + dz * dz <= n * n) {
                 return p;
             }
         }
@@ -456,7 +454,7 @@ public final class WantedSC {
         double reach = WantedRulesSC.LEAVE_REACH;
         for (Object o : w.playerEntities) {
             EntityPlayer p = (EntityPlayer) o;
-            if (real(p) && p.getDistanceSqToEntity(e) <= reach * reach) {
+            if (PlayerMsgSC.isReal(p) && p.getDistanceSqToEntity(e) <= reach * reach) {
                 someone = true;
                 break;
             }
@@ -602,10 +600,10 @@ public final class WantedSC {
                 continue;
             }
             int got = ReputationSC.give(sr.player(p.getUniqueID()), WantedRulesSC.REWARD_REP, ReputationSC.SRC_WANTED, day);
-            give(p, SettlementItemsSC.chips(WantedRulesSC.REWARD_CHIPS));
-            give(p, com.sc.init.IdeaItemsSC.wantedToken(1));
+            PlayerMsgSC.giveOrDrop(p, SettlementItemsSC.chips(WantedRulesSC.REWARD_CHIPS));
+            PlayerMsgSC.giveOrDrop(p, com.sc.init.IdeaItemsSC.wantedToken(1));
             p.inventoryContainer.detectAndSendChanges();
-            tell(p, EnumChatFormatting.GREEN, "sc.wanted.reward", fullName(r), String.valueOf(WantedRulesSC.REWARD_CHIPS), ReputationSC.signed(got));
+            PlayerMsgSC.tell(p, EnumChatFormatting.GREEN, "sc.wanted.reward", fullName(r), String.valueOf(WantedRulesSC.REWARD_CHIPS), ReputationSC.signed(got));
             names.add(p.getCommandSenderName());
         }
         if (sr != null) {
@@ -626,25 +624,10 @@ public final class WantedSC {
             who.append(who.length() == 0 ? "" : ", ").append(n);
         }
         for (Object o : w.playerEntities) {
-            if (real(o)) {
-                tell((EntityPlayer) o, EnumChatFormatting.GOLD, "sc.wanted.down", fullName(r), who.length() == 0 ? "-" : who.toString());
+            if (PlayerMsgSC.isReal(o)) {
+                PlayerMsgSC.tell((EntityPlayer) o, EnumChatFormatting.GOLD, "sc.wanted.down", fullName(r), who.length() == 0 ? "-" : who.toString());
             }
         }
-    }
-
-    // ================================================================== the world test's hooks
-
-    /** The world test: post this week's one now (a City must exist). @return posted */
-    public static boolean postNow(WorldServer w) {
-        RareRegistrySC reg = RareRegistrySC.get(w);
-        return reg != null && post(w, reg, SettlementSC.week(w));
-    }
-
-    /** The world test: bring the posted one into the world now at its spot (no player asked). @return the entity, or null */
-    public static EntityWantedSC spawnNow(WorldServer w) {
-        RareRegistrySC reg = RareRegistrySC.get(w);
-        RareRegistrySC.Rec r = reg == null ? null : reg.recIfAny(RareRegistrySC.WANTED);
-        return r == null || r.state != RareRegistrySC.NONE ? null : spawn(w, reg, r, w.getTotalWorldTime());
     }
 
     // ================================================================== helpers
@@ -662,26 +645,6 @@ public final class WantedSC {
         net.minecraft.server.MinecraftServer srv = net.minecraft.server.MinecraftServer.getServer();
         World s = srv == null || !SubstrateSC.active() ? null : srv.worldServerForDimension(SubstrateSC.dimId());
         return s != null ? s : w;
-    }
-
-    private static boolean real(Object o) {
-        return o instanceof EntityPlayerMP && !(o instanceof FakePlayer);
-    }
-
-    private static void tell(EntityPlayer p, EnumChatFormatting colour, String key, Object... args) {
-        if (real(p)) {
-            p.addChatComponentMessage(new ChatComponentTranslation(key, args).setChatStyle(new ChatStyle().setColor(colour)));
-        }
-    }
-
-    private static void give(EntityPlayer p, ItemStack s) {
-        if (s == null || s.stackSize <= 0) {
-            return;
-        }
-        p.inventory.addItemStackToInventory(s);
-        if (s.stackSize > 0) {
-            p.dropPlayerItemWithRandomChoice(s, false);
-        }
     }
 
     private static void sparks(Entity e) {

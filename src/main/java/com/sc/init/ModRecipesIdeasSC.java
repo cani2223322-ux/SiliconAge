@@ -23,7 +23,6 @@ public final class ModRecipesIdeasSC {
 
     public static void init() {
         pd6();
-        pd7();
         om2();
         om3();
         om4();
@@ -73,10 +72,6 @@ public final class ModRecipesIdeasSC {
             o[i] = s;
         }
         GameRegistry.addShapelessRecipe(out, o);
-    }
-
-    /** ПД-7: the Relay is bought (TradeTableSC), not crafted - nothing here unless ПД-7 decides otherwise. */
-    private static void pd7() {
     }
 
     /** ОМ-2: the singular scrap's crushing, the thread's rolling, the condensate's centrifuge, the paste - and their ticks. TODO(balance) */
@@ -190,7 +185,7 @@ public final class ModRecipesIdeasSC {
         if (chamber != null) {
             RecipeRegistry.register(new MachineRecipe(MachineType.UPGRADE_STATION_EV, new ItemStack[]{new ItemStack(ModItems.TOOLS.get(SCToolType.PHOTOMASK)),
                     n(ModItems.ingot.stackOf(com.sc.util.Material.TUNGSTEN), 4), new ItemStack(chamber, 2)},      // 3 slots (TileEntityMachineSC.INPUT_SLOTS)
-                    null, null, new ItemStack[]{mask}, null, null, OM4_STATION_TICKS, 0f).freshTools());   // МШ-4: an unworn photomask only
+                    null, null, new ItemStack[]{mask}, null, null, OM4_STATION_TICKS, 0f).consumesTools()); // МШ-4 / ОМ-4: an unworn photomask, used up whole
         }
         if (ModFluids.krypton != null) {
             RecipeRegistry.register(new MachineRecipe(MachineType.EUV_LITHOGRAPH, new ItemStack[]{si(com.sc.util.SiliconMaterial.METALLIZED_WAFER, 1), mask.copy()},
