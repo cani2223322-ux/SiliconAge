@@ -35,6 +35,10 @@ public class TileEntityDataPortSC extends TileEntity implements com.sc.energy.IC
     public int toggleMode() {
         mode = mode == STOP ? PERMIT : STOP;
         markDirty();
+        TileEntityGeneratorSC g = reactor();
+        if (g != null) {
+            g.portsChanged();                                   // Э11: the reactor asks its ports again at once
+        }
         return mode;
     }
 

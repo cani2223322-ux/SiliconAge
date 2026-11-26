@@ -906,6 +906,9 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
     private final java.util.List<int[]> dataPorts = new java.util.ArrayList<int[]>();
     /** ОМ-5: a PERMIT port unpowered keeps the reactor from lighting (the screen's line - synced). */
     private boolean portBlocked;
+    /** Э11: ignitionAllowedByPorts' last answer and its world time (MIN_VALUE: ask now). Not saved. */
+    private boolean portsAllowed = true;
+    private long portsAskedAt = Long.MIN_VALUE;
 
     /**
      * ОМ-5: what a comparator reads - a reactor that must be lit: nothing until lit, then its ramp (Fusion, Tokamak, Exo) or the plasma's
@@ -930,6 +933,7 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      * walls, cap and floor - noted by notePortSC as it walked them) is told it belongs here (TileEntityDataPortSC.bind) and listed.
      */
     public void bindPortsSC(java.util.List<int[]> found) {
+        portsAskedAt = Long.MIN_VALUE;                          // Э11: the new set is asked at the next lighting try
         dataPorts.clear();
         for (int[] p : found) {
             net.minecraft.tileentity.TileEntity te = worldObj.getTileEntity(p[0], p[1], p[2]);
@@ -970,6 +974,11 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
             }
         }
         return true;
+    }
+
+    /** Э11 (a Data Port's mode toggled): ignite() asks the ports again on its next try. */
+    public void portsChanged() {
+        portsAskedAt = Long.MIN_VALUE;
     }
 
     /** ОМ-5: a PERMIT port keeps it from lighting now (the screen). */
@@ -2349,7 +2358,14 @@ public class TileEntityGeneratorSC extends TileEntityEnergyBase implements ISide
      * only when the last is spent) and deuterium, EXO enough liquid helium. Not lit - the charge stays.
      */
     private boolean ignite() {
-        portBlocked = xv() && !ignitionAllowedByPorts();         // ОМ-5: the screen's line, latched or not
+        if (xv()) {                                              // Э11: the ports asked once per Data Port's own TICK, not every tick
+            long now = worldObj.getTotalWorldTime();
+            if (portsAskedAt == Long.MIN_VALUE || now - portsAskedAt >= TileEntityDataPortSC.TICK || now < portsAskedAt) {
+                portsAllowed = ignitionAllowedByPorts();
+                portsAskedAt = now;
+            }
+        }
+        portBlocked = xv() && !portsAllowed;                     // ОМ-5: the screen's line, latched or not
         if (xv() && bigEvent != 0) {
             return false;               // put out / broken down: lit again only once the player allows it (the screen's button)
         }

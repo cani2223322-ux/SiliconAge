@@ -1795,13 +1795,15 @@ public class TileEntityQuarrySC extends TileEntityEnergyBase implements ISidedIn
                     || m == com.sc.dim.SubstrateBlocksSC.OXIDE_GREEN;
         }
         for (int id : OreDictionary.getOreIDs(s)) {
-            String n = OreDictionary.getOreName(id);
-            if ("stone".equals(n) || "cobblestone".equals(n)) {
+            if (id == STONE_ORE_ID || id == COBBLE_ORE_ID) {   // Э9: the ids once, not the names per mined stack
                 return true;
             }
         }
         return false;
     }
+
+    /** Э9: the ore dictionary's ids of "stone" / "cobblestone" (getOreID registers a name that isn't there yet - harmless). */
+    private static final int STONE_ORE_ID = OreDictionary.getOreID("stone"), COBBLE_ORE_ID = OreDictionary.getOreID("cobblestone");
 
     private void flushOverflow() {
         List<ItemStack> copy = new ArrayList<ItemStack>(overflow);

@@ -117,13 +117,16 @@ public class MapGenSubstrateCavesSC extends MapGenBase {
         long seed = world.getSeed();
         int kind = SubstrateCellsSC.chunkHasInner(cx, cz) ? SubstrateCellsSC.cellKind(world, cx >> 4, cz >> 4) : BiomeSubstrateSC.PLATEAUS;
         boolean rift = kind == BiomeSubstrateSC.RIFT, ridge = kind == BiomeSubstrateSC.RIDGES;
+        java.util.List<net.minecraft.world.gen.structure.StructureBoundingBox> tunnelBoxes =
+                tunnels == null ? null : tunnels.boxesNear(cx, cz, BOX_MARGIN);   // Э6: the start looked up once per chunk
+        boolean anyTunnel = tunnelBoxes != null && !tunnelBoxes.isEmpty();
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 int wx = cx * 16 + x, wz = cz * 16 + z;
                 boolean k = rift && (SubstrateWildTerrainSC.riftVoid(seed, wx, wz) || SubstrateWildTerrainSC.pillar(wx, wz))
                         || vaults != null && vaults.covers(wx, wz, BOX_MARGIN) || camps != null && camps.covers(wx, wz, BOX_MARGIN)
                         || arenas != null && arenas.covers(wx, wz, BOX_MARGIN) || wrecks != null && wrecks.covers(wx, wz, BOX_MARGIN)
-                        || tunnels != null && tunnels.covers(wx, wz, BOX_MARGIN);                    // ПД-8
+                        || anyTunnel && com.sc.ruin.MapGenTunnelSC.hits(tunnelBoxes, wx, wz, BOX_MARGIN);   // ПД-8
                 keep[x * 16 + z] = k;
                 keepAny |= k;
                 ridgeCol[x * 16 + z] = ridge && SubstrateCellsSC.inner(wx, wz);

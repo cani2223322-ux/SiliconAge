@@ -101,6 +101,41 @@ public class MapGenTunnelSC extends MapGenStructure {
         return false;
     }
 
+    /**
+     * Э6: the built tunnel's pieces whose boxes reach chunk (cx, cz)'s columns widened by `margin` - the caves' mask asks once per chunk
+     * and tests its 256 columns against them (`covers` per column looked the start up 256 times). A chunk lies in one 256-block cell,
+     * so its columns share covers()'s start. Empty: none. Server.
+     */
+    public java.util.List<net.minecraft.world.gen.structure.StructureBoundingBox> boxesNear(int cx, int cz, int margin) {
+        java.util.List<net.minecraft.world.gen.structure.StructureBoundingBox> out = new java.util.ArrayList<net.minecraft.world.gen.structure.StructureBoundingBox>();
+        if (worldObj == null) {
+            return out;
+        }
+        int[] s = TunnelLayoutSC.startChunk(cx >> 4, cz >> 4);
+        Object st = structureMap.get(Long.valueOf(ChunkCoordIntPair.chunkXZ2Int(s[0], s[1])));
+        if (!(st instanceof StructureStart) || !((StructureStart) st).isSizeableStructure()) {
+            return out;
+        }
+        int x0 = cx * 16, z0 = cz * 16;
+        for (Object o : ((StructureStart) st).getComponents()) {
+            net.minecraft.world.gen.structure.StructureBoundingBox b = ((StructureComponent) o).getBoundingBox();
+            if (b.intersectsWith(x0 - margin, z0 - margin, x0 + 15 + margin, z0 + 15 + margin)) {
+                out.add(b);
+            }
+        }
+        return out;
+    }
+
+    /** Э6: column (x, z) widened by `margin` meets one of `boxes` (boxesNear's) - the same answer as covers(x, z, margin). */
+    public static boolean hits(java.util.List<net.minecraft.world.gen.structure.StructureBoundingBox> boxes, int x, int z, int margin) {
+        for (int i = 0; i < boxes.size(); i++) {
+            if (boxes.get(i).intersectsWith(x - margin, z - margin, x + margin, z + margin)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The start made at chunk (cx, cz), or null (none made yet) - the world test asks. Server. */
     public StructureRuinStartSC startAt(int cx, int cz) {
         Object st = structureMap.get(Long.valueOf(ChunkCoordIntPair.chunkXZ2Int(cx, cz)));

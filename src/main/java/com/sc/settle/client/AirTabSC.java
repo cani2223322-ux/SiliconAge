@@ -58,6 +58,10 @@ final class AirTabSC {
     private String icao = "", rl = "", rh = "", atis;
     private final List<String> rows = new ArrayList<String>();
     private int seenState = -1, seenResult = -1, waited, poll, scroll;
+    /** Э8: the list's wrapped lines and their colours for the last state and width (null: wrap again). */
+    private List<String> wrapped;
+    private List<Integer> wrappedColours;
+    private int wrappedWidth;
     /** The last AIR_RESULT's text and its kind (good / refused). */
     String resultText = "";
     boolean resultOk;
@@ -103,6 +107,7 @@ final class AirTabSC {
     }
 
     private void parse(NBTTagCompound s) {
+        wrapped = null;                                     // Э8: the list's lines are wrapped again for the new state
         kind = s.getByte("k");
         nameCode = s.getInteger("n");
         icao = s.getString("icao");
@@ -215,14 +220,19 @@ final class AirTabSC {
     @SuppressWarnings("unchecked")
     void drawList(FontRenderer f, int x, int y, int w, int h, int ox, int oy) {
         int tx = x + 6, tw = w - 16, top = y + 4, fit = Math.max(1, (h - 8) / LINE_H);
-        List<String> lines = new ArrayList<String>();
-        List<Integer> colours = new ArrayList<Integer>();
-        for (Entry e : entries()) {
-            for (String s : (List<String>) f.listFormattedStringToWidth(e.text, tw)) {
-                lines.add(s);
-                colours.add(Integer.valueOf(e.colour));
+        if (wrapped == null || wrappedWidth != tw) {        // Э8: built and wrapped once per state, not every frame
+            wrapped = new ArrayList<String>();
+            wrappedColours = new ArrayList<Integer>();
+            wrappedWidth = tw;
+            for (Entry e : entries()) {
+                for (String s : (List<String>) f.listFormattedStringToWidth(e.text, tw)) {
+                    wrapped.add(s);
+                    wrappedColours.add(Integer.valueOf(e.colour));
+                }
             }
         }
+        List<String> lines = wrapped;
+        List<Integer> colours = wrappedColours;
         scroll = Math.max(0, Math.min(scroll, lines.size() - fit));
         for (int i = 0; i < fit && scroll + i < lines.size(); i++) {
             f.drawString(lines.get(scroll + i), tx, top + i * LINE_H, colours.get(scroll + i).intValue());

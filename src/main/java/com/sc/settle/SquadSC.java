@@ -224,12 +224,46 @@ public final class SquadSC {
         if (s == 0L) {
             return out;
         }
-        for (Map.Entry<UUID, SettlementRegistrySC.PlayerRec> e : reg.players().entrySet()) {
-            if (!e.getKey().equals(except) && squadOf(e.getValue()) == s) {
-                out.add(e.getKey());
+        List<UUID> all;
+        synchronized (INVITES) {
+            if (index == null || indexReg != reg) {             // Э10: the walk over every player once, then the index
+                index = new HashMap<Long, List<UUID>>();
+                indexReg = reg;
+                for (Map.Entry<UUID, SettlementRegistrySC.PlayerRec> e : reg.players().entrySet()) {
+                    long q = squadOf(e.getValue());
+                    if (q != 0L) {
+                        List<UUID> l = index.get(Long.valueOf(q));
+                        if (l == null) {
+                            index.put(Long.valueOf(q), l = new ArrayList<UUID>());
+                        }
+                        l.add(e.getKey());
+                    }
+                }
+            }
+            all = index.get(Long.valueOf(s));
+            if (all != null) {
+                for (UUID u : all) {
+                    if (!u.equals(except)) {
+                        out.add(u);
+                    }
+                }
             }
         }
         return out;
+    }
+
+    /**
+     * Э10: squad id -> its members, built from the registry's records on the first ask (indexReg: the registry it was built from - a
+     * world loaded anew builds it again); dropped by every change of a record's EXTRA (write / leave) and at the server's stop.
+     */
+    private static Map<Long, List<UUID>> index;
+    private static SettlementRegistrySC indexReg;
+
+    private static void dropIndex() {
+        synchronized (INVITES) {
+            index = null;
+            indexReg = null;
+        }
     }
 
     // ================================================================== the invitation (a Credit Chip's click)
@@ -343,6 +377,7 @@ public final class SquadSC {
         q.setLong(JOINED, now);
         q.setString(NAME, name == null ? "" : name);
         r.extra.setTag(EXTRA, q);
+        dropIndex();
     }
 
     /** CommandSquadSC «decline <name>». */
@@ -379,11 +414,13 @@ public final class SquadSC {
         }
         List<EntityPlayerMP> told = onlineOf(reg, s);
         r.extra.removeTag(EXTRA);
+        dropIndex();
         List<UUID> rest = membersOf(reg, s, null);
         if (rest.size() == 1) {
             SettlementRegistrySC.PlayerRec last = reg.playerIfAny(rest.get(0));
             if (last != null) {
                 last.extra.removeTag(EXTRA);                    // one left alone - no squad any more
+                dropIndex();
             }
         }
         reg.markDirty();
@@ -459,6 +496,7 @@ public final class SquadSC {
         synchronized (INVITES) {
             INVITES.clear();
         }
+        dropIndex();
     }
 
     // ================================================================== helpers

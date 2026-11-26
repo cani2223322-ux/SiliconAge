@@ -107,8 +107,10 @@ public final class AmbientLifeClientSC {
         for (EntityDroneFxSC d : DRONE_LIST) {
             taken.add(Long.valueOf(((long) d.groupX() << 32) ^ (d.groupZ() & 0xFFFFFFFFL)));
         }
-        for (Object o : new ArrayList<Object>(w.loadedTileEntityList)) {
-            if (!(o instanceof TileEntityShowcaseSC) || DRONE_LIST.size() >= DRONES) {
+        List<?> tiles = w.loadedTileEntityList;                  // Э7: read in place (the client thread; addEffect doesn't touch it)
+        for (int i = 0; i < tiles.size() && DRONE_LIST.size() < DRONES; i++) {
+            Object o = tiles.get(i);
+            if (!(o instanceof TileEntityShowcaseSC)) {
                 continue;
             }
             TileEntityShowcaseSC t = (TileEntityShowcaseSC) o;
