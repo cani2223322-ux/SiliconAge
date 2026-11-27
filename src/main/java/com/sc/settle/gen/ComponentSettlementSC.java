@@ -9,6 +9,7 @@ import com.sc.settle.SettlementBlocksSC;
 import com.sc.tileentity.TileEntityShowcaseSC;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockLeaves;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -139,11 +140,19 @@ public class ComponentSettlementSC extends StructureComponent {
      * already there (Ф6's «Достройка» runs the pieces again, a piece built over another's block): nothing set - Forge
      * 1614's setBlock runs both light passes even for no change. @return placed (or already so)
      */
+    /**
+     * The meta standing counts as `meta`: leaves' bit 8 («check decay») is the game's own - a leaf set or broken next to them sets it
+     * on its neighbours, so a repair pass comparing it would set the greenhouse's leaves again at every pass (ПЕ-9).
+     */
+    static boolean sameMeta(Block b, int had, int meta) {
+        return had == meta || b instanceof BlockLeaves && (had & ~8) == (meta & ~8);
+    }
+
     public static boolean put(World w, StructureBoundingBox win, int x, int y, int z, Block b, int meta) {
         if (b == null || y < 1 || y > 255 || !win.isVecInside(x, y, z)) {
             return false;
         }
-        if (w.getBlock(x, y, z) == b && w.getBlockMetadata(x, y, z) == meta) {
+        if (w.getBlock(x, y, z) == b && sameMeta(b, w.getBlockMetadata(x, y, z), meta)) {
             return true;
         }
         w.setBlock(x, y, z, b, meta, 2);

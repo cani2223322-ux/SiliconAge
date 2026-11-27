@@ -51,7 +51,9 @@ import net.minecraftforge.common.DimensionManager;
  * EDGE_ROOT and no heightVariation >= SHATTERED_VAR (the blend band eases only 8 blocks back to the land: hills there stand as a wall
  * round the city); within the area + BAND_NEAR no MOUNTAIN and no rootHeight >= HIGH_ROOT (the plateaus: Forge calls savanna's and
  * mesa's PLAINS / SANDY, their tops at 90..100 over a floor of at most 72; Extreme Hills M); within + BAND_MID (64) no JUNGLE,
- * MUSHROOM; within + BAND_FAR (192) no MAGICAL, no SPOOKY but vanilla's Roofed Forest (Thaumcraft's magical forests and the taint).
+ * MUSHROOM; within + BAND_FAR (192) no MAGICAL, no SPOOKY but vanilla's Roofed Forest (Thaumcraft's magical forests and the taint);
+ * within + BAND_NEAR no vanilla Roofed Forest either (LAND_RULES 4, 2026-11-28: BiomeGenForest.decorate grows its dark oaks and huge
+ * mushrooms itself, never through TerrainGen's TREE / BIG_SHROOM event - the bans of EmbassyWorldGenSC can't stop them).
  * The integrator's numbers (2026-10-19): the first rules (no river or hills within + 16, 70 % open, vanilla's Roofed Forest spooky,
  * 5 candidates, 64 tries) let 0 of 9000 sampled points of six seeds fit - his let about 2 % fit, a rolled region get one about a
  * third of the time, the guaranteed one stand in each of twelve seeds. The review's (LAND_RULES 3, the same twelve-seed measure in
@@ -67,7 +69,8 @@ import net.minecraftforge.common.DimensionManager;
  * the strongholds' ring (640..1152 and its biome shift). A grid embassy there whose ground is not explored is it; otherwise the
  * first of GUARANTEE_TRIES pure candidates in the ring whose land fits, half a region from every grid embassy and every embassy's
  * record, no chunk of its footprint on disk or loaded, no player's field zone within ZONE_CLEAR of its area (zoneNear - a grid site
- * too: its start is made empty while a zone reaches it, MapGenEmbassySC); none - the same in FALLBACK_MIN..FALLBACK_MAX;
+ * too: its start is made empty while a zone reaches it, MapGenEmbassySC); none - the same in FALLBACK_MIN..FALLBACK_MAX (a grid
+ * embassy there first, then the pure candidates);
  * none still - one line in the log. Decided once (decideGuaranteed - the world's load, or the first ask) and written into the
  * registry's world `extra` EXTRA "E" (x, z, radius, floor, seed; g - a grid one; none - nowhere, with the numbers it was tried at and v - LAND_RULES).</li>
  * </ul>
@@ -89,7 +92,7 @@ public final class EmbassySiteSC {
     public static final int EDGE_IN = 4, EDGE_PCT = 10;
     public static final float EDGE_ROOT = 0.3F, HIGH_ROOT = 0.8F, SHATTERED_VAR = 0.6F;
     /** ПЕ-3: the land rules' version - written with a «nowhere» decision (a different one decides again). */
-    public static final int LAND_RULES = 3;
+    public static final int LAND_RULES = 4;
     /** ПЕ-3: a vanilla village's start, a temple no nearer than the area + this. */
     public static final int VILLAGE_CLEAR = 128, TEMPLE_CLEAR = 32;
     /** ПЕ-2: the guaranteed one's tries in each ring, the fallback ring, a player's field zone no nearer than its area + this. */
@@ -334,6 +337,10 @@ public final class EmbassySiteSC {
                 }
                 if (d <= area + BAND_NEAR && (any(t, NOT_NEAR) || g.rootHeight >= HIGH_ROOT)) {
                     return "mountains / plateau " + g.biomeName + " within " + (int) d;
+                }
+                if (d <= area + BAND_NEAR && vanillaRoofed(g)) {
+                    // LAND_RULES 4: its dark oaks and huge mushrooms grow in its own decorate, past Forge's TREE event the bans deny
+                    return "roofed forest " + g.biomeName + " within " + (int) d;
                 }
                 boolean hill = BiomeDictionary.isBiomeOfType(t, BiomeDictionary.Type.HILLS), onRim = d >= rim && d <= area + BAND_NEAR;
                 if (onRim && g.heightVariation >= SHATTERED_VAR) {
@@ -714,6 +721,10 @@ public final class EmbassySiteSC {
             onGrid = found != null;
             if (found == null) {
                 found = ring(w, min, max);
+            }
+            if (found == null) {
+                found = gridInRing(w, FALLBACK_MIN, FALLBACK_MAX);   // its own points there keep half a region off the grid's
+                onGrid = found != null;
             }
             if (found == null) {
                 found = ring(w, FALLBACK_MIN, FALLBACK_MAX);
